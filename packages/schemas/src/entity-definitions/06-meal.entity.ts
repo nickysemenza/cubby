@@ -35,7 +35,7 @@ export default defineEntity({
       {
         key: "date",
         kind: "date",
-        control: { kind: "date", section: "schedule" },
+        control: { kind: "date", section: "schedule", initial: "today" },
         display: { list: true, detail: true },
         validation: {
           read: mealDate,
@@ -47,7 +47,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         nullable: true,
-        control: { kind: "text" },
+        control: { kind: "text", placeholder: "Meal name (optional)" },
         display: { list: true, detail: true },
         validation: {
           read: z.string().nullable(),
@@ -71,7 +71,7 @@ export default defineEntity({
         key: "mealType",
         kind: "enum",
         nullable: true,
-        control: { kind: "select" },
+        control: { kind: "select", placeholder: "Which meal of the day?" },
         display: { list: true, detail: true },
         validation: {
           read: mealTypeSchema.nullable(),

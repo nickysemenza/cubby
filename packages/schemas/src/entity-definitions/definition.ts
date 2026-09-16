@@ -118,6 +118,14 @@ const metadataSchemas = () => {
         .optional()
         .default(null),
       section: nonEmptyString().optional().default("main"),
+      /** Editor placeholder text, generic-editor only. */
+      placeholder: nonEmptyString().nullable().optional().default(null),
+      /**
+       * A create-only initial value the generic editor derives at draft time
+       * instead of from the field's record/schema default. `"today"` is the
+       * only member today (the household's local calendar date).
+       */
+      initial: z.literal("today").nullable().optional().default(null),
     })
     .strict();
 

@@ -1,4 +1,5 @@
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
+import { entityFieldSchemaMaps } from "@cubby/schemas/entity-field-schema-maps";
 import {
   entityFieldModels,
   type EntityFieldModel,
@@ -76,7 +77,6 @@ interface IntentOptions<E extends EditableEntity> {
   access?: EditIntent<E>["access"];
   validate?: EditIntent<E>["validate"];
   defaults?: EditIntent<E>["defaults"];
-  acceptsSeed?: boolean;
   buildData?: (
     patch: EntityEditValueBag,
     context: EntityEditContext,
@@ -132,10 +132,12 @@ const nullableTrimNormalize = (value: EntityEditValue): EntityEditValue => {
  * behaviour a per-field override used to spell out by hand, from the field's
  * own declaration (`packages/schemas/src/entity-definitions/*.entity.ts`):
  * a text field required on create trims and rejects blank; a nullable text
- * field trims and collapses blank to `null`; a required non-text field is
- * simply required. Returns `undefined` when none of those apply — the field
- * keeps `makeField`'s own defaults unless an explicit override says
- * otherwise. `fieldsFrom`'s `overrides` argument still wins over this.
+ * field trims and collapses blank to `null`; a nullable singular reference
+ * gets the same trim-to-null treatment (a shortcode is a string too); a
+ * required non-text field is simply required. Returns `undefined` when none
+ * of those apply — the field keeps `makeField`'s own defaults unless an
+ * explicit override says otherwise. `fieldsFrom`'s `overrides` argument still
+ * wins over this.
  */
 const defaultFieldOptions = <E extends EditableEntity>(
   field: EntityFieldModel["fields"][number],
@@ -147,27 +149,90 @@ const defaultFieldOptions = <E extends EditableEntity>(
       return { required: false, normalize: nullableTrimNormalize };
     return undefined;
   }
+  if (field.reference && !field.reference.multiple && field.nullable) {
+    return { required: false, normalize: nullableTrimNormalize };
+  }
   if (field.requiredOnCreate) return { required: true };
   return undefined;
+};
+
+/** The bare-kind fallback once a field has no schema `.default()` of its own. */
+const kindDefault = (
+  field: EntityFieldModel["fields"][number],
+): EntityEditValue => {
+  if (field.reference) return field.reference.multiple ? [] : null;
+  if (field.kind === "text") return field.nullable ? null : "";
+  if (field.kind === "text-array") return [];
+  if (field.kind === "boolean") return false;
+  return null;
+};
+
+/**
+ * A create-only initial value derived from the field's own declaration, in
+ * order: the manifest's `control.initial` marker (today's household date is
+ * the only one so far); the generated create schema's own Zod default (Zod 4
+ * exposes it as a plain `def.defaultValue` property on a `ZodDefault`
+ * instance — proven in `definitions.unit.test.ts`); else a value implied by
+ * the field's kind. Never consulted for update — an existing record's own
+ * value always wins there, in `makeField`'s `initial` below.
+ */
+const genericCreateDefault = <E extends EditableEntity>(
+  entity: E,
+  field: EntityFieldModel["fields"][number],
+): EntityEditValue => {
+  if (field.control?.initial === "today") return householdLocalDate();
+  // SAFETY: `entityFieldSchemaMaps[entity].create` is keyed by every field
+  // this entity's create contract accepts; `field.key` names one of this
+  // same entity's own model fields, so the lookup is a schema for `field.key`
+  // or `undefined` for an editor-only pseudo field with no create contract.
+  const schema = (
+    entityFieldSchemaMaps[entity].create as Record<string, z.ZodTypeAny>
+  )[field.key];
+  if (schema instanceof z.ZodDefault) {
+    // SAFETY: every Zod schema this map holds validates one of
+    // `EntityEditValue`'s own primitive/array/object shapes — the generic
+    // editor's value bag was designed to be a superset of every field's
+    // create/update payload.
+    return schema.def.defaultValue as EntityEditValue;
+  }
+  return kindDefault(field);
 };
 
 const builderFor = <E extends EditableEntity>(
   entity: E,
 ): EntityEditBuilder<E> => {
+  // Widened to a plain `string` key on purpose: `id` (a field id, an
+  // editor-only pseudo field, or a shorthand override target) is never
+  // narrowed to this entity's own field-key union at the call sites below.
+  const fieldModelByKey = new Map<string, EntityFieldModel["fields"][number]>(
+    entityFieldModels[entity].fields.map((field) => [field.key, field]),
+  );
+
   const makeField = (id: string, options?: FieldOptions<E>): EditField<E> => ({
     entity,
     id,
     access: options?.access ?? (() => editable),
-    // Every gallery entity's `pendingImageIds` is array-valued and `readKey:
-    // null` (never populated from a record), so its one true default is an
-    // empty array — not the generic text field's `null` — for every entity
-    // that declares it, with no per-entity literal required.
-    initial: ({ record, context }) =>
-      id === "pendingImageIds"
-        ? []
-        : (valueFor(record, id) ??
-          (id === "parentProjectId" ? context.parentProjectId : undefined) ??
-          null),
+    initial: ({ operation, record, context }) => {
+      // Every gallery entity's `pendingImageIds` is array-valued and
+      // `readKey: null` (never populated from a record), so its one true
+      // default is an empty array — not the generic text field's `null` —
+      // for every entity that declares it, with no per-entity literal
+      // required.
+      if (id === "pendingImageIds") return [];
+      const existing = valueFor(record, id);
+      if (existing !== undefined) return existing;
+      if (id === "parentProjectId" && context.parentProjectId !== undefined) {
+        return context.parentProjectId;
+      }
+      if (operation !== "create") return null;
+      // `mealKind`'s storage default is a DB literal, not a Zod `.default()`
+      // (the create schema stays `.optional()` so a caller may omit it and
+      // let the column default apply) — the one create-time constant with no
+      // schema-derivable value to fall back on.
+      if (id === "mealKind" && entity === "meal") return "cooked";
+      const field = fieldModelByKey.get(id);
+      return field ? genericCreateDefault(entity, field) : null;
+    },
     normalize: options?.normalize ?? ((value) => value),
     validate: (input) => {
       const { value } = input;
@@ -185,10 +250,6 @@ const builderFor = <E extends EditableEntity>(
     toPatch: ({ value, record }) =>
       changed(record, id, value) ? { [id]: value } : undefined,
   });
-
-  const fieldModelByKey = new Map(
-    entityFieldModels[entity].fields.map((field) => [field.key, field]),
-  );
 
   return {
     fieldsFrom: (intents, overrides) => {
@@ -224,7 +285,6 @@ const makeIntent = <E extends EditableEntity>(
   access: options.access ?? (() => editable),
   validate: options.validate,
   defaults: options.defaults,
-  acceptsSeed: options.acceptsSeed,
   build: ({ record, patch, context }) => {
     const keys = Object.keys(patch);
     const data = options.buildData ? options.buildData(patch, context) : patch;
@@ -473,6 +533,15 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
  *
  * These are field fragments and commands, not form components: desktop pages,
  * dialogs, calendar sheets, and cells stay adapters at their own seams.
+ *
+ * Most entities need only their field roster — defaults, blank normalization,
+ * and required-ness are all derived generically above from the manifest and
+ * the generated create/update schemas. An entry keeps explicit `create`/
+ * `update`/field overrides only for genuinely context-sensitive behaviour: a
+ * validator that reads other field values, an access rule keyed by surface,
+ * a value that folds several editor-only fields into one stored shape, or a
+ * default that depends on runtime context (`context.disposition`) rather
+ * than the declaration.
  */
 export const entityEditRegistry: EntityEditRegistry = {
   product: buildDefinition("product", (f) => ({
@@ -513,77 +582,18 @@ export const entityEditRegistry: EntityEditRegistry = {
             : editable,
       },
     }),
-    create: {
-      capture: {
-        defaults: { ingredientId: "", locationId: null, status: "planned" },
-      },
-      full: { defaults: { ingredientId: "", status: "planned" } },
-    },
-    update: { full: { acceptsSeed: true } },
   })),
   gardenEntry: buildDefinition("gardenEntry", (f) => ({
     fields: f.fieldsFrom(["capture", "full"]),
-    create: {
-      capture: {
-        defaults: {
-          locationId: "",
-          observedOn: householdLocalDate(),
-          note: null,
-        },
-      },
-      full: {
-        defaults: {
-          locationId: "",
-          plantingId: null,
-          kind: "observation",
-          observedOn: householdLocalDate(),
-          note: null,
-          harvestAmount: null,
-        },
-      },
-    },
-    update: { full: { acceptsSeed: true } },
   })),
   recipe: buildDefinition("recipe", (f) => ({
     fields: f.fieldsFrom(["full"]),
   })),
   meal: buildDefinition("meal", (f) => ({
     fields: f.fieldsFrom(["full"]),
-    create: {
-      capture: {
-        defaults: () => ({
-          date: householdLocalDate(),
-          name: null,
-          mealType: null,
-          mealKind: "cooked",
-        }),
-      },
-      full: {
-        defaults: {
-          date: null,
-          name: null,
-          mealType: null,
-          mealKind: "cooked",
-          sortOrder: null,
-        },
-      },
-    },
   })),
   project: buildDefinition("project", (f) => ({
     fields: f.fieldsFrom(["full"]),
-    create: {
-      capture: {
-        defaults: {
-          name: "",
-          status: "planning",
-          kind: null,
-          costEstimate: null,
-          parentProjectId: null,
-          startDate: null,
-        },
-      },
-      full: { defaults: { status: "planning", kind: null } },
-    },
   })),
   task: buildDefinition("task", (f) => ({
     fields: f.fieldsFrom(["full"], {
@@ -609,14 +619,6 @@ export const entityEditRegistry: EntityEditRegistry = {
     }),
     create: {
       capture: {
-        defaults: {
-          name: "",
-          status: "not_started",
-          projectId: null,
-          subjectProductId: null,
-          trade: null,
-          dueDate: null,
-        },
         buildData: (patch) => ({
           ...patch,
           projectId: patch.projectId
@@ -629,7 +631,7 @@ export const entityEditRegistry: EntityEditRegistry = {
           dueEndDate: null,
         }),
       },
-      full: { defaults: { status: "not_started" } },
+      full: {},
     },
     update: {
       full: {},
@@ -649,19 +651,15 @@ export const entityEditRegistry: EntityEditRegistry = {
     }),
     create: {
       capture: {
+        // `lineKind`'s `"auto"` is a client-only sentinel `buildData` strips
+        // before validation, and `trade` has no schema default despite being
+        // required on create — neither is derivable from the declaration.
+        // `costType` genuinely depends on runtime context (disposition
+        // capture vs. ordinary spend), not on anything the schema knows.
         defaults: (context) => ({
-          name: "",
           lineKind: "auto",
-          cost: null,
-          date: householdLocalDate(),
-          future: false,
-          projectId: null,
-          productId: null,
-          productQuantity: null,
-          vendor: "",
-          orderId: "",
-          costType: context.disposition ? "tools" : "materials",
           trade: "other",
+          costType: context.disposition ? "tools" : "materials",
         }),
         buildData: (patch) => ({
           ...patch,
@@ -683,7 +681,7 @@ export const entityEditRegistry: EntityEditRegistry = {
           notes: null,
         }),
       },
-      full: { defaults: { future: false } },
+      full: {},
     },
     update: {
       full: {},
@@ -711,25 +709,22 @@ export const entityEditRegistry: EntityEditRegistry = {
     fields: f.fieldsFrom(["full"]),
     create: {
       capture: {
-        defaults: () => ({
-          vendorId: "",
-          orderId: "",
-          displayLabel: "",
-          date: householdLocalDate(),
-          statedTotal: null,
-          notes: "",
-        }),
         buildData: (patch) => ({
           ...patch,
           vendorId: parseShortcodeFor("vendor", patch.vendorId),
         }),
       },
-      full: { defaults: { statedTotal: null } },
+      full: {},
     },
   })),
   financialAccount: buildDefinition("financialAccount", (f) => ({
     fields: f.fieldsFrom(["capture", "full"]),
     create: {
+      // `kind`, `issuer`, `network`, `institution`, `accountType`,
+      // `provider`, and `last4` are editor-only fields that flatten into the
+      // stored `identity` discriminant at submit time (see
+      // `financialAccountCreateData` below) — none of them has a model field
+      // or generated schema to derive a default from.
       capture: {
         defaults: {
           name: "",
@@ -755,7 +750,6 @@ export const entityEditRegistry: EntityEditRegistry = {
     },
     update: {
       full: {
-        acceptsSeed: true,
         buildData: (patch) => {
           if (!("sourceAliases" in patch)) return patch;
           return {
@@ -803,6 +797,12 @@ export const entityEditRegistry: EntityEditRegistry = {
       },
     }),
     create: {
+      // Reference/date/enum fields here are editor blanks that would fail
+      // required-field validation either way, but several (`purchaseId`,
+      // `transactionDate`, `merchant`, …) are normalized by
+      // `normalizeFinancialTransaction`'s trim-to-null branch rather than a
+      // generic reference/kind default, so the explicit defaults stay next
+      // to the `buildData` that consumes them.
       capture: {
         defaults: {
           accountId: "",
@@ -826,7 +826,7 @@ export const entityEditRegistry: EntityEditRegistry = {
       },
     },
     update: {
-      full: { acceptsSeed: true, buildData: normalizeFinancialTransaction },
+      full: { buildData: normalizeFinancialTransaction },
       settlement: {},
     },
   })),
@@ -834,40 +834,17 @@ export const entityEditRegistry: EntityEditRegistry = {
     fields: f.fieldsFrom(["full"]),
     create: {
       // Capture is the full form here: a wish has nothing worth deferring.
-      capture: {
-        fields: f.fieldsFor("full"),
-        defaults: { name: "", notes: null, candidateProductIds: [] },
-      },
-      full: { defaults: { name: "", notes: null, candidateProductIds: [] } },
+      capture: { fields: f.fieldsFor("full") },
+      full: {},
     },
-    update: {
-      full: { acceptsSeed: true },
-      identity: {},
-      acquisition: {},
-    },
+    update: ["full", "identity", "acquisition"],
   })),
   // No editor is rendered for these yet — create/update stay on MCP — but the
   // builders must exist for the registry to be exhaustive over EditableEntity.
   ledgerParty: buildDefinition("ledgerParty", (f) => ({
     fields: f.fieldsFrom(["full"]),
-    create: {
-      full: { defaults: { name: "", kind: "member", notes: null } },
-    },
-    update: { full: { acceptsSeed: true } },
   })),
   ledgerTransfer: buildDefinition("ledgerTransfer", (f) => ({
     fields: f.fieldsFrom(["full"]),
-    create: {
-      full: {
-        defaults: {
-          fromPartyId: "",
-          toPartyId: "",
-          amount: 0,
-          date: "",
-          notes: null,
-        },
-      },
-    },
-    update: { full: { acceptsSeed: true } },
   })),
 };

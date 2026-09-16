@@ -63,6 +63,7 @@ export default defineEntity({
       {
         key: "observedOn",
         kind: "date",
+        control: { kind: "date", initial: "today" },
         validation: {
           read: plainDate,
           create: plainDate,

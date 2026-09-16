@@ -1,6 +1,7 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { entityEditRegistry } from "./definitions";
 import {
@@ -18,6 +19,15 @@ const editableEntities = allEntities.filter(
   (entity): entity is EditableEntity =>
     entity !== "image" && entity !== "usda-food" && entity !== "cookbook",
 );
+
+// Proves the property `genericCreateDefault` (definitions.ts) relies on:
+// Zod 4 exposes a `ZodDefault`'s default as a plain `def.defaultValue`
+// property, not a function to call.
+it("exposes a Zod 4 default as a plain def.defaultValue property", () => {
+  const schema = z.string().default("cooked");
+  expect(schema).toBeInstanceOf(z.ZodDefault);
+  expect(schema.def.defaultValue).toBe("cooked");
+});
 
 describe("entity edit definitions", () => {
   it("covers every standard editable entity exactly once", () => {

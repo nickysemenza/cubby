@@ -202,8 +202,6 @@ export interface EntityEditIntentDefinition<
 > {
   /** Semantic capabilities choose their fields; surfaces only frame them. */
   fields: readonly string[];
-  /** Create accepts seed by default; updates must opt in explicitly. */
-  acceptsSeed?: boolean;
   /** Applied after field defaults and before caller seed/contextual presets. */
   defaults?:
     | Readonly<EntityEditValueBag>
@@ -282,7 +280,7 @@ export interface EntityEditRequest<
   surface: EntityEditSurface;
   record?: R;
   context?: EntityEditContext;
-  /** Explicit initial field values. Creates accept them by default; updates opt in per intent. */
+  /** Explicit initial field values, merged over every operation's own defaults whenever the caller supplies one. */
   seed?: Readonly<Partial<EntityEditDraft<E>>>;
 }
 

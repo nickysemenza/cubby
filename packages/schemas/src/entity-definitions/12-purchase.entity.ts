@@ -57,7 +57,11 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         label: "Order #",
-        control: { kind: "text", section: "identity" },
+        control: {
+          kind: "text",
+          section: "identity",
+          placeholder: "Vendor order / receipt #",
+        },
         display: { list: true, detail: true, detailOrder: 1 },
         validation: {
           read: z.string().nullable(),
@@ -70,7 +74,11 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         label: "Display label",
-        control: { kind: "text", section: "identity" },
+        control: {
+          kind: "text",
+          section: "identity",
+          placeholder: "e.g. pocket hole jig + bits",
+        },
         display: { list: true, detail: true, detailOrder: 2 },
         validation: {
           read: z.string().nullable(),
@@ -81,7 +89,7 @@ export default defineEntity({
       {
         key: "date",
         kind: "date",
-        control: { kind: "date", section: "schedule" },
+        control: { kind: "date", section: "schedule", initial: "today" },
         display: { list: true, detail: true, detailOrder: 3 },
         validation: {
           read: plainDate.describe("The vendor order or receipt date"),
@@ -94,7 +102,11 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         label: "Stated total",
-        control: { kind: "number", renderer: "money" },
+        control: {
+          kind: "number",
+          renderer: "money",
+          placeholder: "What the receipt says",
+        },
         display: { list: true, detail: true, detailOrder: 4 },
         validation: {
           read: wholeCentAmount.nullable(),
@@ -106,7 +118,10 @@ export default defineEntity({
         key: "notes",
         kind: "text",
         nullable: true,
-        control: { kind: "textarea" },
+        control: {
+          kind: "textarea",
+          placeholder: "Anything worth remembering",
+        },
         display: { list: true, detail: true, detailOrder: 5 },
         validation: {
           read: z.string().nullable(),

@@ -1,14 +1,33 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { useId } from "react";
-import { useFormContext, Controller, type FieldValues } from "react-hook-form";
+import { type ComponentType, type ReactNode, useId } from "react";
+import {
+  Controller,
+  useFormContext,
+  type FieldValues,
+  type UseFormReturn,
+} from "react-hook-form";
 
+import {
+  WithEntitySearch,
+  type WithEntitySearchProps,
+} from "~/app/_components/combobox/with-search-hook";
+import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
 import {
   PlainDateField,
   SelectField,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
+import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
+import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
+import {
+  PROJECT_STATUS_OPTIONS,
+  projectKindOptions,
+} from "~/app/projects/project-options";
+import { tradeOptions } from "~/app/projects/trade-options";
+import { taskStatusOptions } from "~/app/tasks/task-options";
 import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -17,8 +36,8 @@ import { Textarea } from "~/components/ui/textarea";
 import {
   entityFieldPresentation,
   type EditMode,
+  type EntityFieldPresentation,
 } from "./entity-field-presentation";
-
 type PrimitiveFieldOptions = {
   placeholder?: string;
   options?: { value: string; label: string }[];
@@ -27,6 +46,236 @@ type PrimitiveFieldOptions = {
   prefix?: string;
   rows?: number;
 };
+
+type PrimitiveFieldModel = (typeof entityFieldModels)[Entity]["fields"][number];
+
+/**
+ * Renders one field's control given its presentation metadata. Shared by
+ * `EntityPrimitiveFields` (a caller-chosen, section-scoped subset) and
+ * `EntityIntentFields` below (a whole semantic intent, in model order) — the
+ * per-kind switch is the same either way; only field *selection* differs.
+ * Never called with `presentation.control.kind === "specialized"` — callers
+ * dispatch that case themselves before reaching here.
+ */
+function renderPrimitiveField({
+  entity,
+  field,
+  presentation,
+  form,
+  idPrefix,
+  fieldOptions,
+  name,
+}: {
+  entity: Entity;
+  field: PrimitiveFieldModel;
+  presentation: EntityFieldPresentation;
+  form: UseFormReturn<FieldValues>;
+  idPrefix: string;
+  fieldOptions: PrimitiveFieldOptions;
+  name: string;
+}) {
+  const control = presentation.control;
+  if (control.kind === "specialized") {
+    throw new Error(
+      `Field ${entity}.${field.key} requires a specialized renderer`,
+    );
+  }
+  const controlId = `${idPrefix}-${field.key}`;
+  const descriptionId = `${controlId}-description`;
+  const errorId = `${controlId}-error`;
+  const placeholder = fieldOptions.placeholder ?? control.placeholder ?? null;
+  if (control.kind === "text") {
+    // SAFETY: The generated text-control declaration selects a string
+    // field. RHF's conditional string path cannot express a dynamic model.
+    const textName = name as never;
+    return (
+      <UnifiedTextField
+        key={field.key}
+        form={form}
+        name={textName}
+        label={presentation.label}
+        description={presentation.description ?? undefined}
+        placeholder={placeholder ?? presentation.label}
+        nullable={field.nullable}
+        focusOnMount={fieldOptions.focusOnMount}
+      />
+    );
+  }
+  if (control.kind === "textarea") {
+    return (
+      <Controller
+        key={field.key}
+        control={form.control}
+        name={name}
+        render={({ field: rhfField, fieldState }) => (
+          <FormFieldGroup
+            htmlFor={controlId}
+            descriptionId={descriptionId}
+            errorId={errorId}
+            label={presentation.label}
+            description={presentation.description ?? undefined}
+            invalid={fieldState.invalid}
+            error={fieldState.error}
+          >
+            <Textarea
+              id={controlId}
+              {...rhfField}
+              value={rhfField.value ?? ""}
+              rows={fieldOptions.rows}
+              placeholder={placeholder ?? undefined}
+              onChange={(event) =>
+                rhfField.onChange(
+                  event.target.value === "" && field.nullable
+                    ? null
+                    : event.target.value,
+                )
+              }
+              aria-invalid={fieldState.invalid}
+              aria-describedby={
+                [
+                  presentation.description ? descriptionId : null,
+                  fieldState.error ? errorId : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
+            />
+          </FormFieldGroup>
+        )}
+      />
+    );
+  }
+  if (control.kind === "checkbox") {
+    return (
+      <Controller
+        key={field.key}
+        control={form.control}
+        name={name}
+        render={({ field: rhfField, fieldState }) => (
+          <FormFieldGroup
+            htmlFor={controlId}
+            descriptionId={descriptionId}
+            errorId={errorId}
+            label={presentation.label}
+            description={presentation.description ?? undefined}
+            invalid={fieldState.invalid}
+            error={fieldState.error}
+          >
+            <Row gap="sm" align="start">
+              <Checkbox
+                id={controlId}
+                checked={rhfField.value === true}
+                name={rhfField.name}
+                onBlur={rhfField.onBlur}
+                ref={rhfField.ref}
+                onCheckedChange={(checked) =>
+                  rhfField.onChange(checked === true)
+                }
+                aria-invalid={fieldState.invalid}
+                aria-describedby={
+                  [
+                    presentation.description ? descriptionId : null,
+                    fieldState.error ? errorId : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
+              />
+            </Row>
+          </FormFieldGroup>
+        )}
+      />
+    );
+  }
+  if (control.kind === "select") {
+    return (
+      <SelectField
+        key={field.key}
+        form={form}
+        name={name}
+        label={presentation.label}
+        options={fieldOptions.options ?? control.options ?? []}
+        placeholder={placeholder ?? undefined}
+        nullable={field.nullable}
+        description={presentation.description ?? undefined}
+      />
+    );
+  }
+  if (control.kind === "date") {
+    // SAFETY: The date declaration selects a plain-date string path; RHF
+    // cannot correlate a runtime model key with its conditional path type.
+    const dateName = name as never;
+    return (
+      <PlainDateField
+        key={field.key}
+        form={form}
+        name={dateName}
+        label={presentation.label}
+        description={presentation.description ?? undefined}
+      />
+    );
+  }
+  // `control.kind === "number"`: a `renderer: "money"` field defaults to a
+  // dollar prefix and cent-precision step — the two conventions every money
+  // field in the manifest already renders with — unless a caller overrides
+  // either explicitly.
+  const isMoney = control.renderer === "money";
+  const prefix = fieldOptions.prefix ?? (isMoney ? "$" : undefined);
+  const step = fieldOptions.step ?? (isMoney ? "0.01" : undefined);
+  return (
+    <Controller
+      key={field.key}
+      control={form.control}
+      name={name}
+      render={({ field: rhfField, fieldState }) => (
+        <FormFieldGroup
+          htmlFor={controlId}
+          descriptionId={descriptionId}
+          errorId={errorId}
+          label={presentation.label}
+          description={presentation.description ?? undefined}
+          invalid={fieldState.invalid}
+          error={fieldState.error}
+        >
+          <div className={prefix ? "relative" : undefined}>
+            {prefix && (
+              <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
+                {prefix}
+              </span>
+            )}
+            <Input
+              id={controlId}
+              type="number"
+              {...rhfField}
+              value={rhfField.value ?? ""}
+              step={step}
+              placeholder={placeholder ?? undefined}
+              className={prefix ? "pl-7" : undefined}
+              onChange={(event) =>
+                rhfField.onChange(
+                  event.target.value === ""
+                    ? field.nullable
+                      ? null
+                      : undefined
+                    : Number(event.target.value),
+                )
+              }
+              aria-invalid={fieldState.invalid}
+              aria-describedby={
+                [
+                  presentation.description ? descriptionId : null,
+                  fieldState.error ? errorId : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
+            />
+          </div>
+        </FormFieldGroup>
+      )}
+    />
+  );
+}
 
 export function EntityPrimitiveFields({
   entity,
@@ -78,202 +327,185 @@ export function EntityPrimitiveFields({
       {fields.map((field) => {
         const presentation = entityFieldPresentation(entity, field.key, mode);
         const fieldOptions = options[field.key] ?? {};
-        if (presentation.control.kind === "specialized") {
-          throw new Error(
-            `Field ${entity}.${field.key} requires a specialized renderer`,
-          );
-        }
         const name = paths[field.key] ?? field.key;
-        const controlId = `${idPrefix}-${field.key}`;
-        const descriptionId = `${controlId}-description`;
-        const errorId = `${controlId}-error`;
-        if (presentation.control.kind === "text") {
-          // SAFETY: The generated text-control declaration selects a string
-          // field. RHF's conditional string path cannot express a dynamic model.
-          const textName = name as never;
+        return renderPrimitiveField({
+          entity,
+          field,
+          presentation,
+          form,
+          idPrefix,
+          fieldOptions,
+          name,
+        });
+      })}
+    </>
+  );
+}
+
+/** Props every specialized intent renderer receives. */
+interface SpecializedIntentRendererProps {
+  entity: Entity;
+  field: PrimitiveFieldModel;
+  form: UseFormReturn<FieldValues>;
+  idPrefix: string;
+}
+
+/**
+ * Renderers for `control.kind: "specialized"` fields that are not a
+ * reference (those are handled generically below). Keyed by
+ * `control.renderer`. Populated as bespoke forms move onto
+ * `EntityIntentFields` (Lane A5) — an entity whose intent includes a
+ * specialized, non-reference field with no entry here fails loudly rather
+ * than silently dropping the field.
+ */
+const specializedIntentRenderers: Readonly<
+  Record<string, ComponentType<SpecializedIntentRendererProps>>
+> = {};
+
+/**
+ * One reference field's search provider: the vendor picker needs its own
+ * shortcode-typed wrapper (vendor has no shared picker default — see
+ * `with-vendor-search.tsx`); every other reference entity gets the generic
+ * `WithEntitySearch` shell.
+ */
+function referenceEntitySearch(
+  referenceEntity: string,
+): (props: WithEntitySearchProps<string>) => ReactNode {
+  if (referenceEntity === "vendor") {
+    // SAFETY: `WithVendorShortcodeSearch` is keyed to `VendorShortcode`, a
+    // string-branded type; the caller's id path is a plain string RHF field.
+    return WithVendorShortcodeSearch as never;
+  }
+  return (props) => (
+    // SAFETY: `referenceEntity` is a manifest-declared reference target,
+    // always one of `WithEntitySearch`'s supported (non-vendor) entities.
+    <WithEntitySearch entity={referenceEntity as never} {...props} />
+  );
+}
+
+/**
+ * Select-control choices for enum fields whose options carry a status color
+ * — a shape the manifest's plain `control.options` (`{value,label}`) doesn't
+ * express, and that a capture dialog's select should still render (list/
+ * filter UI uses these same arrays for the same color coding). Keyed by
+ * `${entity}.${fieldKey}`; every other select field's options come straight
+ * off the manifest.
+ */
+const richSelectOptions = {
+  "meal.mealType": mealTypeOptions,
+  "meal.mealKind": mealKindOptions,
+  "task.status": taskStatusOptions,
+  "task.trade": tradeOptions,
+  "project.status": PROJECT_STATUS_OPTIONS,
+  "project.kind": projectKindOptions,
+} satisfies Readonly<Record<string, PrimitiveFieldOptions["options"]>>;
+
+function richSelectOptionsFor(key: string): PrimitiveFieldOptions["options"] {
+  if (!Object.hasOwn(richSelectOptions, key)) return undefined;
+  // SAFETY: the `Object.hasOwn` check above proves `key` is one of
+  // `richSelectOptions`'s own declared keys, not an arbitrary string.
+  return richSelectOptions[key as keyof typeof richSelectOptions];
+}
+
+/**
+ * Generic capture/intent fields: iterates one semantic intent's field roster
+ * in model order (not a caller-chosen subset) and renders each field with no
+ * per-entity component. A singular reference renders as a search-backed
+ * picker; `control.kind: "specialized"` dispatches to the small renderer
+ * registry above; everything else falls through to the same per-kind
+ * rendering `EntityPrimitiveFields` uses. Fields the intent doesn't declare a
+ * control for (`pendingImageIds`, editor-only pseudo fields) are skipped —
+ * the dialog shell renders those itself (see `entity-edit-dialog-content.tsx`).
+ */
+export function EntityIntentFields({
+  entity,
+  intent,
+  mode = "create",
+}: {
+  entity: Entity;
+  intent: string;
+  mode?: EditMode;
+}) {
+  const form = useFormContext<FieldValues>();
+  const idPrefix = useId();
+  const model = entityFieldModels[entity];
+  // SAFETY: `generatedEntityEditIntents` only declares the entities that
+  // opted into standard editing (`EditableEntity`, a subset of `Entity`);
+  // callers only ever pass one of those, but this component's `entity` prop
+  // stays the broader `Entity` to match `EntityPrimitiveFields`.
+  const declaredIntents = (
+    generatedEntityEditIntents as Record<
+      string,
+      { fields: Record<string, readonly string[]> } | undefined
+    >
+  )[entity];
+  const intentFieldKeys: readonly string[] =
+    declaredIntents?.fields[intent] ?? [];
+  const fields = model.fields.filter(
+    (field) => intentFieldKeys.includes(field.key) && field.control !== null,
+  );
+
+  return (
+    <>
+      {fields.map((field) => {
+        if (field.reference && !field.reference.multiple) {
+          const referenceEntity = field.reference.entity;
           return (
-            <UnifiedTextField
+            <EntityValueField
               key={field.key}
               form={form}
-              name={textName}
-              label={presentation.label}
-              description={presentation.description ?? undefined}
-              placeholder={fieldOptions.placeholder ?? presentation.label}
-              nullable={field.nullable}
-              focusOnMount={fieldOptions.focusOnMount}
+              // SAFETY: `field.key` is one of this entity's own declared
+              // model field keys; RHF's conditional path type cannot express
+              // a runtime-selected field roster.
+              name={field.key as never}
+              // SAFETY: `referenceEntity` is a manifest-declared reference
+              // target, always one of the picker's supported entities.
+              entity={referenceEntity as never}
+              label={field.label}
+              clearable={field.nullable}
+              SearchProvider={referenceEntitySearch(referenceEntity)}
             />
           );
         }
-        if (presentation.control.kind === "textarea") {
+        const presentation = entityFieldPresentation(entity, field.key, mode);
+        if (presentation.control.kind === "specialized") {
+          const Renderer =
+            specializedIntentRenderers[presentation.control.renderer ?? ""];
+          if (!Renderer) {
+            throw new Error(
+              `Field ${entity}.${field.key} has no specialized intent renderer for "${presentation.control.renderer}"`,
+            );
+          }
           return (
-            <Controller
+            <Renderer
               key={field.key}
-              control={form.control}
-              name={name}
-              render={({ field: control, fieldState }) => (
-                <FormFieldGroup
-                  htmlFor={controlId}
-                  descriptionId={descriptionId}
-                  errorId={errorId}
-                  label={presentation.label}
-                  description={presentation.description ?? undefined}
-                  invalid={fieldState.invalid}
-                  error={fieldState.error}
-                >
-                  <Textarea
-                    id={controlId}
-                    {...control}
-                    value={control.value ?? ""}
-                    rows={fieldOptions.rows}
-                    placeholder={fieldOptions.placeholder}
-                    onChange={(event) =>
-                      control.onChange(
-                        event.target.value === "" && field.nullable
-                          ? null
-                          : event.target.value,
-                      )
-                    }
-                    aria-invalid={fieldState.invalid}
-                    aria-describedby={
-                      [
-                        presentation.description ? descriptionId : null,
-                        fieldState.error ? errorId : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" ") || undefined
-                    }
-                  />
-                </FormFieldGroup>
-              )}
+              entity={entity}
+              field={field}
+              form={form}
+              idPrefix={idPrefix}
             />
           );
         }
-        if (presentation.control.kind === "checkbox") {
-          return (
-            <Controller
-              key={field.key}
-              control={form.control}
-              name={name}
-              render={({ field: control, fieldState }) => (
-                <FormFieldGroup
-                  htmlFor={controlId}
-                  descriptionId={descriptionId}
-                  errorId={errorId}
-                  label={presentation.label}
-                  description={presentation.description ?? undefined}
-                  invalid={fieldState.invalid}
-                  error={fieldState.error}
-                >
-                  <Row gap="sm" align="start">
-                    <Checkbox
-                      id={controlId}
-                      checked={control.value === true}
-                      name={control.name}
-                      onBlur={control.onBlur}
-                      ref={control.ref}
-                      onCheckedChange={(checked) =>
-                        control.onChange(checked === true)
-                      }
-                      aria-invalid={fieldState.invalid}
-                      aria-describedby={
-                        [
-                          presentation.description ? descriptionId : null,
-                          fieldState.error ? errorId : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" ") || undefined
-                      }
-                    />
-                  </Row>
-                </FormFieldGroup>
-              )}
-            />
-          );
+        const fieldOptions: PrimitiveFieldOptions = {};
+        if (
+          field.key === "name" &&
+          mode === "create" &&
+          presentation.control.kind === "text"
+        ) {
+          fieldOptions.focusOnMount = true;
         }
         if (presentation.control.kind === "select") {
-          return (
-            <SelectField
-              key={field.key}
-              form={form}
-              name={name}
-              label={presentation.label}
-              options={
-                fieldOptions.options ?? presentation.control.options ?? []
-              }
-              nullable={field.nullable}
-              description={presentation.description ?? undefined}
-            />
-          );
+          fieldOptions.options = richSelectOptionsFor(`${entity}.${field.key}`);
         }
-        if (presentation.control.kind === "date") {
-          // SAFETY: The date declaration selects a plain-date string path; RHF
-          // cannot correlate a runtime model key with its conditional path type.
-          const dateName = name as never;
-          return (
-            <PlainDateField
-              key={field.key}
-              form={form}
-              name={dateName}
-              label={presentation.label}
-              description={presentation.description ?? undefined}
-            />
-          );
-        }
-        if (presentation.control.kind === "number") {
-          return (
-            <Controller
-              key={field.key}
-              control={form.control}
-              name={name}
-              render={({ field: control, fieldState }) => (
-                <FormFieldGroup
-                  htmlFor={controlId}
-                  descriptionId={descriptionId}
-                  errorId={errorId}
-                  label={presentation.label}
-                  description={presentation.description ?? undefined}
-                  invalid={fieldState.invalid}
-                  error={fieldState.error}
-                >
-                  <div className={fieldOptions.prefix ? "relative" : undefined}>
-                    {fieldOptions.prefix && (
-                      <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
-                        {fieldOptions.prefix}
-                      </span>
-                    )}
-                    <Input
-                      id={controlId}
-                      type={presentation.control.kind}
-                      {...control}
-                      value={control.value ?? ""}
-                      step={fieldOptions.step}
-                      className={fieldOptions.prefix ? "pl-7" : undefined}
-                      onChange={(event) =>
-                        control.onChange(
-                          event.target.value === ""
-                            ? field.nullable
-                              ? null
-                              : undefined
-                            : Number(event.target.value),
-                        )
-                      }
-                      aria-invalid={fieldState.invalid}
-                      aria-describedby={
-                        [
-                          presentation.description ? descriptionId : null,
-                          fieldState.error ? errorId : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" ") || undefined
-                      }
-                    />
-                  </div>
-                </FormFieldGroup>
-              )}
-            />
-          );
-        }
-        return null;
+        return renderPrimitiveField({
+          entity,
+          field,
+          presentation,
+          form,
+          idPrefix,
+          fieldOptions,
+          name: field.key,
+        });
       })}
     </>
   );

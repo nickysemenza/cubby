@@ -17,7 +17,6 @@ import {
 import { z } from "zod";
 
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
-import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
 import {
   NullableNumericField,
   PlainDateField,
@@ -40,10 +39,7 @@ import {
   FinancialTransactionFormFields,
   type FinancialTransactionFormValues,
 } from "~/app/finance/financial-transaction-form";
-import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
-import { projectKindOptions } from "~/app/projects/project-options";
-import { PROJECT_STATUS_OPTIONS, tradeOptions } from "~/app/projects/shared";
-import { taskStatusOptions } from "~/app/tasks/task-options";
+import { tradeOptions } from "~/app/projects/shared";
 import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -53,7 +49,10 @@ import { Switch } from "~/components/ui/switch";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 
-import { EntityPrimitiveFields } from "./entity-primitive-fields";
+import {
+  EntityIntentFields,
+  EntityPrimitiveFields,
+} from "./entity-primitive-fields";
 import type { EntityEditResultFor } from "./intent-types";
 import type {
   EntityEditContext,
@@ -95,65 +94,12 @@ const resultName = (
   return parsed.name || fallback;
 };
 
-function MealCaptureFields({ form }: EntityEditorFieldsProps) {
-  return (
-    <>
-      <PlainDateField form={form} name="date" label="Date" />
-      <EntityPrimitiveFields
-        entity="meal"
-        mode="create"
-        section="main"
-        options={{
-          name: { placeholder: "Meal name (optional)", focusOnMount: true },
-          mealType: {
-            placeholder: "Which meal of the day?",
-            options: mealTypeOptions,
-          },
-          mealKind: {
-            options: mealKindOptions,
-          },
-        }}
-      />
-    </>
-  );
+function MealCaptureFields() {
+  return <EntityIntentFields entity="meal" intent="capture" />;
 }
 
-function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
-  return (
-    <>
-      <EntityPrimitiveFields
-        entity="task"
-        mode="create"
-        section="main"
-        options={{
-          name: { placeholder: "What needs doing?", focusOnMount: true },
-          status: { options: taskStatusOptions },
-          trade: { options: tradeOptions },
-        }}
-      />
-      <PlainDateField form={form} name="dueDate" label="Due date" />
-      <EntityValueField<FieldValues, "project">
-        form={form}
-        name="projectId"
-        entity="project"
-        label="Project"
-        SearchProvider={(props) => (
-          <WithEntitySearch entity="project" {...props} />
-        )}
-        clearable
-      />
-      <EntityValueField<FieldValues, "product">
-        form={form}
-        name="subjectProductId"
-        entity="product"
-        label="For"
-        SearchProvider={(props) => (
-          <WithEntitySearch entity="product" {...props} />
-        )}
-        clearable
-      />
-    </>
-  );
+function TaskCaptureFields() {
+  return <EntityIntentFields entity="task" intent="capture" />;
 }
 
 function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
@@ -261,75 +207,16 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
   );
 }
 
-function ProjectCaptureFields({ form }: EntityEditorFieldsProps) {
-  return (
-    <>
-      <EntityPrimitiveFields
-        entity="project"
-        mode="create"
-        section="main"
-        options={{
-          name: { placeholder: "What are you working on?", focusOnMount: true },
-          status: { options: PROJECT_STATUS_OPTIONS },
-          kind: { options: projectKindOptions },
-          costEstimate: { placeholder: "e.g. 500", step: "0.01", prefix: "$" },
-        }}
-      />
-      <PlainDateField form={form} name="startDate" label="Start date" />
-    </>
-  );
+function ProjectCaptureFields() {
+  return <EntityIntentFields entity="project" intent="capture" />;
 }
 
 function VendorCaptureFields() {
-  return (
-    <EntityPrimitiveFields
-      entity="vendor"
-      mode="create"
-      section="main"
-      options={{
-        name: { placeholder: "Who are you paying?", focusOnMount: true },
-        website: { placeholder: "https://…" },
-      }}
-    />
-  );
+  return <EntityIntentFields entity="vendor" intent="capture" />;
 }
 
-function PurchaseCaptureFields({ form }: EntityEditorFieldsProps) {
-  return (
-    <>
-      <EntityValueField<FieldValues, "vendor">
-        form={form}
-        name="vendorId"
-        entity="vendor"
-        label="Vendor"
-        placeholder="Who was paid?"
-        SearchProvider={WithVendorShortcodeSearch}
-      />
-      <EntityPrimitiveFields
-        entity="purchase"
-        mode="create"
-        section="identity"
-        options={{
-          orderId: { placeholder: "Vendor order / receipt #" },
-          displayLabel: { placeholder: "e.g. pocket hole jig + bits" },
-        }}
-      />
-      <PlainDateField form={form} name="date" label="Purchase date" />
-      <EntityPrimitiveFields
-        entity="purchase"
-        mode="create"
-        section="main"
-        options={{
-          statedTotal: {
-            placeholder: "What the receipt says",
-            step: "0.01",
-            prefix: "$",
-          },
-          notes: { placeholder: "Anything worth remembering" },
-        }}
-      />
-    </>
-  );
+function PurchaseCaptureFields() {
+  return <EntityIntentFields entity="purchase" intent="capture" />;
 }
 
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {

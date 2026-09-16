@@ -125,13 +125,28 @@ describe("entity editing kernel", () => {
     });
   });
 
-  it("does not silently apply an update seed", () => {
+  it("applies an update seed too, since one only exists when a caller sent it (V7)", () => {
     const request = {
       entity: "task" as const,
       operation: "update" as const,
       surface: "calendar" as const,
       record: { id: "TSK-1", name: "saved" },
-      seed: { name: "must not leak" },
+      seed: { name: "seed value" },
+    };
+    const resolved = resolveEntityEdit(registry, request);
+    expect(isResolvedEntityEdit(resolved)).toBe(true);
+    if (!isResolvedEntityEdit(resolved)) return;
+    expect(initialEntityEditValues(resolved, request)).toEqual({
+      name: "seed value",
+    });
+  });
+
+  it("leaves an update's saved values alone when no seed is supplied", () => {
+    const request = {
+      entity: "task" as const,
+      operation: "update" as const,
+      surface: "calendar" as const,
+      record: { id: "TSK-1", name: "saved" },
     };
     const resolved = resolveEntityEdit(registry, request);
     expect(isResolvedEntityEdit(resolved)).toBe(true);
