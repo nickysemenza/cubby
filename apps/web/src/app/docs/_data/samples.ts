@@ -1,6 +1,10 @@
 import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
-import { buildNutrition, type MeasureEstimate } from "@cubby/schemas/nutrition";
+import {
+  buildNutrition,
+  type MeasureEstimate,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { SHORTCODE_CHARS } from "@cubby/shared";
 import { z } from "zod";
@@ -83,13 +87,15 @@ const completeEstimate = (lower: number, total: number): MeasureEstimate => ({
 export const sampleSummaryData: z.infer<typeof entitySummaryDataSchema> = {
   type: "recipe",
   data: {
-    cost: completeEstimate(8.45, 6),
-    weight: completeEstimate(650, 6),
-    nutrition: buildNutrition((key) => {
-      if (key === "kcal") return completeEstimate(2800, 6);
-      if (key === "protein") return completeEstimate(42, 6);
-      return { status: "unavailable", reason: "no_data" };
+    ...withMacros({
+      cost: completeEstimate(8.45, 6),
+      nutrition: buildNutrition((key) => {
+        if (key === "kcal") return completeEstimate(2800, 6);
+        if (key === "protein") return completeEstimate(42, 6);
+        return { status: "unavailable", reason: "no_data" };
+      }),
     }),
+    weight: completeEstimate(650, 6),
   },
 };
 

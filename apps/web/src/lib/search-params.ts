@@ -57,6 +57,9 @@ const urlStringValue = z
 
 export const urlStringParam = urlStringValue.catch(undefined);
 
+/** A calendar date (`YYYY-MM-DD`); anything else is dropped. */
+export const urlPlainDateParam = z.iso.date().optional().catch(undefined);
+
 /** A comma-encoded, one-or-many enum filter that retains URL string coercion. */
 export const urlEnumListParam = <T extends z.ZodType<string>>(itemSchema: T) =>
   urlStringParam

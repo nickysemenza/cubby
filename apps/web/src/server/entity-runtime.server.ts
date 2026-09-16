@@ -9,6 +9,7 @@ import { entityInspectorHealthContract } from "~/contracts/entity-inspector-heal
 import { entityIntegrityContract } from "~/contracts/entity-integrity.contract";
 import { entityListContract } from "~/contracts/entity-list.contract";
 import { entityMutationContract } from "~/contracts/entity-mutation.contract";
+import { entityTimelineContract } from "~/contracts/entity-timeline.contract";
 import {
   entityDetailInputSchema,
   getEntityDetailOutputSchema,
@@ -17,11 +18,16 @@ import {
   entityListInputSchema,
   getEntityListOutputSchema,
 } from "~/entities/generated/entity-lists.gen";
+import {
+  entityTimelineInputSchema,
+  getEntityTimelineOutputSchema,
+} from "~/entities/generated/entity-timelines.gen";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   entityBrowserMutationCommandSchema,
   entityBrowserMutationResultSchema,
 } from "~/server/entity-kernel/contracts";
+import { runEntityTimeline } from "~/server/entity-timeline";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getEntityCounts } from "~/server/repo/dashboard";
 import { getEntityGraph } from "~/server/repo/entity-graph";
@@ -85,6 +91,23 @@ export const entityDetailHandlers = implementOperationDomain(
           ? null
           : getEntityDetailOutputSchema(input.entity).parse(result.item);
       },
+    },
+  },
+);
+
+export const entityTimelineHandlers = implementOperationDomain(
+  entityTimelineContract,
+  {
+    timeline: {
+      input: entityTimelineInputSchema,
+      output: (input) => getEntityTimelineOutputSchema(input.entity),
+      run: async (context, input) =>
+        getEntityTimelineOutputSchema(input.entity).parse(
+          await runEntityTimeline(
+            context,
+            entityTimelineInputSchema.parse(input),
+          ),
+        ),
     },
   },
 );

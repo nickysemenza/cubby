@@ -1,11 +1,9 @@
 import { generatedHeader } from "../../artifacts.ts";
-import {
-  EntityDeclarationError,
-  type CompiledEntity,
-  type EntityArtifacts,
-  type SourceRef,
+import type {
+  CompiledEntity,
+  EntityArtifacts,
+  SourceRef,
 } from "../declarations.ts";
-import { entityProjectionMaps } from "./index.ts";
 import { browserRoutes } from "./routes.ts";
 
 const pascalCase = (value: string) =>
@@ -30,49 +28,40 @@ type RoutedEntity = CompiledEntity & {
   route: NonNullable<CompiledEntity["route"]>;
 };
 
-const renderIndexRoute = (
-  entity: RoutedEntity,
-  list: NonNullable<RoutedEntity["route"]["list"]>,
-  withLoader: boolean,
-): string => {
+const GENERIC_LIST = {
+  module: "~/app/_components/entity-list/generic-entity-list",
+  export: "GenericEntityList",
+} as const satisfies SourceRef;
+const GENERIC_DETAIL = {
+  module: "~/app/_components/entity-detail/generic-entity-detail",
+  export: "GenericEntityDetail",
+} as const satisfies SourceRef;
+
+const renderIndexRoute = (entity: RoutedEntity): string => {
   const { basePath } = browserRoutes(entity);
   const page = `${pascalCase(basePath)}Page`;
   const plural = entity.inspector.plural ?? entity.inspector.singular;
-  // `create: "dialog"` always renders the trigger (it is also what makes
-  // `?create=true` addressable); declared actions render beside it.
-  // `actions: null` opts the list out because its component owns the create
-  // affordance itself.
+  // `create: "dialog"` renders the capture trigger (it is also what makes
+  // `?create=true` addressable); every other header affordance comes from
+  // the manifest's `list.actions` / `list.links` through the generic list.
   const createAction =
-    entity.route.create === "dialog" && list.actions !== null
+    entity.route.create === "dialog"
       ? `<CreateDialogAction request={captureRequest(${JSON.stringify(entity.key)})}>New ${entity.inspector.singular}</CreateDialogAction>`
       : null;
-  const declaredAction = list.actions ? `<${list.actions.export} />` : null;
-  const actionNodes = [createAction, declaredAction].filter(
-    (node): node is string => node !== null,
-  );
-  const actions =
-    actionNodes.length === 0
-      ? null
-      : actionNodes.length === 1
-        ? actionNodes[0]
-        : `<>${actionNodes.join("")}</>`;
   const imports = [
     'import { createFileRoute, stripSearchParams } from "@tanstack/react-router";',
     "",
+    importLine(GENERIC_LIST),
     ...(createAction !== null
       ? [
           'import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";',
         ]
       : []),
-    'import { listPage } from "~/app/_components/routing/entity-routes";',
-    importLine(list.component),
-    ...(list.actions ? [importLine(list.actions)] : []),
+    'import { entityListPage } from "~/app/_components/routing/entity-routes";',
     ...(createAction !== null
       ? ['import { captureRequest } from "~/entities/editing/editor-requests";']
       : []),
-    ...(withLoader
-      ? ['import { entityListLoader } from "~/entities/entity-list-ssr";']
-      : []),
+    'import { entityListLoader } from "~/entities/entity-list-ssr";',
     'import { entitySearch } from "~/entities/generated/entity-search.gen";',
     'import { pageTitle } from "~/lib/page-title";',
   ];
@@ -80,19 +69,16 @@ const renderIndexRoute = (
     generatedHeader +
     `${imports.join("\n")}\n\n` +
     splitterNote +
-    `const ${page} = listPage({\n` +
-    `  title: ${JSON.stringify(plural)},\n` +
+    `const ${page} = entityListPage({\n` +
     `  entity: ${JSON.stringify(entity.key)},\n` +
-    `  list: ${list.component.export},\n` +
-    (actions === null ? "" : `  actions: () => ${actions},\n`) +
+    `  list: () => <${GENERIC_LIST.export} entity=${JSON.stringify(entity.key)} />,\n` +
+    (createAction === null ? "" : `  actions: () => ${createAction},\n`) +
     "});\n\n" +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/`)})({\n` +
     `  validateSearch: entitySearch.${entity.key}.schema,\n` +
     `  search: { middlewares: [stripSearchParams(entitySearch.${entity.key}.defaults)] },\n` +
-    (withLoader
-      ? "  loaderDeps: ({ search }) => search,\n" +
-        `  loader: entityListLoader(${JSON.stringify(entity.key)}),\n`
-      : "") +
+    "  loaderDeps: ({ search }) => search,\n" +
+    `  loader: entityListLoader(${JSON.stringify(entity.key)}),\n` +
     `  head: () => ({ meta: [{ title: pageTitle(${JSON.stringify(plural)}) }] }),\n` +
     `  component: ${page},\n` +
     "});\n"
@@ -102,30 +88,25 @@ const renderIndexRoute = (
 const renderDetailRoute = (
   entity: RoutedEntity,
   detail: NonNullable<RoutedEntity["route"]["detail"]>,
-  kernelDetail: boolean,
 ): string => {
   const { basePath, detailParam } = browserRoutes(entity);
   const name = pascalCase(basePath);
-  if (!kernelDetail && detail.query === undefined) {
-    throw new EntityDeclarationError(
-      `${entity.key}.route.detail needs a query: the entity is outside the kernel detail roster.`,
-    );
-  }
+  const queryRef = detail === true ? undefined : detail.query;
   const query = (shortcode: string) =>
-    detail.query === undefined
+    queryRef === undefined
       ? `entityDetailFor(${JSON.stringify(entity.key)}).queryOptions(${shortcode})`
-      : `${detail.query.export}(${shortcode})`;
+      : `${queryRef.export}(${shortcode})`;
   const imports = [
     'import { createFileRoute } from "@tanstack/react-router";',
     "",
+    importLine(GENERIC_DETAIL),
     'import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";',
     'import { detailPage, notFoundPage } from "~/app/_components/routing/entity-routes";',
-    importLine(detail.component),
     'import { RouteErrorComponent } from "~/components/lazy-route-error";',
     'import { DetailPagePending } from "~/components/route-pending";',
-    detail.query === undefined
+    queryRef === undefined
       ? 'import { entityDetailFor } from "~/entities/entity-detail.functions";'
-      : importLine(detail.query),
+      : importLine(queryRef),
     'import { shortcodeHead } from "~/lib/page-title";',
   ];
   return (
@@ -133,8 +114,9 @@ const renderDetailRoute = (
     `${imports.join("\n")}\n\n` +
     splitterNote +
     `const ${name}DetailPage = detailPage({\n` +
+    `  entity: ${JSON.stringify(entity.key)},\n` +
     `  query: (${detailParam}) => ${query(detailParam)},\n` +
-    `  render: (record, ${detailParam}) => <${detail.component.export} key={${detailParam}} record={record} />,\n` +
+    `  render: (record, ${detailParam}) => <${GENERIC_DETAIL.export} key={${detailParam}} entity=${JSON.stringify(entity.key)} record={record} />,\n` +
     `  title: (record) => record.${entity.inspector.titleField},\n` +
     "});\n\n" +
     `const ${name}NotFound = notFoundPage(${JSON.stringify(entity.key)});\n\n` +
@@ -162,11 +144,8 @@ const renderDetailRoute = (
  */
 export const renderBrowserRouteArtifacts = (
   entities: readonly CompiledEntity[],
-): EntityArtifacts[] => {
-  const projections = entityProjectionMaps(entities);
-  const listEntities = new Set(projections.list.map(({ key }) => key));
-  const detailEntities = new Set(projections.detail.map(({ key }) => key));
-  return entities
+): EntityArtifacts[] =>
+  entities
     .filter(
       (entity): entity is RoutedEntity =>
         entity.route !== null && entity.descriptor.browserRoutes !== false,
@@ -180,11 +159,7 @@ export const renderBrowserRouteArtifacts = (
           : [
               {
                 relativePath: `${directory}/${basePath}.index.tsx`,
-                source: renderIndexRoute(
-                  entity,
-                  entity.route.list,
-                  listEntities.has(entity.key),
-                ),
+                source: renderIndexRoute(entity),
               },
             ]),
         ...(entity.route.detail === null
@@ -192,13 +167,8 @@ export const renderBrowserRouteArtifacts = (
           : [
               {
                 relativePath: `${directory}/${basePath}.$${detailParam}.tsx`,
-                source: renderDetailRoute(
-                  entity,
-                  entity.route.detail,
-                  detailEntities.has(entity.key),
-                ),
+                source: renderDetailRoute(entity, entity.route.detail),
               },
             ]),
       ];
     });
-};

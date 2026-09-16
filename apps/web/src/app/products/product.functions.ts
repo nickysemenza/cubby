@@ -26,7 +26,6 @@ export const product = defineOperationDomain(productContract, {
   externalIdSourceOptions: {
     tags: [["product", "externalIdSourceOptions"]],
   },
-  movementTimeline: { tags: [["product", "movementTimeline"]] },
   getByShortcodes: { tags: [["product", "getByShortcodes"]] },
   merge: { invalidates: ripple.productMerge },
   projectUses: {

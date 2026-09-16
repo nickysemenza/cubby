@@ -1,4 +1,8 @@
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import {
+  buildNutrition,
+  type NutritionTotals,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import {
   recipeOut,
   type SectionIngredientOut,
@@ -12,10 +16,10 @@ const unavailableNutrition = buildNutrition(() => ({
   status: "unavailable" as const,
   reason: "no_data" as const,
 }));
-const unavailableTotals: NutritionTotals = {
+const unavailableTotals: NutritionTotals = withMacros({
   cost: { status: "unavailable", reason: "no_data" },
   nutrition: unavailableNutrition,
-};
+});
 
 import { EMPTY_MARK } from "~/components/matrix/matrix-chrome";
 import type { RecipeCosting } from "~/lib/recipe-costing";

@@ -3,7 +3,11 @@ import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { positiveAmount } from "./codec";
 import { cookbookShortcode, recipeShortcode } from "./identifier-fields";
-import { nutritionTotals, nutrientKey } from "./nutrition";
+import {
+  nutritionTotals,
+  nutrientKey,
+  storedNutritionTotals,
+} from "./nutrition";
 
 // Recipe source values - single source of truth for both Zod and Drizzle
 export const recipeSourceValues = [
@@ -23,6 +27,8 @@ export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 
 export const recipeTotals = nutritionTotals;
 export type RecipeTotals = z.infer<typeof recipeTotals>;
+/** The `Recipe.totals` jsonb column: the read shape minus the `macros` projection. */
+export type StoredRecipeTotals = z.infer<typeof storedNutritionTotals>;
 
 // Costing explain payload (recipe.explainCosting + the MCP explain tool).
 // Mirrors the diagnostics calculateTotals produces (lib/recipe-costing.ts) —

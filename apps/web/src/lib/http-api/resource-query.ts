@@ -1,3 +1,4 @@
+import { entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";
 import {
   MAX_PAGE_SIZE,
   MAX_SORTS,
@@ -182,7 +183,17 @@ export function resourceListQuery<Filters extends z.ZodObject>(
   filters: Filters,
   roster?: ListSortRoster,
 ): z.ZodType<ResourceListQuery<Filters>, ResourceListQuery<Filters>> {
-  const entityControls = queryControlsFor(roster);
+  // SAFETY: the strict object is exactly the flattened filter wire shape plus
+  // the controls, which is what `ResourceListQuery` spells at the type level;
+  // the query projections also accept the JSON form those types name.
+  return flatQuery(filters, queryControlsFor(roster)) as z.ZodType<
+    ResourceListQuery<Filters>,
+    ResourceListQuery<Filters>
+  >;
+}
+
+/** The entity's filter fields flattened beside a set of control parameters. */
+function flatQuery(filters: z.ZodObject, entityControls: z.ZodObject) {
   const nesting = new Map<string, readonly [string, string]>();
   const fields: Record<string, z.ZodType> = {};
   const claim = (name: string, schema: z.ZodType) => {
@@ -214,12 +225,38 @@ export function resourceListQuery<Filters extends z.ZodObject>(
     ...entityControls.shape,
   });
   nestingByQuery.set(query, nesting);
-  // SAFETY: the strict object is exactly the flattened filter wire shape plus
-  // the controls, which is what `ResourceListQuery` spells at the type level;
-  // the query projections also accept the JSON form those types name.
-  return query as z.ZodType<
-    ResourceListQuery<Filters>,
-    ResourceListQuery<Filters>
+  return query;
+}
+
+export type ResourceTimelineQuery<
+  Filters extends z.ZodTypeAny,
+  Id extends z.ZodType<string>,
+> = Flat<Json<z.input<Filters>>> &
+  z.input<ReturnType<typeof entityTimelineWindowFor<Id>>>;
+
+/**
+ * The wire schema of a resource timeline: the same flat filter parameters as
+ * the list plus the timeline window (`ids` repeats its key, `from`/`to` are
+ * calendar dates, `order` defaults to newest first).
+ */
+export function resourceTimelineQuery<
+  Filters extends z.ZodObject,
+  Id extends z.ZodType<string>,
+>(
+  filters: Filters,
+  id: Id,
+): z.ZodType<
+  ResourceTimelineQuery<Filters, Id>,
+  ResourceTimelineQuery<Filters, Id>
+> {
+  const window = toWire(entityTimelineWindowFor(id), "query");
+  if (!(window instanceof z.ZodObject))
+    throw new Error("Timeline window must project onto a query object");
+  // SAFETY: as for `resourceListQuery`, with the window in place of the
+  // paging controls.
+  return flatQuery(filters, window) as z.ZodType<
+    ResourceTimelineQuery<Filters, Id>,
+    ResourceTimelineQuery<Filters, Id>
   >;
 }
 
@@ -239,6 +276,29 @@ export const resourceQueryValues = z.record(
   z.string(),
   unparsedStartOperationDataSchema,
 );
+
+const timelineWindowKeys = new Set<string>(
+  entityTimelineWindowFor(z.string()).keyof().options,
+);
+
+export interface ResourceTimelineInput {
+  filters: Record<string, UnparsedStartOperationData>;
+  window: Record<string, UnparsedStartOperationData>;
+}
+
+/** Map a validated resource-timeline query onto the entity timeline input. */
+export function resourceTimelineInputFrom(
+  values: z.output<typeof resourceQueryValues>,
+  nesting: ResourceQueryNesting,
+): ResourceTimelineInput {
+  const window: Record<string, UnparsedStartOperationData> = {};
+  const rest: Record<string, UnparsedStartOperationData> = {};
+  for (const [name, value] of Object.entries(values)) {
+    if (timelineWindowKeys.has(name)) window[name] = value;
+    else rest[name] = value;
+  }
+  return { filters: resourceListInputFrom(rest, nesting).filters, window };
+}
 
 /** Map a validated resource-list query onto the entity list operation input. */
 export function resourceListInputFrom(

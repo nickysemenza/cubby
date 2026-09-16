@@ -22,14 +22,10 @@ export default defineEntity({
   names: { singular: "Image", plural: "Images" },
   route: {
     basePath: "images",
-    list: {
-      component: { module: "~/app/images/imagelist", export: "ImageList" },
-    },
+    // The image list is not a kernel list (no create contract), so its index
+    // route stays hand-written; the detail reads its own query.
+    list: null,
     detail: {
-      component: {
-        module: "~/app/images/image-detail-page",
-        export: "ImageDetailPage",
-      },
       query: {
         module: "~/entities/image.functions",
         export: "imageDetailQuery",
@@ -48,6 +44,35 @@ export default defineEntity({
         "Add photos to attach them to recipes, products, and places.",
     },
     icons: { lucide: "Image", sfSymbol: "photo" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "filename",
+            "url",
+            "key",
+            "size",
+            "contentType",
+            "status",
+            "width",
+            "height",
+            "detectedContentType",
+            "sha256",
+            "renderStatus",
+            "storageStatus",
+            "verifiedAt",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+        { kind: "slot", id: "associations", title: "Used by" },
+      ],
+    },
+    list: { actions: ["delete"] },
   },
   model: {
     fields: [

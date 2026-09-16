@@ -38,6 +38,7 @@ import { entityDetailFor } from "~/entities/entity-detail.functions";
 import {
   editableFieldOverrides,
   EntityBasicInfo,
+  entitySectionFields,
 } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
@@ -490,7 +491,12 @@ export const TaskDetail: FC<TaskDetailProps> = ({ record: task }) => {
       icon: Info,
       placement: "primary",
       content: (
-        <EntityBasicInfo entity="task" record={task} overrides={overrides} />
+        <EntityBasicInfo
+          entity="task"
+          fields={entitySectionFields("task", "overview")}
+          record={task}
+          overrides={overrides}
+        />
       ),
     },
     {

@@ -17,21 +17,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "ledgerTransfer",
   names: { singular: "Ledger Transfer", plural: "Transfers" },
-  route: {
-    basePath: "ledger-transfers",
-    list: {
-      component: {
-        module: "~/app/finance/ledger-transfer-list",
-        export: "LedgerTransferList",
-      },
-    },
-    detail: {
-      component: {
-        module: "~/app/finance/ledger-transfer-detail",
-        export: "LedgerTransferDetail",
-      },
-    },
-  },
+  route: { basePath: "ledger-transfers", list: true, detail: true },
   table: "LedgerTransfer",
   identifiers: { brand: "LedgerTransferId", shortcode: "LTR-" },
   // Ledger transfers have no name field; `fromPartyName` is the most
@@ -49,6 +35,33 @@ export default defineEntity({
       lucide: "ArrowLeftRight",
       sfSymbol: "arrow.left.arrow.right.circle",
     },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "fromPartyId",
+            "toPartyId",
+            "amount",
+            "date",
+            "notes",
+            "classification",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "evidence",
+          title: "Evidence transactions",
+          fields: ["evidenceTransactionIds"],
+        },
+      ],
+    },
+    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -146,7 +159,7 @@ export default defineEntity({
         label: "Evidence",
         reference: { entity: "financialTransaction", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
-        display: { list: true, columnId: "evidenceCount" },
+        display: { list: true, detail: true, columnId: "evidenceCount" },
         validation: {
           read: z.array(financialTransactionShortcode),
           create: ledgerTransferEvidenceTransactionIds.nullable().default([]),

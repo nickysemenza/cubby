@@ -1,4 +1,8 @@
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import {
+  buildNutrition,
+  type NutritionTotals,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import {
   type RecipeOut,
   recipeOut,
@@ -13,10 +17,10 @@ const unavailableNutrition = buildNutrition(() => ({
   status: "unavailable" as const,
   reason: "no_data" as const,
 }));
-const unavailableTotals: NutritionTotals = {
+const unavailableTotals: NutritionTotals = withMacros({
   cost: { status: "unavailable", reason: "no_data" },
   nutrition: unavailableNutrition,
-};
+});
 
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";

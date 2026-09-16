@@ -2,10 +2,11 @@ import { readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compileEntity, validateEntityIdentities } from "./compile.ts";
+import { validateRelationSections } from "./presentation.ts";
 import { browserRoutes } from "./render/routes.ts";
 import type {
+  CompiledEntityPresentation,
   EntityDeclarationMetadata,
-  EntityPresentation,
   EntityFieldControlKind,
   EntityFieldKind,
   EntityStorageDefaultKind,
@@ -32,9 +33,13 @@ type ParsedEntityRoute = {
   basePath: string;
   detailParam?: string;
   create?: "dialog" | "page";
-  list: Readonly<{ component: SourceRef; actions?: SourceRef | null }> | null;
-  detail: Readonly<{ component: SourceRef; query?: SourceRef }> | null;
+  list: true | null;
+  detail: true | Readonly<{ query: SourceRef }> | null;
 };
+/** The list-route query parameter(s) a filter descriptor binds to. */
+type FilterWire =
+  | Readonly<{ kind: "param"; name: string }>
+  | Readonly<{ kind: "range"; from: string; to: string; presence?: string }>;
 type IdentifierRef = Readonly<{
   entity: string;
   kind: "id" | "shortcode";
@@ -80,6 +85,7 @@ export type FilterDescriptor = Readonly<{
   }> | null;
   urlOnly: boolean;
   nullable: Readonly<{ field: string; label: string }> | null;
+  wire: FilterWire;
 }>;
 export type EntityPorts = Readonly<{
   repository: SourceRef | null;
@@ -90,6 +96,7 @@ export type EntityPorts = Readonly<{
     semanticText: SourceRef | null;
     dependentRefresh: SourceRef | null;
   }>;
+  timeline: SourceRef | null;
 }>;
 export type RelationMutation = Readonly<{
   entity: string;
@@ -125,7 +132,6 @@ export type EntityField = Readonly<{
     standard: "name" | "image" | null;
     detailOrder: number | null;
     listOrder: number | null;
-    detailSection: string;
     width: "xs" | "sm" | "md" | "lg" | null;
     format:
       | "currency"
@@ -133,6 +139,7 @@ export type EntityField = Readonly<{
       | "plainDate"
       | "timestamp"
       | "external-link"
+      | "amount"
       | null;
     mobile: Readonly<{
       slot: string;
@@ -181,15 +188,16 @@ export type EntityFieldModel = Readonly<{
   sort: EntityFieldModelSort | null;
   intents: EntityEditIntents | null;
 }>;
+export type CompiledPresentation = CompiledEntityPresentation;
 export type CompiledEntity = Readonly<{
   key: string;
   shortcode: string | null;
-  /** Opt-in native resource verbs with their reasons (list/get are implicit). */
-  native: Readonly<Partial<Record<"create" | "update" | "delete", string>>>;
   /** Names plus the declaration's `presentation` block, passed through as one unit. */
   inspector: Readonly<
-    { singular: string; plural: string | null } & EntityPresentation
+    { singular: string; plural: string | null } & CompiledPresentation
   >;
+  /** `capabilities.timeline`: how `resources.<entity>.timeline` is served. */
+  timeline: "default" | "custom" | null;
   descriptor: DeclarationObject;
   contract: Readonly<{
     create: SourceRef | null;
@@ -333,6 +341,7 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
   );
   const routes = new Set<string>();
   validateEntityIdentities(entities);
+  validateRelationSections(entities);
   for (const entity of entities) {
     if (entity.descriptor.browserRoutes === false) continue;
     for (const route of Object.values(browserRoutes(entity).routes)) {

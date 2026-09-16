@@ -24,6 +24,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   editableFieldOverrides,
   EntityBasicInfo,
+  entitySectionFields,
 } from "~/entities/entity-display";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
@@ -294,6 +295,7 @@ export const PurchaseDetail: FC<{ record: PurchaseOut }> = ({
       content: (
         <EntityBasicInfo
           entity="purchase"
+          fields={entitySectionFields("purchase", "overview")}
           record={purchase}
           overrides={overrides}
         />

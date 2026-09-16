@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, notFound, useParams } from "@tanstack/react-router";
@@ -84,6 +85,41 @@ interface ListPageOptions {
  */
 export function listPage({ list, ...options }: ListPageOptions) {
   return listChromePage({ ...options, page: list });
+}
+
+/**
+ * The generated index routes' page: the title and the header links come
+ * from the entity's manifest (`entitySummary[entity].list`); `actions` adds
+ * the route's own trigger (the create dialog) beside them.
+ */
+export function entityListPage({
+  entity,
+  actions,
+  ...options
+}: Omit<ListPageOptions, "title" | "entity"> & {
+  entity: BrowserRoutedEntity;
+}) {
+  const { singular, plural, list } = entitySummary[entity];
+  return listPage({
+    ...options,
+    entity,
+    title: plural ?? singular,
+    actions: () => (
+      <>
+        {list.links.map((link) => (
+          <Button
+            key={link.path}
+            variant="outline"
+            render={<Link to={link.path} />}
+            nativeButton={false}
+          >
+            {link.label}
+          </Button>
+        ))}
+        {actions?.()}
+      </>
+    ),
+  });
 }
 
 interface ListChromeOptions {
@@ -183,6 +219,8 @@ type DetailRecord<TQuery extends DetailQueryFactory> = NonNullable<
 >;
 
 interface DetailPageOptions<TQuery extends DetailQueryFactory> {
+  /** The entity the route serves; the generated routes name it. */
+  entity?: BrowserRoutedEntity;
   /**
    * The record's query — the same one the route's loader prefetches, so this
    * suspense read is always a cache hit.

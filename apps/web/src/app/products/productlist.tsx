@@ -8,9 +8,9 @@ import {
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { CalendarRange, Clock3, Rows3, Table2 } from "lucide-react";
+import { CalendarClock, Rows3, Table2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -86,6 +86,7 @@ import { productCategoryOptionsWithTheme } from "../_components/products/product
 import { ProductDiscardDialog } from "../_components/products/product-discard-dialog";
 import { ProductShelf } from "../_components/products/product-shelf";
 import { ProductWorkbenchInspector } from "../_components/products/product-workbench-inspector";
+import { EntityTimeline } from "../_components/timeline/entity-timeline";
 import { TruncatedList } from "../_components/TruncatedList";
 import {
   buildProductTreeRows,
@@ -95,15 +96,13 @@ import {
   productTreeRowKey,
   productTreeSubRows,
 } from "./product-kit-rows";
-import { ProductMovementViews } from "./product-movement-views";
 
-export type ProductListView = "table" | "shelf" | "events" | "lifecycles";
+export type ProductListView = "table" | "shelf" | "timeline";
 
 export const PRODUCT_VIEW_OPTIONS: ViewSwitcherOption<ProductListView>[] = [
   { value: "table", label: "Table", icon: Table2 },
   { value: "shelf", label: "Shelf", icon: Rows3 },
-  { value: "events", label: "Events", icon: Clock3 },
-  { value: "lifecycles", label: "Lifecycles", icon: CalendarRange },
+  { value: "timeline", label: "Timeline", icon: CalendarClock },
 ];
 
 interface ProductListProps {
@@ -218,6 +217,37 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
     />
   ) : (
     <NoneValue />
+  );
+}
+
+const productsRoute = getRouteApi("/_authenticated/products/");
+
+/** The Timeline view: `resources.product.timeline` over the current filters, window in the search keys. */
+function ProductTimelineView({ filters }: { filters: ProductFilters }) {
+  const search = productsRoute.useSearch();
+  const navigate = productsRoute.useNavigate();
+  return (
+    <EntityTimeline
+      entity="product"
+      filters={filters}
+      from={search.timelineFrom}
+      to={search.timelineTo}
+      order={search.timelineOrder ?? "desc"}
+      mode={search.timelineMode ?? "events"}
+      onControlsChange={(patch) =>
+        navigate({
+          search: (previous) => {
+            const next = { ...previous };
+            if ("from" in patch) next.timelineFrom = patch.from;
+            if ("to" in patch) next.timelineTo = patch.to;
+            if ("order" in patch) next.timelineOrder = patch.order;
+            if ("mode" in patch) next.timelineMode = patch.mode;
+            return next;
+          },
+          replace: true,
+        })
+      }
+    />
   );
 }
 
@@ -1171,8 +1201,8 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
             infiniteScroll={workbench.infiniteScroll}
           />
         )}
-        {(view === "events" || view === "lifecycles") && (
-          <ProductMovementViews filters={currentFilters} view={view} />
+        {view === "timeline" && (
+          <ProductTimelineView filters={currentFilters} />
         )}
       </Stack>
       {view === "table" && <PreviewSheet />}

@@ -17,22 +17,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "purchase",
   names: { singular: "Purchase", plural: "Purchases" },
-  route: {
-    basePath: "purchases",
-    create: "dialog",
-    list: {
-      component: {
-        module: "~/app/purchases/purchaselist",
-        export: "PurchaseList",
-      },
-    },
-    detail: {
-      component: {
-        module: "~/app/purchases/purchase-detail",
-        export: "PurchaseDetail",
-      },
-    },
-  },
+  route: { basePath: "purchases", create: "dialog", list: true, detail: true },
   table: "Purchase",
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
@@ -46,6 +31,57 @@ export default defineEntity({
       actionLabel: "New Purchase",
     },
     icons: { lucide: "Receipt", sfSymbol: "cart" },
+    detail: {
+      hero: { stats: ["statedTotal", "expenseTotal"], images: true },
+      sections: [
+        {
+          kind: "relation",
+          id: "expenses",
+          title: "Expenses",
+          relation: "expenses",
+          filter: { descriptor: "purchaseId" },
+          columns: ["name", "cost", "date", "lineKind", "product", "project"],
+        },
+        // Per-line quantity and unit cost live on the `PurchaseProduct` join,
+        // which a relation section over the product list cannot show.
+        {
+          kind: "relation",
+          id: "products",
+          title: "Products",
+          relation: "products",
+          filter: { descriptor: "related:product.purchases" },
+          columns: ["name", "manufacturer", "category", "price"],
+        },
+        { kind: "slot", id: "project-allocation", title: "Project allocation" },
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "vendorId",
+            "orderId",
+            "displayLabel",
+            "date",
+            "statedTotal",
+            "notes",
+          ],
+        },
+        {
+          kind: "slot",
+          id: "reconciliation",
+          title: "Reconciliation",
+          placement: "supporting",
+        },
+        {
+          kind: "slot",
+          id: "financial-settlement",
+          title: "Financial settlement",
+          placement: "supporting",
+        },
+      ],
+    },
+    list: { actions: ["merge", "delete"] },
   },
   model: {
     fields: [
@@ -709,6 +745,7 @@ export default defineEntity({
         columnId: "productId",
         kind: "idMulti",
         placeholder: "Filter by related products id...",
+        brandRef: { entity: "product", kind: "id" },
         urlOnly: true,
       },
       {

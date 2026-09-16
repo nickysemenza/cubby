@@ -5,21 +5,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "ledgerParty",
   names: { singular: "Ledger Party", plural: "Ledger Parties" },
-  route: {
-    basePath: "ledger-parties",
-    list: {
-      component: {
-        module: "~/app/finance/ledger-party-list",
-        export: "LedgerPartyList",
-      },
-    },
-    detail: {
-      component: {
-        module: "~/app/finance/ledger-party-detail",
-        export: "LedgerPartyDetail",
-      },
-    },
-  },
+  route: { basePath: "ledger-parties", list: true, detail: true },
   table: "LedgerParty",
   identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
   presentation: {
@@ -32,6 +18,44 @@ export default defineEntity({
         "Household members, guests, and the household itself as a whole show up here once a contribution or transfer names them.",
     },
     icons: { lucide: "Users", sfSymbol: "person.2" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: ["name", "kind", "notes", "createdAt", "updatedAt"],
+        },
+        {
+          kind: "relation",
+          id: "financial-accounts",
+          title: "Financial accounts",
+          relation: "financial-accounts",
+          filter: { descriptor: "ledgerPartyId" },
+          columns: ["name", "identity", "transactionCount"],
+        },
+        {
+          kind: "relation",
+          id: "outgoing-transfers",
+          title: "Outgoing transfers",
+          relation: "outgoing-transfers",
+          filter: { descriptor: "fromPartyId" },
+          columns: ["toPartyId", "amount", "date"],
+          sort: { field: "date", direction: "desc" },
+        },
+        {
+          kind: "relation",
+          id: "incoming-transfers",
+          title: "Incoming transfers",
+          relation: "incoming-transfers",
+          filter: { descriptor: "toPartyId" },
+          columns: ["fromPartyId", "amount", "date"],
+          sort: { field: "date", direction: "desc" },
+        },
+      ],
+    },
+    list: { actions: ["merge", "delete"] },
   },
   model: {
     fields: [

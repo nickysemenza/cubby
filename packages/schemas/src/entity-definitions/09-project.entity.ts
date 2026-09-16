@@ -30,6 +30,141 @@ export default defineEntity({
       actionLabel: "New Project",
     },
     icons: { lucide: "Hammer", sfSymbol: "hammer" },
+    detail: {
+      hero: {
+        chip: "status",
+        stats: ["costEstimate"],
+        actions: ["edit", "setStatus"],
+      },
+      sections: [
+        { kind: "slot", id: "budget", title: "Budget" },
+        {
+          kind: "slot",
+          id: "contribution",
+          title: "Contribution",
+          placement: "supporting",
+        },
+        {
+          kind: "relation",
+          id: "tasks",
+          title: "Tasks",
+          relation: "tasks",
+          filter: { descriptor: "project" },
+          columns: ["name", "status", "dueDate", "trade"],
+        },
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "name",
+            "icon",
+            "status",
+            "kind",
+            "startDate",
+            "endDate",
+            "costEstimate",
+            "parentProjectId",
+            "locations",
+            "updatedAt",
+          ],
+        },
+        {
+          kind: "relation",
+          id: "reusable-resources",
+          title: "Reusable resources",
+          relation: "resources",
+          filter: { descriptor: "usedOnProjectId" },
+          columns: ["name", "manufacturer", "category"],
+        },
+        {
+          kind: "fields",
+          id: "resources",
+          title: "Resources",
+          placement: "supporting",
+          fields: ["googleDriveFolderUrl", "notionPageUrl"],
+        },
+        {
+          kind: "fields",
+          id: "dependencies",
+          title: "Dependencies",
+          placement: "supporting",
+          fields: ["blockedByIds", "blockingIds"],
+        },
+        {
+          kind: "relation",
+          id: "sub-projects",
+          title: "Sub-projects",
+          relation: "sub-projects",
+          filter: { descriptor: "parent" },
+          columns: ["name", "status", "kind", "costEstimate"],
+        },
+        {
+          kind: "relation",
+          id: "expenses",
+          title: "Expenses",
+          relation: "expenses",
+          filter: { descriptor: "project" },
+          columns: ["name", "cost", "date", "costType", "trade", "product"],
+          sort: { field: "date", direction: "desc" },
+        },
+        {
+          kind: "relation",
+          id: "purchases",
+          title: "Purchases",
+          relation: "purchases",
+          filter: { descriptor: "related:purchase.projects" },
+          columns: ["vendor", "displayLabel", "date", "statedTotal"],
+          sort: { field: "date", direction: "desc" },
+        },
+        {
+          kind: "relation",
+          id: "purchased-products",
+          title: "Purchased products",
+          relation: "purchased-products",
+          filter: { descriptor: "related:product.projects" },
+          columns: ["name", "manufacturer", "category", "expenseTotal"],
+        },
+        {
+          kind: "relation",
+          id: "vendors",
+          title: "Vendors",
+          relation: "vendors",
+          filter: { descriptor: "projectId" },
+          columns: ["name", "purchaseCount", "spend"],
+        },
+        {
+          kind: "fields",
+          id: "notes",
+          title: "Notes",
+          placement: "supporting",
+          fields: ["notes"],
+        },
+        {
+          kind: "slot",
+          id: "analytics",
+          title: "Analytics",
+          placement: "full",
+          collapsed: true,
+        },
+      ],
+    },
+    list: {
+      views: [
+        "table",
+        {
+          kind: "slot",
+          id: "overview",
+          label: "Overview",
+          searchKeys: ["rows"],
+        },
+        { kind: "slot", id: "analytics", label: "Analytics" },
+        { kind: "slot", id: "gallery", label: "Gallery" },
+      ],
+      actions: ["setStatus", "delete"],
+      links: [{ label: "Tools", path: "/projects/tools" }],
+    },
   },
   model: {
     fields: [
@@ -41,7 +176,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 10,
-          detailSection: "overview",
           standard: "name",
         },
         validation: {
@@ -58,7 +192,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 30,
-          detailSection: "overview",
         },
         validation: {
           read: projectStatusSchema,
@@ -75,7 +208,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 40,
-          detailSection: "overview",
         },
         validation: {
           read: projectKindSchema.nullable(),
@@ -87,7 +219,7 @@ export default defineEntity({
         key: "locations",
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true, detailOrder: 90, detailSection: "overview" },
+        display: { detail: true, detailOrder: 90 },
         validation: {
           read: z.array(z.string()).describe("House/site names, free-form"),
           create: z.array(z.string()).default([]),
@@ -104,7 +236,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 70,
-          detailSection: "overview",
         },
         validation: {
           read: positiveMoneyNullable
@@ -125,7 +256,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 80,
-          detailSection: "overview",
         },
         validation: {
           read: projectShortcode.nullable(),
@@ -143,7 +273,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 50,
-          detailSection: "overview",
         },
         validation: {
           read: plainDate
@@ -163,7 +292,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 60,
-          detailSection: "overview",
         },
         validation: {
           read: plainDate
@@ -182,7 +310,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 20,
-          detailSection: "overview",
         },
         validation: {
           read: z.string().describe("Emoji shown next to the name").nullable(),
@@ -195,7 +322,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea", section: "details" },
-        display: { list: true },
+        display: { list: true, detail: true },
         validation: {
           read: z.string().describe("Freeform markdown").nullable(),
           create: z.string().nullable().default(null),
@@ -212,7 +339,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 10,
-          detailSection: "resources",
         },
         validation: {
           read: googleDriveFolderUrl,
@@ -230,7 +356,6 @@ export default defineEntity({
           list: true,
           detail: true,
           detailOrder: 20,
-          detailSection: "resources",
         },
         validation: {
           read: notionPageUrl,
@@ -244,7 +369,7 @@ export default defineEntity({
         label: "Blocked By IDs",
         reference: { entity: "task", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
-        display: { list: true },
+        display: { list: true, detail: true },
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -291,7 +416,7 @@ export default defineEntity({
         kind: "identifier",
         label: "Blocking IDs",
         reference: { entity: "task", multiple: true },
-        display: { list: true },
+        display: { list: true, detail: true },
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -311,7 +436,7 @@ export default defineEntity({
         key: "updatedAt",
         kind: "timestamp",
         label: "Last updated",
-        display: { detail: true, detailOrder: 100, detailSection: "overview" },
+        display: { detail: true, detailOrder: 100 },
         validation: {
           read: z.date(),
           create: null,
@@ -591,6 +716,7 @@ export default defineEntity({
         columnId: "dateRange",
         urlKey: "date",
         kind: "range",
+        wire: { kind: "range", from: "dateFrom", to: "dateTo" },
         placeholder: "Filter by project activity...",
         options: [
           { value: "30d", label: "Last 30 days" },
@@ -730,6 +856,7 @@ export default defineEntity({
         columnId: "usedToolId",
         kind: "idMulti",
         placeholder: "Filter by related reusable resources id...",
+        brandRef: { entity: "product", kind: "id" },
         urlOnly: true,
       },
       {
@@ -749,6 +876,7 @@ export default defineEntity({
         columnId: "vendorId",
         kind: "idMulti",
         placeholder: "Filter by related vendors id...",
+        brandRef: { entity: "vendor", kind: "id" },
         urlOnly: true,
       },
       {
@@ -760,6 +888,38 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "sub-projects",
+      label: "Sub-projects",
+      target: "project",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Project.parentProjectId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Project.parentProjectId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "purchases",
+      label: "Purchases",
+      target: "purchase",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Expense.projectId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Expense.purchaseId", direction: "incoming" },
+          { edge: "Expense.projectId", direction: "outgoing" },
+        ],
+      },
+    },
     {
       key: "parent",
       label: "Parent project",

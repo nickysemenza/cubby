@@ -19,6 +19,7 @@ import { entityDetailFor } from "~/entities/entity-detail.functions";
 import {
   editableFieldOverrides,
   EntityBasicInfo,
+  entitySectionFields,
 } from "~/entities/entity-display";
 import {
   cancelQueriesByTags,
@@ -158,6 +159,7 @@ export function WishDetail({ record: wish }: { record: WishOut }) {
       content: (
         <EntityBasicInfo
           entity="wish"
+          fields={entitySectionFields("wish", "overview")}
           record={wish}
           overrides={fieldOverrides}
         />

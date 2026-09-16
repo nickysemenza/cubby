@@ -42,7 +42,7 @@ const storageJsonTypes = {
   "product.labelNutrition": "ProductLabelNutrition | null",
   "purchase.dataExceptions": "DataException[]",
   "recipe.meta": "RecipeStoredMeta | null",
-  "recipe.totals": "RecipeTotals | null",
+  "recipe.totals": "StoredRecipeTotals | null",
   "recipe.yield": "RecipeYield",
 } as const satisfies Readonly<Record<string, string>>;
 
@@ -198,7 +198,7 @@ export const renderEntityColumnsArtifact = (
     'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
     'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
     'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +
-    'import type { RecipeStoredMeta, RecipeTotals, RecipeYield } from "@cubby/schemas/recipe-shared";\n' +
+    'import type { RecipeStoredMeta, RecipeYield, StoredRecipeTotals } from "@cubby/schemas/recipe-shared";\n' +
     'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
     'import { inventoryPlacementValues } from "@cubby/shared";\n' +
     'import { sql } from "drizzle-orm";\n' +

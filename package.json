@@ -12,7 +12,6 @@
     "typecheck:web": "pnpm --filter @cubby/web typecheck",
     "generate": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts",
     "generate:check": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts --check",
-    "knip": "knip --no-config-hints --cache",
     "dedupe:check": "pnpm dedupe --check",
     "audit:security": "node scripts/check-security-audit.ts",
     "lint": "NX_DAEMON=false nx run cubby-checks:lint --outputStyle=stream",

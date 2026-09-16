@@ -14,7 +14,17 @@ import {
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
-import { and, desc, eq, gte, lt, lte, or, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lt,
+  lte,
+  or,
+  type SQL,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -319,6 +329,12 @@ export async function getAuditLog(
   params: {
     entityType?: AuditEntityType;
     entityId?: string;
+    /**
+     * Repo-only cohort narrowing (uuids, not shortcodes): the entity timeline
+     * reads one audit window for every record in a list scope. Never exposed
+     * on the browser/MCP audit input, whose subject is a single shortcode.
+     */
+    entityIds?: readonly string[];
     source?: AuditSource | AuditSource[];
     // Both ISO date strings, same encoding as `cursor` below — inclusive
     // bounds on `createdAt`.
@@ -336,6 +352,11 @@ export async function getAuditLog(
 
   if (params.entityId) {
     conditions.push(eq(auditLog.entityId, params.entityId));
+  }
+
+  if (params.entityIds) {
+    if (params.entityIds.length === 0) return { entries: [] };
+    conditions.push(inArray(auditLog.entityId, [...params.entityIds]));
   }
 
   const sourceCondition = eqAny(auditLog.source, params.source);

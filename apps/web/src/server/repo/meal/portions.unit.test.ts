@@ -2,6 +2,7 @@ import {
   buildNutrition,
   type MeasureEstimate,
   type NutritionTotals,
+  withMacros,
 } from "@cubby/schemas/nutrition";
 import { describe, expect, it } from "vitest";
 
@@ -19,16 +20,17 @@ const complete = (
   coverage: { covered: 2, total: 2 },
 });
 
-const totals = (): NutritionTotals => ({
-  cost: complete(10, 12),
-  nutrition: buildNutrition((key) =>
-    key === "kcal"
-      ? complete(800, 960)
-      : key === "protein"
-        ? complete(80, 96)
-        : { status: "unavailable", reason: "no_data" },
-  ),
-});
+const totals = (): NutritionTotals =>
+  withMacros({
+    cost: complete(10, 12),
+    nutrition: buildNutrition((key) =>
+      key === "kcal"
+        ? complete(800, 960)
+        : key === "protein"
+          ? complete(80, 96)
+          : { status: "unavailable", reason: "no_data" },
+    ),
+  });
 
 describe("meal portion estimates", () => {
   it("prefers actual, then estimated, then current recipe yield", () => {

@@ -29,7 +29,12 @@ describe("HTTP contract", () => {
       expected,
     );
     // Opted out of HTTP, still a Start operation.
-    for (const excluded of ["entity.list", "entity.detail", "entity.mutate"]) {
+    for (const excluded of [
+      "entity.list",
+      "entity.detail",
+      "entity.mutate",
+      "entity.timeline",
+    ]) {
       expect(expected).not.toContain(excluded);
       expect(START_OPERATIONS).toHaveProperty(excluded);
     }
@@ -59,8 +64,8 @@ describe("HTTP contract", () => {
     }
     expect(mismatches).toEqual([]);
     // Flat-input queries are GET; the structured ones travel as POST bodies.
-    expect(transports).toEqual({ get: 120, post: 33, mutation: 86 });
-    expect(Object.keys(document.paths)).toHaveLength(276);
+    expect(transports).toEqual({ get: 120, post: 32, mutation: 86 });
+    expect(Object.keys(document.paths)).toHaveLength(279);
     const analytics = rpc.find(
       (route) => metadataOf(route).operation === "expense.analytics",
     );
@@ -92,6 +97,19 @@ describe("HTTP contract", () => {
     expect(() =>
       checkHttpRoutes({ a: clash, b: { ...clash, path: clash.path } }),
     ).toThrow("collision");
+  });
+
+  it("registers a collection's static timeline route before its /:id route", () => {
+    // Regression guard: itty-router takes the first match, so a contract
+    // whose `get` precedes `timeline` would answer `/products/timeline` with
+    // a 404 for the shortcode "timeline".
+    const { timeline, get } = httpContract.resources.product;
+    expect(() => checkHttpRoutes({ get, timeline })).toThrow("shadow");
+    expect(() => checkHttpRoutes({ timeline, get })).not.toThrow();
+    const paths = httpRoutes(httpContract).map((route) => route.path);
+    expect(paths.indexOf("/api/v1/products/timeline")).toBeLessThan(
+      paths.indexOf("/api/v1/products/:id"),
+    );
   });
 
   it("carries object inputs as fields and wraps scalar inputs", () => {

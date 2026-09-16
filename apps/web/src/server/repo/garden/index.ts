@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  type GardenEntryFilters,
   type GardenPlantingOut,
   gardenCreatePlantingInput,
   gardenCorrectLocationDatesInput,
@@ -15,6 +16,7 @@ import {
   gardenOverviewOut,
   gardenOptionsInput,
   gardenOptionsOut,
+  type PlantingFilters,
   plantingOut,
 } from "@cubby/schemas/garden";
 import {
@@ -56,6 +58,7 @@ import {
   associatePendingImages,
   countWhere,
   eqAny,
+  eqAnyRequested,
   executeListQueryWithCount,
   imageJoinBindings,
   mapImages,
@@ -71,6 +74,7 @@ import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
+  resolveFilterIds,
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -99,17 +103,23 @@ const required = async <
   return parseEntityId(entity, id);
 };
 
+// The joins `plantingOut`'s name projections read; shared by the row read
+// and the list so both parse the same shape.
+const plantingReferences = {
+  ingredient: {
+    columns: { shortcode: true, name: true, gardenGuideKey: true },
+  },
+  sourceProduct: { columns: { shortcode: true, name: true } },
+  location: { columns: { shortcode: true, name: true } },
+  intendedLocation: { columns: { shortcode: true, name: true } },
+  parentPlanting: { columns: { shortcode: true } },
+  images: plantingImagesRelation,
+} as const;
+
 const plantingRow = async (db: GardenDb, id: PlantingId) => {
   const row = await unwrapDb(db).query.planting.findFirst({
     where: and(eq(planting.id, id), notDeleted(planting)),
-    with: {
-      ingredient: { columns: { shortcode: true, name: true } },
-      sourceProduct: { columns: { shortcode: true } },
-      location: { columns: { shortcode: true } },
-      intendedLocation: { columns: { shortcode: true } },
-      parentPlanting: { columns: { shortcode: true } },
-      images: plantingImagesRelation,
-    },
+    with: plantingReferences,
   });
   if (!row)
     throw createAppError(
@@ -138,6 +148,11 @@ const mapPlanting = (row: PlantingWithReferences) =>
     parentPlantingId: row.parentPlanting
       ? parseShortcodeFor("planting", row.parentPlanting.shortcode)
       : null,
+    ingredientName: row.ingredient.name,
+    gardenGuideKey: row.ingredient.gardenGuideKey,
+    sourceProductName: row.sourceProduct?.name ?? null,
+    locationName: row.location?.name ?? null,
+    intendedLocationName: row.intendedLocation?.name ?? null,
     displayName: plantingDisplayName({
       ingredientName: row.ingredient.name,
       variety: row.variety,
@@ -894,10 +909,21 @@ const plantingScaffold = listScaffold("planting", planting);
 
 export const plantingList = async (
   db: Database,
+  filters: PlantingFilters,
   pagination: PaginationParams,
   sorts: SortParams[] = [],
 ) => {
-  const where = buildPlantingWhere();
+  // Id filters resolve shortcodes first; a requested set that resolves to
+  // nothing matches nothing (`eqAnyRequested`), never the whole list.
+  const [locationIds, ingredientIds] = await Promise.all([
+    resolveFilterIds(db, "location", filters.locationId),
+    resolveFilterIds(db, "ingredient", filters.ingredientId),
+  ]);
+  const where = plantingScaffold.where(filters, [
+    buildPlantingWhere(),
+    eqAnyRequested(planting.locationId, locationIds),
+    eqAnyRequested(planting.ingredientId, ingredientIds),
+  ]);
   const orderByArray = plantingScaffold.orderBy(sorts);
   const { take, skip } = plantingScaffold.page(pagination);
   const { data: rows, count } = await executeListQueryWithCount({
@@ -905,14 +931,7 @@ export const plantingList = async (
     rows: () =>
       unwrapDb(db).query.planting.findMany({
         where,
-        with: {
-          ingredient: { columns: { shortcode: true, name: true } },
-          sourceProduct: { columns: { shortcode: true } },
-          location: { columns: { shortcode: true } },
-          intendedLocation: { columns: { shortcode: true } },
-          parentPlanting: { columns: { shortcode: true } },
-          images: plantingImagesRelation,
-        },
+        with: plantingReferences,
         orderBy: orderByArray,
         limit: take,
         offset: skip,
@@ -925,12 +944,57 @@ export const plantingList = async (
 
 const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
 
+/**
+ * A planting's journal always includes its direct entries. Whole-location
+ * entries join only when their observation date falls in a confirmed period.
+ */
+const journalPredicate = (db: Database, plantingId: PlantingId) =>
+  or(
+    eq(gardenEntry.plantingId, plantingId),
+    and(
+      isNull(gardenEntry.plantingId),
+      exists(
+        unwrapDb(db)
+          .select({ one: sql`1` })
+          .from(plantingLocationPeriod)
+          .where(
+            and(
+              eq(plantingLocationPeriod.plantingId, plantingId),
+              sql`${plantingLocationPeriod.locationId} = ${sql.raw('"gardenEntry"."locationId"')}`,
+              sql`${sql.raw('"gardenEntry"."observedOn"')} >= ${plantingLocationPeriod.inLocationSince}`,
+              or(
+                isNull(plantingLocationPeriod.endedOn),
+                sql`${sql.raw('"gardenEntry"."observedOn"')} <= ${plantingLocationPeriod.endedOn}`,
+              ),
+            ),
+          ),
+      ),
+    ),
+  );
+
 export const gardenEntryList = async (
   db: Database,
+  filters: GardenEntryFilters,
   pagination: PaginationParams,
   sorts: SortParams[] = [],
 ) => {
-  const where = buildGardenEntryWhere();
+  const [locationIds, plantingIds, journalPlantingId] = await Promise.all([
+    resolveFilterIds(db, "location", filters.locationId),
+    resolveFilterIds(db, "planting", filters.plantingId),
+    filters.journalPlantingId === undefined
+      ? undefined
+      : resolveLiveShortcode(db, filters.journalPlantingId, "planting"),
+  ]);
+  const where = gardenEntryScaffold.where(filters, [
+    buildGardenEntryWhere(),
+    eqAnyRequested(gardenEntry.locationId, locationIds),
+    eqAnyRequested(gardenEntry.plantingId, plantingIds),
+    filters.journalPlantingId === undefined
+      ? undefined
+      : journalPlantingId
+        ? journalPredicate(db, parseEntityId("planting", journalPlantingId))
+        : sql`false`,
+  ]);
   // `createdAt desc` is a deliberate stable tiebreak (was hard-coded as a
   // second `orderBy` entry alongside whichever field the caller picked) — a
   // `tieBreaker`, not a `resolve` special-case, so it can't swallow a second
@@ -1137,30 +1201,11 @@ export const gardenJournal = async (
 ) => {
   const plantingId = await required(db, input.plantingId, "planting");
   const pageSize = 50;
-  const inConfirmedLocationPeriod = exists(
-    unwrapDb(db)
-      .select({ one: sql`1` })
-      .from(plantingLocationPeriod)
-      .where(
-        and(
-          eq(plantingLocationPeriod.plantingId, plantingId),
-          sql`${plantingLocationPeriod.locationId} = ${sql.raw('"gardenEntry"."locationId"')}`,
-          sql`${sql.raw('"gardenEntry"."observedOn"')} >= ${plantingLocationPeriod.inLocationSince}`,
-          or(
-            isNull(plantingLocationPeriod.endedOn),
-            sql`${sql.raw('"gardenEntry"."observedOn"')} <= ${plantingLocationPeriod.endedOn}`,
-          ),
-        ),
-      ),
-  );
   const rows = await unwrapDb(db).query.gardenEntry.findMany({
     where: and(
       notDeleted(gardenEntry),
       input.includeBedContext
-        ? or(
-            eq(gardenEntry.plantingId, plantingId),
-            and(isNull(gardenEntry.plantingId), inConfirmedLocationPeriod),
-          )
+        ? journalPredicate(db, plantingId)
         : eq(gardenEntry.plantingId, plantingId),
     ),
     with: {

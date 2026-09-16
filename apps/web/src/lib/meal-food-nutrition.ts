@@ -8,6 +8,8 @@ import type {
 import {
   type MeasureEstimate,
   type NutritionTotals,
+  type StoredNutritionTotals,
+  withMacros,
 } from "@cubby/schemas/nutrition";
 import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import type { RecipeYield } from "@cubby/schemas/recipe-shared";
@@ -55,7 +57,7 @@ export type FoodAmountCalculation = {
   batchShare: MeasureEstimate;
 };
 
-const toWTotals = (totals: NutritionTotals): WNutritionTotals => ({
+const toWTotals = (totals: StoredNutritionTotals): WNutritionTotals => ({
   cost: totals.cost,
   nutrition: TIER1_NUTRIENT_KEYS.map((key) => ({
     code: TIER1_NUTRIENTS[key].code,
@@ -63,10 +65,11 @@ const toWTotals = (totals: NutritionTotals): WNutritionTotals => ({
   })),
 });
 
-const fromWTotals = (totals: WNutritionTotals): NutritionTotals => ({
-  cost: fromWMeasureEstimate(totals.cost),
-  nutrition: fromNamedEstimates(totals.nutrition),
-});
+const fromWTotals = (totals: WNutritionTotals): NutritionTotals =>
+  withMacros({
+    cost: fromWMeasureEstimate(totals.cost),
+    nutrition: fromNamedEstimates(totals.nutrition),
+  });
 
 const mappedSource = (
   products: ProductWithMappingsAndFoodOut[],

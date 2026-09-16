@@ -83,6 +83,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   editableFieldOverrides,
   EntityBasicInfo,
+  entitySectionFields,
 } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { image } from "~/entities/image.functions";
@@ -1091,6 +1092,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       <EntityBasicInfo
         entity="project"
         record={project}
+        fields={entitySectionFields("project", "overview")}
         overrides={overviewRenderers}
         afterFields={{
           costEstimate: [
@@ -1118,7 +1120,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       <EntityBasicInfo
         entity="project"
         record={project}
-        section="resources"
+        fields={entitySectionFields("project", "resources")}
         overrides={{
           googleDriveFolderUrl: () => ({
             value: (

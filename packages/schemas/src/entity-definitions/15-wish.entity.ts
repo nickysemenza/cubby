@@ -5,18 +5,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "wish",
   names: { singular: "Wish", plural: "Wishlist" },
-  route: {
-    basePath: "wishes",
-    create: "dialog",
-    // WishList renders its own create action in the table toolbar.
-    list: {
-      component: { module: "~/app/wishes/wish-list", export: "WishList" },
-      actions: null,
-    },
-    detail: {
-      component: { module: "~/app/wishes/wish-detail", export: "WishDetail" },
-    },
-  },
+  route: { basePath: "wishes", create: "dialog", list: true, detail: true },
   table: "Wish",
   identifiers: { brand: "WishId", shortcode: "WSH-" },
   presentation: {
@@ -30,6 +19,24 @@ export default defineEntity({
       actionLabel: "Add Wish",
     },
     icons: { lucide: "Heart", sfSymbol: "star" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: ["name", "notes", "acquiredAt", "createdAt", "updatedAt"],
+        },
+        {
+          kind: "fields",
+          id: "candidates",
+          title: "Tool alternatives",
+          fields: ["candidates"],
+        },
+      ],
+    },
+    list: { actions: ["markPurchased", "delete"] },
   },
   model: {
     fields: [
@@ -103,6 +110,7 @@ export default defineEntity({
       {
         key: "candidates",
         kind: "json",
+        display: { detail: true },
         validation: {
           read: z.array(wishCandidateOut),
           create: null,

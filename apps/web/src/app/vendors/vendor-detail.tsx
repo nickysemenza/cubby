@@ -10,6 +10,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   editableFieldOverrides,
   EntityBasicInfo,
+  entitySectionFields,
 } from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 
@@ -135,6 +136,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ record: vendor }) => {
       content: (
         <EntityBasicInfo
           entity="vendor"
+          fields={entitySectionFields("vendor", "overview")}
           record={vendor}
           overrides={fieldOverrides}
         />

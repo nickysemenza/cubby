@@ -29,41 +29,39 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   onOpenChange,
   request,
   onSuccess,
+  mutationPort,
 }: EntityEditDialogProps<E>) {
   const sessionRequest: RuntimeEntityEditRequest<E> = {
     ...request,
     surface: "dialog",
   };
-  const session = useEntityEditSession(sessionRequest);
+  const session = useEntityEditSession(sessionRequest, { mutationPort });
   const resetSession = session.reset;
   const presentation = getEntityEditorPresentation<E>(request);
   const context = request.context ?? {};
   const record = request.record;
-  // A create intent whose active field roster includes `pendingImageIds` gets
-  // the generic photo-capture field for free, below the presentation's own
-  // fields — no per-entity Fields component needs to know about it (meal and
-  // task's capture dialogs are exactly this: see `editor-presentations.tsx`).
   const resolved = resolveEntityEdit(entityEditRegistry, sessionRequest);
   const intentFields = isResolvedEntityEdit(resolved)
     ? resolved.intentDefinition.fields
     : [];
-  // A create *or* update intent whose active field roster includes
-  // `pendingImageIds` gets the generic photo-capture field for free, below
-  // the presentation's own fields — no per-entity Fields component needs to
-  // know about it (meal and task's capture dialogs are exactly this: see
-  // `editor-presentations.tsx`). An update that also carries
-  // `removeImageIds` additionally lets the existing gallery be trimmed —
-  // reordering stays a `full`-page-only affordance (no generic `imageOrder`
-  // seeding from a record).
+  // An intent whose active field roster includes `pendingImageIds` gets the
+  // generic photo-capture field below the presentation's own fields; no
+  // per-entity Fields component knows about images. An update roster that
+  // also carries `removeImageIds` / `imageOrder` lets the existing gallery be
+  // trimmed / reordered; the `imageOrder` field is seeded from `record.images`
+  // and only reaches the payload when the order changed (`definitions.ts`).
   const showPendingImageUpload = intentFields.includes("pendingImageIds");
   const showImageRemoval =
     request.operation === "update" && intentFields.includes("removeImageIds");
-  // SAFETY: only reached when `showImageRemoval` is true, which only turns
-  // true for an update whose record is a gallery entity's own read shape —
-  // the one shape in this generic dialog that carries an `images` array.
-  const existingImages = showImageRemoval
-    ? ((record as { images?: PendingImage[] }).images ?? [])
-    : [];
+  const showImageReorder =
+    request.operation === "update" && intentFields.includes("imageOrder");
+  // SAFETY: only reached for an update whose record is a gallery entity's own
+  // read shape — the one shape in this generic dialog that carries an
+  // `images` array.
+  const existingImages =
+    showImageRemoval || showImageReorder
+      ? ((record as { images?: PendingImage[] }).images ?? [])
+      : [];
   // Field-scoped issues render beside their control via the session's RHF
   // errors; everything else — the headline plus one line per lifecycle blocker
   // — belongs in the banner.
@@ -132,6 +130,14 @@ export function EntityEditDialogContent<E extends EditableEntity>({
               showImageRemoval
                 ? (removedImageIds) =>
                     session.form.setValue("removeImageIds", removedImageIds, {
+                      shouldDirty: true,
+                    })
+                : undefined
+            }
+            onExistingImagesReorder={
+              showImageReorder
+                ? (orderedImageIds) =>
+                    session.form.setValue("imageOrder", orderedImageIds, {
                       shouldDirty: true,
                     })
                 : undefined

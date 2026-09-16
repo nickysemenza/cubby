@@ -88,11 +88,11 @@ Rules that follow from that:
   helper name, or a SQL string is a change-detector; it fails on refactors and
   stays green on regressions.
 - **Real-DB invariants stay integration, always.** The soft-delete, incoming-edge,
-  search-artifact, and filter-application invariants documented below are only
-  meaningful against real SQL — see
-  `server/repo/filter-application.integration.test.ts` and
-  `server/repo/inventory/embedding-cascade-invariant.integration.test.ts`. Never
-  satisfy one with a mock.
+  and search-artifact invariants documented below are only meaningful against
+  real SQL — see `server/repo/inventory/embedding-cascade-invariant.integration.test.ts`
+  and `server/repo/shortcode.integration.test.ts`. Never satisfy one with a
+  mock. Pinned WHERE-clause SQL shapes belong in
+  `server/repo/build-where.unit.test.ts`, not scattered per-entity copies.
 - **A guard that CI depends on is not deletable as duplication.** Entity
   freshness, soft-delete coverage, SQL-array safety, security, and the real-DB
   invariant suites back `pnpm check`; treat them as load-bearing even when a

@@ -1,5 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { buildNutrition } from "@cubby/schemas/nutrition";
+import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { addDays, format, parseISO } from "date-fns";
 import { describe, expect, it } from "vitest";
@@ -24,13 +24,13 @@ const meal = (id: string, startDate: string): CalendarItem => ({
   mealKind: "cooked",
   recipeNames: [],
   coverImageUrl: null,
-  mealTotals: {
+  mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
       status: "unavailable",
       reason: "empty",
     })),
-  },
+  }),
 });
 
 const task = (

@@ -16,9 +16,10 @@ import type {
 } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
-import type {
-  NutritionEstimate,
-  NutritionTotals,
+import {
+  type NutritionEstimate,
+  type NutritionTotals,
+  withMacros,
 } from "@cubby/schemas/nutrition";
 import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import type {
@@ -396,10 +397,10 @@ const projectRecipeCosting = (
       nutrients: [...w.missing_by_type.nutrients],
     },
     diagnostics: w.rows.map((r, i) => toRowDiagnostic(r, rows[i], ingMap)),
-    estimates: {
+    estimates: withMacros({
       cost: fromWMeasureEstimate(w.estimates.cost),
       nutrition: fromNamedEstimates(w.estimates.nutrition),
-    },
+    }),
   };
   if (w.price_upper != null) totals.priceUpper = w.price_upper;
   if (anyNutrientUpper) totals.nutrientsUpper = nutrientsUpper;

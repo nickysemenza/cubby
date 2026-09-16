@@ -50,6 +50,31 @@ export function checkHttpRoutes(router: AppRouter): void {
     routeMetadata(route);
     checkCarriers(route, key);
   }
+  checkStaticSiblingOrder(routes);
+}
+
+/**
+ * A fixed path under a collection (`/products/timeline`) must be registered
+ * before that collection's `/:id` route with the same method: the router
+ * takes the first match, and the contract's key order is what decides it.
+ * The generator emits `timeline` before `get`; this keeps a re-sort honest.
+ */
+function checkStaticSiblingOrder(routes: readonly AppRoute[]): void {
+  routes.forEach((route, index) => {
+    if (!route.path.endsWith("/:id")) return;
+    const collection = route.path.slice(0, -"/:id".length);
+    for (const later of routes.slice(index + 1)) {
+      if (
+        later.method === route.method &&
+        !later.path.includes(":") &&
+        later.path.startsWith(`${collection}/`) &&
+        !later.path.slice(collection.length + 1).includes("/")
+      )
+        throw new Error(
+          `HTTP route ${later.method} ${later.path} is registered after ${route.path}, which would shadow it`,
+        );
+    }
+  });
 }
 
 /** A route carries its input as query parameters or as a body, never both. */

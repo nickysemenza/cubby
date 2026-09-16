@@ -7,19 +7,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "vendor",
   names: { singular: "Vendor", plural: "Vendors" },
-  route: {
-    basePath: "vendors",
-    create: "dialog",
-    list: {
-      component: { module: "~/app/vendors/vendorlist", export: "VendorList" },
-    },
-    detail: {
-      component: {
-        module: "~/app/vendors/vendor-detail",
-        export: "VendorDetail",
-      },
-    },
-  },
+  route: { basePath: "vendors", create: "dialog", list: true, detail: true },
   table: "Vendor",
   identifiers: { brand: "VendorId", shortcode: "VEN-" },
   presentation: {
@@ -33,6 +21,68 @@ export default defineEntity({
       actionLabel: "Add Vendor",
     },
     icons: { lucide: "Store", sfSymbol: "storefront" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "name",
+            "website",
+            "orderUrlTemplate",
+            "notes",
+            "purchaseCount",
+            "spend",
+            "latestPurchaseDate",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+        {
+          kind: "relation",
+          id: "purchases",
+          title: "Purchases",
+          relation: "purchases",
+          filter: { descriptor: "vendor" },
+          columns: [
+            "displayLabel",
+            "orderId",
+            "date",
+            "statedTotal",
+            "expenseCount",
+          ],
+          sort: { field: "date", direction: "desc" },
+        },
+        {
+          kind: "relation",
+          id: "purchased-products",
+          title: "Purchased products",
+          relation: "products",
+          filter: { descriptor: "related:product.vendors" },
+          columns: ["name", "manufacturer", "category", "expenseTotal"],
+        },
+        {
+          kind: "relation",
+          id: "projects",
+          title: "Projects",
+          relation: "projects",
+          filter: { descriptor: "vendorId" },
+          columns: ["name", "status", "kind"],
+        },
+        {
+          kind: "relation",
+          id: "expenses",
+          title: "Expenses",
+          relation: "expenses",
+          filter: { descriptor: "vendor" },
+          columns: ["name", "cost", "date", "project"],
+          sort: { field: "date", direction: "desc" },
+        },
+      ],
+    },
+    list: { actions: ["merge", "delete"] },
   },
   model: {
     fields: [
@@ -394,6 +444,7 @@ export default defineEntity({
         columnId: "productId",
         kind: "idMulti",
         placeholder: "Filter by related products id...",
+        brandRef: { entity: "product", kind: "id" },
         urlOnly: true,
       },
       {
@@ -413,6 +464,7 @@ export default defineEntity({
         columnId: "projectId",
         kind: "idMulti",
         placeholder: "Filter by related projects id...",
+        brandRef: { entity: "project", kind: "id" },
         urlOnly: true,
       },
       {

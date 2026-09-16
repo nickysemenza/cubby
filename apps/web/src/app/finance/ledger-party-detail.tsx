@@ -10,7 +10,10 @@ import { DetailSections } from "~/app/_components/data-table/detail-page";
 import type { RelationshipEntity } from "~/app/_components/relationships/relationship-tree";
 import { RelationshipTree } from "~/app/_components/relationships/relationship-tree";
 import { Page } from "~/components/page/Page";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  EntityBasicInfo,
+  entitySectionFields,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
 
@@ -125,6 +128,7 @@ export function LedgerPartyDetail({
             content: (
               <EntityBasicInfo
                 entity="ledgerParty"
+                fields={entitySectionFields("ledgerParty", "overview")}
                 record={party}
                 overrides={{
                   kind: (record) => ({

@@ -15,6 +15,10 @@ import {
   getEntityListOutputSchema,
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
+import {
+  getEntityTimelineOutputSchema,
+  type TimelineEntity,
+} from "~/entities/generated/entity-timelines.gen";
 import { entityDeleteResultSchema } from "~/server/entity-kernel/contracts";
 import {
   ENTITY_SCHEMA_BINDINGS,
@@ -23,7 +27,11 @@ import {
 } from "~/server/generated/entity-bindings.gen";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 
-import { type ListSortRoster, resourceListQuery } from "./resource-query";
+import {
+  type ListSortRoster,
+  resourceListQuery,
+  resourceTimelineQuery,
+} from "./resource-query";
 import { isFlatQueryInput, type Json, toWire } from "./wire";
 
 /**
@@ -41,7 +49,9 @@ export const httpMetadataSchema = z.object({
   /** The operation answers `null` for "no such thing"; HTTP answers 404. */
   nullableOutput: z.boolean().optional(),
   entity: z.string().optional(),
-  resource: z.enum(["list", "get", "create", "update", "delete"]).optional(),
+  resource: z
+    .enum(["list", "timeline", "get", "create", "update", "delete"])
+    .optional(),
 });
 export type HttpMetadata = z.output<typeof httpMetadataSchema>;
 
@@ -268,6 +278,30 @@ export const resourceList = <E extends ListEntity & BoundEntity>(
     operation: "entity.list",
     entity,
     resource: "list",
+  } satisfies HttpMetadata,
+});
+
+/**
+ * `GET /<plural>/timeline`: the entity's dated history over the list scope
+ * (the list's flat filters plus the timeline window). Registered before
+ * `/<plural>/:id` in the generated contract: the router takes the first
+ * match, and a shortcode never spells `timeline`.
+ */
+export const resourceTimeline = <E extends TimelineEntity & BoundEntity>(
+  entity: ResourceEntity<E>,
+  basePath: string,
+) => ({
+  method: "GET" as const,
+  path: `/${basePath}/timeline`,
+  query: resourceTimelineQuery(
+    ENTITY_SCHEMA_BINDINGS[entity].filters,
+    ENTITY_SCHEMA_BINDINGS[entity].id,
+  ),
+  responses: { 200: toWire(getEntityTimelineOutputSchema(entity), "output") },
+  metadata: {
+    operation: "entity.timeline",
+    entity,
+    resource: "timeline",
   } satisfies HttpMetadata,
 });
 

@@ -2,7 +2,11 @@ import { Suspense } from "react";
 
 import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import type { EntityEditResultFor } from "./intent-types";
-import type { EditableEntity, EntityEditRequest } from "./types";
+import type {
+  EditableEntity,
+  EntityEditRequest,
+  EntityMutationPort,
+} from "./types";
 
 type SupportedEntityEditDialogRequest =
   | (Omit<EntityEditRequest<"meal", "create", "capture">, "surface"> & {
@@ -57,6 +61,9 @@ type SupportedEntityEditDialogRequest =
       EntityEditRequest<"financialTransaction", "update", "full">,
       "surface"
     > & { intent: "full" })
+  | (Omit<EntityEditRequest<"wish", "create", "capture">, "surface"> & {
+      intent: "capture";
+    })
   | (Omit<EntityEditRequest<"wish", "create", "full">, "surface"> & {
       intent: "full";
     })
@@ -73,6 +80,8 @@ export interface EntityEditDialogProps<E extends EditableEntity> {
   onOpenChange: (open: boolean) => void;
   request: EntityEditDialogRequest<E>;
   onSuccess?: (result: EntityEditResultFor<E>) => void;
+  /** A local command adapter for a surface whose remote transport is unavailable. */
+  mutationPort?: EntityMutationPort;
 }
 
 /**

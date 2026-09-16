@@ -155,6 +155,8 @@ describe("entity kernel search projections", () => {
         sowedOn: null,
         transplantedOn: null,
         finishedOn: null,
+        inLocationSince: null,
+        inLocationSinceKind: "actual",
       },
     });
     if (created.action !== "create") throw new Error("expected create");

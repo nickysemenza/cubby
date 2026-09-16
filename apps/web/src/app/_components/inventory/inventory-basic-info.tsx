@@ -5,7 +5,10 @@ import type { z } from "zod";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { MutedBox } from "~/components/layout/muted-box";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  EntityBasicInfo,
+  entitySectionFields,
+} from "~/entities/entity-display";
 
 import { EntityInlineLink } from "../EntityInlineLink";
 import { UnitMappingGraph } from "../units/unit-mapping-graph";
@@ -26,6 +29,7 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
   return (
     <EntityBasicInfo
       entity="inventory"
+      fields={entitySectionFields("inventory", "inventory-details")}
       record={inventoryitem}
       overrides={{
         amount: (record) => ({

@@ -67,7 +67,12 @@ const resultDetailFields = z.object({ resultDetail });
 const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
   (entity) => {
     const binding = ENTITY_SCHEMA_BINDINGS[entity];
-    const filters = binding.filters
+    // Widened before the chained calls: `.default` over a union of every
+    // entity's typed filter object is not a callable union. The kernel
+    // re-validates `filters` with the entity's own schema
+    // (`entity-operations.ts`), so the command carries the loose shape.
+    const entityFilters: z.ZodObject = binding.filters;
+    const filters = entityFilters
       .extend({ ids: z.array(binding.id).min(1).max(500).optional() })
       .strict()
       .default({});

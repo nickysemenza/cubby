@@ -6,7 +6,11 @@ import {
   nutritionMeal,
   getMealPreparationsOut,
 } from "@cubby/schemas/meal";
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import {
+  buildNutrition,
+  type NutritionTotals,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import { productResolveNamesOut } from "@cubby/schemas/product";
 import { expenseAnalyticsOut } from "@cubby/schemas/project";
 import {
@@ -28,7 +32,7 @@ import {
 } from "./tools/recipe.tools";
 
 /** The mock generator can't satisfy the coverage refine; build totals by hand. */
-const knownTotals: NutritionTotals = {
+const knownTotals: NutritionTotals = withMacros({
   cost: {
     status: "complete",
     lower: 1.5,
@@ -45,7 +49,7 @@ const knownTotals: NutritionTotals = {
         }
       : { status: "pending", reason: "totals_missing" },
   ),
-};
+});
 
 describe("MCP workflow tools", () => {
   it("scales recipe nutrition and reports compact unmapped coverage", () => {

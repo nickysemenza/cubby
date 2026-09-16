@@ -27,6 +27,46 @@ export default defineEntity({
         "Add a dated observation, harvest, or photo batch to keep a simple garden history.",
     },
     icons: { lucide: "CalendarDays", sfSymbol: "text.badge.plus" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "entry",
+          title: "Entry",
+          fields: [
+            "kind",
+            "observedOn",
+            "locationId",
+            "plantingId",
+            "note",
+            "harvestAmount",
+            "anchorsPeriod",
+          ],
+        },
+      ],
+    },
+    list: {
+      views: ["table", "timeline"],
+      actions: ["delete"],
+      timeline: { fields: ["observedOn"] },
+    },
+    // Anchor and `move` entries lock their location/planting/date fields —
+    // corrected only through location history, never the entry edit form.
+    // See `assertGardenEntryStructure` in `server/repo/garden/index.ts`.
+    edit: {
+      readOnlyWhen: [
+        {
+          field: "kind",
+          equals: "move",
+          fields: ["locationId", "plantingId", "kind", "observedOn"],
+        },
+        {
+          field: "anchorsPeriod",
+          equals: true,
+          fields: ["locationId", "plantingId", "kind", "observedOn"],
+        },
+      ],
+    },
   },
   model: {
     fields: [
@@ -34,6 +74,8 @@ export default defineEntity({
         key: "locationId",
         kind: "identifier",
         reference: { entity: "location" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true, detailOrder: 2 },
         validation: {
           read: locationShortcode,
           create: locationShortcode,
@@ -45,6 +87,8 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "planting" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true, detailOrder: 3 },
         validation: {
           read: plantingShortcode.nullable(),
           create: plantingShortcode.nullable().default(null),
@@ -54,6 +98,15 @@ export default defineEntity({
       {
         key: "kind",
         kind: "enum",
+        control: {
+          kind: "select",
+          options: [
+            { value: "observation", label: "Observation" },
+            { value: "harvest", label: "Harvest" },
+            { value: "move", label: "Move" },
+          ],
+        },
+        display: { list: true, detail: true, detailOrder: 0 },
         validation: {
           read: gardenEntryKind,
           create: gardenEntryKind.default("observation"),
@@ -64,6 +117,12 @@ export default defineEntity({
         key: "observedOn",
         kind: "date",
         control: { kind: "date", initial: "today" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 1,
+          format: "plainDate",
+        },
         validation: {
           read: plainDate,
           create: plainDate,
@@ -74,6 +133,8 @@ export default defineEntity({
         key: "note",
         kind: "text",
         nullable: true,
+        control: { kind: "textarea" },
+        display: { list: true, detail: true, detailOrder: 4 },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -84,6 +145,8 @@ export default defineEntity({
         key: "harvestAmount",
         kind: "text",
         nullable: true,
+        control: { kind: "text" },
+        display: { list: true, detail: true, detailOrder: 5 },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -125,7 +188,29 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
+        display: { list: true, standard: "image", columnId: "image" },
         validation: { read: z.array(imageOut), create: null, update: null },
+      },
+      {
+        key: "locationName",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
+        key: "plantingName",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
+      },
+      {
+        // Anchor and `move` entries lock their location/planting/date fields —
+        // corrected only through location history, never the entry edit form.
+        // See `assertGardenEntryStructure` in `server/repo/garden/index.ts`.
+        key: "anchorsPeriod",
+        kind: "boolean",
+        label: "Anchors a location period",
+        display: { detail: true, detailOrder: 6 },
+        validation: { read: z.boolean(), create: null, update: null },
       },
       {
         // `"<Kind> · <YYYY-MM-DD> · <location name>"` — gardenEntry has no
@@ -204,7 +289,10 @@ export default defineEntity({
       "note",
       "harvestAmount",
     ],
-    sort: { fields: ["observedOn", "createdAt"], default: "observedOn" },
+    sort: {
+      fields: ["observedOn", "createdAt", "updatedAt", "kind"],
+      default: "observedOn",
+    },
     intents: {
       fields: {
         capture: ["locationId", "observedOn", "note", "pendingImageIds"],
@@ -216,6 +304,8 @@ export default defineEntity({
           "note",
           "harvestAmount",
           "pendingImageIds",
+          "removeImageIds",
+          "imageOrder",
         ],
       },
       create: ["capture", "full"],
@@ -231,6 +321,9 @@ export default defineEntity({
       "harvestAmount",
       "images",
       "displayName",
+      "locationName",
+      "plantingName",
+      "anchorsPeriod",
       "createdAt",
       "updatedAt",
     ],
@@ -247,8 +340,48 @@ export default defineEntity({
     output: { module: "@cubby/schemas/garden", export: "gardenEntryOut" },
     list: { module: "@cubby/schemas/garden", export: "gardenEntryListItemOut" },
   },
-  // Bed/planting history filters live on `garden.entries`, not generic lists.
-  filters: { audit: false, schema: null, descriptors: [] },
+  filters: {
+    audit: true,
+    schema: {
+      module: "@cubby/schemas/garden",
+      export: "gardenEntryFilterFields",
+    },
+    descriptors: [
+      {
+        columnId: "kind",
+        kind: "multiselect",
+        placeholder: "Filter by kind...",
+        options: [
+          { value: "observation", label: "Observation" },
+          { value: "harvest", label: "Harvest" },
+          { value: "move", label: "Move" },
+        ],
+        deriveSchema: true,
+        stored: true,
+      },
+      {
+        columnId: "locationId",
+        kind: "idMulti",
+        placeholder: "Filter by location...",
+        brandRef: { entity: "location", kind: "id" },
+      },
+      {
+        columnId: "plantingId",
+        kind: "idMulti",
+        placeholder: "Filter by planting...",
+        brandRef: { entity: "planting", kind: "id" },
+      },
+      {
+        // A planting's journal: its own entries plus whole-location entries
+        // observed during one of its confirmed location periods.
+        columnId: "journalPlantingId",
+        kind: "id",
+        placeholder: "Journal for planting...",
+        brandRef: { entity: "planting", kind: "id" },
+        urlOnly: true,
+      },
+    ],
+  },
   relations: [
     {
       key: "location",
@@ -301,6 +434,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
+    timeline: "default",
     images: "gallery",
     countable: true,
     softDelete: true,

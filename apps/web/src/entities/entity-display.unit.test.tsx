@@ -10,7 +10,11 @@ import {
   type CubbyColumnDef,
 } from "~/app/_components/data-table/table-features";
 
-import { createEntityDisplayColumns, EntityBasicInfo } from "./entity-display";
+import {
+  createEntityDisplayColumns,
+  EntityBasicInfo,
+  entitySectionFields,
+} from "./entity-display";
 
 /**
  * Narrows a column's `cell` to a callable renderer taking only `{ row }` —
@@ -42,7 +46,7 @@ describe("declared entity displays", () => {
     render(
       <EntityBasicInfo
         entity="project"
-        section="resources"
+        fields={entitySectionFields("project", "resources")}
         record={{
           name: "Fixture project",
           googleDriveFolderUrl: "https://example.com/folder",
@@ -61,7 +65,7 @@ describe("declared entity displays", () => {
       render(
         <EntityBasicInfo
           entity="project"
-          section="resources"
+          fields={entitySectionFields("project", "resources")}
           record={{ name: "Fixture project" }}
           overrides={{ name: (record) => ({ value: record.name }) }}
         />,

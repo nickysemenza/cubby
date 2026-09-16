@@ -169,15 +169,6 @@ export const financialTransactionEditRequest = (
   },
 });
 
-export const wishCreateRequest = (): Omit<
-  EntityEditRequest<"wish", "create", "full">,
-  "surface"
-> & { intent: "full" } => ({
-  entity: "wish",
-  operation: "create",
-  intent: "full",
-});
-
 export const wishEditRequest = (
   wish: WishOut,
 ): Omit<EntityEditRequest<"wish", "update", "full">, "surface"> & {

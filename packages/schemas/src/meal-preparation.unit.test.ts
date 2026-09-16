@@ -6,7 +6,7 @@ import {
   saveMealRecipePreparationInput,
   saveMealRecipePreparationOut,
 } from "./meal";
-import { buildNutrition, measureEstimate } from "./nutrition";
+import { buildNutrition, measureEstimate, withMacros } from "./nutrition";
 
 const mealId = testShortcode("meal", "meal-preparation");
 const leftoversMealId = testShortcode("meal", "leftovers");
@@ -19,16 +19,17 @@ const complete = (lower: number) => ({
   upper: null,
   coverage: { covered: 1, total: 1 },
 });
-const totals = (cost: number, kcal: number, protein: number) => ({
-  cost: complete(cost),
-  nutrition: buildNutrition((key) =>
-    key === "kcal"
-      ? complete(kcal)
-      : key === "protein"
-        ? complete(protein)
-        : { status: "unavailable", reason: "no_data" },
-  ),
-});
+const totals = (cost: number, kcal: number, protein: number) =>
+  withMacros({
+    cost: complete(cost),
+    nutrition: buildNutrition((key) =>
+      key === "kcal"
+        ? complete(kcal)
+        : key === "protein"
+          ? complete(protein)
+          : { status: "unavailable", reason: "no_data" },
+    ),
+  });
 
 describe("meal preparation contracts", () => {
   it("accepts positive integer yields and keyed set/remove portion changes", () => {
@@ -288,13 +289,13 @@ describe("meal preparation contracts", () => {
         },
         projected: {
           portionCount: 0,
-          totals: {
+          totals: withMacros({
             cost: { status: "unavailable", reason: "empty" },
             nutrition: buildNutrition(() => ({
               status: "unavailable",
               reason: "empty",
             })),
-          },
+          }),
         },
       },
     });

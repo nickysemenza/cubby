@@ -1,5 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { buildNutrition } from "@cubby/schemas/nutrition";
+import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -19,13 +19,13 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   mealKind: "eating_out",
   recipeNames: [],
   coverImageUrl: null,
-  mealTotals: {
+  mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
       status: "unavailable",
       reason: "empty",
     })),
-  },
+  }),
 };
 
 const plantingMilestone: Extract<CalendarItem, { kind: "planting" }> = {

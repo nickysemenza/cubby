@@ -4,6 +4,7 @@ import {
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -175,8 +176,6 @@ function readScalarField<TRecord extends object>(
 ): ScalarDisplayValue {
   if (!field.readKey)
     throw new Error(`Display field ${field.key} needs a renderer`);
-  if (field.reference)
-    throw new Error(`Display field ${field.key} needs a specialized renderer`);
   // SAFETY: The generated model owns the read key; its scalar schema checks the value
   // before rendering, including absent fields in partial detail responses.
   const value = record[field.readKey as keyof TRecord];
@@ -207,6 +206,14 @@ function readScalarField<TRecord extends object>(
       };
     case "text-array":
       return { kind: "list", raw: z.array(z.string()).parse(value) };
+    // A reference reads as its shortcode(s); a page that wants a link
+    // overrides the field.
+    case "identifier": {
+      if (field.reference?.multiple)
+        return { kind: "list", raw: z.array(z.string()).parse(value) };
+      const raw = z.string().parse(value);
+      return { kind: "text", raw, label: raw };
+    }
     default:
       throw new Error(
         `Display field ${field.key} needs a specialized renderer`,
@@ -231,19 +238,57 @@ function copyScalarField<TRecord extends object>(
   }
 }
 
+/**
+ * The detail fields a `fields` section of `entitySummary[entity].detail`
+ * names, in declared order; without a section, every `display.detail` field
+ * by `detailOrder`.
+ */
+const entityDetailFields = (
+  entity: Entity,
+  fields?: readonly string[],
+): DisplayField[] => {
+  const detail = entityDisplayFields(entity, "detail");
+  if (fields === undefined)
+    return [...detail].sort(
+      (left, right) =>
+        (left.display.detailOrder ?? Number.MAX_SAFE_INTEGER) -
+        (right.display.detailOrder ?? Number.MAX_SAFE_INTEGER),
+    );
+  return fields.map((key) => {
+    const field = detail.find((candidate) => candidate.key === key);
+    if (field === undefined)
+      throw new Error(`${entity}.${key} is not a display.detail field`);
+    return field;
+  });
+};
+
+/** The field keys of one declared `fields` detail section. */
+export const entitySectionFields = (
+  entity: Entity,
+  sectionId: string,
+): readonly string[] => {
+  const section = entitySummary[entity].detail.sections.find(
+    (candidate) => candidate.id === sectionId,
+  );
+  if (section === undefined || section.kind !== "fields")
+    throw new Error(`${entity} declares no fields section ${sectionId}`);
+  return section.fields;
+};
+
 export function EntityBasicInfo<TRecord extends object>({
   entity,
   record,
   overrides = {},
   afterFields = {},
-  section = "overview",
+  fields: fieldKeys,
   actions,
   header,
   footer,
 }: {
   entity: Entity;
   record: TRecord;
-  section?: string;
+  /** A declared `fields` section's keys; every `display.detail` field when omitted. */
+  fields?: readonly string[];
   overrides?: Readonly<
     Record<
       string,
@@ -257,13 +302,7 @@ export function EntityBasicInfo<TRecord extends object>({
   header?: ReactNode;
   footer?: ReactNode;
 }) {
-  const fields = entityDisplayFields(entity, "detail")
-    .filter((field) => field.display.detailSection === section)
-    .sort(
-      (left, right) =>
-        (left.display.detailOrder ?? Number.MAX_SAFE_INTEGER) -
-        (right.display.detailOrder ?? Number.MAX_SAFE_INTEGER),
-    );
+  const fields = entityDetailFields(entity, fieldKeys);
   for (const key of [...Object.keys(overrides), ...Object.keys(afterFields)]) {
     if (!fields.some((field) => field.key === key)) {
       throw new Error(`Undeclared detail renderer for ${entity}.${key}`);

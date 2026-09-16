@@ -408,6 +408,10 @@ function AmountField({ field, form }: SpecializedIntentRendererProps) {
 const specializedIntentRenderers = {
   "tag-list": TagListField,
   amount: AmountField,
+  // The gallery block the dialog shell mounts owns reordering (it writes
+  // `imageOrder` through `onExistingImagesReorder`); the field itself has no
+  // control of its own to draw.
+  "image-order": () => null,
 } satisfies Readonly<
   Record<string, ComponentType<SpecializedIntentRendererProps>>
 >;

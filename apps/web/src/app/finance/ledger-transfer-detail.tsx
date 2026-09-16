@@ -11,7 +11,10 @@ import { TableLink } from "~/app/_components/table/TableLink";
 import { Page } from "~/components/page/Page";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  EntityBasicInfo,
+  entitySectionFields,
+} from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 
 import { ledgerTransferClassificationOptions } from "./ledger-transfer-columns";
@@ -85,6 +88,7 @@ export function LedgerTransferDetail({
             content: (
               <EntityBasicInfo
                 entity="ledgerTransfer"
+                fields={entitySectionFields("ledgerTransfer", "overview")}
                 record={transfer}
                 overrides={{
                   fromPartyId: (record) => ({

@@ -9,7 +9,10 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { financialTransactionEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  EntityBasicInfo,
+  entitySectionFields,
+} from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 
 import { DetailSections } from "../_components/data-table/detail-page";
@@ -49,6 +52,7 @@ export function FinancialTransactionDetail({
             content: (
               <EntityBasicInfo
                 entity="financialTransaction"
+                fields={entitySectionFields("financialTransaction", "overview")}
                 record={transaction}
                 overrides={{
                   merchant: (r) => ({

@@ -10,7 +10,10 @@ import { NoneValue } from "~/components/ui/none-value";
 import { financialAccountEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  EntityBasicInfo,
+  entitySectionFields,
+} from "~/entities/entity-display";
 
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { DetailSections } from "../_components/data-table/detail-page";
@@ -46,6 +49,7 @@ export function FinancialAccountDetail({
             content: (
               <EntityBasicInfo
                 entity="financialAccount"
+                fields={entitySectionFields("financialAccount", "overview")}
                 record={account}
                 overrides={{
                   ledgerPartyId: () => ({

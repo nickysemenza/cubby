@@ -17,7 +17,6 @@ import {
   type productInventoryEntriesBatchInput,
   type productMarkUsdaUnavailableManyInput,
   productMergeSummaryOut,
-  type productMovementTimelineInput,
   type productQuantitySummaryBatchInput,
   type productQuickCreatePayload,
   type productShortcodesInput,
@@ -52,7 +51,6 @@ import {
   getCategoryDistribution,
   getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
-  getProductMovementTimeline,
   getProductPickerItemsByIds,
   getProductsByShortcodes,
   getProductTagOptions,
@@ -354,13 +352,6 @@ export const getProductExternalIdSourceOptionsWorkflow =
     (context: ProductWorkflowContext) =>
       getProductExternalIdSourceOptions(context.readDb),
   );
-export const getProductMovementTimelineWorkflow = defineWorkflowOperation(
-  "product.movementTimeline",
-  (
-    context: ProductWorkflowContext,
-    input: z.output<typeof productMovementTimelineInput>,
-  ) => getProductMovementTimeline(context.readDb, input),
-);
 export const getProductsByShortcodesWorkflow = defineWorkflowOperation(
   "product.getByShortcodes",
   (

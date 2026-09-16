@@ -55,6 +55,25 @@ const changed = (
   value: EntityEditValue,
 ) => !record || !isEqual(valueFor(record, id), value);
 
+/**
+ * The gallery pseudo-fields have no stored twin on the record: `images` is
+ * the read shape, and `pendingImageIds`/`removeImageIds`/`imageOrder` are
+ * write-only instructions. Their baseline is derived from `images` (order)
+ * or is the empty list, and a patch carries them only when they instruct
+ * something — an untouched gallery sends none of them.
+ */
+const IMAGE_LIST_FIELDS = new Set(["pendingImageIds", "removeImageIds"]);
+const recordImageIds = (record: EntityEditRecord | undefined): string[] =>
+  z
+    .array(z.object({ id: z.string() }).loose())
+    .catch([])
+    .parse(record?.images)
+    .map((image) => image.id);
+const imageIdList = (value: EntityEditValue): string[] | undefined => {
+  const parsed = z.array(z.string()).safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+};
+
 const noIssues = (): readonly EntityEditIssue[] => [];
 
 type EditField<E extends EditableEntity> = EntityEditField<
@@ -227,12 +246,9 @@ const builderFor = <E extends EditableEntity>(
     initial: (input) => {
       if (options?.initial) return options.initial(input);
       const { operation, record, context } = input;
-      // Every gallery entity's `pendingImageIds` is array-valued and
-      // `readKey: null` (never populated from a record), so its one true
-      // default is an empty array — not the generic text field's `null` —
-      // for every entity that declares it, with no per-entity literal
-      // required.
-      if (id === "pendingImageIds") return [];
+      if (IMAGE_LIST_FIELDS.has(id)) return [];
+      if (id === "imageOrder")
+        return operation === "update" ? recordImageIds(record) : [];
       const existing = valueFor(record, id);
       if (existing !== undefined) return existing;
       if (id === "parentProjectId" && context.parentProjectId !== undefined) {
@@ -261,8 +277,19 @@ const builderFor = <E extends EditableEntity>(
       }
       return options?.validate?.(input) ?? noIssues();
     },
-    toPatch: ({ value, record }) =>
-      changed(record, id, value) ? { [id]: value } : undefined,
+    toPatch: ({ value, record }) => {
+      if (IMAGE_LIST_FIELDS.has(id)) {
+        const ids = imageIdList(value);
+        return ids && ids.length > 0 ? { [id]: ids } : undefined;
+      }
+      if (id === "imageOrder") {
+        const ids = imageIdList(value);
+        return ids && record && !isEqual(ids, recordImageIds(record))
+          ? { imageOrder: ids }
+          : undefined;
+      }
+      return changed(record, id, value) ? { [id]: value } : undefined;
+    },
   });
 
   return {

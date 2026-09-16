@@ -3,7 +3,10 @@ import type { FC } from "react";
 
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  EntityBasicInfo,
+  entitySectionFields,
+} from "~/entities/entity-display";
 
 interface IngredientBasicInfoProps {
   ingredient: IngredientWithFoodOut;
@@ -17,6 +20,7 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
   return (
     <EntityBasicInfo
       entity="ingredient"
+      fields={entitySectionFields("ingredient", "basic-information")}
       record={ingredient}
       overrides={{
         aliases: (record) => ({

@@ -12,14 +12,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
-  route: {
-    basePath: "tasks",
-    create: "dialog",
-    list: null,
-    detail: {
-      component: { module: "~/app/tasks/task-detail", export: "TaskDetail" },
-    },
-  },
+  route: { basePath: "tasks", create: "dialog", list: null, detail: true },
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {
@@ -33,6 +26,73 @@ export default defineEntity({
       actionLabel: "New Task",
     },
     icons: { lucide: "ListChecks", sfSymbol: "checklist" },
+    detail: {
+      hero: {
+        chip: "status",
+        actions: ["edit", "setStatus", "setDueDate", "moveToProject", "delete"],
+      },
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "name",
+            "status",
+            "trade",
+            "dueDate",
+            "dueEndDate",
+            "projectId",
+            "subjectProductId",
+            "parentTaskId",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "dependencies",
+          title: "Dependencies",
+          placement: "supporting",
+          fields: ["blockedByIds", "blockingIds"],
+        },
+        {
+          kind: "relation",
+          id: "subtasks",
+          title: "Subtasks",
+          relation: "subtasks",
+          filter: { descriptor: "parentTask" },
+          columns: ["name", "status", "dueDate"],
+        },
+      ],
+    },
+    list: {
+      views: [
+        "table",
+        { kind: "slot", id: "agenda", label: "Next" },
+        {
+          kind: "slot",
+          id: "board",
+          label: "Board",
+          searchKeys: ["cols", "lane"],
+        },
+        "timeline",
+      ],
+      actions: [
+        "setStatus",
+        "setTrade",
+        "setDueDate",
+        "moveToProject",
+        "delete",
+      ],
+      timeline: {
+        fields: ["dueDate", "dueEndDate"],
+        lifecycle: {
+          start: "createdAt",
+          milestones: ["dueDate"],
+          end: "dueEndDate",
+        },
+      },
+    },
   },
   model: {
     fields: [
@@ -109,7 +169,12 @@ export default defineEntity({
         label: "Parent Task",
         reference: { entity: "task" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, columnId: "parentTask" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 7,
+          columnId: "parentTask",
+        },
         validation: {
           read: taskShortcode.nullable(),
           create: taskShortcode.nullable().default(null),
@@ -186,9 +251,10 @@ export default defineEntity({
       {
         key: "blockedByIds",
         kind: "identifier",
-        label: "Blocked By IDs",
+        label: "Blocked by",
         reference: { entity: "task", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
+        display: { detail: true },
         validation: {
           read: z.array(taskShortcode),
           create: null,
@@ -275,8 +341,9 @@ export default defineEntity({
       {
         key: "blockingIds",
         kind: "identifier",
-        label: "Blocking IDs",
+        label: "Blocks",
         reference: { entity: "task", multiple: true },
+        display: { detail: true },
         validation: {
           read: z.array(taskShortcode),
           create: null,
@@ -425,6 +492,8 @@ export default defineEntity({
           "dueEndDate",
           "notes",
           "pendingImageIds",
+          "removeImageIds",
+          "imageOrder",
         ],
         schedule: ["name", "status", "dueDate", "dueEndDate"],
         status: ["status"],
@@ -525,6 +594,12 @@ export default defineEntity({
       {
         columnId: "dueDate",
         kind: "range",
+        wire: {
+          kind: "range",
+          from: "dueFrom",
+          to: "dueTo",
+          presence: "duePresenceFilter",
+        },
         placeholder: "Filter by due date...",
         options: [
           { value: "has", label: "Has due date", meta: true },
@@ -633,6 +708,19 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "subtasks",
+      label: "Subtasks",
+      target: "task",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Task.parentTaskId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Task.parentTaskId", direction: "outgoing" }],
+      },
+    },
+    {
       key: "project",
       label: "Project",
       target: "project",
@@ -711,6 +799,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
+    timeline: "default",
     images: "gallery",
     countable: true,
     softDelete: true,

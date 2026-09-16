@@ -2,6 +2,7 @@ import {
   buildNutrition,
   type MeasureEstimate,
   type NutritionTotals,
+  withMacros,
 } from "@cubby/schemas/nutrition";
 import { describe, expect, it } from "vitest";
 
@@ -23,10 +24,11 @@ const complete = (
   coverage: { covered: 1, total: 1 },
 });
 
-const totals = (value: number): NutritionTotals => ({
-  cost: complete(value),
-  nutrition: buildNutrition(() => complete(value)),
-});
+const totals = (value: number): NutritionTotals =>
+  withMacros({
+    cost: complete(value),
+    nutrition: buildNutrition(() => complete(value)),
+  });
 
 describe("nutrition estimate arithmetic", () => {
   it("scales point and ranged estimates through WASM", () => {

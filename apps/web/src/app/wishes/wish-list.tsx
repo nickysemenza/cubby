@@ -10,7 +10,6 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
-import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
@@ -22,7 +21,6 @@ import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
-import { wishCreateRequest } from "~/entities/editing/editor-requests";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
@@ -324,11 +322,6 @@ export function WishList() {
         <ListWorkbench
           model={workbench}
           ariaLabel="Wishlist Table"
-          actions={
-            <CreateDialogAction request={wishCreateRequest()}>
-              New wish
-            </CreateDialogAction>
-          }
           onRowClick={onRowClick}
           onRowHover={onRowHover}
           onRowHoverEnd={onRowHoverEnd}

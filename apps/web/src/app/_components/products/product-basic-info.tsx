@@ -17,7 +17,10 @@ import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  EntityBasicInfo,
+  entitySectionFields,
+} from "~/entities/entity-display";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { wasm } from "~/lib/wasm";
@@ -262,6 +265,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   return (
     <EntityBasicInfo
       entity="product"
+      fields={entitySectionFields("product", "basic-information")}
       record={product}
       overrides={overrides}
       afterFields={{

@@ -448,6 +448,7 @@ async function waitForLockWaiter(db: Database): Promise<void> {
   // Lazy: this module is also vitest's `globalSetup`, which runs in the main
   // process before `test.env` applies, and `database-helpers/core` pulls in
   // `env.ts`, whose validation would fail there.
+  // oxlint-disable-next-line no-restricted-imports -- lazy by design, see above
   const { getDb } = await import("../src/server/repo/database-helpers/core");
   const deadline = Date.now() + LOCK_POLL_TIMEOUT_MS;
   for (;;) {
@@ -537,11 +538,17 @@ export async function seedEntity<E extends EntityKernelEntity>(
     { ENTITY_KERNEL_ENTITIES },
   ] = await Promise.all([
     import("../src/lib/test/mock-schema"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/entity-kernel/adapter"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/testing/request-context"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/request-context"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/generated/entity-bindings.gen"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/generated/entity-kernel-bindings.gen"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/entity-kernel/contracts"),
   ]);
 

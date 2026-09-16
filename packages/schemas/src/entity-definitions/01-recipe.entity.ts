@@ -29,6 +29,52 @@ export default defineEntity({
       actionLabel: "Create Recipe",
     },
     icons: { lucide: "ChefHat", sfSymbol: "fork.knife" },
+    detail: {
+      hero: { images: true },
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "name",
+            "servings",
+            "yield",
+            "meta",
+            "tags",
+            "source",
+            "forkedFromRecipeId",
+            "notes",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "contents",
+          title: "Recipe",
+          fields: ["sections", "totals"],
+        },
+        { kind: "slot", id: "workflow", placement: "full" },
+        {
+          kind: "relation",
+          id: "meals",
+          title: "Meals",
+          relation: "meals",
+          filter: { descriptor: "recipeId" },
+          columns: ["date", "name", "mealType"],
+          sort: { field: "date", direction: "desc" },
+        },
+      ],
+    },
+    list: {
+      actions: ["delete"],
+      links: [
+        { label: "Compare", path: "/recipes/compare" },
+        { label: "Import", path: "/recipes/import" },
+      ],
+    },
   },
   model: {
     fields: [
@@ -84,7 +130,7 @@ export default defineEntity({
           list: true,
           detail: true,
           width: "xs",
-          mobile: { slot: "subtitle", priority: 5, interactive: true },
+          mobile: { slot: "trailing", priority: 5, interactive: true },
           columnId: "yield",
           listOrder: 1,
         },

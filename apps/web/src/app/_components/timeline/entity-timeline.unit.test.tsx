@@ -1,0 +1,120 @@
+import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { entityTimeline } from "~/entities/entity-timeline.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
+import { EntityTimeline } from "./entity-timeline";
+
+const events: EntityTimelineOut = {
+  groups: [
+    {
+      key: "purchase:PUR-2222",
+      date: "2026-01-10",
+      label: "Toolco · Order 42",
+      link: { entity: "purchase", id: "PUR-2222" },
+      events: [
+        {
+          id: "expense:EXP-2222",
+          kind: "acquired",
+          label: "Bench vise",
+          amount: 120,
+          link: { entity: "expense", id: "EXP-2222" },
+          detail: "Acquired · 1 unit",
+        },
+        {
+          id: "expense:EXP-3333",
+          kind: "exited",
+          label: "Sold the vise",
+          amount: -80,
+          link: { entity: "expense", id: "EXP-3333" },
+        },
+      ],
+    },
+  ],
+  stats: [{ key: "movements", label: "Movements", value: "2" }],
+  notes: ["1 planned movement is omitted."],
+  extent: { from: "2026-01-10", to: "2026-03-01" },
+};
+
+const withRows: EntityTimelineOut = {
+  ...events,
+  rows: [
+    {
+      id: "PRD-2222",
+      name: "Bench vise",
+      intervals: [
+        { start: "2026-01-10", end: "2026-02-01", confident: true },
+        { start: "2026-02-01", end: null, confident: false },
+      ],
+      markers: [
+        {
+          date: "2026-01-10",
+          kind: "acquired",
+          link: { entity: "expense", id: "EXP-2222" },
+        },
+      ],
+    },
+  ],
+};
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+afterEach(() => {
+  harness.dispose();
+});
+
+const operationsFor = (out: EntityTimelineOut) => ({
+  timeline: entityTimeline.timeline.withTransport(async () => out),
+});
+
+/**
+ * The renderer's branches are data-driven: the mode switch exists only when
+ * the capability supplies rows, amounts keep the ledger sign, and an
+ * unconfident interval is drawn differently from a proven one.
+ */
+describe("EntityTimeline", () => {
+  it("renders date groups with signed amounts and hides the mode switch without rows", async () => {
+    render(
+      <EntityTimeline
+        entity="product"
+        ids={["PRD-2222"]}
+        operations={operationsFor(events)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(await screen.findByText("Toolco · Order 42")).toBeInTheDocument();
+    expect(screen.getByText("$120.00")).toBeInTheDocument();
+    expect(screen.getByText("$80.00 recovered")).toBeInTheDocument();
+    expect(screen.getByText("1 planned movement is omitted.")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Bench vise" })).toHaveAttribute(
+      "href",
+      "/expenses/EXP-2222",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Lifecycles view" }),
+    ).toBeNull();
+  });
+
+  it("switches to lifecycle rows and marks an unconfident span as inferred", async () => {
+    render(
+      <EntityTimeline
+        entity="product"
+        ids={["PRD-2222"]}
+        operations={operationsFor(withRows)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(await screen.findByText("Toolco · Order 42")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Lifecycles view" }));
+    expect(await screen.findByText("Record")).toBeInTheDocument();
+    expect(
+      screen.getByTitle("Uncertain after Feb 1, 2026"),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Jan 10, 2026 – Feb 1, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Inferred")).toBeVisible();
+  });
+});

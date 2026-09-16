@@ -5,7 +5,10 @@ import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  EntityBasicInfo,
+  entitySectionFields,
+} from "~/entities/entity-display";
 
 import { EntityInlineLink } from "../EntityInlineLink";
 import { LocationIconWithLabel } from "./location-icons";
@@ -23,6 +26,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
   return (
     <EntityBasicInfo
       entity="location"
+      fields={entitySectionFields("location", "basic-information")}
       record={location}
       overrides={{
         id: (record) => ({

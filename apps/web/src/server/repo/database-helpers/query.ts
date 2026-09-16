@@ -7,7 +7,7 @@ import {
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
-import type { AppErrorReason } from "@cubby/shared";
+import { type AppErrorReason, parseShortcode } from "@cubby/shared";
 import type { AnyColumn, SQL, SQLWrapper } from "drizzle-orm";
 import {
   and,
@@ -542,6 +542,29 @@ export const matchesStringValues = (
   if (values.length === 1) return sql`${expression} = ${values[0]}`;
   return sql`${expression} IN (${sql.join(
     values.map((value) => sql`${value}`),
+    sql`, `,
+  )})`;
+};
+
+/**
+ * A shortcode expression against a REQUESTED set of codes, without resolving
+ * them first (usable from synchronous where-builders). Codes are compared in
+ * canonical form (`parseShortcode` uppercases and remaps legacy prefixes; one
+ * that does not parse is kept as-is and matches nothing). A requested set
+ * that is empty matches nothing — never the whole list; `undefined` means
+ * "not requested" and adds no condition.
+ */
+export const shortcodeSetCondition = (
+  expression: SQL,
+  codes: string | readonly string[] | undefined,
+): SQL | undefined => {
+  if (codes === undefined) return undefined;
+  const canonical = [codes]
+    .flat()
+    .map((code) => parseShortcode(code)?.shortcode ?? code);
+  if (canonical.length === 0) return sql`false`;
+  return sql`${expression} IN (${sql.join(
+    canonical.map((code) => sql`${code}`),
     sql`, `,
   )})`;
 };

@@ -187,6 +187,44 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
       params: { ids: id },
     });
     expect(many.status(), await many.text()).toBe(200);
+    // `/products/timeline` is a static sibling of `/products/:id`; both must
+    // resolve, in that order, or the timeline reads as a missing shortcode.
+    const productName = `Timeline product ${Date.now()}`;
+    const productCreated = await page.request.post("/api/v1/products", {
+      headers: origin,
+      data: { name: productName },
+    });
+    expect(productCreated.status(), await productCreated.text()).toBe(201);
+    const productId = createdSchema.parse(await productCreated.json()).item.id;
+    try {
+      const timeline = await page.request.get("/api/v1/products/timeline", {
+        params: { ids: productId, order: "asc" },
+      });
+      expect(timeline.status(), await timeline.text()).toBe(200);
+      expect(await timeline.json()).toMatchObject({
+        groups: expect.any(Array),
+        stats: expect.arrayContaining([
+          expect.objectContaining({ key: "products", value: "1" }),
+        ]),
+        notes: expect.any(Array),
+      });
+      const productRead = await page.request.get(
+        `/api/v1/products/${productId}`,
+      );
+      expect(productRead.status(), await productRead.text()).toBe(200);
+      expect(await productRead.json()).toMatchObject({
+        id: productId,
+        name: productName,
+      });
+    } finally {
+      expect(
+        (
+          await page.request.delete(`/api/v1/products/${productId}`, {
+            headers: origin,
+          })
+        ).status(),
+      ).toBe(200);
+    }
   } finally {
     expect(
       (await page.request.delete(path, { headers: origin })).status(),

@@ -297,7 +297,6 @@ describe("typed entity compiler", () => {
       display: {
         list: false,
         detail: false,
-        detailSection: "overview",
       },
       validation: { create: null, read, update: null },
     });
@@ -475,11 +474,8 @@ describe("typed entity compiler", () => {
     ).toThrow(message);
   });
 
-  it("validates standard display renderers and sections", () => {
-    const compile = (
-      display: { standard?: string; detailSection?: string },
-      kind = "text",
-    ) =>
+  it("validates standard display renderers", () => {
+    const compile = (display: { standard?: string }, kind = "text") =>
       compileEntityDeclarations([
         {
           ...base,
@@ -488,13 +484,6 @@ describe("typed entity compiler", () => {
       ]);
     expect(() => compile({ standard: "unknown" })).toThrow(/./u);
     expect(() => compile({ standard: "name" }, "number")).toThrow(/./u);
-    expect(() => compile({ detailSection: " " })).toThrow(
-      "detailSection must not be blank",
-    );
-    expect(
-      compile({ detailSection: "resources" })[0]?.fieldModel.fields[0]?.display
-        .detailSection,
-    ).toBe("resources");
   });
 
   it("validates titleField against the read projection, not model field keys", () => {
@@ -783,8 +772,173 @@ describe("typed entity compiler", () => {
       expect(() => stored(descriptor)).toThrow(message);
   });
 
+  it("checks every presentation declaration against the fields, relations and capabilities", () => {
+    const presented = {
+      ...base,
+      model: {
+        ...model,
+        fields: [
+          ...model.fields,
+          {
+            key: "status",
+            kind: "enum",
+            control: {
+              kind: "select",
+              options: [{ value: "open", label: "Open" }],
+            },
+            display: { detail: true },
+            validation: { read: z.enum(["open"]), create: null, update: null },
+          },
+          {
+            key: "dueOn",
+            kind: "date",
+            display: { detail: true },
+            validation: { read: z.string(), create: null, update: null },
+          },
+        ],
+        output: ["name", "status", "dueOn"],
+      },
+      relations: [
+        {
+          key: "parent",
+          label: "Parent",
+          target: "alpha",
+          cardinality: "one",
+          provenance: {
+            kind: "local-path",
+            steps: [{ edge: "Alpha.parentId", direction: "outgoing" }],
+          },
+          inverse: {
+            steps: [{ edge: "Alpha.parentId", direction: "incoming" }],
+          },
+        },
+      ],
+    };
+    const compile = (
+      presentation: Partial<EntityDeclaration["presentation"]>,
+      capabilities: Partial<EntityDeclaration["capabilities"]> = {},
+    ) =>
+      compileEntityDeclarations([
+        {
+          ...presented,
+          presentation: { ...base.presentation, ...presentation },
+          capabilities: { ...base.capabilities, ...capabilities },
+        },
+      ]);
+    const fields = (
+      keys: string[],
+    ): Partial<EntityDeclaration["presentation"]> => ({
+      detail: {
+        sections: [
+          { kind: "fields", id: "overview", title: "Overview", fields: keys },
+        ],
+      },
+    });
+    expect(
+      compile(fields(["status", "dueOn"]))[0]?.inspector.detail.hero,
+    ).toEqual({
+      chip: null,
+      stats: [],
+      breadcrumb: null,
+      images: false,
+      actions: [],
+    });
+    const rejected: [
+      string,
+      Partial<EntityDeclaration["presentation"]>,
+      string,
+    ][] = [
+      [
+        "a non-detail field in a fields section",
+        fields(["name"]),
+        "not a display.detail field",
+      ],
+      ["a detail field left unplaced", fields(["status"]), "unplaced: dueOn"],
+      [
+        "a field placed twice",
+        {
+          detail: {
+            sections: [
+              {
+                kind: "fields",
+                id: "a",
+                title: "A",
+                fields: ["status", "dueOn"],
+              },
+              { kind: "fields", id: "b", title: "B", fields: ["status"] },
+            ],
+          },
+        },
+        "already placed in a",
+      ],
+      [
+        "a reserved section id",
+        { detail: { sections: [{ kind: "slot", id: "history" }] } },
+        "reserved id",
+      ],
+      [
+        "a relation section over a to-one relation",
+        {
+          detail: {
+            sections: [
+              {
+                kind: "relation",
+                id: "parent",
+                title: "Parent",
+                relation: "parent",
+                filter: { descriptor: "parentId" },
+              },
+            ],
+          },
+        },
+        "not a many-cardinality relation",
+      ],
+      [
+        "a text hero chip",
+        { detail: { hero: { chip: "name" } } },
+        "must be an enum or boolean field",
+      ],
+      [
+        "a non-reference breadcrumb",
+        { detail: { hero: { breadcrumb: "name" } } },
+        "must be a reference field",
+      ],
+      [
+        "a timeline view without the capability",
+        { list: { views: ["table", "timeline"] } },
+        "without capabilities.timeline",
+      ],
+      [
+        "a shelf view without images",
+        { list: { views: ["shelf"] } },
+        "needs stored images",
+      ],
+      [
+        "a readOnlyWhen value outside the control options",
+        {
+          edit: {
+            readOnlyWhen: [
+              { field: "status", equals: "closed", fields: ["name"] },
+            ],
+          },
+        },
+        "not one of status's control options",
+      ],
+    ];
+    for (const [, presentation, message] of rejected)
+      expect(() => compile(presentation)).toThrow(message);
+    expect(() => compile({}, { timeline: "custom" })).toThrow(
+      "must be declared together",
+    );
+    expect(() =>
+      compile(
+        { list: { timeline: { lifecycle: { start: "name" } } } },
+        { timeline: "default" },
+      ),
+    ).toThrow("must be a date or timestamp field");
+  });
+
   it("splits browser route modules between the generator and hand-written files", () => {
-    const list = { component: { module: "~/app/alphas", export: "AlphaList" } };
     const entities = compileEntityDeclarations([
       {
         ...base,
@@ -792,28 +946,44 @@ describe("typed entity compiler", () => {
           basePath: "alphas",
           detailParam: "id",
           create: "page",
-          list,
-          detail: null,
+          list: null,
+          detail: {
+            query: { module: "~/entities/alpha", export: "alphaQuery" },
+          },
         },
       },
     ]);
     expect(generatedBrowserRouteFiles(entities)).toEqual([
-      "apps/web/src/routes/_authenticated/alphas.index.tsx",
+      "apps/web/src/routes/_authenticated/alphas.$id.tsx",
     ]);
     const expected = handWrittenBrowserRouteFiles(entities);
     expect(expected).toEqual([
-      "apps/web/src/routes/_authenticated/alphas.$id.tsx",
+      "apps/web/src/routes/_authenticated/alphas.index.tsx",
       "apps/web/src/routes/_authenticated/alphas.new.tsx",
     ]);
     expect(
       missingBrowserRouteFiles(entities, (path) => path.endsWith(expected[0]!)),
     ).toEqual([expected[1]]);
+    // A generated list/detail page reads the kernel projections, which need
+    // a create+update contract.
+    for (const route of [
+      { basePath: "alphas", list: true, detail: null },
+      { basePath: "alphas", list: null, detail: true },
+    ] as const)
+      expect(() => compileEntityDeclarations([{ ...base, route }])).toThrow(
+        "no create+update contract",
+      );
     // A dialog-created entity needs a capture intent for the dialog to open.
     expect(() =>
       compileEntityDeclarations([
         {
           ...base,
-          route: { basePath: "alphas", create: "dialog", list, detail: null },
+          route: {
+            basePath: "alphas",
+            create: "dialog",
+            list: null,
+            detail: null,
+          },
         },
       ]),
     ).toThrow('model.intents.create lacks "capture"');
@@ -890,8 +1060,12 @@ describe("typed entity compiler", () => {
       "validateSearch: entitySearch.vendor.schema",
     );
     expect(vendorsIndex).toContain('captureRequest("vendor")');
-    expect(artifact("wishes.index.tsx")).not.toContain("CreateDialogAction");
-    expect(artifact("images.index.tsx")).not.toContain("entityListLoader");
+    // The image list is not a kernel list, so its index route stays hand-written.
+    expect(
+      artifacts.some(({ relativePath }) =>
+        relativePath.endsWith("images.index.tsx"),
+      ),
+    ).toBe(false);
     expect(artifact("images.$shortcode.tsx")).toContain("imageDetailQuery(");
     expect(artifact("vendors.$shortcode.tsx")).toContain(
       "title: (record) => record.name",

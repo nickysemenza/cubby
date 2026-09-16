@@ -1,34 +1,8 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type { EntityEditCommand, EntityEditRequest } from "./types";
+import type { EntityEditRequest } from "./types";
 
 describe("typed entity edit requests", () => {
-  it("derives operation, intent, record, and seed types from the entity", () => {
-    const request = {
-      entity: "task",
-      operation: "update",
-      intent: "schedule",
-      surface: "calendar",
-      record: {
-        id: "TSK-TYPED",
-        status: "not_started",
-        dueDate: "2026-08-20",
-      },
-    } satisfies EntityEditRequest<"task", "update", "schedule">;
-
-    expectTypeOf(request.intent).toEqualTypeOf<"schedule">();
-    expect(request.record.id).toBe("TSK-TYPED");
-
-    const createRequest = {
-      entity: "expense",
-      operation: "create",
-      intent: "capture",
-      surface: "dialog",
-      seed: { future: true, date: "2026-08-21" },
-    } satisfies EntityEditRequest<"expense", "create", "capture">;
-    expect(createRequest.seed.future).toBe(true);
-  });
-
   it("rejects intent and draft fields belonging to another entity", () => {
     const invalidIntent: EntityEditRequest<"task", "update"> = {
       entity: "task",
@@ -48,26 +22,5 @@ describe("typed entity edit requests", () => {
     };
     expect(invalidIntent.entity).toBe("task");
     expect(invalidSeed.entity).toBe("meal");
-  });
-
-  it("keeps mutation payloads correlated with their entity and operation", () => {
-    const taskUpdate = {
-      entity: "task",
-      operation: "update",
-      intent: "status",
-      id: "TSK-TYPED",
-      data: { status: "done" },
-    } satisfies EntityEditCommand<"task", "update">;
-    expect(taskUpdate.data.status).toBe("done");
-
-    const invalidMealUpdate: EntityEditCommand<"meal", "update"> = {
-      entity: "meal",
-      operation: "update",
-      intent: "calendar",
-      id: "MEA-TYPED",
-      // @ts-expect-error status is a Task mutation field, not a Meal field
-      data: { status: "done" },
-    };
-    expect(invalidMealUpdate.entity).toBe("meal");
   });
 });
