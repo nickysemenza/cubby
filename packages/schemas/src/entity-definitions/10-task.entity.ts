@@ -12,7 +12,14 @@ import { z } from "zod";
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
-  route: { basePath: "tasks" },
+  route: {
+    basePath: "tasks",
+    create: "dialog",
+    list: null,
+    detail: {
+      component: { module: "~/app/tasks/task-detail", export: "TaskDetail" },
+    },
+  },
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {

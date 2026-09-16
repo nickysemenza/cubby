@@ -2,13 +2,8 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
-import {
-  entityFilterSearchFields,
-  getEntityFilters,
-  manifestFilterConfig,
-} from "./filter-manifest";
+import { getEntityFilters, manifestFilterConfig } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
   decodeFilters,
@@ -19,6 +14,7 @@ import {
   partitionFilterSpecs,
 } from "./filters";
 import { generatedEntityFilterContractCases } from "./generated/entity-filter-contracts.gen";
+import { entitySearch } from "./generated/entity-search.gen";
 
 const VENDOR_ONE = testEntityId("vendor", "VEN-4K7M");
 const VENDOR_TWO = testEntityId("vendor", "VEN-9Q2X");
@@ -412,20 +408,20 @@ describe("purchase filters", () => {
 
   it("round-trips a ?vendor= scope through the URL", () => {
     const specs = getEntityFilters("purchase");
-    const url = z
-      .object(entityFilterSearchFields("purchase"))
-      .parse({ vendor: "vendor-1,vendor-2" });
+    const url = entitySearch.purchase.schema.parse({
+      vendor: "VEN-4K7M,VEN-2ABC",
+    });
 
     const decoded = decodeFilters(specs, url);
     expect(decoded).toEqual([
-      { id: "vendor", value: ["vendor-1", "vendor-2"] },
+      { id: "vendor", value: ["VEN-4K7M", "VEN-2ABC"] },
     ]);
 
     const state = new Map(decoded.map((f) => [f.id, f.value]));
     expect(encodeFilters(specs, (columnId) => state.get(columnId))).toEqual({
       q: undefined,
       label: undefined,
-      vendor: "vendor-1,vendor-2",
+      vendor: "VEN-4K7M,VEN-2ABC",
       orderId: undefined,
       date: undefined,
       statedTotal: undefined,
@@ -509,7 +505,7 @@ describe("expense URL-only scopes", () => {
   });
 
   it("still declares a search field for every URL-only key", () => {
-    const fields = entityFilterSearchFields("expense");
+    const fields = entitySearch.expense.schema.shape;
     expect(Object.keys(fields)).toEqual(
       expect.arrayContaining([
         "productId",

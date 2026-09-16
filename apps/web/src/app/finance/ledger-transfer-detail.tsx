@@ -37,9 +37,9 @@ function partyLink(id: string, name: string) {
  * isn't needed when the id set is already in hand.
  */
 export function LedgerTransferDetail({
-  transfer,
+  record: transfer,
 }: {
-  transfer: LedgerTransferOut;
+  record: LedgerTransferOut;
 }) {
   const evidenceQueries = useQueries({
     queries: transfer.evidenceTransactionIds.map((id) =>

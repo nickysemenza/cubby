@@ -785,6 +785,25 @@ const compiledNative = (
   return native;
 };
 
+/**
+ * A dialog-created entity needs a capture intent for the generated index's
+ * `CreateDialogAction` (and the `?create=true` search key) to open anything.
+ */
+const validateRouteCreate = (
+  route: EntityDeclarationMetadata["route"],
+  fieldModel: EntityFieldModel,
+  context: string,
+) => {
+  if (
+    route?.create === "dialog" &&
+    !(fieldModel.intents?.create ?? []).includes("capture")
+  ) {
+    throw new EntityDeclarationError(
+      `${context}.route.create is "dialog" but model.intents.create lacks "capture".`,
+    );
+  }
+};
+
 // One compiler pass keeps cross-field capability errors attached to the exact
 // entity declaration rather than losing context across partial validators.
 export const compileEntity = (
@@ -939,6 +958,7 @@ export const compileEntity = (
     );
   }
   const route = declaration.route;
+  validateRouteCreate(route, fieldModel, context);
   const shortcode = compiledShortcode(descriptor, context);
   booleanValue(
     required(descriptor, "auditable", `${context}.descriptor`),

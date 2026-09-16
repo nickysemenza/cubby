@@ -28,7 +28,17 @@ import { z } from "zod";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
-  route: { basePath: "products" },
+  route: {
+    basePath: "products",
+    create: "page",
+    list: null,
+    detail: {
+      component: {
+        module: "~/app/_components/products/product-detail",
+        export: "ProductDetail",
+      },
+    },
+  },
   table: "Product",
   identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {

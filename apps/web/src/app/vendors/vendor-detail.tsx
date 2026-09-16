@@ -22,7 +22,7 @@ import { RelationshipSummaryTable } from "../_components/relationships/relations
 import { VendorPurchasesTable } from "./vendor-purchases-table";
 
 interface VendorDetailProps {
-  vendor: VendorOut;
+  record: VendorOut;
 }
 
 /**
@@ -35,7 +35,7 @@ interface VendorDetailProps {
  * The contractor metadata and vendor-level documents sketched in vendor.ts are
  * the natural follow-ons; nothing here anticipates them.
  */
-export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
+export const VendorDetail: FC<VendorDetailProps> = ({ record: vendor }) => {
   const updateMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("vendor", "update"),
     entity: "vendor",

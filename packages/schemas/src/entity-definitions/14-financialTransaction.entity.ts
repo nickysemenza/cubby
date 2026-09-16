@@ -33,7 +33,22 @@ export const generatedFinancialTransactionStatusValues = [
 export default defineEntity({
   key: "financialTransaction",
   names: { singular: "Financial Transaction", plural: "Transactions" },
-  route: { basePath: "financial-transactions" },
+  route: {
+    basePath: "financial-transactions",
+    create: "dialog",
+    list: {
+      component: {
+        module: "~/app/finance/financial-transaction-list",
+        export: "FinancialTransactionList",
+      },
+    },
+    detail: {
+      component: {
+        module: "~/app/finance/financial-transaction-detail",
+        export: "FinancialTransactionDetail",
+      },
+    },
+  },
   table: "FinancialTransaction",
   identifiers: {
     brand: "FinancialTransactionId",

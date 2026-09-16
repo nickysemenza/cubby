@@ -3,7 +3,6 @@ import type { FinancialTransactionOut } from "@cubby/schemas/financial-transacti
 import type {
   ProductShortcode,
   ProjectShortcode,
-  VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
@@ -21,12 +20,12 @@ type MutableDraft<E extends EditableEntity> = {
 
 /**
  * A create-intent "capture" dialog request with no fields beyond an optional
- * seed — the request every entity with no bespoke capture logic needs.
- * Entities whose capture request derives fields from its input (context,
- * defaulted seed values) keep their own hand-written builder below instead
- * of folding into this one.
+ * seed — the request every entity with no bespoke capture logic needs, and
+ * what the generated list routes open. Entities whose capture request
+ * derives fields from its input (context, defaulted seed values) keep their
+ * own hand-written builder below instead of folding into this one.
  */
-function captureRequest<E extends EditableEntity>(
+export function captureRequest<E extends EditableEntity>(
   entity: E,
   seed?: MutableDraft<E>,
 ): DialogRequest<E> {
@@ -34,8 +33,9 @@ function captureRequest<E extends EditableEntity>(
   // a per-entity lookup the compiler can't verify includes `"capture"` for an
   // opaque generic `E`; every caller below only ever instantiates this with
   // an entity whose editing registry declares `"capture"` as a valid create
-  // intent (the same set the hand-written builders it replaces used
-  // directly).
+  // intent: the hand-written builders below, and the generated list routes,
+  // whose `route.create: "dialog"` the entity compiler checks against
+  // `model.intents.create`.
   const request = {
     entity,
     operation: "create",
@@ -120,20 +120,6 @@ export const projectCaptureRequest = (input?: {
   };
 };
 
-export const vendorCaptureRequest = (): DialogRequest<"vendor"> =>
-  captureRequest("vendor");
-
-export const purchaseCaptureRequest = (input?: {
-  vendorId?: VendorShortcode | null;
-}): DialogRequest<"purchase"> =>
-  captureRequest(
-    "purchase",
-    input?.vendorId ? { vendorId: input.vendorId } : undefined,
-  );
-
-export const financialAccountCaptureRequest =
-  (): DialogRequest<"financialAccount"> => captureRequest("financialAccount");
-
 export const financialAccountEditRequest = (
   account: FinancialAccountOut,
 ): Omit<EntityEditRequest<"financialAccount", "update", "full">, "surface"> & {
@@ -150,10 +136,6 @@ export const financialAccountEditRequest = (
     notes: account.notes ?? null,
   },
 });
-
-export const financialTransactionCaptureRequest =
-  (): DialogRequest<"financialTransaction"> =>
-    captureRequest("financialTransaction");
 
 export const financialTransactionEditRequest = (
   transaction: FinancialTransactionOut,

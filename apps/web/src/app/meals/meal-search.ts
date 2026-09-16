@@ -5,9 +5,8 @@ import {
 import { addDays, format, isValid, parseISO, startOfWeek } from "date-fns";
 import { z } from "zod";
 
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { calendarPeriodParam } from "~/app/calendar/calendar-search";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { entitySearch } from "~/entities/generated/entity-search.gen";
 import { urlEnumListParam, urlStringParam } from "~/lib/search-params";
 
 const dateParamSchema = z
@@ -18,32 +17,27 @@ const dateParamSchema = z
 
 export type MealCalendarView = "calendar" | "table" | "nutrition";
 
-// Merges `tableSearchFields` (sort/page/pageSize) so the Table view's
-// useTableState urlSync round-trips through this route's search params —
-// without it, this strict z.object strips those keys on every navigate and
-// the table's sort/page silently resets (see tasks.index.tsx for the same
-// pattern).
+// The generated meal search carries the manifest filters, the table keys
+// (sort/page/pageSize) the Table view's useTableState urlSync round-trips,
+// and `create` — meals have no /meals/new route, the create is a dialog
+// opened by that param, which is what lets the action registry and the
+// empty-state CTA point at it. The calendar keys sit on top.
 export const mealCalendarSearchSchema = z.object({
+  ...entitySearch.meal.schema.shape,
   view: z.enum(["calendar", "table", "nutrition"]).optional().catch(undefined),
   period: calendarPeriodParam,
   week: dateParamSchema,
   date: z.iso.date().optional().catch(undefined),
-  // Meals have no /meals/new route — the create is a dialog, opened by this
-  // param. That makes it deep-linkable, which is what lets the action registry
-  // and the empty-state CTA point at it (they can only express a destination).
-  create: z.boolean().optional().catch(undefined),
-  ...tableSearchFields,
-  ...entityFilterSearchFields("meal"),
   mealType: urlEnumListParam(mealTypeSchema),
   mealKind: urlEnumListParam(mealKindSchema),
 });
 
 export const mealCalendarSearchDefaults = {
+  ...entitySearch.meal.defaults,
   view: undefined,
   period: undefined,
   week: undefined,
   date: undefined,
-  create: undefined,
 } as const;
 
 /** A renderer, not a view: both draw the same server-selected set. */

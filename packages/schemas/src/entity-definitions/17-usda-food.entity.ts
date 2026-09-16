@@ -13,7 +13,7 @@ import { productTopLevelOut } from "../product-output-fields.js";
 export default defineEntity({
   key: "usda-food",
   names: { singular: "USDA Food", plural: "USDA Foods" },
-  route: { basePath: "usda", detailParam: "id" },
+  route: { basePath: "usda", detailParam: "id", list: null, detail: null },
   table: null,
   identifiers: { brand: null, shortcode: null },
   presentation: {

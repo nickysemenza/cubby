@@ -4,7 +4,7 @@ import {
   type LocationShortcode,
   type ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BookOpen, History, MoreHorizontal, Sprout } from "lucide-react";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { useState } from "react";
 import { DetailSections } from "~/app/_components/data-table/detail-page";
 import { formatDateWithYear } from "~/app/projects/project-formatting";
 import { Row, Stack } from "~/components/layout";
+import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -23,6 +24,8 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { EntryForm } from "./entry-form";
@@ -352,13 +355,11 @@ function PlantingLocationHistorySection({
   );
 }
 
-export function PlantingDetail({
-  planting,
-  refresh,
-}: {
-  planting: PlantingOut;
-  refresh: () => void;
-}) {
+/** The planting detail page body, including its `<Page>` shell. */
+export function PlantingDetail({ record: planting }: { record: PlantingOut }) {
+  const queryClient = useQueryClient();
+  const refresh = () =>
+    void invalidateOperationTags(queryClient, ripple.planting);
   const [dialog, setDialog] = useState<PlantingDialog | null>(null);
   const [correctingDates, setCorrectingDates] = useState(false);
   const crop = useQuery(
@@ -398,7 +399,14 @@ export function PlantingDetail({
     refresh();
   };
   return (
-    <>
+    <Page
+      variant="detail"
+      entity="planting"
+      title={planting.displayName}
+      rawData={planting}
+      heroImages={planting.images}
+      heroNo={planting.id}
+    >
       <Stack gap="md" className="mb-6">
         {/* The page hero already carries the display name; this row is the
             status and the current growing area. */}
@@ -519,6 +527,6 @@ export function PlantingDetail({
           />
         </ResponsiveDialog>
       )}
-    </>
+    </Page>
   );
 }

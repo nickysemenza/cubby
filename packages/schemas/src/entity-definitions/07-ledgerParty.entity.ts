@@ -5,7 +5,21 @@ import { z } from "zod";
 export default defineEntity({
   key: "ledgerParty",
   names: { singular: "Ledger Party", plural: "Ledger Parties" },
-  route: { basePath: "ledger-parties" },
+  route: {
+    basePath: "ledger-parties",
+    list: {
+      component: {
+        module: "~/app/finance/ledger-party-list",
+        export: "LedgerPartyList",
+      },
+    },
+    detail: {
+      component: {
+        module: "~/app/finance/ledger-party-detail",
+        export: "LedgerPartyDetail",
+      },
+    },
+  },
   table: "LedgerParty",
   identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
   presentation: {

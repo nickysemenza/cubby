@@ -4,6 +4,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { Suspense } from "react";
+import { z } from "zod";
 
 import LocationTreeGraph from "~/app/_components/inventory/location-tree-graph";
 import LocationTreeView from "~/app/_components/inventory/location-tree-view";
@@ -24,14 +25,20 @@ import {
 import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import { filterUrlKey } from "~/entities/filters";
-import {
-  type LOCATION_LIST_VIEWS,
-  locationSearchDefaults,
-  locationSearchSchema,
-} from "~/entities/list-search";
+import { entitySearch } from "~/entities/generated/entity-search.gen";
 import { pageTitle } from "~/lib/page-title";
 
+const LOCATION_LIST_VIEWS = ["gallery", "table", "visualizations"] as const;
 type ViewOption = (typeof LOCATION_LIST_VIEWS)[number];
+
+const locationSearchSchema = z.object({
+  ...entitySearch.location.schema.shape,
+  view: z.enum(LOCATION_LIST_VIEWS).optional().catch(undefined),
+});
+const locationSearchDefaults = {
+  ...entitySearch.location.defaults,
+  view: undefined,
+};
 
 const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "gallery", label: "Gallery" },

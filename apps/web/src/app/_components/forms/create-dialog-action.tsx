@@ -12,16 +12,6 @@ const EntityEditDialog = lazy(() =>
   })),
 );
 
-/**
- * The `?create=true` search param this component reads.
- *
- * A list route whose `validateSearch` is a strict `z.object` must merge this
- * fragment, or the router strips the key the moment the dialog writes it. Same
- * contract as `tableSearchFields`.
- */
-export const createDialogSearchField = {
-  create: z.boolean().optional().catch(undefined),
-};
 const routeSearchValueSchema = z.json();
 type RouteSearchValue = z.infer<typeof routeSearchValueSchema> | undefined;
 type CreateDialogNavigate = (options: {
@@ -51,8 +41,8 @@ export function CreateDialogAction({
   children?: ReactNode;
 }) {
   // Both hooks are route-agnostic on purpose: this button renders on a dozen
-  // list routes, and each declares `create` via `createDialogSearchField`
-  // rather than through a shared route type. `useNavigate`'s search reducer is
+  // list routes, and each declares `create` through its generated search
+  // schema (`route.create: "dialog"`) rather than through a shared route type. `useNavigate`'s search reducer is
   // typed per-route, so a component that works on all of them can't satisfy it.
   const routeNavigate = useNavigate();
   const navigate = (options: Parameters<CreateDialogNavigate>[0]) => {

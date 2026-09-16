@@ -8,50 +8,56 @@ import type {
 import { entityProjectionMaps } from "./index.ts";
 import { renderRecord } from "./record.ts";
 
+/**
+ * One aliased runtime import per distinct `module#export`, sorted so the
+ * emitted import block is stable. `alias` resolves a ref back to its
+ * identifier in the generated module.
+ */
+export const sourceRefImports = (
+  refs: readonly SourceRef[],
+  prefix: string,
+) => {
+  const refKey = (ref: SourceRef) => `${ref.module}#${ref.export}`;
+  const distinct = [
+    ...new Map(refs.map((ref) => [refKey(ref), ref] as const)).values(),
+  ].sort((left, right) => refKey(left).localeCompare(refKey(right)));
+  const aliases = new Map(
+    distinct.map((ref, index) => [refKey(ref), `${prefix}${index}`]),
+  );
+  const byModule = new Map<string, Array<{ export: string; alias: string }>>();
+  for (const ref of distinct) {
+    const imports = byModule.get(ref.module) ?? [];
+    // SAFETY: every distinct ref was assigned an alias in the map above.
+    imports.push({ export: ref.export, alias: aliases.get(refKey(ref))! });
+    byModule.set(ref.module, imports);
+  }
+  return {
+    imports: [...byModule.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([module, imports]) =>
+          `import { ${imports.map(({ export: name, alias }) => `${name} as ${alias}`).join(", ")} } from ${JSON.stringify(module)};`,
+      )
+      .join("\n"),
+    // SAFETY: callers only resolve refs they passed in.
+    alias: (ref: SourceRef) => aliases.get(refKey(ref))!,
+  };
+};
+
 export const renderFilterArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
   const { filters: filterEntities } = entityProjectionMaps(entities);
-  const roster = Object.fromEntries(
-    filterEntities.map(({ key, filterUrlKeys }) => [key, filterUrlKeys]),
-  );
-  const filterRefs = [
-    ...new Map(
-      filterEntities.flatMap(({ filterDescriptors }) =>
-        filterDescriptors.flatMap((descriptor) =>
-          [descriptor.optionsRef, descriptor.expandRef]
-            .filter((ref): ref is SourceRef => ref !== null)
-            .map((ref) => [`${ref.module}#${ref.export}`, ref] as const),
+  const { imports: runtimeImports, alias } = sourceRefImports(
+    filterEntities.flatMap(({ filterDescriptors }) =>
+      filterDescriptors.flatMap((descriptor) =>
+        [descriptor.optionsRef, descriptor.expandRef].filter(
+          (ref): ref is SourceRef => ref !== null,
         ),
       ),
-    ).values(),
-  ].sort((left, right) =>
-    `${left.module}#${left.export}`.localeCompare(
-      `${right.module}#${right.export}`,
     ),
+    "filterRef",
   );
-  const refAliases = new Map(
-    filterRefs.map((ref, index) => [
-      `${ref.module}#${ref.export}`,
-      `filterRef${index}`,
-    ]),
-  );
-  const runtimeImportsByModule = new Map<
-    string,
-    Array<{ export: string; alias: string }>
-  >();
-  for (const [index, ref] of filterRefs.entries()) {
-    const imports = runtimeImportsByModule.get(ref.module) ?? [];
-    imports.push({ export: ref.export, alias: `filterRef${index}` });
-    runtimeImportsByModule.set(ref.module, imports);
-  }
-  const runtimeImports = [...runtimeImportsByModule.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(
-      ([module, imports]) =>
-        `import { ${imports.map(({ export: name, alias }) => `${name} as ${alias}`).join(", ")} } from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
   const runtimeDescriptor = (descriptor: FilterDescriptor): string => {
     const properties = [
       `columnId:${JSON.stringify(descriptor.columnId)}`,
@@ -68,9 +74,7 @@ export const renderFilterArtifacts = (
         : [`options:${compactLiteral(descriptor.options)}`]),
       ...(descriptor.optionsRef === null
         ? []
-        : [
-            `options:${refAliases.get(`${descriptor.optionsRef.module}#${descriptor.optionsRef.export}`)}`,
-          ]),
+        : [`options:${alias(descriptor.optionsRef)}`]),
       ...(descriptor.optionsKey === null
         ? []
         : [`optionsKey:${JSON.stringify(descriptor.optionsKey)}`]),
@@ -88,9 +92,7 @@ export const renderFilterArtifacts = (
           ]),
       ...(descriptor.expandRef === null
         ? []
-        : [
-            `expand:${refAliases.get(`${descriptor.expandRef.module}#${descriptor.expandRef.export}`)}`,
-          ]),
+        : [`expand:${alias(descriptor.expandRef)}`]),
       ...(descriptor.urlOnly ? ["urlOnly:true"] : []),
       ...(descriptor.nullable === null
         ? []
@@ -163,31 +165,6 @@ export const renderFilterArtifacts = (
           comment:
             "// Generated contract cases keep mechanical filter invariants reviewable.\n// Generated filter contract cases stay compact.",
         }),
-    },
-    {
-      relativePath: "apps/web/src/entities/filter-search-fields.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n' +
-        'import { urlStringParam } from "~/lib/search-params";\n\n' +
-        renderRecord({
-          name: "entityFilterUrlKeyRoster",
-          entries: roster,
-          satisfies: "Record<Entity, readonly string[]>",
-          comment: "// Generated data stays one entity per line.",
-          exported: false,
-        }) +
-        "\n" +
-        "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
-        "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
-        "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
-        "export function entityFilterSearchFields(\n" +
-        "  entity: Entity,\n" +
-        ") {\n" +
-        "  return Object.fromEntries(\n" +
-        "    entityFilterUrlKeys(entity).map((key) => [key, urlStringParam]),\n" +
-        "  );\n" +
-        "}\n",
     },
     {
       relativePath:

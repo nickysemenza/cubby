@@ -47,7 +47,15 @@ Each declaration co-locates schemas and field policy:
 export default defineEntity({
   key: "example",
   names: { singular: "Example", plural: "Examples" },
-  route: { basePath: "examples" },
+  route: {
+    basePath: "examples",
+    // "dialog" puts `?create=true` in the list search and renders the capture
+    // action; "page" links a hand-written `examples.new.tsx` as `routes.new`.
+    create: "dialog",
+    // `null` keeps the route module hand-written; a component ref generates it.
+    list: { component: { module: "~/app/examples/example-list", export: "ExampleList" } },
+    detail: { component: { module: "~/app/examples/example-detail", export: "ExampleDetail" } },
+  },
   table: "Example",
   identifiers: { brand: "ExampleId", shortcode: "EXM-" },
   presentation: {
@@ -321,12 +329,17 @@ declaration module must not export `filterSchemas`.
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
 `packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
-client-safe inspector metadata, browser route roster, filter field/URL catalogs,
-kernel and MCP action capabilities, relation-specific command schemas,
-repository/relation-adapter assembly, and contract cases.
-Shared browser helpers consume the roster, while TanStack route modules remain
-thin handwritten entrypoints. Specialized screens stay as extension slots in
-shared shells.
+client-safe inspector metadata, browser route roster, the typed list search
+schema per entity (`entities/generated/entity-search.gen.ts`: manifest filter
+keys, table keys and `create`, with `defaults` naming every key for
+`stripSearchParams`), kernel and MCP action capabilities, relation-specific
+command schemas, repository/relation-adapter assembly, and contract cases.
+The list and detail route modules an entity declares through `route.list` /
+`route.detail` are generated too (`routes/_authenticated/<basePath>.index.tsx`
+and `.$shortcode.tsx`, with the generated header); a `null` slot keeps that
+module hand-written, composing route-only keys onto
+`entitySearch.<entity>.schema.shape`. Specialized screens stay as extension
+slots in shared shells.
 
 Inspector metadata projects declared actions, filter keys, MCP operations,
 lifecycle/capability flags, reference targets, schema source-reference strings,
@@ -456,7 +469,8 @@ irreducible transaction and collision rules.
    and relationship projections explicit. A physical change still requires a
    compatible migration; generation does not apply production DDL.
 3. Add a kernel repository adapter for the capabilities the spec declares.
-4. Add thin TanStack route modules and workflow extensions where needed.
+4. Point `route.list` / `route.detail` at the page components (or set them
+   `null` and hand-write the route module); add workflow extensions where needed.
 5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
    when the entity participates in deletion or merge.

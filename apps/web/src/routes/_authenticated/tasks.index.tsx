@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { Share2 } from "lucide-react";
 import { lazy, Suspense } from "react";
+import { z } from "zod";
 
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
@@ -28,9 +29,30 @@ import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
 } from "~/entities/filters";
-import { taskSearchDefaults, taskSearchSchema } from "~/entities/list-search";
-import type { TaskRenderer } from "~/lib/list-view-normalization";
+import { entitySearch } from "~/entities/generated/entity-search.gen";
 import { pageTitle } from "~/lib/page-title";
+import { urlStringParam } from "~/lib/search-params";
+
+const TASK_RENDERERS = ["next", "board", "timeline", "list"] as const;
+type TaskRenderer = (typeof TASK_RENDERERS)[number];
+
+// Route-only keys on top of the generated task search: the free-text search,
+// the renderer, and the board's column/swimlane axes. `lane` only applies
+// when `cols === "status"` (normalized inside TasksBoardView).
+const taskSearchSchema = z.object({
+  ...entitySearch.task.schema.shape,
+  q: urlStringParam,
+  view: z.enum(TASK_RENDERERS).optional().catch(undefined),
+  cols: z.enum(["status", "project", "trade"]).optional().catch(undefined),
+  lane: z.enum(["project", "trade"]).optional().catch(undefined),
+});
+const taskSearchDefaults = {
+  ...entitySearch.task.defaults,
+  q: undefined,
+  view: undefined,
+  cols: undefined,
+  lane: undefined,
+};
 
 // Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
 // until selected — lazy so that stack stays out of the default List view.

@@ -19,10 +19,12 @@ import { LocationForm } from "./location-form";
 import { LocationVisual } from "./location-visual";
 
 interface LocationDetailProps {
-  location: InfLocation;
+  record: InfLocation;
 }
 
-export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
+export const LocationDetail: FC<LocationDetailProps> = ({
+  record: location,
+}) => {
   const heroMedia = (
     <LocationVisual location={location} variant="hero" interactive />
   );

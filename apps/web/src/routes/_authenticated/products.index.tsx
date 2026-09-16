@@ -1,3 +1,4 @@
+import { plainDate } from "@cubby/schemas/project";
 import {
   createFileRoute,
   Link,
@@ -5,6 +6,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
+import { z } from "zod";
 
 import { listPage } from "~/app/_components/routing/entity-routes";
 import {
@@ -15,11 +17,27 @@ import {
 import { Button } from "~/components/ui/button";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
-import {
-  productSearchDefaults,
-  productSearchSchema,
-} from "~/entities/list-search";
+import { entitySearch } from "~/entities/generated/entity-search.gen";
 import { pageTitle } from "~/lib/page-title";
+
+const PRODUCT_LIST_VIEWS = ["table", "shelf", "events", "lifecycles"] as const;
+
+// Route-only keys on top of the generated product search: the renderer and
+// the movement window the events/lifecycles views read.
+const productSearchSchema = z.object({
+  ...entitySearch.product.schema.shape,
+  view: z.enum(PRODUCT_LIST_VIEWS).optional().catch(undefined),
+  movementFrom: plainDate.optional().catch(undefined),
+  movementTo: plainDate.optional().catch(undefined),
+  movementOrder: z.enum(["asc", "desc"]).optional().catch(undefined),
+});
+const productSearchDefaults = {
+  ...entitySearch.product.defaults,
+  view: undefined,
+  movementFrom: undefined,
+  movementTo: undefined,
+  movementOrder: undefined,
+};
 
 function useProductsView(): ProductListView {
   const { view } = Route.useSearch();

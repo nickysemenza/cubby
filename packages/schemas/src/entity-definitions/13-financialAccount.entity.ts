@@ -11,7 +11,22 @@ import { z } from "zod";
 export default defineEntity({
   key: "financialAccount",
   names: { singular: "Financial Account", plural: "Accounts" },
-  route: { basePath: "financial-accounts" },
+  route: {
+    basePath: "financial-accounts",
+    create: "dialog",
+    list: {
+      component: {
+        module: "~/app/finance/financial-account-list",
+        export: "FinancialAccountList",
+      },
+    },
+    detail: {
+      component: {
+        module: "~/app/finance/financial-account-detail",
+        export: "FinancialAccountDetail",
+      },
+    },
+  },
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-" },
   presentation: {

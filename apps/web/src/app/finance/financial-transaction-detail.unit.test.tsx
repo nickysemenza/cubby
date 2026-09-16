@@ -41,7 +41,7 @@ describe("FinancialTransactionDetail", () => {
   afterEach(() => harness.dispose());
 
   it("renders multi-allocation overview fields and purchase filters", () => {
-    render(<FinancialTransactionDetail transaction={transaction} />, {
+    render(<FinancialTransactionDetail record={transaction} />, {
       wrapper: harness.wrapper,
     });
     expect(screen.getByText("Settles")).toBeVisible();

@@ -18,11 +18,11 @@ import { InventoryForm } from "./inventory-form";
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
 interface InventoryDetailProps {
-  inventoryitem: InventoryItem;
+  record: InventoryItem;
 }
 
 export const InventoryDetail: FC<InventoryDetailProps> = ({
-  inventoryitem,
+  record: inventoryitem,
 }) => {
   const { commonSections, editMode } = useEntityDetail<
     "inventory",

@@ -5,7 +5,22 @@ import { z } from "zod";
 export default defineEntity({
   key: "ingredient",
   names: { singular: "Ingredient", plural: "Ingredients" },
-  route: { basePath: "ingredients" },
+  route: {
+    basePath: "ingredients",
+    create: "page",
+    list: {
+      component: {
+        module: "~/app/ingredients/ingredientlist",
+        export: "IngredientList",
+      },
+    },
+    detail: {
+      component: {
+        module: "~/app/_components/ingredients/ingredient-detail",
+        export: "IngredientDetail",
+      },
+    },
+  },
   table: "Ingredient",
   identifiers: { brand: "IngredientId", shortcode: "ING-" },
   native: { update: "Garden guide association" },

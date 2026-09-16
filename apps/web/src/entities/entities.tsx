@@ -149,14 +149,6 @@ const INK = {
   },
 } satisfies Record<string, EntityColor>;
 
-const newRouteExtensions = {
-  ingredient: { new: "/ingredients/new" },
-  inventory: { new: "/inventory/new" },
-  location: { new: "/locations/new" },
-  product: { new: "/products/new" },
-  recipe: { new: "/recipes/new" },
-} as const;
-
 /**
  * Stamps every definition with the display names its own key already implies.
  *
@@ -255,10 +247,6 @@ const entityDefinitions = withEntityNames({
       text: "text-accent-foreground",
       border: "border-l-warning",
     },
-    routes: {
-      ...generatedBrowserRoutes.ingredient.routes,
-      ...newRouteExtensions.ingredient,
-    },
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
     detail: { commonSections: ["history"] },
@@ -281,10 +269,6 @@ const entityDefinitions = withEntityNames({
   product: {
     ...generatedBrowserRoutes.product,
     color: INK.primary,
-    routes: {
-      ...generatedBrowserRoutes.product.routes,
-      ...newRouteExtensions.product,
-    },
     // Note: product renders unit mappings as a custom section (coverage grid +
     // rows table, like ingredient), so unit-mappings is not a common section.
     detail: { commonSections: ["history"] },
@@ -319,10 +303,6 @@ const entityDefinitions = withEntityNames({
   recipe: {
     ...generatedBrowserRoutes.recipe,
     color: INK.primary,
-    routes: {
-      ...generatedBrowserRoutes.recipe.routes,
-      ...newRouteExtensions.recipe,
-    },
     detail: { commonSections: ["images", "history"] },
     // Cost/calorie column IDs sort the canonical estimates' known lower amount
     // via jsonb expressions. `source` (SourceType+SourceData)
@@ -337,10 +317,6 @@ const entityDefinitions = withEntityNames({
   location: {
     ...generatedBrowserRoutes.location,
     color: INK.slate,
-    routes: {
-      ...generatedBrowserRoutes.location.routes,
-      ...newRouteExtensions.location,
-    },
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
     detail: { commonSections: ["history"] },
@@ -349,10 +325,6 @@ const entityDefinitions = withEntityNames({
   inventory: {
     ...generatedBrowserRoutes.inventory,
     color: INK.primary,
-    routes: {
-      ...generatedBrowserRoutes.inventory.routes,
-      ...newRouteExtensions.inventory,
-    },
     // Inventory items have a simple single-section detail page
     detail: { commonSections: ["history"] },
     // Inventory list has custom columns (image from product, amount instead of name)
