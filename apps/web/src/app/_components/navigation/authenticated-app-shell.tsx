@@ -170,7 +170,7 @@ function MobileRouteBar({
         {descriptor.label}
       </p>
       <Suspense fallback={<div className="h-8 w-20" aria-hidden="true" />}>
-        <ShellControls debugClassName="hidden" />
+        <ShellControls />
       </Suspense>
     </div>
   );

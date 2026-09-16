@@ -7,9 +7,9 @@ import type { QueryTiming } from "~/lib/query-timing";
 import type { EntityActionsEntry } from "../actions/entity-actions";
 import type { UseEntitySelectionReturn } from "../hooks/useEntitySelection";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+import { useTableColumnLayout } from "./column-layout";
 import RTable, { type RTableProps } from "./Table";
 import { type CubbyTable, useCubbyTable } from "./table-features";
-import { type TableLayoutOptions, useCubbyTableLayout } from "./table-layout";
 import type { GroupConfig } from "./useGroupedList";
 
 /**
@@ -74,7 +74,6 @@ type CallerOwnedProps<TItem extends RowData> = Pick<
   | "disableMobileDetailsHref"
   | "inspectorToggle"
   | "currentRowId"
-  | "defaultDensity"
   | "desktopInspector"
   | "onRowClick"
   | "onRowHover"
@@ -100,21 +99,23 @@ type CubbyTableOptions<TItem extends RowData> = Parameters<
 
 type BoundedListWorkbenchOptions<TItem extends RowData & { id: string }> = Omit<
   CubbyTableOptions<TItem>,
-  "data" | "columns" | "atoms" | "meta"
+  "data" | "columns" | "meta"
 > & {
   entity: Entity;
   data: TItem[];
-  columns: TableLayoutOptions<TItem>["columns"];
-  layoutKey: string;
-  layout?: Omit<TableLayoutOptions<TItem>, "columns" | "key">;
+  columns: Parameters<typeof useTableColumnLayout<TItem>>[0]["columns"];
+  initialColumnVisibility?: Parameters<
+    typeof useTableColumnLayout<TItem>
+  >[0]["initialColumnVisibility"];
   selection?: UseEntitySelectionReturn<TItem>;
   isLoading?: boolean;
   deleteDialog?: ReactNode;
 };
 
 /**
- * The complete bounded-table implementation: persisted layout, table atoms,
- * optional entity selection, bulk chrome, and dialogs are wired once.
+ * The complete bounded-table implementation: in-session column layout, table
+ * construction, optional entity selection, bulk chrome, and dialogs are
+ * wired once.
  */
 export function useBoundedListWorkbench<
   TItem extends RowData & { id: string },
@@ -122,24 +123,27 @@ export function useBoundedListWorkbench<
   entity,
   data,
   columns,
-  layoutKey,
-  layout: layoutOptions,
+  initialColumnVisibility,
   selection,
   isLoading,
   deleteDialog,
   ...tableOptions
 }: BoundedListWorkbenchOptions<TItem>): ListWorkbenchModel<TItem> {
-  const layout = useCubbyTableLayout({
-    ...layoutOptions,
-    key: layoutKey,
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
+    initialColumnVisibility,
   });
   const table = useCubbyTable({
     ...tableOptions,
     data,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns: tableColumns,
+    initialState: {
+      ...tableOptions.initialState,
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+    },
+    meta: { defaultLayout },
     enableRowSelection:
       selection?.enableRowSelection ?? tableOptions.enableRowSelection,
     state: selection

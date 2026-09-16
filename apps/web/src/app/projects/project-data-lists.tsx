@@ -133,8 +133,6 @@ export function ProjectDataTaskList({
     deletable,
     nameEditable,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    layoutKey: "task:projects-data",
-    legacyLayoutSizingKey: "task",
   });
 
   return (
@@ -237,8 +235,6 @@ export function ProjectDataExpenseList({
     deletable,
     nameEditable,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    layoutKey: "expense:projects-data",
-    legacyLayoutSizingKey: "expense",
   });
 
   return (

@@ -1163,7 +1163,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
             onRowHover={onRowHover}
             onRowHoverEnd={onRowHoverEnd}
             currentRowId={preview?.rowKey}
-            defaultDensity="dense"
             desktopInspector={dockedInspector}
             inspectorToggle={inspectorToggle}
           />

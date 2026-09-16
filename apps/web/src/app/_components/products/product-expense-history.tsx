@@ -385,7 +385,6 @@ export const ProductExpenseHistory: FC<{
     tableStateOptions: EMBEDDED_TABLE_STATE,
     // Distinct column set from the /expenses ledger, so it needs its own
     // persisted View settings rather than sharing `table-columns:expense`.
-    layoutKey: "expense:product-detail",
     initialColumnVisibility: INITIAL_COLUMN_VISIBILITY,
     hiddenFilterColumns: SELF_FILTERED_COLUMNS,
   });

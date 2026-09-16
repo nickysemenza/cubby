@@ -241,7 +241,7 @@ export default defineConfig(async ({ command, mode }) => {
         },
       },
     },
-    // Compression reports are opt-in; build-sw still enforces download budgets.
+    // Compression reports are opt-in (CUBBY_BUNDLE_REPORT=1).
     build: { reportCompressedSize: process.env.CUBBY_BUNDLE_REPORT === "1" },
     // CF Workers build-time flag for dead code elimination in db.ts
     define: {

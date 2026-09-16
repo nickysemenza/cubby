@@ -16,7 +16,6 @@ import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { EntityIcon } from "~/entities/entities";
-import type { EmptyFilter } from "~/hooks/useGalleryViewState";
 import { cn } from "~/lib/utils";
 
 import { LocationBreadcrumb } from "./location-breadcrumb";
@@ -24,6 +23,7 @@ import { locationTypeOptionsWithTheme } from "./location-icons";
 
 const EMPTY_BREADCRUMB: InfLocation[] = [];
 const emptyFilterSchema = z.enum(["all", "withItems", "empty"]);
+export type EmptyFilter = z.infer<typeof emptyFilterSchema>;
 
 interface GalleryHeaderProps {
   searchTerm: string;

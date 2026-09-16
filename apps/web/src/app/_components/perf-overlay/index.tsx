@@ -7,16 +7,12 @@ import {
   Play,
   RotateCcw,
   SquareDashed,
-  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
 
 import { Row, Stack } from "~/components/layout";
-import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { copyText } from "~/lib/clipboard";
-import { setFlag } from "~/lib/flags";
 import {
   type PerfSnapshot,
   reset,
@@ -31,13 +27,6 @@ import { cn } from "~/lib/utils";
 import { type LiveQueryStats, readLiveQueryStats } from "./use-query-stats";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
-const cornerSchema = z.enum([
-  "top-left",
-  "top-right",
-  "bottom-left",
-  "bottom-right",
-]);
-const minimizedSchema = z.boolean();
 const CORNERS: Corner[] = [
   "bottom-left",
   "bottom-right",
@@ -62,16 +51,8 @@ const ms = (n: number) => `${n.toFixed(1)}ms`;
  * just starts the runtime collectors and polls a snapshot every 500ms.
  */
 export function PerfOverlay() {
-  const [corner, setCorner] = useLocalStorage(
-    "perfOverlayCorner",
-    cornerSchema,
-    "bottom-left",
-  );
-  const [minimized, setMinimized] = useLocalStorage(
-    "perfOverlayMin",
-    minimizedSchema,
-    false,
-  );
+  const [corner, setCorner] = useState<Corner>("bottom-left");
+  const [minimized, setMinimized] = useState(false);
   const [tab, setTab] = useState<Tab>("Slow");
   const [paused, setPausedState] = useState(false);
   const [snap, setSnap] = useState<PerfSnapshot>(() => snapshot());
@@ -186,9 +167,6 @@ export function PerfOverlay() {
           </IconBtn>
           <IconBtn title="Minimize" onClick={() => setMinimized(true)}>
             <Minus className="size-3" />
-          </IconBtn>
-          <IconBtn title="Close" onClick={() => setFlag("perfOverlay", false)}>
-            <X className="size-3" />
           </IconBtn>
         </Row>
       </Row>

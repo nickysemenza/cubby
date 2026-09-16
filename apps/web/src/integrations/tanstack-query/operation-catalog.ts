@@ -337,7 +337,6 @@ const descriptorMeta = <
   meta.cacheTags = cacheTags;
   const resolved = policy ?? operationCachePolicy();
   meta.cacheProfile = resolved.profile;
-  meta.persistence = resolved.persistence;
   if (resolved.freshness) meta.freshness = resolved.freshness;
   return meta;
 };

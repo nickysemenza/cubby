@@ -20,9 +20,9 @@ import { Button } from "~/components/ui/button";
 import { TableHead, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 
+import { columnWidthValue, isLockedColumnId } from "./column-layout";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import type { cubbyTableFeatures, CubbyTable as Table } from "./table-features";
-import { columnWidthValue, isLockedColumnId } from "./table-layout";
 
 type HeaderStyles = { header: string; sortIcon: string };
 

@@ -25,8 +25,6 @@ export interface CubbyOperationMeta extends Record<string, unknown> {
   cacheTags?: readonly OperationCacheTag[];
   /** Cache tags invalidated after a successful mutation. */
   invalidates?: InvalidationTagSet;
-  /** Whether a successful query is eligible for offline persistence. */
-  persistence?: "persist" | "memory";
   /** Named descriptor policy and the resolved timings copied onto query options. */
   cacheProfile?: OperationCacheProfile;
   freshness?: OperationFreshnessPolicy;

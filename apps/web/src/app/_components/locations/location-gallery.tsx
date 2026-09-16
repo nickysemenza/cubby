@@ -19,15 +19,11 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import {
-  type EmptyFilter,
-  useGalleryViewState,
-} from "~/hooks/useGalleryViewState";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
 
 import { ProductImageSummariesProvider } from "../products/product-image-summaries";
-import { GalleryHeader } from "./gallery-header";
+import { type EmptyFilter, GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
 import { GalleryUnifiedView } from "./gallery-unified-view";
 import { LocationGalleryCard } from "./location-gallery-card";
@@ -249,19 +245,16 @@ function calculateStats(
 export function LocationGallery() {
   const isMobile = useIsMobile();
 
-  // Gallery state
-  const {
-    sidebarCollapsed,
-    toggleSidebar,
-    searchTerm,
-    setSearchTerm,
-    locationTypeFilter,
-    setLocationTypeFilter,
-    emptyFilter,
-    setEmptyFilter,
-    hideNonMatching,
-    setHideNonMatching,
-  } = useGalleryViewState();
+  // Gallery state (session-only; nothing here persists across reloads)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [locationTypeFilter, setLocationTypeFilter] =
+    useState<LocationType | null>(null);
+  const [emptyFilter, setEmptyFilter] = useState<EmptyFilter>("all");
+  const [hideNonMatching, setHideNonMatching] = useState(false);
 
   // Track active location for sidebar highlighting
   const [activeLocationId, setActiveLocationId] = useState<string>();

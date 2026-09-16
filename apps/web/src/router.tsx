@@ -16,11 +16,6 @@ import { scrubSentryEvent } from "~/lib/sentry-scrub";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 import { routeTree } from "./routeTree.gen";
 
-// Defined by Vite for every build and dev mode; true only for CF builds.
-// We gate SW registration on this rather than import.meta.env.PROD so the SW
-// only ever registers for deployed CF builds, never a local production build.
-declare const __CF_WORKERS__: boolean;
-
 export const getRouter = () => {
   const rqContext = TanstackQuery.getContext();
 
@@ -115,24 +110,11 @@ export const getRouter = () => {
     // Dev-only on-demand CPU profiler: `await __jsProfile(5000)` in the console.
     if (!isProd) installJsProfiler();
 
-    // Register the app-shell service worker. Gate on the CF build (the SW only
-    // exists there; `vite dev` has no /sw.js and SW + HMR is noisy anyway).
-    // Best-effort: a failed registration must not break boot.
-    const isCfBuild = __CF_WORKERS__;
-    if (isCfBuild && "serviceWorker" in navigator) {
-      const register = () =>
-        navigator.serviceWorker.register("/sw.js").catch((error) => {
-          console.error("[service-worker] registration failed", error);
-        });
-      // This module executes during hydration, which can be AFTER `load` has
-      // already fired — in which case a `load` listener would never run. So
-      // register immediately when the document is already complete.
-      if (document.readyState === "complete") {
-        register();
-      } else {
-        window.addEventListener("load", register, { once: true });
-      }
-    }
+    // The service worker is gone; unregister any still installed from an
+    // earlier deploy so it stops serving stale precached assets.
+    navigator.serviceWorker
+      ?.getRegistrations()
+      .then((registrations) => registrations.forEach((r) => r.unregister()));
   }
 
   setupRouterSsrQueryIntegration({

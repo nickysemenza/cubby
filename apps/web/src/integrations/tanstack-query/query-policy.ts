@@ -3,7 +3,6 @@ import type { DefaultOptions } from "@tanstack/react-query";
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
-export const PERSISTED_QUERY_MAX_AGE = 24 * HOUR;
 export const IDEMPOTENT_MUTATION_RETRY = 2;
 
 /**
@@ -46,7 +45,6 @@ export type OperationCacheProfile =
 
 export type ResolvedOperationCachePolicy = {
   profile: OperationCacheProfile;
-  persistence: "persist" | "memory";
   freshness?: OperationFreshnessPolicy;
 };
 
@@ -60,26 +58,21 @@ const OPERATION_CACHE_PROFILES: Readonly<
 > = Object.freeze({
   interactive: Object.freeze({
     profile: "interactive",
-    persistence: "memory",
   }),
   "live-status": Object.freeze({
     profile: "live-status",
-    persistence: "memory",
     freshness: Object.freeze({ staleTime: 0 }),
   }),
   browse: Object.freeze({
     profile: "browse",
-    persistence: "memory",
     freshness: Object.freeze({ staleTime: 2 * MINUTE }),
   }),
   stable: Object.freeze({
     profile: "stable",
-    persistence: "memory",
     freshness: Object.freeze({ staleTime: 5 * MINUTE }),
   }),
   "derived-summary": Object.freeze({
     profile: "derived-summary",
-    persistence: "memory",
     freshness: Object.freeze({
       staleTime: 5 * MINUTE,
       gcTime: 30 * MINUTE,
@@ -87,11 +80,11 @@ const OPERATION_CACHE_PROFILES: Readonly<
   }),
   "persisted-detail": Object.freeze({
     profile: "persisted-detail",
-    persistence: "persist",
     freshness: Object.freeze({
       staleTime: 5 * MINUTE,
-      // TanStack persistence requires GC to be at least the restore max age.
-      gcTime: PERSISTED_QUERY_MAX_AGE,
+      // Long in-memory GC — this entity's detail is worth keeping warm well
+      // past the tab's active session even without disk persistence.
+      gcTime: 24 * HOUR,
     }),
   }),
 });

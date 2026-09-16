@@ -13,9 +13,9 @@ import { TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
+import { columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
 import type { CubbyRow as Row } from "./table-features";
-import { columnWidthValue } from "./table-layout";
 
 const NUMERIC_CELL = "text-right font-mono tabular-nums";
 const MONO_CELL = "font-mono";

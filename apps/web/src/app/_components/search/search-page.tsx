@@ -19,7 +19,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { z } from "zod";
 
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
@@ -27,13 +26,11 @@ import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { EntityIcon, entities } from "~/entities/entities";
-import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { entities } from "~/entities/entities";
 import { useIsMobile } from "~/hooks/useMobile";
 import { search } from "~/lib/search.functions";
 import { cn } from "~/lib/utils";
 
-import { getRecents, pushRecent } from "../command-menu/recents";
 import {
   type EntityPreviewRowData,
   useEntityPreview,
@@ -42,7 +39,6 @@ import {
   entityTypeMap,
   getSearchMatchText,
   getSearchResultRoute,
-  rememberSearchResult,
   SearchResultMedia,
 } from "./search-utils";
 
@@ -56,7 +52,6 @@ interface SearchPreviewRow {
 }
 
 type SearchPreviewHandler = (row: SearchPreviewRow) => void;
-const recentSearchesSchema = z.array(z.string());
 
 const filterOptions: Array<{ value: SearchType; label: string }> = [
   { value: "all", label: "All" },
@@ -137,12 +132,8 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     related.isPlaceholderData,
     relatedDraft,
   ]);
-  const jumps = useMemo(() => getRecents(), []);
-  const [recents, setRecents] = useLocalStorage(
-    "cubby:recent-searches",
-    recentSearchesSchema,
-    [],
-  );
+  // Session-only; nothing here persists across reloads.
+  const [recents, setRecents] = useState<string[]>([]);
   const hasQuery = draft.trim().length > 0;
 
   return (
@@ -249,7 +240,6 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
         </Stack>
       ) : (
         <SearchLanding
-          jumps={jumps}
           recents={recents}
           clearRecents={() => setRecents([])}
           onSelect={setDraft}
@@ -377,7 +367,6 @@ function SearchRow({
           }}
           onFocus={() => onPrefetch(previewRow)}
           onBlur={() => onPrefetchEnd(previewRow)}
-          onClick={() => rememberSearchResult(item)}
           className="block truncate text-sm font-medium hover:text-primary"
         >
           {item.title}
@@ -523,7 +512,6 @@ function ProductSearchRow({
             }}
             onFocus={() => onPrefetch(previewRow)}
             onBlur={() => onPrefetchEnd(previewRow)}
-            onClick={() => rememberSearchResult(group.primary)}
             className="block truncate text-sm font-medium hover:text-primary"
           >
             {group.primary.title}
@@ -568,7 +556,6 @@ function ProductSearchRow({
               <Link
                 key={placement.id}
                 {...getSearchResultRoute(destination)}
-                onClick={() => rememberSearchResult(destination)}
                 className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
               >
                 <MapPin className="size-4 shrink-0 text-muted-foreground" />
@@ -593,7 +580,6 @@ function ProductSearchRow({
               <Link
                 key={`${componentPlacement.component.id}:${componentPlacement.placement.id}`}
                 {...getSearchResultRoute(destination)}
-                onClick={() => rememberSearchResult(destination)}
                 className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
               >
                 <SearchResultMedia item={componentPlacement.component} />
@@ -619,7 +605,6 @@ function ProductSearchRow({
             <Link
               key={`${item.entityType}:${item.id}`}
               {...getSearchResultRoute(item)}
-              onClick={() => rememberSearchResult(item)}
               className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
             >
               <SearchResultMedia item={item} />
@@ -694,10 +679,9 @@ function MobileSearchResults({
                       />
                     }
                     rightValues={[group.primary.id, "Product"]}
-                    onClick={() => {
-                      rememberSearchResult(group.primary);
-                      navigate(getSearchResultRoute(group.primary));
-                    }}
+                    onClick={() =>
+                      navigate(getSearchResultRoute(group.primary))
+                    }
                   />
                 </div>
                 {hasChildren && (
@@ -740,7 +724,6 @@ function MobileSearchResults({
                       <Link
                         key={placement.id}
                         {...getSearchResultRoute(destination)}
-                        onClick={() => rememberSearchResult(destination)}
                         className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
                       >
                         <MapPin className="size-4 shrink-0 text-muted-foreground" />
@@ -765,7 +748,6 @@ function MobileSearchResults({
                       <Link
                         key={`${componentPlacement.component.id}:${componentPlacement.placement.id}`}
                         {...getSearchResultRoute(destination)}
-                        onClick={() => rememberSearchResult(destination)}
                         className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
                       >
                         <SearchResultMedia
@@ -794,7 +776,6 @@ function MobileSearchResults({
                     <Link
                       key={`${item.entityType}:${item.id}`}
                       {...getSearchResultRoute(item)}
-                      onClick={() => rememberSearchResult(item)}
                       className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
                     >
                       <SearchResultMedia item={item} variant="command" />
@@ -832,10 +813,7 @@ function MobileSearchResults({
               item.id,
               entities[entityTypeMap[item.entityType]].label,
             ]}
-            onClick={() => {
-              rememberSearchResult(item);
-              navigate(getSearchResultRoute(item));
-            }}
+            onClick={() => navigate(getSearchResultRoute(item))}
           />
         );
       })}
@@ -905,46 +883,16 @@ export function SearchResultsFeedback({
 }
 
 function SearchLanding({
-  jumps,
   recents,
   clearRecents,
   onSelect,
 }: {
-  jumps: ReturnType<typeof getRecents>;
   recents: string[];
   clearRecents: () => void;
   onSelect: (value: string) => void;
 }) {
   return (
     <Stack gap="md">
-      {jumps.length > 0 && (
-        <Stack gap="xs">
-          <span className="px-1 eyebrow font-medium">Jump back</span>
-          {jumps.map((jump) => {
-            const entity = entityTypeMap[jump.entityType];
-            return (
-              <Row
-                as="button"
-                align="center"
-                gap="sm"
-                key={`${jump.entityType}-${jump.id}`}
-                type="button"
-                onClick={() => {
-                  pushRecent(jump);
-                  onSelect(jump.name);
-                }}
-                className="w-full px-2 py-2 text-left text-sm hover:bg-muted"
-              >
-                <EntityIcon
-                  entity={entity}
-                  className={cn("size-4", entities[entity].color.text)}
-                />
-                <span className="truncate">{jump.name}</span>
-              </Row>
-            );
-          })}
-        </Stack>
-      )}
       {recents.length > 0 && (
         <Stack gap="xs">
           <Row align="center" justify="between" className="px-1">
@@ -973,7 +921,7 @@ function SearchLanding({
           ))}
         </Stack>
       )}
-      {jumps.length === 0 && recents.length === 0 && (
+      {recents.length === 0 && (
         <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
           <Search className="size-8 opacity-40" />
           <span className="text-sm">Start typing to search across Cubby</span>

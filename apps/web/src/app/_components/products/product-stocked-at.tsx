@@ -366,7 +366,6 @@ export const ProductStockedAt: FC<{
     tableStateOptions: EMBEDDED_TABLE_STATE,
     // Distinct column set from the /inventory index, so it needs its own
     // persisted View settings rather than sharing `table-columns:inventory`.
-    layoutKey: "inventory:product-detail",
     bulkActions,
     rowIsEntity,
     extraActions: (entry) =>

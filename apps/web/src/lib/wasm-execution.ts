@@ -2,7 +2,7 @@ import { SpanStatusCode } from "@opentelemetry/api";
 import { flatten } from "flat";
 import { z } from "zod";
 
-import { getFlag } from "~/lib/flags";
+import { FLAGS } from "~/lib/flags";
 import { recordWasmExec } from "~/lib/perf/perf-store";
 import { getTracer, TraceNames } from "~/server/tracing";
 
@@ -73,12 +73,12 @@ export function executeWasm<TArgs extends unknown[], TResult>(
           data: flatten(args),
         });
       }
-      if (getFlag("perfOverlay")) {
+      if (FLAGS.perfOverlay) {
         recordWasmExec(name, durationMs, threw, executionMode);
       }
       if (
         executionMode === "sync" &&
-        getFlag("wasmSlowWarn") &&
+        FLAGS.wasmSlowWarn &&
         durationMs > SLOW_WASM_THRESHOLD_MS
       ) {
         console.warn(

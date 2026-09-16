@@ -1,6 +1,6 @@
 import { Profiler, type ProfilerOnRenderCallback, type ReactNode } from "react";
 
-import { useFlag } from "~/lib/flags";
+import { FLAGS } from "~/lib/flags";
 
 import { recordRender } from "./perf-store";
 
@@ -11,8 +11,7 @@ const onRender: ProfilerOnRenderCallback = (id, phase, actualDuration) => {
 /**
  * Wraps a subtree in React's <Profiler> and feeds render counts/durations to the
  * perf store — but only when the `perfOverlay` flag is on. When off it's a plain
- * passthrough (zero overhead). Toggling the flag remounts the subtree, which is
- * fine for a debug control.
+ * passthrough (zero overhead).
  */
 export function PerfProfiler({
   id,
@@ -21,7 +20,7 @@ export function PerfProfiler({
   id: string;
   children: ReactNode;
 }) {
-  const enabled = useFlag("perfOverlay");
+  const enabled = FLAGS.perfOverlay;
   if (!enabled) return <>{children}</>;
   return (
     <Profiler id={id} onRender={onRender}>

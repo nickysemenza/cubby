@@ -450,12 +450,7 @@ export function TaskList({
     entity: "task",
     data: sortedData,
     columns,
-    layoutKey: "task:embedded",
-    layout: {
-      initialColumnVisibility: EMBEDDED_TASK_COLUMNS,
-      legacyVisibilityKey: "task:embedded",
-      legacySizingKey: "task:embedded",
-    },
+    initialColumnVisibility: EMBEDDED_TASK_COLUMNS,
     selection,
     deleteDialog,
     // The table holds its full scoped set, so client-side facet counts are exact.
@@ -1103,12 +1098,7 @@ export function ExpenseList({
     entity: "expense",
     data: expenses,
     columns,
-    layoutKey: "expense:embedded",
-    layout: {
-      initialColumnVisibility: EMBEDDED_EXPENSE_COLUMNS,
-      legacyVisibilityKey: "expense:embedded",
-      legacySizingKey: "expense:embedded",
-    },
+    initialColumnVisibility: EMBEDDED_EXPENSE_COLUMNS,
     selection,
     deleteDialog,
     getRowId: (row) => row.id,

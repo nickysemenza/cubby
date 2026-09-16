@@ -156,9 +156,6 @@ export interface UseEntityListOptions<
     resolve: (row: TData) => EntityActionSubject | null;
   };
   initialColumnVisibility?: Record<string, boolean>;
-  layoutKey?: string;
-  legacyLayoutVisibilityKey?: string;
-  legacyLayoutSizingKey?: string;
   nameClassName?: string;
   /** Inline-edit callbacks must be referentially stable. */
   nameEditable?: {
@@ -289,9 +286,6 @@ export function useEntityList<
   deletable,
   deleteEmptyLabel,
   initialColumnVisibility,
-  layoutKey,
-  legacyLayoutVisibilityKey,
-  legacyLayoutSizingKey,
   nameClassName,
   nameEditable,
   nameSuffix,
@@ -414,9 +408,6 @@ export function useEntityList<
     filterOptions,
     initialColumnVisibility,
     ...worklistColumns,
-    layoutKey,
-    legacyLayoutVisibilityKey,
-    legacyLayoutSizingKey,
     state: presentationState,
     supportsServerSorting: true,
     mappingsMap: effectiveMappingsMap,
@@ -433,8 +424,8 @@ export function useEntityList<
   });
   const {
     allColumns,
-    layout,
-    initialColumnVisibility: mergedInitialColumnVisibility,
+    columnVisibility,
+    setColumnVisibility,
     rowContentVersion,
   } = presentation;
 
@@ -504,8 +495,9 @@ export function useEntityList<
     rowSelection: presentationState.listBulkActions.rowSelection,
     onRowSelectionChange:
       presentationState.listBulkActions.onRowSelectionChange,
-    initialColumnVisibility: mergedInitialColumnVisibility,
-    layout,
+    columnVisibility,
+    onColumnVisibilityChange: setColumnVisibility,
+    scrollRestorationId: entity,
     serverTotals,
     rowContentVersion,
   });
