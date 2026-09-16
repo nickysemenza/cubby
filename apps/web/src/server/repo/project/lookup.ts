@@ -262,8 +262,8 @@ export const buildProjectListQuery = async (
   // Exercised by project.integration.test.ts's "sorts by effective start".
   //
   // The `deletedAt IS NULL` guards below are hand-written for the same reason
-  // and are load-bearing — `check-soft-delete-filters.mjs` only scans
-  // `exists`/`notExists` bodies, so it cannot see them.
+  // and are load-bearing — the `cubby/require-soft-delete-filter` oxlint rule
+  // only scans `exists`/`notExists` bodies, so it cannot see them.
   //
   // The two content sources are combined with LEAST, not chained into the
   // coalesce: a project with both tasks and expenses must sort by the

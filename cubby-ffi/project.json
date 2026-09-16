@@ -1,0 +1,20 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "cubby-ffi",
+  "targets": {
+    "rust": {
+      "command": "cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
+      "options": {
+        "cwd": "{projectRoot}"
+      },
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/**",
+        "{workspaceRoot}/rust-toolchain.toml",
+        {
+          "runtime": "rustc -V"
+        }
+      ]
+    }
+  }
+}

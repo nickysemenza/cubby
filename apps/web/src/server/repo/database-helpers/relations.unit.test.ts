@@ -19,9 +19,9 @@ import { relations } from "./relations";
  * Not hypothetical. A missing filter on `ingredient.full.product` shipped (fixed
  * in #1008) and turned every ingredient update into a 500, because
  * `enrichProductRowsWithDataQuality` only holds entries for live products.
- * `scripts/check-soft-delete-filters.ts` cannot catch this class — it scans
- * EXISTS subqueries and is blind to Drizzle `with: {}` configs — so the guard
- * lives here, beside the presets it constrains.
+ * The `cubby/require-soft-delete-filter` oxlint rule cannot catch this
+ * class — it scans EXISTS subqueries and is blind to Drizzle `with: {}`
+ * configs — so the guard lives here, beside the presets it constrains.
  */
 
 /**

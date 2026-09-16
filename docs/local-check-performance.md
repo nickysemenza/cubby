@@ -79,22 +79,67 @@ or weakened to obtain these results.
 
 ## Declarative local tooling
 
-`project.json` replaces the custom check runner. Nx runs four tasks
-concurrently (`nx.json` `"parallel": 4`); `NX_PARALLEL` overrides that limit.
-Existing package scripts and mandatory Git hooks remain the entrypoints. Nx
-Cloud and analytics are disabled; the shared local task cache has a 4 GB limit
-(`"maxCacheSize": "4GB"`) with built-in eviction. Set
-`NX_SKIP_NX_CACHE=true` for a fresh run. Workspace typechecking also caps package
-concurrency at two.
+`project.json` replaces the custom check runner, and `scripts/ci-scope.ts`
+(the hand-rolled path classifier `verify:local`/`verify:push` used to route
+through) is deleted: gates now live as Nx targets on the project whose files
+they cover — `apps/web/project.json` (`postgres`, `build-cf`, `e2e`,
+`workers-tests`), `recipebridge/project.json` and `cubby-ffi/project.json`
+(`rust`), `apps/apple/project.json` (`apple`), root `project.json`'s
+`cubby-checks` project (`generate`, `types`, `lint`, `format`, `knip`, plus the
+uncached `bindings`/`openapi`/`script-tests`/`security`). `nx affected` (used
+by `verify:push`) and `nx run-many --projects=… --affected` compute scope from
+each target's declared `inputs` against `nx.json`'s `defaultBase`
+(`origin/main`) instead of a hand-maintained path-prefix table, so a new
+directory needs a project (and target inputs), not an edit to a classifier.
+
+Nx runs four tasks concurrently (`nx.json` `"parallel": 4`); `NX_PARALLEL`
+overrides that limit. Existing package scripts and mandatory Git hooks remain
+the entrypoints. Nx Cloud and analytics are disabled; the shared local task
+cache has a 4 GB limit (`"maxCacheSize": "4GB"`) with built-in eviction. Set
+`NX_SKIP_NX_CACHE=true` for a fresh run (`pnpm verify:local:full` always does).
+Workspace typechecking also caps package concurrency at two.
+
+Two named inputs replace the single whole-tree `default` this repo used to
+hash everything against: `default` (`{projectRoot}/**/*` plus `sharedGlobals`
+— the lockfile, `pnpm-workspace.yaml`, `tsconfig.json`, `nx.json`, Node/platform
+and select env vars) scopes a project-level target to its own directory, and
+`repo` (the whole tree, excluding `apps/apple/**`, `cubby-ffi/**`, `**/*.md`,
+`.claude/**`, `.impeccable/**`) is what the genuinely whole-tree `cubby-checks`
+gates (`generate`, `types`, `lint`, `format`, `knip`) hash instead. Every aux
+package under `apps/*`/`packages/*` with a `test` script gets a `nx:run-script`-
+inferred `test` target that a repo-wide `targetDefaults` entry makes cached with
+`{projectRoot}` inputs; root `pnpm test` (the `fast-tests` target) now runs
+`nx run-many -t test` so those aux tests replay from cache on a web-only
+change instead of running via `pnpm -r --workspace-concurrency=2 test`, which
+had every aux package's Vitest process competing with the (uncached, heavier)
+web run for the same CPU budget. `fast-tests`' own cache key dropped a
+`git rev-parse HEAD` runtime input that invalidated on every commit regardless
+of relevance (measured 17% hit rate) — it hashes only file content now.
+`packages/wasm` does not appear in `nx show projects`: its entire directory is
+`.gitignore`d (`packages/wasm/.gitignore` is `*`, since its contents —
+including `package.json` — are `wasm-pack` build output), and Nx's project
+crawl is git-aware, so it never sees that `package.json`. Its generation stays
+on the root `wasm` target (keyed off `recipebridge/**`), and it has no
+`scripts` of its own, so there is nothing to gain by un-ignoring it.
 
 Cached checks hash the workspace source/configuration, lockfile, patches,
 Node/platform, and Node options. Typechecks additionally hash generated WASM
-declarations. Fast tests additionally hash the commit, ignored WASM/environment
-files, and test-specific environment settings. MCP App bundles and an empty
+declarations. Fast tests additionally hash ignored WASM/environment files and
+test-specific environment settings. MCP App bundles and an empty
 failure-summary file are restored, so an older failed run cannot leave a stale
 failure list after a successful cache hit. Git-index-sensitive soft-delete
 checks, Knip, network audit, tooling tests, bindings/OpenAPI, PostgreSQL, browser
 acceptance, and Git-aware verification remain live.
+
+`scripts/cache-gc.ts` (and its test) is deleted along with `ci-scope.ts`;
+what it did is now plain commands: `nx reset` clears the Nx daemon/workspace
+cache; `cargo sweep -r ~/.cache/cubby/recipebridge-target` and
+`cargo sweep -r ~/.cache/cubby/cubby-ffi-target` cap the two shared Rust
+target directories (install `cargo-sweep` first: `cargo install cargo-sweep`);
+`rm -rf apps/apple/DerivedData` clears native Apple build output. There is no
+report-only mode to replace — run `du -sh ~/.cache/cubby/*` directly when you
+want the same "what's using space" numbers `cache-gc.ts`'s default (flagless)
+invocation printed.
 
 Deleted: `run-checks.ts` (192 lines), `run-checks.test.ts` (111), and
 `setup-agent-environment.ts` (49). Required-gate assertions move into the existing

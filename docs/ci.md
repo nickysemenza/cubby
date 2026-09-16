@@ -6,57 +6,60 @@ production Workers without running tests or E2E again.
 
 ## Local verification
 
-After committing, run `pnpm verify:local`. It rejects uncommitted code, includes
-deleted paths, runs repository checks and selects affected web, PostgreSQL,
-browser, build, auxiliary and Rust gates using `scripts/ci-scope.ts`. Unknown
-paths fail safe. High-risk changes run the complete routine suite;
-`pnpm verify:local:full` forces that suite for any revision. Use
-`CUBBY_VERIFY_BASE` to override the default merge base with `origin/main`.
-The full command includes WASM preparation, dependency installation/deduplication,
-repository checks, workspace and PostgreSQL tests, Rust formatting/lint/tests,
-auxiliary builds and a fresh web build. It then runs the fast tests followed by
-PostgreSQL and browser tests concurrently through the existing `concurrently`
-npm runner. Those two tiers use isolated database templates; a failure stops
-the peer and fails verification. It deploys nothing. Both `pnpm verify:push`
-and `pnpm verify:local` print each step's elapsed seconds and a total.
+`scripts/ci-scope.ts`'s hand-rolled path classifier is gone. Affected-ness and
+scoping are now Nx's job: every gate is a target on the project whose files it
+covers (`apps/web/project.json` — `postgres`, `build-cf`, `e2e`,
+`workers-tests`; `recipebridge/project.json` and `cubby-ffi/project.json` —
+`rust`; `apps/apple/project.json` — `apple`; the repo-wide `generate`, `types`,
+`lint`, `format`, `knip` gates stay on root `project.json`'s `cubby-checks`
+project), each with `inputs` that hash only the files it actually reads. A
+target whose inputs are unchanged since the last run replays its cached result
+instead of re-executing.
+
+After committing, run `pnpm verify:local`
+(`nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple`).
+It first rejects an uncommitted or untracked working tree, then runs every
+target across every project — most replay from cache on a small change, so an
+unaffected native/Postgres/E2E gate costs a cache lookup, not a rebuild. It
+deploys nothing. `pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true` first,
+forcing every target to actually execute regardless of cache state — use it
+for high-risk changes or before a release. Both print each step's elapsed
+seconds and a total (Nx's own `--outputStyle=stream` reporting).
 
 **Pre-push.** `.husky/pre-push` runs `pnpm verify:push`
-(`node scripts/ci-scope.ts --push`): a scoped fast gate that never escalates to
-the full suite. It runs `requireCommittedCode`, resolves the base (merge-base
-with `origin/main`, falling back to `HEAD^` and saying so), then: `pnpm wasm`
-only when `recipebridge/` changed; `pnpm install --frozen-lockfile` plus
-`pnpm dedupe:check` only when dependency manifests or the lockfile changed;
-always `pnpm check` (not `check:all`); then only the lanes whose paths
-changed — changed Vitest (`test:changed`) or PostgreSQL (`test:changed:postgres`)
-tests, the Cloudflare build, E2E for routing paths, auxiliary worker
-tests/builds, and Rust fmt/clippy/test per changed manifest (`recipebridge/`
-selects recipebridge, `cubby-ffi/` selects cubby-ffi, `rust-toolchain.toml`
-selects both). High-risk paths do not escalate the push gate. Unknown
-(unclassified) paths run the JavaScript gates and print a warning to run
-`pnpm verify:local` before merging.
+(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple && pnpm check`):
+a scoped fast gate that never escalates to the full suite. `nx affected` compares
+the working tree's content hashes against `nx.json`'s `defaultBase`
+(`origin/main`; override per-invocation with `nx affected --base=<ref>` or the
+`NX_BASE` env var) and runs each named target only on the projects whose
+inputs actually changed — a web-only change skips `rust`/`apple` entirely
+rather than a hand-written prefix classifier deciding to skip them. `pnpm
+check` (repository-wide `generate`/`types`/`lint`/`format`/`knip`) always runs
+afterward regardless of scope.
 
 Node 24, pnpm 12.3.4, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
 PostgreSQL remains the authoritative integration tier; Playwright retains a
 single worker and no retries. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count.
-Browser verification always follows the current web build. Pre-commit still
-runs `pnpm check`.
+Browser verification always follows the current web build (the `e2e` target
+`dependsOn: ["build-cf"]`). Pre-commit still runs `pnpm check`.
 
-A change under `apps/apple/` or `cubby-ffi/` additionally selects the `apple`
-check — true for both the push gate and `pnpm verify:local`: `node
+A change under `apps/apple/` or `cubby-ffi/` selects the `apple` Nx target
+(`scripts/apple-check.sh`, the former `ci-scope.ts` `runAppleCheck` body): `node
 scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI shim; a stale
 committed `cubby_ffi.swift` fails as a dirty tree), `xcodegen
 generate --use-cache`,
 `swift test --package-path apps/apple/CubbyKit`,
 `apps/apple/scripts/check-openapi-drift.sh`, then an `xcodebuild` simulator
 build. It skips itself (with a message, not a failure) when `xcode-select -p`
-fails, so a machine without Xcode still passes. `rust` gates run fmt/clippy/test
-per changed manifest (`recipebridge/Cargo.toml`, `cubby-ffi/Cargo.toml`);
-`verify:local:full` and high-risk runs loop both manifests regardless of what
-changed. There is no hosted macOS runner yet — the `apple` check only runs
-locally; a `workflow_dispatch` job behind a `run_ios` input is a possible
-follow-up, not implemented.
+fails, so a machine without Xcode still passes — `pnpm apple check` runs the
+same script directly. The `rust` target runs fmt/clippy/test per crate
+(`recipebridge/project.json`, `cubby-ffi/project.json`); `verify:local(:full)`
+runs both projects' `rust` target regardless of what changed, `verify:push`
+only the affected one. There is no hosted macOS runner yet — the `apple`
+target only runs locally; a `workflow_dispatch` job behind a `run_ios` input is
+a possible follow-up, not implemented.
 
 ## Optional hosted suite
 
@@ -76,8 +79,12 @@ automatically.
 
 ## Deployment
 
-`.github/workflows/deploy.yaml` runs on `main` pushes. It classifies all changed
-paths, builds the affected Workers and deploys them. Each Worker serializes
+`.github/workflows/deploy.yaml` runs on `main` pushes. A `dorny/paths-filter`
+step (replacing the deleted `scripts/ci-scope.ts` `classifyPaths`) classifies
+changed paths into `web`/`usda`/`upc` filters, builds the affected Workers and
+deploys them. Unlike the deleted classifier, an entirely unrecognised
+top-level path is not a fail-safe "deploy everything" — add the path to the
+filter(s) it should affect. Each Worker serializes
 production deployments and checks that the commit is still current main before
 building and again before deploying. Production never depends on a test job.
 This trusts verification performed before merging. Builds/deployments still use
@@ -212,9 +219,9 @@ interface.
 Before changing CI, run:
 
 ```sh
-node --test scripts/ci-scope.test.ts
 actionlint -no-color .github/workflows/*.yaml
 pnpm run check
+pnpm exec nx show projects --affected --base=origin/main
 ```
 
 After a material workflow change, compare at least ten representative runs for

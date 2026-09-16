@@ -93,7 +93,7 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
 - `CubbyKit/Sources/CubbyAPI/*.swift` (`Client.swift`, `Types*.swift`) — swift-openapi-generator's
   typed client and schema types, from `apps/web`'s committed OpenAPI document
   (`apps/web/src/lib/generated/http-openapi.gen.json`). The entire `CubbyAPI` target is generated,
-  which is why it is excluded from the `swift format` targets in `scripts/ci-scope.ts`. Regenerate
+  which is why it is excluded from the `swift format` targets in `scripts/apple-check.sh`. Regenerate
   with `apps/apple/scripts/generate-openapi.sh`; `apps/apple/scripts/check-openapi-drift.sh` fails when stale.
 - `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations}.swift` — the runtime
   route table (`OperationRoute.all`) and the per-entity `list`/`get`/image-attach switches, from
@@ -115,10 +115,12 @@ generated shape.
 - Full app build needs the xcframework from `ensure-apple-ffi.ts` first; that script and its inputs
   belong to W1.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
-  `scripts/ci-scope.ts`'s `runAppleCheck`) gates formatting; run
+  `scripts/apple-check.sh`, the `apple` Nx target on `apps/apple/project.json`) gates
+  formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
-  `runAppleCheck` only runs from the pre-push gate when `apps/apple/` or
-  `cubby-ffi/` changed, and from `pnpm verify:local` on any high-risk or full run.
+  The `apple` target is affected-scoped like every other Nx target: it runs from the pre-push
+  gate (`pnpm verify:push`, via `nx affected -t … apple`) when `apps/apple/` or `cubby-ffi/`
+  changed, and unconditionally from `pnpm verify:local(:full)`.
 
 ### Universal links
 

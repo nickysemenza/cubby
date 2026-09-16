@@ -176,8 +176,8 @@ if [[ -z "$GENERATED_SWIFT" || -z "$GENERATED_HEADER" || -z "$GENERATED_MODULEMA
   exit 1
 fi
 
-# Written unconditionally; the pre-push gate detects a stale committed shim
-# as a dirty working tree after this runs (scripts/ci-scope.ts runAppleCheck).
+# Written unconditionally; the `apple` Nx target (scripts/apple-check.sh)
+# detects a stale committed shim as a dirty working tree after this runs.
 mkdir -p "$(dirname "$SWIFT_SHIM_DEST")"
 cp "$GENERATED_SWIFT" "$SWIFT_SHIM_DEST"
 echo "==> cubby-ffi: wrote $SWIFT_SHIM_DEST"
