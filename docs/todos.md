@@ -27,6 +27,43 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
+- **Define `__GIT_COMMIT__` in the e2e worker runtime.** The AI-usage
+  recorder logs `failed to record usage { error: '__GIT_COMMIT__ is not
+  defined' }` on every request under Playwright because
+  `tests/e2e/e2e-worker-runtime.ts` never defines the Vite constant; one
+  global in the runtime silences it.
+
+- **Recipe rows lost their "N servings" trailing figure on native.** The
+  per-entity `trailing` arm in `App/Shared/Browse/EntityFacts.swift` is gone
+  and expense/purchase got manifest slots; recipe did not. Declare
+  `mobile: { slot: "trailing" }` on `servings` in `01-recipe.entity.ts`.
+
+- **Drop `--cache` from the `knip` target.** After `packages/wasm` was
+  rebuilt in a fresh worktree, knip's own cache kept reporting the stale
+  unresolved imports until `node_modules/.cache/knip` was deleted; the Nx
+  cache on the target already skips unchanged trees and the run is ~3.5s.
+
+- **Silence or prune the 58 redocly `no-unused-components` warnings** that
+  print on every `pnpm check`: the filtered OpenAPI document carries
+  components no native operation references. Prune them in
+  `scripts/generator/http-api/openapi.ts` or disable the rule in `redocly.yaml`.
+
+- **Give `SearchHit.entityType` an unknown fallback.** It is a closed Swift
+  enum now, so a search result for an entity kind the native catalog does not
+  know fails the whole search decode instead of that one hit.
+
+- **Guard `apps/web/tooling/test-setup.ts` against server imports.** It is
+  also vitest's `globalSetup`, which runs in the main process before
+  `test.env` applies, so importing anything that reaches `env.ts` fails env
+  validation for the whole Postgres tier (the race helper's import is lazy for
+  this reason). A `no-restricted-imports` override for that file is cheaper
+  than the next debugging session.
+
+- **`graph-map-state` "places a dense fan compactly" runs near its 5s
+  timeout** and was the one unit test to trip when the tiers ran in parallel;
+  either the layout under test does too much work or the case wants its own
+  timeout.
+
 ---
 
 ## Ready projects
@@ -255,6 +292,14 @@ history is the archive. Permanent product constraints live in the
 ## Requires thought or evidence
 
 ### Needs a decision or investigation
+
+- **Narrow the `e2e` Nx target's inputs, then cache it.** `nx affected`
+  treats all of `apps/web/src/**` as an e2e input, so every web push pays ~2
+  minutes of Playwright in `verify:push` where the old path classifier ran it
+  only for routing paths; and the target is uncached (container side effects),
+  so `verify:local` always pays it too. Decide which paths genuinely change
+  browser behavior (routes, app shells, the worker entry, `tests/e2e/**`) and
+  whether a cache hit on an unchanged tree is acceptable evidence.
 
 - **Consumable vs durable as a Product attribute.** The distinction is
   currently encoded by convention as "expense on `PRJ-HSHD` vs no project",
@@ -733,6 +778,12 @@ Deferred from the 2026-09 code-deletion PR; unordered.
   (`GardenPlantingOut(PlantingDetail, options:)` in
   `API/GeneratedTypeExtensions.swift`); carrying them on the detail read the way
   `GardenPlantingOut` already does deletes that join.
+
+- **Shrink `API/GeneratedTypeExtensions.swift` with server projections.** It
+  is 373 lines against the ~120 planned because native still derives what the
+  server could carry: `MacroSummary` over the nutrition map, graph `stableKey`
+  / `destination`, `recipeNames`, and the planting name joins already listed
+  above. Each projection added to the read deletes its extension.
 
 ## Deferred: deploy surface
 
