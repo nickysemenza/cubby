@@ -10,14 +10,19 @@ production Workers without running tests or E2E again.
 scoping are now Nx's job: every gate is a target on the project whose files it
 covers (`apps/web/project.json` — `postgres`, `build-cf`, `e2e`,
 `workers-tests`; `recipebridge/project.json` and `cubby-ffi/project.json` —
-`rust`; `apps/apple/project.json` — `apple`; the repo-wide `generate`, `types`,
+`rust`; `apps/apple/project.json` — `apple-check`; the repo-wide `generate`, `types`,
 `lint`, `format`, `knip` gates stay on root `project.json`'s `cubby-checks`
 project), each with `inputs` that hash only the files it actually reads. A
 target whose inputs are unchanged since the last run replays its cached result
 instead of re-executing.
 
 After committing, run `pnpm verify:local`
-(`nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple`).
+(`nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`).
+`--parallel=1` is deliberate: every tier is already parallel inside (vitest
+workers, Playwright workers, cargo, xcodebuild), and running tiers side by
+side on one host reproduces the contention the sequential `test:all` removed
+— measured 2026-09-16, the web unit tier took 196s instead of 24s under
+`run-many`'s default parallelism and tripped a 5s test timeout.
 It first rejects an uncommitted or untracked working tree, then runs every
 target across every project — most replay from cache on a small change, so an
 unaffected native/Postgres/E2E gate costs a cache lookup, not a rebuild. It
@@ -27,12 +32,12 @@ for high-risk changes or before a release. Both print each step's elapsed
 seconds and a total (Nx's own `--outputStyle=stream` reporting).
 
 **Pre-push.** `.husky/pre-push` runs `pnpm verify:push`
-(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple && pnpm check`):
+(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple-check --parallel=1 && pnpm check`):
 a scoped fast gate that never escalates to the full suite. `nx affected` compares
 the working tree's content hashes against `nx.json`'s `defaultBase`
 (`origin/main`; override per-invocation with `nx affected --base=<ref>` or the
 `NX_BASE` env var) and runs each named target only on the projects whose
-inputs actually changed — a web-only change skips `rust`/`apple` entirely
+inputs actually changed — a web-only change skips `rust`/`apple-check` entirely
 rather than a hand-written prefix classifier deciding to skip them. `pnpm
 check` (repository-wide `generate`/`types`/`lint`/`format`/`knip`) always runs
 afterward regardless of scope.

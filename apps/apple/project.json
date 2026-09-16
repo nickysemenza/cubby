@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "name": "apple",
   "targets": {
-    "apple": {
+    "apple-check": {
       // No explicit `cwd`: nx:run-commands defaults to the workspace root,
       // which scripts/apple-check.sh (and the paths inside it) assume.
       "command": "sh scripts/apple-check.sh",

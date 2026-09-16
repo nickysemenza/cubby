@@ -92,10 +92,10 @@ workspace file, patch, or lockfile change, or let hosted `pnpm run check:all`
 catch it.
 
 Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm verify:push`
-(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple && pnpm
+(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple-check --parallel=1 && pnpm
 check`): Nx computes which projects are affected from each target's declared
 `inputs` against `nx.json`'s `defaultBase` (`origin/main`), so a web-only
-push naturally skips `rust`/`apple` rather than a hand-written path classifier
+push naturally skips `rust`/`apple-check` rather than a hand-written path classifier
 deciding to skip them, and it never escalates to the full suite. Hooks are
 mandatory: agents never use `--no-verify` to bypass a failure. Pre-commit
 checks the **whole working tree**, not the index, so a commit fails while any
@@ -107,7 +107,7 @@ pushing.
 
 Local verification gates merging: run `pnpm verify:local` on the clean final
 commit (`nx run-many -t
-generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple`, after
+generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`, after
 rejecting an uncommitted or untracked tree). This is the merge gate. Unlike
 the deleted `ci-scope.ts`, there is no separate "high-risk" classification
 that escalates it — `verify:local` always runs the full target list, and an

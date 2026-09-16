@@ -84,7 +84,7 @@ or weakened to obtain these results.
 through) is deleted: gates now live as Nx targets on the project whose files
 they cover — `apps/web/project.json` (`postgres`, `build-cf`, `e2e`,
 `workers-tests`), `recipebridge/project.json` and `cubby-ffi/project.json`
-(`rust`), `apps/apple/project.json` (`apple`), root `project.json`'s
+(`rust`), `apps/apple/project.json` (`apple-check`), root `project.json`'s
 `cubby-checks` project (`generate`, `types`, `lint`, `format`, `knip`, plus the
 uncached `bindings`/`openapi`/`script-tests`/`security`). `nx affected` (used
 by `verify:push`) and `nx run-many --projects=… --affected` compute scope from
