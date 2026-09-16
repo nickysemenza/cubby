@@ -2,22 +2,20 @@
  * Server/compiler entrypoint for Problem filter semantics.
  *
  * Declarations live in `filter-search-fields.ts`, the dependency-light
- * semantic registry that also generates route search fields. Compilation
- * stays here so eager route validation does not pull the richer filter
- * runtime (including ts-pattern) into the application shell.
+ * semantic registry. Compilation stays here so eager route validation does
+ * not pull the richer filter runtime (including ts-pattern) into the
+ * application shell.
  */
 import type { Entity } from "@cubby/schemas/entity";
 
-import {
-  entityFilterUrlKeys,
-  problemFilterSemantics,
-} from "./filter-search-fields";
+import { problemFilterSemantics } from "./filter-search-fields";
 import {
   buildFiltersFromManifest,
   type FilterPatch,
   type FilterSpecCore,
   filterUrlKey,
 } from "./filters";
+import { entityFilterUrlKeys } from "./generated/entity-search.gen";
 import type { FilterAssembly } from "./problem-query";
 
 export const problemFilterSpecs = problemFilterSemantics;

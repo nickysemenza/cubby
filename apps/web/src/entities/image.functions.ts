@@ -24,4 +24,8 @@ export const image = defineOperationDomain(imageContract, {
   },
 });
 
+/** The detail query the generated `images.$shortcode` route reads and prefetches. */
+export const imageDetailQuery = (shortcode: string) =>
+  image.detail.queryOptions({ id: shortcode });
+
 export type ProjectImageSummaries = z.output<typeof projectImageSummariesOut>;

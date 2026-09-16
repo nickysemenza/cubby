@@ -15,7 +15,17 @@ import { z } from "zod";
 export default defineEntity({
   key: "location",
   names: { singular: "Location", plural: "Locations" },
-  route: { basePath: "locations" },
+  route: {
+    basePath: "locations",
+    create: "page",
+    list: null,
+    detail: {
+      component: {
+        module: "~/app/_components/locations/location-detail",
+        export: "LocationDetail",
+      },
+    },
+  },
   table: "Location",
   identifiers: { brand: "LocationId", shortcode: "LOC-" },
   native: { create: "Garden location setup" },

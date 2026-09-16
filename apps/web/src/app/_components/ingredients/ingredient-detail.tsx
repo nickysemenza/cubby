@@ -40,7 +40,7 @@ import { IngredientForm } from "./ingredient-form";
 import { IngredientProductShelf } from "./ingredient-product-shelf";
 
 interface IngredientDetailProps {
-  ingredient: IngredientWithFoodOut;
+  record: IngredientWithFoodOut;
 }
 
 /**
@@ -63,7 +63,9 @@ export function selectNutritionProduct(
   );
 }
 
-export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
+export const IngredientDetail: FC<IngredientDetailProps> = ({
+  record: ingredient,
+}) => {
   const [isEnriching, setIsEnriching] = useState(false);
   const startEnriching = useCallback(() => setIsEnriching(true), []);
 

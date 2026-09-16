@@ -6,6 +6,15 @@ import { getStatusChartColor } from "~/lib/status-colors";
 import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 
 /**
+ * How the Data tab's Projects section draws its rows. A renderer, not a view:
+ * both draw the same server-selected set — `tree` just swaps `project.list`
+ * for `project.tree`, which pages by root of the filtered forest so the nesting
+ * has an honest shape.
+ */
+export const PROJECT_ROWS_RENDERERS = ["flat", "tree"] as const;
+export type ProjectRowsRenderer = (typeof PROJECT_ROWS_RENDERERS)[number];
+
+/**
  * Status select options — the detail page's inline `EditableCell`, the create
  * dialog, and the project table's status filter. Lives here rather than in
  * `shared.tsx` so the filter manifest can import it without closing an import

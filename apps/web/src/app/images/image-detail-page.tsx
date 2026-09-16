@@ -8,10 +8,10 @@ import {
 import { Page } from "~/components/page/Page";
 import { formatCount } from "~/lib/utils";
 
-export default function ImageDetailPage({
-  imageDetails,
+export function ImageDetailPage({
+  record: imageDetails,
 }: {
-  imageDetails: ImageWithEntity;
+  record: ImageWithEntity;
 }) {
   return (
     <Page

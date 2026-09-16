@@ -1399,13 +1399,13 @@ export const renderEntityArtifacts = (
         renderRecord({
           name: "generatedBrowserRoutes",
           entries: Object.fromEntries(
-            projections.routes.map((entity) => [
-              entity.key,
-              browserRoutes(entity),
-            ]),
+            projections.routes.map((entity) => {
+              const { basePath, routes } = browserRoutes(entity);
+              return [entity.key, { basePath, routes }];
+            }),
           ),
           satisfies:
-            "Partial<Record<Entity, { basePath: string; routes: { detail: string; list: string } }>>",
+            "Partial<Record<Entity, { basePath: string; routes: { detail: string; list: string; new?: string } }>>",
           comment: "// Generated routes stay one entity per line.",
         }) +
         "\n" +

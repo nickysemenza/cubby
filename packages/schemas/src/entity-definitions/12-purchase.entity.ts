@@ -17,7 +17,22 @@ import { z } from "zod";
 export default defineEntity({
   key: "purchase",
   names: { singular: "Purchase", plural: "Purchases" },
-  route: { basePath: "purchases" },
+  route: {
+    basePath: "purchases",
+    create: "dialog",
+    list: {
+      component: {
+        module: "~/app/purchases/purchaselist",
+        export: "PurchaseList",
+      },
+    },
+    detail: {
+      component: {
+        module: "~/app/purchases/purchase-detail",
+        export: "PurchaseDetail",
+      },
+    },
+  },
   table: "Purchase",
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {

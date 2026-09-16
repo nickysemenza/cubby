@@ -21,13 +21,13 @@ export const compactLiteral = <T>(value: T) =>
   );
 
 /**
- * `.ts` artifacts are formatted with oxfmt and sealed with a hash line, so
- * `--check` compares hashes instead of re-formatting. `.json`, `.yaml` and
- * `.swift` are written as rendered and compared raw: oxfmt does not format
- * them (the OpenAPI document is on its ignore list) and a hash line has no
- * home in JSON.
+ * `.ts` / `.tsx` artifacts are formatted with oxfmt and sealed with a hash
+ * line, so `--check` compares hashes instead of re-formatting. `.json`,
+ * `.yaml` and `.swift` are written as rendered and compared raw: oxfmt does
+ * not format them (the OpenAPI document is on its ignore list) and a hash
+ * line has no home in JSON.
  */
-const isSealed = (relativePath: string) => relativePath.endsWith(".ts");
+const isSealed = (relativePath: string) => /\.tsx?$/.test(relativePath);
 
 const formatSource = (root: string, artifact: EntityArtifacts): string =>
   execFileSync(

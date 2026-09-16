@@ -17,9 +17,9 @@ import { TableLink } from "../_components/table/TableLink";
 import { PossibleVendor } from "./possible-vendor";
 
 export function FinancialTransactionDetail({
-  transaction,
+  record: transaction,
 }: {
-  transaction: FinancialTransactionOut;
+  record: FinancialTransactionOut;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   return (

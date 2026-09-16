@@ -231,12 +231,15 @@ export function detailPage<TQuery extends DetailQueryFactory>({
   };
 }
 
-/** The `notFoundComponent` every entity detail route renders. */
-export function notFoundPage(
-  entity: BrowserRoutedEntity,
-  title: string,
-  description: string,
-) {
+/**
+ * The `notFoundComponent` every entity detail route renders. Copy derives
+ * from the entity's singular name so generated and hand-written routes read
+ * the same.
+ */
+export function notFoundPage(entity: BrowserRoutedEntity) {
+  const { label } = entities[entity];
+  const title = `${label} not found`;
+  const description = `This ${label.toLocaleLowerCase()} is no longer available.`;
   return function EntityNotFound() {
     return (
       <Page variant="list" title={title} entity={entity} compact>

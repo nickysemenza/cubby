@@ -76,7 +76,7 @@ import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTaskHistory } from "./product-task-history";
 
 interface ProductDetailProps {
-  product: ProductWithFoodOut;
+  record: ProductWithFoodOut;
 }
 
 function productOnHandStat({
@@ -182,7 +182,7 @@ function productNutritionContent({
   );
 }
 
-export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
+export const ProductDetail: FC<ProductDetailProps> = ({ record: product }) => {
   const relationshipRouteQuery = useQuery(
     entityGraph.graph.queryOptions({
       roots: [{ entityType: "product", entityId: product.id }],

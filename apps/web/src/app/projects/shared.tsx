@@ -123,13 +123,16 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy, type FilterValue } from "~/entities/filters";
-import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 
-import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
+import {
+  PROJECT_STATUS_OPTIONS,
+  projectKindOptions,
+  type ProjectRowsRenderer,
+} from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
 import { project } from "./project.functions";
 import { tradeOptions } from "./trade-options";

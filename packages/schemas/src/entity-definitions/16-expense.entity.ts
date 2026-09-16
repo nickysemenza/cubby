@@ -27,7 +27,17 @@ import { z } from "zod";
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
-  route: { basePath: "expenses" },
+  route: {
+    basePath: "expenses",
+    create: "dialog",
+    list: null,
+    detail: {
+      component: {
+        module: "~/app/expenses/expense-detail",
+        export: "ExpenseDetail",
+      },
+    },
+  },
   table: "Expense",
   identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
   native: { update: "Accept expense project recommendation" },

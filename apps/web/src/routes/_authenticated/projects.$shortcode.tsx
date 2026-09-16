@@ -23,11 +23,7 @@ import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { shortcodeHead } from "~/lib/page-title";
 
-const ProjectNotFound = notFoundPage(
-  "project",
-  "Project not found",
-  "This project is no longer available.",
-);
+const ProjectNotFound = notFoundPage("project");
 
 const ProjectDetailRoute = detailPage({
   query: (shortcode) => entityDetailFor("project").queryOptions(shortcode),

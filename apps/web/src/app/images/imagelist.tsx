@@ -30,7 +30,7 @@ import { UploadImageDialog } from "./upload-image-dialog";
 // part of its browser row contract.
 type ImageListRow = Omit<ImageWithEntity, "entityType">;
 
-export default function ImageList() {
+export function ImageList() {
   const queryOptions = useCallback<
     ListQueryOptionsFn<ImageListFilters, ImageListRow>
   >((params) => {

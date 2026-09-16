@@ -54,7 +54,7 @@ const WISH_TAGS: readonly OperationCacheTag[] = [["wish"]];
  * registered `wish.candidates` relationship both show up automatically — see
  * `entityManifest.wish` and `relatedViewRegistry`.
  */
-export function WishDetail({ wish }: { wish: WishOut }) {
+export function WishDetail({ record: wish }: { record: WishOut }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
 

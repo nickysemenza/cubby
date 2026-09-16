@@ -29,7 +29,6 @@ export interface FilterSpec extends FilterSpecCore {
   label?: string;
 }
 
-export { entityFilterSearchFields } from "./filter-search-fields";
 export { entityFilterFieldMaps };
 
 export const getEntityFilters = (entity: Entity): readonly FilterSpec[] =>

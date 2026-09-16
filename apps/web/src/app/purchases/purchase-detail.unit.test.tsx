@@ -57,7 +57,7 @@ afterEach(() => {
 
 describe("Purchase detail display declaration", () => {
   it("preserves overview labels, order links and the vendor cohort action", () => {
-    const { container } = render(<PurchaseDetail purchase={purchase} />, {
+    const { container } = render(<PurchaseDetail record={purchase} />, {
       wrapper: harness.wrapper,
     });
     expect(

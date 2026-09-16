@@ -16,7 +16,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "project",
   names: { singular: "Project", plural: "Projects" },
-  route: { basePath: "projects" },
+  route: { basePath: "projects", create: "dialog", list: null, detail: null },
   table: "Project",
   identifiers: { brand: "ProjectId", shortcode: "PRJ-" },
   presentation: {

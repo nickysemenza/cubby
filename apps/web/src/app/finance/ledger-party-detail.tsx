@@ -58,7 +58,11 @@ function accountItem(account: FinancialAccountOut): RelationshipEntity {
  * "Relationships" section is appended by `DetailSections` independently of
  * either, so meals and recipes eaten need no section here.
  */
-export function LedgerPartyDetail({ party }: { party: LedgerPartyOut }) {
+export function LedgerPartyDetail({
+  record: party,
+}: {
+  record: LedgerPartyOut;
+}) {
   const accountsQuery = useQuery(
     entityListFor("financialAccount").queryOptions({
       filters: {},

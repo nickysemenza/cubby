@@ -60,7 +60,6 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { image, type ProjectImageSummaries } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
-import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import {
@@ -77,6 +76,7 @@ import {
   ProjectDataExpenseList,
   ProjectDataTaskList,
 } from "./project-data-lists";
+import type { ProjectRowsRenderer } from "./project-options";
 import { project } from "./project.functions";
 import {
   capitalize,

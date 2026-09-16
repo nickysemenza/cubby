@@ -42,32 +42,70 @@ export const browserRoutes = (entity: CompiledEntity) => {
     entity.route?.detailParam ??
     browserRouteExtension.get(entity.key)?.detailParam ??
     "shortcode";
-  return {
-    basePath,
-    routes: { detail: `/${basePath}/$${detailParam}`, list: `/${basePath}` },
-  };
+  const detail = `/${basePath}/$${detailParam}`;
+  const list = `/${basePath}`;
+  // `routes.new` exists exactly when a hand-written `<basePath>.new.tsx`
+  // does; a dialog-created entity deep-links through `?create=true`.
+  const routes =
+    entity.route?.create === "page"
+      ? { detail, list, new: `/${basePath}/new` }
+      : { detail, list };
+  return { basePath, detailParam, routes };
 };
 
-export const expectedBrowserRouteFiles = (
+const routeDirectory = "apps/web/src/routes/_authenticated";
+
+const routedEntities = (entities: readonly CompiledEntity[]) =>
+  entities.filter(
+    (
+      entity,
+    ): entity is CompiledEntity & {
+      route: NonNullable<CompiledEntity["route"]>;
+    } => entity.route !== null && entity.descriptor.browserRoutes !== false,
+  );
+
+/** The route modules `render/browser-routes.ts` emits. */
+export const generatedBrowserRouteFiles = (
   entities: readonly CompiledEntity[],
 ): readonly string[] =>
-  entities
-    .filter(({ descriptor }) => descriptor.browserRoutes !== false)
-    .flatMap((entity) => {
-      const { basePath, routes } = browserRoutes(entity);
-      const detailParameter = routes.detail.slice(
-        routes.detail.lastIndexOf("/$") + 1,
-      );
-      return [
-        `apps/web/src/routes/_authenticated/${basePath}.index.tsx`,
-        `apps/web/src/routes/_authenticated/${basePath}.${detailParameter}.tsx`,
-      ];
-    });
+  routedEntities(entities).flatMap((entity) => {
+    const { basePath, detailParam } = browserRoutes(entity);
+    return [
+      ...(entity.route.list === null
+        ? []
+        : [`${routeDirectory}/${basePath}.index.tsx`]),
+      ...(entity.route.detail === null
+        ? []
+        : [`${routeDirectory}/${basePath}.$${detailParam}.tsx`]),
+    ];
+  });
+
+/**
+ * The route modules a declaration promises but leaves hand-written: a `null`
+ * list or detail, and the `/new` page behind `create: "page"`.
+ */
+export const handWrittenBrowserRouteFiles = (
+  entities: readonly CompiledEntity[],
+): readonly string[] =>
+  routedEntities(entities).flatMap((entity) => {
+    const { basePath, detailParam } = browserRoutes(entity);
+    return [
+      ...(entity.route.list === null
+        ? [`${routeDirectory}/${basePath}.index.tsx`]
+        : []),
+      ...(entity.route.detail === null
+        ? [`${routeDirectory}/${basePath}.$${detailParam}.tsx`]
+        : []),
+      ...(entity.route.create === "page"
+        ? [`${routeDirectory}/${basePath}.new.tsx`]
+        : []),
+    ];
+  });
 
 export const missingBrowserRouteFiles = (
   entities: readonly CompiledEntity[],
   exists: (path: string) => boolean = existsSync,
 ): readonly string[] =>
-  expectedBrowserRouteFiles(entities).filter(
+  handWrittenBrowserRouteFiles(entities).filter(
     (relativePath) => !exists(resolve(ROOT, relativePath)),
   );

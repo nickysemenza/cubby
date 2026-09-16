@@ -72,24 +72,34 @@ export const urlEnumListParam = <T extends z.ZodType<string>>(itemSchema: T) =>
     )
     .catch(undefined);
 
-/** A canonical, comma-encoded exact-entity filter. */
-export const urlShortcodeListParam = (type: ShortcodeType) =>
-  urlStringValue
+/**
+ * A canonical, comma-encoded exact-entity filter. `sentinels` are the
+ * non-shortcode items a nullable filter may carry (the filter UI's "has" /
+ * "(none)" presence values); they pass through unchanged.
+ */
+export const urlShortcodeListParam = (
+  type: ShortcodeType,
+  options?: { sentinels?: readonly string[] },
+) => {
+  const sentinels = new Set(options?.sentinels ?? []);
+  const canonical = (item: string) =>
+    sentinels.has(item) ? item : shortcodeSchema(type).parse(item);
+  return urlStringValue
     .refine(
       (value) =>
         value === undefined ||
         value
           .split(",")
-          .every((item) => shortcodeSchema(type).safeParse(item).success),
+          .every(
+            (item) =>
+              sentinels.has(item) ||
+              shortcodeSchema(type).safeParse(item).success,
+          ),
       "Invalid entity shortcode filter",
     )
-    .transform((value) =>
-      value
-        ?.split(",")
-        .map((item) => shortcodeSchema(type).parse(item))
-        .join(","),
-    )
+    .transform((value) => value?.split(",").map(canonical).join(","))
     .catch(UNRESOLVABLE_ENTITY_FILTER);
+};
 
 /** A single exact shortcode scope (not a multi-select). */
 export const urlShortcodeParam = (type: ShortcodeType) =>

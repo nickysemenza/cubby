@@ -15,7 +15,16 @@ const optionalText = z.string().trim().min(1).nullable();
 export default defineEntity({
   key: "planting",
   names: { singular: "Planting", plural: "Plantings" },
-  route: { basePath: "plantings" },
+  route: {
+    basePath: "plantings",
+    list: null,
+    detail: {
+      component: {
+        module: "~/app/garden/planting-detail",
+        export: "PlantingDetail",
+      },
+    },
+  },
   table: "Planting",
   identifiers: { brand: "PlantingId", shortcode: "PLT-" },
   presentation: {

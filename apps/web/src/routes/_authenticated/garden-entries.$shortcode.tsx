@@ -102,11 +102,7 @@ const GardenEntryDetailPage = detailPage({
   title: (entry) => entry.displayName,
 });
 
-const GardenEntryNotFound = notFoundPage(
-  "gardenEntry",
-  "Garden entry not found",
-  "This garden entry is no longer available.",
-);
+const GardenEntryNotFound = notFoundPage("gardenEntry");
 
 export const Route = createFileRoute(
   "/_authenticated/garden-entries/$shortcode",

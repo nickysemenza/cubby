@@ -2,56 +2,42 @@ import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 
 import { mealCalendarSearchSchema } from "~/app/meals/meal-search";
-import {
-  expenseSearchSchema,
-  financialAccountSearchSchema,
-  financialTransactionSearchSchema,
-  imageListSearchSchema,
-  inventorySearchSchema,
-  locationSearchSchema,
-  productSearchSchema,
-  projectSearchSchema,
-  purchaseSearchSchema,
-  recipeListSearchSchema,
-  taskSearchSchema,
-} from "~/entities/list-search";
+import { entitySearch } from "~/entities/generated/entity-search.gen";
 
 describe("detail filter link route contracts", () => {
   it("keeps Product, Location, and exact Inventory facets across navigation", () => {
     expect(
-      productSearchSchema.parse({
-        view: "table",
+      entitySearch.product.schema.parse({
         manufacturer: "Acme",
         model: "2853-20",
         category: "tools",
         tags: "M18",
         ingredient: "ING-4K7M",
+        location: "LOC-2ABC,__none__",
       }),
     ).toMatchObject({
-      view: "table",
       manufacturer: "Acme",
       model: "2853-20",
       category: "tools",
       tags: "M18",
       ingredient: "ING-4K7M",
+      location: "LOC-2ABC,__none__",
     });
 
     expect(
-      locationSearchSchema.parse({
-        view: "table",
+      entitySearch.location.schema.parse({
         type: "shelf",
         product: "PRD-4K7M",
         parent: "LOC-2ABC",
       }),
     ).toMatchObject({
-      view: "table",
       type: "shelf",
       product: "PRD-4K7M",
       parent: "LOC-2ABC",
     });
 
     expect(
-      inventorySearchSchema.parse({
+      entitySearch.inventory.schema.parse({
         productId: "prd-4k7m",
         locationId: " loc-2abc ",
       }),
@@ -63,24 +49,21 @@ describe("detail filter link route contracts", () => {
 
   it("keeps project and task cohort links on filter-aware renderers", () => {
     expect(
-      projectSearchSchema.parse({
-        view: "data",
+      entitySearch.project.schema.parse({
         statuses: "planning,in_progress",
-        kinds: ["garden", "renovation"],
+        kinds: "garden,renovation",
         locations: "Home,Workshop",
         parent: "PRJ-4K7M",
       }),
     ).toMatchObject({
-      view: "data",
-      statuses: ["planning", "in_progress"],
-      kinds: ["garden", "renovation"],
-      locations: ["Home", "Workshop"],
+      statuses: "planning,in_progress",
+      kinds: "garden,renovation",
+      locations: "Home,Workshop",
       parent: "PRJ-4K7M",
     });
 
     expect(
-      taskSearchSchema.parse({
-        view: "list",
+      entitySearch.task.schema.parse({
         status: "in_progress",
         trade: "electrical",
         project: "PRJ-4K7M",
@@ -88,7 +71,6 @@ describe("detail filter link route contracts", () => {
         parentTask: "TSK-2ABC",
       }),
     ).toMatchObject({
-      view: "list",
       status: "in_progress",
       trade: "electrical",
       project: "PRJ-4K7M",
@@ -99,7 +81,7 @@ describe("detail filter link route contracts", () => {
 
   it("keeps every linked Expense and Purchase facet", () => {
     expect(
-      expenseSearchSchema.parse({
+      entitySearch.expense.schema.parse({
         lineKind: "principal",
         costType: "materials",
         trade: "plumbing",
@@ -108,6 +90,7 @@ describe("detail filter link route contracts", () => {
         project: "PRJ-4K7M",
         productId: "PRD-4K7M",
         lineBasis: "item_line",
+        create: true,
       }),
     ).toMatchObject({
       lineKind: "principal",
@@ -118,23 +101,24 @@ describe("detail filter link route contracts", () => {
       project: "PRJ-4K7M",
       productId: "PRD-4K7M",
       lineBasis: "item_line",
+      create: true,
     });
 
-    expect(purchaseSearchSchema.parse({ vendor: "VEN-4K7M" })).toMatchObject({
-      vendor: "VEN-4K7M",
-    });
+    expect(
+      entitySearch.purchase.schema.parse({ vendor: "VEN-4K7M" }),
+    ).toMatchObject({ vendor: "VEN-4K7M" });
   });
 
   it("keeps Finance, Meal, Recipe, and Image facets", () => {
     expect(
-      financialAccountSearchSchema.parse({
+      entitySearch.financialAccount.schema.parse({
         identity: "credit_card",
         provisional: "true",
       }),
     ).toMatchObject({ identity: "credit_card", provisional: "true" });
 
     expect(
-      financialTransactionSearchSchema.parse({
+      entitySearch.financialTransaction.schema.parse({
         merchant: "Hardware Store",
         kind: "purchase",
         status: "posted",
@@ -162,7 +146,7 @@ describe("detail filter link route contracts", () => {
     });
 
     expect(
-      recipeListSearchSchema.parse({
+      entitySearch.recipe.schema.parse({
         tags: "weeknight",
         sourceType: "Book",
         source: "CKB-4K7M",
@@ -173,20 +157,19 @@ describe("detail filter link route contracts", () => {
       source: "CKB-4K7M",
     });
 
-    expect(imageListSearchSchema.parse({ status: "UPLOADED" })).toMatchObject({
-      status: "UPLOADED",
-    });
+    expect(
+      entitySearch.image.schema.parse({ status: "UPLOADED" }),
+    ).toMatchObject({ status: "UPLOADED" });
   });
 
   it("exposes each entity's literal filter keys to typed links", () => {
-    const product = productSearchSchema.parse({ manufacturer: "Acme" });
-    const location = locationSearchSchema.parse({ type: "shelf" });
-    const task = taskSearchSchema.parse({ status: "in_progress" });
+    const product = entitySearch.product.schema.parse({ manufacturer: "Acme" });
+    const location = entitySearch.location.schema.parse({ type: "shelf" });
+    const task = entitySearch.task.schema.parse({ status: "in_progress" });
 
-    // Property access is the assertion here. At runtime these keys come from a
-    // computed `Record<string, …>`; they only survive in the *type* — where
-    // `Route.useSearch()` and `<Link search>` read them — because
-    // `listSearchSchema` keeps its overrides a literal type parameter.
+    // Property access is the assertion here: the keys survive in the *type* —
+    // where `Route.useSearch()` and `<Link search>` read them — because the
+    // generated schema spells every key as a literal.
     expect(product.manufacturer).toBe("Acme");
     expect(product.model).toBeUndefined();
     expect(product.tags).toBeUndefined();
@@ -194,67 +177,90 @@ describe("detail filter link route contracts", () => {
     expect(task.status).toBe("in_progress");
   });
 
-  it("keeps malformed filters safe without widening exact entity scopes", () => {
-    expect(
-      projectSearchSchema.safeParse({ statuses: "planning,almost_done" })
-        .success,
-    ).toBe(false);
+  it("names every schema key in defaults so stripSearchParams sees them all", () => {
+    for (const { schema, defaults } of Object.values(entitySearch)) {
+      expect(Object.keys(defaults)).toEqual(Object.keys(schema.shape));
+      expect(
+        Object.values(defaults).every((value) => value === undefined),
+      ).toBe(true);
+    }
+  });
 
+  it("keeps malformed filters safe without widening exact entity scopes", () => {
     const malformedKnownValues = [
-      [taskSearchSchema, { status: "almost_done" }, undefined],
-      [productSearchSchema, { category: "not_a_category" }, undefined],
+      [entitySearch.task.schema, { status: "almost_done" }, undefined],
+      [entitySearch.product.schema, { category: "not_a_category" }, undefined],
       [
-        productSearchSchema,
+        entitySearch.product.schema,
         { ingredient: "ingredient name" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],
-      [locationSearchSchema, { type: "planet" }, undefined],
-      [locationSearchSchema, { parent: "Kitchen" }, UNRESOLVABLE_ENTITY_FILTER],
+      [entitySearch.location.schema, { type: "planet" }, undefined],
       [
-        projectSearchSchema,
+        entitySearch.location.schema,
+        { parent: "Kitchen" },
+        UNRESOLVABLE_ENTITY_FILTER,
+      ],
+      [
+        entitySearch.project.schema,
+        { statuses: "planning,almost_done" },
+        undefined,
+      ],
+      [
+        entitySearch.project.schema,
         { parent: "Project name" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],
-      [taskSearchSchema, { trade: "magic" }, undefined],
+      [entitySearch.task.schema, { trade: "magic" }, undefined],
       [
-        taskSearchSchema,
+        entitySearch.task.schema,
         { project: "Project name" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],
-      [expenseSearchSchema, { lineKind: "subtotal" }, undefined],
-      [expenseSearchSchema, { costType: "unknown" }, undefined],
-      [expenseSearchSchema, { lineBasis: "guess" }, undefined],
-      [expenseSearchSchema, { future: "maybe" }, undefined],
+      [entitySearch.expense.schema, { lineKind: "subtotal" }, undefined],
+      [entitySearch.expense.schema, { costType: "unknown" }, undefined],
+      [entitySearch.expense.schema, { lineBasis: "guess" }, undefined],
       [
-        purchaseSearchSchema,
+        entitySearch.purchase.schema,
         { vendor: "Vendor name" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],
-      [financialAccountSearchSchema, { identity: "mortgage" }, undefined],
-      [financialAccountSearchSchema, { provisional: "maybe" }, undefined],
-      [financialTransactionSearchSchema, { kind: "withdrawal" }, undefined],
-      [financialTransactionSearchSchema, { status: "settled" }, undefined],
       [
-        financialTransactionSearchSchema,
+        entitySearch.financialAccount.schema,
+        { identity: "mortgage" },
+        undefined,
+      ],
+      [
+        entitySearch.financialTransaction.schema,
+        { kind: "withdrawal" },
+        undefined,
+      ],
+      [
+        entitySearch.financialTransaction.schema,
+        { status: "settled" },
+        undefined,
+      ],
+      [
+        entitySearch.financialTransaction.schema,
         { accountId: "Visa" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],
       [mealCalendarSearchSchema, { mealType: "supper" }, undefined],
       [mealCalendarSearchSchema, { mealKind: "delivery" }, undefined],
-      [recipeListSearchSchema, { sourceType: "Magazine" }, undefined],
+      [entitySearch.recipe.schema, { sourceType: "Magazine" }, undefined],
       [
-        recipeListSearchSchema,
+        entitySearch.recipe.schema,
         { source: "Joy of Cooking" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],
-      [imageListSearchSchema, { status: "PROCESSING" }, undefined],
+      [entitySearch.image.schema, { status: "PROCESSING" }, undefined],
       [
-        inventorySearchSchema,
+        entitySearch.inventory.schema,
         { productId: "Milwaukee drill" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],
       [
-        inventorySearchSchema,
+        entitySearch.inventory.schema,
         { locationId: "LOC-0OIL" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],

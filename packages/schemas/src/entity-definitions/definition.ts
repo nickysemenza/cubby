@@ -261,10 +261,44 @@ const metadataSchemas = () => {
     .object({ module: nonEmptyString(), export: nonEmptyString() })
     .strict();
 
+  /**
+   * Browser route ownership. `list` / `detail` name the page component the
+   * generator renders into `routes/_authenticated/<basePath>.index.tsx` /
+   * `.$<detailParam>.tsx`; `null` keeps that file hand-written. `create` is
+   * how a record is made from the list: `"dialog"` puts `?create=true` in
+   * the list's search schema and the generated index renders the capture
+   * dialog action; `"page"` means a hand-written `<basePath>.new.tsx`
+   * exists and is linked as `routes.new`. It sits beside `list` rather than
+   * inside it because a hand-written list (product, recipe) still owns a
+   * `/new` page.
+   */
   const entityRouteMetadataSchema = z
     .object({
       basePath: nonEmptyString(),
       detailParam: nonEmptyString().optional(),
+      create: z.enum(["dialog", "page"]).optional(),
+      list: z
+        .object({
+          component: sourceRefMetadataSchema,
+          /**
+           * Header actions component; omitted renders the capture dialog
+           * action when `create` is `"dialog"`, `null` renders none.
+           */
+          actions: sourceRefMetadataSchema.nullable().optional(),
+        })
+        .strict()
+        .nullable(),
+      detail: z
+        .object({
+          component: sourceRefMetadataSchema,
+          /**
+           * `(shortcode: string) => queryOptions` for an entity outside the
+           * kernel detail roster (image); the roster's use `entityDetailFor`.
+           */
+          query: sourceRefMetadataSchema.optional(),
+        })
+        .strict()
+        .nullable(),
     })
     .strict();
 

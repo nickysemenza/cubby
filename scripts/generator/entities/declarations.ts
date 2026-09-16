@@ -28,7 +28,13 @@ export interface DeclarationObject {
 }
 
 export type SourceRef = Readonly<{ module: string; export: string }>;
-type ParsedEntityRoute = { basePath: string; detailParam?: string };
+type ParsedEntityRoute = {
+  basePath: string;
+  detailParam?: string;
+  create?: "dialog" | "page";
+  list: Readonly<{ component: SourceRef; actions?: SourceRef | null }> | null;
+  detail: Readonly<{ component: SourceRef; query?: SourceRef }> | null;
+};
 type IdentifierRef = Readonly<{
   entity: string;
   kind: "id" | "shortcode";

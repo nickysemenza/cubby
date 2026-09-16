@@ -15,7 +15,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "recipe",
   names: { singular: "Recipe", plural: "Recipes" },
-  route: { basePath: "recipes" },
+  route: { basePath: "recipes", create: "page", list: null, detail: null },
   table: "Recipe",
   identifiers: { brand: "RecipeId", shortcode: "RCP-" },
   presentation: {

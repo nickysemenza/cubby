@@ -55,7 +55,9 @@ const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
  * reconciled INTO each other — stated totals are a cue, spend is always the
  * lines.
  */
-export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
+export const PurchaseDetail: FC<{ record: PurchaseOut }> = ({
+  record: purchase,
+}) => {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkProductsOpen, setLinkProductsOpen] = useState(false);
 

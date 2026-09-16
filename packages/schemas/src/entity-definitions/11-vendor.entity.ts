@@ -7,7 +7,19 @@ import { z } from "zod";
 export default defineEntity({
   key: "vendor",
   names: { singular: "Vendor", plural: "Vendors" },
-  route: { basePath: "vendors" },
+  route: {
+    basePath: "vendors",
+    create: "dialog",
+    list: {
+      component: { module: "~/app/vendors/vendorlist", export: "VendorList" },
+    },
+    detail: {
+      component: {
+        module: "~/app/vendors/vendor-detail",
+        export: "VendorDetail",
+      },
+    },
+  },
   table: "Vendor",
   identifiers: { brand: "VendorId", shortcode: "VEN-" },
   presentation: {

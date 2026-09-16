@@ -20,7 +20,22 @@ export const generatedImageStorageStatusValues = [
 export default defineEntity({
   key: "image",
   names: { singular: "Image", plural: "Images" },
-  route: { basePath: "images" },
+  route: {
+    basePath: "images",
+    list: {
+      component: { module: "~/app/images/imagelist", export: "ImageList" },
+    },
+    detail: {
+      component: {
+        module: "~/app/images/image-detail-page",
+        export: "ImageDetailPage",
+      },
+      query: {
+        module: "~/entities/image.functions",
+        export: "imageDetailQuery",
+      },
+    },
+  },
   table: "Image",
   identifiers: { brand: "ImageId", shortcode: "IMG-" },
   presentation: {

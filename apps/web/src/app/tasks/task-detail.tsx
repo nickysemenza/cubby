@@ -58,7 +58,7 @@ import {
 } from "./task-options";
 
 interface TaskDetailProps {
-  task: TaskOut;
+  record: TaskOut;
 }
 
 /** A blocked-by/blocking dependency link, name-only. */
@@ -248,7 +248,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
   );
 }
 
-export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
+export const TaskDetail: FC<TaskDetailProps> = ({ record: task }) => {
   const [followUpOpen, setFollowUpOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({

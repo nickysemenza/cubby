@@ -115,5 +115,14 @@ suffix; Swift/Rust output lives in a `Generated/` directory instead.
 edit its generator or input and regenerate; a missing one at its expected path
 means stub it, not fabricate the real shape.
 
+One exception: the entity list/detail route modules the generator emits from
+`route.list` / `route.detail` (`apps/web/src/routes/_authenticated/<basePath>.index.tsx`
+and `.$shortcode.tsx`) sit beside the hand-written routes with no `.gen.`
+suffix, because TanStack's file router needs physical files there and a
+`__virtual.ts` would take over the whole directory. They carry the generated
+header, so `generate:check` still catches a stale or hand-edited one, and each
+is listed explicitly in `.gitattributes`. To customize one, set that
+`route.list` / `route.detail` to `null` in the declaration and write the file.
+
 For the helper catalogue and exact edge-case rules, load the relevant heading in
 [the preserved root reference](root-rules-reference.md).

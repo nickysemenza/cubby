@@ -49,7 +49,7 @@ import { ReceiveExpenseDialog } from "./receive-expense-dialog";
 import { SplitExpenseDialog } from "./split-expense-dialog";
 
 interface ExpenseDetailProps {
-  expense: ExpenseOut;
+  record: ExpenseOut;
 }
 
 const expenseHeroStats = (expense: ExpenseOut): DetailHeroStat[] => [
@@ -240,7 +240,7 @@ function expenseProductRenderers(
   };
 }
 
-export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
+export const ExpenseDetail: FC<ExpenseDetailProps> = ({ record: expense }) => {
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
 

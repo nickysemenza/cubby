@@ -11,6 +11,7 @@ import {
   loadEntityDeclarations,
 } from "./entities/declarations.ts";
 import type { EntityArtifacts } from "./entities/declarations.ts";
+import { renderBrowserRouteArtifacts } from "./entities/render/browser-routes.ts";
 import { renderFilterArtifacts } from "./entities/render/filters.ts";
 import {
   entityOutputsFor,
@@ -21,6 +22,7 @@ import {
 import { renderKernelBindingsArtifacts } from "./entities/render/kernel-bindings.ts";
 import { renderRelationArtifacts } from "./entities/render/relations.ts";
 import { missingBrowserRouteFiles } from "./entities/render/routes.ts";
+import { renderSearchArtifacts } from "./entities/render/search.ts";
 import { renderHttpApiArtifacts } from "./http-api/openapi.ts";
 import { renderStartOperationArtifacts } from "./start-operations/render.ts";
 
@@ -65,11 +67,13 @@ const main = async () => {
     ...renderRelationArtifacts(entities),
     ...renderKernelBindingsArtifacts(entities),
     ...renderFilterArtifacts(entities),
+    ...renderSearchArtifacts(entities),
+    ...renderBrowserRouteArtifacts(entities),
   ]);
   const missingRoutes = missingBrowserRouteFiles(entities);
   if (missingRoutes.length > 0) {
     throw new EntityDeclarationError(
-      `Generated browser routes are missing route modules:\n${missingRoutes.map((path) => `- ${path}`).join("\n")}`,
+      `Declared browser routes are missing hand-written route modules:\n${missingRoutes.map((path) => `- ${path}`).join("\n")}`,
     );
   }
 
