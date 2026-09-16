@@ -16,7 +16,7 @@ export default defineEntity({
   names: { singular: "Garden Entry", plural: "Garden Entries" },
   route: { basePath: "garden-entries" },
   table: "GardenEntry",
-  identifiers: { brand: "GardenEntryId", shortcode: "GDE-", legacy: null },
+  identifiers: { brand: "GardenEntryId", shortcode: "GDE-" },
   presentation: {
     titleField: "displayName",
     domain: "house",

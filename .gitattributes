@@ -1,6 +1,7 @@
 # Generated outputs remain reviewable, but GitHub collapses their diffs by
 # default and excludes them from language statistics.
 **/*.gen.ts linguist-generated
+**/*.gen.json linguist-generated
 **/src/generated/** linguist-generated
 **/drizzle/meta/*.json linguist-generated
 **/migrations/meta/*.json linguist-generated

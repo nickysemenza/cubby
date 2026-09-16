@@ -22,7 +22,7 @@ export default defineEntity({
   names: { singular: "Image", plural: "Images" },
   route: { basePath: "images" },
   table: "Image",
-  identifiers: { brand: "ImageId", shortcode: "IMG-", legacy: null },
+  identifiers: { brand: "ImageId", shortcode: "IMG-" },
   presentation: {
     titleField: "filename",
     domain: null,

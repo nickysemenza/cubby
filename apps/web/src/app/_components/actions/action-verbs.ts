@@ -99,9 +99,9 @@ export const actionVerbs = {
 
   // — AI ——————————————————————————————————————————————————————————————
   //
-  // Every AI trigger is `Sparkles`. Before this the sixteen AI surfaces used
-  // seven trigger verbs and two non-Sparkles glyphs — inventory detection wore
-  // `PackagePlus` and Ask Cubby wore `Search`, so neither read as AI at all.
+  // Every AI trigger is `Sparkles`. Before this the AI surfaces used seven
+  // trigger verbs and a non-Sparkles glyph — inventory detection wore
+  // `PackagePlus`, so it did not read as AI at all.
   // The icon is the recognition; the label says what it will produce.
   //
   // `suggest` is the only AI verb with more than one object (product category,
@@ -113,8 +113,6 @@ export const actionVerbs = {
   analyze: { label: "Analyze photos", icon: Sparkles },
   identify: { label: "Identify product", icon: Sparkles },
   detect: { label: "Detect items", icon: Sparkles },
-  ask: { label: "Ask Cubby", icon: Sparkles },
-  askAbout: { label: "Ask about this", icon: Sparkles },
   regenerate: { label: "Regenerate flow", icon: Sparkles },
 
   // — immediate ——————————————————————————————————————————————————————

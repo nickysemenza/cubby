@@ -19,20 +19,21 @@ import {
 } from "../../../packages/schemas/src/entity-definitions/definition";
 import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
 import {
-  checkEntityArtifacts,
+  checkArtifacts,
+  findExtraArtifacts,
   generatedHeader,
-} from "../../../scripts/entity-generator/artifacts";
-import { compileEntityDeclarations } from "../../../scripts/entity-generator/compile";
-import { loadEntityDeclarations } from "../../../scripts/entity-generator/declarations";
-import type { CompiledEntity } from "../../../scripts/entity-generator/declarations";
-import { renderEntityArtifacts } from "../../../scripts/entity-generator/render/index";
-import { renderFilterArtifacts } from "../../../scripts/entity-generator/render/filters";
-import { renderKernelBindingsArtifacts } from "../../../scripts/entity-generator/render/kernel-bindings";
-import { renderRelationArtifacts } from "../../../scripts/entity-generator/render/relations";
+} from "../../../scripts/generator/artifacts";
+import { compileEntityDeclarations } from "../../../scripts/generator/entities/compile";
+import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
+import type { CompiledEntity } from "../../../scripts/generator/entities/declarations";
+import { renderEntityArtifacts } from "../../../scripts/generator/entities/render/index";
+import { renderFilterArtifacts } from "../../../scripts/generator/entities/render/filters";
+import { renderKernelBindingsArtifacts } from "../../../scripts/generator/entities/render/kernel-bindings";
+import { renderRelationArtifacts } from "../../../scripts/generator/entities/render/relations";
 import {
   expectedBrowserRouteFiles,
   missingBrowserRouteFiles,
-} from "../../../scripts/entity-generator/render/routes";
+} from "../../../scripts/generator/entities/render/routes";
 
 const temporaryRoots: string[] = [];
 afterEach(async () => {
@@ -86,7 +87,7 @@ const base = {
   names: { singular: "Alpha", plural: "Alphas" },
   route: null,
   table: null,
-  identifiers: { brand: null, shortcode: null, legacy: null },
+  identifiers: { brand: null, shortcode: null },
   presentation,
   fields: null,
   filters: { descriptors: [] },
@@ -542,25 +543,15 @@ describe("typed entity compiler", () => {
     expect(() => compileEntityDeclarations([base, base])).toThrow(
       "Duplicate entity key alpha",
     );
-    const named = (key: string, shortcode: string, legacy = "A-") => ({
+    const named = (key: string, shortcode: string) => ({
       ...base,
       key,
-      identifiers: {
-        ...base.identifiers,
-        shortcode,
-        legacy,
-      },
+      identifiers: { ...base.identifiers, shortcode },
     });
     expect(() =>
       compileEntityDeclarations([
         named("alpha", "ALP-"),
-        named("beta", "ALP-", "B-"),
-      ]),
-    ).toThrow("conflicts");
-    expect(() =>
-      compileEntityDeclarations([
-        named("alpha", "ALP-"),
-        named("beta", "BET-", "A-"),
+        named("beta", "ALP-"),
       ]),
     ).toThrow("conflicts");
   });
@@ -808,10 +799,10 @@ describe("typed entity compiler", () => {
     const artifacts = [
       {
         relativePath: "generated/entity-literal-alpha.gen.ts",
-        source: "export const alpha = 1;\n",
+        source: `${generatedHeader}export const alpha = 1;\n`,
       },
     ];
-    expect(await checkEntityArtifacts(root, artifacts)).toEqual([
+    expect(await checkArtifacts(root, artifacts)).toEqual([
       "missing: generated/entity-literal-alpha.gen.ts",
     ]);
     await mkdir(join(root, "generated"));
@@ -830,9 +821,11 @@ describe("typed entity compiler", () => {
     // A file with no generator header — even one shaped like a generated
     // artifact's name — is left alone; it isn't ours to flag.
     await writeFile(join(root, "generated/notes.gen.ts"), "// just a note\n");
-    expect(await checkEntityArtifacts(root, artifacts)).toEqual([
+    expect(await checkArtifacts(root, artifacts)).toEqual([
       "stale: generated/entity-literal-alpha.gen.ts",
-      "extraneous: generated/entity-retired-name.gen.ts",
+    ]);
+    expect(await findExtraArtifacts(root, artifacts)).toEqual([
+      "generated/entity-retired-name.gen.ts",
     ]);
   });
 
@@ -889,9 +882,7 @@ describe("typed entity compiler", () => {
     expect(artifact("entity-filter-bindings.gen.ts")).toContain(
       'columnId:"related:product.tasks"',
     );
-    expect(artifact("shortcode-registry.gen.ts")).toContain(
-      'LEGACY_SHORTCODE_PREFIX = {"P-":"product","L-":"location"}',
-    );
+    expect(artifact("shortcode-registry.gen.ts")).not.toContain("LEGACY");
     expect(artifact("entity-details.gen.ts")).toContain(
       '"product": withEntityDetailMedia(productWithFoodOut)',
     );

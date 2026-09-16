@@ -15,7 +15,8 @@ export default defineEntity({
   names: { singular: "Inventory Item", plural: "Inventory" },
   route: { basePath: "inventory" },
   table: "InventoryEntry",
-  identifiers: { brand: "InventoryId", shortcode: "INV-", legacy: null },
+  identifiers: { brand: "InventoryId", shortcode: "INV-" },
+  native: { create: "CubbyClient.createInventory ad-hoc count" },
   // Inventory has no name field; `displayName` ("<product> · <location>")
   // is declared here for the titleField compiler check, but the joins it
   // needs (product/location names) aren't loaded on the bare entity output —

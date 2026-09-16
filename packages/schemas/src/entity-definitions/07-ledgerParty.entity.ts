@@ -7,7 +7,7 @@ export default defineEntity({
   names: { singular: "Ledger Party", plural: "Ledger Parties" },
   route: { basePath: "ledger-parties" },
   table: "LedgerParty",
-  identifiers: { brand: "LedgerPartyId", shortcode: "LPY-", legacy: null },
+  identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
   presentation: {
     titleField: "name",
     domain: "finance",

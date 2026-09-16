@@ -21,7 +21,6 @@ import { Route as AuthenticatedActivitiesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
 import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
-import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
 import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedDesignRouteImport } from './routes/_authenticated/design'
@@ -187,11 +186,6 @@ const AuthenticatedAiSmokeTestRoute =
 const AuthenticatedAiUsageRoute = AuthenticatedAiUsageRouteImport.update({
   id: '/ai-usage',
   path: '/ai-usage',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
-  id: '/ask',
-  path: '/ask',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedBackgroundJobsRoute =
@@ -789,7 +783,6 @@ export interface FileRoutesByFullPath {
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ai-usage': typeof AuthenticatedAiUsageRoute
-  '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
@@ -904,7 +897,6 @@ export interface FileRoutesByTo {
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ai-usage': typeof AuthenticatedAiUsageRoute
-  '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
@@ -1022,7 +1014,6 @@ export interface FileRoutesById {
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/_authenticated/ai-usage': typeof AuthenticatedAiUsageRoute
-  '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/design': typeof AuthenticatedDesignRoute
@@ -1140,7 +1131,6 @@ export interface FileRouteTypes {
     | '/activity'
     | '/ai-smoke-test'
     | '/ai-usage'
-    | '/ask'
     | '/background-jobs'
     | '/calendar'
     | '/design'
@@ -1255,7 +1245,6 @@ export interface FileRouteTypes {
     | '/activity'
     | '/ai-smoke-test'
     | '/ai-usage'
-    | '/ask'
     | '/background-jobs'
     | '/calendar'
     | '/design'
@@ -1581,13 +1570,6 @@ declare module '@tanstack/react-router' {
       path: '/ai-usage'
       fullPath: '/ai-usage'
       preLoaderRoute: typeof AuthenticatedAiUsageRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ask': {
-      id: '/_authenticated/ask'
-      path: '/ask'
-      fullPath: '/ask'
-      preLoaderRoute: typeof AuthenticatedAskRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/background-jobs': {
@@ -2313,7 +2295,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
   AuthenticatedAiSmokeTestRoute: typeof AuthenticatedAiSmokeTestRoute
   AuthenticatedAiUsageRoute: typeof AuthenticatedAiUsageRoute
-  AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedBackgroundJobsRoute: typeof AuthenticatedBackgroundJobsRoute
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedDesignRoute: typeof AuthenticatedDesignRoute
@@ -2409,7 +2390,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedActivityRoute: AuthenticatedActivityRoute,
   AuthenticatedAiSmokeTestRoute: AuthenticatedAiSmokeTestRoute,
   AuthenticatedAiUsageRoute: AuthenticatedAiUsageRoute,
-  AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedBackgroundJobsRoute: AuthenticatedBackgroundJobsRoute,
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedDesignRoute: AuthenticatedDesignRoute,

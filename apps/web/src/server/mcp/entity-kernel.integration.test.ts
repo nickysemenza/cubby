@@ -1,24 +1,19 @@
-import type { AgentStreamEvent } from "@cubby/schemas/agent";
 import { productCreateInput } from "@cubby/schemas/product";
 import { testUserId } from "@cubby/schemas/testing";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { wishCreateInput } from "@cubby/schemas/wish";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { EventType } from "@tanstack/ai";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
-import { createAgentToolset } from "~/server/agent/mcp-bridge";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
 import { listMcpToolCatalog } from "~/server/mcp/server";
-import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { askAgentStreamWorkflow } from "~/server/workflows/agent.server";
 
 import { callMcpTool } from "./mcp-test-utils";
 import { registerEntityTools } from "./tools/entity.tools";
@@ -54,10 +49,7 @@ const productGetResultSchema = z.object({
 describe("MCP entity kernel boundary", () => {
   const ctx = withTestDb("mcp");
 
-  it("keeps the authenticated agent toolset read-only", async () => {
-    const context = requireActor(
-      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
-    );
+  it("annotates read-only tools from the registry", async () => {
     // The registry's own annotations are the invariant, in both directions:
     // no tool that writes (`find_or_create_product_by_upc` mints a Product
     // despite its `find_` prefix) and no read-only tool left out because its
@@ -71,29 +63,6 @@ describe("MCP entity kernel boundary", () => {
     expect(readOnlyNames).toContain("explain_recipe_costing");
     expect(readOnlyNames).not.toContain("entity");
     expect(readOnlyNames).not.toContain("find_or_create_product_by_upc");
-    const events: AgentStreamEvent[] = [];
-    for await (const event of askAgentStreamWorkflow(
-      context,
-      { query: "read the pantry" },
-      undefined,
-      {
-        acquire: createAgentToolset,
-        stream: async function* (_db, _query, resource) {
-          const names = resource.tools.map((tool) => tool.name).sort();
-          expect(names).toEqual(readOnlyNames);
-          yield {
-            type: EventType.TEXT_MESSAGE_CONTENT,
-            messageId: "message-1",
-            delta: "ready",
-          };
-        },
-      },
-    ))
-      events.push(event);
-    expect(events).toEqual([
-      { type: "delta", text: "ready" },
-      { type: "done", sources: [], toolCalls: [] },
-    ]);
   });
 
   it("executes generated create, partial update, bulk marking, and delete definitions", async () => {

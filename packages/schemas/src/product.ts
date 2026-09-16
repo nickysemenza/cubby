@@ -153,9 +153,16 @@ export const productFindOrCreateByUPCInput = z.object({
   defaultName: z.string().optional(),
 });
 
+/**
+ * `scan` carries a raw scanner string — a Cubby label (or label URL), a
+ * barcode, or an ISBN — for the server to classify, so a native caller needs
+ * no local shortcode/ISBN parsing. Rejected with the same messages the web
+ * scanner shows when it names nothing stockable.
+ */
 export const productFindOrCreateByCodeInput = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("barcode"), value: upc }),
   z.object({ kind: z.literal("isbn"), value: isbn }),
+  z.object({ kind: z.literal("scan"), value: z.string().trim().min(1) }),
 ]);
 
 export type ProductFindOrCreateByCodeInput = z.infer<

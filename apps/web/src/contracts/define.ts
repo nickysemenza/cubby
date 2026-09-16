@@ -24,6 +24,12 @@ interface OperationObservability {
  * and MCP still expose it. Used for operations whose input and output are
  * type-only carriers over a per-entity union, which HTTP serves better as
  * the per-entity resource routes.
+ *
+ * `native` names the reason the Apple app calls this operation; the generator
+ * adds every flagged operation to the swift-openapi-generator filter, so a
+ * flagged member is also the only way an RPC id reaches CubbyKit. Resource
+ * verbs are flagged on the entity declaration (`native.create/update/delete`)
+ * instead.
  */
 export interface QueryContract<
   Input extends z.ZodTypeAny = z.ZodTypeAny,
@@ -34,6 +40,7 @@ export interface QueryContract<
   readonly output: Output;
   readonly observability?: OperationObservability;
   readonly http?: false;
+  readonly native?: string;
 }
 
 export interface MutationContract<
@@ -45,6 +52,7 @@ export interface MutationContract<
   readonly output: Output;
   readonly observability?: OperationObservability;
   readonly http?: false;
+  readonly native?: string;
 }
 
 /**

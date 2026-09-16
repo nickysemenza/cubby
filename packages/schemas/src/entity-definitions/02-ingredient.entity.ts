@@ -7,7 +7,8 @@ export default defineEntity({
   names: { singular: "Ingredient", plural: "Ingredients" },
   route: { basePath: "ingredients" },
   table: "Ingredient",
-  identifiers: { brand: "IngredientId", shortcode: "ING-", legacy: null },
+  identifiers: { brand: "IngredientId", shortcode: "ING-" },
+  native: { update: "Garden guide association" },
   presentation: {
     titleField: "name",
     domain: "cook",

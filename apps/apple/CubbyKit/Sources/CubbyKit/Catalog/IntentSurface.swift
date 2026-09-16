@@ -11,9 +11,4 @@ extension EntityCatalog {
     public static var intentExposed: [EntityDescriptor] {
         all.filter(\.isIntentExposed)
     }
-
-    /// The descriptor whose shortcode prefix a code carries (`PRD-…` → product).
-    public static func descriptor(forShortcode code: String) -> EntityDescriptor? {
-        Shortcode.parse(code).map { self[$0.key] }
-    }
 }

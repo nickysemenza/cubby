@@ -45,6 +45,7 @@
     "**/dist/**",
     "**/drizzle/**",
     "apps/web/src/server/db/__snapshots__/application-schema.json",
+    "apps/web/src/lib/generated/http-openapi.gen.json",
     "**/node_modules/**",
     "apps/upc-lookup/public/**",
     "apps/usda-api/data/**",

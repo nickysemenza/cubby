@@ -17,7 +17,8 @@ export default defineEntity({
   names: { singular: "Location", plural: "Locations" },
   route: { basePath: "locations" },
   table: "Location",
-  identifiers: { brand: "LocationId", shortcode: "LOC-", legacy: "L-" },
+  identifiers: { brand: "LocationId", shortcode: "LOC-" },
+  native: { create: "Garden location setup" },
   presentation: {
     titleField: "name",
     domain: "pantry",

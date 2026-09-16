@@ -17,6 +17,7 @@ export const taskContract = defineContract("task", {
     output: schemas.taskSummaryOut,
   }),
   todayBriefing: query({
+    native: "Today tasks",
     input: z.undefined(),
     output: schemas.taskTodayBriefingOut,
   }),

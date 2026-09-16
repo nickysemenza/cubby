@@ -13,7 +13,11 @@ export type ResolvedScanCode =
    * from the shortcode string is what spawned the duplicate resolvers.
    */
   | { kind: "shortcode"; shortcode: string; type: ShortcodeType }
-  | { kind: "product"; code: ProductFindOrCreateByCodeInput };
+  | {
+      kind: "product";
+      /** Always a concrete code: the raw `scan` arm is what this resolves. */
+      code: Exclude<ProductFindOrCreateByCodeInput, { kind: "scan" }>;
+    };
 
 export type ScanCodeResolution =
   | { ok: true; value: ResolvedScanCode }
@@ -98,6 +102,9 @@ export function resolveScanCode(raw: string): ScanCodeResolution {
  * both what was scanned and what was wanted, so it can say which is which where
  * a caller-supplied string could only ever name the want.
  */
+/** A product scan resolved to one concrete code: never the raw `scan` arm. */
+export type ResolvedProductCode = Exclude<ScanAtLocationCode, { kind: "scan" }>;
+
 export type ScopedScan<T> =
   | { ok: true; value: T }
   /**
@@ -141,7 +148,7 @@ export function resolveLocationScan(raw: string): ScopedScan<string> {
  */
 export function resolveProductScan(
   raw: string,
-): ScopedScan<ScanAtLocationCode> {
+): ScopedScan<ResolvedProductCode> {
   const parsed = resolveScanCode(raw);
   if (!parsed.ok) {
     return { ok: false, reason: "unrecognized", error: parsed.error };

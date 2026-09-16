@@ -28,7 +28,6 @@ export const entityDescriptor = z.object({
   dbTable: z.string().nullable(),
   idBrand: z.string().nullable(),
   shortcodePrefix: z.string().optional(),
-  legacyShortcodePrefix: z.string().optional(),
   softDelete: z.boolean(),
   browserRoutes: z.boolean().optional(),
   auditable: z.boolean(),

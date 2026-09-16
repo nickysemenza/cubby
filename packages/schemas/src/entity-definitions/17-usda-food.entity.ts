@@ -15,7 +15,7 @@ export default defineEntity({
   names: { singular: "USDA Food", plural: "USDA Foods" },
   route: { basePath: "usda", detailParam: "id" },
   table: null,
-  identifiers: { brand: null, shortcode: null, legacy: null },
+  identifiers: { brand: null, shortcode: null },
   presentation: {
     titleField: "description",
     domain: "pantry",

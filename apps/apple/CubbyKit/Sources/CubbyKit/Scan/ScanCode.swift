@@ -73,10 +73,14 @@ extension ScanCode {
 /// Cubby shortcodes: `<PREFIX>-<4 chars>` over a 31-character alphabet with the OCR-confusable
 /// characters removed. Prefixes come from the generated entity catalog, never a hand-kept list.
 /// Also accepts, inbound only, the single-letter prefixes printed on labels before the 2026-07
-/// cutover (`EntityCatalog.legacyShortcodePrefixes`) — a hit is rewritten to its entity's
-/// canonical prefix, mirroring `parseShortcode` in `packages/shared/src/shortcode.ts`.
+/// cutover (`legacyShortcodePrefixes`) — a hit is rewritten to its entity's canonical prefix,
+/// mirroring `parseShortcode` in `packages/shared/src/shortcode.ts`.
 public enum Shortcode {
     public static let alphabet = EntityCatalog.shortcodeAlphabet
+
+    /// INBOUND ONLY: nothing emits these, and the entity manifest no longer carries them; this
+    /// mirrors `LEGACY_SHORTCODE_PREFIX` in `packages/shared/src/shortcode.ts`.
+    private static let legacyShortcodePrefixes: [String: EntityKey] = ["P-": .product, "L-": .location]
 
     public struct Parsed: Sendable, Hashable {
         public let key: EntityKey
@@ -100,7 +104,7 @@ public enum Shortcode {
         // Legacy single-letter prefix: every entity in this table has a canonical
         // `shortcodePrefix` by construction (the generator sources both from the
         // same `ShortcodeType` registry), so the rewrite below always succeeds.
-        guard let key = EntityCatalog.legacyShortcodePrefixes[prefix] else { return nil }
+        guard let key = legacyShortcodePrefixes[prefix] else { return nil }
         let descriptor = EntityCatalog[key]
         guard let canonicalPrefix = descriptor.shortcodePrefix else { return nil }
         return Parsed(key: descriptor.key, singular: descriptor.singular, code: canonicalPrefix + body)

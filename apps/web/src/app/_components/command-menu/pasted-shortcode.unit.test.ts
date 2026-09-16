@@ -11,11 +11,7 @@ describe("parsePastedShortcode", () => {
         selectionStart: 0,
         selectionEnd: 0,
       }),
-    ).toEqual({
-      type: "product",
-      shortcode: "PRD-4K7M",
-      legacy: false,
-    });
+    ).toEqual({ type: "product", shortcode: "PRD-4K7M" });
   });
 
   it("canonicalizes a legacy shortcode that replaces selected search text", () => {
@@ -26,11 +22,7 @@ describe("parsePastedShortcode", () => {
         selectionStart: 0,
         selectionEnd: 10,
       }),
-    ).toEqual({
-      type: "product",
-      shortcode: "PRD-4K7M",
-      legacy: true,
-    });
+    ).toEqual({ type: "product", shortcode: "PRD-4K7M" });
   });
 
   it("does not capture a shortcode pasted into surrounding search text", () => {

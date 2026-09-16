@@ -169,9 +169,7 @@ test("local checks retain every required gate and keep stateful verification liv
     .object({ scripts: z.record(z.string(), z.string()) })
     .parse(JSON.parse(readFileSync("package.json", "utf8")));
   const fast = [
-    "entity",
-    "start-ops",
-    "http-api",
+    "generate",
     "types",
     "lint",
     "format",
@@ -181,11 +179,8 @@ test("local checks retain every required gate and keep stateful verification liv
   ];
   const extra = ["bindings", "openapi", "script-tests", "security"];
   const commands = {
-    entity: "tsx scripts/entity-generator/main.ts --check",
-    "start-ops":
-      "tsx --tsconfig apps/web/tsconfig.json scripts/start-operation-registry-generator.ts --check",
-    "http-api":
-      "pnpm --filter @cubby/web generate:http-api:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
+    generate:
+      "pnpm generate:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
     types: "pnpm typecheck",
     lint: "oxlint .",
     format: "oxfmt --check .",

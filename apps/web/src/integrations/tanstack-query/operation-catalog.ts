@@ -290,8 +290,8 @@ type SubscriptionDescriptor<
   readonly definition: SubscriptionDefinition<Input, Event>;
   /**
    * Opens the stream. There is no `queryOptions`/`mutationOptions` sibling:
-   * a stream has no cache entry, and its consumers (`useBulkStream`,
-   * `useAgentStream`) drive it directly.
+   * a stream has no cache entry, and its consumer (`useBulkStream`) drives it
+   * directly.
    */
   open(
     input: z.input<Input>,

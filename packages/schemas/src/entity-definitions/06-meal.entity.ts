@@ -17,7 +17,7 @@ export default defineEntity({
   names: { singular: "Meal", plural: "Meals" },
   route: { basePath: "meals" },
   table: "Meal",
-  identifiers: { brand: "MealId", shortcode: "MEL-", legacy: null },
+  identifiers: { brand: "MealId", shortcode: "MEL-" },
   presentation: {
     titleField: "displayName",
     domain: "plan",

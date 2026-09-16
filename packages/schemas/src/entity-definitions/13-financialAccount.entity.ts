@@ -13,7 +13,7 @@ export default defineEntity({
   names: { singular: "Financial Account", plural: "Accounts" },
   route: { basePath: "financial-accounts" },
   table: "FinancialAccount",
-  identifiers: { brand: "FinancialAccountId", shortcode: "FAC-", legacy: null },
+  identifiers: { brand: "FinancialAccountId", shortcode: "FAC-" },
   presentation: {
     titleField: "name",
     domain: "finance",

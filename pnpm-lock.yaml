@@ -148,6 +148,9 @@ importers:
       '@redocly/cli':
         specifier: ^2.52.0
         version: 2.52.0
+      '@ts-rest/open-api':
+        specifier: 3.53.0-rc.1
+        version: 3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.5.0))(zod@4.5.4)
       '@types/node':
         specifier: ^26.1.1
         version: 26.5.0
@@ -526,9 +529,6 @@ importers:
       '@ts-rest/core':
         specifier: 3.53.0-rc.1
         version: 3.53.0-rc.1(@types/node@26.5.0)
-      '@ts-rest/open-api':
-        specifier: 3.53.0-rc.1
-        version: 3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.5.0))(zod@4.5.4)
       '@ts-rest/serverless':
         specifier: 3.53.0-rc.1
         version: 3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.5.0))(@types/aws-lambda@8.10.162)

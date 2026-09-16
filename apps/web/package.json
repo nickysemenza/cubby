@@ -23,7 +23,6 @@
     "test:e2e:install-deps": "playwright install-deps",
     "test:e2e:postgres": "pnpm test:e2e",
     "typecheck": "tsc --noEmit --checkers 1 && tsc --noEmit -p tsconfig.sw.json",
-    "ai:eval": "tsx scripts/ai-eval.ts",
     "db:ensure-extensions": "tsx scripts/ensure-db-extensions.ts",
     "db:preflight-entity-integrity": "tsx scripts/preflight-entity-relationship-integrity.ts",
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
@@ -39,9 +38,7 @@
     "gen:pwa-icons": "magick -background none public/favicon.svg -resize 192x192 -depth 8 -strip public/icon-192.png && magick -background none public/favicon.svg -resize 512x512 -depth 8 -strip public/icon-512.png && magick -size 512x512 xc:'#f7f9fc' \\( public/icon-512.png -resize 360x360 \\) -gravity center -composite -depth 8 -strip public/icon-512-maskable.png",
     "gen:pwa-splash": "mkdir -p public/splash && for size in 750x1334:192 1125x2436:256 828x1792:256 1170x2532:256 1284x2778:256 1179x2556:256 1290x2796:256 1206x2622:256 1320x2868:256 1620x2160:300 1668x2388:300 2048x2732:360; do dim=${size%%:*}; icon=${size##*:}; magick -size $dim xc:'#f7f9fc' \\( public/icon-512.png -resize ${icon}x${icon} \\) -gravity center -composite -depth 8 -strip public/splash/apple-splash-${dim}.png; done",
     "gen:pwa-assets": "pnpm run gen:apple-icon && pnpm run gen:pwa-icons && pnpm run gen:pwa-splash",
-    "test:calendar": "vitest run --config vitest.calendar.config.ts",
-    "generate:http-api": "tsx --tsconfig tsconfig.json scripts/generate-http-openapi.ts",
-    "generate:http-api:check": "tsx --tsconfig tsconfig.json scripts/generate-http-openapi.ts --check"
+    "test:calendar": "vitest run --config vitest.calendar.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -103,7 +100,6 @@
     "@tanstack/react-virtual": "^3.14.6",
     "@tanstack/store": "^0.11.1",
     "@ts-rest/core": "3.53.0-rc.1",
-    "@ts-rest/open-api": "3.53.0-rc.1",
     "@ts-rest/serverless": "3.53.0-rc.1",
     "@viz-js/viz": "^3.30.0",
     "@xmldom/xmldom": "^0.9.12",

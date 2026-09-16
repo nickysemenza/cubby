@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { createAgentToolset } from "../agent/mcp-bridge";
-
 async function withoutDynamicCode<T>(run: () => Promise<T>): Promise<T> {
   const previousRunJitless = z.config().jitless;
   const functionDescriptor = Object.getOwnPropertyDescriptor(
@@ -45,19 +43,5 @@ describe("MCP clients on Cloudflare Workers", () => {
       const { tools } = await mcpServer.listMcpToolCatalog();
       expect(tools.length).toBeGreaterThan(0);
     });
-  }, 15_000);
-
-  it("builds the agent toolset without generating validator code", async () => {
-    let close: (() => Promise<void>) | undefined;
-
-    try {
-      await withoutDynamicCode(async () => {
-        const toolset = await createAgentToolset();
-        close = toolset.close;
-        expect(toolset.tools.length).toBeGreaterThan(0);
-      });
-    } finally {
-      await close?.();
-    }
   }, 15_000);
 });

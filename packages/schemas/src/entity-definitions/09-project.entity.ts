@@ -18,7 +18,7 @@ export default defineEntity({
   names: { singular: "Project", plural: "Projects" },
   route: { basePath: "projects" },
   table: "Project",
-  identifiers: { brand: "ProjectId", shortcode: "PRJ-", legacy: null },
+  identifiers: { brand: "ProjectId", shortcode: "PRJ-" },
   presentation: {
     titleField: "name",
     domain: "house",

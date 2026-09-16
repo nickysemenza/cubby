@@ -17,7 +17,7 @@ export default defineEntity({
   names: { singular: "Planting", plural: "Plantings" },
   route: { basePath: "plantings" },
   table: "Planting",
-  identifiers: { brand: "PlantingId", shortcode: "PLT-", legacy: null },
+  identifiers: { brand: "PlantingId", shortcode: "PLT-" },
   presentation: {
     titleField: "displayName",
     domain: "house",

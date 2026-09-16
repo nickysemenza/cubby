@@ -51,26 +51,28 @@ struct OperationRoutesTests {
         #expect(accepting == OperationRoute.imageAttachableEntities)
     }
 
-    /// `apps/apple/openapi/native-operations.json` is the hand-kept allowlist of RPC operation ids
-    /// (every `resources.*` id is generated automatically, per its own `$comment`) that feeds
-    /// `apps/web/scripts/generate-http-openapi.ts`. Every id it lists must have made it into the
-    /// generated table, or the config and the table have drifted apart.
+    /// `apps/apple/openapi/openapi-generator-config.yaml` lists every operation id the generated
+    /// client carries (`native:` flags on the web contracts and entity declarations, plus the
+    /// automatic resource ids), written by `scripts/generator/http-api/native.ts`. Every id it
+    /// lists must have made it into the generated table, or the config and the table have drifted.
     @Test func everyNativeOperationHasAGeneratedRoute() throws {
-        struct Config: Decodable {
-            struct Operation: Decodable { let id: String }
-            let operations: [Operation]
-        }
-        // Tests/CubbyKitTests/OperationRoutesTests.swift -> apps/apple/openapi/native-operations.json
+        // Tests/CubbyKitTests/OperationRoutesTests.swift -> apps/apple/openapi/openapi-generator-config.yaml
         let configURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // CubbyKitTests/
             .deletingLastPathComponent()  // Tests/
             .deletingLastPathComponent()  // CubbyKit/
             .deletingLastPathComponent()  // apple/
-            .appendingPathComponent("openapi/native-operations.json")
-        let config = try JSONDecoder().decode(Config.self, from: try Data(contentsOf: configURL))
-        #expect(!config.operations.isEmpty)
-        for operation in config.operations {
-            #expect(OperationRoute.all[operation.id] != nil, "missing generated route for \(operation.id)")
+            .appendingPathComponent("openapi/openapi-generator-config.yaml")
+        // The filter is a flat `    - <id>` list under `operations:`; no YAML parser needed.
+        let ids = try String(contentsOf: configURL, encoding: .utf8)
+            .split(separator: "\n")
+            .compactMap { line -> String? in
+                guard line.hasPrefix("    - ") else { return nil }
+                return String(line.dropFirst(6))
+            }
+        #expect(!ids.isEmpty)
+        for id in ids {
+            #expect(OperationRoute.all[id] != nil, "missing generated route for \(id)")
         }
     }
 }

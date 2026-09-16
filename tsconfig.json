@@ -4,7 +4,9 @@
   // and were therefore checked by nothing before they became TypeScript.
   //
   // These scripts run under `node scripts/foo.ts` with Node 24's native type
-  // stripping, except the entity generator uses tsx to load schema modules.
+  // stripping. `scripts/generator/` is the exception: it runs under
+  // `tsx --tsconfig apps/web/tsconfig.json` because it imports web modules by
+  // their `~/` paths, so the web project type-checks it (see its `include`).
   // `erasableSyntaxOnly` remains on:
   // it fails the build on enums, namespaces, and parameter properties, the
   // constructs stripping cannot handle. `allowImportingTsExtensions` supports
@@ -30,5 +32,6 @@
     "noFallthroughCasesInSwitch": true,
     "noEmit": true
   },
-  "include": ["scripts/**/*.ts"]
+  "include": ["scripts/**/*.ts"],
+  "exclude": ["scripts/generator/**"]
 }

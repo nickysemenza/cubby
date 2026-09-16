@@ -1118,9 +1118,9 @@ const byTypeFields = Object.fromEntries(
 
 export const problemsCountSchema = z.object({
   /** Defect rows only — what the navbar badge and homepage banner show. */
-  total: z.number(),
+  total: z.number().int(),
   /** Coverage-backlog rows, reported separately so they never inflate `total`. */
-  coverageTotal: z.number(),
+  coverageTotal: z.number().int(),
   byType: z.object(byTypeFields),
 });
 

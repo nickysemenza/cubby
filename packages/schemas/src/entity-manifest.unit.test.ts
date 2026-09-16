@@ -236,15 +236,14 @@ describe("entity manifest", () => {
     expect(descriptor("usda-food").dbTable).toBeNull();
   });
 
-  it("declares a legacy prefix exactly where one was ever minted", () => {
-    const declared = allEntities.filter(
-      (entity) => descriptor(entity).legacyShortcodePrefix !== undefined,
-    );
-    expect(sorted(declared)).toEqual(
-      sorted(Object.values(LEGACY_SHORTCODE_PREFIX)),
-    );
-    for (const [legacy, entity] of Object.entries(LEGACY_SHORTCODE_PREFIX)) {
-      expect(descriptor(entity).legacyShortcodePrefix).toBe(legacy);
+  it("keeps legacy aliases out of the manifest and pointed at real prefixes", () => {
+    // The parser's alias table is inbound-only: every target entity mints a
+    // canonical prefix, and no descriptor advertises the legacy form.
+    for (const entity of Object.values(LEGACY_SHORTCODE_PREFIX)) {
+      expect(descriptor(entity).shortcodePrefix).toBe(SHORTCODE_PREFIX[entity]);
+    }
+    for (const entity of allEntities) {
+      expect(descriptor(entity)).not.toHaveProperty("legacyShortcodePrefix");
     }
   });
 

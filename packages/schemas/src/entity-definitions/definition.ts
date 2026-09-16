@@ -272,7 +272,19 @@ const metadataSchemas = () => {
     .object({
       brand: nonEmptyString().nullable(),
       shortcode: nonEmptyString().nullable(),
-      legacy: nonEmptyString().nullable(),
+    })
+    .strict();
+
+  /**
+   * Resource verbs the Apple app calls, each with the reason. `list` and
+   * `get` are native for every HTTP entity, and `update` for every gallery
+   * entity (image attach/reorder), so only opt-in verbs are declared here.
+   */
+  const entityNativeMetadataSchema = z
+    .object({
+      create: nonEmptyString().optional(),
+      update: nonEmptyString().optional(),
+      delete: nonEmptyString().optional(),
     })
     .strict();
 
@@ -543,6 +555,7 @@ const metadataSchemas = () => {
       route: entityRouteMetadataSchema.nullable(),
       table: nonEmptyString().nullable(),
       identifiers: entityIdentifiersMetadataSchema,
+      native: entityNativeMetadataSchema.optional(),
       presentation: entityPresentationMetadataSchema,
       fields: entityContractMetadataSchema.nullable(),
       model: entityFieldModelMetadataSchema.optional(),

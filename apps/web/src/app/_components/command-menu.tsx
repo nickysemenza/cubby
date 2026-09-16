@@ -20,7 +20,6 @@ import {
   MapPin,
   Search,
   Settings,
-  Sparkles,
   Wrench,
   X,
 } from "lucide-react";
@@ -87,12 +86,6 @@ const goToLeaves = completeNavLeaves.filter(
     hasRoutedPath(leaf) &&
     leaf.to !== "/settings" &&
     !quickActionPaths.has(leaf.to),
-);
-
-const AskCubbyPanel = React.lazy(() =>
-  import("./command-menu/ask-cubby").then((module) => ({
-    default: module.AskCubbyPanel,
-  })),
 );
 
 interface GlobalCommandMenuProps {
@@ -185,20 +178,6 @@ export function GlobalCommandMenu({
     useGlobalSearch(search, searchScope ?? undefined);
   const conversion = useConversionAnswer(searchScope ? "" : search);
 
-  // Opt-in: the agent only runs when the user explicitly selects the Ask item.
-  // Keyword/shortcode fast paths stay instant and untouched. Streams the
-  // answer for a progressive "typing" reveal.
-  const [answerMode, setAnswerMode] = React.useState(false);
-  const [askQuery, setAskQuery] = React.useState<string | null>(null);
-  const runAsk = (query: string) => {
-    const trimmed = query.trim();
-    if (trimmed.length === 0) return;
-    setAskQuery(trimmed);
-    setAnswerMode(true);
-  };
-  const exitAnswerMode = () => {
-    setAnswerMode(false);
-  };
   const { parsedShortcode, shortcodeName } = useShortcodePreview(
     search,
     searchScope,
@@ -233,13 +212,11 @@ export function GlobalCommandMenu({
   // before this (lazily loaded) menu has mounted. Don't register it here too,
   // or it would double-toggle once mounted.
 
-  // Reset search and answer mode when dialog closes
+  // Reset search when dialog closes
   React.useEffect(() => {
     if (!open) {
       setSearch("");
       setSearchScope(null);
-      setAnswerMode(false);
-      setAskQuery(null);
     }
   }, [open]);
 
@@ -265,18 +242,6 @@ export function GlobalCommandMenu({
       });
       setOpen(false);
     }
-  };
-
-  // An agent citation's shortcode is nullable: sources are scraped out of MCP
-  // tool payloads, and not every projection carries one. No code means no
-  // navigation — better a dead click than a uuid URL that 404s.
-  const goToSource = (
-    entityType: SearchableEntity,
-    shortcode: string | null,
-    name?: string,
-  ) => {
-    if (!shortcode) return;
-    goToEntity(entityType, shortcode, name);
   };
 
   const goToSearchResult = (item: SearchDestination) => {
@@ -361,146 +326,108 @@ export function GlobalCommandMenu({
             scopeLabel={scopeLabel}
           />
           <CommandList className="max-h-96">
-            {answerMode ? (
-              <React.Suspense fallback={<CommandSearchSpinner />}>
-                <AskCubbyPanel
-                  query={askQuery ?? search}
-                  showToolCalls={isDevtoolsVisible}
-                  onBack={exitAnswerMode}
-                  onSelectSource={goToSource}
-                />
-              </React.Suspense>
-            ) : (
-              <>
-                {/* Inline unit conversion — "250 g flour in cups" */}
-                {conversion && (
-                  <CommandGroup heading="Conversion">
-                    <CommandItem
-                      value={`conversion-${search}`}
-                      onSelect={() =>
-                        goToEntity(
-                          "ingredient",
-                          conversion.ingredientShortcode,
-                          conversion.ingredientName,
-                        )
-                      }
-                      className="flex items-center gap-2"
-                    >
-                      <Equal className="size-4 shrink-0 text-primary" />
-                      <span className="truncate font-mono text-sm font-semibold tabular-nums">
-                        {conversion.input} {conversion.ingredientName} ={" "}
-                        {conversion.result}
+            <>
+              {/* Inline unit conversion — "250 g flour in cups" */}
+              {conversion && (
+                <CommandGroup heading="Conversion">
+                  <CommandItem
+                    value={`conversion-${search}`}
+                    onSelect={() =>
+                      goToEntity(
+                        "ingredient",
+                        conversion.ingredientShortcode,
+                        conversion.ingredientName,
+                      )
+                    }
+                    className="flex items-center gap-2"
+                  >
+                    <Equal className="size-4 shrink-0 text-primary" />
+                    <span className="truncate font-mono text-sm font-semibold tabular-nums">
+                      {conversion.input} {conversion.ingredientName} ={" "}
+                      {conversion.result}
+                    </span>
+                    {conversion.cost && (
+                      <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+                        ≈ {conversion.cost}
                       </span>
-                      {conversion.cost && (
-                        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                          ≈ {conversion.cost}
-                        </span>
-                      )}
-                    </CommandItem>
-                  </CommandGroup>
-                )}
+                    )}
+                  </CommandItem>
+                </CommandGroup>
+              )}
 
-                {/* Loading state — first results only; refetches keep the
+              {/* Loading state — first results only; refetches keep the
                 previous list rendered (dimmed) instead of blanking it */}
-                {isLoading && (
-                  <Row align="center" justify="center" className="py-6">
-                    <Spinner className="text-muted-foreground" />
-                  </Row>
-                )}
+              {isLoading && (
+                <Row align="center" justify="center" className="py-6">
+                  <Spinner className="text-muted-foreground" />
+                </Row>
+              )}
 
-                {/* Empty state */}
-                {isEmpty && !isLoading && !parsedShortcode && (
-                  <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
-                    {scopeLabel
-                      ? `No ${scopeLabel.toLocaleLowerCase()} matched “${search}”.`
-                      : "Nothing matched — try another word."}
-                  </output>
-                )}
+              {/* Empty state */}
+              {isEmpty && !isLoading && !parsedShortcode && (
+                <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
+                  {scopeLabel
+                    ? `No ${scopeLabel.toLocaleLowerCase()} matched “${search}”.`
+                    : "Nothing matched — try another word."}
+                </output>
+              )}
 
-                {searchScope && !hasSearch && (
-                  <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
-                    Type to search {scopeLabel}.
-                  </output>
-                )}
+              {searchScope && !hasSearch && (
+                <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
+                  Type to search {scopeLabel}.
+                </output>
+              )}
 
-                <ShortcodeCommandItems
-                  actions={entityActions}
-                  name={shortcodeName}
-                  onClose={() => setOpen(false)}
-                  onGoToShortcode={goToShortcode}
-                  parsedShortcode={parsedShortcode}
-                />
+              <ShortcodeCommandItems
+                actions={entityActions}
+                name={shortcodeName}
+                onClose={() => setOpen(false)}
+                onGoToShortcode={goToShortcode}
+                parsedShortcode={parsedShortcode}
+              />
 
-                <SearchResults
-                  error={error}
-                  hasResults={hasResults}
-                  isDevtoolsVisible={isDevtoolsVisible}
-                  isLoading={isLoading}
-                  navigate={navigate}
-                  onClose={() => setOpen(false)}
-                  onSelectResult={goToSearchResult}
-                  results={results}
-                  retry={retry}
-                  search={search}
-                  searchScope={searchScope}
-                  scopeLabel={scopeLabel}
-                />
+              <SearchResults
+                error={error}
+                hasResults={hasResults}
+                isDevtoolsVisible={isDevtoolsVisible}
+                isLoading={isLoading}
+                navigate={navigate}
+                onClose={() => setOpen(false)}
+                onSelectResult={goToSearchResult}
+                results={results}
+                retry={retry}
+                search={search}
+                searchScope={searchScope}
+                scopeLabel={scopeLabel}
+              />
 
-                <MatchingQuickActions
-                  actions={filteredActions}
-                  hasResults={hasResults}
-                  hasSearch={hasSearch}
-                  isLoading={isLoading}
-                  onGoToPage={goToPage}
-                />
+              <MatchingQuickActions
+                actions={filteredActions}
+                hasResults={hasResults}
+                hasSearch={hasSearch}
+                isLoading={isLoading}
+                onGoToPage={goToPage}
+              />
 
-                {/* Agent is available after direct navigation results and actions. */}
-                {hasSearch && !isLoading && (
-                  <CommandGroup>
-                    <CommandItem
-                      value={`ask-cubby-${search}`}
-                      onSelect={() => runAsk(search)}
-                      className="flex items-center gap-2"
-                    >
-                      <Sparkles className="size-4 text-primary" />
-                      <span className="truncate">
-                        Ask Cubby:{" "}
-                        <span className="text-muted-foreground">
-                          "{search}"
-                        </span>
-                      </span>
-                    </CommandItem>
-                  </CommandGroup>
-                )}
-
-                <DefaultCommandMenu
-                  filteredActions={filteredActions}
-                  hasSearch={hasSearch}
-                  isDevtoolsVisible={isDevtoolsVisible}
-                  isLoading={isLoading}
-                  navigate={navigate}
-                  onClose={() => setOpen(false)}
-                  onGoToEntity={goToEntity}
-                  onGoToPage={goToPage}
-                  perfOverlayOn={perfOverlayOn}
-                  recents={recents}
-                  searchScope={searchScope}
-                  toggleDevtools={toggleDevtools}
-                />
-              </>
-            )}
+              <DefaultCommandMenu
+                filteredActions={filteredActions}
+                hasSearch={hasSearch}
+                isDevtoolsVisible={isDevtoolsVisible}
+                isLoading={isLoading}
+                navigate={navigate}
+                onClose={() => setOpen(false)}
+                onGoToEntity={goToEntity}
+                onGoToPage={goToPage}
+                perfOverlayOn={perfOverlayOn}
+                recents={recents}
+                searchScope={searchScope}
+                toggleDevtools={toggleDevtools}
+              />
+            </>
           </CommandList>
         </CommandDialog>
       )}
     </EntityPaletteActionsHost>
-  );
-}
-
-function CommandSearchSpinner() {
-  return (
-    <Row align="center" justify="center" className="py-6">
-      <Spinner className="text-muted-foreground" />
-    </Row>
   );
 }
 
@@ -527,9 +454,7 @@ function CommandMenuInput({
     <CommandInput
       ref={searchInputRef}
       placeholder={
-        scopeLabel
-          ? `Search ${scopeLabel}…`
-          : "Search, jump to a page, or ask Cubby…"
+        scopeLabel ? `Search ${scopeLabel}…` : "Search or jump to a page…"
       }
       value={search}
       onValueChange={onSearchChange}

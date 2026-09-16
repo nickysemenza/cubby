@@ -20,6 +20,7 @@ import {
 
 export const searchContract = defineContract("search", {
   find: query({
+    native: "Search and intents",
     input: searchQueryInputSchema,
     output: searchHitsOut,
   }),

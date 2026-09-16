@@ -7,7 +7,7 @@ export default defineEntity({
   names: { singular: "Cookbook", plural: "Cookbooks" },
   route: { basePath: "cookbooks" },
   table: "Cookbook",
-  identifiers: { brand: "CookbookId", shortcode: "CKB-", legacy: null },
+  identifiers: { brand: "CookbookId", shortcode: "CKB-" },
   presentation: {
     titleField: "book",
     domain: "cook",

@@ -17,7 +17,6 @@ typealias ProductDetailOut = Components.Schemas.ProductDetail
 typealias ProductRowOut = Components.Schemas.ProductTopLevelOut
 typealias ProductListItemOut = Components.Schemas.ProductListPage.ItemsPayloadPayload
 typealias AmountInput = Components.Schemas.PositiveAmountInput
-typealias AgentResultOut = Components.Schemas.AgentResult
 typealias LocationNodeOut = Components.Schemas.InfLocation
 typealias LocationListRowOut = Components.Schemas.LocationListPage.ItemsPayloadPayload
 typealias InventoryRowOut = Components.Schemas.InventoryWithLocationAndProductOut
@@ -672,17 +671,6 @@ extension UPCLookup {
             source: out.source.rawValue,
             cached: out.cached
         )
-    }
-}
-
-// MARK: - Assistant
-
-extension AgentAnswer {
-    init(_ out: AgentResultOut) {
-        answer = out.answer
-        sources = out.sources.map {
-            Source(entityType: $0.entityType.rawValue, id: $0.id, name: $0.name, detail: $0.detail)
-        }
     }
 }
 

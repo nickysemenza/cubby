@@ -38,7 +38,6 @@ export default defineEntity({
   identifiers: {
     brand: "FinancialTransactionId",
     shortcode: "FTX-",
-    legacy: null,
   },
   // Financial transactions have no name field and `merchant` is nullable;
   // `displayName` falls back through `rawDescription` and `kind` for a

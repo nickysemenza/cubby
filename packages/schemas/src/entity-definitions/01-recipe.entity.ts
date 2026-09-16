@@ -17,7 +17,7 @@ export default defineEntity({
   names: { singular: "Recipe", plural: "Recipes" },
   route: { basePath: "recipes" },
   table: "Recipe",
-  identifiers: { brand: "RecipeId", shortcode: "RCP-", legacy: null },
+  identifiers: { brand: "RecipeId", shortcode: "RCP-" },
   presentation: {
     titleField: "name",
     domain: "cook",

@@ -92,7 +92,7 @@ describe("operation recorder", () => {
     const operation = beginObservedOperation({
       kind: "mutation",
       transport: "start",
-      operation: "agent.askStream",
+      operation: "recipe.importCookbookStream",
     });
 
     const headers = new Headers(operationHeaders(operation));

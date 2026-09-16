@@ -40,26 +40,32 @@ export const inventoryContract = defineContract("inventory", {
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
   }),
   moveEntries: mutation({
+    native: "Accept inventory placement recommendation",
     input: moveInventoryEntriesPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
   }),
   reconcileSession: mutation({
+    native: "Audit reconcile",
     input: reconcileSessionPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
   }),
   scanAtLocation: mutation({
+    native: "Capture",
     input: scanAtLocationInput,
     output: scanAtLocationOut,
   }),
   resolveScanStrays: mutation({
+    native: "Strays sheet",
     input: resolveScanStraysInput,
     output: resolveScanStraysOut,
   }),
   findDuplicates: query({
+    native: "Audit duplicate badge",
     input: inventoryFindDuplicatesInput,
     output: inventoryDuplicateUniqueProductsOut,
   }),
   getByLocationIds: query({
+    native: "Audit bin rows",
     input: inventoryLocationIdsInput,
     output: inventoryWithLocationAndProductListOut,
   }),

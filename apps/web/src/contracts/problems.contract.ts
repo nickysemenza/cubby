@@ -33,6 +33,7 @@ export const problemsContract = defineContract("problems", {
     output: problemsFastSchema,
   }),
   getCounts: query({
+    native: "Today problems tile",
     input: noInput,
     output: problemsCountSchema,
   }),

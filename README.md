@@ -167,7 +167,7 @@ MCP / jobs      ───────────────↗
 JSONL routes    →  cancellable workflow streams
 ```
 
-- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm entity:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
+- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm generate:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
 - `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. Explicit Start functions adapt workflows, while typed JSONL routes carry cancellable progress streams.
 - Services own workflows and external enrichment such as USDA data. Repositories retain transaction ownership, invariants, and entity-specific SQL.
 - `Database` is a request-scoped handle: routers and services pass it through, while repository helpers are the sanctioned place to resolve its Drizzle client. This keeps the layered architecture by convention and API locality.
@@ -609,9 +609,10 @@ Run TS scripts with the web tsconfig so schema import aliases resolve. The
 native Apple app (`apps/apple`) generates its client from the committed
 document and is the API's consumer of record.
 
-After changing contracts, declarations or schemas, run `pnpm generate` (entity,
-start-operation, then HTTP OpenAPI generation) and `pnpm generate:check` before a
-PR; `pnpm check:all` includes it. Operation contracts, entity capabilities, and
+After changing contracts, declarations or schemas, run `pnpm generate` (one
+generator, `scripts/generator/`, running its entity, start-operation and HTTP
+OpenAPI stages in order) and `pnpm generate:check` before a PR; `pnpm check`
+includes it. Operation contracts, entity capabilities, and
 runtime schemas remain authoritative; new ordinary operations require no
 HTTP-specific edits. Wire schemas are derived from the domain schemas by
 `toWire` (`apps/web/src/lib/http-api/wire.ts`): Dates become ISO strings, output

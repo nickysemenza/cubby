@@ -30,7 +30,7 @@ export default defineEntity({
   names: { singular: "Product", plural: "Products" },
   route: { basePath: "products" },
   table: "Product",
-  identifiers: { brand: "ProductId", shortcode: "PRD-", legacy: "P-" },
+  identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {
     titleField: "name",
     // Pantry/Inventory wayfinding, not a Product status colour; USDA data

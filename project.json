@@ -2,12 +2,8 @@
   "$schema": "./node_modules/nx/schemas/project-schema.json",
   "name": "cubby-checks",
   "targets": {
-    "entity": {
-      "command": "tsx scripts/entity-generator/main.ts --check",
-      "cache": true
-    },
-    "start-ops": {
-      "command": "tsx --tsconfig apps/web/tsconfig.json scripts/start-operation-registry-generator.ts --check",
+    "generate": {
+      "command": "pnpm generate:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
       "cache": true
     },
     "types": {
@@ -154,10 +150,6 @@
         "{workspaceRoot}/apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift"
       ]
-    },
-    "http-api": {
-      "command": "pnpm --filter @cubby/web generate:http-api:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
-      "cache": true
     }
   }
 }

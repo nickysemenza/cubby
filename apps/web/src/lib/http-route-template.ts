@@ -30,7 +30,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/mcp",
   "/api/v1/docs",
   "/api/v1/openapi.json",
-  "/ask",
   "/background-jobs",
   "/calendar",
   "/collections",

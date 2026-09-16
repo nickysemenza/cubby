@@ -19,7 +19,7 @@ export default defineEntity({
   names: { singular: "Ledger Transfer", plural: "Transfers" },
   route: { basePath: "ledger-transfers" },
   table: "LedgerTransfer",
-  identifiers: { brand: "LedgerTransferId", shortcode: "LTR-", legacy: null },
+  identifiers: { brand: "LedgerTransferId", shortcode: "LTR-" },
   // Ledger transfers have no name field; `fromPartyName` is the most
   // identifying human-readable value a transfer carries.
   presentation: {

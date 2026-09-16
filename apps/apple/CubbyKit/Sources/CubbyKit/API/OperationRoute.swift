@@ -1,6 +1,6 @@
 /// One HTTP operation from the OpenAPI document: method, path template, and what it accepts.
 /// The table itself (`OperationRoute.all`) is generated into `Generated/OperationRoutes.swift`
-/// by `apps/web/scripts/generate-http-openapi.ts`, so every operation the server exposes is
+/// by `scripts/generator/http-api/native.ts`, so every operation the server exposes is
 /// reachable from `CubbyDebugClient` and the CLI without a hand-kept list. The generated
 /// `Client` covers the same document but cannot be enumerated at runtime.
 public struct OperationRoute: Sendable, Hashable {

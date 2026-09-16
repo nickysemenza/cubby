@@ -168,11 +168,7 @@ describe("parseShortcode", () => {
 
   it.each(ENTITIES)("round-trips a canonical %s code", (entity) => {
     const code = generateShortcode(entity);
-    expect(parseShortcode(code)).toEqual({
-      type: entity,
-      shortcode: code,
-      legacy: false,
-    });
+    expect(parseShortcode(code)).toEqual({ type: entity, shortcode: code });
   });
 
   it("canonicalizes legacy single-letter codes", () => {
@@ -181,12 +177,10 @@ describe("parseShortcode", () => {
     expect(parseShortcode("P-4K7M")).toEqual({
       type: "product",
       shortcode: "PRD-4K7M",
-      legacy: true,
     });
-    expect(parseShortcode("  L-4K7M  ")).toMatchObject({
+    expect(parseShortcode("  L-4K7M  ")).toEqual({
       type: "location",
       shortcode: "LOC-4K7M",
-      legacy: true,
     });
     expect(parseShortcode("R-4K7M")).toBeNull();
   });
@@ -213,7 +207,7 @@ describe("extractShortcodeFromScan", () => {
     ).toMatchObject({ type: "product", shortcode: "PRD-4K7M" });
     expect(
       extractShortcodeFromScan("https://cubby.example.com/L-4K7M"),
-    ).toMatchObject({ type: "location", shortcode: "LOC-4K7M", legacy: true });
+    ).toEqual({ type: "location", shortcode: "LOC-4K7M" });
   });
 
   it("reads a bare code and rejects an unrelated URL", () => {

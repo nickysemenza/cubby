@@ -119,8 +119,8 @@ public actor CubbyClient {
     /// `search` (≥2 chars) widens the garden-scoped options set with prefix matches, for an
     /// "Add…" picker outside the household's existing garden associations.
     ///
-    /// The generated `GardenOptionsInput` is currently self-referential — `apps/web/scripts/
-    /// generate-http-openapi.ts` registers the Zod wire projection and its `{ input: ... }`
+    /// The generated `GardenOptionsInput` is currently self-referential — `scripts/generator/
+    /// http-api/openapi.ts` registers the Zod wire projection and its `{ input: ... }`
     /// wrapper under the same `"GardenOptionsInput"` component id, so the wrapper's `input` field
     /// recurses into itself with no reachable `search` leaf (confirmed against the source Zod
     /// schema at `packages/schemas/src/garden.ts`, which does carry `search`). Until that
@@ -725,12 +725,6 @@ public actor CubbyClient {
     public func lookupUPC(_ upc: String) async throws -> UPCLookup {
         try await perform {
             UPCLookup(try await api.upc_lookup(query: .init(upc: upc)).ok.body.json)
-        }
-    }
-
-    public func ask(_ query: String) async throws -> AgentAnswer {
-        try await perform {
-            AgentAnswer(try await api.agent_ask(body: .json(.init(query: query))).ok.body.json)
         }
     }
 

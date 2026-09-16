@@ -36,8 +36,8 @@ under `~/.cache/cubby/openapi-generator-build`.
 ## Generated files (read-only here)
 
 - `CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift` — emitted by
-  `scripts/entity-generator/render/swift-catalog.ts` from the entity spine. Regenerate with
-  `pnpm entity:generate` from the repo root.
+  `scripts/generator/entities/render/swift-catalog.ts` from the entity spine. Regenerate with
+  `pnpm generate` from the repo root.
 - `CubbyKit/Sources/CubbyAPI/*.swift` — the whole `CubbyAPI` target is swift-openapi-generator's
   output (`Client.swift` plus `Types*.swift`). Regenerate with
   `apps/apple/scripts/generate-openapi.sh`; `check-openapi-drift.sh` fails when stale.

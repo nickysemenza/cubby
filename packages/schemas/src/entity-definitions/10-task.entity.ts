@@ -14,7 +14,7 @@ export default defineEntity({
   names: { singular: "Task", plural: "Tasks" },
   route: { basePath: "tasks" },
   table: "Task",
-  identifiers: { brand: "TaskId", shortcode: "TSK-", legacy: null },
+  identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {
     titleField: "name",
     domain: "house",

@@ -19,7 +19,7 @@ export default defineEntity({
   names: { singular: "Purchase", plural: "Purchases" },
   route: { basePath: "purchases" },
   table: "Purchase",
-  identifiers: { brand: "PurchaseId", shortcode: "PUR-", legacy: null },
+  identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
     titleField: "displayName",
     domain: "finance",

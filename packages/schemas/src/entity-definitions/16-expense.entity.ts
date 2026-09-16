@@ -29,7 +29,8 @@ export default defineEntity({
   names: { singular: "Expense", plural: "Expenses" },
   route: { basePath: "expenses" },
   table: "Expense",
-  identifiers: { brand: "ExpenseId", shortcode: "EXP-", legacy: null },
+  identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
+  native: { update: "Accept expense project recommendation" },
   presentation: {
     titleField: "name",
     domain: "finance",

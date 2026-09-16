@@ -94,17 +94,6 @@ public struct FoundProduct: Sendable, Hashable {
     public let created: Bool
 }
 
-public struct AgentAnswer: Sendable, Hashable {
-    public struct Source: Sendable, Hashable {
-        public let entityType: String
-        public let id: String
-        public let name: String
-        public let detail: String?
-    }
-    public let answer: String
-    public let sources: [Source]
-}
-
 /// What `upc.lookup` knows about a barcode, from the cache or the upstream catalog.
 public struct UPCLookup: Sendable, Hashable {
     public let upc: String

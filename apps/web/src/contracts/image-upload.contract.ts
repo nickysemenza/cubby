@@ -14,10 +14,12 @@ import { defineContract, mutation } from "~/contracts/define";
 
 export const imageUploadContract = defineContract("image", {
   markUploaded: mutation({
+    native: "PhotoService",
     input: getImageByIdSchema,
     output: imageWithEntitySchema,
   }),
   uploadImage: mutation({
+    native: "PhotoService",
     input: initiateUploadWithoutEntitySchema,
     output: initiateUploadWithoutEntityResponseSchema,
   }),

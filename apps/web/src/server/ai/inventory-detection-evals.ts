@@ -16,7 +16,7 @@ interface InventoryDetectionEvalResult {
   missingEvidenceItems: string[];
 }
 
-export const normalizeEvalName = (value: string): string =>
+const normalizeEvalName = (value: string): string =>
   getMiscDisplayName(value)
     .trim()
     .toLowerCase()

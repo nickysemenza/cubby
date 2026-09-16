@@ -134,14 +134,13 @@ export async function workflowStreamResponse<
               const input = options.inputSchema.parse(rawInput);
 
               stage = "run";
-              mutationStarted = options.operation !== "agent.askStream";
+              mutationStarted = true;
               const events = await options.run(context, input, signal);
               for await (const event of events) {
                 throwIfStartOperationAborted(signal);
                 stage = "output";
                 const parsed = options.eventSchema.parse(event);
-                if (mutationStarted)
-                  await runtime.recordDatabaseWrite(options.operation);
+                await runtime.recordDatabaseWrite(options.operation);
                 controller.enqueue(
                   encodeFrame({
                     kind: "event",

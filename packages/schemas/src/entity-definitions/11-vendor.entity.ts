@@ -9,7 +9,7 @@ export default defineEntity({
   names: { singular: "Vendor", plural: "Vendors" },
   route: { basePath: "vendors" },
   table: "Vendor",
-  identifiers: { brand: "VendorId", shortcode: "VEN-", legacy: null },
+  identifiers: { brand: "VendorId", shortcode: "VEN-" },
   presentation: {
     titleField: "name",
     domain: "finance",
