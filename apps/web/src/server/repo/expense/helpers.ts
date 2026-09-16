@@ -280,9 +280,8 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
  * Household.
  *
  * Imports and split replacement rows use it while creating expenses.
- * `updateExpense` and `moveExpenses` deliberately do NOT — an update is an
- * explicit statement about one row the operator is looking at, and
- * `moveExpenses` is the bulk move-to-inbox undo. Re-defaulting in either would
+ * `updateExpense` deliberately does NOT — an update is an explicit statement
+ * about one row the operator is looking at, and re-defaulting on update would
  * make "clear the project on this food line" impossible, bouncing every clear
  * straight back to Household with no error and no audit diff to explain it.
  * Automation triages, humans override, an override is never re-triaged.

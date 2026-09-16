@@ -631,7 +631,7 @@ function CalendarDaySheet({
   );
 }
 
-export function CalendarRangeError({ onRetry }: { onRetry: () => void }) {
+function CalendarRangeError({ onRetry }: { onRetry: () => void }) {
   return (
     <div
       role="alert"

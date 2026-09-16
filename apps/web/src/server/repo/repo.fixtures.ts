@@ -12,7 +12,6 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import {
   type LocationCreateInput,
@@ -37,7 +36,6 @@ import type { CookbookImportContext } from "./import-recipe-convert";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
-import { createMeal } from "./meal";
 import { createProduct } from "./product";
 import { createRecipe } from "./recipe";
 import { resolveLiveShortcode } from "./shortcode-resolver";
@@ -358,16 +356,6 @@ export const makeRecipeInput = (
 };
 
 export const createRecipeFixture = retainEntityId("recipe", createRecipe);
-
-export const createMealFixture = retainEntityId("meal", createMeal);
-
-export const makeImportRecipe = (
-  overrides: Partial<ImportRecipe> = {},
-): ImportRecipe => ({
-  meta: { title: "Test Recipe" },
-  sections: [{ instructions: [], ingredients: [] }],
-  ...overrides,
-});
 
 // A fixture ingredient line: bare text, or text with a reference to another
 // item by id. Parsed rather than type-tested, per the repo's lint rules.

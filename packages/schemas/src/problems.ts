@@ -1192,9 +1192,9 @@ export const countProblems = (all: AllProblems): ProblemsCount => {
 };
 
 // Assemble the cost-grouped detector results into the combined AllProblems
-// shape (with derived total). Shared by the service-layer findAllProblems
-// aggregator and the MCP list_problems tool so the merge + total live in one
-// place. (The Problems page merges client-side in useProblemsData, which is
+// shape (with derived total). Shared so the merge + total live in one place —
+// the MCP list_problems tool calls this directly over its own per-group
+// scans. (The Problems page merges client-side in useProblemsData, which is
 // loading-aware and defaults not-yet-loaded groups to empty.)
 export const assembleAllProblems = (groups: {
   fast: ProblemsFast;

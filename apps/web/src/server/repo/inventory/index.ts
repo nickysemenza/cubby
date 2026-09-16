@@ -32,7 +32,6 @@ export {
   getInventoryEntryByShortcode,
   getInventoryForProducts,
   inventoryentryList,
-  updateInventoryEntry,
 } from "./crud";
 export {
   getLiveStockRowsByIds,

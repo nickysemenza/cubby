@@ -5,7 +5,7 @@ import { Stack } from "~/components/layout";
 
 import { docSections } from "./docs-registry";
 
-export const DOCS_NAV_LINK_CLASS =
+const DOCS_NAV_LINK_CLASS =
   "block rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted max-md:flex max-md:min-h-11 max-md:items-center";
 
 /**

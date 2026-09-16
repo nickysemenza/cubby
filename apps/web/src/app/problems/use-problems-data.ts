@@ -18,7 +18,7 @@ export type ProblemsDataOptions = {
 };
 
 /** The five independently budgeted operations that make up the Problems page. */
-export function createProblemGroupQueries(opts: ProblemsDataOptions = {}) {
+function createProblemGroupQueries(opts: ProblemsDataOptions = {}) {
   const staleTime = opts.staleTime ?? PROBLEMS_QUERY_STALE_TIME;
   const { enabled } = opts;
   return {

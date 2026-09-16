@@ -29,13 +29,11 @@ export {
   getNotionRecipePageIds,
   getNotionRecipesForDiff,
   getRecipeByID,
-  getRecipeByShortcode,
   getRecipeCoverImageUrlsByShortcodes,
   getRecipesByIDs,
   recipeList,
   updateRecipe,
   upsertCookbookRecipe,
-  upsertNotionRecipe,
   upsertRecipe,
 } from "./crud";
 // Row → API shaping helpers

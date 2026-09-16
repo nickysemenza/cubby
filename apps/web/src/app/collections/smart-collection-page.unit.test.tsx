@@ -1,6 +1,7 @@
 import type { SmartCollectionDetailOut } from "@cubby/schemas/collection";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -229,14 +230,26 @@ describe("SmartCollectionPage", () => {
     );
 
     const requestCount = requests.length;
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Condition 2 value" }),
-      { target: { value: "" } },
-    );
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "Condition 2 value" }),
+        { target: { value: "" } },
+      );
 
-    expect(screen.getByText("Preview uses the last valid rules")).toBeVisible();
-    expect(screen.getByText("Sample paint roller")).toBeVisible();
-    await new Promise((resolve) => window.setTimeout(resolve, 300));
-    expect(requests).toHaveLength(requestCount);
+      expect(
+        screen.getByText("Preview uses the last valid rules"),
+      ).toBeVisible();
+      expect(screen.getByText("Sample paint roller")).toBeVisible();
+      // The debounced preview request is a real setTimeout in the component;
+      // fake timers let this assertion stay fast while still failing if a
+      // request fires for an in-flight blank condition.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(requests).toHaveLength(requestCount);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

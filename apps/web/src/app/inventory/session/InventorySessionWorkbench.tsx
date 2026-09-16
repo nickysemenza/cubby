@@ -854,7 +854,7 @@ function InventorySessionActive({
   );
 }
 
-export function InventorySessionLoadError({
+function InventorySessionLoadError({
   title,
   detail,
   onRetry,

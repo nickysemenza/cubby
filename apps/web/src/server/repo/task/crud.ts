@@ -21,7 +21,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
-  TaskBulkMoveInput,
   TaskBulkReorderInput,
   TaskBulkStatusInput,
   TaskCreateInput,
@@ -305,8 +304,8 @@ export const getTaskByShortcode = (db: Database, shortcode: string) =>
   taskReader.getByShortcode(db, shortcode);
 
 /**
- * Batch by-id read for bulk-write results (`moveTasks`/`setTasksStatus`) — the
- * same row shape/joins as `getTaskByID`, fetched with one `inArray` query plus
+ * Batch by-id read for bulk-write results (`setTasksStatus`) — the same row
+ * shape/joins as `getTaskByID`, fetched with one `inArray` query plus
  * the batched dependency/subtask-count reads instead of N one-by-one calls.
  * Exported for `repo/project/create-from-tasks.ts`'s promotion read-back
  * (its moved-task ids need the same batched shape, not N `getTaskByID` calls).
@@ -664,66 +663,10 @@ export const updateTasksInBulk = async (
 };
 
 /**
- * Bulk "move to project" — a plain `projectId` column write over `ids`, one
- * transaction, one audit entry per row that actually changed. `projectId:
- * null` moves every listed task to the inbox. Unlike the single-row
- * `updateTask` there's no before/after row diff to lean on for validation, so
- * the target project's liveness is checked explicitly (`assertProjectLive`) —
- * the UI's project picker already filters to live projects, but the workflow API
- * is callable directly.
- */
-export const moveTasks = async (
-  db: Database,
-  input: TaskBulkMoveInput,
-  actor: ActorContext,
-): Promise<TaskOut[]> => {
-  const updatedIds = await withTransaction(db, async (tx) => {
-    // Resolving THROUGH a live-only lookup is the liveness check itself.
-    const projectId =
-      input.projectId !== null
-        ? await resolveLiveTaskProjectId(tx, input.projectId)
-        : null;
-
-    const ids = await resolveLiveTaskIds(tx, input.ids);
-
-    const before = await tx.query.task.findMany({
-      where: and(inArray(task.id, ids), notDeleted(task)),
-      columns: { id: true, projectId: true },
-    });
-    if (before.length === 0) return [];
-
-    await tx
-      .update(task)
-      .set({ projectId })
-      .where(and(inArray(task.id, ids), notDeleted(task)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { id: row.id, projectId }, [
-        "projectId",
-      ]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "task",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return before.map((row) => row.id);
-  });
-
-  return getTasksByIDs(db, updatedIds);
-};
-
-/**
- * Bulk status write — a plain `status` column write over `ids`, mirroring
- * `moveTasks`'s shape. A plain UPDATE with no recurrence/denormalization
- * side-effects, same as `updateTask`'s status write — there's no "done"
- * cascade in this schema today.
+ * Bulk status write — a plain `status` column write over `ids`. A plain
+ * UPDATE with no recurrence/denormalization side-effects, same as
+ * `updateTask`'s status write — there's no "done" cascade in this schema
+ * today.
  */
 export const setTasksStatus = async (
   db: Database,

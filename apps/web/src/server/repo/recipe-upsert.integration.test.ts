@@ -1,6 +1,6 @@
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { asc, eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -88,40 +88,28 @@ describe("upsertRecipe", () => {
     // committed winner and update it, not 500.
     const name = "Race Recipe";
 
-    let releaseWinner!: () => void;
-    const winnerCommitted = new Promise<void>((resolve) => {
-      releaseWinner = resolve;
+    const { winner: winnerId, loser: result } = await raceUniqueInsert(ctx, {
+      winner: (releaseSignal) =>
+        getDb(ctx.db).transaction(async (tx) => {
+          const [row] = await tx
+            .insert(recipe)
+            .values({
+              name,
+              shortcode: "RACER1",
+              SourceType: "Website",
+              SourceData: "https://example.com/winner",
+            })
+            .returning();
+          await releaseSignal; // hold the txn (and its lock) open
+          return row!.id;
+        }),
+      loser: () =>
+        upsertRecipe(
+          makeRecipeInput({ name, url: "https://example.com/loser" }),
+          ctx.db,
+          ctx.actor,
+        ),
     });
-
-    let winnerId = "";
-    const winner = getDb(ctx.db).transaction(async (tx) => {
-      const [row] = await tx
-        .insert(recipe)
-        .values({
-          name,
-          shortcode: "RACER1",
-          SourceType: "Website",
-          SourceData: "https://example.com/winner",
-        })
-        .returning();
-      winnerId = row!.id;
-      await winnerCommitted; // hold the txn (and its lock) open
-    });
-
-    // Let the winner reach (and hold) its uncommitted INSERT.
-    await new Promise((r) => setTimeout(r, 100));
-
-    const loser = upsertRecipe(
-      makeRecipeInput({ name, url: "https://example.com/loser" }),
-      ctx.db,
-      ctx.actor,
-    );
-
-    // Give the upsert time to reach its blocked INSERT, then commit the winner.
-    await new Promise((r) => setTimeout(r, 100));
-    releaseWinner();
-
-    const [, result] = await Promise.all([winner, loser]);
 
     // The upsert recovered onto the winner's row — no throw, no duplicate.
     expect(result.id).toBe(winnerId);

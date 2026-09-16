@@ -76,25 +76,42 @@ describe("cookbook gateway transport", () => {
   });
 
   it("retries a thrown network error and resolves with the first success", async () => {
-    const forward = vi
-      .fn<ForwardGatewayRequest>()
-      .mockRejectedValueOnce(new Error("Failed to fetch"))
-      .mockResolvedValue({ status: 200, headers: [], body: "ok" });
+    // p-retry backs off with a real setTimeout between attempts; fake timers
+    // keep this assertion fast without weakening it (still fails if the
+    // retry is dropped or the resolved value stops surfacing).
+    vi.useFakeTimers();
+    try {
+      const forward = vi
+        .fn<ForwardGatewayRequest>()
+        .mockRejectedValueOnce(new Error("Failed to fetch"))
+        .mockResolvedValue({ status: 200, headers: [], body: "ok" });
 
-    const response = await createGatewaySend(forward)(request);
+      const result = createGatewaySend(forward)(request);
+      await vi.runAllTimersAsync();
+      const response = await result;
 
-    expect(forward).toHaveBeenCalledTimes(2);
-    expect(response.body).toBe("ok");
+      expect(forward).toHaveBeenCalledTimes(2);
+      expect(response.body).toBe("ok");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("gives up after the retry budget so a dead connection surfaces", async () => {
-    const forward = vi
-      .fn<ForwardGatewayRequest>()
-      .mockRejectedValue(new Error("Failed to fetch"));
+    vi.useFakeTimers();
+    try {
+      const forward = vi
+        .fn<ForwardGatewayRequest>()
+        .mockRejectedValue(new Error("Failed to fetch"));
 
-    await expect(createGatewaySend(forward)(request)).rejects.toThrow(
-      "Failed to fetch",
-    );
-    expect(forward).toHaveBeenCalledTimes(3);
+      const result = createGatewaySend(forward)(request);
+      await Promise.all([
+        expect(result).rejects.toThrow("Failed to fetch"),
+        vi.runAllTimersAsync(),
+      ]);
+      expect(forward).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

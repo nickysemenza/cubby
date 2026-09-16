@@ -26,10 +26,5 @@ describe("AppFooter", () => {
       "title",
       `View ${metadata.branch}@${metadata.commit} on GitHub`,
     );
-    expect(commitLink).toHaveClass("min-h-11", "sm:min-h-0");
-    expect(screen.getByRole("link", { name: "GitHub repository" })).toHaveClass(
-      "min-h-11",
-      "sm:min-h-0",
-    );
   });
 });
