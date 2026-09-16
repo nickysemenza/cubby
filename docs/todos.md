@@ -27,6 +27,69 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
+- **Cap the product timeline like the default one.** `productTimeline`
+  (`server/repo/product/movement-timeline.ts`) returns one lifecycle row per
+  product in the cohort; an unfiltered `/products?view=timeline` ran 19.6 s
+  and rendered ~7 MB of DOM for 6,085 rows. Apply the default
+  implementation's 500-row cap with the truncation stated in `notes`/`stats`,
+  or page `rows`, and have the list mount refuse to run the read until a
+  filter narrows the cohort.
+
+- **Scope the generic dialog's `useWatch`.** `useEntityEditSession` calls
+  `useWatch({ control })` at the session level, so every keystroke re-renders
+  the whole form (all sections and the image block). The remount bug fixed in
+  #1067 was the acute symptom; watch only the fields a presentation depends
+  on (`kind`-driven layouts) and let `Controller`s re-render themselves.
+
+- **Give the browser test harness a rejecting default transport.** UI tests
+  that mount slots (relatedness rail, product image summaries) reach the real
+  Start transport with no server, so `generic-entity-detail.unit.test.tsx`
+  needs a console spy and a 1.5 s settle to keep failures from landing after
+  teardown. `createBrowserTestHarness` should install a transport that
+  rejects synchronously (or the slot registry should take an operations
+  seam) so a UI test can never leak a network call.
+
+- **`SelectField` names its picker with the lowercased label.** The generic
+  editor's selects read `aria-label="kind"` with placeholder "Select kind"
+  while the visible label is "Kind" (`form-utils.tsx` `SelectField` →
+  `StaticPicker label={label.toLowerCase()}`). Pass the label as written.
+
+- **Reserve the date field's clear-button width.** `DatePickerInput` mounts
+  "Clear date" only once a value exists, so committing a typed date shifts
+  everything below it by the button's width; clicks aimed at the next field
+  land on whatever moved under them.
+
+- **Require a `label` on reference fields.** A reference field without one
+  renders its key humanised ("Location Id") in the editor and facts grid
+  (gardenEntry's two were fixed by hand in #1067). Add the compiler check in
+  `scripts/generator/entities/compile.ts` beside `validateTitleField`.
+
+- **Declare `control.options` on enum fields that lack them.** Product
+  `category`, inventory `placement` and the other option-less enum controls
+  make the native editor fall back to the same-named list filter's enum
+  values (`filterValues(for:)` in `EntityOperations.swift`); declaring the
+  options on the control removes the heuristic on both platforms.
+
+- **Drop the stale `native:` flags on `garden.journal`, `garden.entries`,
+  and `garden.createPlanting`.** Nothing on native calls them since the
+  garden forms moved onto the generic editor, but the flags keep dead
+  aliases in `APITypes.swift` and dead operations in the Swift client.
+
+- **Declare `importPhotos` as a planting hero action.** The native hero row
+  (`GardenPlantingActionsRow`) adds the Import photos verb by hand because
+  `19-planting.entity.ts` does not list it; declare it so both platforms
+  render it from the manifest.
+
+- **`pnpm deploy` is shadowed by pnpm's built-in.** `pnpm --filter
+  @cubby/web deploy` errors with `ERR_PNPM_INVALID_DEPLOY_TARGET`; only
+  `pnpm run deploy` reaches the script. Rename it `deploy:web` (and update
+  `README.md`'s deployment section).
+
+- **Link the generic-page design canvas from `apps/web/DESIGN.md`.**
+  <https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL> is the spec the
+  generic detail/list pages were built against (hero plate, section kinds,
+  workbench band, journal variant) and is referenced only from #1067.
+
 ---
 
 ## Ready projects
@@ -260,6 +323,19 @@ history is the archive. Permanent product constraints live in the
 
 ### Needs a decision or investigation
 
+- **List-route SSR payloads are large.** Unauthenticated probes measured
+  `/projects` at 826 KB, `/locations` 655 KB, `/recipes` 579 KB of HTML.
+  Find what the generic list loader and the slot views dehydrate (a full
+  first page plus the calendar/dashboard data is the likely answer) before
+  deciding whether to trim the loader, defer slot data, or leave it.
+
+- **Eyeball `/graph` after the canonical-owner change.** #1067 made the
+  foreign-key side own a physical path shared by two declared relations
+  (`entity-graph.ts` `canonicalPaths`), so arrows that used to read
+  `product → inventory` now read `inventory → product`; the tests were
+  updated but the Relationships tab and `/graph` were not inspected for
+  relations declared on both sides.
+
 - **Narrow the `e2e` Nx target's inputs, then cache it.** `nx affected`
   treats all of `apps/web/src/**` as an e2e input, so every web push pays ~2
   minutes of Playwright in `verify:push` where the old path classifier ran it
@@ -474,6 +550,13 @@ history is the archive. Permanent product constraints live in the
   (`productsWithBetterUpcData`) calls the external UPC lookup, so the badge
   refresh is not pure SQL. Moving it to the coverage page (computed on that
   page's load) keeps the badge cheap without losing the detector.
+
+- **Timeline notes carry links and product `usedOnProjects`** — Promote when
+  the "N products omitted" sentences in the product timeline need to be
+  clickable again or a project link is wanted on a lifecycle row:
+  `EntityTimelineOut.notes[]` are plain strings and `rows[]` has no project
+  slot, both dropped when `product-movement-views.tsx` became the generic
+  `EntityTimeline` in #1067.
 
 - **Multi-product Expense links** — Promote when one Expense genuinely needs several
   Products and `splitExpense` cannot truthfully split the money.
