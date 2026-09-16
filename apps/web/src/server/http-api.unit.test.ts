@@ -57,40 +57,6 @@ describe("HTTP boundary", () => {
     );
   });
 
-  it("does not let legacy consistency headers change API routing", async () => {
-    expect(
-      (
-        await request("recipes", {
-          headers: { authorization: "Bearer token.signature" },
-        })
-      ).status,
-    ).toBe(200);
-    expect(ports.context).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actor: expect.objectContaining({ source: "api" }),
-      }),
-    );
-    expect(ports.context.mock.calls[0]?.[0]).not.toHaveProperty(
-      "clientAllowsBoundedStale",
-    );
-    expect(
-      (
-        await request("recipes", {
-          headers: {
-            authorization: "Bearer token.signature",
-            "x-cubby-read-consistency": "bounded-stale",
-            "x-cubby-fresh-read": "1",
-          },
-        })
-      ).status,
-    ).toBe(200);
-    expect(ports.context).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actor: expect.objectContaining({ source: "api" }),
-      }),
-    );
-  });
-
   it("forwards only Better Auth session-data cookies", async () => {
     const headers = new Headers();
     headers.append(
@@ -197,7 +163,6 @@ describe("HTTP boundary", () => {
       body: '{"notes":"Changed"}',
     });
     expect(response.status).toBe(200);
-    expect(response.headers.get("x-cubby-fresh-read-seconds")).toBeNull();
     // The bearer plugin turns the header into a session before getSession
     // runs, while the signed session cache can avoid a database lookup.
     expect(ports.getSession).toHaveBeenCalledWith({

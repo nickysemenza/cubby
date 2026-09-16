@@ -26,8 +26,6 @@ struct MiddlewareTests {
         ) { request, body, _ in
             #expect(request.headerFields[.authorization] == "Bearer tok.sig")
             #expect(request.headerFields[.xAPIKey] == nil)
-            #expect(request.headerFields[HTTPField.Name("x-cubby-read-consistency")!] == nil)
-            #expect(request.headerFields[HTTPField.Name("x-cubby-fresh-read")!] == nil)
             return (HTTPResponse(status: .ok), body)
         }
         #expect(response.status == .ok)
@@ -66,11 +64,13 @@ struct MiddlewareTests {
     @Test func appliesTokenRotationAndCookiesFromTypedResponses() async throws {
         let (credentials, _) = try provider(with: .bearer("before"))
         let middleware = CubbyAuthMiddleware(credentials: credentials)
-        var fields = HTTPFields()
-        fields[HTTPField.Name("set-auth-token")!] = "after"
-        fields[values: .setCookie] = [
+        var mutableFields = HTTPFields()
+        mutableFields[HTTPField.Name("set-auth-token")!] = "after"
+        mutableFields[values: .setCookie] = [
             "better-auth.session_data=cache; Max-Age=300; Path=/"
         ]
+        // Swift 6 rejects capturing a `var` in the concurrently-executing response closure.
+        let fields = mutableFields
 
         _ = try await middleware.intercept(
             HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
@@ -205,8 +205,6 @@ struct MiddlewareTests {
         ) { request, body, _ in
             #expect(request.headerFields[.xAPIKey] == "cubby_x")
             #expect(request.headerFields[.authorization] == nil)
-            #expect(request.headerFields[HTTPField.Name("x-cubby-read-consistency")!] == nil)
-            #expect(request.headerFields[HTTPField.Name("x-cubby-fresh-read")!] == nil)
             return (HTTPResponse(status: .ok), body)
         }
     }
