@@ -36,8 +36,7 @@
       "!{workspaceRoot}/apps/apple/**",
       "!{workspaceRoot}/cubby-ffi/**",
       "!{workspaceRoot}/**/*.md",
-      "!{workspaceRoot}/.claude/**",
-      "!{workspaceRoot}/.impeccable/**"
+      "!{workspaceRoot}/.claude/**"
     ]
   },
   "analytics": false,

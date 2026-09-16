@@ -104,7 +104,7 @@ hash everything against: `default` (`{projectRoot}/**/*` plus `sharedGlobals`
 — the lockfile, `pnpm-workspace.yaml`, `tsconfig.json`, `nx.json`, Node/platform
 and select env vars) scopes a project-level target to its own directory, and
 `repo` (the whole tree, excluding `apps/apple/**`, `cubby-ffi/**`, `**/*.md`,
-`.claude/**`, `.impeccable/**`) is what the genuinely whole-tree `cubby-checks`
+`.claude/**`) is what the genuinely whole-tree `cubby-checks`
 gates (`generate`, `types`, `lint`, `format`, `knip`) hash instead. Every aux
 package under `apps/*`/`packages/*` with a `test` script gets a `nx:run-script`-
 inferred `test` target that a repo-wide `targetDefaults` entry makes cached with
