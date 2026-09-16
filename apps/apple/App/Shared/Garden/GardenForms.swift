@@ -8,7 +8,7 @@ struct GardenPlantingSheet: View {
     @State private var locationID = ""
     @State private var intendedLocationID = ""
     @State private var productID = ""
-    @State private var status: GardenPlantingStatus = .growing
+    @State private var status: PlantingStatus = .growing
     @State private var variety = ""
     @State private var quantity = ""
     @State private var plannedWindow = ""
@@ -21,7 +21,7 @@ struct GardenPlantingSheet: View {
     @State private var transplantedAt = Date.now
     @State private var useInLocationSince = false
     @State private var inLocationSince = Date.now
-    @State private var inLocationSinceKind: GardenLocationStartKind = .actual
+    @State private var inLocationSinceKind: PlantingLocationStartKind = .actual
     @State private var rememberSource = false
     @State private var draftDismissal = DraftDismissalState()
 
@@ -49,8 +49,8 @@ struct GardenPlantingSheet: View {
                     Picker(GardenStrings.status, selection: $status) {
                         // No "Finished" creation state (G-10): a planting is created only as
                         // currently growing or as a future plan.
-                        Text(GardenStrings.growingNow).tag(GardenPlantingStatus.growing)
-                        Text(GardenStrings.planned).tag(GardenPlantingStatus.planned)
+                        Text(GardenStrings.growingNow).tag(PlantingStatus.growing)
+                        Text(GardenStrings.planned).tag(PlantingStatus.planned)
                     }
                     .pickerStyle(.segmented)
                     GardenOptionPicker(
@@ -133,21 +133,21 @@ struct GardenPlantingSheet: View {
 
     private func save() async {
         let saved = await model.create(
-            CreateGardenPlanting(
-                ingredientID: ingredientID,
-                locationID: locationID.nilIfEmpty,
-                intendedLocationID: intendedLocationID.nilIfEmpty,
-                productID: productID.nilIfEmpty,
+            GardenCreatePlantingInput(
+                ingredientId: ingredientID,
+                locationId: locationID.nilIfEmpty.map { LocationCode($0) },
+                intendedLocationId: intendedLocationID.nilIfEmpty.map { LocationCode($0) },
                 status: status,
+                inLocationSince: useInLocationSince ? PlainDate(inLocationSince) : nil,
+                inLocationSinceKind: inLocationSinceKind,
+                sourceProductId: productID.nilIfEmpty.map { ProductCode($0) },
                 variety: variety.nilIfEmpty,
                 quantity: quantity.nilIfEmpty,
                 notes: notes.nilIfEmpty,
                 plannedWindow: plannedWindow.nilIfEmpty,
-                plannedDate: usePlannedDate ? plannedDate : nil,
-                sownAt: useSowingDate ? sownAt : nil,
-                transplantedAt: useTransplantDate ? transplantedAt : nil,
-                inLocationSince: useInLocationSince ? inLocationSince : nil,
-                inLocationSinceKind: inLocationSinceKind
+                plannedDate: usePlannedDate ? PlainDate(plannedDate) : nil,
+                sowedOn: useSowingDate ? PlainDate(sownAt) : nil,
+                transplantedOn: useTransplantDate ? PlainDate(transplantedAt) : nil
             ),
             rememberSource: rememberSource
         )
@@ -321,11 +321,11 @@ struct GardenEntrySheet: View {
             return
         }
         let saved = await model.record(
-            RecordGardenEntry(
-                locationID: locationID, plantingID: plantingID.nilIfEmpty, kind: kind,
-                observedAt: observedAt,
+            GardenRecordEntryInput(
+                locationId: LocationCode(locationID), plantingId: plantingID.nilIfEmpty,
+                kind: .init(rawValue: kind.rawValue), observedOn: PlainDate(observedAt),
                 note: note.nilIfEmpty, harvestAmount: kind == .harvest ? harvestAmount.nilIfEmpty : nil,
-                pendingImageIDs: uploadedIDs))
+                pendingImageIds: uploadedIDs))
         guard !Task.isCancelled else { return }
         if saved {
             if !uploadedIDs.isEmpty, let client = model.service as? CubbyClient,
@@ -443,7 +443,7 @@ struct GardenPlantingActionSheet: View {
         _date = State(initialValue: date)
     }
 
-    private var planting: GardenPlanting {
+    private var planting: GardenPlantingOut {
         switch action {
         case .entry(let planting), .start(let planting), .move(let planting), .split(let planting),
             .finish(let planting):
@@ -560,14 +560,14 @@ struct GardenPlantingActionSheet: View {
             saved = await model.start(id: planting.id, at: locationID, on: date, method: startMethod)
         case .move(let planting):
             saved = await model.move(
-                MoveGardenPlanting(
-                    plantingID: planting.id, destinationLocationID: locationID, observedAt: date,
+                GardenMovePlantingInput(
+                    plantingId: planting.id, locationId: LocationCode(locationID), movedOn: PlainDate(date),
                     note: note.nilIfEmpty))
         case .split(let planting):
             saved = await model.split(
-                SplitGardenPlanting(
-                    plantingID: planting.id, destinationLocationID: locationID, quantity: quantity.nilIfEmpty,
-                    observedAt: date, note: note.nilIfEmpty))
+                GardenSplitPlantingInput(
+                    plantingId: planting.id, locationId: LocationCode(locationID), movedOn: PlainDate(date),
+                    quantity: quantity.nilIfEmpty, note: note.nilIfEmpty))
         case .finish(let planting):
             saved = await model.finish(id: planting.id, on: date, note: note.nilIfEmpty)
         }
@@ -588,7 +588,7 @@ struct GardenPlantingActionSheet: View {
 }
 
 struct FinishedPlantingsSheet: View {
-    let plantings: [GardenPlanting]
+    let plantings: [GardenPlantingOut]
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -601,13 +601,13 @@ struct FinishedPlantingsSheet: View {
                         Text(planting.displayName).font(.porcelainBody.weight(.semibold))
                         Text(planting.status.rawValue.capitalized).font(.porcelainLabel)
                             .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        if let date = planting.sownAt {
+                        if let date = planting.sowedOn?.date {
                             Text(
                                 "\(GardenStrings.sowedOn): \(date.formatted(date: .abbreviated, time: .omitted))"
                             )
                             .font(.porcelainLabel)
                         }
-                        if let date = planting.finishedAt {
+                        if let date = planting.finishedOn?.date {
                             Text(
                                 "Finished: \(date.formatted(date: .abbreviated, time: .omitted))"
                             )
@@ -632,7 +632,7 @@ struct FinishedPlantingsSheet: View {
 
 struct GardenPlantingDetailView: View {
     let model: GardenModel
-    let planting: GardenPlanting
+    let planting: GardenPlantingOut
     let guide: GardenGuide?
     let source: (String) -> GardenGuideSource?
     let uploader: GardenImageUploader
@@ -658,8 +658,8 @@ struct GardenPlantingDetailView: View {
                 GardenPlantingJournal(model: model, planting: planting, uploader: uploader)
             } else {
                 Section(GardenStrings.about) {
-                    NavigationLink(value: Route.entityDetail(.ingredient, id: planting.ingredient.id)) {
-                        LabeledContent(GardenStrings.crop, value: planting.ingredient.name)
+                    NavigationLink(value: Route.entityDetail(.ingredient, id: planting.ingredientId)) {
+                        LabeledContent(GardenStrings.crop, value: planting.ingredientName)
                     }
                     LabeledContent(GardenStrings.status, value: planting.status.rawValue.capitalized)
                     if let variety = planting.variety {
@@ -668,47 +668,52 @@ struct GardenPlantingDetailView: View {
                     if let quantity = planting.quantity {
                         LabeledContent(GardenStrings.quantity, value: quantity)
                     }
-                    if let location = planting.location {
-                        NavigationLink(value: Route.entityDetail(.location, id: location.id)) {
-                            LabeledContent(GardenStrings.location, value: location.name)
+                    if let locationID = planting.locationId {
+                        let name = planting.locationName ?? locationID.rawValue
+                        NavigationLink(value: Route.entityDetail(.location, id: locationID.rawValue)) {
+                            LabeledContent(GardenStrings.location, value: name)
                         }
-                        NavigationLink(value: Route.gardenBedJournal(id: location.id)) {
-                            Text(GardenStrings.areaJournal(location.name))
+                        NavigationLink(value: Route.gardenBedJournal(id: locationID.rawValue)) {
+                            Text(GardenStrings.areaJournal(name))
                         }
-                    } else if let intended = planting.intendedLocation {
-                        NavigationLink(value: Route.entityDetail(.location, id: intended.id)) {
-                            LabeledContent(GardenStrings.intendedDestination, value: intended.name)
+                    } else if let intendedID = planting.intendedLocationId {
+                        NavigationLink(value: Route.entityDetail(.location, id: intendedID.rawValue)) {
+                            LabeledContent(
+                                GardenStrings.intendedDestination,
+                                value: planting.intendedLocationName ?? intendedID.rawValue)
                         }
                     }
                     NavigationLink("Location history") {
                         GardenLocationHistoryView(service: model.service, planting: planting)
                     }
-                    if let parentID = planting.parentPlantingID {
+                    if let parentID = planting.parentPlantingId {
                         NavigationLink(value: Route.entityDetail(.planting, id: parentID)) {
                             Text(GardenStrings.originalTrayPlanting)
                         }
                     }
                     if let planned = planting.plannedWindow { LabeledContent("Plan", value: planned) }
-                    if let date = planting.plannedDate {
+                    if let date = planting.plannedDate?.date {
                         LabeledContent(
                             GardenStrings.plannedDate,
                             value: date.formatted(date: .abbreviated, time: .omitted))
                     }
-                    if let date = planting.sownAt {
+                    if let date = planting.sowedOn?.date {
                         LabeledContent(
                             GardenStrings.sowedOn, value: date.formatted(date: .abbreviated, time: .omitted))
                     }
-                    if let date = planting.transplantedAt {
+                    if let date = planting.transplantedOn?.date {
                         LabeledContent(
                             GardenStrings.transplantedOn,
                             value: date.formatted(date: .abbreviated, time: .omitted))
                     }
-                    if let sourceProduct = planting.product {
-                        NavigationLink(value: Route.entityDetail(.product, id: sourceProduct.id)) {
-                            LabeledContent(GardenStrings.source, value: sourceProduct.name)
+                    if let sourceProductID = planting.sourceProductId {
+                        NavigationLink(value: Route.entityDetail(.product, id: sourceProductID.rawValue)) {
+                            LabeledContent(
+                                GardenStrings.source,
+                                value: planting.sourceProductName ?? sourceProductID.rawValue)
                         }
                     }
-                    if let date = planting.finishedAt {
+                    if let date = planting.finishedOn?.date {
                         LabeledContent("Finished", value: date.formatted(date: .abbreviated, time: .omitted))
                     }
                 }
@@ -717,7 +722,7 @@ struct GardenPlantingDetailView: View {
                     Section(GardenStrings.plantingGuide) {
                         DisclosureGroup("Show guide") {
                             ForEach(guide.windows) { window in
-                                GardenGuideWindowDetail(window: window, source: source(window.sourceID))
+                                GardenGuideWindowDetail(window: window, source: source(window.sourceId))
                             }
                         }
                     }
@@ -785,9 +790,11 @@ private struct GardenGuideWindowDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(summary).font(.porcelainBody.weight(.semibold))
-            if let note = window.note { Text(note).font(.porcelainLabel) }
+            if let note = window.notes { Text(note).font(.porcelainLabel) }
             if let source {
-                Link(GardenStrings.viewSource, destination: source.url).font(.porcelainLabel)
+                if let url = URL(string: source.url) {
+                    Link(GardenStrings.viewSource, destination: url).font(.porcelainLabel)
+                }
                 if let published = source.publishedOrRevised {
                     Text("\(GardenStrings.publishedOrRevised): \(published)").font(.porcelainLabel)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
@@ -807,9 +814,10 @@ private struct GardenGuideWindowDetail: View {
 
     private var summary: String {
         let monthNames = window.months.compactMap { Calendar.current.monthSymbols[safe: $0 - 1] }
-        let scope = [window.microclimate, window.monthPart].compactMap { $0 }.joined(separator: " · ")
-        return [window.method, monthNames.joined(separator: ", "), scope].filter { !$0.isEmpty }.joined(
-            separator: " · ")
+        let microclimate = window.microclimate == .unspecified ? nil : window.microclimate.rawValue
+        let scope = [microclimate, window.monthPart?.rawValue].compactMap { $0 }.joined(separator: " · ")
+        return [window.method.rawValue, monthNames.joined(separator: ", "), scope].filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
 }
 
@@ -828,7 +836,7 @@ private struct GardenGuideWindowDetail: View {
 }
 
 private struct GardenPlantingCorrectionSheet: View {
-    let model: GardenModel; let planting: GardenPlanting
+    let model: GardenModel; let planting: GardenPlantingOut
     @Environment(\.dismiss) private var dismiss
     @State private var ingredientID: String; @State private var productID: String;
     @State private var intendedID: String
@@ -838,21 +846,21 @@ private struct GardenPlantingCorrectionSheet: View {
     @State private var hasPlanned: Bool; @State private var hasSowed: Bool;
     @State private var hasTransplanted: Bool
     @State private var draftDismissal = DraftDismissalState()
-    init(model: GardenModel, planting: GardenPlanting) {
+    init(model: GardenModel, planting: GardenPlantingOut) {
         self.model = model; self.planting = planting
-        _ingredientID = State(initialValue: planting.ingredient.id);
-        _productID = State(initialValue: planting.product?.id ?? "");
-        _intendedID = State(initialValue: planting.intendedLocation?.id ?? "")
+        _ingredientID = State(initialValue: planting.ingredientId);
+        _productID = State(initialValue: planting.sourceProductId?.rawValue ?? "");
+        _intendedID = State(initialValue: planting.intendedLocationId?.rawValue ?? "")
         _variety = State(initialValue: planting.variety ?? "");
         _quantity = State(initialValue: planting.quantity ?? "");
         _notes = State(initialValue: planting.notes ?? "");
         _window = State(initialValue: planting.plannedWindow ?? "")
-        _planned = State(initialValue: planting.plannedDate ?? .now);
-        _sowed = State(initialValue: planting.sownAt ?? .now);
-        _transplanted = State(initialValue: planting.transplantedAt ?? .now)
-        _hasPlanned = State(initialValue: planting.plannedDate != nil);
-        _hasSowed = State(initialValue: planting.sownAt != nil);
-        _hasTransplanted = State(initialValue: planting.transplantedAt != nil)
+        _planned = State(initialValue: planting.plannedDate?.date ?? .now);
+        _sowed = State(initialValue: planting.sowedOn?.date ?? .now);
+        _transplanted = State(initialValue: planting.transplantedOn?.date ?? .now)
+        _hasPlanned = State(initialValue: planting.plannedDate?.date != nil);
+        _hasSowed = State(initialValue: planting.sowedOn?.date != nil);
+        _hasTransplanted = State(initialValue: planting.transplantedOn?.date != nil)
     }
     var body: some View {
         NavigationStack {
@@ -906,22 +914,26 @@ private struct GardenPlantingCorrectionSheet: View {
             onDiscard: { dismiss() }, onCloseWhileSaving: { dismiss() })
     }
     private var isDirty: Bool {
-        ingredientID != planting.ingredient.id || productID != (planting.product?.id ?? "")
-            || intendedID != (planting.intendedLocation?.id ?? "") || variety != (planting.variety ?? "")
+        ingredientID != planting.ingredientId || productID != (planting.sourceProductId?.rawValue ?? "")
+            || intendedID != (planting.intendedLocationId?.rawValue ?? "")
+            || variety != (planting.variety ?? "")
             || quantity != (planting.quantity ?? "") || notes != (planting.notes ?? "")
-            || window != (planting.plannedWindow ?? "") || hasPlanned != (planting.plannedDate != nil)
-            || hasSowed != (planting.sownAt != nil) || hasTransplanted != (planting.transplantedAt != nil)
-            || (hasPlanned && planned != planting.plannedDate) || (hasSowed && sowed != planting.sownAt)
-            || (hasTransplanted && transplanted != planting.transplantedAt)
+            || window != (planting.plannedWindow ?? "") || hasPlanned != (planting.plannedDate?.date != nil)
+            || hasSowed != (planting.sowedOn?.date != nil)
+            || hasTransplanted != (planting.transplantedOn?.date != nil)
+            || (hasPlanned && planned != planting.plannedDate?.date)
+            || (hasSowed && sowed != planting.sowedOn?.date)
+            || (hasTransplanted && transplanted != planting.transplantedOn?.date)
     }
     private func save() async {
-        let input = EditGardenPlanting(
-            id: planting.id, ingredientID: ingredientID, productID: productID.nilIfEmpty,
-            intendedLocationID: intendedID.nilIfEmpty, variety: variety.nilIfEmpty,
+        // The complete editor value: `gardenEditAPI` encodes every absent optional as `null`.
+        let data = PlantingUpdateData(
+            ingredientId: ingredientID, sourceProductId: productID.nilIfEmpty.map { ProductCode($0) },
+            intendedLocationId: intendedID.nilIfEmpty.map { LocationCode($0) }, variety: variety.nilIfEmpty,
             quantity: quantity.nilIfEmpty, notes: notes.nilIfEmpty, plannedWindow: window.nilIfEmpty,
-            plannedDate: hasPlanned ? planned : nil, sownAt: hasSowed ? sowed : nil,
-            transplantedAt: hasTransplanted ? transplanted : nil)
-        if await model.updatePlanting(input) { dismiss() }
+            plannedDate: hasPlanned ? PlainDate(planned) : nil, sowedOn: hasSowed ? PlainDate(sowed) : nil,
+            transplantedOn: hasTransplanted ? PlainDate(transplanted) : nil)
+        if await model.updatePlanting(id: planting.id, data) { dismiss() }
     }
 }
 
@@ -993,11 +1005,11 @@ private struct GardenGuideSection: View {
         Section(GardenStrings.plantingGuide) {
             ForEach(guide.windows) { window in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(source(window.sourceID)?.name ?? window.sourceID).font(
+                    Text(source(window.sourceId)?.name ?? window.sourceId).font(
                         .porcelainBody.weight(.semibold))
                     Text(months(for: window)).font(.porcelainLabel).foregroundStyle(
                         PorcelainTokens.graphiteSecondary)
-                    if let note = window.note { Text(note).font(.porcelainLabel) }
+                    if let note = window.notes { Text(note).font(.porcelainLabel) }
                 }
             }
         }
@@ -1005,7 +1017,7 @@ private struct GardenGuideSection: View {
 
     private func months(for window: GardenGuideWindow) -> String {
         let names = window.months.compactMap { Calendar.current.monthSymbols[safe: $0 - 1] }
-        return "\(window.method.capitalized): \(names.joined(separator: ", "))"
+        return "\(window.method.rawValue.capitalized): \(names.joined(separator: ", "))"
     }
 }
 
@@ -1044,7 +1056,9 @@ struct GardenSetupSheet: View {
                         } label: {
                             VStack(alignment: .leading) {
                                 Text(location.name)
-                                if let kind = location.gardenKind { Text(kind.capitalized).font(.caption) }
+                                if let kind = location.gardenKind {
+                                    Text(kind.rawValue.capitalized).font(.caption)
+                                }
                             }
                         }
                     }
@@ -1195,19 +1209,19 @@ private struct GardenAddIngredientSheet: View {
 
 private struct GardenLocationForm: View {
     let model: GardenModel
-    let location: GardenLocation?
+    let location: GardenLocationSummaryOut?
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
     @State private var kind: GardenLocationKind
     @State private var conditions: String
     @State private var draftDismissal = DraftDismissalState()
 
-    init(model: GardenModel, location: GardenLocation?) {
+    init(model: GardenModel, location: GardenLocationSummaryOut?) {
         self.model = model
         self.location = location
         _name = State(initialValue: location?.name ?? "")
-        _kind = State(initialValue: GardenLocationKind(rawValue: location?.gardenKind ?? "") ?? .bed)
-        _conditions = State(initialValue: location?.conditions ?? "")
+        _kind = State(initialValue: location?.gardenKind ?? .bed)
+        _conditions = State(initialValue: location?.gardenConditions ?? "")
     }
 
     var body: some View {
@@ -1240,15 +1254,15 @@ private struct GardenLocationForm: View {
 
     private var isDirty: Bool {
         name != (location?.name ?? "")
-            || kind != (GardenLocationKind(rawValue: location?.gardenKind ?? "") ?? .bed)
-            || conditions != (location?.conditions ?? "")
+            || kind != (location?.gardenKind ?? .bed)
+            || conditions != (location?.gardenConditions ?? "")
     }
 
     private func save() async {
         let saved: Bool
         if let location {
             saved = await model.updateLocation(
-                id: location.id, name: name, kind: kind, conditions: conditions.nilIfEmpty)
+                id: location.id.rawValue, name: name, kind: kind, conditions: conditions.nilIfEmpty)
         } else {
             saved = await model.createLocation(name: name, kind: kind, conditions: conditions.nilIfEmpty)
         }
@@ -1387,23 +1401,25 @@ struct GardenHistoryView: View {
 }
 
 struct GardenEntryCorrectionSheet: View {
-    let model: GardenModel; let entry: GardenEntry; let uploader: GardenImageUploader
+    let model: GardenModel; let entry: GardenEntryOut; let uploader: GardenImageUploader
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var date: Date; @State private var note: String; @State private var amount: String
     @State private var locationID: String; @State private var plantingID: String
-    @State private var selections: [PhotoSelectionItem] = []; @State private var removed: Set<String> = []
+    @State private var selections: [PhotoSelectionItem] = []
+    @State private var removed: Set<ImageCode> = []
     @State private var uploadedIDs: [ImageCode] = []
     @State private var uploadError: String?; @State private var isUploading = false
     @State private var saveTask: Task<Void, Never>?
     @State private var allowsSaveToFinishAfterDismissal = false
     @State private var draftDismissal = DraftDismissalState()
-    init(model: GardenModel, entry: GardenEntry, uploader: GardenImageUploader) {
+    init(model: GardenModel, entry: GardenEntryOut, uploader: GardenImageUploader) {
         self.model = model; self.entry = entry; self.uploader = uploader
-        _date = State(initialValue: entry.observedAt); _note = State(initialValue: entry.note ?? "");
+        _date = State(initialValue: entry.observedOn.date ?? .now);
+        _note = State(initialValue: entry.note ?? "");
         _amount = State(initialValue: entry.harvestAmount ?? "")
-        _locationID = State(initialValue: entry.locationID)
-        _plantingID = State(initialValue: entry.plantingID ?? "")
+        _locationID = State(initialValue: entry.locationId.rawValue)
+        _plantingID = State(initialValue: entry.plantingId ?? "")
     }
 
     /// A `move` entry, and the anchor entry `startPlanting` writes when a planting first enters a
@@ -1444,11 +1460,14 @@ struct GardenEntryCorrectionSheet: View {
                 if let error = model.saveError { Text(error).foregroundStyle(PorcelainTokens.destructive) }
                 Section("Photos") {
                     PhotoBatch(
-                        photos: entry.images.filter { !removed.contains($0.id) }.map {
-                            PhotoAttachment(
-                                id: $0.id, filename: $0.filename, source: .remote($0.url), imageID: $0.id)
+                        photos: entry.images.filter { !removed.contains($0.id) }.compactMap { image in
+                            image.imageURL.map {
+                                PhotoAttachment(
+                                    id: image.id.rawValue, filename: image.filename, source: .remote($0),
+                                    imageID: image.id.rawValue)
+                            }
                         },
-                        onRemove: isUploading ? nil : { removed.insert($0) }
+                        onRemove: isUploading ? nil : { removed.insert(ImageCode($0)) }
                     )
                     .gardenPhotoGridWidth()
                     PhotoBatch(
@@ -1527,11 +1546,15 @@ struct GardenEntryCorrectionSheet: View {
             Diagnostics.report(error, context: "garden.entry.edit.upload")
             return
         }
+        // A locked entry omits its structural fields (the server leaves an absent one alone);
+        // `plantingId` is always sent because the wire encodes its absence as "clear".
         if await model.updateEntry(
-            EditGardenEntry(
-                id: entry.id, locationID: locationID, plantingID: plantingID.nilIfEmpty, kind: entry.kind,
-                observedAt: date, note: note.nilIfEmpty, harvestAmount: amount.nilIfEmpty,
-                pendingImageIDs: uploadedIDs, removeImageIDs: Array(removed)))
+            id: entry.id,
+            GardenEntryUpdateData(
+                locationId: isLocked ? nil : LocationCode(locationID), plantingId: plantingID.nilIfEmpty,
+                kind: isLocked ? nil : entry.kind, observedOn: isLocked ? nil : PlainDate(date),
+                note: note.nilIfEmpty, harvestAmount: amount.nilIfEmpty,
+                pendingImageIds: uploadedIDs, removeImageIds: Array(removed)))
         {
             guard !Task.isCancelled else { return }
             if !uploadedIDs.isEmpty, let client = model.service as? CubbyClient,
@@ -1580,8 +1603,9 @@ struct GardenEntryCorrectionSheet: View {
     }
 
     private var isDirty: Bool {
-        date != entry.observedAt || note != (entry.note ?? "") || amount != (entry.harvestAmount ?? "")
-            || locationID != entry.locationID || plantingID != (entry.plantingID ?? "")
+        PlainDate(date) != entry.observedOn || note != (entry.note ?? "")
+            || amount != (entry.harvestAmount ?? "")
+            || locationID != entry.locationId.rawValue || plantingID != (entry.plantingId ?? "")
             || !selections.isEmpty || !removed.isEmpty
     }
 }
@@ -1620,12 +1644,12 @@ struct GardenObservationDatePicker: View {
 
 private struct GardenPlantingJournal: View {
     let model: GardenModel
-    let planting: GardenPlanting
+    let planting: GardenPlantingOut
     let uploader: GardenImageUploader
     @State private var journal: GardenJournalModel
-    @State private var editing: GardenEntry?
+    @State private var editing: GardenEntryOut?
 
-    init(model: GardenModel, planting: GardenPlanting, uploader: GardenImageUploader) {
+    init(model: GardenModel, planting: GardenPlantingOut, uploader: GardenImageUploader) {
         self.model = model; self.planting = planting; self.uploader = uploader
         // Whole-bed context is always included — inclusion is a rule of the journal, not a
         // per-viewing preference (G-85).
@@ -1674,11 +1698,15 @@ private struct GardenPlantingJournal: View {
 }
 
 struct GardenImageStrip: View {
-    let images: [GardenImage]
+    let images: [ImageOut]
     var body: some View {
         PhotoBatch(
-            photos: images.map {
-                PhotoAttachment(id: $0.id, filename: $0.filename, source: .remote($0.url), imageID: $0.id)
+            photos: images.compactMap { image in
+                image.imageURL.map {
+                    PhotoAttachment(
+                        id: image.id.rawValue, filename: image.filename, source: .remote($0),
+                        imageID: image.id.rawValue)
+                }
             })
     }
 }
@@ -1689,9 +1717,9 @@ struct GardenImageStrip: View {
 
 private struct GardenLocationHistoryView: View {
     let service: any GardenService
-    let planting: GardenPlanting
+    let planting: GardenPlantingOut
     @State private var history: GardenLocationHistoryModel
-    @State private var revised: [GardenLocationPeriod] = []
+    @State private var revised: [GardenLocationPeriodOut] = []
     @State private var initialLocationDate = Date.now
     @State private var initialLastDay = Date.now
     /// Set once from the *first* load, so the title never flips from "Confirm" to "Correct" the
@@ -1702,11 +1730,11 @@ private struct GardenLocationHistoryView: View {
     private let originalInitialLocationDate: Date
     private let originalInitialLastDay: Date
 
-    init(service: any GardenService, planting: GardenPlanting) {
+    init(service: any GardenService, planting: GardenPlantingOut) {
         self.service = service; self.planting = planting
         _history = State(initialValue: GardenLocationHistoryModel(service: service, planting: planting))
         let initialLocationDate = Date.now
-        let initialLastDay = planting.finishedAt ?? .now
+        let initialLastDay = planting.finishedOn?.date ?? .now
         originalInitialLocationDate = initialLocationDate
         originalInitialLastDay = initialLastDay
         _initialLocationDate = State(initialValue: initialLocationDate)
@@ -1732,11 +1760,11 @@ private struct GardenLocationHistoryView: View {
                 }
             }
             ForEach($revised) { $period in
-                Section(period.location.name) {
+                Section(period.locationName) {
                     DatePicker(
                         GardenStrings.inThisLocationSince,
                         selection: Binding(
-                            get: { period.inLocationSince },
+                            get: { period.inLocationSince.date ?? .now },
                             set: { reviseBoundary(sequence: period.sequence, date: $0, start: true) }),
                         displayedComponents: .date)
                     LabeledContent(
@@ -1747,7 +1775,7 @@ private struct GardenLocationHistoryView: View {
                         Text(GardenStrings.earlierPresenceUnknown)
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    if let ended = period.endedOn {
+                    if let ended = period.endedOn?.date {
                         DatePicker(
                             "Ended",
                             selection: Binding(
@@ -1761,8 +1789,10 @@ private struct GardenLocationHistoryView: View {
             }
             if history.isLoading && revised.isEmpty { LoadingIndicator() }
             if revised.isEmpty, !history.isLoading, history.error == nil, planting.status != .planned,
-                let location = planting.location
+                let locationID = planting.locationId
             {
+                let location = GardenOption(
+                    id: locationID.rawValue, name: planting.locationName ?? locationID.rawValue)
                 Section("Add location history") {
                     Text(
                         "No location date has been recorded for this planting. This does not create a sowing or transplant date."
@@ -1819,20 +1849,22 @@ private struct GardenLocationHistoryView: View {
     }
 
     private func saveInitialPeriod(location: GardenOption) async {
-        let first = GardenLocationPeriod(
-            sequence: 0, location: location, inLocationSince: initialLocationDate,
-            endedOn: planting.status == .finished ? initialLastDay : nil, startKind: .actual)
+        let first = GardenLocationPeriodOut(
+            sequence: 0, locationId: LocationCode(location.id), locationName: location.name,
+            inLocationSince: PlainDate(initialLocationDate),
+            endedOn: planting.status == .finished ? PlainDate(initialLastDay) : nil, startKind: .actual)
         if await history.save([first]) { revised = history.periods; dismiss() }
     }
 
     private func reviseBoundary(sequence: Int, date: Date, start: Bool) {
         guard let index = revised.firstIndex(where: { $0.sequence == sequence }) else { return }
+        let day = PlainDate(date)
         if start {
-            revised[index].inLocationSince = date
-            if index > 0 { revised[index - 1].endedOn = date }
+            revised[index].inLocationSince = day
+            if index > 0 { revised[index - 1].endedOn = day }
         } else {
-            revised[index].endedOn = date
-            if index + 1 < revised.count { revised[index + 1].inLocationSince = date }
+            revised[index].endedOn = day
+            if index + 1 < revised.count { revised[index + 1].inLocationSince = day }
         }
     }
 }

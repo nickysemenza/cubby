@@ -217,7 +217,7 @@ struct MatchCandidateView: View {
     @Environment(AppModel.self) private var appModel
     let candidate: DedupCandidate
     var selections: [PhotoSelectionItem] = []
-    @State private var detail: CubbyImageDetail?
+    @State private var detail: ImageWithEntity?
     @State private var error: String?
 
     var body: some View {
@@ -229,17 +229,19 @@ struct MatchCandidateView: View {
                         height: 100)
                 }
             } else if let detail {
-                PhotoAttachmentImage(
-                    photo: PhotoAttachment(
-                        id: detail.id.rawValue, filename: detail.filename,
-                        source: .remote(detail.url)), renderedWidth: 160
-                ).frame(height: 120)
+                if let url = detail.imageURL {
+                    PhotoAttachmentImage(
+                        photo: PhotoAttachment(
+                            id: detail.id.rawValue, filename: detail.filename, source: .remote(url)),
+                        renderedWidth: 160
+                    ).frame(height: 120)
+                }
                 Text(detail.filename).font(.headline)
                 if detail.associations.isEmpty {
                     Text("In Cubby, with no current associations").font(.caption)
                 }
                 ForEach(detail.associations) { association in
-                    Text("\(association.name) · \(association.role)").font(.caption)
+                    Text("\(association.entityName) · \(association.role.rawValue)").font(.caption)
                 }
             } else if let error {
                 Text(error).foregroundStyle(PorcelainTokens.destructive)

@@ -1,0 +1,373 @@
+import CubbyAPI
+import CubbyAPISupport
+import Foundation
+
+/// The hand-written surface on the generated types: identities SwiftUI lists need, the few
+/// derived values screens read, and the converters between sibling wire shapes. Everything else
+/// about a generated type is its own; a divergence that needs more than a few lines belongs in the
+/// generator (see `scripts/generator/http-api/`), not here.
+
+// The branded codes and `PlainDate` live in `CubbyAPISupport` so the generated client can use
+// them; these aliases let the App name them through CubbyKit alone.
+public typealias ProductCode = CubbyAPISupport.ProductCode
+public typealias LocationCode = CubbyAPISupport.LocationCode
+public typealias InventoryEntryCode = CubbyAPISupport.InventoryEntryCode
+public typealias ImageCode = CubbyAPISupport.ImageCode
+public typealias EntityKey = CubbyAPISupport.EntityKey
+
+// MARK: - Amounts
+
+/// An inventory amount on the wire is `{value, unit, upperValue?}`; "each" is the unit every
+/// scanned or counted row uses, so the count-based helper hard-codes it.
+extension PositiveAmountInput {
+    public init(_ value: Double, unit: String = "each") {
+        self.init(value: value, unit: unit, upperValue: nil)
+    }
+
+    public init(_ amount: Amount) {
+        self.init(value: amount.value, unit: amount.unit, upperValue: amount.upperValue)
+    }
+}
+
+extension Amount {
+    public init(_ input: PositiveAmountInput) {
+        self.init(value: input.value, unit: input.unit, upperValue: input.upperValue)
+    }
+}
+
+// MARK: - Entity references and the relationship graph
+
+extension EntityRef: Identifiable {
+    public init(entity: EntityKey, id: String) {
+        self.init(entityType: entity, entityId: id)
+    }
+
+    public init(_ root: EntityGraphRoot) {
+        self.init(entityType: root.entityType, entityId: root.entityId)
+    }
+
+    public var entity: EntityKey { entityType }
+    public var id: String { entityId }
+    public var stableKey: String { "\(entityType.rawValue):\(entityId)" }
+
+    var graphRootInput: EntityGraphRootInput {
+        .init(entityType: entityType, entityId: entityId)
+    }
+}
+
+extension EntityGraphRoot {
+    public init(_ reference: EntityRef) {
+        self.init(entityType: reference.entityType, entityId: reference.entityId)
+    }
+}
+
+extension EntityGraphNode: Identifiable {
+    /// Fixtures and previews build nodes from a reference; the wire carries the parts.
+    public init(reference: EntityRef, label: String, metadata: [String: String] = [:], imageURL: URL? = nil) {
+        self.init(
+            entityType: reference.entityType, entityId: reference.entityId, label: label,
+            metadata: .init(additionalProperties: metadata),
+            image: imageURL.map { .init(url: $0.absoluteString) })
+    }
+
+    public var reference: EntityRef { EntityRef(entityType: entityType, entityId: entityId) }
+    public var id: String { reference.stableKey }
+    public var imageURL: URL? { image.flatMap { URL(string: $0.url) } }
+}
+
+extension EntityGraphBranch: Identifiable {
+    public var id: String { "\(root.stableKey)|\(relationshipKey)" }
+}
+
+extension EntityGraphPath: Identifiable {
+    public var id: String {
+        "\(nodeRefs.map(\.stableKey).joined(separator: ">"))|\(edgeIds.joined(separator: ">"))"
+    }
+    public var destination: EntityRef? { nodeRefs.last }
+}
+
+extension ExpenseProjectProposal: Identifiable {
+    public var id: String { "expense-project:\(expenseId):\(target.id)" }
+}
+
+extension InventoryPlacementProposal: Identifiable {
+    public var id: String { "inventory-placement:\(inventoryId.rawValue):\(target.id.rawValue)" }
+}
+
+extension ProductRelatedProposal: Identifiable {
+    public var id: String { "product-related:\(target.id.rawValue)" }
+}
+
+extension EntityRecommendationGroup: Identifiable {
+    public var id: String {
+        switch self {
+        case .expenseProject: "expense-project"
+        case .inventoryPlacement: "inventory-placement"
+        case .productRelated: "product-related"
+        }
+    }
+
+    public var status: EmbeddingReadiness {
+        switch self {
+        case .expenseProject(let group): group.status
+        case .inventoryPlacement(let group): group.status
+        case .productRelated(let group): group.status
+        }
+    }
+}
+
+// MARK: - Scanning
+
+extension ScanStrayOut: Identifiable {
+    public var id: InventoryEntryCode { entryId }
+}
+
+// MARK: - Search
+
+extension SearchHit {
+    /// `entityType` spells entity keys the way `EntityKey` does, so this resolves for every
+    /// catalog entity and is `nil` only for a kind the catalog has not learned yet.
+    public var key: EntityKey? { EntityKey(rawValue: entityType.rawValue) }
+    public var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
+
+    /// The server's caps on a `search.find` query.
+    public static let maxQueryLength = 100
+    public static let maxLimit = 50
+}
+
+// MARK: - Products
+
+extension ProductDetail {
+    public var coverImageURL: URL? { coverImageUrl.flatMap(URL.init(string:)) }
+}
+
+extension UpcLookupOutput {
+    /// `manufacturer` when the catalog knows one, else the brand it printed on the label.
+    public var manufacturerOrBrand: String? { manufacturer ?? brand }
+    public var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
+}
+
+// MARK: - Meals and nutrition
+
+extension MealOut {
+    public var recipeNames: [String] { recipes.map(\.recipe.name) }
+}
+
+extension MealListItem {
+    public var recipeNames: [String] { recipes.map(\.recipe.name) }
+}
+
+extension NutritionMeal {
+    public var displayName: String {
+        if let name, !name.isEmpty { return name }
+        if let mealType { return mealType.rawValue.capitalized }
+        return "Meal"
+    }
+}
+
+extension MealNutritionPerson: Identifiable {
+    public var id: String { eater.id }
+    public var name: String { eater.name }
+}
+
+extension MealNutritionFood: Identifiable {
+    /// The fields every food kind carries, whichever arm the discriminator chose.
+    private var common:
+        (
+            meal: NutritionMeal, name: String, amount: MealFoodAmount?, grams: Double?,
+            weight: MeasureEstimate,
+            totals: MealTotals
+        )
+    {
+        switch self {
+        case .ingredient(let f): (f.meal, f.name, f.amount, f.grams, f.weight, f.totals)
+        case .manual(let f): (f.meal, f.name, f.amount, f.grams, f.weight, f.totals)
+        case .product(let f): (f.meal, f.name, f.amount, f.grams, f.weight, f.totals)
+        case .recipe(let f): (f.meal, f.name, f.amount, f.grams, f.weight, f.totals)
+        }
+    }
+
+    public var meal: NutritionMeal { common.meal }
+    public var name: String { common.name }
+    public var amount: MealFoodAmount? { common.amount }
+    public var grams: Double? { common.grams }
+    public var weight: MeasureEstimate { common.weight }
+    public var totals: MealTotals { common.totals }
+
+    public var id: String {
+        switch self {
+        case .recipe(let food): "recipe:\(food.meal.id):\(food.mealRecipeId)"
+        case .product(let food): "product:\(food.id)"
+        case .ingredient(let food): "ingredient:\(food.id)"
+        case .manual(let food): "manual:\(food.id)"
+        }
+    }
+
+    public var sourceKind: String {
+        switch self {
+        case .recipe: "Recipe"
+        case .product: "Product"
+        case .ingredient: "Ingredient"
+        case .manual: "Manual"
+        }
+    }
+
+    public var amountDescription: String {
+        if let amount {
+            return "\(amount.value.formatted(.number.precision(.fractionLength(0...6)))) \(amount.unit)"
+        }
+        return grams.map { "\($0.formatted(.number.precision(.fractionLength(0...1)))) g" }
+            ?? "Entered macros"
+    }
+}
+
+/// The four everyday macros out of a `MealTotals.nutrition` map, each an honest estimate.
+public struct MacroSummary: Sendable, Hashable {
+    public let calories: MeasureEstimate
+    public let protein: MeasureEstimate
+    public let carbs: MeasureEstimate
+    public let fat: MeasureEstimate
+
+    public init(
+        calories: MeasureEstimate, protein: MeasureEstimate, carbs: MeasureEstimate, fat: MeasureEstimate
+    ) {
+        self.calories = calories
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+    }
+
+    public init(_ totals: MealTotals) {
+        let nutrition = totals.nutrition.additionalProperties
+        calories = nutrition["kcal"] ?? .noEstimate
+        protein = nutrition["protein"] ?? .noEstimate
+        carbs = nutrition["carbs"] ?? .noEstimate
+        fat = nutrition["fat"] ?? .noEstimate
+    }
+
+    public var containsPartialEstimate: Bool {
+        [calories, protein, carbs, fat].contains { $0.isPartial }
+    }
+}
+
+extension MeasureEstimate {
+    /// The estimate for a nutrient the totals map does not carry.
+    static let noEstimate = MeasureEstimate.unavailable(.init(status: .unavailable, reason: .noData))
+
+    public var isPartial: Bool {
+        if case .partial = self { return true }
+        return false
+    }
+}
+
+// MARK: - Dashboard and Today
+
+extension DashboardCountsOut {
+    /// Row counts keyed by `EntityKey.rawValue`, read off the JSON projection so a newly countable
+    /// entity needs no hand-listed arm here. The response spells the USDA food count `usdaFoods`
+    /// (plural) and USDA foods are not `countable` in the manifest, so that key is mapped by hand.
+    public func count(for key: EntityKey) -> Int? {
+        guard let counts = try? JSONValue(encoding: self), case .object(let fields) = counts else {
+            return nil
+        }
+        let field = key == .usdaFood ? "usdaFoods" : key.rawValue
+        if case .number(let value) = fields[field] ?? .null { return Int(value) }
+        return nil
+    }
+}
+
+// MARK: - Images
+
+extension InitiateUploadWithoutEntity {
+    /// `image.uploadImage`'s `entityType` names the owning table for storage placement; an entity
+    /// outside its enum uploads untyped. `EntityImage`'s raw values are `EntityKey.rawValue`
+    /// upper-cased, so the case is derived rather than hand-listed (a hand-listed switch once
+    /// dropped `gardenEntry`).
+    public init(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey) {
+        self.init(filename: filename, size: size, contentType: format == .png ? .imagePng : .imageJpeg)
+        entityType = EntityImage(rawValue: entity.rawValue.uppercased())
+    }
+}
+
+// MARK: - Garden
+
+extension GardenPlantingOut {
+    /// `resources.planting.get` carries ids only; the names come from the garden options set.
+    public init(_ detail: PlantingDetail, options: GardenOptionsOut) {
+        let ingredient = options.ingredients.first { $0.id == detail.ingredientId }
+        self.init(
+            id: detail.id, ingredientId: detail.ingredientId, sourceProductId: detail.sourceProductId,
+            locationId: detail.locationId, intendedLocationId: detail.intendedLocationId,
+            parentPlantingId: detail.parentPlantingId, status: detail.status, variety: detail.variety,
+            quantity: detail.quantity, notes: detail.notes, plannedWindow: detail.plannedWindow,
+            plannedDate: detail.plannedDate, sowedOn: detail.sowedOn, transplantedOn: detail.transplantedOn,
+            finishedOn: detail.finishedOn, displayName: detail.displayName, createdAt: detail.createdAt,
+            updatedAt: detail.updatedAt, ingredientName: ingredient?.name ?? detail.ingredientId,
+            gardenGuideKey: ingredient?.gardenGuideKey,
+            sourceProductName: detail.sourceProductId.flatMap { id in
+                options.products.first { $0.id == id }?.name
+            },
+            locationName: detail.locationId.flatMap { id in options.locations.first { $0.id == id }?.name },
+            intendedLocationName: detail.intendedLocationId.flatMap { id in
+                options.locations.first { $0.id == id }?.name
+            })
+    }
+}
+
+extension GardenEntryOut {
+    public init(_ detail: GardenEntryDetail) {
+        self.init(
+            id: detail.id, locationId: detail.locationId, plantingId: detail.plantingId, kind: detail.kind,
+            observedOn: detail.observedOn, note: detail.note, harvestAmount: detail.harvestAmount,
+            images: detail.attachments.map {
+                ImageOut(
+                    id: $0.id, url: $0.url, key: $0.key, filename: $0.filename, size: $0.size,
+                    contentType: $0.contentType, status: $0.status, width: $0.width, height: $0.height,
+                    detectedContentType: $0.detectedContentType, sha256: $0.sha256,
+                    renderStatus: $0.renderStatus, storageStatus: $0.storageStatus,
+                    verifiedAt: $0.verifiedAt, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
+            },
+            displayName: detail.displayName, createdAt: detail.createdAt, updatedAt: detail.updatedAt,
+            locationName: detail.locationName, plantingName: detail.plantingName,
+            anchorsPeriod: detail.anchorsPeriod)
+    }
+
+    /// The journal row is the entry plus the bed context it was read through.
+    public init(_ journal: GardenJournalEntryOut) {
+        self.init(
+            id: journal.id, locationId: journal.locationId, plantingId: journal.plantingId,
+            kind: journal.kind, observedOn: journal.observedOn, note: journal.note,
+            harvestAmount: journal.harvestAmount, images: journal.images, displayName: journal.displayName,
+            createdAt: journal.createdAt, updatedAt: journal.updatedAt, locationName: journal.locationName,
+            plantingName: journal.plantingName, anchorsPeriod: journal.anchorsPeriod)
+    }
+}
+
+extension GardenJournalEntryOut {
+    /// The entry without its bed context, for views that render entries from either source.
+    public var entry: GardenEntryOut { GardenEntryOut(self) }
+}
+
+extension ImageOut {
+    public var imageURL: URL? { URL(string: url) }
+}
+
+extension ImageWithEntity {
+    public var imageURL: URL? { URL(string: url) }
+}
+
+extension ImageAssociation: Identifiable {
+    public var id: String { "\(entityType.rawValue):\(entityId):\(role.rawValue)" }
+    /// The catalog key, when the association's entity is one the catalog knows.
+    public var key: EntityKey? { EntityKey(rawValue: entityType.rawValue) }
+}
+
+extension GardenGuideWindow: Identifiable {
+    public var id: String {
+        "\(sourceId)|\(method.rawValue)|\(months.map(String.init).joined(separator: ","))"
+    }
+}
+
+extension GardenLocationPeriodOut: Identifiable {
+    public var id: Int { sequence }
+}

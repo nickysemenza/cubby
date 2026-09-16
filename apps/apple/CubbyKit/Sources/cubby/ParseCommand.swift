@@ -11,6 +11,8 @@ struct Parse: AsyncParsableCommand {
     var json: Bool = false
     @Flag(name: .customLong("units"), help: "Print the size-unit alias vocabulary instead.")
     var units: Bool = false
+    @Flag(name: .customLong("isbn"), help: "Normalize the line as an ISBN instead (the scan-code FFI).")
+    var isbn: Bool = false
     @Argument(help: "An ingredient line, e.g. \"2 cups flour\".")
     var line: [String] = []
 
@@ -20,6 +22,13 @@ struct Parse: AsyncParsableCommand {
             return
         }
         let text = line.joined(separator: " ")
+        if isbn {
+            guard let normalized = ScanCodes.normalizeISBN(text) else {
+                throw CLIError.message("Not a valid ISBN-10 or ISBN-13.")
+            }
+            print("\(normalized.gtin14) isbn13=\(normalized.isbn13) isbn10=\(normalized.isbn10 ?? "-")")
+            return
+        }
         guard !text.isEmpty else { throw CLIError.message("Give an ingredient line to parse.") }
         let parsed = IngredientParser.parse(text)
         if json {

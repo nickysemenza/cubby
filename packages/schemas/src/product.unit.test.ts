@@ -75,7 +75,10 @@ describe("productQuantitySummaryBatchInput", () => {
 describe("productFindOrCreateByCodeInput", () => {
   it.each([
     [{ kind: "barcode", value: "012345678905" }, "012345678905"],
-    [{ kind: "isbn", value: "978-0-306-40615-7" }, "09780306406157"],
+    // Only trims: check-digit validation + GTIN-14 normalization happen in
+    // `product.findOrCreateByCode`'s "isbn" arm (schemas cannot depend on
+    // the WASM boundary that validation needs).
+    [{ kind: "isbn", value: "  978-0-306-40615-7  " }, "978-0-306-40615-7"],
     // The raw arm only trims: the server classifies it into one of the others.
     [{ kind: "scan", value: "  P-4K7M " }, "P-4K7M"],
   ])("accepts the %o arm", (input, value) => {

@@ -1,9 +1,9 @@
+import CubbyAPI
 import Foundation
 
-/// One expected inventory row in a bin, from `inventory.getByLocationIds`. Hand-decoded so the
-/// server's `updatedAt` string survives verbatim: `reconcileSession` compares the snapshot to
-/// the millisecond, and a Date round-trip could change the spelling.
-public struct RecountRow: Sendable, Hashable, Identifiable, Decodable {
+/// One expected inventory row in a bin, from `inventory.getByLocationIds`, with the product
+/// reduced to what the walk matches and shows.
+public struct RecountRow: Sendable, Hashable, Identifiable {
     public struct Product: Sendable, Hashable {
         public let id: ProductCode
         public let name: String
@@ -32,7 +32,9 @@ public struct RecountRow: Sendable, Hashable, Identifiable, Decodable {
 
     public let id: InventoryEntryCode
     public let amount: Amount
-    public let updatedAtRaw: String
+    /// The server's own timestamp, sent back verbatim as `snapshotUpdatedAt`: the reconcile guard
+    /// compares it to the millisecond, and the generated client's transcoder keeps milliseconds.
+    public let updatedAt: Date
     public let placement: String
     public let product: Product
     public let locationID: LocationCode
@@ -41,7 +43,7 @@ public struct RecountRow: Sendable, Hashable, Identifiable, Decodable {
     public init(
         id: InventoryEntryCode,
         amount: Amount,
-        updatedAtRaw: String,
+        updatedAt: Date,
         placement: String = "stock",
         product: Product,
         locationID: LocationCode,
@@ -49,82 +51,45 @@ public struct RecountRow: Sendable, Hashable, Identifiable, Decodable {
     ) {
         self.id = id
         self.amount = amount
-        self.updatedAtRaw = updatedAtRaw
+        self.updatedAt = updatedAt
         self.placement = placement
         self.product = product
         self.locationID = locationID
         self.locationName = locationName
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case id, amount, updatedAt, placement, product, location
-    }
-    private enum ProductKeys: String, CodingKey {
-        case id, name, manufacturer, primaryGtin, externalIds, images
-    }
-    private enum ExternalIDKeys: String, CodingKey { case kind, externalId }
-    private enum ImageKeys: String, CodingKey { case url, status }
-    private enum LocationKeys: String, CodingKey { case id, name }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(InventoryEntryCode.self, forKey: .id)
-        amount = try container.decode(Amount.self, forKey: .amount)
-        updatedAtRaw = try container.decode(String.self, forKey: .updatedAt)
-        placement = try container.decodeIfPresent(String.self, forKey: .placement) ?? "stock"
-
-        let product = try container.nestedContainer(keyedBy: ProductKeys.self, forKey: .product)
-        let primaryGtin = try product.decodeIfPresent(String.self, forKey: .primaryGtin)
+    public init(_ out: InventoryWithLocationAndProductOut) {
         var barcodes: Set<String> = []
-        var externalIDs = try product.nestedUnkeyedContainer(forKey: .externalIds)
-        while !externalIDs.isAtEnd {
-            let entry = try externalIDs.nestedContainer(keyedBy: ExternalIDKeys.self)
-            if try entry.decode(String.self, forKey: .kind) == "gtin_14" {
-                barcodes.insert(try entry.decode(String.self, forKey: .externalId))
-            }
+        for external in out.product.externalIds where external.kind == .gtin14 {
+            barcodes.insert(external.externalId)
         }
-        var cover: URL?
-        if product.contains(.images) {
-            var images = try product.nestedUnkeyedContainer(forKey: .images)
-            while !images.isAtEnd, cover == nil {
-                let image = try images.nestedContainer(keyedBy: ImageKeys.self)
-                if try image.decodeIfPresent(String.self, forKey: .status) == "UPLOADED" {
-                    cover = try image.decodeIfPresent(String.self, forKey: .url).flatMap(URL.init(string:))
-                }
-            }
-        }
-        self.product = Product(
-            id: try product.decode(ProductCode.self, forKey: .id),
-            name: try product.decode(String.self, forKey: .name),
-            manufacturer: try product.decodeIfPresent(String.self, forKey: .manufacturer),
-            primaryGtin: primaryGtin,
-            barcodes: barcodes,
-            coverImageURL: cover
+        // InventoryDetailProductOut (the recount row's product shape) carries neither
+        // `displayImages` nor `coverImageUrl` — only this status-tagged `images` array. Switch to
+        // `out.product.displayImages.first?.url` once that field lands here, matching the
+        // list-row image ladder in EntityRow.imageURL(from:).
+        let cover = out.product.images.first { $0.status == .uploaded }.flatMap { URL(string: $0.url) }
+        self.init(
+            id: out.id,
+            amount: Amount(value: out.amount.value, unit: out.amount.unit, upperValue: out.amount.upperValue),
+            updatedAt: out.updatedAt,
+            placement: out.placement.rawValue,
+            product: Product(
+                id: out.product.id,
+                name: out.product.name,
+                manufacturer: out.product.manufacturer.isEmpty ? nil : out.product.manufacturer,
+                primaryGtin: out.product.primaryGtin,
+                barcodes: barcodes,
+                coverImageURL: cover
+            ),
+            locationID: out.location.id,
+            locationName: out.location.name
         )
-
-        let location = try container.nestedContainer(keyedBy: LocationKeys.self, forKey: .location)
-        locationID = try location.decode(LocationCode.self, forKey: .id)
-        locationName = try location.decode(String.self, forKey: .name)
     }
 
-    /// The `snapshotUpdatedAt` for a bin: the verbatim `updatedAt` of the most recently updated
-    /// row, or `nil` for an empty bin. Compared as dates, returned as the original string.
-    public static func snapshotTimestamp(_ rows: [RecountRow]) -> String? {
-        let transcoder = LenientISO8601DateTranscoder()
-        let dated = rows.compactMap { row in
-            (try? transcoder.decode(row.updatedAtRaw)).map { (row.updatedAtRaw, $0) }
-        }
-        if dated.count == rows.count {
-            return dated.max { $0.1 < $1.1 }?.0
-        }
-        // A timestamp the transcoder cannot parse: fall back to the lexical order, which for the
-        // API's fixed `YYYY-MM-DDTHH:mm:ss.sssZ` spelling is the chronological one.
-        return rows.map(\.updatedAtRaw).max()
-    }
-
-    /// Left-pads a scanned 8/12/13-digit barcode to the GTIN-14 the server stores.
-    public static func gtin14(_ digits: String) -> String {
-        String(repeating: "0", count: max(0, 14 - digits.count)) + digits
+    /// The `snapshotUpdatedAt` for a bin: the most recently updated row's timestamp, or `nil` for
+    /// an empty bin.
+    public static func snapshotTimestamp(_ rows: [RecountRow]) -> Date? {
+        rows.map(\.updatedAt).max()
     }
 }
 
@@ -139,6 +104,19 @@ public enum RecountResolution: Sendable, Hashable {
     public var isChange: Bool {
         if case .verify = self { return false }
         return true
+    }
+
+    /// The wire arm for `inventory.reconcileSession`; each carries only its own keys, since an
+    /// unexpected key fails validation.
+    public func resolution(for id: InventoryEntryCode) -> InventorySessionResolution {
+        switch self {
+        case .verify: .verify(.init(kind: .verify, inventoryEntryId: id))
+        case .adjust(let amount):
+            .adjust(.init(kind: .adjust, inventoryEntryId: id, amount: PositiveAmountInput(amount)))
+        case .remove: .remove(.init(kind: .remove, inventoryEntryId: id))
+        case .relocate(let target, _):
+            .relocate(.init(kind: .relocate, inventoryEntryId: id, targetLocationId: target))
+        }
     }
 }
 

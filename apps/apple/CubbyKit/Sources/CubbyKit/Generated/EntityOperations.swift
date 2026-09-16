@@ -48,7 +48,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .financialAccount:
             let page = try await client.resources_financialAccount_list(
@@ -56,7 +56,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .financialTransaction:
             let page = try await client.resources_financialTransaction_list(
@@ -64,7 +64,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .gardenEntry:
             let page = try await client.resources_gardenEntry_list(
@@ -72,7 +72,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .ingredient:
             let page = try await client.resources_ingredient_list(
@@ -80,7 +80,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .inventory:
             let page = try await client.resources_inventory_list(
@@ -88,7 +88,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .ledgerParty:
             let page = try await client.resources_ledgerParty_list(
@@ -96,7 +96,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .ledgerTransfer:
             let page = try await client.resources_ledgerTransfer_list(
@@ -104,7 +104,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .location:
             let page = try await client.resources_location_list(
@@ -112,7 +112,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .meal:
             let page = try await client.resources_meal_list(
@@ -120,7 +120,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .planting:
             let page = try await client.resources_planting_list(
@@ -128,7 +128,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .product:
             let page = try await client.resources_product_list(
@@ -136,7 +136,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .project:
             let page = try await client.resources_project_list(
@@ -144,7 +144,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .purchase:
             let page = try await client.resources_purchase_list(
@@ -152,7 +152,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .recipe:
             let page = try await client.resources_recipe_list(
@@ -160,7 +160,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .task:
             let page = try await client.resources_task_list(
@@ -168,7 +168,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .vendor:
             let page = try await client.resources_vendor_list(
@@ -176,7 +176,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         case .wish:
             let page = try await client.resources_wish_list(
@@ -184,7 +184,7 @@ extension EntityDescriptor {
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )
         default: throw EntityOperationError.unsupported(key, .list)
         }
@@ -235,7 +235,7 @@ extension EntityDescriptor {
 
     /// `resources.<key>.update` with only `pendingImageIds` set, for the entities whose update
     /// body declares it (the same set `OperationRoute.imageAttachableEntities` lists).
-    func attachImages(_ imageIds: [String], to id: String, client: Client) async throws {
+    func attachImages(_ imageIds: [ImageCode], to id: String, client: Client) async throws {
         switch key {
         case .gardenEntry:
             _ = try await client.resources_gardenEntry_update(
@@ -274,7 +274,7 @@ extension EntityDescriptor {
     }
 
     /// `resources.<key>.update` with only `imageOrder` set.
-    func setImageOrder(_ imageIds: [String], on id: String, client: Client) async throws {
+    func setImageOrder(_ imageIds: [ImageCode], on id: String, client: Client) async throws {
         switch key {
         case .gardenEntry:
             _ = try await client.resources_gardenEntry_update(

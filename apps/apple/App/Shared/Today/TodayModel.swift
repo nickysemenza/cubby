@@ -13,9 +13,9 @@ enum TodaySectionState<Value> {
 @MainActor
 @Observable
 final class TodayModel {
-    private(set) var tasks: TodaySectionState<[TodayTask]> = .loading
-    private(set) var meals: TodaySectionState<[TodayMeal]> = .loading
-    private(set) var problems: TodaySectionState<TodayProblemCounts> = .loading
+    private(set) var tasks: TodaySectionState<[TaskTodayBriefingItemOut]> = .loading
+    private(set) var meals: TodaySectionState<[MealListItem]> = .loading
+    private(set) var problems: TodaySectionState<ProblemsCount> = .loading
 
     private(set) var tasksIsLoading = false
     private(set) var mealsIsLoading = false
@@ -155,17 +155,17 @@ final class TodayModel {
         problemsIsLoading = false
     }
 
-    private var loadedTasks: [TodayTask]? {
+    private var loadedTasks: [TaskTodayBriefingItemOut]? {
         if case .loaded(let value) = tasks { return value }
         return nil
     }
 
-    private var loadedMeals: [TodayMeal]? {
+    private var loadedMeals: [MealListItem]? {
         if case .loaded(let value) = meals { return value }
         return nil
     }
 
-    private var loadedProblems: TodayProblemCounts? {
+    private var loadedProblems: ProblemsCount? {
         if case .loaded(let value) = problems { return value }
         return nil
     }

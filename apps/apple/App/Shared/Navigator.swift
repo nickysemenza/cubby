@@ -15,7 +15,7 @@ final class Navigator {
     var selectedRecords: [AppSection: RecordSelection] = [:]
     var graphWorkspace: GraphWorkspaceSession?
 
-    func openGraph(root: EntityReference? = nil) {
+    func openGraph(root: EntityRef? = nil) {
         #if os(macOS)
             section = .graph
             paths[.graph] = root.map { [.graph($0)] } ?? []

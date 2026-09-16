@@ -87,12 +87,12 @@ struct ScopePickerSheet: View {
                         .font(.porcelainBody)
                         .foregroundStyle(PorcelainTokens.graphite)
                         .lineLimit(1)
-                    if let type = node.type {
-                        Eyebrow(type)
+                    if let type = node._type {
+                        Eyebrow(type.rawValue)
                     }
                 }
                 Spacer(minLength: PorcelainTokens.Space.sm)
-                Text("\(node.totalItemCount)")
+                Text("\(node.totalItems)")
                     .font(.porcelainData)
                     .foregroundStyle(PorcelainTokens.graphiteSecondary)
             }
@@ -107,13 +107,13 @@ struct ScopePickerSheet: View {
     private func submitCode() {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard let parsed = Shortcode.parse(trimmed), parsed.key == .location else {
+        guard let label = CubbyLabel(trimmed), label.key == .location else {
             codeError = "That's not a location code."
             return
         }
         codeError = nil
         code = ""
-        Task { await session.start(scope: LocationCode(parsed.code)) }
+        Task { await session.start(scope: LocationCode(label.code)) }
     }
 }
 

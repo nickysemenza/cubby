@@ -14,11 +14,11 @@ final class GardenModel {
 
     let service: any GardenService
     private(set) var phase: Phase = .idle
-    private(set) var overview = GardenOverview(locations: [], finishedPlantings: [])
+    private(set) var overview = GardenOverviewOut(locations: [], finished: [], unassigned: [])
     private(set) var options = GardenOptions(ingredients: [], locations: [], products: [])
-    private(set) var guides = GardenGuidesDocument(schemaVersion: 1, sources: [], guides: [])
+    private(set) var guides = GardenGuidesDocument(schemaVersion: ._1, sources: [], guides: [])
     private(set) var guideError: String?
-    private(set) var entries: [GardenEntry] = []
+    private(set) var entries: [GardenEntryOut] = []
     private(set) var entriesError: String?
     private(set) var entriesHasMore = false
     private(set) var entriesLoading = false
@@ -78,14 +78,14 @@ final class GardenModel {
         } catch {
             // Guides enhance a planting decision; a stale or unavailable reference file must not
             // prevent the user from recording what is actually growing.
-            guides = GardenGuidesDocument(schemaVersion: 1, sources: [], guides: [])
+            guides = GardenGuidesDocument(schemaVersion: ._1, sources: [], guides: [])
             guideError = Self.message(for: error)
             Diagnostics.report(error, context: "garden.guides")
         }
     }
 
-    var allPlantings: [GardenPlanting] {
-        overview.locations.flatMap(\.plantings) + overview.unassignedPlantings + overview.finishedPlantings
+    var allPlantings: [GardenPlantingOut] {
+        overview.locations.flatMap(\.plantings) + overview.unassigned + overview.finished
     }
 
     var allPlantingOptions: [GardenOption] { options.plantings }
@@ -116,20 +116,20 @@ final class GardenModel {
     /// `rememberSource` writes the source product's `growsIngredientID` back only when the caller
     /// opted in *and* the product's current association actually differs from this planting's
     /// crop — an unchanged association is not worth an extra write.
-    func create(_ input: CreateGardenPlanting, rememberSource: Bool = false) async -> Bool {
+    func create(_ input: GardenCreatePlantingInput, rememberSource: Bool = false) async -> Bool {
         let saved = await save {
             _ = try await self.service.createGardenPlanting(input)
         }
-        guard saved, rememberSource, let productID = input.productID else { return saved }
+        guard saved, rememberSource, let productID = input.sourceProductId?.rawValue else { return saved }
         let currentAssociation = options.products.first(where: { $0.id == productID })?.growsIngredientID
-        guard currentAssociation != input.ingredientID else { return saved }
+        guard currentAssociation != input.ingredientId else { return saved }
         _ = await save {
-            try await self.service.setGardenProduct(id: productID, growsIngredientID: input.ingredientID)
+            try await self.service.setGardenProduct(id: productID, growsIngredientID: input.ingredientId)
         }
         return saved
     }
 
-    func record(_ input: RecordGardenEntry) async -> Bool {
+    func record(_ input: GardenRecordEntryInput) async -> Bool {
         await save { try await self.service.recordGardenEntry(input) }
     }
 
@@ -144,11 +144,11 @@ final class GardenModel {
         }
     }
 
-    func move(_ input: MoveGardenPlanting) async -> Bool {
+    func move(_ input: GardenMovePlantingInput) async -> Bool {
         await save { try await self.service.moveGardenPlanting(input) }
     }
 
-    func split(_ input: SplitGardenPlanting) async -> Bool {
+    func split(_ input: GardenSplitPlantingInput) async -> Bool {
         await save { _ = try await self.service.splitGardenPlanting(input) }
     }
 
@@ -179,8 +179,8 @@ final class GardenModel {
         await save { try await self.service.setGardenIngredient(id: id, guideKey: guideKey) }
     }
 
-    func updatePlanting(_ input: EditGardenPlanting) async -> Bool {
-        await save { try await self.service.updateGardenPlanting(input) }
+    func updatePlanting(id: String, _ data: PlantingUpdateData) async -> Bool {
+        await save { try await self.service.updateGardenPlanting(id: id, data) }
     }
 
     func loadEntries(reset: Bool = true) async {
@@ -199,8 +199,8 @@ final class GardenModel {
         }
     }
 
-    func updateEntry(_ input: EditGardenEntry) async -> Bool {
-        await save { try await self.service.updateGardenEntry(input) }
+    func updateEntry(id: String, _ data: GardenEntryUpdateData) async -> Bool {
+        await save { try await self.service.updateGardenEntry(id: id, data) }
     }
 
     private func save(_ operation: () async throws -> Void) async -> Bool {

@@ -9,6 +9,16 @@ generate:
 # through the generated aliases in CubbyKit/Generated/APITypes.swift.
 accessModifier: public
 namingStrategy: idiomatic
+additionalImports:
+  - CubbyAPISupport
+typeOverrides:
+  schemas:
+    Entity: CubbyAPISupport.EntityKey
+    ImageShortcode: CubbyAPISupport.ImageCode
+    InventoryShortcode: CubbyAPISupport.InventoryEntryCode
+    LocationShortcode: CubbyAPISupport.LocationCode
+    PlainDate: CubbyAPISupport.PlainDate
+    ProductShortcode: CubbyAPISupport.ProductCode
 filter:
   operations:
     - dashboard.counts

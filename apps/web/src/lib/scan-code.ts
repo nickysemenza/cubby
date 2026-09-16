@@ -1,10 +1,11 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { normalizeIsbn } from "@cubby/schemas/isbn";
 import type { ProductFindOrCreateByCodeInput } from "@cubby/schemas/product";
 import type { ScanAtLocationCode } from "@cubby/schemas/scan";
 import type { ShortcodeType } from "@cubby/shared";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
+
+import { wasm } from "~/lib/wasm";
 
 export type ResolvedScanCode =
   /**
@@ -63,7 +64,7 @@ export function resolveScanCode(raw: string): ScanCodeResolution {
     // Plain codes are the normal path.
   }
 
-  const normalizedIsbn = normalizeIsbn(value);
+  const normalizedIsbn = wasm.normalize_isbn(value);
   if (normalizedIsbn) {
     return {
       ok: true,

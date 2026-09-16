@@ -1,10 +1,5 @@
+import CubbyAPI
 import Foundation
-
-public struct ImageCode: RawRepresentable, Sendable, Hashable, Codable {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
-    public init(_ rawValue: String) { self.rawValue = rawValue }
-}
 
 /// What `image.uploadImage` hands back: where to PUT the bytes, and the id to mark afterwards.
 public struct ImageUpload: Sendable, Hashable, Decodable {
@@ -18,6 +13,14 @@ public struct ImageUpload: Sendable, Hashable, Decodable {
         self.imageId = imageId
         self.key = key
         self.url = url
+    }
+
+    /// A response whose URLs do not parse is an operation failure, not a decode failure.
+    public init(_ out: InitiateUploadWithoutEntityResponse) throws {
+        guard let uploadURL = URL(string: out.uploadUrl), let url = URL(string: out.url) else {
+            throw CubbyAPIError(status: 0, operationID: "image.uploadImage", detail: nil)
+        }
+        self.init(uploadUrl: uploadURL, imageId: out.imageId, key: out.key, url: url)
     }
 }
 

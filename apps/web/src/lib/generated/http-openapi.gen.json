@@ -33508,7 +33508,6 @@
                   "type": "string"
                 }
               ],
-              "items": false,
               "minItems": 2,
               "maxItems": 2
             }
@@ -33543,7 +33542,6 @@
                   "type": "string"
                 }
               ],
-              "items": false,
               "minItems": 2,
               "maxItems": 2
             }
@@ -38230,9 +38228,6 @@
           "location"
         ],
         "additionalProperties": false
-      },
-      "Isbn": {
-        "type": "string"
       },
       "JsonValue": {
         "description": "Any JSON value: a string, number, boolean, null, array or object."
@@ -42999,7 +42994,6 @@
                 "additionalProperties": false
               }
             ],
-            "items": false,
             "minItems": 1,
             "maxItems": 1
           }
@@ -43020,7 +43014,6 @@
           "candidates": {
             "type": "array",
             "prefixItems": [],
-            "items": false,
             "maxItems": 0
           }
         },
@@ -43067,7 +43060,6 @@
                 "additionalProperties": false
               }
             ],
-            "items": false,
             "minItems": 1,
             "maxItems": 1
           }
@@ -46096,7 +46088,10 @@
             "$ref": "#/components/schemas/GtinInput"
           },
           "isbn": {
-            "$ref": "#/components/schemas/Isbn"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "fdc_id": {
             "$ref": "#/components/schemas/FdcId"
@@ -47064,7 +47059,7 @@
             "const": "isbn"
           },
           "value": {
-            "$ref": "#/components/schemas/Isbn"
+            "type": "string"
           }
         },
         "required": [
@@ -48665,7 +48660,10 @@
             "$ref": "#/components/schemas/GtinInput"
           },
           "isbn": {
-            "$ref": "#/components/schemas/Isbn"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "model": {
             "type": [
@@ -49140,7 +49138,10 @@
             "$ref": "#/components/schemas/GtinInput"
           },
           "isbn": {
-            "$ref": "#/components/schemas/Isbn"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "fdc_id": {
             "$ref": "#/components/schemas/FdcId"

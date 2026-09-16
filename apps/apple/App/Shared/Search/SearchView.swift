@@ -225,7 +225,7 @@ struct SearchContent: View {
             UnknownCodePanel(code: code, catalog: catalog, creating: creatingProduct) {
                 Task { await createProduct(code: code) }
             } onStock: {
-                model.navigator.pendingCaptureCode = code.value
+                model.navigator.pendingCaptureCode = code
                 dismissSearch()
                 model.navigator.open(.capture(location: nil))
             }
@@ -255,11 +255,11 @@ struct SearchContent: View {
         }
     }
 
-    private func createProduct(code: ScanCode) async {
+    private func createProduct(code: String) async {
         creatingProduct = true
         defer { creatingProduct = false }
         do {
-            guard let found = try await model.client.findOrCreateProduct(code: code) else { return }
+            let found = try await model.client.findOrCreateProduct(raw: code)
             RecentEntities.record(found.product.id.rawValue)
             dismissSearch()
             model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
@@ -309,8 +309,9 @@ private struct SearchHitRow: View {
                 ForEach(PreviewFixtures.sampleRows) { row in
                     SearchHitRow(
                         hit: SearchHit(
-                            id: row.id, entityType: "product", title: row.title, subtitle: row.subtitle,
-                            typeHint: nil, imageURL: row.imageURL, matchKind: "text", matchReason: "name"))
+                            id: row.id, entityType: .product, title: row.title, subtitle: row.subtitle,
+                            typeHint: nil, imageUrl: row.imageURL?.absoluteString, matchKind: .prefix,
+                            matchField: .title, matchReason: "name", matchTerms: []))
                 }
             }
         }

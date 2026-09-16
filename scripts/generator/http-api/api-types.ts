@@ -123,7 +123,7 @@ export type EntityOutputs = ReadonlyMap<string, string | null>;
  * `CubbyKit/Generated/APITypes.swift`: one `public typealias` per named
  * component the native client carries, so hand-written Swift never spells
  * `Components.Schemas.*`; `<Entity>`, `<Entity>ListItem` and `<Entity>Detail`
- * for every entity with HTTP resources; and `@retroactive Identifiable` for
+ * for every entity with HTTP resources; and `Identifiable` (same package, so not retroactive) for
  * every aliased object that carries an `id`.
  *
  * `entityOutputs` maps an entity key to its output schema's export name
@@ -198,6 +198,6 @@ export const renderApiTypes = (
       "// MARK: - Components\n\n" +
       `${aliased.map((name) => `public typealias ${name} = Components.Schemas.${name}`).join("\n")}\n\n` +
       "// MARK: - Identifiable\n\n" +
-      `${identifiable.map((name) => `extension Components.Schemas.${name}: @retroactive Identifiable {}`).join("\n")}\n`,
+      `${identifiable.map((name) => `extension Components.Schemas.${name}: Identifiable {}`).join("\n")}\n`,
   };
 };

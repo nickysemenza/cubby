@@ -464,6 +464,7 @@ const swiftFormatTargets = () => {
   return [
     ...siblingsOfGenerated,
     "apps/apple/App",
+    "apps/apple/CubbyKit/Sources/CubbyAPISupport",
     "apps/apple/CubbyKit/Sources/cubby",
     "apps/apple/CubbyKit/Tests",
   ];
@@ -514,7 +515,7 @@ export const runAppleCheck = () => {
     "apps/apple/CubbyKit",
     "--force-resolved-versions",
   ]);
-  run("apps/apple/scripts/check-openapi-drift.sh", []);
+  run("apps/apple/scripts/generate-openapi.sh", ["--check"]);
   // Same DerivedData as `pnpm apple`, so this build is incremental over the
   // dev loop's instead of a second full compile of CubbyKit. The index store
   // has no reader in a command-line build.

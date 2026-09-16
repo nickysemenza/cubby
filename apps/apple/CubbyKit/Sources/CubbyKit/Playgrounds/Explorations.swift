@@ -13,10 +13,10 @@
         _ = IngredientParser.sizeUnitAliases.count
     }
 
-    #Playground("Classify scanner input") {
+    #Playground("Read scanner input offline") {
         let inputs = ["012345678905", "9780306406157", "PRD-2345", "https://cubby.example/LOC-2345", "hello"]
         for input in inputs {
-            _ = ScanCode.classify(input)
+            _ = (CubbyLabel(input), ScanCodes.gtin14(input))
         }
     }
 

@@ -233,15 +233,17 @@ const renderEntityDescriptorLiteral = (
 
 /**
  * Renders the read-only Swift entity catalog consumed by CubbyKit: an
- * enumerable `EntityKey`, the field/filter/action vocabulary as Swift enums
- * (case names camelCased from the TS source, raw values kept verbatim), and
- * one `EntityDescriptor` per declared entity. Pure string emission, compared
- * byte for byte by `generate:check`.
+ * enumerable `EntityKey` (into the `CubbyAPISupport` target, where the
+ * generated client's `Entity` schema is overridden to it so the wire enum
+ * and the catalog key are one type), the field/filter/action vocabulary as
+ * Swift enums (case names camelCased from the TS source, raw values kept
+ * verbatim), and one `EntityDescriptor` per declared entity. Pure string
+ * emission, compared byte for byte by `generate:check`.
  */
 export const renderSwiftEntityCatalog = (
   entities: readonly CompiledEntity[],
   kernelContractCases: SwiftKernelContractCases,
-): EntityArtifacts => {
+): EntityArtifacts[] => {
   const entityKeyEnum = renderStringEnum(
     "EntityKey",
     entities.map(({ key }) => key),
@@ -278,9 +280,7 @@ export const renderSwiftEntityCatalog = (
   const source =
     generatedHeader +
     "// swift-format-ignore-file\n\n" +
-    "import Foundation\n\n" +
-    entityKeyEnum +
-    "\n" +
+    "import CubbyAPISupport\nimport Foundation\n\n" +
     entityActionEnum +
     "\n" +
     entityFieldKindEnum +
@@ -358,9 +358,21 @@ export const renderSwiftEntityCatalog = (
     "    }\n" +
     "  }\n" +
     "}\n";
-  return {
-    relativePath:
-      "apps/apple/CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift",
-    source,
-  };
+  return [
+    {
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift",
+      source:
+        generatedHeader +
+        "// swift-format-ignore-file\n\n" +
+        "/// Every declared entity, keyed as the manifest spells it. The generated client's\n" +
+        "/// `Entity` schema is this enum (`typeOverrides` in openapi-generator-config.yaml).\n" +
+        entityKeyEnum,
+    },
+    {
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift",
+      source,
+    },
+  ];
 };

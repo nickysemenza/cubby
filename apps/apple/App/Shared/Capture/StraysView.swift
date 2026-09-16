@@ -32,7 +32,7 @@ struct StraysView: View {
                         ForEach(stray.rows) { row in
                             HStack(spacing: PorcelainTokens.Space.sm) {
                                 DomainMark(.location)
-                                Text(row.locationName)
+                                Text(row.location.name)
                                     .font(.porcelainBody)
                                     .foregroundStyle(PorcelainTokens.graphiteSecondary)
                                     .lineLimit(1)

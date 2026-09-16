@@ -49,7 +49,7 @@ scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI shim; a stale
 committed `cubby_ffi.swift` fails as a dirty tree), `xcodegen
 generate --use-cache`,
 `swift test --package-path apps/apple/CubbyKit`,
-`apps/apple/scripts/check-openapi-drift.sh`, then an `xcodebuild` simulator
+`apps/apple/scripts/generate-openapi.sh --check`, then an `xcodebuild` simulator
 build. It skips itself (with a message, not a failure) when `xcode-select -p`
 fails, so a machine without Xcode still passes. `rust` gates run fmt/clippy/test
 per changed manifest (`recipebridge/Cargo.toml`, `cubby-ffi/Cargo.toml`);

@@ -570,3 +570,23 @@ export function integerLiterals(components: Components): Components {
     ]),
   );
 }
+
+/**
+ * Zod 4.2 closes a `z.tuple()` with `items: false` beside `prefixItems`.
+ * OpenAPIKit (swift-openapi-generator's parser) rejects a boolean `items`, so
+ * the closing keyword is dropped; the tuple stays `prefixItems`-only, which
+ * the Swift client already renders as an untyped array.
+ */
+export function openTupleItems(components: Components): Components {
+  const visit = (node: JsonSchema): JsonSchema => {
+    if (node.items !== false || node.prefixItems === undefined) return node;
+    const { items: _items, ...rest } = node;
+    return rest;
+  };
+  return Object.fromEntries(
+    Object.entries(components).map(([name, schema]) => [
+      name,
+      mapSchemas(schema, visit),
+    ]),
+  );
+}

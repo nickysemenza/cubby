@@ -40,31 +40,28 @@ public actor CubbyClient {
 
     // MARK: - Products
 
-    public func product(_ id: ProductCode) async throws -> ProductSummary {
+    public func product(_ id: ProductCode) async throws -> ProductDetail {
         try await perform {
-            ProductSummary(try await api.resources_product_get(path: .init(id: id.rawValue)).ok.body.json)
+            try await api.resources_product_get(path: .init(id: id.rawValue)).ok.body.json
         }
     }
 
-    public func findOrCreateProduct(upc: String, defaultName: String? = nil) async throws -> FoundProduct {
+    public func findOrCreateProduct(upc: String, defaultName: String? = nil) async throws
+        -> ProductFindOrCreateByUPCOut
+    {
         try await perform {
-            let output = try await api.product_findOrCreateByUPC(
-                body: .json(.init(upc: upc, defaultName: defaultName)))
-            return FoundProduct(try output.ok.body.json)
+            try await api.product_findOrCreateByUPC(body: .json(.init(upc: upc, defaultName: defaultName)))
+                .ok.body.json
         }
     }
 
-    /// Find-or-create by a scanned code the way the web `/scan` page does: an ISBN becomes a
-    /// book, a barcode a product. `.product` is already a product and needs no request.
-    public func findOrCreateProduct(code: ScanCode) async throws -> FoundProduct? {
-        let body: Components.Schemas.ProductFindOrCreateByCodeInput
-        switch code {
-        case .barcode(let value): body = .barcode(.init(kind: .barcode, value: value))
-        case .isbn(let value): body = .isbn(.init(kind: .isbn, value: value))
-        case .product: return nil
-        }
-        return try await perform {
-            FoundProduct(try await api.product_findOrCreateByCode(body: .json(body)).ok.body.json)
+    /// Find-or-create by a raw scanned code, resolved server-side the way the web `/scan` page
+    /// does: an ISBN becomes a book, a barcode a product, a product label the product itself; an
+    /// unreadable code is the server's validation error.
+    public func findOrCreateProduct(raw: String) async throws -> ProductFindOrCreateByUPCOut {
+        try await perform {
+            try await api.product_findOrCreateByCode(body: .json(.scan(.init(kind: .scan, value: raw))))
+                .ok.body.json
         }
     }
 
@@ -98,7 +95,7 @@ public actor CubbyClient {
         query.imagePresenceFilter = .has
         return try await perform {
             let result = try await api.resources_product_list(query: query).ok.body.json
-            return ListPage(items: result.items.map { ProductCode($0.id) }, meta: PageMeta(result.meta))
+            return ListPage(items: result.items.map(\.id), meta: result.meta)
         }
     }
 
@@ -112,8 +109,8 @@ public actor CubbyClient {
 
     // MARK: - Garden
 
-    public func gardenOverview() async throws -> GardenOverview {
-        try await perform { GardenOverview(try await api.garden_overview().ok.body.json) }
+    public func gardenOverview() async throws -> GardenOverviewOut {
+        try await perform { try await api.garden_overview().ok.body.json }
     }
 
     /// `search` (≥2 chars) widens the garden-scoped options set with prefix matches, for an
@@ -133,23 +130,19 @@ public actor CubbyClient {
     }
 
     public func gardenGuides() async throws -> GardenGuidesDocument {
-        try await perform { GardenGuidesDocument(try await api.garden_guides().ok.body.json) }
+        try await perform { try await api.garden_guides().ok.body.json }
     }
 
-    public func createGardenPlanting(_ input: CreateGardenPlanting) async throws {
-        try await perform {
-            _ = try await api.garden_createPlanting(body: .json(GardenCreateInput(input))).ok
-        }
+    public func createGardenPlanting(_ input: GardenCreatePlantingInput) async throws {
+        try await perform { _ = try await api.garden_createPlanting(body: .json(input)).ok }
     }
 
-    public func recordGardenEntry(_ input: RecordGardenEntry) async throws {
+    public func recordGardenEntry(_ input: GardenRecordEntryInput) async throws {
         _ = try await recordGardenEntryReturningID(input)
     }
 
-    public func recordGardenEntryReturningID(_ input: RecordGardenEntry) async throws -> String {
-        try await perform {
-            try await api.garden_recordEntry(body: .json(GardenRecordInput(input))).ok.body.json.id
-        }
+    public func recordGardenEntryReturningID(_ input: GardenRecordEntryInput) async throws -> String {
+        try await perform { try await api.garden_recordEntry(body: .json(input)).ok.body.json.id }
     }
 
     public func startGardenPlanting(
@@ -161,27 +154,25 @@ public actor CubbyClient {
         try await perform {
             _ = try await api.garden_startPlanting(
                 body: .json(
-                    GardenStartInput(id: id, locationID: locationID, startedAt: startedAt, method: method))
+                    .init(
+                        plantingId: id, locationId: LocationCode(locationID), startedOn: PlainDate(startedAt),
+                        startMethod: .init(rawValue: method.rawValue)!))
             ).ok
         }
     }
 
-    public func moveGardenPlanting(_ input: MoveGardenPlanting) async throws {
-        try await perform {
-            _ = try await api.garden_movePlanting(body: .json(GardenMoveInput(input))).ok
-        }
+    public func moveGardenPlanting(_ input: GardenMovePlantingInput) async throws {
+        try await perform { _ = try await api.garden_movePlanting(body: .json(input)).ok }
     }
 
-    public func splitGardenPlanting(_ input: SplitGardenPlanting) async throws {
-        try await perform {
-            _ = try await api.garden_splitPlanting(body: .json(GardenSplitInput(input))).ok
-        }
+    public func splitGardenPlanting(_ input: GardenSplitPlantingInput) async throws {
+        try await perform { _ = try await api.garden_splitPlanting(body: .json(input)).ok }
     }
 
     public func finishGardenPlanting(id: String, finishedAt: Date, note: String? = nil) async throws {
         try await perform {
             _ = try await api.garden_finishPlanting(
-                body: .json(GardenFinishInput(id: id, finishedAt: finishedAt, note: note))
+                body: .json(.init(plantingId: id, finishedOn: PlainDate(finishedAt), note: note))
             ).ok
         }
     }
@@ -196,7 +187,7 @@ public actor CubbyClient {
                     .init(
                         name: name,
                         _type: .area,
-                        gardenKind: .init(rawValue: kind.rawValue),
+                        gardenKind: kind,
                         gardenConditions: conditions
                     )
                 )
@@ -213,7 +204,7 @@ public actor CubbyClient {
                 body: .json(
                     .init(
                         name: name,
-                        gardenKind: kind.map { .init(rawValue: $0.rawValue)! },
+                        gardenKind: kind,
                         gardenConditions: conditions
                     )
                 )
@@ -240,93 +231,80 @@ public actor CubbyClient {
         }
     }
 
-    public func updateGardenPlanting(_ input: EditGardenPlanting) async throws {
+    /// Through `gardenEditAPI`, which encodes an absent editor field as `null`
+    /// (`GardenEditEncodingMiddleware`): the draft is the complete editor value, not a patch.
+    public func updateGardenPlanting(id: String, _ data: PlantingUpdateData) async throws {
         try await perform {
-            _ = try await gardenEditAPI.resources_planting_update(
-                path: .init(id: input.id),
-                body: .json(
-                    .init(
-                        ingredientId: input.ingredientID, sourceProductId: input.productID,
-                        intendedLocationId: input.intendedLocationID, variety: input.variety,
-                        quantity: input.quantity, notes: input.notes, plannedWindow: input.plannedWindow,
-                        plannedDate: input.plannedDate.map(GardenPlainDate.string),
-                        sowedOn: input.sownAt.map(GardenPlainDate.string),
-                        transplantedOn: input.transplantedAt.map(GardenPlainDate.string)
-                    )
-                )
-            ).ok
+            _ = try await gardenEditAPI.resources_planting_update(path: .init(id: id), body: .json(data)).ok
         }
     }
 
-    public func gardenEntry(id: String) async throws -> GardenEntry {
+    public func gardenEntry(id: String) async throws -> GardenEntryOut {
         try await perform {
-            GardenEntry(try await api.resources_gardenEntry_get(path: .init(id: id)).ok.body.json)
+            GardenEntryOut(try await api.resources_gardenEntry_get(path: .init(id: id)).ok.body.json)
         }
     }
 
-    public func gardenPlanting(id: String) async throws -> GardenPlanting {
+    public func gardenPlanting(id: String) async throws -> GardenPlantingOut {
         try await perform {
-            async let options = gardenOptions()
+            async let options = api.garden_options(query: .init()).ok.body.json
             let output = try await api.resources_planting_get(path: .init(id: id)).ok.body.json
-            return GardenPlanting(output, options: try await options)
+            return GardenPlantingOut(output, options: try await options)
         }
     }
 
     public func gardenEntries(
         locationID: String? = nil, plantingID: String? = nil, page: Int = 1
-    ) async throws -> (items: [GardenEntry], hasMore: Bool) {
+    ) async throws -> (items: [GardenEntryOut], hasMore: Bool) {
         try await perform {
             let result = try await api.garden_entries(
                 query: .init(locationId: locationID, plantingId: plantingID, page: page)
             ).ok.body.json
-            return (result.items.map(GardenEntry.init), result.hasMore)
+            return (result.items, result.hasMore)
         }
     }
 
     public func gardenJournal(
         plantingID: String, includeBedContext: Bool = false, page: Int = 1
-    ) async throws -> (items: [GardenJournalEntry], hasMore: Bool) {
+    ) async throws -> (items: [GardenJournalEntryOut], hasMore: Bool) {
         try await perform {
             let result = try await api.garden_journal(
                 query: .init(plantingId: plantingID, includeBedContext: includeBedContext, page: page)
             ).ok.body.json
-            return (result.items.map(GardenJournalEntry.init), result.hasMore)
+            return (result.items, result.hasMore)
         }
     }
 
-    public func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriod] {
+    public func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriodOut] {
         try await perform {
-            let result = try await api.garden_locationHistory(query: .init(plantingId: plantingID)).ok.body
-                .json
-            return result.periods.map(GardenLocationPeriod.init)
+            try await api.garden_locationHistory(query: .init(plantingId: plantingID)).ok.body.json.periods
         }
     }
 
     public func correctGardenLocationDates(
-        plantingID: String, periods: [GardenLocationPeriod]
-    ) async throws -> [GardenLocationPeriod] {
+        plantingID: String, periods: [GardenLocationPeriodOut]
+    ) async throws -> [GardenLocationPeriodOut] {
         try await perform {
-            let result = try await api.garden_correctLocationDates(
-                body: .json(GardenCorrectLocationDatesInput(plantingID: plantingID, periods: periods))
-            ).ok.body.json
-            return result.periods.map(GardenLocationPeriod.init)
+            try await api.garden_correctLocationDates(
+                body: .json(
+                    .init(
+                        plantingId: plantingID,
+                        periods: periods.map {
+                            .init(
+                                sequence: $0.sequence, inLocationSince: $0.inLocationSince,
+                                endedOn: $0.endedOn)
+                        }))
+            ).ok.body.json.periods
         }
     }
 
-    public func updateGardenEntry(_ input: EditGardenEntry) async throws {
+    /// Through `gardenEditAPI`, which encodes an absent `plantingId`/`note`/`harvestAmount` as
+    /// `null` (`GardenEditEncodingMiddleware`); an absent structural field (`locationId`, `kind`,
+    /// `observedOn`) is left alone, so a locked field is simply omitted from the draft.
+    public func updateGardenEntry(id: String, _ data: GardenEntryUpdateData) async throws {
         try await perform {
-            _ = try await gardenEditAPI.resources_gardenEntry_update(
-                path: .init(id: input.id),
-                body: .json(
-                    .init(
-                        locationId: input.locationID, plantingId: input.plantingID,
-                        kind: input.kind.map { .init(rawValue: $0.rawValue)! },
-                        observedOn: input.observedAt.map(GardenPlainDate.string),
-                        note: input.note, harvestAmount: input.harvestAmount,
-                        pendingImageIds: input.pendingImageIDs.map(\.rawValue),
-                        removeImageIds: input.removeImageIDs
-                    ))
-            ).ok
+            _ = try await gardenEditAPI.resources_gardenEntry_update(path: .init(id: id), body: .json(data))
+                .ok
         }
     }
 
@@ -359,14 +337,14 @@ public actor CubbyClient {
 
     // MARK: - Entity relationships
 
-    public func exploreRelationships(root: EntityReference, depth: Int) async throws -> EntityGraph {
+    public func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph {
         let depth = min(3, max(1, depth))
         return try await perform {
             let output = try await api.entity_explore(
                 body: .json(
                     .init(
                         root: root.graphRootInput,
-                        depth: .init(value1: Double(depth))
+                        depth: .init(value1: .init(rawValue: depth))
                     )
                 )
             ).ok.body.json
@@ -375,13 +353,13 @@ public actor CubbyClient {
     }
 
     public func relationshipPage(
-        root: EntityReference,
+        root: EntityRef,
         relationshipKey: String,
         offset: Int,
         limit: Int
-    ) async throws -> EntityGraphPage {
+    ) async throws -> EntityGraphOutput {
         try await perform {
-            let output = try await api.entity_graph(
+            try await api.entity_graph(
                 body: .json(
                     .init(
                         roots: [root.graphRootInput],
@@ -391,18 +369,16 @@ public actor CubbyClient {
                     )
                 )
             ).ok.body.json
-            return EntityGraphPage(output)
         }
     }
 
-    public func recommendations(for source: EntityReference) async throws -> EntityRecommendations {
+    public func recommendations(for source: EntityRef) async throws -> EntityRecommendationsOut {
         try await perform {
-            let entity = Operations.Recommendations_forEntity.Input.Query.EntityTypePayload(
-                rawValue: source.entity.rawValue)!
-            let output = try await api.recommendations_forEntity(
-                query: .init(entityType: entity, entityId: source.id)
+            // `recommendations.forEntity` declares its own copy of the entity enum; match by raw value.
+            try await api.recommendations_forEntity(
+                query: .init(
+                    entityType: .init(rawValue: source.entityType.rawValue)!, entityId: source.entityId)
             ).ok.body.json
-            return EntityRecommendations(output)
         }
     }
 
@@ -415,16 +391,18 @@ public actor CubbyClient {
         }
     }
 
-    public func moveInventory(_ inventoryID: String, to locationID: String) async throws -> EntityReference {
+    public func moveInventory(_ inventoryID: String, to locationID: String) async throws -> EntityRef {
         try await perform {
             let result = try await api.inventory_moveEntries(
                 body: .json(
                     .init(items: [
-                        .init(inventoryEntryId: inventoryID, targetLocationId: locationID)
+                        .init(
+                            inventoryEntryId: InventoryEntryCode(inventoryID),
+                            targetLocationId: LocationCode(locationID))
                     ]))
             ).ok.body.json
             guard let survivor = result.items.first else { throw URLError(.cannotParseResponse) }
-            return EntityReference(entity: .inventory, id: survivor.id)
+            return EntityRef(entity: .inventory, id: survivor.id.rawValue)
         }
     }
 
@@ -433,13 +411,13 @@ public actor CubbyClient {
     /// Attaches already-uploaded images to any entity whose update body takes `pendingImageIds`.
     public func attachImages(_ ids: [ImageCode], to descriptor: EntityDescriptor, id: String) async throws {
         try await perform {
-            try await descriptor.attachImages(ids.map(\.rawValue), to: id, client: api)
+            try await descriptor.attachImages(ids, to: id, client: api)
         }
     }
 
     public func setImageOrder(_ ids: [ImageCode], on descriptor: EntityDescriptor, id: String) async throws {
         try await perform {
-            try await descriptor.setImageOrder(ids.map(\.rawValue), on: id, client: api)
+            try await descriptor.setImageOrder(ids, on: id, client: api)
         }
     }
 
@@ -453,11 +431,7 @@ public actor CubbyClient {
             let output = try await api.image_uploadImage(
                 body: .json(.init(filename: filename, size: size, format: format, entity: entity))
             )
-            let json = try output.ok.body.json
-            guard let upload = ImageUpload(json) else {
-                throw CubbyAPIError(status: 0, operationID: "image.uploadImage", detail: nil)
-            }
-            return upload
+            return try ImageUpload(try output.ok.body.json)
         }
     }
 
@@ -466,82 +440,52 @@ public actor CubbyClient {
             guard request.algorithmRevision == PerceptualHash64.algorithmRevision else {
                 throw HashIndex.Failure.unsupportedRevision(request.algorithmRevision)
             }
-            var input = UploadInput(
+            var input = InitiateUploadWithoutEntity(
                 filename: request.filename, size: request.size, contentType: .imageJpeg)
             guard let contentType = type(of: input.contentType).init(rawValue: request.contentType) else {
                 throw PhotoFile.Failure.unsupportedContentType(request.contentType)
             }
             input.contentType = contentType
-            input.entityType = Components.Schemas.EntityImage(
-                rawValue: request.entity.rawValue.uppercased())
-            input.algorithmRevision = Double(request.algorithmRevision)
+            input.entityType = EntityImage(rawValue: request.entity.rawValue.uppercased())
+            input.algorithmRevision = .init(rawValue: request.algorithmRevision)
             input.perceptualHash = request.perceptualHash.hex
             input.sourceFingerprint = .init(
                 hash: request.sourceFingerprint.hash.hex,
                 aspectRatio: request.sourceFingerprint.aspectRatio)
             input.width = request.width
             input.height = request.height
-            let output = try await api.image_uploadImage(
-                body: .json(input))
-            guard let upload = ImageUpload(try output.ok.body.json) else {
-                throw CubbyAPIError(status: 0, operationID: "image.uploadImage", detail: nil)
-            }
-            return upload
+            let output = try await api.image_uploadImage(body: .json(input))
+            return try ImageUpload(try output.ok.body.json)
         }
     }
 
-    public func imageHashIndex() async throws -> ImageHashIndexDocument {
+    /// The server's hash index, or `HashIndex.Failure.unsupportedRevision` when it was computed
+    /// with a different algorithm than this build carries.
+    public func imageHashIndex() async throws -> ImageHashIndex {
         try await perform {
             let result = try await api.image_hashIndex().ok.body.json
-            guard result.algorithmRevision == Double(PerceptualHash64.algorithmRevision) else {
-                throw HashIndex.Failure.unsupportedRevision(Int(result.algorithmRevision))
+            guard result.algorithmRevision.rawValue == PerceptualHash64.algorithmRevision else {
+                throw HashIndex.Failure.unsupportedRevision(result.algorithmRevision.rawValue)
             }
-            return try ImageHashIndexDocument(
-                algorithmRevision: Int(result.algorithmRevision),
-                items: result.items.map { row in
-                    try ImageHashEntry(
-                        id: ImageCode(row.id),
-                        perceptualHash: row.perceptualHash.map { try PerceptualHash64(hex: $0) },
-                        sourceFingerprint: row.sourceFingerprint.map {
-                            try SourceFingerprint(
-                                hash: PerceptualHash64(hex: $0.hash), aspectRatio: $0.aspectRatio)
-                        }, width: row.width, height: row.height)
-                },
-                repair: result.repair.map { row in
-                    guard let url = URL(string: row.url) else { throw PhotoFile.Failure.unreadable }
-                    return ImageHashRepair(id: ImageCode(row.id), url: url)
-                })
+            return result
         }
     }
 
-    public func setPerceptualHashes(_ items: [ImageHashUpdate]) async throws -> ImageHashWriteResult {
+    public func setPerceptualHashes(_ items: [ImageHashUpdate]) async throws -> SetPerceptualHashesOutput {
         try await perform {
-            let result = try await api.image_setPerceptualHashes(
+            try await api.image_setPerceptualHashes(
                 body: .json(
                     .init(
-                        algorithmRevision: Double(PerceptualHash64.algorithmRevision),
-                        items: items.map { .init(id: $0.id.rawValue, perceptualHash: $0.perceptualHash.hex) })
+                        algorithmRevision: .init(rawValue: PerceptualHash64.algorithmRevision)!,
+                        items: items.map { .init(id: $0.id, perceptualHash: $0.perceptualHash.hex) })
                 )
             ).ok.body.json
-            return try ImageHashWriteResult(
-                items: result.items.map {
-                    try ImageHashUpdate(
-                        id: ImageCode($0.id), perceptualHash: PerceptualHash64(hex: $0.perceptualHash))
-                }, unavailable: result.unavailable.map { ImageCode($0) })
         }
     }
 
-    public func imageDetail(_ id: ImageCode) async throws -> CubbyImageDetail {
+    public func imageDetail(_ id: ImageCode) async throws -> ImageWithEntity {
         try await perform {
-            let result = try await api.image_detail(query: .init(id: id.rawValue)).ok.body.json
-            guard let url = URL(string: result.url) else { throw PhotoFile.Failure.unreadable }
-            return CubbyImageDetail(
-                id: ImageCode(result.id), url: url, filename: result.filename,
-                associations: result.associations.map {
-                    .init(
-                        entityType: $0.entityType.rawValue, entityID: $0.entityId,
-                        name: $0.entityName, role: $0.role.rawValue)
-                })
+            try await api.image_detail(query: .init(id: id.rawValue)).ok.body.json
         }
     }
 
@@ -550,32 +494,42 @@ public actor CubbyClient {
     /// projected out here because that is all this call is for.
     public func productImageIDs(_ product: ProductCode) async throws -> [ImageCode] {
         try await perform {
-            let output = try await api.resources_product_get(path: .init(id: product.rawValue))
-            return try output.ok.body.json.attachments.map { ImageCode($0.id) }
+            try await api.resources_product_get(path: .init(id: product.rawValue)).ok.body.json.attachments
+                .map(\.id)
         }
     }
 
     public func markUploaded(_ id: ImageCode) async throws {
         try await perform {
-            _ = try await api.image_markUploaded(body: .json(.init(id: id.rawValue))).ok
+            _ = try await api.image_markUploaded(body: .json(.init(id: id))).ok
         }
     }
 
     // MARK: - Scanning and inventory
 
-    public func scan(_ code: ScanCode, at location: LocationCode) async throws -> ScanResult {
+    /// One raw scanner or keyboard value at a location, classified by the server: a barcode,
+    /// an ISBN, a product label (legacy `P-` included), or a validation error naming why not.
+    public func scan(raw: String, at location: LocationCode) async throws -> ScanAtLocationOut {
         try await perform {
-            let output = try await api.inventory_scanAtLocation(
-                body: .json(.init(location: location, code: code)))
-            return ScanResult(try output.ok.body.json)
+            try await api.inventory_scanAtLocation(
+                body: .json(
+                    .init(locationId: location, code: .init(value1: .scan(.init(kind: .scan, value: raw)))))
+            ).ok.body.json
         }
     }
 
-    public func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> StrayResolution {
+    public func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws
+        -> ResolveScanStraysOut
+    {
         try await perform {
-            let output = try await api.inventory_resolveScanStrays(
-                body: .json(.init(target: target, moves: moves)))
-            return StrayResolution(try output.ok.body.json)
+            try await api.inventory_resolveScanStrays(
+                body: .json(
+                    .init(
+                        targetLocationId: target,
+                        moves: moves.map {
+                            .init(entryId: $0.entryId, quantity: $0.quantity.map { PositiveAmountInput($0) })
+                        }))
+            ).ok.body.json
         }
     }
 
@@ -588,9 +542,9 @@ public actor CubbyClient {
         try await perform {
             let output = try await api.resources_inventory_create(
                 body: .json(
-                    .init(productId: product.rawValue, locationId: location.rawValue, amount: .init(count)))
+                    .init(productId: product, locationId: location, amount: .init(count)))
             )
-            return InventoryEntryCode(try output.created.body.json.item.id)
+            return try output.created.body.json.item.id
         }
     }
 
@@ -608,16 +562,16 @@ public actor CubbyClient {
     /// Products stocked in more than one location, for the Duplicate badge.
     public func findDuplicates() async throws -> Set<ProductCode> {
         try await perform {
-            Set(try await api.inventory_findDuplicates(query: .init()).ok.body.json.map(ProductCode.init))
+            Set(try await api.inventory_findDuplicates(query: .init()).ok.body.json.map(\.id))
         }
     }
 
     /// Commits one bin's recount. Throws a `CubbyAPIError` with `isStaleInventory` when the bin
     /// changed since it was read.
-    public func reconcile(_ body: ReconcileBody) async throws -> [RecountRow] {
+    public func reconcile(_ body: ReconcileSessionPayload) async throws -> [RecountRow] {
         try await perform {
-            let output = try await api.inventory_reconcileSession(body: .json(.init(body)))
-            return try output.ok.body.json.items.map(RecountRow.init)
+            try await api.inventory_reconcileSession(body: .json(body)).ok.body.json.items.map(
+                RecountRow.init)
         }
     }
 
@@ -625,24 +579,25 @@ public actor CubbyClient {
 
     public func locationTree() async throws -> LocationTree {
         try await perform {
-            LocationTree(roots: try await api.location_makeTree().ok.body.json.map(LocationTreeNode.init))
+            LocationTree(roots: try await api.location_makeTree().ok.body.json)
         }
     }
 
     /// Every location, by name, for the sweep's bin picker.
-    public func locationOptions(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<LocationOption> {
+    public func locationOptions(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<LocationListItem>
+    {
         try await perform {
             let result = try await api.resources_location_list(
                 query: .init(page: page, pageSize: pageSize, sort: "name")
             ).ok.body.json
-            return ListPage(items: result.items.map { LocationOption($0) }, meta: PageMeta(result.meta))
+            return ListPage(items: result.items, meta: result.meta)
         }
     }
 
     /// The global "Unknown" location, created on first use.
     public func ensureGlobalUnknownLocation() async throws -> LocationCode {
         try await perform {
-            LocationCode(try await api.location_ensureGlobalUnknown(body: .json(.init())).ok.body.json.id)
+            try await api.location_ensureGlobalUnknown(body: .json(.init())).ok.body.json.id
         }
     }
 
@@ -650,7 +605,7 @@ public actor CubbyClient {
     public func bulkUpdateParent(_ bins: [LocationCode], to parent: LocationCode?) async throws -> Int {
         try await perform {
             let output = try await api.location_bulkUpdateParent(
-                body: .json(.init(ids: bins.map(\.rawValue), parentId: parent?.rawValue))
+                body: .json(.init(ids: bins, parentId: parent))
             )
             return try output.ok.body.json.updated
         }
@@ -673,59 +628,50 @@ public actor CubbyClient {
             .init(rawValue: $0.rawValue)
         }
         return try await perform {
-            try await api.search_find(query: query).ok.body.json.map { SearchHit($0) }
+            try await api.search_find(query: query).ok.body.json
         }
     }
 
-    public func dashboardCounts() async throws -> DashboardCounts {
-        try await perform {
-            DashboardCounts(try await api.dashboard_counts().ok.body.json)
-        }
+    public func dashboardCounts() async throws -> DashboardCountsOut {
+        try await perform { try await api.dashboard_counts().ok.body.json }
     }
 
-    public func todayBriefing() async throws -> [TodayTask] {
-        try await perform {
-            try await api.task_todayBriefing().ok.body.json.next.map(TodayTask.init)
-        }
+    /// `task.todayBriefing`'s `next` array: actionable tasks, already filtered and capped.
+    public func todayBriefing() async throws -> [TaskTodayBriefingItemOut] {
+        try await perform { try await api.task_todayBriefing().ok.body.json.next }
     }
 
-    public func problemCounts() async throws -> TodayProblemCounts {
-        try await perform {
-            TodayProblemCounts(try await api.problems_getCounts().ok.body.json)
-        }
+    public func problemCounts() async throws -> ProblemsCount {
+        try await perform { try await api.problems_getCounts().ok.body.json }
     }
 
     /// The meals planned for one household calendar day.
-    public func meals(on date: Date) async throws -> [TodayMeal] {
+    public func meals(on date: Date) async throws -> [MealListItem] {
         let day = HouseholdDay.string(for: date)
         return try await perform {
             var query = Operations.Resources_meal_list.Input.Query(page: 1, pageSize: 20, sort: "date")
             query.from = day
             query.to = day
-            return try await api.resources_meal_list(query: query).ok.body.json.items.map(TodayMeal.init)
+            return try await api.resources_meal_list(query: query).ok.body.json.items
         }
     }
 
-    public func mealNutrition(mealID: String) async throws -> MealNutritionSummary {
+    public func mealNutrition(mealID: String) async throws -> MealNutritionOut {
         let input = MealNutritionInput(value1: .init(mealId: mealID))
         return try await perform {
-            MealNutritionSummary(
-                try await api.meal_getNutrition(.init(body: .json(input))).ok.body.json)
+            try await api.meal_getNutrition(.init(body: .json(input))).ok.body.json
         }
     }
 
-    public func mealNutrition(on day: String) async throws -> MealNutritionSummary {
+    public func mealNutrition(on day: String) async throws -> MealNutritionOut {
         let input = MealNutritionInput(value2: .init(date: day))
         return try await perform {
-            MealNutritionSummary(
-                try await api.meal_getNutrition(.init(body: .json(input))).ok.body.json)
+            try await api.meal_getNutrition(.init(body: .json(input))).ok.body.json
         }
     }
 
-    public func lookupUPC(_ upc: String) async throws -> UPCLookup {
-        try await perform {
-            UPCLookup(try await api.upc_lookup(query: .init(upc: upc)).ok.body.json)
-        }
+    public func lookupUPC(_ upc: String) async throws -> UpcLookupOutput {
+        try await perform { try await api.upc_lookup(query: .init(upc: upc)).ok.body.json }
     }
 
     // MARK: - Internals
@@ -738,7 +684,7 @@ public actor CubbyClient {
             let result = try await api.resources_product_list(query: query).ok.body.json
             return ListPage(
                 items: try result.items.compactMap { descriptor.row(from: try JSONValue(encoding: $0)) },
-                meta: PageMeta(result.meta)
+                meta: result.meta
             )
         }
     }

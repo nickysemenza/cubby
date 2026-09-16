@@ -17,7 +17,6 @@ import {
   parseEntityId,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import { isbnFromGtin } from "@cubby/schemas/isbn";
 import type {
   ProductCreateInput,
   ProductTopLevelOut,
@@ -31,6 +30,7 @@ import { uniq } from "es-toolkit";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { type ResolvedProductCode, resolveProductScan } from "~/lib/scan-code";
+import { wasm } from "~/lib/wasm";
 import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -447,7 +447,7 @@ async function findOrCreateByISBN(
   canonicalGtin: string,
   actor: ActorContext,
 ): Promise<FindOrCreateByUPCResult> {
-  const normalized = isbnFromGtin(canonicalGtin);
+  const normalized = wasm.isbn_from_gtin(canonicalGtin);
   if (!normalized) {
     throw new Error(`Invalid canonical ISBN: ${canonicalGtin}`);
   }
@@ -548,8 +548,25 @@ export function findOrCreateByCode(
   switch (code.kind) {
     case "product":
       return findProductByLabel(db, code.value);
-    case "isbn":
-      return findOrCreateByISBN(db, upcLookupClient, code.value, actor);
+    case "isbn": {
+      // `code.value` is now a raw, unvalidated string — the schema-level
+      // `isbn` field became a plain trimmed string (check-digit validation +
+      // GTIN-14 normalization moved here) because `packages/schemas` cannot
+      // depend on the WASM boundary that validation needs.
+      const normalizedIsbn = wasm.normalize_isbn(code.value);
+      if (!normalizedIsbn) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "expected a valid ISBN-10 or ISBN-13",
+        );
+      }
+      return findOrCreateByISBN(
+        db,
+        upcLookupClient,
+        normalizedIsbn.gtin14,
+        actor,
+      );
+    }
     case "barcode":
       return findOrCreateByUPC(
         db,

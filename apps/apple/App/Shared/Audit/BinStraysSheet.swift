@@ -58,7 +58,7 @@ struct BinStraysSheet: View {
                     ForEach(stray.rows) { row in
                         HStack(spacing: PorcelainTokens.Space.sm) {
                             DomainMark(.location)
-                            Text("in \(row.locationName)")
+                            Text("in \(row.location.name)")
                                 .font(.porcelainBody)
                                 .foregroundStyle(PorcelainTokens.graphiteSecondary)
                                 .lineLimit(1)

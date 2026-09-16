@@ -204,12 +204,21 @@ const nativeOperationIds = (
 /**
  * Generated schema types replaced by hand-written Swift types
  * (`typeOverrides.schemas` in swift-openapi-generator's config): component
- * name -> Swift type. Empty until the native lane moves its branded codes and
- * plain-date types into a support target.
+ * name -> Swift type. The targets live in the `CubbyAPISupport` target
+ * (`apps/apple/CubbyKit/Sources/CubbyAPISupport/`), each a single JSON
+ * string on the wire, so every generated field typed by one of these
+ * components is branded or calendar-typed at the boundary.
  */
-const TYPE_OVERRIDES: Readonly<Record<string, string>> = {};
+const TYPE_OVERRIDES = {
+  Entity: "CubbyAPISupport.EntityKey",
+  ImageShortcode: "CubbyAPISupport.ImageCode",
+  InventoryShortcode: "CubbyAPISupport.InventoryEntryCode",
+  LocationShortcode: "CubbyAPISupport.LocationCode",
+  PlainDate: "CubbyAPISupport.PlainDate",
+  ProductShortcode: "CubbyAPISupport.ProductCode",
+} as const satisfies Record<string, string>;
 /** Modules the generated client imports for the overrides above. */
-const ADDITIONAL_IMPORTS: readonly string[] = [];
+const ADDITIONAL_IMPORTS: readonly string[] = ["CubbyAPISupport"];
 
 const renderGeneratorConfig = (
   generatedOperations: readonly string[],
@@ -309,7 +318,7 @@ const renderEntityOperations = (
             ).ok.body.json
             return ListPage(
                 items: try page.items.map(JSONValue.init(encoding:)),
-                meta: PageMeta(page.meta)
+                meta: page.meta
             )`,
     )
     .join("\n");
@@ -394,7 +403,7 @@ ${getCases}
 
     /// \`resources.<key>.update\` with only \`pendingImageIds\` set, for the entities whose update
     /// body declares it (the same set \`OperationRoute.imageAttachableEntities\` lists).
-    func attachImages(_ imageIds: [String], to id: String, client: Client) async throws {
+    func attachImages(_ imageIds: [ImageCode], to id: String, client: Client) async throws {
         switch key {
 ${attachCases}
         default: throw EntityOperationError.unsupported(key, .update)
@@ -402,7 +411,7 @@ ${attachCases}
     }
 
     /// \`resources.<key>.update\` with only \`imageOrder\` set.
-    func setImageOrder(_ imageIds: [String], on id: String, client: Client) async throws {
+    func setImageOrder(_ imageIds: [ImageCode], on id: String, client: Client) async throws {
         switch key {
 ${orderCases}
         default: throw EntityOperationError.unsupported(key, .update)

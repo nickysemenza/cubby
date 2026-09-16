@@ -28,7 +28,7 @@ struct EntityDetailView: View {
                 guard appModel.relationshipMutationRevision > 0,
                     appModel.relationshipMutationEntities.contains(key),
                     appModel.relationshipMutationReplacement?.recommendation.subject
-                        != EntityReference(entity: key, id: id),
+                        != EntityRef(entity: key, id: id),
                     model?.phase == .loaded
                 else { return }
                 await refresh()
@@ -148,7 +148,7 @@ struct EntityDetailView: View {
         guard let model, let relationshipsModel else { return }
         async let detailLoad: Void = model.loadInitial(id: id)
         async let relationshipLoad: Void = relationshipsModel.loadInitial(
-            source: EntityReference(entity: key, id: id))
+            source: EntityRef(entity: key, id: id))
         let nutrition = nutrition
         async let nutritionLoad: Void? = nutrition?.refresh()
         _ = await (detailLoad, relationshipLoad, nutritionLoad)
@@ -171,7 +171,7 @@ struct EntityDetailView: View {
 struct EntityDetailContent: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
-    var mealNutrition: TodaySectionState<MealNutritionSummary>? = nil
+    var mealNutrition: TodaySectionState<MealNutritionOut>? = nil
     var nutritionIsLoading = false
     var nutritionError: String? = nil
     var onRetryNutrition: (@Sendable () async -> Void)? = nil
@@ -280,7 +280,7 @@ struct EntityDetailContent: View {
                     {
                         LabeledContent(
                             inlineRelationshipFieldLabel,
-                            value: inlineRelationshipCurrentTarget?.name ?? "Unassigned"
+                            value: inlineRelationshipCurrentTarget ?? "Unassigned"
                         )
                         inlineRelationshipAlternatives
                     }
@@ -334,7 +334,7 @@ struct EntityDetailContent: View {
                             proposal: proposal,
                             basisKey: basisKey,
                             source: relationshipsModel?.source
-                                ?? EntityReference(entity: descriptor.key, id: row.id),
+                                ?? EntityRef(entity: descriptor.key, id: row.id),
                             currentTarget: inlineRelationshipCurrentTarget
                         )
                     }
@@ -356,14 +356,15 @@ struct EntityDetailContent: View {
         descriptor.key == .expense ? "Project" : "Location"
     }
 
-    private var inlineRelationshipCurrentTarget: RelationshipTarget? {
+    /// The name of the target the record currently has, from the recommendation group of its kind.
+    private var inlineRelationshipCurrentTarget: String? {
         guard let groups = relationshipsModel?.recommendationDocument?.groups else { return nil }
         for group in groups {
             switch (descriptor.key, group) {
-            case (.expense, .expenseProject(_, let current, _)):
-                return current
-            case (.inventory, .inventoryPlacement(_, let current, _)):
-                return current
+            case (.expense, .expenseProject(let group)):
+                return group.currentTarget?.name
+            case (.inventory, .inventoryPlacement(let group)):
+                return group.currentTarget?.name
             default:
                 continue
             }
@@ -375,10 +376,10 @@ struct EntityDetailContent: View {
         guard let groups = relationshipsModel?.recommendationDocument?.groups else { return [] }
         return groups.flatMap { group in
             switch (descriptor.key, group) {
-            case (.expense, .expenseProject(_, _, let proposals)):
-                return proposals.map(ActionableRelationshipRecommendation.expenseProject)
-            case (.inventory, .inventoryPlacement(_, _, let proposals)):
-                return proposals.map(ActionableRelationshipRecommendation.inventoryPlacement)
+            case (.expense, .expenseProject(let group)):
+                return group.proposals.map(ActionableRelationshipRecommendation.expenseProject)
+            case (.inventory, .inventoryPlacement(let group)):
+                return group.proposals.map(ActionableRelationshipRecommendation.inventoryPlacement)
             default:
                 return []
             }
@@ -584,7 +585,7 @@ private struct InlineRelationshipAlternativeView: View {
                     .foregroundStyle(PorcelainTokens.cobalt)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
-                    Text("\(hasCurrentTarget ? "Alternative" : "Suggested") \(field): \(target.name)")
+                    Text("\(hasCurrentTarget ? "Alternative" : "Suggested") \(field): \(targetName)")
                         .font(.porcelainLabel)
                         .foregroundStyle(PorcelainTokens.graphite)
                         .fixedSize(horizontal: false, vertical: true)
@@ -614,10 +615,10 @@ private struct InlineRelationshipAlternativeView: View {
         }
     }
 
-    private var target: RelationshipTarget {
+    private var targetName: String {
         switch proposal {
-        case .expenseProject(let proposal): proposal.target
-        case .inventoryPlacement(let proposal): proposal.target
+        case .expenseProject(let proposal): proposal.target.name
+        case .inventoryPlacement(let proposal): proposal.target.name
         }
     }
 
@@ -660,7 +661,7 @@ private struct InlineRelationshipAlternativeView: View {
 
 #Preview("Expense project alternative") {
     let appModel = PreviewFixtures.signedInModel()
-    let source = EntityReference(entity: .expense, id: "EXP-2345")
+    let source = EntityRef(entity: .expense, id: "EXP-2345")
     let row = EntityRow(
         id: source.id,
         title: "Hardware store receipt",
@@ -678,26 +679,30 @@ private struct InlineRelationshipAlternativeView: View {
     let relationships = EntityRelationshipsModel(
         client: appModel.client,
         initialRecommendations: .init(
-            source: source,
+            source: .init(source),
             basisKey: "expense-preview",
             groups: [
                 .expenseProject(
-                    status: .ready,
-                    currentTarget: .init(id: "PRJ-1001", name: "General maintenance"),
-                    proposals: [
-                        .init(
-                            expenseID: source.id,
-                            target: .init(id: "PRJ-2001", name: "Workshop shelves"),
-                            effectiveStart: "2026-09-01",
-                            effectiveEnd: "2026-09-30",
-                            sameTradeCount: 2,
-                            exactProductCount: 1,
-                            supportingExpenses: [
-                                .init(id: "EXP-3456", name: "Shelf brackets")
-                            ],
-                            reasons: ["Matches recent carpentry expenses"]
-                        )
-                    ]
+                    .init(
+                        kind: .expenseProject,
+                        status: .ready,
+                        currentTarget: .init(id: "PRJ-1001", name: "General maintenance"),
+                        proposals: [
+                            .init(
+                                kind: .expenseProject,
+                                expenseId: source.id,
+                                target: .init(id: "PRJ-2001", name: "Workshop shelves"),
+                                effectiveStart: "2026-09-01",
+                                effectiveEnd: "2026-09-30",
+                                sameTradeCount: 2,
+                                exactProductCount: 1,
+                                supportingExpenses: [
+                                    .init(id: "EXP-3456", name: "Shelf brackets")
+                                ],
+                                reasons: ["Matches recent carpentry expenses"]
+                            )
+                        ]
+                    )
                 )
             ]
         )

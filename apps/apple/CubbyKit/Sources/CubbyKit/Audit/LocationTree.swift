@@ -1,50 +1,14 @@
+import CubbyAPI
 import Foundation
 
-/// One node of `location.makeTree`, hand-decoded because the schema is self-recursive (the
-/// generator would need boxing) and because the tree never carries `parent`; the index below
-/// derives parents from the nesting instead.
-public struct LocationTreeNode: Sendable, Hashable, Identifiable, Decodable {
-    public let id: LocationCode
-    public let name: String
-    public let type: String?
-    public let directItemCount: Int
-    public let totalItemCount: Int
-    public let children: [LocationTreeNode]
-    /// Kept verbatim; only displayed.
-    public let lastBulkInventoryRaw: String?
+/// One node of `location.makeTree`: the generated `InfLocation`, whose tree fields are optional
+/// on the wire because the same shape serves flat reads.
+public typealias LocationTreeNode = InfLocation
 
-    public init(
-        id: LocationCode,
-        name: String,
-        type: String? = nil,
-        directItemCount: Int = 0,
-        totalItemCount: Int = 0,
-        children: [LocationTreeNode] = [],
-        lastBulkInventoryRaw: String? = nil
-    ) {
-        self.id = id
-        self.name = name
-        self.type = type
-        self.directItemCount = directItemCount
-        self.totalItemCount = totalItemCount
-        self.children = children
-        self.lastBulkInventoryRaw = lastBulkInventoryRaw
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id, name, type, directItemCount, totalItemCount, children, lastBulkInventory
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(LocationCode.self, forKey: .id)
-        name = try container.decode(String.self, forKey: .name)
-        type = try container.decodeIfPresent(String.self, forKey: .type)
-        directItemCount = try container.decodeIfPresent(Int.self, forKey: .directItemCount) ?? 0
-        totalItemCount = try container.decodeIfPresent(Int.self, forKey: .totalItemCount) ?? 0
-        children = try container.decodeIfPresent([LocationTreeNode].self, forKey: .children) ?? []
-        lastBulkInventoryRaw = try container.decodeIfPresent(String.self, forKey: .lastBulkInventory)
-    }
+extension InfLocation {
+    public var childNodes: [InfLocation] { children ?? [] }
+    public var directItems: Int { directItemCount ?? 0 }
+    public var totalItems: Int { totalItemCount ?? 0 }
 }
 
 /// The whole location tree with an index built once: parents, ancestors, breadcrumbs, and the
@@ -61,7 +25,7 @@ public struct LocationTree: Sendable, Hashable {
         func visit(_ node: LocationTreeNode, parent: LocationCode?) {
             nodes[node.id] = node
             if let parent { parents[node.id] = parent }
-            for child in node.children { visit(child, parent: node.id) }
+            for child in node.childNodes { visit(child, parent: node.id) }
         }
         for root in roots { visit(root, parent: nil) }
         nodesByID = nodes
@@ -110,8 +74,8 @@ public struct LocationTree: Sendable, Hashable {
         guard let root = nodesByID[scope] else { return [] }
         var out: [LocationTreeNode] = []
         func visit(_ node: LocationTreeNode) {
-            if node.directItemCount > 0 { out.append(node) }
-            for child in node.children { visit(child) }
+            if node.directItems > 0 { out.append(node) }
+            for child in node.childNodes { visit(child) }
         }
         visit(root)
         return out
@@ -122,8 +86,8 @@ public struct LocationTree: Sendable, Hashable {
     public func scopeCandidates() -> [(node: LocationTreeNode, depth: Int)] {
         var out: [(LocationTreeNode, Int)] = []
         func visit(_ node: LocationTreeNode, depth: Int) {
-            if node.totalItemCount > 0 || node.directItemCount > 0 { out.append((node, depth)) }
-            for child in node.children { visit(child, depth: depth + 1) }
+            if node.totalItems > 0 || node.directItems > 0 { out.append((node, depth)) }
+            for child in node.childNodes { visit(child, depth: depth + 1) }
         }
         for root in roots { visit(root, depth: 0) }
         return out

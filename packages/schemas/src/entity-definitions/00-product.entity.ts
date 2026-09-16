@@ -13,7 +13,6 @@ import {
   productShortcode,
 } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
-import { isbn } from "@cubby/schemas/isbn";
 import { money } from "@cubby/schemas/money";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import {
@@ -111,10 +110,15 @@ export default defineEntity({
         nullable: true,
         readKey: null,
         control: { kind: "text" },
+        // Plain string: check-digit validation + GTIN-14 normalization now
+        // happen at the repository boundary (`resolvePrimaryProductCodeInput`
+        // in `apps/web/src/server/repo/product/update-helpers.ts`), not here —
+        // `packages/schemas` cannot depend on the WASM boundary that
+        // validation needs (see `@cubby/recipebridge`).
         validation: {
           read: null,
-          create: isbn.nullable().optional(),
-          update: isbn.nullable().optional(),
+          create: z.string().trim().nullable().optional(),
+          update: z.string().trim().nullable().optional(),
         },
       },
       {

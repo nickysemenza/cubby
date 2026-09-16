@@ -16,9 +16,16 @@ struct EntityStat: Identifiable {
 /// screen, so the alternative to this lookup is showing every row identically. Nothing here issues
 /// a request: if the projection did not carry the value, the fact is simply absent.
 enum EntityFacts {
-    /// The single figure a list row earns on its trailing edge.
+    /// The single figure a list row earns on its trailing edge: the column the catalog places in
+    /// the mobile `trailing` slot, else the nested projection a product, location or inventory row
+    /// carries (those read nested keys the field metadata cannot name).
     static func trailing(key: EntityKey, row: EntityRow) -> String? {
         let raw = row.raw
+        if let field = EntityCatalog[key].fields.first(where: { $0.mobileSlot == "trailing" }),
+            let value = formatted(raw[field.key], as: field)
+        {
+            return value
+        }
         switch key {
         case .product:
             if let onHand = number(raw["onHandUnits"]) {
@@ -35,17 +42,6 @@ enum EntityFacts {
             return raw["path"]?.stringValue
         case .inventory:
             return amount(raw["amount"])
-        case .expense:
-            return money(raw["total"]) ?? money(raw["cost"])
-        case .purchase:
-            return money(raw["total"])
-        case .task:
-            return raw["status"]?.stringValue?.capitalized ?? date(raw["dueDate"])
-        case .recipe:
-            if let servings = number(raw["servings"]) {
-                return "\(format(servings)) servings"
-            }
-            return nil
         default:
             return nil
         }
@@ -105,28 +101,17 @@ enum EntityFacts {
             if let verified = date(raw["verifiedAt"]) {
                 stats.append(EntityStat(label: "Verified", value: verified))
             }
-        case .task:
-            if let status = raw["status"]?.stringValue {
-                stats.append(EntityStat(label: "Status", value: status.capitalized))
-            }
-            if let due = date(raw["dueDate"]) {
-                stats.append(EntityStat(label: "Due", value: due))
-            }
-            if let project = raw["projectName"]?.stringValue {
-                stats.append(EntityStat(label: "Project", value: project))
-            }
-        case .expense:
-            if let total = money(raw["total"]) ?? money(raw["cost"]) {
-                stats.append(EntityStat(label: "Cost", value: total))
-            }
-            if let when = date(raw["date"]) {
-                stats.append(EntityStat(label: "Date", value: when))
-            }
-            if let vendor = raw["vendor"]?.stringValue {
-                stats.append(EntityStat(label: "Vendor", value: vendor))
-            }
         default:
-            break
+            // The columns the catalog places on the mobile card, in priority order, then the
+            // scalar `showInDetail` fields.
+            let placed = descriptor.fields.filter { $0.mobileSlot != nil }
+                .sorted { ($0.mobilePriority ?? .max) < ($1.mobilePriority ?? .max) }
+            for field in placed {
+                if let value = formatted(raw[field.key], as: field) {
+                    stats.append(
+                        EntityStat(label: field.label, value: value, mono: field.kind == .identifier))
+                }
+            }
         }
 
         if stats.count < 4, descriptor.key != .location {
@@ -148,22 +133,31 @@ enum EntityFacts {
             guard field.showInDetail, !skipped.contains(field.key), !excluding.contains(field.label) else {
                 continue
             }
-            guard let value = row.raw[field.key] else { continue }
-            switch value {
-            case .string(let string) where !string.isEmpty:
-                let display =
-                    (field.kind == .date || field.kind == .timestamp) ? (date(value) ?? string) : string
-                stats.append(EntityStat(label: field.label, value: display, mono: field.kind == .identifier))
-            case .number(let number):
-                stats.append(EntityStat(label: field.label, value: format(number)))
-            case .bool(let flag):
-                stats.append(EntityStat(label: field.label, value: flag ? "Yes" : "No"))
-            default:
-                continue
-            }
+            guard let value = formatted(row.raw[field.key], as: field) else { continue }
+            stats.append(EntityStat(label: field.label, value: value, mono: field.kind == .identifier))
             if stats.count >= 4 { break }
         }
         return stats
+    }
+
+    /// One scalar as the catalog says to show it: `format` (`currency`, `plainDate`, `timestamp`)
+    /// first, then the field kind. Anything that is not a single readable value is `nil`.
+    static func formatted(_ value: JSONValue?, as field: FieldDescriptor) -> String? {
+        guard let value else { return nil }
+        switch field.format {
+        case "currency": return money(value)
+        case "plainDate", "timestamp": return date(value)
+        default: break
+        }
+        switch value {
+        case .string(let string) where !string.isEmpty:
+            if field.kind == .date || field.kind == .timestamp { return date(value) ?? string }
+            return field.kind == .`enum`
+                ? string.replacingOccurrences(of: "_", with: " ").capitalized : string
+        case .number(let number): return format(number)
+        case .bool(let flag): return flag ? "Yes" : "No"
+        default: return nil
+        }
     }
 
     // MARK: - Value readers

@@ -83,7 +83,7 @@ final class IdentifyModel {
             let targetIDs = Array(ids.prefix(maxProducts))
 
             let client = self.client
-            let products = await withTaskGroup(of: ProductSummary?.self, returning: [ProductSummary].self) {
+            let products = await withTaskGroup(of: ProductDetail?.self, returning: [ProductDetail].self) {
                 group in
                 var iterator = targetIDs.makeIterator()
                 func enqueue() {
@@ -93,7 +93,7 @@ final class IdentifyModel {
                     }
                 }
                 for _ in 0..<6 { enqueue() }
-                var collected: [ProductSummary] = []
+                var collected: [ProductDetail] = []
                 for await result in group {
                     if let result { collected.append(result) }
                     enqueue()

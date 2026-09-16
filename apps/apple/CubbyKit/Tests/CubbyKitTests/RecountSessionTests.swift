@@ -8,7 +8,7 @@ import Testing
 /// made" is observable, and can fail the next reconcile as stale.
 final class StubRecountService: RecountService, Sendable {
     enum Call: Equatable, Sendable {
-        case tree, unknown, rows(LocationCode), duplicates, reconcile(LocationCode, snapshot: String?), adopt(
+        case tree, unknown, rows(LocationCode), duplicates, reconcile(LocationCode, snapshot: Date?), adopt(
             [LocationCode], LocationCode), scan(String, LocationCode), resolve(LocationCode)
     }
 
@@ -17,13 +17,14 @@ final class StubRecountService: RecountService, Sendable {
         var rows: [LocationCode: [RecountRow]] = [:]
         var duplicates: Set<ProductCode> = []
         var staleReconciles = 0
-        var scanResult: ScanResult = StubScanService.result(.queued, id: "PRD-9999", name: "Unexpected")
+        var scanResult: ScanAtLocationOut = StubScanService.result(
+            .queued, id: "PRD-9999", name: "Unexpected")
         /// Per-code answers; a code not listed falls back to `scanResult`.
-        var scanResults: [String: ScanResult] = [:]
+        var scanResults: [String: ScanAtLocationOut] = [:]
         /// How long `stockRows` takes, so a test can overlap a refetch with later scans.
         var rowsDelay: Duration = .zero
         var calls: [Call] = []
-        var lastReconcile: ReconcileBody?
+        var lastReconcile: ReconcileSessionPayload?
     }
 
     let state: Mutex<State>
@@ -57,7 +58,7 @@ final class StubRecountService: RecountService, Sendable {
         return state.withLock { $0.duplicates }
     }
 
-    func reconcile(_ body: ReconcileBody) async throws -> [RecountRow] {
+    func reconcile(_ body: ReconcileSessionPayload) async throws -> [RecountRow] {
         record(.reconcile(body.locationId, snapshot: body.snapshotUpdatedAt))
         let stale: Bool = state.withLock { state in
             state.lastReconcile = body
@@ -79,14 +80,15 @@ final class StubRecountService: RecountService, Sendable {
         return bins.count
     }
 
-    func scan(_ code: ScanCode, at location: LocationCode) async throws -> ScanResult {
-        record(.scan(code.value, location))
-        return state.withLock { $0.scanResults[code.value] ?? $0.scanResult }
+    func scan(raw: String, at location: LocationCode) async throws -> ScanAtLocationOut {
+        record(.scan(raw, location))
+        return state.withLock { $0.scanResults[raw] ?? $0.scanResult }
     }
 
-    func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> StrayResolution {
+    func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> ResolveScanStraysOut {
         record(.resolve(target))
-        return StrayResolution(moved: moves.count, skipped: [])
+        return ResolveScanStraysOut(
+            moved: moves.count, skipped: [], sideEffects: .init(backgroundBatches: []))
     }
 }
 
@@ -123,7 +125,8 @@ struct RecountSessionTests {
         at location: LocationCode = LocationCode("LOC-5678")
     ) -> RecountRow {
         RecountRow(
-            id: InventoryEntryCode(id), amount: Amount(value: 1, unit: "each"), updatedAtRaw: updated,
+            id: InventoryEntryCode(id), amount: Amount(value: 1, unit: "each"),
+            updatedAt: try! LenientISO8601DateTranscoder().decode(updated),
             product: .init(id: ProductCode(product), name: name, primaryGtin: gtin),
             locationID: location, locationName: "Bin"
         )
@@ -222,9 +225,10 @@ struct RecountSessionTests {
             $0.scanResult = StubScanService.result(
                 .queued, id: "PRD-9999", name: "Unexpected",
                 strays: [
-                    Stray(
-                        entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"),
-                        locationName: "Bin 9", ambiguousQuantity: false)
+                    ScanStrayOut(
+                        entryId: InventoryEntryCode("INV-9999"),
+                        location: .init(id: LocationCode("LOC-89AB"), name: "Bin 9"),
+                        amount: Amount(value: 1, unit: "each"), ambiguousQuantity: false)
                 ])
         }
         session.submit("4006381333931")
@@ -301,11 +305,12 @@ struct RecountSessionTests {
         session.submit("LOC-89AB")
         await session.commitBin()
         let body = try #require(service.state.withLock { $0.lastReconcile })
-        #expect(body.snapshotUpdatedAt == "2026-03-03T10:00:00.000Z")
+        #expect(
+            body.snapshotUpdatedAt == (try LenientISO8601DateTranscoder().decode("2026-03-03T10:00:00.000Z")))
         #expect(body.expectedInventoryEntryIds.map(\.rawValue) == ["INV-2345", "INV-3456"])
         #expect(
             body.resolutions.map { resolution -> String in
-                switch resolution.resolution {
+                switch resolution {
                 case .verify: "verify"
                 case .adjust: "adjust"
                 case .remove: "remove"
@@ -413,9 +418,10 @@ struct RecountSessionTests {
             $0.scanResult = StubScanService.result(
                 .queued, id: "PRD-9999", name: "Unexpected",
                 strays: [
-                    Stray(
-                        entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"),
-                        locationName: "Bin 9", ambiguousQuantity: true)
+                    ScanStrayOut(
+                        entryId: InventoryEntryCode("INV-9999"),
+                        location: .init(id: LocationCode("LOC-89AB"), name: "Bin 9"),
+                        amount: Amount(value: 1, unit: "each"), ambiguousQuantity: true)
                 ])
         }
         session.submit("4006381333931")
@@ -438,9 +444,10 @@ struct RecountSessionTests {
             $0.scanResult = StubScanService.result(
                 .queued, id: "PRD-9999", name: "Late",
                 strays: [
-                    Stray(
-                        entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"),
-                        locationName: "Bin 9", ambiguousQuantity: false)
+                    ScanStrayOut(
+                        entryId: InventoryEntryCode("INV-9999"),
+                        location: .init(id: LocationCode("LOC-89AB"), name: "Bin 9"),
+                        amount: Amount(value: 1, unit: "each"), ambiguousQuantity: false)
                 ])
         }
         session.submit("4006381333931")

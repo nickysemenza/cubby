@@ -37,3 +37,18 @@ public enum IngredientParser {
         CubbyFFI.sizeUnitAliases()
     }
 }
+
+/// The scan-code arithmetic the device still does offline, from the same Rust the server runs
+/// (`recipebridge/src/isbn.rs`): only identity, never classification — the server decides what a
+/// raw scan means.
+public enum ScanCodes {
+    /// The GTIN-14 a barcode or ISBN is stored as (`0` + ISBN-13 for a book), or `nil` when the
+    /// value is neither. A UPC-A read and its EAN-13 spelling land on the same key.
+    public static func gtin14(_ raw: String) -> String? {
+        CubbyFFI.scanCodeGtin14(raw: raw)
+    }
+
+    public static func normalizeISBN(_ raw: String) -> NormalizedIsbn? {
+        CubbyFFI.normalizeIsbn(value: raw)
+    }
+}

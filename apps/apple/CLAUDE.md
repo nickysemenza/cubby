@@ -25,17 +25,22 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
 - Store the `set-auth-token` response header verbatim in Keychain. If a *later* `/api/auth/*`
   response carries a different `set-auth-token`, overwrite the stored value — do not keep the
   first one.
-- Never name a `Components.Schemas.*_schemaNN` type, nor a positional `…Payload`/`InputSchemaNN`
-  name, in hand-written Swift. Those are swift-openapi-generator's names for a 1,000+-schema doc
-  and are not stable across regeneration. The generator's output is its own SPM target,
-  `CubbyAPI` (`CubbyKit/Sources/CubbyAPI/`), so editing hand-written CubbyKit code no longer
-  recompiles ~58k generated lines. Generated names are spelled — and `import CubbyAPI` appears —
-  only in five files: `CubbyKit/Sources/CubbyKit/API/Mapping.swift`, `API/CubbyClient.swift`,
-  `API/Pagination.swift`, `API/CubbyAPIError.swift`, and `Generated/EntityOperations.swift`
-  (plus `Tests/CubbyKitTests/MappingTests.swift`). `accessModifier: package` in
-  `openapi/openapi-generator-config.yaml` lets those files inside the package name a generated
-  symbol while the App target, which is outside the package, still cannot. Map generated types
-  into hand-authored `Sendable` structs at that boundary.
+- Hand-written Swift names generated types only through the aliases in
+  `CubbyKit/Sources/CubbyKit/Generated/APITypes.swift` (`Product`, `ProductListItem`,
+  `GardenPlantingOut`, `ScanAtLocationOut`, …), never as `Components.Schemas.*`, and never a
+  positional `…Payload`/`InputSchemaNN`/`OutputSchemaNN` name — those are swift-openapi-generator's
+  names for a 1,000+-schema doc and are not stable across regeneration (reach a positional
+  value by property and let inference carry the type). The generator's output is its own SPM
+  target, `CubbyAPI` (`CubbyKit/Sources/CubbyAPI/`), so editing hand-written CubbyKit code
+  does not recompile ~58k generated lines; `import CubbyAPI` appears only inside CubbyKit
+  (`API/*.swift`, `Generated/*.swift`, and the model files that extend a generated type), never
+  in the App or the CLI. There is no hand-written mapping layer: a screen reads the generated
+  type, and the few derived values it needs (`stableKey`, `manufacturerOrNil`, `MacroSummary`,
+  …) live as extensions in `API/GeneratedTypeExtensions.swift`. A wire type the generator gets
+  wrong is fixed in the generator (`scripts/generator/http-api/`), not re-typed by hand. The
+  branded codes (`ProductCode`, `LocationCode`, `InventoryEntryCode`, `ImageCode`), `PlainDate`,
+  and `EntityKey` live in `CubbyKit/Sources/CubbyAPISupport/` and are the generated client's own
+  types for those schemas (`typeOverrides` in `openapi/openapi-generator-config.yaml`).
 - Always pass `serverURL` explicitly when constructing a generated `Client`. The spec's `servers`
   entry is `"/"`, which is not a usable absolute URL on its own.
 
@@ -85,7 +90,8 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
 
 ## Generated files (read-only)
 
-- `CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift` — from
+- `CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift` and
+  `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
   `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`
   (repo root).
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
@@ -94,9 +100,10 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   typed client and schema types, from `apps/web`'s committed OpenAPI document
   (`apps/web/src/lib/generated/http-openapi.gen.json`). The entire `CubbyAPI` target is generated,
   which is why it is excluded from the `swift format` targets in `scripts/ci-scope.ts`. Regenerate
-  with `apps/apple/scripts/generate-openapi.sh`; `apps/apple/scripts/check-openapi-drift.sh` fails when stale.
-- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations}.swift` — the runtime
-  route table (`OperationRoute.all`) and the per-entity `list`/`get`/image-attach switches, from
+  with `apps/apple/scripts/generate-openapi.sh`; `generate-openapi.sh --check` fails when stale.
+- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,APITypes}.swift` — the
+  runtime route table (`OperationRoute.all`), the per-entity `list`/`get`/image-attach switches,
+  and the public aliases for every generated type the native client carries, from
   `scripts/generator/http-api/native.ts` reading the `native` flags on contracts and entity
   declarations. Regenerate with `pnpm generate`; `pnpm check` fails when stale.
   That same script also (re)writes `openapi/openapi-generator-config.yaml` from those flags, so

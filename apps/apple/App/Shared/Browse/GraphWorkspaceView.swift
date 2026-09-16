@@ -21,7 +21,7 @@ import SwiftUI
 }
 
 struct GraphWorkspaceView: View {
-    var initialRoot: EntityReference?
+    var initialRoot: EntityRef?
     @Environment(AppModel.self) private var appModel
     @State private var session: GraphWorkspaceSession?
     @State private var pickingRoot = false
@@ -96,7 +96,7 @@ struct EmbeddedGraphExplorer: View {
 }
 
 private struct GraphStartingRecordPicker: View {
-    let select: (EntityReference) -> Void
+    let select: (EntityRef) -> Void
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
@@ -328,10 +328,10 @@ private struct GraphExplorerPane: View {
                         if let path = model.visibleGraph?.paths.first(where: {
                             $0.destination == node.reference
                         }),
-                            !path.edgeIDs.isEmpty
+                            !path.edgeIds.isEmpty
                         {
                             Text("Path from starting record").font(.subheadline.weight(.medium))
-                            ForEach(path.edgeIDs, id: \.self) { id in
+                            ForEach(path.edgeIds, id: \.self) { id in
                                 if let edge = model.graph?.edges.first(where: { $0.id == id }) {
                                     Button {
                                         model.selectedEdgeID = id

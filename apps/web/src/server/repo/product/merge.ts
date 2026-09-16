@@ -19,11 +19,11 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
-import { isbnFromGtin } from "@cubby/schemas/isbn";
 import type { MergeProductsInput } from "@cubby/schemas/product";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
 
+import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -606,7 +606,7 @@ const distinctIsbns = (rows: readonly ExternalIdRow[]): string[] =>
   uniq(
     rows.flatMap((row) => {
       if (row.source !== "gtin") return [];
-      const isbn = isbnFromGtin(row.externalId);
+      const isbn = wasm.isbn_from_gtin(row.externalId);
       return isbn ? [isbn.isbn13] : [];
     }),
   );
@@ -1676,7 +1676,7 @@ export const previewMergeProducts = async (
               plan.externalIds.rows.filter(
                 (row) =>
                   row.source === "gtin" &&
-                  isbnFromGtin(row.externalId) !== null,
+                  wasm.isbn_from_gtin(row.externalId) != null,
               ),
             )
           : {},

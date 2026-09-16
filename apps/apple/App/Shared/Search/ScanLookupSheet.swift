@@ -131,7 +131,7 @@ struct ScanLookupSheet: View {
             UnknownCodePanel(code: code, catalog: catalog, creating: creatingProduct) {
                 Task { await createProduct(code: code) }
             } onStock: {
-                model.navigator.pendingCaptureCode = code.value
+                model.navigator.pendingCaptureCode = code
                 dismiss()
                 model.navigator.open(.capture(location: nil))
             }
@@ -183,11 +183,11 @@ struct ScanLookupSheet: View {
         }
     }
 
-    private func createProduct(code: ScanCode) async {
+    private func createProduct(code: String) async {
         creatingProduct = true
         defer { creatingProduct = false }
         do {
-            guard let found = try await model.client.findOrCreateProduct(code: code) else { return }
+            let found = try await model.client.findOrCreateProduct(raw: code)
             RecentEntities.record(found.product.id.rawValue)
             dismiss()
             model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
@@ -205,16 +205,17 @@ struct ScanLookupSheet: View {
 #Preview("Unknown code, catalog hit", traits: .modifier(SignedInPreview())) {
     ScanLookupSheet(
         previewOutcome: .unknownCode(
-            .barcode("00012345678905"),
-            catalog: UPCLookup(
-                upc: "00012345678905", name: "LED bulbs, 4-pack", manufacturer: "Acme", category: nil,
-                priceDollars: nil, imageURL: nil, source: "upcitemdb", cached: false)
+            "00012345678905",
+            catalog: UpcLookupOutput(
+                upc: "00012345678905", name: "LED bulbs, 4-pack", manufacturer: "Acme", brand: nil,
+                category: nil,
+                description: nil, priceDollars: nil, imageUrl: nil, source: .upcitemdb, cached: false)
         )
     )
 }
 
 #Preview("Multiple products", traits: .modifier(SignedInPreview())) {
     ScanLookupSheet(
-        previewOutcome: .products(PreviewFixtures.sampleRows, code: .barcode("012345678905"))
+        previewOutcome: .products(PreviewFixtures.sampleRows, code: "00012345678905")
     )
 }

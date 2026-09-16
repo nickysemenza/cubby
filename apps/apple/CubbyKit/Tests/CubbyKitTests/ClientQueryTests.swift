@@ -88,10 +88,11 @@ struct ClientQueryTests {
         let client = try makeClient()
         await #expect(throws: CubbyAPIError.self) {
             try await client.updateGardenEntry(
+                id: "GDE-2345",
                 .init(
-                    id: "GDE-2345", locationID: "LOC-2345", plantingID: nil, kind: .observation,
-                    observedAt: Date(timeIntervalSince1970: 1_700_000_000), note: nil,
-                    harvestAmount: nil, pendingImageIDs: [], removeImageIDs: []))
+                    locationId: LocationCode("LOC-2345"), plantingId: nil, kind: .observation,
+                    observedOn: PlainDate(Date(timeIntervalSince1970: 1_700_000_000)), note: nil,
+                    harvestAmount: nil, pendingImageIds: [], removeImageIds: []))
         }
         await #expect(throws: CubbyAPIError.self) {
             try await client.attachImages(
@@ -150,7 +151,8 @@ struct ClientQueryTests {
         await #expect(throws: CubbyAPIError.self) {
             try await client.createGardenPlanting(
                 .init(
-                    ingredientID: "ING-2345", locationID: "LOC-2345", productID: "PRD-2345", status: .growing)
+                    ingredientId: "ING-2345", locationId: LocationCode("LOC-2345"), status: .growing,
+                    sourceProductId: ProductCode("PRD-2345"))
             )
         }
         await #expect(throws: CubbyAPIError.self) {
@@ -192,7 +194,7 @@ struct ClientQueryTests {
 
         let destination = try await makeClient().moveInventory("INV-1001", to: "LOC-1001")
 
-        #expect(destination == EntityReference(entity: .inventory, id: "INV-2002"))
+        #expect(destination == EntityRef(entity: .inventory, id: "INV-2002"))
         let request = try #require(seen.withLock { $0 })
         #expect(request.path == "/api/v1/inventory/moveEntries")
         #expect(

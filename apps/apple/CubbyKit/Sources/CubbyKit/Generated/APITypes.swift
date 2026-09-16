@@ -207,7 +207,6 @@ public typealias InventoryShortcode = Components.Schemas.InventoryShortcode
 public typealias InventoryWithLocationAndProductListAndSideEffectsOut = Components.Schemas.InventoryWithLocationAndProductListAndSideEffectsOut
 public typealias InventoryWithLocationAndProductListOut = Components.Schemas.InventoryWithLocationAndProductListOut
 public typealias InventoryWithLocationAndProductOut = Components.Schemas.InventoryWithLocationAndProductOut
-public typealias Isbn = Components.Schemas.Isbn
 public typealias LedgerAttributionInput = Components.Schemas.LedgerAttributionInput
 public typealias LedgerAttributionInputRequest = Components.Schemas.LedgerAttributionInputRequest
 public typealias LedgerAttributions = Components.Schemas.LedgerAttributions
@@ -435,100 +434,100 @@ public typealias WishShortcode = Components.Schemas.WishShortcode
 
 // MARK: - Identifiable
 
-extension Components.Schemas.BackgroundBatchRef: @retroactive Identifiable {}
-extension Components.Schemas.DisplayImageSummary: @retroactive Identifiable {}
-extension Components.Schemas.DuplicateUniqueProduct: @retroactive Identifiable {}
-extension Components.Schemas.EntityAttachmentRead: @retroactive Identifiable {}
-extension Components.Schemas.EntityGraphEdge: @retroactive Identifiable {}
-extension Components.Schemas.ExpenseDetail: @retroactive Identifiable {}
-extension Components.Schemas.ExpenseListItem: @retroactive Identifiable {}
-extension Components.Schemas.ExpenseOut: @retroactive Identifiable {}
-extension Components.Schemas.ExternalIdInput: @retroactive Identifiable {}
-extension Components.Schemas.ExternalIdOut: @retroactive Identifiable {}
-extension Components.Schemas.FinancialAccountDetail: @retroactive Identifiable {}
-extension Components.Schemas.FinancialAccountListItem: @retroactive Identifiable {}
-extension Components.Schemas.FinancialTransactionDetail: @retroactive Identifiable {}
-extension Components.Schemas.FinancialTransactionListItem: @retroactive Identifiable {}
-extension Components.Schemas.GardenEntryDetail: @retroactive Identifiable {}
-extension Components.Schemas.GardenEntryListItem: @retroactive Identifiable {}
-extension Components.Schemas.GardenEntryOut: @retroactive Identifiable {}
-extension Components.Schemas.GardenGuideSource: @retroactive Identifiable {}
-extension Components.Schemas.GardenJournalEntryOut: @retroactive Identifiable {}
-extension Components.Schemas.GardenLocationSummaryOut: @retroactive Identifiable {}
-extension Components.Schemas.GardenPlantingOut: @retroactive Identifiable {}
-extension Components.Schemas.GetImageById: @retroactive Identifiable {}
-extension Components.Schemas.ImageHashIndexItem: @retroactive Identifiable {}
-extension Components.Schemas.ImageOut: @retroactive Identifiable {}
-extension Components.Schemas.ImageWithEntity: @retroactive Identifiable {}
-extension Components.Schemas.InfLocation: @retroactive Identifiable {}
-extension Components.Schemas.IngredientDetail: @retroactive Identifiable {}
-extension Components.Schemas.IngredientListItem: @retroactive Identifiable {}
-extension Components.Schemas.IngredientOut: @retroactive Identifiable {}
-extension Components.Schemas.InventoryDetail: @retroactive Identifiable {}
-extension Components.Schemas.InventoryDetailProductOut: @retroactive Identifiable {}
-extension Components.Schemas.InventoryEntryOut: @retroactive Identifiable {}
-extension Components.Schemas.InventoryListItem: @retroactive Identifiable {}
-extension Components.Schemas.InventoryListLocationOut: @retroactive Identifiable {}
-extension Components.Schemas.InventoryListProductOut: @retroactive Identifiable {}
-extension Components.Schemas.InventoryWithLocationAndProductOut: @retroactive Identifiable {}
-extension Components.Schemas.LedgerPartyDetail: @retroactive Identifiable {}
-extension Components.Schemas.LedgerPartyListItem: @retroactive Identifiable {}
-extension Components.Schemas.LedgerTransferDetail: @retroactive Identifiable {}
-extension Components.Schemas.LedgerTransferListItem: @retroactive Identifiable {}
-extension Components.Schemas.LocationDetail: @retroactive Identifiable {}
-extension Components.Schemas.LocationIdentityProductOut: @retroactive Identifiable {}
-extension Components.Schemas.LocationListItem: @retroactive Identifiable {}
-extension Components.Schemas.LocationListRefOut: @retroactive Identifiable {}
-extension Components.Schemas.LocationOut: @retroactive Identifiable {}
-extension Components.Schemas.MealDetail: @retroactive Identifiable {}
-extension Components.Schemas.MealListItem: @retroactive Identifiable {}
-extension Components.Schemas.MealNutritionFoodIngredient: @retroactive Identifiable {}
-extension Components.Schemas.MealNutritionFoodManual: @retroactive Identifiable {}
-extension Components.Schemas.MealNutritionFoodProduct: @retroactive Identifiable {}
-extension Components.Schemas.MealOut: @retroactive Identifiable {}
-extension Components.Schemas.MealRecipeOut: @retroactive Identifiable {}
-extension Components.Schemas.MealRecipeSummary: @retroactive Identifiable {}
-extension Components.Schemas.NutritionMeal: @retroactive Identifiable {}
-extension Components.Schemas.PlantingDetail: @retroactive Identifiable {}
-extension Components.Schemas.PlantingListItem: @retroactive Identifiable {}
-extension Components.Schemas.PlantingOut: @retroactive Identifiable {}
-extension Components.Schemas.ProductCookbookRefOut: @retroactive Identifiable {}
-extension Components.Schemas.ProductDetail: @retroactive Identifiable {}
-extension Components.Schemas.ProductListInventoryEntryOut: @retroactive Identifiable {}
-extension Components.Schemas.ProductListItem: @retroactive Identifiable {}
-extension Components.Schemas.ProductTopLevelOut: @retroactive Identifiable {}
-extension Components.Schemas.ProductWithMappingsAndFoodOut: @retroactive Identifiable {}
-extension Components.Schemas.ProductWithMappingsOut: @retroactive Identifiable {}
-extension Components.Schemas.ProjectDetail: @retroactive Identifiable {}
-extension Components.Schemas.ProjectListItem: @retroactive Identifiable {}
-extension Components.Schemas.PurchaseDetail: @retroactive Identifiable {}
-extension Components.Schemas.PurchaseListItem: @retroactive Identifiable {}
-extension Components.Schemas.PurchaseOut: @retroactive Identifiable {}
-extension Components.Schemas.RecipeDetail: @retroactive Identifiable {}
-extension Components.Schemas.RecipeDetailMcpOut: @retroactive Identifiable {}
-extension Components.Schemas.RecipeFieldsRecipeSectionOut: @retroactive Identifiable {}
-extension Components.Schemas.RecipeIngredientInputIngredient: @retroactive Identifiable {}
-extension Components.Schemas.RecipeIngredientInputRecipe: @retroactive Identifiable {}
-extension Components.Schemas.RecipeInstructionInput: @retroactive Identifiable {}
-extension Components.Schemas.RecipeListItem: @retroactive Identifiable {}
-extension Components.Schemas.RecipeRefOut: @retroactive Identifiable {}
-extension Components.Schemas.RecipeSectionIngredientOutIngredient: @retroactive Identifiable {}
-extension Components.Schemas.RecipeSectionIngredientOutRecipe: @retroactive Identifiable {}
-extension Components.Schemas.RecipeSectionInput: @retroactive Identifiable {}
-extension Components.Schemas.RecipeTopLevel: @retroactive Identifiable {}
-extension Components.Schemas.RecipeUsageOut: @retroactive Identifiable {}
-extension Components.Schemas.RecommendationLocationTarget: @retroactive Identifiable {}
-extension Components.Schemas.RecommendationProjectTarget: @retroactive Identifiable {}
-extension Components.Schemas.RecommendationSupportingExpense: @retroactive Identifiable {}
-extension Components.Schemas.SearchHit: @retroactive Identifiable {}
-extension Components.Schemas.TaskDetail: @retroactive Identifiable {}
-extension Components.Schemas.TaskListItem: @retroactive Identifiable {}
-extension Components.Schemas.TaskOut: @retroactive Identifiable {}
-extension Components.Schemas.TaskTodayBriefingItemOut: @retroactive Identifiable {}
-extension Components.Schemas.UnitMappingInput: @retroactive Identifiable {}
-extension Components.Schemas.UnitMappingOut: @retroactive Identifiable {}
-extension Components.Schemas.VendorDetail: @retroactive Identifiable {}
-extension Components.Schemas.VendorListItem: @retroactive Identifiable {}
-extension Components.Schemas.WishCandidateOut: @retroactive Identifiable {}
-extension Components.Schemas.WishDetail: @retroactive Identifiable {}
-extension Components.Schemas.WishListItem: @retroactive Identifiable {}
+extension Components.Schemas.BackgroundBatchRef: Identifiable {}
+extension Components.Schemas.DisplayImageSummary: Identifiable {}
+extension Components.Schemas.DuplicateUniqueProduct: Identifiable {}
+extension Components.Schemas.EntityAttachmentRead: Identifiable {}
+extension Components.Schemas.EntityGraphEdge: Identifiable {}
+extension Components.Schemas.ExpenseDetail: Identifiable {}
+extension Components.Schemas.ExpenseListItem: Identifiable {}
+extension Components.Schemas.ExpenseOut: Identifiable {}
+extension Components.Schemas.ExternalIdInput: Identifiable {}
+extension Components.Schemas.ExternalIdOut: Identifiable {}
+extension Components.Schemas.FinancialAccountDetail: Identifiable {}
+extension Components.Schemas.FinancialAccountListItem: Identifiable {}
+extension Components.Schemas.FinancialTransactionDetail: Identifiable {}
+extension Components.Schemas.FinancialTransactionListItem: Identifiable {}
+extension Components.Schemas.GardenEntryDetail: Identifiable {}
+extension Components.Schemas.GardenEntryListItem: Identifiable {}
+extension Components.Schemas.GardenEntryOut: Identifiable {}
+extension Components.Schemas.GardenGuideSource: Identifiable {}
+extension Components.Schemas.GardenJournalEntryOut: Identifiable {}
+extension Components.Schemas.GardenLocationSummaryOut: Identifiable {}
+extension Components.Schemas.GardenPlantingOut: Identifiable {}
+extension Components.Schemas.GetImageById: Identifiable {}
+extension Components.Schemas.ImageHashIndexItem: Identifiable {}
+extension Components.Schemas.ImageOut: Identifiable {}
+extension Components.Schemas.ImageWithEntity: Identifiable {}
+extension Components.Schemas.InfLocation: Identifiable {}
+extension Components.Schemas.IngredientDetail: Identifiable {}
+extension Components.Schemas.IngredientListItem: Identifiable {}
+extension Components.Schemas.IngredientOut: Identifiable {}
+extension Components.Schemas.InventoryDetail: Identifiable {}
+extension Components.Schemas.InventoryDetailProductOut: Identifiable {}
+extension Components.Schemas.InventoryEntryOut: Identifiable {}
+extension Components.Schemas.InventoryListItem: Identifiable {}
+extension Components.Schemas.InventoryListLocationOut: Identifiable {}
+extension Components.Schemas.InventoryListProductOut: Identifiable {}
+extension Components.Schemas.InventoryWithLocationAndProductOut: Identifiable {}
+extension Components.Schemas.LedgerPartyDetail: Identifiable {}
+extension Components.Schemas.LedgerPartyListItem: Identifiable {}
+extension Components.Schemas.LedgerTransferDetail: Identifiable {}
+extension Components.Schemas.LedgerTransferListItem: Identifiable {}
+extension Components.Schemas.LocationDetail: Identifiable {}
+extension Components.Schemas.LocationIdentityProductOut: Identifiable {}
+extension Components.Schemas.LocationListItem: Identifiable {}
+extension Components.Schemas.LocationListRefOut: Identifiable {}
+extension Components.Schemas.LocationOut: Identifiable {}
+extension Components.Schemas.MealDetail: Identifiable {}
+extension Components.Schemas.MealListItem: Identifiable {}
+extension Components.Schemas.MealNutritionFoodIngredient: Identifiable {}
+extension Components.Schemas.MealNutritionFoodManual: Identifiable {}
+extension Components.Schemas.MealNutritionFoodProduct: Identifiable {}
+extension Components.Schemas.MealOut: Identifiable {}
+extension Components.Schemas.MealRecipeOut: Identifiable {}
+extension Components.Schemas.MealRecipeSummary: Identifiable {}
+extension Components.Schemas.NutritionMeal: Identifiable {}
+extension Components.Schemas.PlantingDetail: Identifiable {}
+extension Components.Schemas.PlantingListItem: Identifiable {}
+extension Components.Schemas.PlantingOut: Identifiable {}
+extension Components.Schemas.ProductCookbookRefOut: Identifiable {}
+extension Components.Schemas.ProductDetail: Identifiable {}
+extension Components.Schemas.ProductListInventoryEntryOut: Identifiable {}
+extension Components.Schemas.ProductListItem: Identifiable {}
+extension Components.Schemas.ProductTopLevelOut: Identifiable {}
+extension Components.Schemas.ProductWithMappingsAndFoodOut: Identifiable {}
+extension Components.Schemas.ProductWithMappingsOut: Identifiable {}
+extension Components.Schemas.ProjectDetail: Identifiable {}
+extension Components.Schemas.ProjectListItem: Identifiable {}
+extension Components.Schemas.PurchaseDetail: Identifiable {}
+extension Components.Schemas.PurchaseListItem: Identifiable {}
+extension Components.Schemas.PurchaseOut: Identifiable {}
+extension Components.Schemas.RecipeDetail: Identifiable {}
+extension Components.Schemas.RecipeDetailMcpOut: Identifiable {}
+extension Components.Schemas.RecipeFieldsRecipeSectionOut: Identifiable {}
+extension Components.Schemas.RecipeIngredientInputIngredient: Identifiable {}
+extension Components.Schemas.RecipeIngredientInputRecipe: Identifiable {}
+extension Components.Schemas.RecipeInstructionInput: Identifiable {}
+extension Components.Schemas.RecipeListItem: Identifiable {}
+extension Components.Schemas.RecipeRefOut: Identifiable {}
+extension Components.Schemas.RecipeSectionIngredientOutIngredient: Identifiable {}
+extension Components.Schemas.RecipeSectionIngredientOutRecipe: Identifiable {}
+extension Components.Schemas.RecipeSectionInput: Identifiable {}
+extension Components.Schemas.RecipeTopLevel: Identifiable {}
+extension Components.Schemas.RecipeUsageOut: Identifiable {}
+extension Components.Schemas.RecommendationLocationTarget: Identifiable {}
+extension Components.Schemas.RecommendationProjectTarget: Identifiable {}
+extension Components.Schemas.RecommendationSupportingExpense: Identifiable {}
+extension Components.Schemas.SearchHit: Identifiable {}
+extension Components.Schemas.TaskDetail: Identifiable {}
+extension Components.Schemas.TaskListItem: Identifiable {}
+extension Components.Schemas.TaskOut: Identifiable {}
+extension Components.Schemas.TaskTodayBriefingItemOut: Identifiable {}
+extension Components.Schemas.UnitMappingInput: Identifiable {}
+extension Components.Schemas.UnitMappingOut: Identifiable {}
+extension Components.Schemas.VendorDetail: Identifiable {}
+extension Components.Schemas.VendorListItem: Identifiable {}
+extension Components.Schemas.WishCandidateOut: Identifiable {}
+extension Components.Schemas.WishDetail: Identifiable {}
+extension Components.Schemas.WishListItem: Identifiable {}

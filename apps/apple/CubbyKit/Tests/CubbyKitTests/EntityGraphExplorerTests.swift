@@ -5,9 +5,9 @@ import Testing
 
 @Suite("Persistent graph explorer")
 struct EntityGraphExplorerTests {
-    let root = EntityReference(entity: .vendor, id: "VEN-2345")
-    let purchase = EntityReference(entity: .purchase, id: "PUR-2345")
-    let expense = EntityReference(entity: .expense, id: "EXP-2345")
+    let root = EntityRef(entity: .vendor, id: "VEN-2345")
+    let purchase = EntityRef(entity: .purchase, id: "PUR-2345")
+    let expense = EntityRef(entity: .expense, id: "EXP-2345")
 
     @Test @MainActor func selectionDoesNotReadAndExpansionKeepsTheMap() async throws {
         let initial = fixture(root: root, members: [purchase])
@@ -60,7 +60,7 @@ struct EntityGraphExplorerTests {
     }
 
     @Test func denseLayoutIsCompactAndKeepsExistingCoordinates() async throws {
-        let members = (0..<499).map { EntityReference(entity: .purchase, id: "PUR-\($0)") }
+        let members = (0..<499).map { EntityRef(entity: .purchase, id: "PUR-\($0)") }
         let initial = fixture(root: root, members: Array(members.prefix(24)))
         let full = fixture(root: root, members: members)
         let first = try await EntityGraphMapLayout.place(graph: initial, measuredSizes: [:], previous: [:])
@@ -93,8 +93,7 @@ struct EntityGraphExplorerTests {
         #expect(model.busy.isEmpty)
     }
 
-    private func fixture(root: EntityReference, members: [EntityReference], total: Int? = nil) -> EntityGraph
-    {
+    private func fixture(root: EntityRef, members: [EntityRef], total: Int? = nil) -> EntityGraph {
         let edges = members.map {
             EntityGraphEdge(
                 id: "\(root.stableKey)>\($0.stableKey)", source: root, target: $0, relationshipKey: "members",
@@ -109,7 +108,7 @@ struct EntityGraphExplorerTests {
                 .init(
                     root: root, relationshipKey: "members", label: "Connected records", target: .purchase,
                     totalCount: total ?? members.count, nextOffset: nil, items: members,
-                    edgeIDs: edges.map(\.id))
+                    edgeIds: edges.map(\.id))
             ],
             paths: [], completion: .init(status: .exhausted, requestedDepth: 1, reachedDepth: 1),
             truncated: false)
@@ -117,15 +116,15 @@ struct EntityGraphExplorerTests {
 }
 
 private actor GraphExplorerClient: EntityRelationshipsClient {
-    let graphs: [EntityReference: EntityGraph]
-    let delayed: EntityReference?
-    var reads: [EntityReference] = []
+    let graphs: [EntityRef: EntityGraph]
+    let delayed: EntityRef?
+    var reads: [EntityRef] = []
     private var continuation: CheckedContinuation<EntityGraph, Never>?
     private var started: CheckedContinuation<Void, Never>?
-    init(graphs: [EntityReference: EntityGraph], delayed: EntityReference? = nil) {
+    init(graphs: [EntityRef: EntityGraph], delayed: EntityRef? = nil) {
         self.graphs = graphs; self.delayed = delayed
     }
-    func exploreRelationships(root: EntityReference, depth: Int) async throws -> EntityGraph {
+    func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph {
         reads.append(root)
         if root == delayed {
             return await withCheckedContinuation { continuation in
@@ -139,16 +138,16 @@ private actor GraphExplorerClient: EntityRelationshipsClient {
         if continuation == nil { await withCheckedContinuation { started = $0 } }
     }
     func finishDelay(with graph: EntityGraph) { continuation?.resume(returning: graph); continuation = nil }
-    func relationshipPage(root: EntityReference, relationshipKey: String, offset: Int, limit: Int) throws
-        -> EntityGraphPage
+    func relationshipPage(root: EntityRef, relationshipKey: String, offset: Int, limit: Int) throws
+        -> EntityGraphOutput
     { throw URLError(.unsupportedURL) }
-    func recommendations(for source: EntityReference) throws -> EntityRecommendations {
+    func recommendations(for source: EntityRef) throws -> EntityRecommendationsOut {
         throw URLError(.unsupportedURL)
     }
     func assignExpense(_ expenseID: String, toProject projectID: String) throws {
         throw URLError(.unsupportedURL)
     }
-    func moveInventory(_ inventoryID: String, to locationID: String) throws -> EntityReference {
+    func moveInventory(_ inventoryID: String, to locationID: String) throws -> EntityRef {
         throw URLError(.unsupportedURL)
     }
 }

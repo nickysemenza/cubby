@@ -91,10 +91,10 @@ struct TodayView: View {
 
 struct TodayContent: View {
     let dateText: String
-    let tasks: TodaySectionState<[TodayTask]>
-    let meals: TodaySectionState<[TodayMeal]>
-    let problems: TodaySectionState<TodayProblemCounts>
-    var nutrition: TodaySectionState<MealNutritionSummary> = .loading
+    let tasks: TodaySectionState<[TaskTodayBriefingItemOut]>
+    let meals: TodaySectionState<[MealListItem]>
+    let problems: TodaySectionState<ProblemsCount>
+    var nutrition: TodaySectionState<MealNutritionOut> = .loading
     var nutritionDay = HouseholdDay.string(for: .now)
     let onRefresh: @Sendable () async -> Void
     var tasksError: String?
@@ -396,7 +396,7 @@ struct TodayContent: View {
 /// One task row: name, then project and due date as a quiet second line, with status called out
 /// both by color and by word.
 private struct TaskRow: View {
-    let task: TodayTask
+    let task: TaskTodayBriefingItemOut
 
     var body: some View {
         HStack(alignment: .top, spacing: PorcelainTokens.Space.md) {
@@ -425,28 +425,28 @@ private struct TaskRow: View {
     }
 
     private var statusLabel: String {
-        task.status == "in_progress" ? "In progress" : "Not started"
+        task.status == .inProgress ? "In progress" : "Not started"
     }
 
     private var statusTone: StatusChip.Tone {
-        task.status == "in_progress" ? .positive : .neutral
+        task.status == .inProgress ? .positive : .neutral
     }
 }
 
 /// One meal row: name and type, with the recipes attached to it as a quiet second line.
 private struct MealRow: View {
-    let meal: TodayMeal
+    let meal: MealListItem
 
     var body: some View {
         HStack(alignment: .top, spacing: PorcelainTokens.Space.md) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: PorcelainTokens.Space.xs) {
-                    Text(meal.name)
+                    Text(meal.displayName)
                         .font(.porcelainTitle)
                         .foregroundStyle(PorcelainTokens.graphite)
 
                     if let mealType = meal.mealType {
-                        Text(mealType.capitalized)
+                        Text(mealType.rawValue.capitalized)
                             .font(.porcelainLabel)
                             .foregroundStyle(PorcelainTokens.graphiteSecondary)
                     }
@@ -502,8 +502,8 @@ private func formattedDueDate(_ raw: String) -> String {
             dateText: "Friday, September 11",
             tasks: .loaded([]),
             meals: .loaded([]),
-            problems: .loaded(TodayProblemCounts(total: 0, coverageTotal: 0)),
-            nutrition: .loaded(MealNutritionSummary(meals: [], people: [])),
+            problems: .loaded(PreviewFixtures.sampleTodayProblems),
+            nutrition: .loaded(MealNutritionOut(meals: [], people: [])),
             onRefresh: {}
         )
         .navigationTitle("Today")

@@ -895,9 +895,10 @@ describe("typed entity compiler", () => {
     expect(artifact("entity-lists.gen.ts")).toContain(
       "ENTITY_LIST_FILTER_SCHEMAS",
     );
-    const swiftCatalog = artifact("EntityCatalog.swift");
-    expect(swiftCatalog).toContain("public enum EntityKey");
-    const entityKeyBody = swiftCatalog
+    expect(artifact("EntityCatalog.swift")).toContain("import CubbyAPISupport");
+    const swiftEntityKey = artifact("EntityKey.swift");
+    expect(swiftEntityKey).toContain("public enum EntityKey");
+    const entityKeyBody = swiftEntityKey
       .split("public enum EntityKey")[1]!
       .split("\n}\n")[0]!;
     const rawValues = [

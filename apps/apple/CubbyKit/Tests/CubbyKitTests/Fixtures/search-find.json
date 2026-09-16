@@ -9,7 +9,9 @@
     "matchKind": "prefix",
     "matchField": "title",
     "matchReason": "Title starts with \"sample\"",
-    "matchTerms": ["sample"]
+    "matchTerms": [
+      "sample"
+    ]
   },
   {
     "id": "LOC-5678",
@@ -21,18 +23,8 @@
     "matchKind": "fuzzy",
     "matchField": "alias",
     "matchReason": "Alias resembles \"sample\"",
-    "matchTerms": ["sample"]
-  },
-  {
-    "id": "XYZ-0000",
-    "entityType": "someday",
-    "title": "A kind the catalog does not know",
-    "subtitle": null,
-    "typeHint": null,
-    "imageUrl": null,
-    "matchKind": "semantic",
-    "matchField": "embedding",
-    "matchReason": "",
-    "matchTerms": []
+    "matchTerms": [
+      "sample"
+    ]
   }
 ]

@@ -121,7 +121,7 @@ struct EntityRelationshipsSection: View {
         }
     }
 
-    private func completionText(_ completion: EntityGraphCompletion) -> String {
+    private func completionText(_ completion: EntityGraphExploreCompletion) -> String {
         switch completion.status {
         case .exhausted:
             "All relationships within depth \(completion.reachedDepth) are shown."
@@ -164,9 +164,9 @@ private struct RelationshipRecommendationGroupView: View {
 
     var body: some View {
         switch group {
-        case .expenseProject(let status, let current, let proposals):
-            recommendationHeader("Project", status: status, current: current)
-            ForEach(proposals) { proposal in
+        case .expenseProject(let group):
+            recommendationHeader("Project", status: group.status, current: group.currentTarget?.name)
+            ForEach(group.proposals) { proposal in
                 ExpenseProjectProposalView(
                     proposal: proposal,
                     isAccepting: model.acceptingRecommendationID == proposal.id,
@@ -174,9 +174,9 @@ private struct RelationshipRecommendationGroupView: View {
                     accept: { accept(.expenseProject(proposal)) }
                 )
             }
-        case .inventoryPlacement(let status, let current, let proposals):
-            recommendationHeader("Location", status: status, current: current)
-            ForEach(proposals) { proposal in
+        case .inventoryPlacement(let group):
+            recommendationHeader("Location", status: group.status, current: group.currentTarget?.name)
+            ForEach(group.proposals) { proposal in
                 InventoryPlacementProposalView(
                     proposal: proposal,
                     isAccepting: model.acceptingRecommendationID == proposal.id,
@@ -184,9 +184,9 @@ private struct RelationshipRecommendationGroupView: View {
                     accept: { accept(.inventoryPlacement(proposal)) }
                 )
             }
-        case .productRelated(let status, let proposals):
-            recommendationHeader("Related products", status: status, current: nil)
-            ForEach(proposals) { proposal in
+        case .productRelated(let group):
+            recommendationHeader("Related products", status: group.status, current: nil)
+            ForEach(group.proposals) { proposal in
                 ProductRelationshipProposalView(proposal: proposal)
             }
         }
@@ -195,7 +195,7 @@ private struct RelationshipRecommendationGroupView: View {
     private func recommendationHeader(
         _ title: String,
         status: EmbeddingReadiness,
-        current: RelationshipTarget?
+        current: String?
     ) -> some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
             HStack {
@@ -204,7 +204,7 @@ private struct RelationshipRecommendationGroupView: View {
                 RelationshipReadinessLabel(status: status)
             }
             if let current {
-                LabeledContent("Current", value: current.name)
+                LabeledContent("Current", value: current)
                     .font(.callout)
             }
         }
@@ -222,8 +222,9 @@ private struct RelationshipRecommendationGroupView: View {
 struct RelationshipRecommendationReview: Identifiable {
     let proposal: ActionableRelationshipRecommendation
     let basisKey: String
-    let source: EntityReference
-    let currentTarget: RelationshipTarget?
+    let source: EntityRef
+    /// The name of the target the record has now, if any.
+    let currentTarget: String?
 
     var id: String { "\(basisKey):\(proposal.id)" }
 }
@@ -303,15 +304,15 @@ struct RelationshipRecommendationReviewSheet: View {
     private var comparison: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.md) {
-                comparisonValue("Current", value: review.currentTarget?.name ?? "Unassigned")
+                comparisonValue("Current", value: review.currentTarget ?? "Unassigned")
                 Image(systemName: "arrow.right")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                comparisonValue("Proposed", value: proposedTarget.name)
+                comparisonValue("Proposed", value: proposedTarget)
             }
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-                comparisonValue("Current", value: review.currentTarget?.name ?? "Unassigned")
-                comparisonValue("Proposed", value: proposedTarget.name)
+                comparisonValue("Current", value: review.currentTarget ?? "Unassigned")
+                comparisonValue("Proposed", value: proposedTarget)
             }
         }
         .accessibilityElement(children: .combine)
@@ -328,10 +329,10 @@ struct RelationshipRecommendationReviewSheet: View {
         }
     }
 
-    private var proposedTarget: RelationshipTarget {
+    private var proposedTarget: String {
         switch review.proposal {
-        case .expenseProject(let proposal): proposal.target
-        case .inventoryPlacement(let proposal): proposal.target
+        case .expenseProject(let proposal): proposal.target.name
+        case .inventoryPlacement(let proposal): proposal.target.name
         }
     }
 
@@ -346,7 +347,7 @@ struct RelationshipRecommendationReviewSheet: View {
 }
 
 private struct ExpenseProjectProposalView: View {
-    let proposal: ExpenseProjectRecommendation
+    let proposal: ExpenseProjectProposal
     let isAccepting: Bool
     let isDisabled: Bool
     let accept: () -> Void
@@ -401,7 +402,7 @@ private struct ExpenseProjectProposalView: View {
 }
 
 private struct InventoryPlacementProposalView: View {
-    let proposal: InventoryPlacementRecommendation
+    let proposal: InventoryPlacementProposal
     let isAccepting: Bool
     let isDisabled: Bool
     let accept: () -> Void
@@ -423,13 +424,13 @@ private struct InventoryPlacementProposalView: View {
 }
 
 private struct ProductRelationshipProposalView: View {
-    let proposal: ProductRelationshipRecommendation
+    let proposal: ProductRelatedProposal
     @Environment(AppModel.self) private var appModel
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         Button {
-            open(EntityReference(entity: .product, id: proposal.target.id))
+            open(EntityRef(entity: .product, id: proposal.target.id.rawValue))
         } label: {
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
                 HStack {
@@ -453,7 +454,7 @@ private struct ProductRelationshipProposalView: View {
         .accessibilityHint("Opens the related product")
     }
 
-    private func open(_ reference: EntityReference) {
+    private func open(_ reference: EntityRef) {
         if reference.entity.httpActions.contains(.get) {
             appModel.navigator.openRecord(.init(key: reference.entity, id: reference.id))
         } else {
@@ -742,7 +743,7 @@ private struct RelationshipNodeDetailsSheet: View {
 
     private func pathDescription(_ path: EntityGraphPath, graph: EntityGraph) -> String {
         let labels = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.reference, $0.label) })
-        return path.nodeReferences.map { labels[$0] ?? $0.id }.joined(separator: " → ")
+        return path.nodeRefs.map { labels[$0] ?? $0.id }.joined(separator: " → ")
     }
 }
 
@@ -753,14 +754,14 @@ private struct RelationshipPathSteps: View {
     var body: some View {
         let labels = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.reference, $0.label) })
         let edges = Dictionary(uniqueKeysWithValues: graph.edges.map { ($0.id, $0) })
-        ForEach(path.edgeIDs.indices, id: \.self) { index in
-            if let edge = edges[path.edgeIDs[index]] {
+        ForEach(path.edgeIds.indices, id: \.self) { index in
+            if let edge = edges[path.edgeIds[index]] {
                 let source =
-                    path.nodeReferences.indices.contains(index)
-                    ? path.nodeReferences[index] : edge.source
+                    path.nodeRefs.indices.contains(index)
+                    ? path.nodeRefs[index] : edge.source
                 let target =
-                    path.nodeReferences.indices.contains(index + 1)
-                    ? path.nodeReferences[index + 1] : edge.target
+                    path.nodeRefs.indices.contains(index + 1)
+                    ? path.nodeRefs[index + 1] : edge.target
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
                     Label(edge.label, systemImage: "arrow.right")
                         .font(.porcelainLabel)
@@ -834,9 +835,9 @@ struct RelationshipGraphNode: View {
 }
 
 #Preview("Relationships") {
-    let root = EntityReference(entity: .product, id: "PRD-2345")
-    let expense = EntityReference(entity: .expense, id: "EXP-2345")
-    let project = EntityReference(entity: .project, id: "PRJ-2345")
+    let root = EntityRef(entity: .product, id: "PRD-2345")
+    let expense = EntityRef(entity: .expense, id: "EXP-2345")
+    let project = EntityRef(entity: .project, id: "PRJ-2345")
     let graph = EntityGraph(
         root: root,
         nodes: [
@@ -855,29 +856,35 @@ struct RelationshipGraphNode: View {
         branches: [
             EntityGraphBranch(
                 root: root, relationshipKey: "expenses", label: "Expenses", target: .expense,
-                totalCount: 1, nextOffset: nil, items: [expense], edgeIDs: ["product-expense"])
+                totalCount: 1, nextOffset: nil, items: [expense], edgeIds: ["product-expense"])
         ],
         paths: [
             EntityGraphPath(
-                nodeReferences: [root, expense, project],
-                edgeIDs: ["product-expense", "expense-project"])
+                nodeRefs: [root, expense, project],
+                edgeIds: ["product-expense", "expense-project"])
         ],
         completion: .init(status: .exhausted, requestedDepth: 2, reachedDepth: 2),
         truncated: false
     )
-    let recommendations = EntityRecommendations(
-        source: root,
+    let recommendations = EntityRecommendationsOut(
+        source: .init(root),
         basisKey: "preview",
         groups: [
             .productRelated(
-                status: .ready,
-                proposals: [
-                    .init(
-                        target: .init(id: "PRD-3456", name: "Impact driver"), score: 0.87,
-                        evidence: [
-                            .init(signal: "co-occurrence", detail: "Stored and purchased together", weight: 1)
-                        ])
-                ])
+                .init(
+                    kind: .productRelated,
+                    status: .ready,
+                    proposals: [
+                        .init(
+                            kind: .productRelated,
+                            target: .init(id: ProductCode("PRD-3456"), name: "Impact driver"),
+                            score: 0.87,
+                            evidence: [
+                                .init(
+                                    signal: "co-occurrence", detail: "Stored and purchased together",
+                                    weight: 1)
+                            ])
+                    ]))
         ]
     )
     let model = EntityRelationshipsModel(
@@ -893,7 +900,7 @@ struct RelationshipGraphNode: View {
 
 private struct RelationshipPreviewHost: View {
     let model: EntityRelationshipsModel
-    var sourceToLoad: EntityReference?
+    var sourceToLoad: EntityRef?
 
     var body: some View {
         NavigationStack {
@@ -911,7 +918,7 @@ private struct RelationshipPreviewHost: View {
 }
 
 #Preview("Relationships — Loading") {
-    let source = EntityReference(entity: .expense, id: "EXP-2345")
+    let source = EntityRef(entity: .expense, id: "EXP-2345")
     return RelationshipPreviewHost(
         model: EntityRelationshipsModel(client: PreviewEntityRelationshipsClient(mode: .loading)),
         sourceToLoad: source
@@ -919,7 +926,7 @@ private struct RelationshipPreviewHost: View {
 }
 
 #Preview("Relationships — Empty") {
-    let source = EntityReference(entity: .recipe, id: "RCP-2345")
+    let source = EntityRef(entity: .recipe, id: "RCP-2345")
     let graph = EntityGraph(
         root: source,
         nodes: [.init(reference: source, label: "Weeknight soup")],
@@ -933,14 +940,14 @@ private struct RelationshipPreviewHost: View {
         model: EntityRelationshipsModel(
             client: PreviewEntityRelationshipsClient(),
             initialGraph: graph,
-            initialRecommendations: .init(source: source, basisKey: "empty-preview", groups: [])
+            initialRecommendations: .init(source: .init(source), basisKey: "empty-preview", groups: [])
         )
     )
 }
 
 #Preview("Relationships — Partial") {
-    let source = EntityReference(entity: .product, id: "PRD-2345")
-    let related = EntityReference(entity: .product, id: "PRD-3456")
+    let source = EntityRef(entity: .product, id: "PRD-2345")
+    let related = EntityRef(entity: .product, id: "PRD-3456")
     let graph = EntityGraph(
         root: source,
         nodes: [
@@ -967,30 +974,34 @@ private struct RelationshipPreviewHost: View {
                 totalCount: 8,
                 nextOffset: 1,
                 items: [related],
-                edgeIDs: ["related-product"]
+                edgeIds: ["related-product"]
             )
         ],
         paths: [
-            .init(nodeReferences: [source, related], edgeIDs: ["related-product"])
+            .init(nodeRefs: [source, related], edgeIds: ["related-product"])
         ],
         completion: .init(status: .paginationLimit, requestedDepth: 2, reachedDepth: 1),
         truncated: true
     )
-    let recommendations = EntityRecommendations(
-        source: source,
+    let recommendations = EntityRecommendationsOut(
+        source: .init(source),
         basisKey: "partial-preview",
         groups: [
             .productRelated(
-                status: .unavailable,
-                proposals: [
-                    .init(
-                        target: .init(id: related.id, name: "Impact driver"),
-                        score: 0.82,
-                        evidence: [
-                            .init(signal: "shared tags", detail: "Workshop tools", weight: 0.7)
-                        ]
-                    )
-                ]
+                .init(
+                    kind: .productRelated,
+                    status: .unavailable,
+                    proposals: [
+                        .init(
+                            kind: .productRelated,
+                            target: .init(id: ProductCode(related.id), name: "Impact driver"),
+                            score: 0.82,
+                            evidence: [
+                                .init(signal: "shared tags", detail: "Workshop tools", weight: 0.7)
+                            ]
+                        )
+                    ]
+                )
             )
         ]
     )
@@ -1004,7 +1015,7 @@ private struct RelationshipPreviewHost: View {
 }
 
 #Preview("Relationships — Error") {
-    let source = EntityReference(entity: .inventory, id: "INV-2345")
+    let source = EntityRef(entity: .inventory, id: "INV-2345")
     return RelationshipPreviewHost(
         model: EntityRelationshipsModel(client: PreviewEntityRelationshipsClient()),
         sourceToLoad: source
@@ -1017,18 +1028,18 @@ private actor PreviewEntityRelationshipsClient: EntityRelationshipsClient {
 
     init(mode: Mode = .error) { self.mode = mode }
 
-    func exploreRelationships(root: EntityReference, depth: Int) async throws -> EntityGraph {
+    func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph {
         try await waitOrThrow()
     }
     func relationshipPage(
-        root: EntityReference, relationshipKey: String, offset: Int, limit: Int
-    ) throws -> EntityGraphPage { throw URLError(.resourceUnavailable) }
-    func recommendations(for source: EntityReference) async throws -> EntityRecommendations {
+        root: EntityRef, relationshipKey: String, offset: Int, limit: Int
+    ) throws -> EntityGraphOutput { throw URLError(.resourceUnavailable) }
+    func recommendations(for source: EntityRef) async throws -> EntityRecommendationsOut {
         try await waitOrThrow()
     }
     func assignExpense(_ expenseID: String, toProject projectID: String) throws {}
-    func moveInventory(_ inventoryID: String, to locationID: String) -> EntityReference {
-        EntityReference(entity: .inventory, id: inventoryID)
+    func moveInventory(_ inventoryID: String, to locationID: String) -> EntityRef {
+        EntityRef(entity: .inventory, id: inventoryID)
     }
 
     private func waitOrThrow<T>() async throws -> T {
