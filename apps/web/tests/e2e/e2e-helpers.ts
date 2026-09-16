@@ -1,5 +1,13 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+/** The `get-session` status observed at a hydration failure, for attribution. */
+async function observedSessionStatus(page: Page): Promise<number | "unknown"> {
+  return await page.request
+    .get("/api/auth/get-session")
+    .then((response) => response.status())
+    .catch(() => "unknown" as const);
+}
+
 /**
  * Wait until React has hydrated the authenticated application shell.
  *
@@ -7,6 +15,15 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * it proves shell-level click handlers are attached across both desktop chrome
  * and contextual mobile chrome without coupling the wait to a route-specific
  * control.
+ *
+ * Two distinct failure modes look alike from the outside (no shell, timeout)
+ * but have different causes and need different messages: SSR can render the
+ * unauthenticated shell (the session lookup itself failed or timed out — the
+ * session cookie is stripped by design in `e2e-worker-runtime.ts`), or the
+ * authenticated shell can render but never flip its hydrated marker (bundle
+ * fetch/parse/execute starved on a busy main thread). Both messages carry the
+ * URL and the `get-session` status observed at the moment of failure so a
+ * flake is attributable without re-running under a trace.
  */
 export async function waitForAppHydration(page: Page) {
   const shell = page.locator(
@@ -14,18 +31,35 @@ export async function waitForAppHydration(page: Page) {
   );
   const signIn = page.getByRole("link", { name: "Sign In", exact: true });
 
-  await expect(async () => {
-    if (await signIn.isVisible().catch(() => false)) {
-      const rateLimited = await page
-        .getByText("Too Many Requests", { exact: true })
-        .isVisible()
-        .catch(() => false);
-      throw new Error(
-        `Authenticated shell unavailable at ${page.url()}${rateLimited ? " (Too Many Requests)" : " (Sign In is visible)"}`,
-      );
-    }
-    await expect(shell).toBeAttached({ timeout: 3000 });
-  }).toPass({ timeout: 15000 });
+  // Only the LAST attempt's outcome matters for the message: which branch was
+  // observed drives which of the two messages is thrown below. The `get-session`
+  // fetch is diagnostic-only and must not run on every retry — it is real
+  // network I/O, and adding it to the hot retry path would itself slow down
+  // hydration under load instead of just explaining a failure that already
+  // happened.
+  let sawSignIn = false;
+  let rateLimited = false;
+  try {
+    await expect(async () => {
+      sawSignIn = await signIn.isVisible().catch(() => false);
+      if (sawSignIn) {
+        rateLimited = await page
+          .getByText("Too Many Requests", { exact: true })
+          .isVisible()
+          .catch(() => false);
+        throw new Error("SSR rendered the unauthenticated shell");
+      }
+      await expect(shell).toBeAttached({ timeout: 3000 });
+    }).toPass({ timeout: 15000 });
+  } catch {
+    const sessionStatus = await observedSessionStatus(page);
+    const detail = `at ${page.url()} (get-session: ${sessionStatus})`;
+    throw new Error(
+      sawSignIn
+        ? `SSR rendered the unauthenticated shell ${detail}${rateLimited ? " (Too Many Requests)" : ""}`
+        : `Shell not hydrated within budget ${detail}`,
+    );
+  }
 }
 
 export async function gotoAuthenticatedPage(

@@ -34,7 +34,7 @@
     "test:scripts": "node --test scripts/*.test.ts",
     "test:e2e": "pnpm --filter @cubby/web test:e2e",
     "test:e2e:postgres": "pnpm --filter @cubby/web test:e2e:postgres",
-    "test:all": "pnpm test && node scripts/test-services.ts -- concurrently --kill-others-on-fail --success all --names postgres,e2e \"pnpm test:postgres\" \"pnpm test:e2e\"",
+    "test:all": "pnpm test && node scripts/test-services.ts -- sh -c 'pnpm test:postgres && pnpm test:e2e'",
     "test:local": "pnpm test:all",
     "apple": "node scripts/apple.ts",
     "wasm": "CARGO_TARGET_DIR=\"${CARGO_TARGET_DIR:-$HOME/.cache/cubby/recipebridge-target}\" wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge && node scripts/ensure-wasm.ts --stamp",

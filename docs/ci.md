@@ -221,39 +221,114 @@ boundaries decreased across the comparison. These are measurements on a busy dev
 not a runtime-independent speed guarantee. Each completed run left zero
 containers and zero volumes; downloaded images remained cached.
 
-Seven warm `NX_SKIP_NX_CACHE=true pnpm test:all` samples executed the tests
-(no replayed Nx results). Each PostgreSQL tier passed all 407 contracts. The
-browser tier discovered 65 tests, with no skips or retries:
+Seven warm `NX_SKIP_NX_CACHE=true pnpm test:all` samples on 2026-09-15 (median
+**250.21s**; 3 of 7 hit a hydration timeout — sample 3: calendar; sample 6:
+placement navigation and mobile; sample 7: relationship page) and the
+worker-scoped browser harness's 141.59s three-worker sample are the
+historical baseline this section replaced;
+both predate the `test:all` sequencing fix below. Keep them as reference only —
+the test count, sequencing, and worker cap have all since changed, so their
+absolute wall times are not comparable to the table below.
 
-| Sample | Total wall time | Browser result |
-|---|---|---|
-| 1 | 242.48s | 65 passed |
-| 2 | 250.21s | 65 passed |
-| 3 | 259.69s | 64 passed; calendar hydration timeout |
-| 4 | 215.70s | 65 passed |
-| 5 | 248.93s | 65 passed |
-| 6 | 378.90s | 63 passed; placement navigation and mobile hydration timeouts |
-| 7 | 396.65s | 64 passed; relationship page hydration timeout |
+### E2E flake root cause and `test:all` sequencing (2026-09-16)
 
-The median across all samples was **250.21s**; four samples passed completely.
-This exceeds the local-suite target above and does not establish a speedup over
-Docker. Host load reached 76 on eight cores during investigation, with Spotlight
-using over two cores; contention is a possible cause, not a proven explanation.
-The failing scenarios subsequently passed 10 nutrition repetitions and 12 traced
-readiness repetitions. A standalone traced browser run passed all 65 tests in
-265.87s. The intermittent readiness failures remain unresolved; no retries or
-larger timeouts were added to hide them.
+`test:all` ran `concurrently "pnpm test:postgres" "pnpm test:e2e"`: 6 vitest
+forks plus 3 Playwright workers (each its own Node process running workerd and
+a browser), a 4-vCPU PostgreSQL VM, and a 1-vCPU IntegreSQL VM, all on one
+8-core host at once. `waitForAppHydration` (`tests/e2e/e2e-helpers.ts`) waits
+for the authenticated shell's `data-hydrated="true"` marker — bundle fetch,
+parse, and execute on a main thread starved by that oversubscription — while
+`gotoAuthenticatedPage` navigates with `domcontentloaded`, so the same 15s
+budget also covers SSR's `get-session` lookup racing the concurrent
+PostgreSQL tier's `pg_terminate_backend` + truncate-and-reseed cycle per unit
+test. `trace: "on-first-retry"` paired with `retries: 0` meant a failure never
+recorded a trace, and the helper's one message ("Sign In is visible") covered
+both an unhydrated shell and SSR genuinely rendering the signed-out shell,
+so a flake gave no way to tell which had happened without re-running under a
+debugger.
 
-The worker-scoped browser harness that followed gives every Playwright worker a
-separate IntegreSQL clone, object store, and Wrangler runtime. A fresh-build
-three-worker run passed all 65 tests without retries or skips in **141.59s** and
-left zero containers and volumes. One uncached one-worker `test:all` sample also
-passed all 407 PostgreSQL contracts and the browser lane in 397s. The planned
-five-sample 1/2/3 comparison stopped when the host became actively used; a
-concurrent two-worker sample timed out one PostgreSQL contract, so those
-`test:all` timings are not a valid worker-count comparison. The local default
-remains three from the earlier browser-only measurements; repeat the full matrix
-on an idle host before treating its wall times as a new baseline.
+Fix, landed here: (1) `test:all` → `pnpm test && node scripts/test-services.ts
+-- sh -c 'pnpm test:postgres && pnpm test:e2e'` — one container pair,
+sequential, so PostgreSQL and the browser tier never compete for the same
+cores; nested `test-services.ts` invocations no-op their own container
+bring-up via the inherited `CUBBY_TEST_SERVICES=external`. (2) `playwright.config.ts`
+`trace: "retain-on-failure"` (the only setting that actually records anything
+with `retries: 0`). (3) `waitForAppHydration` now throws one of two distinct
+messages — `"Shell not hydrated within budget at <url> (get-session: <status>)"`
+or `"SSR rendered the unauthenticated shell at <url> (get-session: <status>)"`
+— fetching the `get-session` status once, only after the retry budget is
+already exhausted, so the diagnostic fetch itself never adds latency to the
+retry loop. The next flake's error message will name which of the two
+happened and what the session endpoint reported at that moment, without a
+trace re-run. (4) `tooling/e2e-workers.ts` accepts `CUBBY_E2E_WORKERS` up to 4
+(was 3), for future headroom experiments; the local default stays 3 (see
+below). No timeouts were raised and no retries were added.
+
+B1's E2E-side spec consolidation shrank the same-day surface: the four
+per-viewport specs `declared-vendor-display`, `declared-ledger-display`,
+`declared-record-lists`, and `financial-transaction-fields` (8 tests, column
+rendering already covered by `entity-display.<entity>.unit.test.tsx`) became
+one desktop case in `declared-record-lists.spec.ts` plus one mobile case
+folded into `mobile.entity-views.spec.ts`; the other three specs were
+deleted. Sixteen `page.screenshot({ path: testInfo.outputPath(...) })`
+attachments that nothing read were deleted from those and other specs. Total
+discovered E2E tests: **58** (`pnpm --filter @cubby/web exec playwright test
+--list`), down from the historical 65.
+
+Measured on the same 8-core, 24 GiB Mac, `container` 1.4.1 — **not idle**: the
+host ran three other worktrees' Nx daemons and their own test/build work
+throughout this session (1-minute `uptime` load ranged 4 to 26 across the
+runs below, against the plan's idle-host assumption). Given that, this table
+is evidence of direction, not a clean absolute baseline; re-run the matrix on
+an idle host before trusting the wall times as a new target.
+
+| Config | Runs | Wall (s) | E2E wall (s, solo) | Flakes | Load (1-min) before → after |
+|---|---|---|---|---|---|
+| Concurrent (old), full crash | 1 | 180 | — (e2e never ran a test: `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`) | run-ending crash | 4.6 → n/a |
+| Concurrent (old), completed | 1 | 159 | — | 4/58 (see below) | 8.9 → 10.8 |
+| Sequential (adopted) | 4 | 207, 266, 162, 202 | — | 4/58, same 4 each run | 4.5→13.6, 16.8→19.3, 15.7→11.5, 8.7→11.6 |
+| E2E alone, 3 workers | 2 | — | 155, 137 | 4/58 both | 11.4→26.4, 3.1→14.0 |
+| E2E alone, 4 workers | 1 | — | 134 | 4/58 | 7.9 → 12.4 |
+
+Every failure across every config, every worker count, and even the one run
+that *started* from a near-idle 3.1 load (climbing to 14 purely from the
+run's own postgres+integresql+3-browser-worker footprint) was the *same* four
+tests: `create-recipe-full-flow.spec.ts`, `product-ssr.spec.ts`,
+`mobile.phone-workflows.spec.ts`, `http-resource-api.spec.ts` — three of them
+exactly the hydration-timeout shape this fix targets (a `Create|Save|Move`
+button or click target not appearing within budget) and the fourth a
+session-revocation cache race. None of those four files are touched by this
+change (`git status` confirms it), and none were touched by any commit on
+this branch; they fail identically regardless of `test:all` sequencing or
+worker count, including from a near-idle start. That rules out "this
+change caused it" and points instead to a **pre-existing host-contention
+sensitivity**: these are the tests closest to their own timeout budget, so
+they are the first to tip over the instant *any* significant load appears —
+even the load the E2E run's own three browser workers plus PostgreSQL
+generate by themselves on this 8-core machine. This is a narrower claim than
+H1 as originally framed (which blamed the specific PostgreSQL+Playwright
+`test:all` concurrency): the sequential fix removes that specific
+concurrency, but E2E alone still saturates the box enough to reproduce the
+same four failures. The concurrent shape's one clearly worse behavior is its
+failure mode at the high end: a full crash with zero test output, versus the
+sequential shape's four-for-four completed runs that at least name their
+failures.
+
+**Decision:** adopt the sequential `test:all` regardless — it removes the
+specific PostgreSQL/Playwright CPU oversubscription by construction, and its
+worst observed outcome (a reported failure) is strictly more debuggable than
+the concurrent shape's worst observed outcome (a silent crash). Keep the local
+E2E worker default at 3: the 3-vs-4-worker sample is too small and too noisy
+(load swung 12+ points within single runs) to justify moving the default;
+`CUBBY_E2E_WORKERS=4` is available for a follow-up comparison on an idle host
+now that the cap allows it. **This session did not reach 0 flakes** in any
+sequential run: the same four pre-existing, unrelated tests failed every
+time, including from a near-idle start, so they are not attributable to the
+sequencing fix and are out of this change's scope — track them separately as
+a follow-up (their own resource footprint, not `test:all`'s scheduling, is
+the lead). Re-run `pnpm test:all` ×3–5 on a host with nothing else running at
+all (not just "idle-ish") to confirm the sequencing fix's flake rate in
+isolation from these four.
 
 A warm targeted PostgreSQL family passed 24 tests in 12.38s including service
 startup and cleanup. An earlier Docker sample took 18.07s, but was not a matched

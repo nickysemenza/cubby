@@ -38,10 +38,6 @@ test("phone nutrition focuses a nutrient with legible contributions and repair n
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await expect(settings).not.toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("nutrition-phone.png"),
-    fullPage: true,
-  });
   await contributions
     .getByRole("link", { name: `Repair protein data for ${name} incomplete` })
     .click();

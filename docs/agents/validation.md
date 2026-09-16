@@ -43,10 +43,17 @@ file under `apps/web/src` is its own Vitest test file.
 and IntegreSQL containers and remove them afterward; independent commands use
 independent pairs. CI/Linux use external services; the Docker fallback is
 `docker compose -p cubby up -d` plus `CUBBY_TEST_SERVICES=external`.
-`pnpm test:all` (also `test:local`) runs the fast tier first,
-then PostgreSQL and Playwright concurrently.
-Those authoritative tiers use distinct IntegreSQL template hashes so concurrent
-template initialization cannot reset the browser database during a local run.
+`pnpm test:all` (also `test:local`) runs the fast tier, then PostgreSQL, then
+Playwright — one container pair, sequentially. Running the PostgreSQL and
+Playwright tiers concurrently (6 vitest forks plus 3 Playwright workers, each
+with its own workerd and browser, on an 8-core host) was the primary cause of
+E2E flakes: hydration waits and SSR session lookups compete for the same
+starved main thread and database connections that the concurrent PostgreSQL
+contract run is also using. Sequencing removes that contention by
+construction; see [CI](../ci.md) for the measurements behind the change.
+Those authoritative tiers still use distinct IntegreSQL template hashes so a
+later template initialization cannot reset an earlier tier's checked-out
+databases.
 
 `pnpm test:changed` is likewise Docker-free and registers neither database
 project. Use `pnpm test:changed:postgres <ref>` when changed integration
