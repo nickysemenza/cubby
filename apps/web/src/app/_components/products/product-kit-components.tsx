@@ -136,7 +136,6 @@ function imagesFor(id: string, name: string, url: string | null) {
 function KitTable({
   rows,
   ariaLabel,
-  layoutKey,
   action,
   emptyState,
   nameHeader,
@@ -146,7 +145,6 @@ function KitTable({
 }: {
   rows: ProductRow[];
   ariaLabel: string;
-  layoutKey: string;
   action: (row: ProductRow) => ReactNode;
   emptyState: ReactNode;
   nameHeader: "Product" | "Kit";
@@ -246,7 +244,6 @@ function KitTable({
     entity: "product",
     data: rows,
     columns,
-    layoutKey,
     selection,
     getRowId: (row) => row.id,
     initialState: TABLE_STATE,
@@ -417,7 +414,6 @@ function AddComponentsDialog({
     entity: "product",
     data: rows,
     columns,
-    layoutKey: "product:component-picker",
     isLoading: searchQuery.isPending,
     getRowId: (row) => row.id,
     enableRowSelection: true,
@@ -628,7 +624,6 @@ export function ProductKitComponents({
         <KitTable
           rows={componentRows}
           ariaLabel="Kit components"
-          layoutKey="product:kit-components"
           action={componentAction}
           bulkActions={componentBulkActions}
           nameHeader="Product"
@@ -656,7 +651,6 @@ export function ProductKitComponents({
           <KitTable
             rows={membershipRows}
             ariaLabel="Kit memberships"
-            layoutKey="product:kit-memberships"
             action={membershipAction}
             nameHeader="Kit"
             showPrice

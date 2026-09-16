@@ -27,6 +27,7 @@ import type { RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { cn, formatCurrency } from "~/lib/utils";
 
+import { useTableColumnLayout } from "../data-table/column-layout";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import {
@@ -34,7 +35,6 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../data-table/table-features";
-import { useCubbyTableLayout } from "../data-table/table-layout";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
@@ -521,10 +521,8 @@ export const RecipeIngredientList: React.FC<{
     );
   });
 
-  const layout = useCubbyTableLayout({
-    key: "recipe:ingredients",
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
-    legacySizingKey: "recipe:ingredients",
     initialColumnVisibility: {
       grams: false,
       scalingPct: false,
@@ -537,29 +535,34 @@ export const RecipeIngredientList: React.FC<{
       ),
     },
   });
+  const [columnVisibility, setColumnVisibility] = useState(
+    defaultLayout.columnVisibility,
+  );
   const table = useCubbyTable({
     data: displayData,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns: tableColumns,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+    },
+    meta: { defaultLayout },
     enableFilters: false,
     getRowId: getScalingRowId,
     rowCount: ingredients.length,
     state: {
+      columnVisibility,
       pagination: {
         pageSize: ingredients.length,
         pageIndex: 0,
       },
     },
+    onColumnVisibilityChange: setColumnVisibility,
   });
 
   const selectNutrient = (key: (typeof TIER1_NUTRIENT_KEYS)[number]) => {
     setFocusedNutrient(key);
     const id = `nutrient-${TIER1_NUTRIENTS[key].code}`;
-    layout.atoms.columnVisibility.set({
-      ...layout.atoms.columnVisibility.get(),
-      [id]: true,
-    });
+    setColumnVisibility((current) => ({ ...current, [id]: true }));
   };
 
   return (

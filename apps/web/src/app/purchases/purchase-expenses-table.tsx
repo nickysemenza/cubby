@@ -174,8 +174,6 @@ function PurchaseExpenseRows({
     scopeFilters: scope,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    layoutKey: `expense:purchase-detail:${kind}`,
-    legacyLayoutVisibilityKey: `expense:purchase-detail-${kind}`,
     hiddenFilterColumns: ["vendor", "orderId"],
     deletable,
     nameEditable,

@@ -167,7 +167,6 @@ export function LinkProductsDialog({
     entity: "product",
     data: rows,
     columns,
-    layoutKey: "purchase:product-picker",
     isLoading: searchQuery.isPending,
     getRowId: (row) => row.id,
     enableRowSelection: true,

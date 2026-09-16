@@ -13,13 +13,13 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
+import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
 import RTable from "~/app/_components/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import type { InfiniteScrollControls } from "~/app/_components/hooks/useInfiniteTableList";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -429,10 +429,8 @@ function ToolRosterTable({
       }),
     [helper],
   );
-  const layout = useCubbyTableLayout({
-    key: "mcp-usage-tools",
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
-    legacySizingKey: "mcp-usage-tools",
   });
   const sorting = useMemo<SortingState>(
     () => [{ id: sort.key, desc: sort.descending }],
@@ -457,9 +455,13 @@ function ToolRosterTable({
   );
   const table = useCubbyTable({
     data: tools,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns: tableColumns,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+    },
+    meta: { defaultLayout },
     getRowId: (row) => row.toolName,
     manualFiltering: true,
     manualSorting: true,
@@ -476,7 +478,6 @@ function ToolRosterTable({
       ariaLabel="MCP tool pruning worklist"
       embedded
       showColumnMenu
-      defaultDensity="compact"
       additionalToolbarContent={additionalToolbarContent}
       onRowClick={(row) => onSelectTool(row.original.toolName)}
       currentRowId={selectedTool ?? undefined}
@@ -620,16 +621,18 @@ function ActivityTable({
       }),
     [helper],
   );
-  const layout = useCubbyTableLayout({
-    key: "mcp-usage-activity",
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
-    legacySizingKey: "mcp-usage-activity",
   });
   const table = useCubbyTable({
     data: entries,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns: tableColumns,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+    },
+    meta: { defaultLayout },
     getRowId: (row) => row.id,
     manualFiltering: true,
     manualPagination: true,

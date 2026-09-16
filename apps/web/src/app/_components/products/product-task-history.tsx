@@ -17,13 +17,13 @@ import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 
+import { useTableColumnLayout } from "../data-table/column-layout";
 import { ShelfEmpty } from "../data-table/shelf";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../data-table/table-features";
-import { useCubbyTableLayout } from "../data-table/table-layout";
 
 const EMPTY_TASKS: TaskOut[] = [];
 
@@ -102,15 +102,18 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
     [helper, nameEditable],
   );
   const ordered = useMemo(() => orderProductTasks(tasks), [tasks]);
-  const layout = useCubbyTableLayout({
-    key: "task:product-history",
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
   });
   const table = useCubbyTable({
     data: ordered,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns: tableColumns,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+    },
+    meta: { defaultLayout },
     getRowId: (task) => task.id,
   });
 

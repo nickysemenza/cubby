@@ -17,7 +17,6 @@ import { MobileSortSheet } from "./MobileSortSheet";
 import type { CubbyRow as Row, CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 import { mobileListLayout } from "./useMobileListModel";
-import type { TableDensity } from "./useTableDensity";
 
 interface MobileRefreshControls {
   onRefresh: () => Promise<void>;
@@ -48,7 +47,6 @@ interface MobileListScreenProps<TItem extends RowData> {
   rowContentVersion?: unknown;
   portalWorkbenchUtilities?: boolean;
   emptyState?: ReactNode;
-  defaultDensity?: TableDensity;
   showToolbar?: boolean;
   showViewOptions?: boolean;
   toolbarVariant?: "page" | "embedded";
@@ -74,7 +72,6 @@ export function MobileListScreen<TItem extends RowData>({
   rowContentVersion,
   portalWorkbenchUtilities = false,
   emptyState,
-  defaultDensity,
   showToolbar = true,
   showViewOptions = false,
   toolbarVariant = "page",
@@ -127,7 +124,6 @@ export function MobileListScreen<TItem extends RowData>({
       {showToolbar && (
         <DataTableToolbar
           table={table}
-          defaultDensity={defaultDensity}
           additionalContent={toolbarContent}
           actions={actions}
           bulkActionBar={bulkActionBar}

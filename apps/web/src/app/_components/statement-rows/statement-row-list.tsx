@@ -42,7 +42,6 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "../data-table/table-features";
-import { useCubbyTableLayout } from "../data-table/table-layout";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
 
@@ -562,11 +561,6 @@ export function StatementRowList() {
     [totalCount, amountTotal],
   );
 
-  const layout = useCubbyTableLayout({
-    key: "statementRow",
-    columns,
-    legacySizingKey: "statementRow",
-  });
   const table = useTableConfig({
     data: listQuery.data?.data ?? NO_ROWS,
     columns,
@@ -574,7 +568,6 @@ export function StatementRowList() {
     totalCount,
     getRowId: (row) => `${row.source}:${row.externalId}`,
     serverTotals,
-    layout,
   });
 
   return (

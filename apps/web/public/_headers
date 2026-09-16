@@ -13,9 +13,3 @@
 
 /*.wasm
   Cache-Control: public, max-age=31536000, immutable
-
-# The registration script is a stable URL and must be checked on every load.
-# Its internal cache name is build-keyed; caching sw.js itself as immutable
-# would prevent the browser from discovering that new generation.
-/sw.js
-  Cache-Control: public, max-age=0, must-revalidate

@@ -4,7 +4,6 @@ import { ChevronDown, Copy, RefreshCw, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { calendar } from "~/app/calendar/calendar.functions";
@@ -28,17 +27,8 @@ import {
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { StatusText } from "~/components/ui/status-text";
-import { Switch } from "~/components/ui/switch";
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  FLAG_KEYS,
-  FLAGS,
-  type FlagGroup,
-  type FlagKey,
-  isDevBuildOnlyFlag,
-  useFlags,
-} from "~/lib/flags";
 import { pageTitle } from "~/lib/page-title";
 import {
   timingResponseSchema,
@@ -50,25 +40,12 @@ export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: pageTitle("Settings") }] }),
 });
 
-const GROUPS: { group: FlagGroup; blurb: string }[] = [
-  {
-    group: "Developer",
-    blurb: "Diagnostics and debug tooling. Safe to leave on; off by default.",
-  },
-  {
-    group: "Experimental",
-    blurb: "Unfinished features — may change or break.",
-  },
-];
-
 function SettingsPage() {
-  const { flags, setFlag, resetFlags } = useFlags();
   const [devOpen, setDevOpen] = useState(false);
   return (
     <Page variant="list" title="Settings">
       <Stack gap="md" className="max-w-2xl pb-6 md:gap-6">
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
-        <AppearanceCard />
         <CalendarAccessCard />
 
         {/* Everything dev/debug/maintenance lives behind one collapsed
@@ -88,7 +65,7 @@ function SettingsPage() {
               <Stack gap="tight">
                 <Eyebrow as="span">Developer / Maintenance</Eyebrow>
                 <Description size="xs">
-                  Feature flags, diagnostics, and force-run batch fixes.
+                  Diagnostics and force-run batch fixes.
                 </Description>
               </Stack>
             </Row>
@@ -100,36 +77,6 @@ function SettingsPage() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <Stack gap="lg" className="pt-4">
-              {GROUPS.map(({ group, blurb }) => {
-                const keys = FLAG_KEYS.filter(
-                  (k) =>
-                    FLAGS[k].group === group &&
-                    // Hide toggles whose target is build-stripped in prod —
-                    // flipping them there does nothing, so the row would be a
-                    // dead control.
-                    (import.meta.env.DEV || !isDevBuildOnlyFlag(k)),
-                );
-                if (keys.length === 0) return null;
-                return (
-                  <Card key={group} className="max-md:border-x-0">
-                    <CardHeader>
-                      <CardTitle>{group}</CardTitle>
-                      <CardDescription>{blurb}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="divide-y divide-border/60">
-                      {keys.map((key) => (
-                        <FlagRow
-                          key={key}
-                          flagKey={key}
-                          value={flags.get(key) ?? FLAGS[key].default}
-                          onChange={(v) => setFlag(key, v)}
-                        />
-                      ))}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-
               <DiagnosticsCard />
 
               <CalendarFeedInspectorCard enabled={devOpen} />
@@ -137,10 +84,6 @@ function SettingsPage() {
               <AwaitingWorkCard />
 
               <MaintenanceCard />
-
-              <Button variant="outline" size="sm" onClick={resetFlags}>
-                Reset developer flags
-              </Button>
             </Stack>
           </CollapsibleContent>
         </Collapsible>
@@ -281,36 +224,6 @@ function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
   );
 }
 
-function FlagRow({
-  flagKey,
-  value,
-  onChange,
-}: {
-  flagKey: FlagKey;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  const def = FLAGS[flagKey];
-  return (
-    <Row align="start" justify="between" gap="md" className="py-4">
-      <Stack gap="tight">
-        <Row align="center" gap="sm">
-          <span className="text-sm font-medium">{def.label}</span>
-          <code className="font-mono text-2xs text-muted-foreground">
-            {flagKey}
-          </code>
-        </Row>
-        <Description size="xs">{def.description}</Description>
-      </Stack>
-      <Switch
-        checked={value}
-        onCheckedChange={onChange}
-        className="relative before:absolute before:-inset-x-1 before:-inset-y-3"
-      />
-    </Row>
-  );
-}
-
 function DiagnosticsCard() {
   const { data, error, isFetching, refetch, dataUpdatedAt } =
     useQuery<TimingResponse>({
@@ -393,40 +306,6 @@ function DiagnosticsCard() {
             </Row>
           </>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-const DENSITIES = ["comfortable", "compact", "dense"] as const;
-
-function AppearanceCard() {
-  const { density, setDensity } = useTableDensity();
-  return (
-    <Card className="max-md:border-x-0">
-      <CardHeader className="max-md:px-2">
-        <CardTitle>Appearance</CardTitle>
-      </CardHeader>
-      <CardContent className="max-md:px-2">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1 max-md:grid-cols-1">
-          <Stack gap="tight">
-            <span className="text-sm font-medium">Table density</span>
-            <Description size="xs">Row height in data tables.</Description>
-          </Stack>
-          <div className="grid grid-cols-3 gap-1">
-            {DENSITIES.map((d) => (
-              <Button
-                key={d}
-                size="xs"
-                variant={density === d ? "default" : "outline"}
-                onClick={() => setDensity(d)}
-                className="min-h-11 capitalize md:min-h-0"
-              >
-                {d}
-              </Button>
-            ))}
-          </div>
-        </div>
       </CardContent>
     </Card>
   );

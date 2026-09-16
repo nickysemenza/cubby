@@ -83,14 +83,4 @@ test.describe("iPhone WebKit smoke", () => {
       ),
     ).toBeNull();
   });
-
-  test("offline fallback remains usable on iPhone", async ({ page }) => {
-    await page.goto("/offline.html");
-    await expect(
-      page.getByRole("heading", { name: "You're offline" }),
-    ).toBeVisible();
-    const retry = page.getByRole("button", { name: "Try again" });
-    await expect(retry).toBeVisible();
-    expect((await retry.boundingBox())?.height).toBeGreaterThanOrEqual(44);
-  });
 });

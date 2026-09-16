@@ -8,7 +8,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { collection } from "./collection.functions";
 
 describe("smart Collection cache contract", () => {
-  it("revalidates both views after each relationship mutation and never persists drafts", async () => {
+  it("revalidates both views after each relationship mutation", async () => {
     const client = new QueryClient();
     const definition = SMART_COLLECTION_STARTERS[0];
     if (!definition) throw new Error("Missing starter");
@@ -19,8 +19,6 @@ describe("smart Collection cache contract", () => {
       definition,
       pagination: { pageIndex: 0, pageSize: 25 },
     });
-    expect(list.meta?.persistence).toBe("memory");
-    expect(detail.meta?.persistence).toBe("memory");
     client.getQueryCache().build(client, list);
     client.getQueryCache().build(client, detail);
     for (const invalidation of [

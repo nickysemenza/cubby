@@ -53,9 +53,6 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "nameSuffix"
   | "tableStateOptions"
   | "initialColumnVisibility"
-  | "layoutKey"
-  | "legacyLayoutVisibilityKey"
-  | "legacyLayoutSizingKey"
   | "deleteEmptyLabel"
   | "hiddenFilterColumns"
   | "subject"
@@ -127,9 +124,6 @@ export function useClientEntityList<TData extends BaseListRow>({
   nameSuffix,
   tableStateOptions,
   initialColumnVisibility,
-  layoutKey,
-  legacyLayoutVisibilityKey,
-  legacyLayoutSizingKey,
   tree,
   rowIsEntity,
   bulkActions,
@@ -175,9 +169,6 @@ export function useClientEntityList<TData extends BaseListRow>({
     columns: customColumns,
     filters,
     initialColumnVisibility,
-    layoutKey,
-    legacyLayoutVisibilityKey,
-    legacyLayoutSizingKey,
     state: presentationState,
     supportsServerSorting: false,
     hiddenFilterColumns,
@@ -191,8 +182,8 @@ export function useClientEntityList<TData extends BaseListRow>({
   });
   const {
     allColumns,
-    layout,
-    initialColumnVisibility: mergedInitialColumnVisibility,
+    columnVisibility,
+    setColumnVisibility,
     rowContentVersion,
   } = presentation;
 
@@ -244,8 +235,9 @@ export function useClientEntityList<TData extends BaseListRow>({
     rowSelection: presentationState.listBulkActions.rowSelection,
     onRowSelectionChange:
       presentationState.listBulkActions.onRowSelectionChange,
-    layout,
-    initialColumnVisibility: mergedInitialColumnVisibility,
+    columnVisibility,
+    onColumnVisibilityChange: setColumnVisibility,
+    scrollRestorationId: entity,
     getSubRows: tree?.getSubRows,
     filterFromLeafRows: tree?.filterFromLeafRows,
     paginateExpandedRows: tree?.paginateExpandedRows,

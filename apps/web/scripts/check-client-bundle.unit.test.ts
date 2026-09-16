@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { assertNoServerCodeInClient } from "./build-sw";
+import { assertNoServerCodeInClient } from "./check-client-bundle";
 
 const fixturePath = (name: string) =>
   fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));

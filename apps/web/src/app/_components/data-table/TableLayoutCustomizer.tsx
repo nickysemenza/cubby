@@ -39,12 +39,12 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
 
+import { isLockedColumnId, withLockedEndLast } from "./column-layout";
 import { columnLabel } from "./data-table-view-options";
 import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
-import { isLockedColumnId, withLockedEndLast } from "./table-layout";
 
 const columnRegionSchema = z.enum(["start", "center", "end"]);
 type Region = z.infer<typeof columnRegionSchema>;

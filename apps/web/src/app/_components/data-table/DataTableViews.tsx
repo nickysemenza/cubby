@@ -18,16 +18,16 @@ import {
   viewsForEntity,
 } from "~/entities/view-manifest";
 
+import { withLockedEndLast } from "./column-layout";
 import type { CubbyTable as Table } from "./table-features";
-import {
-  type CubbySavedTableLayout,
-  normalizeTableLayout,
-} from "./table-layout";
 
 interface DataTableViewsProps<TData extends RowData> {
   table: Table<TData>;
   entity: Entity | undefined;
 }
+
+/** A view's exact declared layout — see `ViewDefinition["layout"]`. */
+type SavedLayout = NonNullable<ViewDefinition["layout"]>;
 
 interface SavedViewsMenuProps {
   entity: Entity | undefined;
@@ -37,7 +37,7 @@ interface SavedViewsMenuProps {
   onApplySort: (sort: NonNullable<ViewDefinition["sort"]>) => void;
   onResetPage?: () => void;
   /** Tables apply exact layouts; dashboard/card consumers simply omit it. */
-  onApplyLayout?: (layout: CubbySavedTableLayout) => void;
+  onApplyLayout?: (layout: SavedLayout) => void;
 }
 
 /**
@@ -67,26 +67,35 @@ export function DataTableViews<TData extends RowData>({
       onApplyLayout={(savedLayout) => {
         const defaults = table.options.meta?.defaultLayout;
         if (!defaults) return;
-        const layout = normalizeTableLayout(
-          {
-            ...defaults,
-            ...savedLayout,
-            columnPinning: {
-              start: savedLayout.columnPinning?.start ?? [],
-              end: savedLayout.columnPinning?.end ?? [],
-            },
-            columnVisibility: {
-              ...defaults.columnVisibility,
-              ...savedLayout.columnVisibility,
-            },
-            columnSizing: savedLayout.columnSizing ?? {},
-          },
-          defaults,
+        // A view's layout is source-controlled (`view-manifest.ts`), not user
+        // input — trust a non-empty slice as-is, falling back to the table's
+        // own computed default for whichever slice the view leaves empty.
+        // `withLockedEndLast` still guards the one invariant a view author
+        // could get wrong: the row-actions menu never leaves the trailing edge.
+        table.setColumnOrder(
+          savedLayout.columnOrder.length > 0
+            ? withLockedEndLast(savedLayout.columnOrder)
+            : defaults.columnOrder,
         );
-        table.setColumnOrder(layout.columnOrder);
-        table.setColumnPinning(layout.columnPinning);
-        table.setColumnVisibility(layout.columnVisibility);
-        table.setColumnSizing(layout.columnSizing);
+        table.setColumnPinning({
+          start:
+            savedLayout.columnPinning.start.length > 0
+              ? savedLayout.columnPinning.start
+              : defaults.columnPinning.start,
+          end:
+            savedLayout.columnPinning.end.length > 0
+              ? withLockedEndLast(savedLayout.columnPinning.end)
+              : defaults.columnPinning.end,
+        });
+        table.setColumnVisibility({
+          ...defaults.columnVisibility,
+          ...savedLayout.columnVisibility,
+        });
+        table.setColumnSizing(
+          Object.keys(savedLayout.columnSizing).length > 0
+            ? savedLayout.columnSizing
+            : defaults.columnSizing,
+        );
       }}
       onResetPage={() => table.setPageIndex(0)}
     />

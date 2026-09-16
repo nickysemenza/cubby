@@ -20,7 +20,6 @@ const columns = helper.columns([
   helper.display({ header: "Actions", id: "actions" }),
 ]);
 const defaultLayout = {
-  version: 1,
   columnOrder: ["select", "image", "name", "trade", "actions"],
   columnPinning: { start: ["select", "image"], end: ["actions"] },
   columnVisibility: {

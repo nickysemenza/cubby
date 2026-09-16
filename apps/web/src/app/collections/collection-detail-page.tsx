@@ -14,6 +14,7 @@ import {
 import { MapPin, PackageSearch, Search } from "lucide-react";
 import { useCallback, useId, useMemo } from "react";
 
+import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
 import {
   createImageColumn,
   createNameColumn,
@@ -24,7 +25,6 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -233,8 +233,7 @@ export function CollectionProductsTable({
       }),
     [],
   );
-  const layout = useCubbyTableLayout({
-    key: PRODUCT_TABLE_LAYOUT_KEY,
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
   });
   const pagination = useMemo<PaginationState>(
@@ -251,8 +250,12 @@ export function CollectionProductsTable({
   );
   const table = useCubbyTable({
     data: products,
-    columns: layout.columns,
-    atoms: layout.atoms,
+    columns: tableColumns,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+    },
     getRowId: (product) => product.id,
     enableSorting: false,
     enableRowSelection: false,
@@ -263,7 +266,7 @@ export function CollectionProductsTable({
     state: { pagination },
     onPaginationChange,
     meta: {
-      defaultLayout: layout.defaultLayout,
+      defaultLayout,
       scrollRestorationId: PRODUCT_TABLE_LAYOUT_KEY,
     },
   });

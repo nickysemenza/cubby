@@ -252,7 +252,6 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     entity: "product",
     data: rows,
     columns,
-    layoutKey: "purchase:products",
     selection,
     isLoading: query.isPending,
     // `rowKey`, not `id`: a component can appear under two kits on one order.

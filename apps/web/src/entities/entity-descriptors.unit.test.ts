@@ -124,7 +124,6 @@ const DETAIL_POLICY = {
       observedByTransport: true,
       cacheTags: [["entity", "detail"], ["product"]],
       cacheProfile: "persisted-detail",
-      persistence: "persist",
       freshness: {
         staleTime: 300000,
         gcTime: 86400000,
@@ -141,7 +140,6 @@ const DETAIL_POLICY = {
       observedByTransport: true,
       cacheTags: [["entity", "detail"], ["task"]],
       cacheProfile: "interactive",
-      persistence: "memory",
     },
   },
 } as const;
@@ -154,7 +152,6 @@ const LIST_POLICY = {
     observedByTransport: true,
     cacheTags: [["entity", "list"], ["product"]],
     cacheProfile: "browse",
-    persistence: "memory",
     freshness: {
       staleTime: 120000,
     },
@@ -238,7 +235,7 @@ describe("entity detail query keys", () => {
     ).rejects.toThrow();
   });
 
-  it("carries the persistence and freshness policy of the entity", () => {
+  it("carries the cache-profile and freshness policy of the entity", () => {
     expect(
       withoutFunctions(entityDetailFor("product").queryOptions("PRD-4K7M")),
     ).toEqual(DETAIL_POLICY.persisted);

@@ -1,7 +1,11 @@
 import { AuthQueryProvider } from "@daveyplate/better-auth-tanstack";
 import { AuthUIProviderTanstack } from "@daveyplate/better-auth-ui/tanstack";
-import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { Link as TanStackLink, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -22,15 +26,11 @@ import {
 } from "./operation-cache";
 import { operationInvalidationTags } from "./operation-catalog";
 import { installOperationRecorder } from "./operation-recorder";
-import { persister } from "./persister";
 import {
   shouldToastMutationError,
   shouldToastQueryError,
 } from "./query-error-policy";
-import {
-  PERSISTED_QUERY_MAX_AGE,
-  QUERY_CLIENT_DEFAULT_OPTIONS,
-} from "./query-policy";
+import { QUERY_CLIENT_DEFAULT_OPTIONS } from "./query-policy";
 
 // Wrapper to adapt TanStack Router Link to better-auth-ui Link format
 const Link = ({
@@ -163,30 +163,9 @@ export function Provider({
           else toast(text);
         }}
       >
-        {persister ? (
-          <PersistQueryClientProvider
-            client={queryClient}
-            persistOptions={{
-              persister,
-              // Bust the persisted cache whenever the deploy changes, so a
-              // schema/shape change can't resurrect stale offline data.
-              buster: __GIT_COMMIT__,
-              maxAge: PERSISTED_QUERY_MAX_AGE,
-              dehydrateOptions: {
-                shouldDehydrateQuery: (query) => {
-                  return (
-                    query.meta?.persistence === "persist" &&
-                    query.state.status === "success"
-                  );
-                },
-              },
-            }}
-          >
-            {children}
-          </PersistQueryClientProvider>
-        ) : (
-          children
-        )}
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
       </AuthUIProviderTanstack>
     </AuthQueryProvider>
   );

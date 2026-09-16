@@ -11,16 +11,12 @@ interface EntityRoutes {
 
 type CommonSectionType = "images" | "history" | "unit-mappings";
 
-/** First-visit row density; a stored Display choice always takes precedence. */
-type ListDefaultDensity = "comfortable" | "compact" | "dense";
-
 interface EntityDetailConfig {
   commonSections?: CommonSectionType[];
 }
 
 interface EntityListConfig {
   hasUnitMappings?: boolean;
-  defaultDensity?: ListDefaultDensity;
   /**
    * Direction the list opens `defaultSort` in. Defaults to "desc", which is
    * right for the date/amount columns most lists open on and WRONG for a name

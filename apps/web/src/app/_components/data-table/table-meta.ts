@@ -1,8 +1,8 @@
 import type { CellData, RowData } from "@tanstack/react-table";
 
 import type { ColumnCellData } from "./cell-data";
+import type { CubbyDefaultTableLayout } from "./column-layout";
 import type { FilterableComboboxItem } from "./editable-cell";
-import type { CubbyTableLayoutV1 } from "./table-layout";
 
 /** Configuration for an inline column-header filter. */
 export interface FilterConfig {
@@ -74,12 +74,12 @@ export interface CubbyTableMeta {
   serverTotals?: ServerTotals;
   urlScopeCount?: number;
   rowContentVersion?: unknown;
-  /** Code-defined layout used to normalize persisted and saved layouts. */
-  defaultLayout?: CubbyTableLayoutV1;
+  /** Code-defined layout a "Customized" badge and "Restore default" compare against. */
+  defaultLayout?: CubbyDefaultTableLayout;
   /**
-   * Stable id for the desktop scroll pane, mirrored from the layout key.
-   * Routed through meta rather than an RTable prop so every existing call site
-   * gets pane scroll restoration without threading a new argument.
+   * Stable id for the desktop scroll pane. Routed through meta rather than an
+   * RTable prop so every existing call site gets pane scroll restoration
+   * without threading a new argument.
    */
   scrollRestorationId?: string;
 }

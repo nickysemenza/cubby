@@ -8,7 +8,6 @@ import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
-  browserEntityDefinition,
   defaultSortFor,
   type EntityDetailRoute,
   entities,
@@ -25,39 +24,6 @@ describe("defaultSortFor", () => {
   it("reads vendor's default sort as spend — the product decision now lives on the declaration, not a browser override", () => {
     expect(generatedEntitySort.vendor.default).toBe("spend");
     expect(defaultSortFor("vendor")).toBe("spend");
-  });
-});
-
-describe("entity list first-visit density", () => {
-  it("keeps registry density exceptions to read-heavy rosters", () => {
-    const defaults = Object.fromEntries(
-      browserRoutedEntities.map((entity) => [
-        entity,
-        browserEntityDefinition(entity).list?.defaultDensity,
-      ]),
-    );
-
-    expect(defaults).toEqual({
-      ingredient: undefined,
-      product: undefined,
-      recipe: undefined,
-      cookbook: undefined,
-      location: undefined,
-      inventory: undefined,
-      meal: undefined,
-      ledgerParty: undefined,
-      ledgerTransfer: undefined,
-      project: undefined,
-      task: undefined,
-      vendor: "dense",
-      purchase: undefined,
-      expense: undefined,
-      financialAccount: undefined,
-      financialTransaction: "dense",
-      wish: undefined,
-      "usda-food": undefined,
-      image: undefined,
-    });
   });
 });
 

@@ -12,7 +12,6 @@ import { IconTile } from "~/components/ui/icon-tile";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 
-import { pushRecent } from "../command-menu/recents";
 import {
   getLocationIcon,
   getLocationTypeColor,
@@ -51,10 +50,6 @@ export function getSearchResultRoute(item: SearchDestination) {
     to: entities[entity].routes.detail,
     params: entityDetailParams(item.id),
   };
-}
-
-export function rememberSearchResult(item: SearchDestination): void {
-  pushRecent({ entityType: item.entityType, id: item.id, name: item.title });
 }
 
 /**

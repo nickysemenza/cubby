@@ -162,7 +162,6 @@ export function ProductPurchases({
     entity: "purchase",
     data: rows,
     columns,
-    layoutKey: "product:purchases",
     isLoading:
       query.isPending || (items.length === 0 && membershipQuery.isPending),
     getRowId: (row) => row.id,

@@ -718,8 +718,6 @@ function ServerProjectGallery({
     queryOptions: listQueryOptions,
     columns,
     filterOptions,
-    layoutKey: "project:gallery",
-    legacyLayoutSizingKey: "project",
   });
   const {
     onRowClick,

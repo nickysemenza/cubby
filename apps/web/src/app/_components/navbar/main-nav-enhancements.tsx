@@ -34,10 +34,7 @@ export function MainNavEnhancements({
         )}
       </nav>
 
-      <AuthenticatedShellControls
-        debugClassName="hidden h-8 px-2 md:flex"
-        includeAccount
-      />
+      <AuthenticatedShellControls includeAccount />
     </>
   );
 }

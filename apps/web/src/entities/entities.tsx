@@ -360,7 +360,6 @@ const entityDefinitions = withEntityNames({
     detail: { commonSections: ["history"] },
     // Default sort ("spend") is declared on `model.sort` in
     // `11-vendor.entity.ts` now, not overridden here.
-    list: { defaultDensity: "dense" },
     // "fixed": the keeper is the vendor being viewed; candidates are every
     // OTHER vendor (mergeVendors has no cross-vendor refusal like
     // mergePurchases' vendor-match check — any two vendors can fold together).
@@ -456,9 +455,6 @@ const entityDefinitions = withEntityNames({
     ...generatedBrowserRoutes.financialTransaction,
     color: INK.primary,
     detail: { commonSections: ["history"] },
-    list: {
-      defaultDensity: "dense",
-    },
   },
   wish: {
     ...generatedBrowserRoutes.wish,

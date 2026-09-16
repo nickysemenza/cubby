@@ -333,7 +333,6 @@ export function WishList() {
           onRowHover={onRowHover}
           onRowHoverEnd={onRowHoverEnd}
           currentRowId={preview?.rowKey ?? preview?.id}
-          defaultDensity="dense"
           desktopInspector={dockedInspector}
           inspectorToggle={inspectorToggle}
           getMobileDetailsHref={wishMobileDetailsHref}

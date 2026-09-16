@@ -178,7 +178,6 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
     scopeFilters: scope,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    layoutKey: "purchase:vendor-detail",
     hiddenFilterColumns: ["vendor"],
   });
 
