@@ -799,7 +799,7 @@ public enum EntityCatalog {
       FieldDescriptor(key: "orderId", label: "Order #", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "displayLabel", label: "Display label", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "date", label: "Date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "statedTotal", label: "Stated total", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "statedTotal", label: "Stated total", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 4, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
       FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
@@ -1026,7 +1026,7 @@ public enum EntityCatalog {
     countable: true,
     fields: [
       FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "cost", label: "Cost", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 20, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "cost", label: "Cost", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 20, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
       FieldDescriptor(key: "date", label: "Date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 30, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "lineKind", label: "Line kind", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 40, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "lineBasis", label: "Itemization", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 140, format: nil, mobileSlot: nil, mobilePriority: nil),

@@ -122,7 +122,13 @@ export default defineEntity({
           renderer: "money",
           placeholder: "What the receipt says",
         },
-        display: { list: true, detail: true, detailOrder: 4 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 4,
+          format: "currency",
+          mobile: { slot: "trailing", priority: 1 },
+        },
         validation: {
           read: wholeCentAmount.nullable(),
           create: wholeCentAmount.nullable().default(null),

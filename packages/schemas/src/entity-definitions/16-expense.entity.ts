@@ -76,7 +76,13 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number", renderer: "money", section: "details" },
-        display: { list: true, detail: true, detailOrder: 20 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 20,
+          format: "currency",
+          mobile: { slot: "trailing", priority: 1 },
+        },
         validation: {
           read: wholeCentAmount.describe("Dollars").nullable(),
           create: wholeCentAmount.nullable().default(null),
