@@ -148,9 +148,9 @@ struct BrowseRootView: View {
     }
 
     /// Split for one domain: `rows` are listable (real `NavigationLink`s), `unlisted` are the
-    /// plural names of everything else in the domain, for the footnote line. `httpActions` is
-    /// authoritative over the kernel roster's `descriptor.actions` here — it's the set the HTTP
-    /// document actually routes (see `GenericEntityListModel.load`).
+    /// plural names of everything else in the domain, for the footnote line. `httpActions` is the
+    /// set the HTTP document routes (`nativeActions` is the subset the generated client carries
+    /// for create/update/delete/timeline; see `GenericEntityListModel.load`).
     private func descriptors(in domain: AppDomain) -> (rows: [EntityDescriptor], unlisted: [String]) {
         let matches = descriptorsMatchingQuery.filter { $0.key.domain == domain }
         let rows = matches.filter { $0.key.httpActions.contains(.list) }.sorted { $0.plural < $1.plural }

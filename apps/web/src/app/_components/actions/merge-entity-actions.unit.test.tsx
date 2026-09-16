@@ -66,7 +66,7 @@ function MergeActionHarness({
 }
 
 function PurchaseAvailabilityHarness() {
-  const purchaseAction = mergeEntityActionDefinitions[1];
+  const purchaseAction = mergeEntityActionDefinitions[2];
   const availability = purchaseAction.use().availability;
   if (!availability)
     throw new Error("Purchase merge must declare availability.");
@@ -86,6 +86,7 @@ function PurchaseAvailabilityHarness() {
 describe("merge entity actions", () => {
   it("registers bounded vendor and purchase merge actions", () => {
     expect(mergeEntityActionDefinitions).toMatchObject([
+      { entities: ["product"], minSelection: 2, verb: "merge" },
       { entities: ["vendor"], minSelection: 2, verb: "merge" },
       { entities: ["purchase"], minSelection: 2, verb: "merge" },
     ]);

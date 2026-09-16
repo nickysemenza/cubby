@@ -55,7 +55,8 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["merge", "delete"] },
+    // Merge is a kernel capability with no browser operation yet.
+    list: { actions: ["delete"] },
   },
   model: {
     fields: [

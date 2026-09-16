@@ -4,6 +4,7 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   collectionSlugsFromTags,
@@ -229,6 +230,36 @@ const genericCreateDefault = <E extends EditableEntity>(
   return kindDefault(field);
 };
 
+/**
+ * The update-surface locks the declaration carries: `edit.readOnlyOnUpdate`
+ * (unconditional) and `edit.readOnlyWhen` (a field's value locks a set of
+ * fields — a garden entry that anchors a location period keeps its kind,
+ * location, planting and date). The server enforces the same rule; this is
+ * what turns the refusal into a disabled control instead of an error.
+ */
+const declaredAccess = (
+  entity: EditableEntity,
+  id: string,
+): EditField<EditableEntity>["access"] => {
+  const { readOnlyOnUpdate, readOnlyWhen } = entitySummary[entity].edit;
+  const unconditional = readOnlyOnUpdate.some((key) => key === id);
+  const rules = readOnlyWhen.filter((rule) =>
+    rule.fields.some((key) => key === id),
+  );
+  if (!unconditional && rules.length === 0) return () => editable;
+  return ({ operation, record }) => {
+    if (operation !== "update") return editable;
+    if (unconditional)
+      return readOnly("Changed through the record's own lifecycle actions.");
+    const locked = rules.find(
+      (rule) => record !== undefined && record[rule.field] === rule.equals,
+    );
+    return locked
+      ? readOnly(`Locked while ${locked.field} is ${String(locked.equals)}.`)
+      : editable;
+  };
+};
+
 const builderFor = <E extends EditableEntity>(
   entity: E,
 ): EntityEditBuilder<E> => {
@@ -242,7 +273,7 @@ const builderFor = <E extends EditableEntity>(
   const makeField = (id: string, options?: FieldOptions<E>): EditField<E> => ({
     entity,
     id,
-    access: options?.access ?? (() => editable),
+    access: options?.access ?? declaredAccess(entity, id),
     initial: (input) => {
       if (options?.initial) return options.initial(input);
       const { operation, record, context } = input;
@@ -653,28 +684,10 @@ export const entityEditRegistry: EntityEditRegistry = {
       full: { buildData: locationBuildData },
     },
   })),
+  // `status`/`locationId` lock on update through the declared
+  // `edit.readOnlyOnUpdate` (the Start/Move/Split/Finish actions own them).
   planting: buildDefinition("planting", (f) => ({
-    // `status` and `locationId` are lifecycle/location state — corrected only
-    // through the Start/Move/Split/Finish actions, never a plain field edit,
-    // so an update-surface edit leaves both read-only.
-    fields: f.fieldsFrom(["capture", "full"], {
-      status: {
-        access: ({ operation }) =>
-          operation === "update"
-            ? readOnly(
-                "Use Start, Move, or Finish to change lifecycle or location.",
-              )
-            : editable,
-      },
-      locationId: {
-        access: ({ operation }) =>
-          operation === "update"
-            ? readOnly(
-                "Use Start, Move, or Finish to change lifecycle or location.",
-              )
-            : editable,
-      },
-    }),
+    fields: f.fieldsFrom(["capture", "full"]),
   })),
   gardenEntry: buildDefinition("gardenEntry", (f) => ({
     fields: f.fieldsFrom(["capture", "full"]),

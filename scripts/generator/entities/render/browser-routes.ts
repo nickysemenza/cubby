@@ -4,6 +4,7 @@ import type {
   EntityArtifacts,
   SourceRef,
 } from "../declarations.ts";
+import { entityProjectionMaps } from "./index.ts";
 import { browserRoutes } from "./routes.ts";
 
 const pascalCase = (value: string) =>
@@ -28,40 +29,50 @@ type RoutedEntity = CompiledEntity & {
   route: NonNullable<CompiledEntity["route"]>;
 };
 
-const GENERIC_LIST = {
-  module: "~/app/_components/entity-list/generic-entity-list",
-  export: "GenericEntityList",
-} as const satisfies SourceRef;
 const GENERIC_DETAIL = {
   module: "~/app/_components/entity-detail/generic-entity-detail",
   export: "GenericEntityDetail",
 } as const satisfies SourceRef;
 
-const renderIndexRoute = (entity: RoutedEntity): string => {
+const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
   const { basePath } = browserRoutes(entity);
   const page = `${pascalCase(basePath)}Page`;
   const plural = entity.inspector.plural ?? entity.inspector.singular;
   // `create: "dialog"` renders the capture trigger (it is also what makes
-  // `?create=true` addressable); every other header affordance comes from
-  // the manifest's `list.actions` / `list.links` through the generic list.
+  // `?create=true` addressable); `create: "page"` links the hand-written
+  // `/new` route. Every other header affordance comes from the manifest's
+  // `list.actions` / `list.links` through the generic list page.
   const createAction =
     entity.route.create === "dialog"
-      ? `<CreateDialogAction request={captureRequest(${JSON.stringify(entity.key)})}>New ${entity.inspector.singular}</CreateDialogAction>`
-      : null;
+      ? `<CreateDialogAction request={captureRequest(${JSON.stringify(entity.key)})} />`
+      : entity.route.create === "page"
+        ? `<Button render={<Link to=${JSON.stringify(`/${basePath}/new`)} />} nativeButton={false}><Plus />New</Button>`
+        : null;
   const imports = [
-    'import { createFileRoute, stripSearchParams } from "@tanstack/react-router";',
+    ...(entity.route.create === "page"
+      ? [
+          'import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";',
+          'import { Plus } from "lucide-react";',
+        ]
+      : [
+          'import { createFileRoute, stripSearchParams } from "@tanstack/react-router";',
+        ]),
     "",
-    importLine(GENERIC_LIST),
-    ...(createAction !== null
+    ...(entity.route.create === "dialog"
       ? [
           'import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";',
         ]
       : []),
-    'import { entityListPage } from "~/app/_components/routing/entity-routes";',
-    ...(createAction !== null
+    'import { listPage } from "~/app/_components/routing/entity-routes";',
+    ...(entity.route.create === "page"
+      ? ['import { Button } from "~/components/ui/button";']
+      : []),
+    ...(entity.route.create === "dialog"
       ? ['import { captureRequest } from "~/entities/editing/editor-requests";']
       : []),
-    'import { entityListLoader } from "~/entities/entity-list-ssr";',
+    ...(listed
+      ? ['import { entityListLoader } from "~/entities/entity-list-ssr";']
+      : []),
     'import { entitySearch } from "~/entities/generated/entity-search.gen";',
     'import { pageTitle } from "~/lib/page-title";',
   ];
@@ -69,16 +80,19 @@ const renderIndexRoute = (entity: RoutedEntity): string => {
     generatedHeader +
     `${imports.join("\n")}\n\n` +
     splitterNote +
-    `const ${page} = entityListPage({\n` +
+    `const ${page} = listPage({\n` +
     `  entity: ${JSON.stringify(entity.key)},\n` +
-    `  list: () => <${GENERIC_LIST.export} entity=${JSON.stringify(entity.key)} />,\n` +
     (createAction === null ? "" : `  actions: () => ${createAction},\n`) +
     "});\n\n" +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/`)})({\n` +
     `  validateSearch: entitySearch.${entity.key}.schema,\n` +
     `  search: { middlewares: [stripSearchParams(entitySearch.${entity.key}.defaults)] },\n` +
-    "  loaderDeps: ({ search }) => search,\n" +
-    `  loader: entityListLoader(${JSON.stringify(entity.key)}),\n` +
+    // The eager first-page loader exists only for an entity with a generated
+    // list read; a client-paged roster (cookbook) fetches on mount.
+    (listed
+      ? "  loaderDeps: ({ search }) => search,\n" +
+        `  loader: entityListLoader(${JSON.stringify(entity.key)}),\n`
+      : "") +
     `  head: () => ({ meta: [{ title: pageTitle(${JSON.stringify(plural)}) }] }),\n` +
     `  component: ${page},\n` +
     "});\n"
@@ -144,8 +158,11 @@ const renderDetailRoute = (
  */
 export const renderBrowserRouteArtifacts = (
   entities: readonly CompiledEntity[],
-): EntityArtifacts[] =>
-  entities
+): EntityArtifacts[] => {
+  const listed = new Set(
+    entityProjectionMaps(entities).list.map((entity) => entity.key),
+  );
+  return entities
     .filter(
       (entity): entity is RoutedEntity =>
         entity.route !== null && entity.descriptor.browserRoutes !== false,
@@ -159,7 +176,7 @@ export const renderBrowserRouteArtifacts = (
           : [
               {
                 relativePath: `${directory}/${basePath}.index.tsx`,
-                source: renderIndexRoute(entity),
+                source: renderIndexRoute(entity, listed.has(entity.key)),
               },
             ]),
         ...(entity.route.detail === null
@@ -172,3 +189,4 @@ export const renderBrowserRouteArtifacts = (
             ]),
       ];
     });
+};

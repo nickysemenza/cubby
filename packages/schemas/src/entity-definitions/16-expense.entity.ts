@@ -27,7 +27,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
-  route: { basePath: "expenses", create: "dialog", list: null, detail: true },
+  route: { basePath: "expenses", create: "dialog", list: true, detail: true },
   table: "Expense",
   identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
   presentation: {
@@ -81,7 +81,21 @@ export default defineEntity({
       ],
     },
     list: {
-      views: ["table", { kind: "slot", id: "analytics", label: "Analytics" }],
+      views: [
+        "table",
+        {
+          kind: "slot",
+          id: "analytics",
+          label: "Analytics",
+          searchKeys: [
+            "analyzeRows",
+            "analyzeColumns",
+            "analyzeMetric",
+            "analyzeCompare",
+            "analyzeShow",
+          ],
+        },
+      ],
       actions: ["setCostType", "setTrade", "moveToProject", "delete"],
     },
   },

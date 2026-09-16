@@ -8,6 +8,7 @@ import Foundation
 public enum EntityAction: String, CaseIterable, Codable, Sendable {
   case get = "get"
   case list = "list"
+  case timeline = "timeline"
   case search = "search"
   case create = "create"
   case update = "update"
@@ -49,25 +50,59 @@ public enum EntityFilterKind: String, CaseIterable, Codable, Sendable {
   case range = "range"
 }
 
-public struct FilterOption: Codable, Sendable, Hashable {
+/// A `{value, label}` choice: a filter's options or a select control's options.
+public struct LabeledOption: Codable, Sendable, Hashable {
   public let value: String
   public let label: String
+}
+
+/// The entity a reference field points at; `multiple` for an id-array field.
+public struct FieldReference: Codable, Sendable, Hashable {
+  public let entity: EntityKey
+  public let multiple: Bool
 }
 
 public struct FieldDescriptor: Codable, Sendable {
   public let key: String
   public let label: String
   public let kind: EntityFieldKind
+  /// Whether the server accepts `null` for this field; only a nullable key may be cleared.
+  public let nullable: Bool
+  public let reference: FieldReference?
   public let controlKind: EntityControlKind?
-  public let section: String?
+  /// The editor section the field groups under when `presentation.editSections` is nil.
+  public let controlSection: String?
+  /// A select control's choices; nil for every other control.
+  public let controlOptions: [LabeledOption]?
+  public let placeholder: String?
+  /// `today` seeds a date control on create.
+  public let initial: String?
+  /// Membership in the create / update payloads (the editor's visible field rosters).
+  public let inCreate: Bool
+  /// The create payload rejects this key absent: the editor must fill it before saving.
+  public let requiredOnCreate: Bool
+  public let inUpdate: Bool
   public let showInList: Bool
   public let showInDetail: Bool
   public let detailOrder: Int?
-  /// List cell formatter (`currency`, `plainDate`, `timestamp`, `external-link`).
+  /// Cell formatter (`currency`, `signedCurrency`, `plainDate`, `timestamp`, `external-link`, `amount`).
   public let format: String?
   /// Mobile card placement of the list column, when declared.
   public let mobileSlot: String?
   public let mobilePriority: Int?
+}
+
+/// The list-route query parameter(s) a filter binds to; the request is keyed by these names.
+public enum FilterWire: Codable, Sendable, Hashable {
+  case param(name: String)
+  case range(from: String, to: String, presence: String?)
+
+  public var names: [String] {
+    switch self {
+    case .param(let name): [name]
+    case .range(let from, let to, let presence): [from, to] + (presence.map { [$0] } ?? [])
+    }
+  }
 }
 
 public struct FilterDescriptor: Codable, Sendable {
@@ -76,7 +111,11 @@ public struct FilterDescriptor: Codable, Sendable {
   public let kind: EntityFilterKind
   public let placeholder: String
   public let label: String?
-  public let options: [FilterOption]?
+  /// Declared choices; nil when the server supplies them (`EntityDescriptor.filterValues(for:)`).
+  public let options: [LabeledOption]?
+  public let wire: FilterWire
+  /// For an `id`/`idMulti` filter, the entity the ids name.
+  public let targetEntity: EntityKey?
 }
 
 /// The five wayfinding lines, from `WAYFINDING_DOMAINS` in the entity definitions.
@@ -86,6 +125,148 @@ public enum WayfindingDomain: String, Codable, Sendable, CaseIterable {
   case plan
   case house
   case finance
+}
+
+public enum SectionPlacement: String, Codable, Sendable, Hashable {
+  case primary, supporting, full
+}
+
+public struct SectionSort: Codable, Sendable, Hashable {
+  public enum Direction: String, Codable, Sendable, Hashable { case asc, desc }
+  public let field: String
+  public let direction: Direction
+}
+
+/// A relation section renders the target entity's list filtered by `filterDescriptor`
+/// (a descriptor on the target whose wire name receives this record's id).
+public struct RelationSectionSpec: Codable, Sendable, Hashable {
+  public let relation: String
+  public let filterDescriptor: String
+  public let columns: [String]?
+  public let sort: SectionSort?
+  public let limit: Int?
+}
+
+public enum TimelineSectionMode: String, Codable, Sendable, Hashable {
+  case events, lifecycles
+}
+
+/// One declared detail section. `history`, `relationships` and `images` are never declared;
+/// the renderer derives them from capabilities.
+public struct DetailSection: Codable, Sendable, Hashable, Identifiable {
+  public enum Kind: Codable, Sendable, Hashable {
+    case fields([String])
+    case relation(RelationSectionSpec)
+    case timeline(mode: TimelineSectionMode)
+    /// Hand-written per platform; rendered only where a registry provides it.
+    case slot
+  }
+
+  public let id: String
+  public let title: String?
+  public let placement: SectionPlacement
+  public let collapsed: Bool
+  public let kind: Kind
+}
+
+public enum DetailVariant: String, Codable, Sendable, Hashable {
+  case standard
+  /// The first (relation) section renders before the supporting fields with a create button
+  /// prefilled from its filter.
+  case journal
+}
+
+/// A list view; the first declared one is the default.
+public enum ListView: Codable, Sendable, Hashable, Identifiable {
+  case table
+  case shelf
+  case timeline
+  case slot(id: String, label: String, searchKeys: [String])
+
+  public var id: String {
+    switch self {
+    case .table: "table"
+    case .shelf: "shelf"
+    case .timeline: "timeline"
+    case .slot(let id, _, _): id
+    }
+  }
+
+  public var label: String {
+    switch self {
+    case .table: "Table"
+    case .shelf: "Shelf"
+    case .timeline: "Timeline"
+    case .slot(_, let label, _): label
+    }
+  }
+}
+
+/// The date keys the lifecycle timeline reads: one interval per record from `start` to `end`,
+/// with `milestones` as markers.
+public struct TimelineLifecycle: Codable, Sendable, Hashable {
+  public let start: String
+  public let milestones: [String]
+  public let end: String?
+}
+
+public struct EditSection: Codable, Sendable, Hashable, Identifiable {
+  public let id: String
+  public let title: String
+  public let fields: [String]
+}
+
+public enum ReadOnlyMatch: Codable, Sendable, Hashable {
+  case string(String)
+  case bool(Bool)
+}
+
+/// `fields` are read-only on update while the record's `field` equals `equals`.
+public struct ReadOnlyRule: Codable, Sendable, Hashable {
+  public let field: String
+  public let equals: ReadOnlyMatch
+  public let fields: [String]
+}
+
+/// The declaration's `presentation` block with its defaults resolved: what the generic
+/// list, detail and editor screens render. Field keys are `FieldDescriptor.key`s; action keys
+/// are the web verb vocabulary and render natively only where a slot registry provides them.
+public struct EntityPresentation: Codable, Sendable, Hashable {
+  public let detailVariant: DetailVariant
+  public let heroChip: String?
+  public let heroStats: [String]
+  public let heroBreadcrumb: String?
+  public let heroImages: Bool
+  public let heroActions: [String]
+  public let detailSections: [DetailSection]
+  public let listViews: [ListView]
+  /// Shelf card subtitle fields, in order; empty when there is no shelf view.
+  public let shelfSubtitle: [String]
+  public let listActions: [String]
+  /// Date fields the default timeline emits events for.
+  public let timelineFields: [String]
+  public let lifecycle: TimelineLifecycle?
+  /// Editor sections; nil derives them from `FieldDescriptor.controlSection`.
+  public let editSections: [EditSection]?
+  public let readOnlyOnUpdate: [String]
+  public let readOnlyWhen: [ReadOnlyRule]
+}
+
+public enum RelationCardinality: String, Codable, Sendable, Hashable {
+  case one, many
+}
+
+public struct RelationDescriptor: Codable, Sendable, Hashable {
+  public let key: String
+  public let label: String
+  public let target: EntityKey
+  public let cardinality: RelationCardinality
+}
+
+/// How `resources.<entity>.timeline` is served: the audit log plus declared date fields, or
+/// the entity's own implementation.
+public enum EntityTimelineMode: String, Codable, Sendable, Hashable {
+  case `default`, custom
 }
 
 public struct EntityDescriptor: Codable, Sendable {
@@ -99,16 +280,29 @@ public struct EntityDescriptor: Codable, Sendable {
   public let domain: WayfindingDomain?
   /// SF Symbol name from the declaration's `presentation.icons.sfSymbol`.
   public let sfSymbol: String
-  public let countable: Bool
+  /// Indexed by `search.find`; the intent surface is `searchable` ∧ `httpActions.contains(.get)`.
+  public let searchable: Bool
+  /// Non-nil exactly when the HTTP document exposes `resources.<key>.timeline`.
+  public let timeline: EntityTimelineMode?
   public let fields: [FieldDescriptor]
   public let filters: [FilterDescriptor]
-  public let actions: Set<EntityAction>
+  public let relations: [RelationDescriptor]
+  public let presentation: EntityPresentation
+
+  public func field(_ key: String) -> FieldDescriptor? {
+    fields.first { $0.key == key }
+  }
+
+  public func filter(_ columnId: String) -> FilterDescriptor? {
+    filters.first { $0.columnId == columnId }
+  }
+
+  public func relation(_ key: String) -> RelationDescriptor? {
+    relations.first { $0.key == key }
+  }
 }
 
 public enum EntityCatalog {
-  public static let shortcodeAlphabet: String = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
-  public static let shortcodeBodyLength = 4
-
   private static let productDescriptor: EntityDescriptor =
   EntityDescriptor(
     key: .product,
@@ -119,110 +313,163 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .pantry,
     sfSymbol: "shippingbox",
-    countable: true,
+    searchable: true,
+    timeline: .custom,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "aliases", label: "Aliases", kind: .textArray, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "tags", label: "Tags", kind: .textArray, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "upc", label: "Upc", kind: .text, controlKind: .text, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "isbn", label: "Isbn", kind: .text, controlKind: .text, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "fdc_id", label: "FDC", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 7, format: "external-link", mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "manufacturer", label: "Manufacturer", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: "subtitle", mobilePriority: 20),
-      FieldDescriptor(key: "model", label: "Model", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "expectedQuantity", label: "Expected Quantity", kind: .number, controlKind: .number, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "category", label: "Category", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: "subtitle", mobilePriority: 30),
-      FieldDescriptor(key: "ingredientId", label: "Ingredient", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: 8, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "growsIngredientId", label: "Grows", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "price", label: "Valuation price", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 4, format: "currency", mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "unitMappings", label: "Unit Mappings", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "labelNutrition", label: "Label nutrition", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "externalIds", label: "External IDs", kind: .textArray, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 9, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "usdaUnavailable", label: "Usda Unavailable", kind: .boolean, controlKind: .checkbox, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "stockTracked", label: "Stock tracking", kind: .boolean, controlKind: .checkbox, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Shortcode", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "primaryGtin", label: "Barcode / ISBN", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: 6, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "images", label: "Images", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pricing", label: "Pricing", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "dataQuality", label: "Data quality", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "expenseTotal", label: "Net basis", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "componentCount", label: "Components", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "servingAsLocations", label: "In service", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "ledgerExpectedQuantity", label: "Expected", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "quantityVariance", label: "Variance", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "purchaseDate", label: "Purchase date", kind: .date, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "expenseCount", label: "Expenses", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "onHandUnits", label: "On Hand Units", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "dataExceptions", label: "Data Exceptions", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "identity-name", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "aliases", label: "Aliases", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "tags", label: "Tags", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "upc", label: "Upc", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "isbn", label: "Isbn", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "fdc_id", label: "FDC", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 7, format: "external-link", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "manufacturer", label: "Manufacturer", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "manufacturer", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: "subtitle", mobilePriority: 20),
+      FieldDescriptor(key: "model", label: "Model", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "identity-model", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "notes", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "expectedQuantity", label: "Expected Quantity", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "category", label: "Category", kind: .`enum`, nullable: true, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: "subtitle", mobilePriority: 30),
+      FieldDescriptor(key: "ingredientId", label: "Ingredient", kind: .identifier, nullable: true, reference: FieldReference(entity: .ingredient, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 8, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "growsIngredientId", label: "Grows", kind: .identifier, nullable: true, reference: FieldReference(entity: .ingredient, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "price", label: "Valuation price", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 4, format: "currency", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "unitMappings", label: "Unit Mappings", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "labelNutrition", label: "Label nutrition", kind: .json, nullable: true, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "externalIds", label: "External IDs", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 9, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "usdaUnavailable", label: "Usda Unavailable", kind: .boolean, nullable: true, reference: nil, controlKind: .checkbox, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "stockTracked", label: "Stock tracking", kind: .boolean, nullable: true, reference: nil, controlKind: .checkbox, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Shortcode", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "primaryGtin", label: "Barcode / ISBN", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: 6, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pricing", label: "Pricing", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "dataQuality", label: "Data quality", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "expenseTotal", label: "Net basis", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "componentCount", label: "Components", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "servingAsLocations", label: "In service", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "ledgerExpectedQuantity", label: "Expected", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "quantityVariance", label: "Variance", kind: .number, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "purchaseDate", label: "Purchase date", kind: .date, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "expenseCount", label: "Expenses", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "onHandUnits", label: "On Hand Units", kind: .number, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: "trailing", mobilePriority: 0),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "dataExceptions", label: "Data Exceptions", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by name...", label: nil, options: nil),
-      FilterDescriptor(columnId: "manufacturer", urlKey: "manufacturer", kind: .multiselect, placeholder: "Filter by manufacturer...", label: nil, options: nil),
-      FilterDescriptor(columnId: "manufacturerSearch", urlKey: "manufacturerSearch", kind: .text, placeholder: "Search manufacturer...", label: nil, options: nil),
-      FilterDescriptor(columnId: "primaryGtin", urlKey: "primaryGtin", kind: .text, placeholder: "Filter by UPC...", label: nil, options: nil),
-      FilterDescriptor(columnId: "model", urlKey: "model", kind: .text, placeholder: "Filter by model...", label: nil, options: nil),
-      FilterDescriptor(columnId: "modelPresence", urlKey: "modelPresence", kind: .presence, placeholder: "Filter model presence...", label: nil, options: [FilterOption(value: "has", label: "Has model"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "upcPresence", urlKey: "upcPresence", kind: .presence, placeholder: "Filter UPC presence...", label: nil, options: [FilterOption(value: "has", label: "Has UPC"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "category", urlKey: "category", kind: .multiselect, placeholder: "Filter by category...", label: nil, options: nil),
-      FilterDescriptor(columnId: "location", urlKey: "location", kind: .idMulti, placeholder: "Filter locations...", label: nil, options: nil),
-      FilterDescriptor(columnId: "servingAsLocations", urlKey: "servingAsLocations", kind: .presence, placeholder: "Filter in service...", label: nil, options: [FilterOption(value: "has", label: "Has in service as a location"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "ingredient", urlKey: "ingredient", kind: .idMulti, placeholder: "Filter ingredient...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expenses", urlKey: "expenses", kind: .range, placeholder: "Filter expenses...", label: nil, options: [FilterOption(value: "has", label: "Has expenses"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "1", label: "1+ expenses"), FilterOption(value: "2", label: "2+ expenses"), FilterOption(value: "5", label: "5+ expenses")]),
-      FilterDescriptor(columnId: "expenseTotal", urlKey: "expenseTotal", kind: .range, placeholder: "Filter net basis...", label: nil, options: [FilterOption(value: "positive", label: "Positive basis"), FilterOption(value: "zero", label: "Zero basis"), FilterOption(value: "negative", label: "Credit / negative"), FilterOption(value: "gte100", label: "$100 and up"), FilterOption(value: "gte500", label: "$500 and up")]),
-      FilterDescriptor(columnId: "expectedQuantity", urlKey: "expectedQuantity", kind: .range, placeholder: "Filter expected quantity...", label: nil, options: [FilterOption(value: "negative", label: "Negative (sold more than bought)"), FilterOption(value: "zero", label: "Zero (none expected)"), FilterOption(value: "positive", label: "One or more expected"), FilterOption(value: "gte5", label: "5 or more expected"), FilterOption(value: "unknown", label: "Has lines with no quantity")]),
-      FilterDescriptor(columnId: "quantityVariance", urlKey: "quantityVariance", kind: .range, placeholder: "Filter shelf vs. ledger...", label: nil, options: [FilterOption(value: "mismatched", label: "Shelf disagrees with ledger"), FilterOption(value: "matched", label: "Shelf matches ledger")]),
-      FilterDescriptor(columnId: "notes", urlKey: "notes", kind: .text, placeholder: "Search notes...", label: nil, options: nil),
-      FilterDescriptor(columnId: "notesPresence", urlKey: "notesPresence", kind: .presence, placeholder: "Filter notes presence...", label: nil, options: [FilterOption(value: "has", label: "Has notes"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [FilterOption(value: "complete", label: "Complete"), FilterOption(value: "needs_data", label: "Needs data"), FilterOption(value: "defect", label: "Defect")]),
-      FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [FilterOption(value: "product_manufacturer", label: "Manufacturer"), FilterOption(value: "product_category", label: "Category"), FilterOption(value: "product_model", label: "Model"), FilterOption(value: "product_image", label: "No image (stocked)"), FilterOption(value: "amazon_asin", label: "Amazon ASIN"), FilterOption(value: "duplicate_external_id", label: "Duplicate external ID")]),
-      FilterDescriptor(columnId: "externalIds", urlKey: "externalIds", kind: .multiselect, placeholder: "Filter by external ID source...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchaseDate", urlKey: "purchaseDate", kind: .range, placeholder: "Filter by purchase date...", label: nil, options: [FilterOption(value: "has", label: "Has purchase date"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "price", urlKey: "price", kind: .range, placeholder: "Filter price...", label: nil, options: [FilterOption(value: "has", label: "Has price"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "none-real", label: "No price (excluding buckets)"), FilterOption(value: "none-bucket", label: "No price (buckets only)")]),
-      FilterDescriptor(columnId: "food", urlKey: "food", kind: .presence, placeholder: "Filter USDA...", label: nil, options: [FilterOption(value: "has", label: "Has USDA key"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "image", urlKey: "image", kind: .presence, placeholder: "Filter images...", label: nil, options: [FilterOption(value: "has", label: "Has image"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "inventoryMultiplicity", urlKey: "inventoryMultiplicity", kind: .select, placeholder: "Filter inventory multiplicity...", label: nil, options: [FilterOption(value: "duplicate_within_placement", label: "Duplicate within placement")]),
-      FilterDescriptor(columnId: "kitAccounting", urlKey: "kitAccounting", kind: .select, placeholder: "Filter kit accounting...", label: nil, options: [FilterOption(value: "double_counted", label: "Counted twice")]),
-      FilterDescriptor(columnId: "ownershipReconciliation", urlKey: "ownershipReconciliation", kind: .select, placeholder: "Filter ownership reconciliation...", label: nil, options: [FilterOption(value: "disposed_still_on_hand", label: "Disposed but still on hand")]),
-      FilterDescriptor(columnId: "conversionCoverage", urlKey: "conversionCoverage", kind: .select, placeholder: "Filter conversion coverage...", label: nil, options: [FilterOption(value: "partial", label: "Partial coverage")]),
-      FilterDescriptor(columnId: "conversionTopology", urlKey: "conversionTopology", kind: .select, placeholder: "Filter conversion topology...", label: nil, options: [FilterOption(value: "islanded", label: "Islanded mappings")]),
-      FilterDescriptor(columnId: "unitMappingQuality", urlKey: "unitMappingQuality", kind: .presence, placeholder: "Filter mappings...", label: nil, options: [FilterOption(value: "has", label: "Has mappings"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "stockTracked", urlKey: "stockTracked", kind: .presence, placeholder: "Filter stock tracking...", label: nil, options: [FilterOption(value: "none", label: "Undecided"), FilterOption(value: "has", label: "Reviewed")]),
-      FilterDescriptor(columnId: "components", urlKey: "components", kind: .presence, placeholder: "Filter kits...", label: nil, options: [FilterOption(value: "has", label: "Is a kit"), FilterOption(value: "none", label: "Not a kit")]),
-      FilterDescriptor(columnId: "tags", urlKey: "tags", kind: .multiselect, placeholder: "Filter by tag...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.vendors", urlKey: "related-vendor", kind: .idMulti, placeholder: "Filter by vendor...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.projects", urlKey: "related-project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.usedOnProjects", urlKey: "related-usedOnProject", kind: .text, placeholder: "Search related used on projects...", label: nil, options: nil),
-      FilterDescriptor(columnId: "usedOnProjectId", urlKey: "usedOnProjectId", kind: .idMulti, placeholder: "Filter by related used on projects id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "usedOnProjectPresenceFilter", urlKey: "usedOnProjectPresenceFilter", kind: .presence, placeholder: "Filter related used on projects presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.purchases", urlKey: "related-purchase", kind: .idMulti, placeholder: "Filter by purchase...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.inventory", urlKey: "related-relatedInventory", kind: .text, placeholder: "Search related inventory...", label: nil, options: nil),
-      FilterDescriptor(columnId: "relatedInventoryId", urlKey: "relatedInventoryId", kind: .idMulti, placeholder: "Filter by related inventory id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "relatedInventoryPresenceFilter", urlKey: "relatedInventoryPresenceFilter", kind: .presence, placeholder: "Filter related inventory presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.wishes", urlKey: "related-wish", kind: .text, placeholder: "Search related wishlist candidates...", label: nil, options: nil),
-      FilterDescriptor(columnId: "wishId", urlKey: "wishId", kind: .idMulti, placeholder: "Filter by related wishlist candidates id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "wishPresenceFilter", urlKey: "wishPresenceFilter", kind: .presence, placeholder: "Filter related wishlist candidates presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.tasks", urlKey: "related:product.tasks", kind: .range, placeholder: "Filter tasks...", label: nil, options: [FilterOption(value: "has", label: "Has task"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "open", label: "Has open task"), FilterOption(value: "not_started", label: "Not started"), FilterOption(value: "later", label: "Later"), FilterOption(value: "in_progress", label: "In progress"), FilterOption(value: "blocked", label: "Blocked"), FilterOption(value: "done", label: "Done"), FilterOption(value: "overdue", label: "Overdue"), FilterOption(value: "week", label: "Due this week"), FilterOption(value: "30d", label: "Due in 30 days")]),
-      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by related tasks id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil),
-      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:product.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil),
-      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by name...", label: nil, options: nil, wire: .param(name: "nameFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "manufacturer", urlKey: "manufacturer", kind: .multiselect, placeholder: "Filter by manufacturer...", label: nil, options: nil, wire: .param(name: "manufacturerExact"), targetEntity: nil),
+      FilterDescriptor(columnId: "manufacturerSearch", urlKey: "manufacturerSearch", kind: .text, placeholder: "Search manufacturer...", label: nil, options: nil, wire: .param(name: "manufacturerFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "primaryGtin", urlKey: "primaryGtin", kind: .text, placeholder: "Filter by UPC...", label: nil, options: nil, wire: .param(name: "upcFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "model", urlKey: "model", kind: .text, placeholder: "Filter by model...", label: nil, options: nil, wire: .param(name: "modelFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "modelPresence", urlKey: "modelPresence", kind: .presence, placeholder: "Filter model presence...", label: nil, options: [LabeledOption(value: "has", label: "Has model"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "modelPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "upcPresence", urlKey: "upcPresence", kind: .presence, placeholder: "Filter UPC presence...", label: nil, options: [LabeledOption(value: "has", label: "Has UPC"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "upcPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "category", urlKey: "category", kind: .multiselect, placeholder: "Filter by category...", label: nil, options: nil, wire: .param(name: "categoryFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "location", urlKey: "location", kind: .idMulti, placeholder: "Filter locations...", label: nil, options: nil, wire: .param(name: "locationIdFilter"), targetEntity: .location),
+      FilterDescriptor(columnId: "servingAsLocations", urlKey: "servingAsLocations", kind: .presence, placeholder: "Filter in service...", label: nil, options: [LabeledOption(value: "has", label: "Has in service as a location"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "servingAsLocationPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "ingredient", urlKey: "ingredient", kind: .idMulti, placeholder: "Filter ingredient...", label: nil, options: nil, wire: .param(name: "ingredientIdFilter"), targetEntity: .ingredient),
+      FilterDescriptor(columnId: "expenses", urlKey: "expenses", kind: .range, placeholder: "Filter expenses...", label: nil, options: [LabeledOption(value: "has", label: "Has expenses"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "1", label: "1+ expenses"), LabeledOption(value: "2", label: "2+ expenses"), LabeledOption(value: "5", label: "5+ expenses")], wire: .range(from: "expenseCountMin", to: "expenseCountMax", presence: "expensePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseTotal", urlKey: "expenseTotal", kind: .range, placeholder: "Filter net basis...", label: nil, options: [LabeledOption(value: "positive", label: "Positive basis"), LabeledOption(value: "zero", label: "Zero basis"), LabeledOption(value: "negative", label: "Credit / negative"), LabeledOption(value: "gte100", label: "$100 and up"), LabeledOption(value: "gte500", label: "$500 and up")], wire: .range(from: "expenseTotalMin", to: "expenseTotalMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "expectedQuantity", urlKey: "expectedQuantity", kind: .range, placeholder: "Filter expected quantity...", label: nil, options: [LabeledOption(value: "negative", label: "Negative (sold more than bought)"), LabeledOption(value: "zero", label: "Zero (none expected)"), LabeledOption(value: "positive", label: "One or more expected"), LabeledOption(value: "gte5", label: "5 or more expected"), LabeledOption(value: "unknown", label: "Has lines with no quantity")], wire: .range(from: "expectedQuantityMin", to: "expectedQuantityMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "quantityVariance", urlKey: "quantityVariance", kind: .range, placeholder: "Filter shelf vs. ledger...", label: nil, options: [LabeledOption(value: "mismatched", label: "Shelf disagrees with ledger"), LabeledOption(value: "matched", label: "Shelf matches ledger")], wire: .param(name: "quantityVarianceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "notes", urlKey: "notes", kind: .text, placeholder: "Search notes...", label: nil, options: nil, wire: .param(name: "notesFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "notesPresence", urlKey: "notesPresence", kind: .presence, placeholder: "Filter notes presence...", label: nil, options: [LabeledOption(value: "has", label: "Has notes"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "notesPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
+      FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "product_manufacturer", label: "Manufacturer"), LabeledOption(value: "product_category", label: "Category"), LabeledOption(value: "product_model", label: "Model"), LabeledOption(value: "product_image", label: "No image (stocked)"), LabeledOption(value: "amazon_asin", label: "Amazon ASIN"), LabeledOption(value: "duplicate_external_id", label: "Duplicate external ID")], wire: .param(name: "dataGap"), targetEntity: nil),
+      FilterDescriptor(columnId: "externalIds", urlKey: "externalIds", kind: .multiselect, placeholder: "Filter by external ID source...", label: nil, options: nil, wire: .param(name: "externalIdSource"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchaseDate", urlKey: "purchaseDate", kind: .range, placeholder: "Filter by purchase date...", label: nil, options: [LabeledOption(value: "has", label: "Has purchase date"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "purchaseDateFrom", to: "purchaseDateTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "price", urlKey: "price", kind: .range, placeholder: "Filter price...", label: nil, options: [LabeledOption(value: "has", label: "Has price"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "none-real", label: "No price (excluding buckets)"), LabeledOption(value: "none-bucket", label: "No price (buckets only)")], wire: .param(name: "pricePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "food", urlKey: "food", kind: .presence, placeholder: "Filter USDA...", label: nil, options: [LabeledOption(value: "has", label: "Has USDA key"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "usdaPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "image", urlKey: "image", kind: .presence, placeholder: "Filter images...", label: nil, options: [LabeledOption(value: "has", label: "Has image"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "imagePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "inventoryMultiplicity", urlKey: "inventoryMultiplicity", kind: .select, placeholder: "Filter inventory multiplicity...", label: nil, options: [LabeledOption(value: "duplicate_within_placement", label: "Duplicate within placement")], wire: .param(name: "inventoryMultiplicity"), targetEntity: nil),
+      FilterDescriptor(columnId: "kitAccounting", urlKey: "kitAccounting", kind: .select, placeholder: "Filter kit accounting...", label: nil, options: [LabeledOption(value: "double_counted", label: "Counted twice")], wire: .param(name: "kitAccounting"), targetEntity: nil),
+      FilterDescriptor(columnId: "ownershipReconciliation", urlKey: "ownershipReconciliation", kind: .select, placeholder: "Filter ownership reconciliation...", label: nil, options: [LabeledOption(value: "disposed_still_on_hand", label: "Disposed but still on hand")], wire: .param(name: "ownershipReconciliation"), targetEntity: nil),
+      FilterDescriptor(columnId: "conversionCoverage", urlKey: "conversionCoverage", kind: .select, placeholder: "Filter conversion coverage...", label: nil, options: [LabeledOption(value: "partial", label: "Partial coverage")], wire: .param(name: "conversionCoverage"), targetEntity: nil),
+      FilterDescriptor(columnId: "conversionTopology", urlKey: "conversionTopology", kind: .select, placeholder: "Filter conversion topology...", label: nil, options: [LabeledOption(value: "islanded", label: "Islanded mappings")], wire: .param(name: "conversionTopology"), targetEntity: nil),
+      FilterDescriptor(columnId: "unitMappingQuality", urlKey: "unitMappingQuality", kind: .presence, placeholder: "Filter mappings...", label: nil, options: [LabeledOption(value: "has", label: "Has mappings"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "unitMappingPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "stockTracked", urlKey: "stockTracked", kind: .presence, placeholder: "Filter stock tracking...", label: nil, options: [LabeledOption(value: "none", label: "Undecided"), LabeledOption(value: "has", label: "Reviewed")], wire: .param(name: "stockTrackedPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "components", urlKey: "components", kind: .presence, placeholder: "Filter kits...", label: nil, options: [LabeledOption(value: "has", label: "Is a kit"), LabeledOption(value: "none", label: "Not a kit")], wire: .param(name: "componentPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "tags", urlKey: "tags", kind: .multiselect, placeholder: "Filter by tag...", label: nil, options: nil, wire: .param(name: "tagFilters"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:product.vendors", urlKey: "related-vendor", kind: .idMulti, placeholder: "Filter by vendor...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: .vendor),
+      FilterDescriptor(columnId: "related:product.projects", urlKey: "related-project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
+      FilterDescriptor(columnId: "related:product.usedOnProjects", urlKey: "related-usedOnProject", kind: .text, placeholder: "Search related used on projects...", label: nil, options: nil, wire: .param(name: "usedOnProjectSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "kitId", urlKey: "kitId", kind: .idMulti, placeholder: "Filter by kit...", label: nil, options: nil, wire: .param(name: "kitId"), targetEntity: .product),
+      FilterDescriptor(columnId: "usedOnProjectId", urlKey: "usedOnProjectId", kind: .idMulti, placeholder: "Filter by related used on projects id...", label: nil, options: nil, wire: .param(name: "usedOnProjectId"), targetEntity: .project),
+      FilterDescriptor(columnId: "usedOnProjectPresenceFilter", urlKey: "usedOnProjectPresenceFilter", kind: .presence, placeholder: "Filter related used on projects presence...", label: nil, options: nil, wire: .param(name: "usedOnProjectPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:product.purchases", urlKey: "related-purchase", kind: .idMulti, placeholder: "Filter by purchase...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: .purchase),
+      FilterDescriptor(columnId: "related:product.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:product.inventory", urlKey: "related-relatedInventory", kind: .text, placeholder: "Search related inventory...", label: nil, options: nil, wire: .param(name: "relatedInventorySearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "relatedInventoryId", urlKey: "relatedInventoryId", kind: .idMulti, placeholder: "Filter by related inventory id...", label: nil, options: nil, wire: .param(name: "relatedInventoryId"), targetEntity: nil),
+      FilterDescriptor(columnId: "relatedInventoryPresenceFilter", urlKey: "relatedInventoryPresenceFilter", kind: .presence, placeholder: "Filter related inventory presence...", label: nil, options: nil, wire: .param(name: "relatedInventoryPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:product.wishes", urlKey: "related-wish", kind: .text, placeholder: "Search related wishlist candidates...", label: nil, options: nil, wire: .param(name: "wishSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "wishId", urlKey: "wishId", kind: .idMulti, placeholder: "Filter by related wishlist candidates id...", label: nil, options: nil, wire: .param(name: "wishId"), targetEntity: nil),
+      FilterDescriptor(columnId: "wishPresenceFilter", urlKey: "wishPresenceFilter", kind: .presence, placeholder: "Filter related wishlist candidates presence...", label: nil, options: nil, wire: .param(name: "wishPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:product.tasks", urlKey: "related:product.tasks", kind: .range, placeholder: "Filter tasks...", label: nil, options: [LabeledOption(value: "has", label: "Has task"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "open", label: "Has open task"), LabeledOption(value: "not_started", label: "Not started"), LabeledOption(value: "later", label: "Later"), LabeledOption(value: "in_progress", label: "In progress"), LabeledOption(value: "blocked", label: "Blocked"), LabeledOption(value: "done", label: "Done"), LabeledOption(value: "overdue", label: "Overdue"), LabeledOption(value: "week", label: "Due this week"), LabeledOption(value: "30d", label: "Due in 30 days")], wire: .range(from: "taskDueFrom", to: "taskDueTo", presence: "taskPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by related tasks id...", label: nil, options: nil, wire: .param(name: "taskId"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:product.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil, wire: .param(name: "mealSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil, wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:product.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil, wire: .param(name: "eaterSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil, wire: .param(name: "eaterPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .bulkUpdate, .delete, .merge]
+    relations: [
+      RelationDescriptor(key: "ingredient", label: "Ingredient", target: .ingredient, cardinality: .one),
+      RelationDescriptor(key: "grows-ingredient", label: "Grows ingredient", target: .ingredient, cardinality: .one),
+      RelationDescriptor(key: "project-uses", label: "Used on projects", target: .project, cardinality: .many),
+      RelationDescriptor(key: "vendors", label: "Vendors", target: .vendor, cardinality: .many),
+      RelationDescriptor(key: "purchased-projects", label: "Projects", target: .project, cardinality: .many),
+      RelationDescriptor(key: "purchases", label: "Purchases", target: .purchase, cardinality: .many),
+      RelationDescriptor(key: "expenses", label: "Expenses", target: .expense, cardinality: .many),
+      RelationDescriptor(key: "inventory", label: "Inventory", target: .inventory, cardinality: .many),
+      RelationDescriptor(key: "tasks", label: "Tasks", target: .task, cardinality: .many),
+      RelationDescriptor(key: "meals", label: "Eaten at meals", target: .meal, cardinality: .many),
+      RelationDescriptor(key: "eaters", label: "Eaten by", target: .ledgerParty, cardinality: .many),
+      RelationDescriptor(key: "wishes", label: "Wishlist candidates", target: .wish, cardinality: .many),
+      RelationDescriptor(key: "locations", label: "Serving as locations", target: .location, cardinality: .many),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
+      RelationDescriptor(key: "components", label: "Components", target: .product, cardinality: .many),
+      RelationDescriptor(key: "containing-kits", label: "Containing kits", target: .product, cardinality: .many),
+      RelationDescriptor(key: "usda-food", label: "USDA food", target: .usdaFood, cardinality: .one)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: true,
+      heroActions: ["edit", "addToInventory", "recordSale", "discard"],
+      detailSections: [
+        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["name", "id", "manufacturer", "model", "price", "category", "primaryGtin", "fdc_id", "ingredientId", "externalIds", "tags", "notes"])),
+        DetailSection(id: "garden", title: nil, placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "stocked-at", title: "Stocked at", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "productId", columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil))),
+        DetailSection(id: "expense-history", title: "Expense history", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "productId", columns: ["name", "cost", "date", "lineKind", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "productId", columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
+        DetailSection(id: "kit-components", title: "Kit components", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "components", filterDescriptor: "kitId", columns: ["name", "manufacturer", "onHandUnits"], sort: nil, limit: nil))),
+        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "productId", columns: ["name", "purchaseCount", "spend", "latestPurchaseDate"], sort: nil, limit: nil))),
+        DetailSection(id: "project-uses", title: "Used on projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "project-uses", filterDescriptor: "usedToolId", columns: ["name", "status", "kind", "startDate"], sort: nil, limit: nil))),
+        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "subjectProduct", columns: ["name", "status", "dueDate", "trade"], sort: SectionSort(field: "dueDate", direction: .desc), limit: nil))),
+        DetailSection(id: "movements", title: "Movements", placement: .full, collapsed: false, kind: .timeline(mode: .events)),
+        DetailSection(id: "nutrition", title: "Nutrition", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "unit-mappings", title: "Unit mappings", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "fits-with", title: "Fits with", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "cookbooks", title: "Cookbooks", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "recipe-appearances", title: "Appears in recipes", placement: .primary, collapsed: false, kind: .slot)
+      ],
+      listViews: [.table, .shelf, .timeline],
+      shelfSubtitle: ["price", "category"],
+      listActions: ["addToInventory", "discard", "setStockTracking", "printLabels", "merge", "delete"],
+      timelineFields: ["purchaseDate"],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let recipeDescriptor: EntityDescriptor =
@@ -235,57 +482,87 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .cook,
     sfSymbol: "fork.knife",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "meta", label: "Meta", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "yield", label: "Yield", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "servings", label: "Yield", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: "subtitle", mobilePriority: 5),
-      FieldDescriptor(key: "tags", label: "Tags", kind: .textArray, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "costTotal", label: "Cost", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "caloriesTotal", label: "Calories", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "meals", label: "Meals", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sections", label: "Sections", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "source", label: "Source", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "totals", label: "Totals", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "images", label: "Images", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "SourceType", label: "Source Type", kind: .`enum`, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "SourceData", label: "Source Data", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "cookbookId", label: "Cookbook ID", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "forkedFromRecipeId", label: "Forked from", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "forkedFromRecipeName", label: "Forked From Recipe Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "totalsComputedAt", label: "Totals Computed At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "activeMinutes", label: "Active Minutes", kind: .number, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "totalMinutes", label: "Time", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "identity", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "meta", label: "Meta", kind: .json, nullable: true, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "yield", label: "Yield", kind: .json, nullable: true, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "servings", label: "Yield", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "servings", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: "trailing", mobilePriority: 5),
+      FieldDescriptor(key: "tags", label: "Tags", kind: .textArray, nullable: true, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "costTotal", label: "Cost", kind: .number, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "caloriesTotal", label: "Calories", kind: .number, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "meals", label: "Meals", kind: .number, nullable: false, reference: FieldReference(entity: .meal, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sections", label: "Sections", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "source", label: "Source", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "totals", label: "Totals", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "SourceType", label: "Source Type", kind: .`enum`, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "SourceData", label: "Source Data", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "cookbookId", label: "Cookbook ID", kind: .identifier, nullable: true, reference: FieldReference(entity: .cookbook, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "forkedFromRecipeId", label: "Forked from", kind: .identifier, nullable: true, reference: FieldReference(entity: .recipe, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "forkedFromRecipeName", label: "Forked From Recipe Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "totalsComputedAt", label: "Totals Computed At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "activeMinutes", label: "Active Minutes", kind: .number, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "totalMinutes", label: "Time", kind: .number, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by recipe name...", label: nil, options: nil),
-      FilterDescriptor(columnId: "tags", urlKey: "tags", kind: .multiselect, placeholder: "Filter by tag...", label: nil, options: nil),
-      FilterDescriptor(columnId: "source", urlKey: "source", kind: .idMulti, placeholder: "Filter by cookbook...", label: nil, options: nil),
-      FilterDescriptor(columnId: "meals", urlKey: "meals", kind: .presence, placeholder: "Filter meals...", label: nil, options: [FilterOption(value: "has", label: "Has meals"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "image", urlKey: "image", kind: .presence, placeholder: "Filter images...", label: nil, options: [FilterOption(value: "has", label: "Has image"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "instructions", urlKey: "instructions", kind: .presence, placeholder: "Filter instructions...", label: nil, options: [FilterOption(value: "has", label: "Has instructions"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "sourceType", urlKey: "sourceType", kind: .multiselect, placeholder: "Filter by source...", label: nil, options: [FilterOption(value: "Book", label: "Book"), FilterOption(value: "Website", label: "Website"), FilterOption(value: "Other", label: "Other"), FilterOption(value: "Notion", label: "Notion")]),
-      FilterDescriptor(columnId: "costTotal", urlKey: "costTotal", kind: .range, placeholder: "Filter recipe cost...", label: nil, options: [FilterOption(value: "under10", label: "Under $10"), FilterOption(value: "10to25", label: "$10–$25"), FilterOption(value: "25plus", label: "$25 and up")]),
-      FilterDescriptor(columnId: "caloriesTotal", urlKey: "caloriesTotal", kind: .range, placeholder: "Filter calories...", label: nil, options: [FilterOption(value: "under500", label: "Under 500 cal"), FilterOption(value: "500to1000", label: "500–1,000 cal"), FilterOption(value: "1000plus", label: "1,000+ cal")]),
-      FilterDescriptor(columnId: "totalMinutes", urlKey: "totalMinutes", kind: .range, placeholder: "Filter total time...", label: nil, options: [FilterOption(value: "under30", label: "Under 30 min"), FilterOption(value: "30to60", label: "30–60 min"), FilterOption(value: "60plus", label: "Over an hour")]),
-      FilterDescriptor(columnId: "related:recipe.ingredients", urlKey: "related-ingredient", kind: .idMulti, placeholder: "Filter by ingredient...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:recipe.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil),
-      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by recipe name...", label: nil, options: nil, wire: .param(name: "nameFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "tags", urlKey: "tags", kind: .multiselect, placeholder: "Filter by tag...", label: nil, options: nil, wire: .param(name: "tagFilters"), targetEntity: nil),
+      FilterDescriptor(columnId: "source", urlKey: "source", kind: .idMulti, placeholder: "Filter by cookbook...", label: nil, options: nil, wire: .param(name: "cookbookId"), targetEntity: .cookbook),
+      FilterDescriptor(columnId: "meals", urlKey: "meals", kind: .presence, placeholder: "Filter meals...", label: nil, options: [LabeledOption(value: "has", label: "Has meals"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "image", urlKey: "image", kind: .presence, placeholder: "Filter images...", label: nil, options: [LabeledOption(value: "has", label: "Has image"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "imagePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "instructions", urlKey: "instructions", kind: .presence, placeholder: "Filter instructions...", label: nil, options: [LabeledOption(value: "has", label: "Has instructions"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "instructionsPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "sourceType", urlKey: "sourceType", kind: .multiselect, placeholder: "Filter by source...", label: nil, options: [LabeledOption(value: "Book", label: "Book"), LabeledOption(value: "Website", label: "Website"), LabeledOption(value: "Other", label: "Other"), LabeledOption(value: "Notion", label: "Notion")], wire: .param(name: "sourceTypeFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "costTotal", urlKey: "costTotal", kind: .range, placeholder: "Filter recipe cost...", label: nil, options: [LabeledOption(value: "under10", label: "Under $10"), LabeledOption(value: "10to25", label: "$10–$25"), LabeledOption(value: "25plus", label: "$25 and up")], wire: .range(from: "costTotalMin", to: "costTotalMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "caloriesTotal", urlKey: "caloriesTotal", kind: .range, placeholder: "Filter calories...", label: nil, options: [LabeledOption(value: "under500", label: "Under 500 cal"), LabeledOption(value: "500to1000", label: "500–1,000 cal"), LabeledOption(value: "1000plus", label: "1,000+ cal")], wire: .range(from: "caloriesTotalMin", to: "caloriesTotalMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "totalMinutes", urlKey: "totalMinutes", kind: .range, placeholder: "Filter total time...", label: nil, options: [LabeledOption(value: "under30", label: "Under 30 min"), LabeledOption(value: "30to60", label: "30–60 min"), LabeledOption(value: "60plus", label: "Over an hour")], wire: .range(from: "totalMinutesMin", to: "totalMinutesMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "related:recipe.ingredients", urlKey: "related-ingredient", kind: .idMulti, placeholder: "Filter by ingredient...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: .ingredient),
+      FilterDescriptor(columnId: "related:recipe.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil, wire: .param(name: "mealSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil, wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    relations: [
+      RelationDescriptor(key: "cookbook", label: "Cookbook", target: .cookbook, cardinality: .one),
+      RelationDescriptor(key: "forkedFrom", label: "Forked from", target: .recipe, cardinality: .one),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
+      RelationDescriptor(key: "ingredients", label: "Ingredients", target: .ingredient, cardinality: .many),
+      RelationDescriptor(key: "sub-recipes", label: "Sub-recipes", target: .recipe, cardinality: .many),
+      RelationDescriptor(key: "meals", label: "Meals", target: .meal, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: true,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "servings", "yield", "meta", "tags", "source", "forkedFromRecipeId", "notes", "createdAt", "updatedAt"])),
+        DetailSection(id: "contents", title: "Recipe", placement: .primary, collapsed: false, kind: .fields(["sections", "totals"])),
+        DetailSection(id: "workflow", title: nil, placement: .full, collapsed: false, kind: .slot),
+        DetailSection(id: "meals", title: "Meals", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "recipeId", columns: ["date", "name", "mealType"], sort: SectionSort(field: "date", direction: .desc), limit: nil)))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let ingredientDescriptor: EntityDescriptor =
@@ -298,36 +575,66 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .cook,
     sfSymbol: "leaf",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "aliases", label: "Aliases", kind: .textArray, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "naKinds", label: "Enrichment exclusions", kind: .textArray, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "usuallyOnHand", label: "Usually on hand", kind: .boolean, controlKind: .checkbox, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "gardenGuideKey", label: "Garden guide key", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "recipeId", label: "Recipe ID", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "identity", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "aliases", label: "Aliases", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "naKinds", label: "Enrichment exclusions", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "usuallyOnHand", label: "Usually on hand", kind: .boolean, nullable: false, reference: nil, controlKind: .checkbox, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "gardenGuideKey", label: "Garden guide key", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "recipeId", label: "Recipe ID", kind: .identifier, nullable: true, reference: FieldReference(entity: .recipe, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by ingredient name...", label: nil, options: nil),
-      FilterDescriptor(columnId: "product", urlKey: "product", kind: .presence, placeholder: "Filter product...", label: nil, options: [FilterOption(value: "has", label: "Has product"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "usuallyOnHand", urlKey: "usuallyOnHand", kind: .boolean, placeholder: "Filter pantry staples...", label: nil, options: [FilterOption(value: "true", label: "Usually on hand"), FilterOption(value: "false", label: "Not usually on hand")]),
-      FilterDescriptor(columnId: "ownRecipes", urlKey: "ownRecipes", kind: .presence, placeholder: "Filter own recipes...", label: nil, options: [FilterOption(value: "has", label: "Has own recipes"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "appearsInRecipes", urlKey: "appearsInRecipes", kind: .presence, placeholder: "Filter recipes...", label: nil, options: [FilterOption(value: "has", label: "Has recipes"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "related:ingredient.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil),
-      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:ingredient.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil),
-      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by ingredient name...", label: nil, options: nil, wire: .param(name: "nameFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "product", urlKey: "product", kind: .presence, placeholder: "Filter product...", label: nil, options: [LabeledOption(value: "has", label: "Has product"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "productPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "usuallyOnHand", urlKey: "usuallyOnHand", kind: .boolean, placeholder: "Filter pantry staples...", label: nil, options: [LabeledOption(value: "true", label: "Usually on hand"), LabeledOption(value: "false", label: "Not usually on hand")], wire: .param(name: "usuallyOnHand"), targetEntity: nil),
+      FilterDescriptor(columnId: "ownRecipes", urlKey: "ownRecipes", kind: .presence, placeholder: "Filter own recipes...", label: nil, options: [LabeledOption(value: "has", label: "Has own recipes"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "ownRecipePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "appearsInRecipes", urlKey: "appearsInRecipes", kind: .presence, placeholder: "Filter recipes...", label: nil, options: [LabeledOption(value: "has", label: "Has recipes"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "recipePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:ingredient.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil, wire: .param(name: "mealSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil, wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:ingredient.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil, wire: .param(name: "eaterSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil, wire: .param(name: "eaterPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .bulkUpdate, .delete, .merge]
+    relations: [
+      RelationDescriptor(key: "products", label: "Products", target: .product, cardinality: .many),
+      RelationDescriptor(key: "recipes", label: "Recipes", target: .recipe, cardinality: .many),
+      RelationDescriptor(key: "recipe", label: "Recipe", target: .recipe, cardinality: .one),
+      RelationDescriptor(key: "meals", label: "Eaten at meals", target: .meal, cardinality: .many),
+      RelationDescriptor(key: "eaters", label: "Eaten by", target: .ledgerParty, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["name", "aliases", "usuallyOnHand", "createdAt", "updatedAt"])),
+        DetailSection(id: "nutrition-product", title: "Nutrition", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "ingredient", columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil))),
+        DetailSection(id: "garden", title: nil, placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "recipes", title: "Appears in recipes", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "related:recipe.ingredients", columns: ["name", "tags", "meals"], sort: nil, limit: nil)))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["setUsuallyOnHand", "merge", "delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let cookbookDescriptor: EntityDescriptor =
@@ -340,30 +647,58 @@ public enum EntityCatalog {
     titleField: "book",
     domain: .cook,
     sfSymbol: "book.closed",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "author", label: "Author", kind: .textArray, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "subjects", label: "Subjects", kind: .textArray, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceLabel", label: "Source Label", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "rawJson", label: "Raw Json", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "report", label: "Report", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "coverImageId", label: "Cover Image ID", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "productId", label: "Product ID", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "importedAt", label: "Imported At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "recipeCount", label: "Recipes", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "coverUrl", label: "Cover", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceRecipeCount", label: "Source recipes", kind: .number, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "needsReextract", label: "Needs re-extraction", kind: .boolean, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "product", label: "Physical copy", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "author", label: "Author", kind: .textArray, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "subjects", label: "Subjects", kind: .textArray, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceLabel", label: "Source Label", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "rawJson", label: "Raw Json", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "report", label: "Report", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "coverImageId", label: "Cover Image ID", kind: .identifier, nullable: true, reference: FieldReference(entity: .image, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "productId", label: "Product ID", kind: .identifier, nullable: true, reference: FieldReference(entity: .product, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "importedAt", label: "Imported At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "recipeCount", label: "Recipes", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "coverUrl", label: "Cover", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceRecipeCount", label: "Source recipes", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "needsReextract", label: "Needs re-extraction", kind: .boolean, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "product", label: "Physical copy", kind: .json, nullable: true, reference: FieldReference(entity: .product, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [],
-    actions: []
+    relations: [
+      RelationDescriptor(key: "recipes", label: "Recipes", target: .recipe, cardinality: .many),
+      RelationDescriptor(key: "cover", label: "Cover image", target: .image, cardinality: .one),
+      RelationDescriptor(key: "product", label: "Product", target: .product, cardinality: .one)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: [],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "author", "subjects", "recipeCount", "sourceRecipeCount", "needsReextract", "coverUrl"])),
+        DetailSection(id: "physical-copy", title: "Physical copy", placement: .supporting, collapsed: false, kind: .fields(["product"])),
+        DetailSection(id: "toc", title: "Contents", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "recipes", title: "Recipes", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "source", columns: ["name", "tags", "costTotal"], sort: nil, limit: nil))),
+        DetailSection(id: "import-progress", title: "Import", placement: .primary, collapsed: false, kind: .slot)
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: [],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let locationDescriptor: EntityDescriptor =
@@ -376,51 +711,84 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .pantry,
     sfSymbol: "mappin.and.ellipse",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "aliases", label: "Aliases", kind: .textArray, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "tags", label: "Tags", kind: .textArray, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "type", label: "Type", kind: .`enum`, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "gardenKind", label: "Garden kind", kind: .`enum`, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "gardenConditions", label: "Growing conditions", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "productId", label: "Is a", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "parentId", label: "Parent Location", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Shortcode", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "product", label: "Product", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "lastBulkInventory", label: "Last recount", kind: .timestamp, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "aiDescription", label: "Ai Description", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "images", label: "Images", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "valuation", label: "Valuation", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "aliases", label: "Aliases", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "tags", label: "Tags", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "type", label: "Type", kind: .`enum`, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "gardenKind", label: "Garden kind", kind: .`enum`, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "gardenConditions", label: "Growing conditions", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "productId", label: "Is a", kind: .identifier, nullable: true, reference: FieldReference(entity: .product, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "parentId", label: "Parent Location", kind: .identifier, nullable: true, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Shortcode", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "product", label: "Product", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "lastBulkInventory", label: "Last recount", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "aiDescription", label: "Ai Description", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "valuation", label: "Valuation", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "image", urlKey: "image", kind: .presence, placeholder: "Filter images...", label: nil, options: [FilterOption(value: "has", label: "Has image"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "lastBulkInventory", urlKey: "lastBulkInventory", kind: .range, placeholder: "Filter recounts...", label: nil, options: [FilterOption(value: "30", label: "Not counted in 30 days"), FilterOption(value: "60", label: "Not counted in 60 days"), FilterOption(value: "90", label: "Not counted in 90 days")]),
-      FilterDescriptor(columnId: "children", urlKey: "children", kind: .presence, placeholder: "Filter children...", label: nil, options: [FilterOption(value: "has", label: "Has children"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "aiDescription", urlKey: "aiDescription", kind: .presence, placeholder: "Filter descriptions...", label: nil, options: [FilterOption(value: "has", label: "Has description"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by location name...", label: nil, options: nil),
-      FilterDescriptor(columnId: "type", urlKey: "type", kind: .multiselect, placeholder: "Filter by type...", label: nil, options: nil),
-      FilterDescriptor(columnId: "product", urlKey: "product", kind: .idMulti, placeholder: "Filter product...", label: nil, options: nil),
-      FilterDescriptor(columnId: "parent", urlKey: "parent", kind: .idMulti, placeholder: "Filter parent...", label: nil, options: nil),
-      FilterDescriptor(columnId: "inventoryEntries", urlKey: "inventoryEntries", kind: .range, placeholder: "Filter inventory...", label: nil, options: [FilterOption(value: "has", label: "Has items"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "1", label: "1+ items"), FilterOption(value: "2", label: "2+ items"), FilterOption(value: "5", label: "5+ items")]),
-      FilterDescriptor(columnId: "valuation", urlKey: "valuation", kind: .range, placeholder: "Filter valuation...", label: nil, options: [FilterOption(value: "positive", label: "Positive basis"), FilterOption(value: "zero", label: "Zero basis"), FilterOption(value: "negative", label: "Credit / negative"), FilterOption(value: "gte100", label: "$100 and up"), FilterOption(value: "gte500", label: "$500 and up")]),
-      FilterDescriptor(columnId: "related:location.ingredients", urlKey: "related-ingredient", kind: .text, placeholder: "Search related ingredients...", label: nil, options: nil),
-      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredients id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "ingredientPresenceFilter", urlKey: "ingredientPresenceFilter", kind: .presence, placeholder: "Filter related ingredients presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:location.plantingHistory", urlKey: "related-planting", kind: .text, placeholder: "Search related plantings...", label: nil, options: nil),
-      FilterDescriptor(columnId: "plantingId", urlKey: "plantingId", kind: .idMulti, placeholder: "Filter by related plantings id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "plantingPresenceFilter", urlKey: "plantingPresenceFilter", kind: .presence, placeholder: "Filter related plantings presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "image", urlKey: "image", kind: .presence, placeholder: "Filter images...", label: nil, options: [LabeledOption(value: "has", label: "Has image"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "imagePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "lastBulkInventory", urlKey: "lastBulkInventory", kind: .range, placeholder: "Filter recounts...", label: nil, options: [LabeledOption(value: "30", label: "Not counted in 30 days"), LabeledOption(value: "60", label: "Not counted in 60 days"), LabeledOption(value: "90", label: "Not counted in 90 days")], wire: .param(name: "lastBulkInventoryOlderThanDays"), targetEntity: nil),
+      FilterDescriptor(columnId: "children", urlKey: "children", kind: .presence, placeholder: "Filter children...", label: nil, options: [LabeledOption(value: "has", label: "Has children"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "childPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "aiDescription", urlKey: "aiDescription", kind: .presence, placeholder: "Filter descriptions...", label: nil, options: [LabeledOption(value: "has", label: "Has description"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "aiDescriptionPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by location name...", label: nil, options: nil, wire: .param(name: "nameFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "type", urlKey: "type", kind: .multiselect, placeholder: "Filter by type...", label: nil, options: nil, wire: .param(name: "itemTypeFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "product", urlKey: "product", kind: .idMulti, placeholder: "Filter product...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
+      FilterDescriptor(columnId: "parent", urlKey: "parent", kind: .idMulti, placeholder: "Filter parent...", label: nil, options: nil, wire: .param(name: "parentId"), targetEntity: .location),
+      FilterDescriptor(columnId: "inventoryEntries", urlKey: "inventoryEntries", kind: .range, placeholder: "Filter inventory...", label: nil, options: [LabeledOption(value: "has", label: "Has items"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "1", label: "1+ items"), LabeledOption(value: "2", label: "2+ items"), LabeledOption(value: "5", label: "5+ items")], wire: .range(from: "directItemCountMin", to: "directItemCountMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "valuation", urlKey: "valuation", kind: .range, placeholder: "Filter valuation...", label: nil, options: [LabeledOption(value: "positive", label: "Positive basis"), LabeledOption(value: "zero", label: "Zero basis"), LabeledOption(value: "negative", label: "Credit / negative"), LabeledOption(value: "gte100", label: "$100 and up"), LabeledOption(value: "gte500", label: "$500 and up")], wire: .range(from: "valuationMin", to: "valuationMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "related:location.ingredients", urlKey: "related-ingredient", kind: .text, placeholder: "Search related ingredients...", label: nil, options: nil, wire: .param(name: "ingredientSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredients id...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: nil),
+      FilterDescriptor(columnId: "ingredientPresenceFilter", urlKey: "ingredientPresenceFilter", kind: .presence, placeholder: "Filter related ingredients presence...", label: nil, options: nil, wire: .param(name: "ingredientPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:location.plantingHistory", urlKey: "related-planting", kind: .text, placeholder: "Search related plantings...", label: nil, options: nil, wire: .param(name: "plantingSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "plantingId", urlKey: "plantingId", kind: .idMulti, placeholder: "Filter by related plantings id...", label: nil, options: nil, wire: .param(name: "plantingId"), targetEntity: nil),
+      FilterDescriptor(columnId: "plantingPresenceFilter", urlKey: "plantingPresenceFilter", kind: .presence, placeholder: "Filter related plantings presence...", label: nil, options: nil, wire: .param(name: "plantingPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .bulkUpdate, .delete]
+    relations: [
+      RelationDescriptor(key: "children", label: "Sub-locations", target: .location, cardinality: .many),
+      RelationDescriptor(key: "inventory", label: "Inventory", target: .inventory, cardinality: .many),
+      RelationDescriptor(key: "parent", label: "Parent location", target: .location, cardinality: .one),
+      RelationDescriptor(key: "product", label: "Product", target: .product, cardinality: .one),
+      RelationDescriptor(key: "ingredients", label: "Ingredients", target: .ingredient, cardinality: .many),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
+      RelationDescriptor(key: "planting-history", label: "Planting history", target: .planting, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: "parentId",
+      heroImages: true,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "inventory", title: "Contents", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "locationId", columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil))),
+        DetailSection(id: "children", title: "Sub-locations", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parent", columns: ["name", "type", "valuation"], sort: nil, limit: nil))),
+        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["id", "type", "productId", "parentId", "lastBulkInventory", "aliases", "tags", "createdAt", "updatedAt"])),
+        DetailSection(id: "garden", title: nil, placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "contents-valuation", title: "Valuation", placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "ai-description", title: "AI description", placement: .supporting, collapsed: false, kind: .slot)
+      ],
+      listViews: [.slot(id: "gallery", label: "Gallery", searchKeys: []), .table, .slot(id: "visualizations", label: "Visualizations", searchKeys: [])],
+      shelfSubtitle: [],
+      listActions: ["moveUnder", "delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let inventoryDescriptor: EntityDescriptor =
@@ -433,39 +801,63 @@ public enum EntityCatalog {
     titleField: "displayName",
     domain: .pantry,
     sfSymbol: "cube.box",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "productId", label: "Product", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "locationId", label: "Location", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "amount", label: "Amount", kind: .json, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "placement", label: "Placement", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "valuation", label: "Valuation", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "verifiedAt", label: "Verified", kind: .timestamp, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "productId", label: "Product", kind: .identifier, nullable: false, reference: FieldReference(entity: .product, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "locationId", label: "Location", kind: .identifier, nullable: false, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "amount", label: "Amount", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: "amount", mobileSlot: "trailing", mobilePriority: 0),
+      FieldDescriptor(key: "placement", label: "Placement", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "valuation", label: "Valuation", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "verifiedAt", label: "Verified", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .id, placeholder: "Filter by product id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "locationId", urlKey: "locationId", kind: .id, placeholder: "Filter by location id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "product", urlKey: "product", kind: .text, placeholder: "Filter by product...", label: nil, options: nil),
-      FilterDescriptor(columnId: "location", urlKey: "location", kind: .text, placeholder: "Filter by location...", label: nil, options: nil),
-      FilterDescriptor(columnId: "manufacturer", urlKey: "manufacturer", kind: .text, placeholder: "Filter by manufacturer...", label: nil, options: nil),
-      FilterDescriptor(columnId: "category", urlKey: "category", kind: .multiselect, placeholder: "Filter by category...", label: nil, options: nil),
-      FilterDescriptor(columnId: "verifiedAt", urlKey: "verifiedAt", kind: .range, placeholder: "Filter verification date...", label: nil, options: [FilterOption(value: "has", label: "Has verification"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "placement", urlKey: "placement", kind: .select, placeholder: "Filter placement...", label: nil, options: [FilterOption(value: "stock", label: "Stock"), FilterOption(value: "installed", label: "Installed"), FilterOption(value: "all", label: "Stock and installed")]),
-      FilterDescriptor(columnId: "locationRole", urlKey: "locationRole", kind: .select, placeholder: "Filter location role...", label: nil, options: [FilterOption(value: "global_unknown", label: "Global Unknown")]),
-      FilterDescriptor(columnId: "valuationStatus", urlKey: "valuationStatus", kind: .select, placeholder: "Filter valuation...", label: nil, options: [FilterOption(value: "valued", label: "Valued"), FilterOption(value: "missing", label: "Missing valuation"), FilterOption(value: "missing_with_priced_product", label: "Missing despite product price")]),
-      FilterDescriptor(columnId: "related:inventory.ingredient", urlKey: "related-ingredient", kind: .text, placeholder: "Search related ingredient...", label: nil, options: nil),
-      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredient id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "ingredientPresenceFilter", urlKey: "ingredientPresenceFilter", kind: .presence, placeholder: "Filter related ingredient presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .id, placeholder: "Filter by product id...", label: nil, options: nil, wire: .param(name: "productIdFilter"), targetEntity: .product),
+      FilterDescriptor(columnId: "locationId", urlKey: "locationId", kind: .id, placeholder: "Filter by location id...", label: nil, options: nil, wire: .param(name: "locationIdFilter"), targetEntity: .location),
+      FilterDescriptor(columnId: "product", urlKey: "product", kind: .text, placeholder: "Filter by product...", label: nil, options: nil, wire: .param(name: "productNameFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "location", urlKey: "location", kind: .text, placeholder: "Filter by location...", label: nil, options: nil, wire: .param(name: "locationNameFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "manufacturer", urlKey: "manufacturer", kind: .text, placeholder: "Filter by manufacturer...", label: nil, options: nil, wire: .param(name: "manufacturerFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "category", urlKey: "category", kind: .multiselect, placeholder: "Filter by category...", label: nil, options: nil, wire: .param(name: "categoryFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "verifiedAt", urlKey: "verifiedAt", kind: .range, placeholder: "Filter verification date...", label: nil, options: [LabeledOption(value: "has", label: "Has verification"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "verifiedFrom", to: "verifiedTo", presence: "verifiedPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "placement", urlKey: "placement", kind: .select, placeholder: "Filter placement...", label: nil, options: [LabeledOption(value: "stock", label: "Stock"), LabeledOption(value: "installed", label: "Installed"), LabeledOption(value: "all", label: "Stock and installed")], wire: .param(name: "placementFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "locationRole", urlKey: "locationRole", kind: .select, placeholder: "Filter location role...", label: nil, options: [LabeledOption(value: "global_unknown", label: "Global Unknown")], wire: .param(name: "locationRole"), targetEntity: nil),
+      FilterDescriptor(columnId: "valuationStatus", urlKey: "valuationStatus", kind: .select, placeholder: "Filter valuation...", label: nil, options: [LabeledOption(value: "valued", label: "Valued"), LabeledOption(value: "missing", label: "Missing valuation"), LabeledOption(value: "missing_with_priced_product", label: "Missing despite product price")], wire: .param(name: "valuationStatus"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:inventory.ingredient", urlKey: "related-ingredient", kind: .text, placeholder: "Search related ingredient...", label: nil, options: nil, wire: .param(name: "ingredientSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredient id...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: nil),
+      FilterDescriptor(columnId: "ingredientPresenceFilter", urlKey: "ingredientPresenceFilter", kind: .presence, placeholder: "Filter related ingredient presence...", label: nil, options: nil, wire: .param(name: "ingredientPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    relations: [
+      RelationDescriptor(key: "product", label: "Product", target: .product, cardinality: .one),
+      RelationDescriptor(key: "location", label: "Location", target: .location, cardinality: .one),
+      RelationDescriptor(key: "ingredient", label: "Ingredient", target: .ingredient, cardinality: .one)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "inventory-details", title: "Inventory item details", placement: .primary, collapsed: false, kind: .fields(["productId", "locationId", "amount", "placement", "verifiedAt"]))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["moveTo", "delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let mealDescriptor: EntityDescriptor =
@@ -478,45 +870,74 @@ public enum EntityCatalog {
     titleField: "displayName",
     domain: .plan,
     sfSymbol: "fork.knife.circle",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "date", label: "Date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sortOrder", label: "Sort Order", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "mealType", label: "Meal Type", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "mealKind", label: "Meal Kind", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "recipes", label: "Recipes", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "images", label: "Images", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "totals", label: "Totals", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "date", label: "Date", kind: .date, nullable: false, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: "today", inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: "Meal name (optional)", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sortOrder", label: "Sort Order", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "ordering", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "mealType", label: "Meal Type", kind: .`enum`, nullable: true, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: "Which meal of the day?", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "mealKind", label: "Meal Kind", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "recipes", label: "Recipes", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "totals", label: "Totals", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "recipeNames", label: "Recipes", kind: .textArray, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "mealType", urlKey: "mealType", kind: .multiselect, placeholder: "Filter by meal type...", label: nil, options: [FilterOption(value: "breakfast", label: "Breakfast"), FilterOption(value: "brunch", label: "Brunch"), FilterOption(value: "lunch", label: "Lunch"), FilterOption(value: "snack", label: "Snack"), FilterOption(value: "dinner", label: "Dinner"), FilterOption(value: "dessert", label: "Dessert")]),
-      FilterDescriptor(columnId: "mealKind", urlKey: "mealKind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [FilterOption(value: "cooked", label: "Cooked"), FilterOption(value: "leftovers", label: "Leftovers"), FilterOption(value: "eating_out", label: "Eating out"), FilterOption(value: "takeout", label: "Takeout / delivery"), FilterOption(value: "other", label: "Other")]),
-      FilterDescriptor(columnId: "recipeCostCoverage", urlKey: "recipeCostCoverage", kind: .select, placeholder: "Filter recipe cost coverage...", label: nil, options: [FilterOption(value: "understated", label: "Understated")]),
-      FilterDescriptor(columnId: "related:meal.recipes", urlKey: "related-recipe", kind: .presence, placeholder: "Filter recipes...", label: nil, options: [FilterOption(value: "has", label: "Has recipes"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "recipeId", urlKey: "recipeId", kind: .idMulti, placeholder: "Filter by related recipe id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:meal.foodProducts", urlKey: "related-foodProduct", kind: .text, placeholder: "Search related food products...", label: nil, options: nil),
-      FilterDescriptor(columnId: "foodProductId", urlKey: "foodProductId", kind: .idMulti, placeholder: "Filter by related food products id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "foodProductPresenceFilter", urlKey: "foodProductPresenceFilter", kind: .presence, placeholder: "Filter related food products presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:meal.foodIngredients", urlKey: "related-foodIngredient", kind: .text, placeholder: "Search related food ingredients...", label: nil, options: nil),
-      FilterDescriptor(columnId: "foodIngredientId", urlKey: "foodIngredientId", kind: .idMulti, placeholder: "Filter by related food ingredients id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "foodIngredientPresenceFilter", urlKey: "foodIngredientPresenceFilter", kind: .presence, placeholder: "Filter related food ingredients presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:meal.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil),
-      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "mealType", urlKey: "mealType", kind: .multiselect, placeholder: "Filter by meal type...", label: nil, options: [LabeledOption(value: "breakfast", label: "Breakfast"), LabeledOption(value: "brunch", label: "Brunch"), LabeledOption(value: "lunch", label: "Lunch"), LabeledOption(value: "snack", label: "Snack"), LabeledOption(value: "dinner", label: "Dinner"), LabeledOption(value: "dessert", label: "Dessert")], wire: .param(name: "mealType"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealKind", urlKey: "mealKind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [LabeledOption(value: "cooked", label: "Cooked"), LabeledOption(value: "leftovers", label: "Leftovers"), LabeledOption(value: "eating_out", label: "Eating out"), LabeledOption(value: "takeout", label: "Takeout / delivery"), LabeledOption(value: "other", label: "Other")], wire: .param(name: "mealKind"), targetEntity: nil),
+      FilterDescriptor(columnId: "recipeCostCoverage", urlKey: "recipeCostCoverage", kind: .select, placeholder: "Filter recipe cost coverage...", label: nil, options: [LabeledOption(value: "understated", label: "Understated")], wire: .param(name: "recipeCostCoverage"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:meal.recipes", urlKey: "related-recipe", kind: .presence, placeholder: "Filter recipes...", label: nil, options: [LabeledOption(value: "has", label: "Has recipes"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "recipePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "recipeId", urlKey: "recipeId", kind: .idMulti, placeholder: "Filter by related recipe id...", label: nil, options: nil, wire: .param(name: "recipeId"), targetEntity: .recipe),
+      FilterDescriptor(columnId: "related:meal.foodProducts", urlKey: "related-foodProduct", kind: .text, placeholder: "Search related food products...", label: nil, options: nil, wire: .param(name: "foodProductSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "foodProductId", urlKey: "foodProductId", kind: .idMulti, placeholder: "Filter by related food products id...", label: nil, options: nil, wire: .param(name: "foodProductId"), targetEntity: nil),
+      FilterDescriptor(columnId: "foodProductPresenceFilter", urlKey: "foodProductPresenceFilter", kind: .presence, placeholder: "Filter related food products presence...", label: nil, options: nil, wire: .param(name: "foodProductPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:meal.foodIngredients", urlKey: "related-foodIngredient", kind: .text, placeholder: "Search related food ingredients...", label: nil, options: nil, wire: .param(name: "foodIngredientSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "foodIngredientId", urlKey: "foodIngredientId", kind: .idMulti, placeholder: "Filter by related food ingredients id...", label: nil, options: nil, wire: .param(name: "foodIngredientId"), targetEntity: nil),
+      FilterDescriptor(columnId: "foodIngredientPresenceFilter", urlKey: "foodIngredientPresenceFilter", kind: .presence, placeholder: "Filter related food ingredients presence...", label: nil, options: nil, wire: .param(name: "foodIngredientPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:meal.eaters", urlKey: "related-eater", kind: .text, placeholder: "Search related eaters...", label: nil, options: nil, wire: .param(name: "eaterSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterId", urlKey: "eaterId", kind: .idMulti, placeholder: "Filter by related eaters id...", label: nil, options: nil, wire: .param(name: "eaterId"), targetEntity: nil),
+      FilterDescriptor(columnId: "eaterPresenceFilter", urlKey: "eaterPresenceFilter", kind: .presence, placeholder: "Filter related eaters presence...", label: nil, options: nil, wire: .param(name: "eaterPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    relations: [
+      RelationDescriptor(key: "recipes", label: "Recipes", target: .recipe, cardinality: .many),
+      RelationDescriptor(key: "food-products", label: "Food products", target: .product, cardinality: .many),
+      RelationDescriptor(key: "food-ingredients", label: "Food ingredients", target: .ingredient, cardinality: .many),
+      RelationDescriptor(key: "eaters", label: "Eaters", target: .ledgerParty, cardinality: .many),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: true,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "composition", title: "Recipes", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "nutrition", title: "Nutrition", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "meal-details", title: "Meal details", placement: .supporting, collapsed: false, kind: .fields(["date", "name", "mealType", "mealKind", "recipeNames", "sortOrder", "createdAt", "updatedAt"]))
+      ],
+      listViews: [.slot(id: "calendar", label: "Calendar", searchKeys: ["period", "week", "date"]), .slot(id: "nutrition", label: "Nutrition", searchKeys: ["date"]), .table],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let ledgerPartyDescriptor: EntityDescriptor =
@@ -529,30 +950,60 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .finance,
     sfSymbol: "person.2",
-    countable: false,
+    searchable: false,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search ledger parties...", label: nil, options: nil),
-      FilterDescriptor(columnId: "kind", urlKey: "kind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [FilterOption(value: "member", label: "Member"), FilterOption(value: "guest", label: "Guest"), FilterOption(value: "household", label: "Household")]),
-      FilterDescriptor(columnId: "related:ledgerParty.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil),
-      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:ledgerParty.recipesEaten", urlKey: "related-recipe", kind: .text, placeholder: "Search related recipes...", label: nil, options: nil),
-      FilterDescriptor(columnId: "recipeId", urlKey: "recipeId", kind: .idMulti, placeholder: "Filter by related recipes id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "recipePresenceFilter", urlKey: "recipePresenceFilter", kind: .presence, placeholder: "Filter related recipes presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search ledger parties...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "kind", urlKey: "kind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [LabeledOption(value: "member", label: "Member"), LabeledOption(value: "guest", label: "Guest"), LabeledOption(value: "household", label: "Household")], wire: .param(name: "kind"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:ledgerParty.meals", urlKey: "related-meal", kind: .text, placeholder: "Search related meals...", label: nil, options: nil, wire: .param(name: "mealSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealId", urlKey: "mealId", kind: .idMulti, placeholder: "Filter by related meals id...", label: nil, options: nil, wire: .param(name: "mealId"), targetEntity: nil),
+      FilterDescriptor(columnId: "mealPresenceFilter", urlKey: "mealPresenceFilter", kind: .presence, placeholder: "Filter related meals presence...", label: nil, options: nil, wire: .param(name: "mealPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:ledgerParty.recipesEaten", urlKey: "related-recipe", kind: .text, placeholder: "Search related recipes...", label: nil, options: nil, wire: .param(name: "recipeSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "recipeId", urlKey: "recipeId", kind: .idMulti, placeholder: "Filter by related recipes id...", label: nil, options: nil, wire: .param(name: "recipeId"), targetEntity: nil),
+      FilterDescriptor(columnId: "recipePresenceFilter", urlKey: "recipePresenceFilter", kind: .presence, placeholder: "Filter related recipes presence...", label: nil, options: nil, wire: .param(name: "recipePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .create, .update, .delete, .merge]
+    relations: [
+      RelationDescriptor(key: "expenses", label: "Attributed expenses", target: .expense, cardinality: .many),
+      RelationDescriptor(key: "financial-accounts", label: "Financial accounts", target: .financialAccount, cardinality: .many),
+      RelationDescriptor(key: "outgoing-transfers", label: "Outgoing transfers", target: .ledgerTransfer, cardinality: .many),
+      RelationDescriptor(key: "incoming-transfers", label: "Incoming transfers", target: .ledgerTransfer, cardinality: .many),
+      RelationDescriptor(key: "meals", label: "Meals eaten", target: .meal, cardinality: .many),
+      RelationDescriptor(key: "recipes-eaten", label: "Recipes eaten", target: .recipe, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "kind", "notes", "createdAt", "updatedAt"])),
+        DetailSection(id: "financial-accounts", title: "Financial accounts", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "financial-accounts", filterDescriptor: "ledgerPartyId", columns: ["name", "identity", "transactionCount"], sort: nil, limit: nil))),
+        DetailSection(id: "outgoing-transfers", title: "Outgoing transfers", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "outgoing-transfers", filterDescriptor: "fromPartyId", columns: ["toPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
+        DetailSection(id: "incoming-transfers", title: "Incoming transfers", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "incoming-transfers", filterDescriptor: "toPartyId", columns: ["fromPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil)))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let ledgerTransferDescriptor: EntityDescriptor =
@@ -565,32 +1016,57 @@ public enum EntityCatalog {
     titleField: "fromPartyName",
     domain: .finance,
     sfSymbol: "arrow.left.arrow.right.circle",
-    countable: false,
+    searchable: false,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "fromPartyId", label: "From", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "toPartyId", label: "To", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "fromPartyName", label: "From Party Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "toPartyName", label: "To Party Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "amount", label: "Amount", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "date", label: "Date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceClaims", label: "Source Claims", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "evidenceTransactionIds", label: "Evidence", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "classification", label: "Classification", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "fromPartyId", label: "From", kind: .identifier, nullable: false, reference: FieldReference(entity: .ledgerParty, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "toPartyId", label: "To", kind: .identifier, nullable: false, reference: FieldReference(entity: .ledgerParty, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "fromPartyName", label: "From Party Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "toPartyName", label: "To Party Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "amount", label: "Amount", kind: .number, nullable: false, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "date", label: "Date", kind: .date, nullable: false, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceClaims", label: "Source Claims", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "evidenceTransactionIds", label: "Evidence", kind: .identifier, nullable: false, reference: FieldReference(entity: .financialTransaction, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "classification", label: "Classification", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "fromPartyId", urlKey: "fromPartyId", kind: .idMulti, placeholder: "Filter by from party...", label: nil, options: nil),
-      FilterDescriptor(columnId: "toPartyId", urlKey: "toPartyId", kind: .idMulti, placeholder: "Filter by to party...", label: nil, options: nil),
-      FilterDescriptor(columnId: "date", urlKey: "date", kind: .range, placeholder: "Filter by transfer date...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "fromPartyId", urlKey: "fromPartyId", kind: .idMulti, placeholder: "Filter by from party...", label: nil, options: nil, wire: .param(name: "fromPartyId"), targetEntity: .ledgerParty),
+      FilterDescriptor(columnId: "toPartyId", urlKey: "toPartyId", kind: .idMulti, placeholder: "Filter by to party...", label: nil, options: nil, wire: .param(name: "toPartyId"), targetEntity: .ledgerParty),
+      FilterDescriptor(columnId: "date", urlKey: "date", kind: .range, placeholder: "Filter by transfer date...", label: nil, options: nil, wire: .range(from: "dateFrom", to: "dateTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .create, .update, .delete]
+    relations: [
+      RelationDescriptor(key: "from-party", label: "From party", target: .ledgerParty, cardinality: .one),
+      RelationDescriptor(key: "to-party", label: "To party", target: .ledgerParty, cardinality: .one),
+      RelationDescriptor(key: "evidence-transactions", label: "Evidence transactions", target: .financialTransaction, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["fromPartyId", "toPartyId", "amount", "date", "notes", "classification", "createdAt", "updatedAt"])),
+        DetailSection(id: "evidence", title: "Evidence transactions", placement: .primary, collapsed: false, kind: .fields(["evidenceTransactionIds"]))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let projectDescriptor: EntityDescriptor =
@@ -603,68 +1079,113 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .house,
     sfSymbol: "hammer",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 30, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 40, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "locations", label: "Locations", kind: .textArray, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: 90, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "costEstimate", label: "Estimate", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 70, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "parentProjectId", label: "Parent project", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 80, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "startDate", label: "Start date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 50, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "endDate", label: "End date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 60, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "icon", label: "Icon", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 20, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "googleDriveFolderUrl", label: "Google Drive folder", kind: .text, controlKind: .text, section: "resources", showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notionPageUrl", label: "Notion page", kind: .text, controlKind: .text, section: "resources", showInList: true, showInDetail: true, detailOrder: 20, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "blockedByIds", label: "Blocked By IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "parentProjectName", label: "Parent Project Name", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "childProjectIds", label: "Child Project IDs", kind: .identifier, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "blockingIds", label: "Blocking IDs", kind: .identifier, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Last updated", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: 100, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "rollup", label: "Rollup", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "dates", label: "Dates", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notionPageId", label: "Notion Page ID", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: "What are you working on?", initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 30, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, nullable: true, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 40, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "locations", label: "Locations", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 90, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "costEstimate", label: "Estimate", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: "e.g. 500", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 70, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "parentProjectId", label: "Parent project", kind: .identifier, nullable: true, reference: FieldReference(entity: .project, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 80, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "startDate", label: "Start date", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 50, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "endDate", label: "End date", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 60, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "icon", label: "Icon", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 20, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "googleDriveFolderUrl", label: "Google Drive folder", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notionPageUrl", label: "Notion page", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 20, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "blockedByIds", label: "Blocked By IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .task, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "parentProjectName", label: "Parent Project Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "childProjectIds", label: "Child Project IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .project, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "blockingIds", label: "Blocking IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .task, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Last updated", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 100, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "rollup", label: "Rollup", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "dates", label: "Dates", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notionPageId", label: "Notion Page ID", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "image", urlKey: "image", kind: .presence, placeholder: "Filter images...", label: nil, options: [FilterOption(value: "has", label: "Has image"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by project name...", label: nil, options: nil),
-      FilterDescriptor(columnId: "status", urlKey: "statuses", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [FilterOption(value: "planning", label: "Planning"), FilterOption(value: "not_started", label: "Not started"), FilterOption(value: "in_progress", label: "In progress"), FilterOption(value: "done", label: "Done")]),
-      FilterDescriptor(columnId: "kind", urlKey: "kinds", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [FilterOption(value: "furniture", label: "Furniture"), FilterOption(value: "workshop", label: "Workshop"), FilterOption(value: "household", label: "Household"), FilterOption(value: "renovation", label: "Renovation"), FilterOption(value: "garden", label: "Garden"), FilterOption(value: "trip", label: "Trip")]),
-      FilterDescriptor(columnId: "attention", urlKey: "attention", kind: .select, placeholder: "Filter tracker attention...", label: nil, options: [FilterOption(value: "stalled", label: "Stalled"), FilterOption(value: "missing_budget", label: "Missing budget"), FilterOption(value: "blocked_no_next_action", label: "Blocked with no next action")]),
-      FilterDescriptor(columnId: "locations", urlKey: "locations", kind: .multiselect, placeholder: "Filter by location...", label: nil, options: nil),
-      FilterDescriptor(columnId: "dateRange", urlKey: "date", kind: .range, placeholder: "Filter by project activity...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "completionYear", urlKey: "completed", kind: .select, placeholder: "Filter by completion year...", label: nil, options: nil),
-      FilterDescriptor(columnId: "parent", urlKey: "parent", kind: .idMulti, placeholder: "Filter by parent project...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:project.blockedBy", urlKey: "related-project", kind: .text, placeholder: "Search related blocked by...", label: nil, options: nil),
-      FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by related blocked by id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter related blocked by presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:project.tasks", urlKey: "related-task", kind: .text, placeholder: "Search related tasks...", label: nil, options: nil),
-      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by related tasks id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "taskPresenceFilter", urlKey: "taskPresenceFilter", kind: .presence, placeholder: "Filter related tasks presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:project.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:project.taskProducts", urlKey: "related-taskProduct", kind: .text, placeholder: "Search related task products...", label: nil, options: nil),
-      FilterDescriptor(columnId: "taskProductId", urlKey: "taskProductId", kind: .idMulti, placeholder: "Filter by related task products id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "taskProductPresenceFilter", urlKey: "taskProductPresenceFilter", kind: .presence, placeholder: "Filter related task products presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:project.purchasedProducts", urlKey: "related-purchasedProduct", kind: .text, placeholder: "Search related purchased products...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchasedProductId", urlKey: "purchasedProductId", kind: .idMulti, placeholder: "Filter by related purchased products id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchasedProductPresenceFilter", urlKey: "purchasedProductPresenceFilter", kind: .presence, placeholder: "Filter related purchased products presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:project.usedTools", urlKey: "related-usedTool", kind: .text, placeholder: "Search related reusable resources...", label: nil, options: nil),
-      FilterDescriptor(columnId: "usedToolId", urlKey: "usedToolId", kind: .idMulti, placeholder: "Filter by related reusable resources id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "usedToolPresenceFilter", urlKey: "usedToolPresenceFilter", kind: .presence, placeholder: "Filter related reusable resources presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:project.vendors", urlKey: "related-vendor", kind: .text, placeholder: "Search related vendors...", label: nil, options: nil),
-      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendors id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "vendorPresenceFilter", urlKey: "vendorPresenceFilter", kind: .presence, placeholder: "Filter related vendors presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "image", urlKey: "image", kind: .presence, placeholder: "Filter images...", label: nil, options: [LabeledOption(value: "has", label: "Has image"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "imagePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Filter by project name...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "status", urlKey: "statuses", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "planning", label: "Planning"), LabeledOption(value: "not_started", label: "Not started"), LabeledOption(value: "in_progress", label: "In progress"), LabeledOption(value: "done", label: "Done")], wire: .param(name: "status"), targetEntity: nil),
+      FilterDescriptor(columnId: "kind", urlKey: "kinds", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [LabeledOption(value: "furniture", label: "Furniture"), LabeledOption(value: "workshop", label: "Workshop"), LabeledOption(value: "household", label: "Household"), LabeledOption(value: "renovation", label: "Renovation"), LabeledOption(value: "garden", label: "Garden"), LabeledOption(value: "trip", label: "Trip")], wire: .param(name: "kind"), targetEntity: nil),
+      FilterDescriptor(columnId: "attention", urlKey: "attention", kind: .select, placeholder: "Filter tracker attention...", label: nil, options: [LabeledOption(value: "stalled", label: "Stalled"), LabeledOption(value: "missing_budget", label: "Missing budget"), LabeledOption(value: "blocked_no_next_action", label: "Blocked with no next action")], wire: .param(name: "attention"), targetEntity: nil),
+      FilterDescriptor(columnId: "locations", urlKey: "locations", kind: .multiselect, placeholder: "Filter by location...", label: nil, options: nil, wire: .param(name: "location"), targetEntity: nil),
+      FilterDescriptor(columnId: "dateRange", urlKey: "date", kind: .range, placeholder: "Filter by project activity...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "dateFrom", to: "dateTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "completionYear", urlKey: "completed", kind: .select, placeholder: "Filter by completion year...", label: nil, options: nil, wire: .param(name: "completionYear"), targetEntity: nil),
+      FilterDescriptor(columnId: "parent", urlKey: "parent", kind: .idMulti, placeholder: "Filter by parent project...", label: nil, options: nil, wire: .param(name: "parentProjectId"), targetEntity: .project),
+      FilterDescriptor(columnId: "related:project.blockedBy", urlKey: "related-project", kind: .text, placeholder: "Search related blocked by...", label: nil, options: nil, wire: .param(name: "projectSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by related blocked by id...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: nil),
+      FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter related blocked by presence...", label: nil, options: nil, wire: .param(name: "projectPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:project.tasks", urlKey: "related-task", kind: .text, placeholder: "Search related tasks...", label: nil, options: nil, wire: .param(name: "taskSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by related tasks id...", label: nil, options: nil, wire: .param(name: "taskId"), targetEntity: nil),
+      FilterDescriptor(columnId: "taskPresenceFilter", urlKey: "taskPresenceFilter", kind: .presence, placeholder: "Filter related tasks presence...", label: nil, options: nil, wire: .param(name: "taskPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:project.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:project.taskProducts", urlKey: "related-taskProduct", kind: .text, placeholder: "Search related task products...", label: nil, options: nil, wire: .param(name: "taskProductSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "taskProductId", urlKey: "taskProductId", kind: .idMulti, placeholder: "Filter by related task products id...", label: nil, options: nil, wire: .param(name: "taskProductId"), targetEntity: nil),
+      FilterDescriptor(columnId: "taskProductPresenceFilter", urlKey: "taskProductPresenceFilter", kind: .presence, placeholder: "Filter related task products presence...", label: nil, options: nil, wire: .param(name: "taskProductPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:project.purchasedProducts", urlKey: "related-purchasedProduct", kind: .text, placeholder: "Search related purchased products...", label: nil, options: nil, wire: .param(name: "purchasedProductSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchasedProductId", urlKey: "purchasedProductId", kind: .idMulti, placeholder: "Filter by related purchased products id...", label: nil, options: nil, wire: .param(name: "purchasedProductId"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchasedProductPresenceFilter", urlKey: "purchasedProductPresenceFilter", kind: .presence, placeholder: "Filter related purchased products presence...", label: nil, options: nil, wire: .param(name: "purchasedProductPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:project.usedTools", urlKey: "related-usedTool", kind: .text, placeholder: "Search related reusable resources...", label: nil, options: nil, wire: .param(name: "usedToolSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "usedToolId", urlKey: "usedToolId", kind: .idMulti, placeholder: "Filter by related reusable resources id...", label: nil, options: nil, wire: .param(name: "usedToolId"), targetEntity: .product),
+      FilterDescriptor(columnId: "usedToolPresenceFilter", urlKey: "usedToolPresenceFilter", kind: .presence, placeholder: "Filter related reusable resources presence...", label: nil, options: nil, wire: .param(name: "usedToolPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:project.vendors", urlKey: "related-vendor", kind: .text, placeholder: "Search related vendors...", label: nil, options: nil, wire: .param(name: "vendorSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendors id...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: .vendor),
+      FilterDescriptor(columnId: "vendorPresenceFilter", urlKey: "vendorPresenceFilter", kind: .presence, placeholder: "Filter related vendors presence...", label: nil, options: nil, wire: .param(name: "vendorPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    relations: [
+      RelationDescriptor(key: "sub-projects", label: "Sub-projects", target: .project, cardinality: .many),
+      RelationDescriptor(key: "purchases", label: "Purchases", target: .purchase, cardinality: .many),
+      RelationDescriptor(key: "parent", label: "Parent project", target: .project, cardinality: .one),
+      RelationDescriptor(key: "blocked-by", label: "Blocked by", target: .project, cardinality: .many),
+      RelationDescriptor(key: "resources", label: "Reusable resources", target: .product, cardinality: .many),
+      RelationDescriptor(key: "tasks", label: "Tasks", target: .task, cardinality: .many),
+      RelationDescriptor(key: "expenses", label: "Expenses", target: .expense, cardinality: .many),
+      RelationDescriptor(key: "task-products", label: "Task products", target: .product, cardinality: .many),
+      RelationDescriptor(key: "purchased-products", label: "Purchased products", target: .product, cardinality: .many),
+      RelationDescriptor(key: "vendors", label: "Vendors", target: .vendor, cardinality: .many),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: "status",
+      heroStats: ["costEstimate"],
+      heroBreadcrumb: nil,
+      heroImages: true,
+      heroActions: ["edit", "setStatus"],
+      detailSections: [
+        DetailSection(id: "budget", title: "Budget", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "contribution", title: "Contribution", placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "project", columns: ["name", "status", "dueDate", "trade"], sort: nil, limit: nil))),
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "icon", "status", "kind", "startDate", "endDate", "costEstimate", "parentProjectId", "locations", "updatedAt"])),
+        DetailSection(id: "reusable-resources", title: "Reusable resources", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "resources", filterDescriptor: "usedOnProjectId", columns: ["name", "manufacturer", "category"], sort: nil, limit: nil))),
+        DetailSection(id: "resources", title: "Resources", placement: .supporting, collapsed: false, kind: .fields(["googleDriveFolderUrl", "notionPageUrl"])),
+        DetailSection(id: "dependencies", title: "Dependencies", placement: .supporting, collapsed: false, kind: .fields(["blockedByIds", "blockingIds"])),
+        DetailSection(id: "sub-projects", title: "Sub-projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "sub-projects", filterDescriptor: "parent", columns: ["name", "status", "kind", "costEstimate"], sort: nil, limit: nil))),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "project", columns: ["name", "cost", "date", "costType", "trade", "product"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "related:purchase.projects", columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
+        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchased-products", filterDescriptor: "related:product.projects", columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil))),
+        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "projectId", columns: ["name", "purchaseCount", "spend"], sort: nil, limit: nil))),
+        DetailSection(id: "notes", title: "Notes", placement: .supporting, collapsed: false, kind: .fields(["notes"])),
+        DetailSection(id: "analytics", title: "Analytics", placement: .full, collapsed: true, kind: .slot)
+      ],
+      listViews: [.table, .slot(id: "overview", label: "Overview", searchKeys: ["rows"]), .slot(id: "analytics", label: "Analytics", searchKeys: []), .slot(id: "gallery", label: "Gallery", searchKeys: [])],
+      shelfSubtitle: [],
+      listActions: ["setStatus", "delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let taskDescriptor: EntityDescriptor =
@@ -677,56 +1198,85 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .house,
     sfSymbol: "checklist",
-    countable: true,
+    searchable: true,
+    timeline: .default,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: "subtitle", mobilePriority: 10),
-      FieldDescriptor(key: "projectId", label: "Project", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "subjectProductId", label: "For", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 6, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "parentTaskId", label: "Parent Task", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "dueDate", label: "Due", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 3, format: "plainDate", mobileSlot: "meta", mobilePriority: 40),
-      FieldDescriptor(key: "dueEndDate", label: "Due End Date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "trade", label: "Trade", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: "meta", mobilePriority: 50),
-      FieldDescriptor(key: "sortOrder", label: "Sort Order", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "blockedByIds", label: "Blocked By IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "images", label: "Images", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "projectName", label: "Project Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "subjectProductName", label: "Subject Product Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "parentTaskName", label: "Parent Task Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "blockingIds", label: "Blocking IDs", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "subtaskCount", label: "Subtask Count", kind: .number, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "doneSubtaskCount", label: "Done Subtask Count", kind: .number, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notionPageId", label: "Notion Page ID", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: "What needs doing?", initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: "subtitle", mobilePriority: 10),
+      FieldDescriptor(key: "projectId", label: "Project", kind: .identifier, nullable: true, reference: FieldReference(entity: .project, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "subjectProductId", label: "For", kind: .identifier, nullable: true, reference: FieldReference(entity: .product, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 6, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "parentTaskId", label: "Parent Task", kind: .identifier, nullable: true, reference: FieldReference(entity: .task, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 7, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "dueDate", label: "Due", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 3, format: "plainDate", mobileSlot: "meta", mobilePriority: 40),
+      FieldDescriptor(key: "dueEndDate", label: "Due End Date", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "trade", label: "Trade", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: "meta", mobilePriority: 50),
+      FieldDescriptor(key: "sortOrder", label: "Sort Order", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "ordering", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "blockedByIds", label: "Blocked by", kind: .identifier, nullable: false, reference: FieldReference(entity: .task, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "projectName", label: "Project Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "subjectProductName", label: "Subject Product Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "parentTaskName", label: "Parent Task Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "blockingIds", label: "Blocks", kind: .identifier, nullable: false, reference: FieldReference(entity: .task, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "subtaskCount", label: "Subtask Count", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "doneSubtaskCount", label: "Done Subtask Count", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notionPageId", label: "Notion Page ID", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Search tasks...", label: nil, options: nil),
-      FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [FilterOption(value: "not_started", label: "Not started"), FilterOption(value: "later", label: "Later"), FilterOption(value: "in_progress", label: "In progress"), FilterOption(value: "blocked", label: "Blocked"), FilterOption(value: "done", label: "Done")]),
-      FilterDescriptor(columnId: "trade", urlKey: "trade", kind: .multiselect, placeholder: "Filter by trade...", label: nil, options: nil),
-      FilterDescriptor(columnId: "dueDate", urlKey: "dueDate", kind: .range, placeholder: "Filter by due date...", label: nil, options: [FilterOption(value: "has", label: "Has due date"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "overdue", label: "Overdue"), FilterOption(value: "week", label: "Due this week"), FilterOption(value: "30d", label: "Due in 30 days")]),
-      FilterDescriptor(columnId: "dueRelative", urlKey: "dueRelative", kind: .select, placeholder: "Filter by relative due date...", label: nil, options: [FilterOption(value: "beforeToday", label: "Before today")]),
-      FilterDescriptor(columnId: "completion", urlKey: "completion", kind: .select, placeholder: "Filter task completion...", label: nil, options: [FilterOption(value: "open", label: "Open"), FilterOption(value: "done", label: "Done")]),
-      FilterDescriptor(columnId: "project", urlKey: "project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .id, placeholder: "Filter by product id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "subjectProduct", urlKey: "subjectProduct", kind: .idMulti, placeholder: "Filter by product...", label: nil, options: nil),
-      FilterDescriptor(columnId: "parentTask", urlKey: "parentTask", kind: .idMulti, placeholder: "Filter by parent task...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:task.blockedBy", urlKey: "related-blockedByTask", kind: .text, placeholder: "Search related blocked by...", label: nil, options: nil),
-      FilterDescriptor(columnId: "blockedByTaskId", urlKey: "blockedByTaskId", kind: .idMulti, placeholder: "Filter by related blocked by id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "blockedByTaskPresenceFilter", urlKey: "blockedByTaskPresenceFilter", kind: .presence, placeholder: "Filter related blocked by presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:task.parent", urlKey: "related-parentTask", kind: .text, placeholder: "Search related parent task...", label: nil, options: nil),
-      FilterDescriptor(columnId: "parentTaskId", urlKey: "parentTaskId", kind: .idMulti, placeholder: "Filter by related parent task id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "parentTaskPresenceFilter", urlKey: "parentTaskPresenceFilter", kind: .presence, placeholder: "Filter related parent task presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "name", urlKey: "name", kind: .text, placeholder: "Search tasks...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "not_started", label: "Not started"), LabeledOption(value: "later", label: "Later"), LabeledOption(value: "in_progress", label: "In progress"), LabeledOption(value: "blocked", label: "Blocked"), LabeledOption(value: "done", label: "Done")], wire: .param(name: "status"), targetEntity: nil),
+      FilterDescriptor(columnId: "trade", urlKey: "trade", kind: .multiselect, placeholder: "Filter by trade...", label: nil, options: nil, wire: .param(name: "trade"), targetEntity: nil),
+      FilterDescriptor(columnId: "dueDate", urlKey: "dueDate", kind: .range, placeholder: "Filter by due date...", label: nil, options: [LabeledOption(value: "has", label: "Has due date"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "overdue", label: "Overdue"), LabeledOption(value: "week", label: "Due this week"), LabeledOption(value: "30d", label: "Due in 30 days")], wire: .range(from: "dueFrom", to: "dueTo", presence: "duePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "dueRelative", urlKey: "dueRelative", kind: .select, placeholder: "Filter by relative due date...", label: nil, options: [LabeledOption(value: "beforeToday", label: "Before today")], wire: .param(name: "dueRelative"), targetEntity: nil),
+      FilterDescriptor(columnId: "completion", urlKey: "completion", kind: .select, placeholder: "Filter task completion...", label: nil, options: [LabeledOption(value: "open", label: "Open"), LabeledOption(value: "done", label: "Done")], wire: .param(name: "completion"), targetEntity: nil),
+      FilterDescriptor(columnId: "project", urlKey: "project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .id, placeholder: "Filter by product id...", label: nil, options: nil, wire: .param(name: "subjectProductId"), targetEntity: .product),
+      FilterDescriptor(columnId: "subjectProduct", urlKey: "subjectProduct", kind: .idMulti, placeholder: "Filter by product...", label: nil, options: nil, wire: .param(name: "subjectProductId"), targetEntity: .product),
+      FilterDescriptor(columnId: "parentTask", urlKey: "parentTask", kind: .idMulti, placeholder: "Filter by parent task...", label: nil, options: nil, wire: .param(name: "parentTaskId"), targetEntity: .task),
+      FilterDescriptor(columnId: "related:task.blockedBy", urlKey: "related-blockedByTask", kind: .text, placeholder: "Search related blocked by...", label: nil, options: nil, wire: .param(name: "blockedByTaskSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "blockedByTaskId", urlKey: "blockedByTaskId", kind: .idMulti, placeholder: "Filter by related blocked by id...", label: nil, options: nil, wire: .param(name: "blockedByTaskId"), targetEntity: nil),
+      FilterDescriptor(columnId: "blockedByTaskPresenceFilter", urlKey: "blockedByTaskPresenceFilter", kind: .presence, placeholder: "Filter related blocked by presence...", label: nil, options: nil, wire: .param(name: "blockedByTaskPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:task.parent", urlKey: "related-parentTask", kind: .text, placeholder: "Search related parent task...", label: nil, options: nil, wire: .param(name: "parentTaskSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "parentTaskId", urlKey: "parentTaskId", kind: .idMulti, placeholder: "Filter by related parent task id...", label: nil, options: nil, wire: .param(name: "parentTaskId"), targetEntity: nil),
+      FilterDescriptor(columnId: "parentTaskPresenceFilter", urlKey: "parentTaskPresenceFilter", kind: .presence, placeholder: "Filter related parent task presence...", label: nil, options: nil, wire: .param(name: "parentTaskPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .bulkUpdate, .delete]
+    relations: [
+      RelationDescriptor(key: "subtasks", label: "Subtasks", target: .task, cardinality: .many),
+      RelationDescriptor(key: "project", label: "Project", target: .project, cardinality: .one),
+      RelationDescriptor(key: "subject", label: "Subject product", target: .product, cardinality: .one),
+      RelationDescriptor(key: "parent", label: "Parent task", target: .task, cardinality: .one),
+      RelationDescriptor(key: "blocked-by", label: "Blocked by", target: .task, cardinality: .many),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: "status",
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: true,
+      heroActions: ["edit", "setStatus", "setDueDate", "moveToProject", "delete"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "status", "trade", "dueDate", "dueEndDate", "projectId", "subjectProductId", "parentTaskId"])),
+        DetailSection(id: "dependencies", title: "Dependencies", placement: .supporting, collapsed: false, kind: .fields(["blockedByIds", "blockingIds"])),
+        DetailSection(id: "subtasks", title: "Subtasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "subtasks", filterDescriptor: "parentTask", columns: ["name", "status", "dueDate"], sort: nil, limit: nil)))
+      ],
+      listViews: [.table, .slot(id: "agenda", label: "Next", searchKeys: []), .slot(id: "board", label: "Board", searchKeys: ["cols", "lane", "q"]), .timeline],
+      shelfSubtitle: [],
+      listActions: ["setStatus", "setTrade", "setDueDate", "moveToProject", "delete"],
+      timelineFields: ["dueDate", "dueEndDate"],
+      lifecycle: TimelineLifecycle(start: "createdAt", milestones: ["dueDate"], end: "dueEndDate"),
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let vendorDescriptor: EntityDescriptor =
@@ -739,48 +1289,79 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .finance,
     sfSymbol: "storefront",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "website", label: "Website", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: "external-link", mobileSlot: "meta", mobilePriority: 30),
-      FieldDescriptor(key: "orderUrlTemplate", label: "Order URL", kind: .text, controlKind: .text, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "purchaseCount", label: "Purchases", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: "meta", mobilePriority: 20),
-      FieldDescriptor(key: "spend", label: "Spend", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: "signedCurrency", mobileSlot: "trailing", mobilePriority: 5),
-      FieldDescriptor(key: "latestPurchaseDate", label: "Latest Purchase Date", kind: .date, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: "plainDate", mobileSlot: "meta", mobilePriority: 35),
-      FieldDescriptor(key: "logo", label: "Logo", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "logoImageId", label: "Logo Image ID", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: "Who are you paying?", initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "website", label: "Website", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: "https://…", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: "external-link", mobileSlot: "meta", mobilePriority: 30),
+      FieldDescriptor(key: "orderUrlTemplate", label: "Order URL", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "purchaseCount", label: "Purchases", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: "meta", mobilePriority: 20),
+      FieldDescriptor(key: "spend", label: "Spend", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: "signedCurrency", mobileSlot: "trailing", mobilePriority: 5),
+      FieldDescriptor(key: "latestPurchaseDate", label: "Latest Purchase Date", kind: .date, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: "plainDate", mobileSlot: "meta", mobilePriority: 35),
+      FieldDescriptor(key: "logo", label: "Logo", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "logoImageId", label: "Logo Image ID", kind: .identifier, nullable: true, reference: FieldReference(entity: .image, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search vendors...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchaseCount", urlKey: "purchaseCount", kind: .range, placeholder: "Filter purchase count...", label: nil, options: [FilterOption(value: "has", label: "Has purchases"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "1", label: "1+ purchases"), FilterOption(value: "2", label: "2+ purchases"), FilterOption(value: "5", label: "5+ purchases")]),
-      FilterDescriptor(columnId: "spend", urlKey: "spend", kind: .range, placeholder: "Filter spend...", label: nil, options: [FilterOption(value: "positive", label: "Positive basis"), FilterOption(value: "zero", label: "Zero basis"), FilterOption(value: "negative", label: "Credit / negative"), FilterOption(value: "gte100", label: "$100 and up"), FilterOption(value: "gte500", label: "$500 and up")]),
-      FilterDescriptor(columnId: "latestPurchaseDate", urlKey: "latestPurchaseDate", kind: .range, placeholder: "Filter latest purchase...", label: nil, options: [FilterOption(value: "has", label: "Has purchase"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "logo", urlKey: "logo", kind: .presence, placeholder: "Filter logos...", label: nil, options: [FilterOption(value: "has", label: "Has logo"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "related:vendor.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related recent expenses...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related recent expenses id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related recent expenses presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:vendor.purchases", urlKey: "related-purchase", kind: .text, placeholder: "Search related purchases...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .idMulti, placeholder: "Filter by related purchases id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchasePresenceFilter", urlKey: "purchasePresenceFilter", kind: .presence, placeholder: "Filter related purchases presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:vendor.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter related products presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:vendor.projects", urlKey: "related-project", kind: .text, placeholder: "Search related projects...", label: nil, options: nil),
-      FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by related projects id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter related projects presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:vendor.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related financial transactions...", label: nil, options: nil),
-      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related financial transactions id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related financial transactions presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search vendors...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchaseCount", urlKey: "purchaseCount", kind: .range, placeholder: "Filter purchase count...", label: nil, options: [LabeledOption(value: "has", label: "Has purchases"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "1", label: "1+ purchases"), LabeledOption(value: "2", label: "2+ purchases"), LabeledOption(value: "5", label: "5+ purchases")], wire: .range(from: "purchaseCountMin", to: "purchaseCountMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "spend", urlKey: "spend", kind: .range, placeholder: "Filter spend...", label: nil, options: [LabeledOption(value: "positive", label: "Positive basis"), LabeledOption(value: "zero", label: "Zero basis"), LabeledOption(value: "negative", label: "Credit / negative"), LabeledOption(value: "gte100", label: "$100 and up"), LabeledOption(value: "gte500", label: "$500 and up")], wire: .range(from: "spendMin", to: "spendMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "latestPurchaseDate", urlKey: "latestPurchaseDate", kind: .range, placeholder: "Filter latest purchase...", label: nil, options: [LabeledOption(value: "has", label: "Has purchase"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "latestPurchaseDateFrom", to: "latestPurchaseDateTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "logo", urlKey: "logo", kind: .presence, placeholder: "Filter logos...", label: nil, options: [LabeledOption(value: "has", label: "Has logo"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "logoPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:vendor.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related recent expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related recent expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related recent expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:vendor.purchases", urlKey: "related-purchase", kind: .text, placeholder: "Search related purchases...", label: nil, options: nil, wire: .param(name: "purchaseSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .idMulti, placeholder: "Filter by related purchases id...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchasePresenceFilter", urlKey: "purchasePresenceFilter", kind: .presence, placeholder: "Filter related purchases presence...", label: nil, options: nil, wire: .param(name: "purchasePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:vendor.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil, wire: .param(name: "productSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
+      FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter related products presence...", label: nil, options: nil, wire: .param(name: "productPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:vendor.projects", urlKey: "related-project", kind: .text, placeholder: "Search related projects...", label: nil, options: nil, wire: .param(name: "projectSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by related projects id...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
+      FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter related projects presence...", label: nil, options: nil, wire: .param(name: "projectPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:vendor.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related financial transactions...", label: nil, options: nil, wire: .param(name: "financialTransactionSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related financial transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related financial transactions presence...", label: nil, options: nil, wire: .param(name: "financialTransactionPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete, .merge]
+    relations: [
+      RelationDescriptor(key: "logo", label: "Logo image", target: .image, cardinality: .one),
+      RelationDescriptor(key: "expenses", label: "Recent expenses", target: .expense, cardinality: .many),
+      RelationDescriptor(key: "purchases", label: "Purchases", target: .purchase, cardinality: .many),
+      RelationDescriptor(key: "products", label: "Products", target: .product, cardinality: .many),
+      RelationDescriptor(key: "projects", label: "Projects", target: .project, cardinality: .many),
+      RelationDescriptor(key: "transactions", label: "Financial transactions", target: .financialTransaction, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "website", "orderUrlTemplate", "notes", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"])),
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendor", columns: ["displayLabel", "orderId", "date", "statedTotal", "expenseCount"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
+        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.vendors", columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil))),
+        DetailSection(id: "projects", title: "Projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "projects", filterDescriptor: "vendorId", columns: ["name", "status", "kind"], sort: nil, limit: nil))),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "vendor", columns: ["name", "cost", "date", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil)))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["merge", "delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let purchaseDescriptor: EntityDescriptor =
@@ -793,69 +1374,101 @@ public enum EntityCatalog {
     titleField: "displayName",
     domain: .finance,
     sfSymbol: "cart",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "vendorId", label: "Vendor", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "orderId", label: "Order #", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "displayLabel", label: "Display label", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "date", label: "Date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "statedTotal", label: "Stated total", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 4, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "vendorName", label: "Vendor Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "vendorLogo", label: "Vendor Logo", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "orderUrl", label: "Order Url", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "expenseCount", label: "Expense Count", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "unpricedExpenseCount", label: "Unpriced Expense Count", kind: .number, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "expenseTotal", label: "Expense Total", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "reconciliation", label: "Reconciliation", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "financialReconciliation", label: "Financial Reconciliation", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "documentCount", label: "Document Count", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "images", label: "Images", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "dataQuality", label: "Data Quality", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "dataExceptions", label: "Data Exceptions", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "vendorId", label: "Vendor", kind: .identifier, nullable: false, reference: FieldReference(entity: .vendor, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "orderId", label: "Order #", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "identity", controlOptions: nil, placeholder: "Vendor order / receipt #", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "displayLabel", label: "Display label", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "identity", controlOptions: nil, placeholder: "e.g. pocket hole jig + bits", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "date", label: "Date", kind: .date, nullable: false, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: "today", inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "statedTotal", label: "Stated total", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: "What the receipt says", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 4, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: "Anything worth remembering", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "removeImageIds", label: "Remove Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendorName", label: "Vendor Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendorLogo", label: "Vendor Logo", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "orderUrl", label: "Order Url", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "expenseCount", label: "Expense Count", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "unpricedExpenseCount", label: "Unpriced Expense Count", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "expenseTotal", label: "Expense Total", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "reconciliation", label: "Reconciliation", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "financialReconciliation", label: "Financial Reconciliation", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "documentCount", label: "Document Count", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "dataQuality", label: "Data Quality", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "dataExceptions", label: "Data Exceptions", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "financialReconciliation", urlKey: "financialReconciliation", kind: .select, placeholder: "Filter financial reconciliation...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchase", urlKey: "q", kind: .text, placeholder: "Search order id or label...", label: nil, options: nil),
-      FilterDescriptor(columnId: "displayLabel", urlKey: "label", kind: .text, placeholder: "Search display label...", label: nil, options: nil),
-      FilterDescriptor(columnId: "vendor", urlKey: "vendor", kind: .idMulti, placeholder: "Filter by vendor...", label: nil, options: nil),
-      FilterDescriptor(columnId: "orderId", urlKey: "orderId", kind: .presence, placeholder: "Filter by order id...", label: nil, options: [FilterOption(value: "has", label: "Has order id"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "date", urlKey: "date", kind: .range, placeholder: "Filter by date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "statedTotal", urlKey: "statedTotal", kind: .presence, placeholder: "Filter by stated total...", label: nil, options: [FilterOption(value: "has", label: "Has stated total"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "expenseCount", urlKey: "lines", kind: .multiselect, placeholder: "Filter by expense status...", label: nil, options: [FilterOption(value: "empty", label: "No expenses"), FilterOption(value: "unpriced", label: "Has unpriced expenses"), FilterOption(value: "priced", label: "Fully priced")]),
-      FilterDescriptor(columnId: "expenseTotal", urlKey: "lineTotal", kind: .range, placeholder: "Filter by expense total...", label: nil, options: [FilterOption(value: "gte500", label: "$500 and up"), FilterOption(value: "gte200", label: "$200 and up"), FilterOption(value: "gte100", label: "$100 and up"), FilterOption(value: "nonpositive", label: "Non-positive (≤ $0)")]),
-      FilterDescriptor(columnId: "reconciliation", urlKey: "reconciliation", kind: .multiselect, placeholder: "Filter reconciliation...", label: nil, options: [FilterOption(value: "match", label: "Reconciles"), FilterOption(value: "refund_adjusted", label: "Refund-adjusted"), FilterOption(value: "mismatch", label: "Needs review"), FilterOption(value: "unknown", label: "No stated total")]),
-      FilterDescriptor(columnId: "documentCount", urlKey: "documents", kind: .presence, placeholder: "Filter by documents...", label: nil, options: [FilterOption(value: "has", label: "Has documents"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "transactionCount", urlKey: "transactions", kind: .presence, placeholder: "Filter by transactions...", label: nil, options: [FilterOption(value: "has", label: "Has transactions"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [FilterOption(value: "complete", label: "Complete"), FilterOption(value: "needs_data", label: "Needs data"), FilterOption(value: "defect", label: "Defect")]),
-      FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [FilterOption(value: "settlement_reference", label: "No settlement evidence"), FilterOption(value: "purchase_date", label: "Missing date"), FilterOption(value: "order_id", label: "Missing order ID"), FilterOption(value: "stated_total", label: "Missing stated total"), FilterOption(value: "empty_expenses", label: "No expense lines"), FilterOption(value: "unpriced_expense", label: "Unpriced expense line"), FilterOption(value: "paperwork_mismatch", label: "Paperwork mismatch")]),
-      FilterDescriptor(columnId: "expenseTotalMin", urlKey: "lineTotalMin", kind: .text, placeholder: "Minimum expense total...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expenseTotalMax", urlKey: "lineTotalMax", kind: .text, placeholder: "Maximum expense total...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:purchase.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:purchase.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related financial transactions...", label: nil, options: nil),
-      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related financial transactions id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related financial transactions presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:purchase.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter related products presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:purchase.projects", urlKey: "related-project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil),
-      FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by project id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter project presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "financialReconciliation", urlKey: "financialReconciliation", kind: .select, placeholder: "Filter financial reconciliation...", label: nil, options: nil, wire: .param(name: "financialReconciliation"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchase", urlKey: "q", kind: .text, placeholder: "Search order id or label...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "displayLabel", urlKey: "label", kind: .text, placeholder: "Search display label...", label: nil, options: nil, wire: .param(name: "displayLabelSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendor", urlKey: "vendor", kind: .idMulti, placeholder: "Filter by vendor...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: .vendor),
+      FilterDescriptor(columnId: "orderId", urlKey: "orderId", kind: .presence, placeholder: "Filter by order id...", label: nil, options: [LabeledOption(value: "has", label: "Has order id"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "orderIdPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "date", urlKey: "date", kind: .range, placeholder: "Filter by date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "dateFrom", to: "dateTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "statedTotal", urlKey: "statedTotal", kind: .presence, placeholder: "Filter by stated total...", label: nil, options: [LabeledOption(value: "has", label: "Has stated total"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "statedTotalPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseCount", urlKey: "lines", kind: .multiselect, placeholder: "Filter by expense status...", label: nil, options: [LabeledOption(value: "empty", label: "No expenses"), LabeledOption(value: "unpriced", label: "Has unpriced expenses"), LabeledOption(value: "priced", label: "Fully priced")], wire: .param(name: "expenseStatus"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseTotal", urlKey: "lineTotal", kind: .range, placeholder: "Filter by expense total...", label: nil, options: [LabeledOption(value: "gte500", label: "$500 and up"), LabeledOption(value: "gte200", label: "$200 and up"), LabeledOption(value: "gte100", label: "$100 and up"), LabeledOption(value: "nonpositive", label: "Non-positive (≤ $0)")], wire: .range(from: "expenseTotalMin", to: "expenseTotalMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "reconciliation", urlKey: "reconciliation", kind: .multiselect, placeholder: "Filter reconciliation...", label: nil, options: [LabeledOption(value: "match", label: "Reconciles"), LabeledOption(value: "refund_adjusted", label: "Refund-adjusted"), LabeledOption(value: "mismatch", label: "Needs review"), LabeledOption(value: "unknown", label: "No stated total")], wire: .param(name: "reconciliation"), targetEntity: nil),
+      FilterDescriptor(columnId: "documentCount", urlKey: "documents", kind: .presence, placeholder: "Filter by documents...", label: nil, options: [LabeledOption(value: "has", label: "Has documents"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "documentPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "transactionCount", urlKey: "transactions", kind: .presence, placeholder: "Filter by transactions...", label: nil, options: [LabeledOption(value: "has", label: "Has transactions"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "financialTransactionPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "dataQuality", urlKey: "dataQuality", kind: .select, placeholder: "Filter data quality...", label: nil, options: [LabeledOption(value: "complete", label: "Complete"), LabeledOption(value: "needs_data", label: "Needs data"), LabeledOption(value: "defect", label: "Defect")], wire: .param(name: "dataStatus"), targetEntity: nil),
+      FilterDescriptor(columnId: "dataGaps", urlKey: "dataGaps", kind: .multiselect, placeholder: "Filter data gaps...", label: nil, options: [LabeledOption(value: "settlement_reference", label: "No settlement evidence"), LabeledOption(value: "purchase_date", label: "Missing date"), LabeledOption(value: "order_id", label: "Missing order ID"), LabeledOption(value: "stated_total", label: "Missing stated total"), LabeledOption(value: "empty_expenses", label: "No expense lines"), LabeledOption(value: "unpriced_expense", label: "Unpriced expense line"), LabeledOption(value: "paperwork_mismatch", label: "Paperwork mismatch")], wire: .param(name: "dataGap"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseTotalMin", urlKey: "lineTotalMin", kind: .text, placeholder: "Minimum expense total...", label: nil, options: nil, wire: .param(name: "expenseTotalMin"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseTotalMax", urlKey: "lineTotalMax", kind: .text, placeholder: "Maximum expense total...", label: nil, options: nil, wire: .param(name: "expenseTotalMax"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:purchase.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:purchase.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related financial transactions...", label: nil, options: nil, wire: .param(name: "financialTransactionSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related financial transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related financial transactions presence...", label: nil, options: nil, wire: .param(name: "financialTransactionPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:purchase.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil, wire: .param(name: "productSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
+      FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter related products presence...", label: nil, options: nil, wire: .param(name: "productPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:purchase.projects", urlKey: "related-project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
+      FilterDescriptor(columnId: "projectId", urlKey: "projectId", kind: .idMulti, placeholder: "Filter by project id...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
+      FilterDescriptor(columnId: "projectPresenceFilter", urlKey: "projectPresenceFilter", kind: .presence, placeholder: "Filter project presence...", label: nil, options: nil, wire: .param(name: "projectPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete, .merge]
+    relations: [
+      RelationDescriptor(key: "vendor", label: "Vendor", target: .vendor, cardinality: .one),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
+      RelationDescriptor(key: "financial-transactions", label: "Financial transactions", target: .financialTransaction, cardinality: .many),
+      RelationDescriptor(key: "expenses", label: "Expenses", target: .expense, cardinality: .many),
+      RelationDescriptor(key: "products", label: "Products", target: .product, cardinality: .many),
+      RelationDescriptor(key: "projects", label: "Projects", target: .project, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: ["statedTotal", "expenseTotal"],
+      heroBreadcrumb: nil,
+      heroImages: true,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "purchaseId", columns: ["name", "cost", "date", "lineKind", "product", "project"], sort: nil, limit: nil))),
+        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.purchases", columns: ["name", "manufacturer", "category", "price"], sort: nil, limit: nil))),
+        DetailSection(id: "project-allocation", title: "Project allocation", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["vendorId", "orderId", "displayLabel", "date", "statedTotal", "notes"])),
+        DetailSection(id: "reconciliation", title: "Reconciliation", placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "financial-settlement", title: "Financial settlement", placement: .supporting, collapsed: false, kind: .slot)
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["merge", "delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let financialAccountDescriptor: EntityDescriptor =
@@ -868,43 +1481,70 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .finance,
     sfSymbol: "building.columns",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "identity", label: "Identity", kind: .json, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "provisional", label: "Provisional", kind: .boolean, controlKind: .checkbox, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceAliases", label: "Aliases", kind: .json, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "ledgerPartyId", label: "Owner", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "ledgerPartyName", label: "Ledger Party Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "transactionCount", label: "Transactions", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "identity", label: "Identity", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "provisional", label: "Provisional", kind: .boolean, nullable: false, reference: nil, controlKind: .checkbox, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceAliases", label: "Aliases", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "ledgerPartyId", label: "Owner", kind: .identifier, nullable: true, reference: FieldReference(entity: .ledgerParty, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "ledgerPartyName", label: "Ledger Party Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "transactionCount", label: "Transactions", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search accounts...", label: nil, options: nil),
-      FilterDescriptor(columnId: "identity", urlKey: "identity", kind: .multiselect, placeholder: "Filter by account type...", label: nil, options: [FilterOption(value: "credit_card", label: "Credit card"), FilterOption(value: "bank_account", label: "Bank account"), FilterOption(value: "stored_value", label: "Stored value"), FilterOption(value: "cash", label: "Cash"), FilterOption(value: "other", label: "Other")]),
-      FilterDescriptor(columnId: "provisional", urlKey: "provisional", kind: .boolean, placeholder: "Filter by status...", label: nil, options: [FilterOption(value: "false", label: "Known"), FilterOption(value: "true", label: "Provisional")]),
-      FilterDescriptor(columnId: "aliases", urlKey: "aliases", kind: .presence, placeholder: "Filter aliases...", label: nil, options: [FilterOption(value: "has", label: "Has aliases"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "last4", urlKey: "last4", kind: .text, placeholder: "Filter by last four digits...", label: nil, options: nil),
-      FilterDescriptor(columnId: "source", urlKey: "source", kind: .multiselect, placeholder: "Filter by source...", label: nil, options: nil),
-      FilterDescriptor(columnId: "externalAccountId", urlKey: "externalAccountId", kind: .multiselect, placeholder: "Filter by external account id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:financialAccount.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related transactions...", label: nil, options: nil),
-      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related transactions id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related transactions presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:financialAccount.purchases", urlKey: "related-purchase", kind: .text, placeholder: "Search related purchases...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .idMulti, placeholder: "Filter by related purchases id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchasePresenceFilter", urlKey: "purchasePresenceFilter", kind: .presence, placeholder: "Filter related purchases presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:financialAccount.vendors", urlKey: "related-vendor", kind: .text, placeholder: "Search related vendors...", label: nil, options: nil),
-      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendors id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "vendorPresenceFilter", urlKey: "vendorPresenceFilter", kind: .presence, placeholder: "Filter related vendors presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "ledgerPartyId", urlKey: "ledgerPartyId", kind: .idMulti, placeholder: "Filter by ledger party...", label: nil, options: nil, wire: .param(name: "ledgerPartyId"), targetEntity: .ledgerParty),
+      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search accounts...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "identity", urlKey: "identity", kind: .multiselect, placeholder: "Filter by account type...", label: nil, options: [LabeledOption(value: "credit_card", label: "Credit card"), LabeledOption(value: "bank_account", label: "Bank account"), LabeledOption(value: "stored_value", label: "Stored value"), LabeledOption(value: "cash", label: "Cash"), LabeledOption(value: "other", label: "Other")], wire: .param(name: "identityKind"), targetEntity: nil),
+      FilterDescriptor(columnId: "provisional", urlKey: "provisional", kind: .boolean, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "false", label: "Known"), LabeledOption(value: "true", label: "Provisional")], wire: .param(name: "provisional"), targetEntity: nil),
+      FilterDescriptor(columnId: "aliases", urlKey: "aliases", kind: .presence, placeholder: "Filter aliases...", label: nil, options: [LabeledOption(value: "has", label: "Has aliases"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "sourceAliasPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "last4", urlKey: "last4", kind: .text, placeholder: "Filter by last four digits...", label: nil, options: nil, wire: .param(name: "last4"), targetEntity: nil),
+      FilterDescriptor(columnId: "source", urlKey: "source", kind: .multiselect, placeholder: "Filter by source...", label: nil, options: nil, wire: .param(name: "source"), targetEntity: nil),
+      FilterDescriptor(columnId: "externalAccountId", urlKey: "externalAccountId", kind: .multiselect, placeholder: "Filter by external account id...", label: nil, options: nil, wire: .param(name: "externalAccountId"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:financialAccount.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related transactions...", label: nil, options: nil, wire: .param(name: "financialTransactionSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related transactions presence...", label: nil, options: nil, wire: .param(name: "financialTransactionPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:financialAccount.purchases", urlKey: "related-purchase", kind: .text, placeholder: "Search related purchases...", label: nil, options: nil, wire: .param(name: "purchaseSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .idMulti, placeholder: "Filter by related purchases id...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchasePresenceFilter", urlKey: "purchasePresenceFilter", kind: .presence, placeholder: "Filter related purchases presence...", label: nil, options: nil, wire: .param(name: "purchasePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:financialAccount.vendors", urlKey: "related-vendor", kind: .text, placeholder: "Search related vendors...", label: nil, options: nil, wire: .param(name: "vendorSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendors id...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorPresenceFilter", urlKey: "vendorPresenceFilter", kind: .presence, placeholder: "Filter related vendors presence...", label: nil, options: nil, wire: .param(name: "vendorPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    relations: [
+      RelationDescriptor(key: "ledger-party", label: "Ledger party", target: .ledgerParty, cardinality: .one),
+      RelationDescriptor(key: "transactions", label: "Transactions", target: .financialTransaction, cardinality: .many),
+      RelationDescriptor(key: "purchases", label: "Purchases", target: .purchase, cardinality: .many),
+      RelationDescriptor(key: "vendors", label: "Vendors", target: .vendor, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "identity", "provisional", "sourceAliases", "ledgerPartyId", "notes", "transactionCount", "createdAt", "updatedAt"])),
+        DetailSection(id: "transactions", title: "Transactions", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "transactions", filterDescriptor: "accountId", columns: ["merchant", "amount", "kind", "status", "postedDate"], sort: SectionSort(field: "postedDate", direction: .desc), limit: nil)))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let financialTransactionDescriptor: EntityDescriptor =
@@ -917,64 +1557,92 @@ public enum EntityCatalog {
     titleField: "displayName",
     domain: .finance,
     sfSymbol: "arrow.left.arrow.right",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "accountId", label: "Account", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 60, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "purchaseId", label: "Purchase", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 40, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 50, format: nil, mobileSlot: "meta", mobilePriority: 20),
-      FieldDescriptor(key: "amount", label: "Amount", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 30, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
-      FieldDescriptor(key: "transactionDate", label: "Transaction Date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: "plainDate", mobileSlot: "meta", mobilePriority: 25),
-      FieldDescriptor(key: "postedDate", label: "Posted", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 80, format: "plainDate", mobileSlot: "meta", mobilePriority: 30),
-      FieldDescriptor(key: "merchant", label: "Merchant", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "rawDescription", label: "Statement description", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceCategory", label: "Source category", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceRefs", label: "Source", kind: .json, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 90, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "allocations", label: "Allocations", kind: .textArray, controlKind: .specialized, section: "overview", showInList: false, showInDetail: true, detailOrder: 70, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "ledgerTransferId", label: "Ledger Transfer ID", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "accountName", label: "Account Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "vendorInference", label: "Possible vendor", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: 20, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "accountId", label: "Account", kind: .identifier, nullable: false, reference: FieldReference(entity: .financialAccount, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 60, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "purchaseId", label: "Purchase", kind: .identifier, nullable: true, reference: FieldReference(entity: .purchase, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "purchase", label: "purchase"), LabeledOption(value: "refund", label: "refund"), LabeledOption(value: "account_transfer", label: "account transfer"), LabeledOption(value: "credit_card_payment", label: "credit card payment"), LabeledOption(value: "fee", label: "fee"), LabeledOption(value: "interest", label: "interest"), LabeledOption(value: "income", label: "income"), LabeledOption(value: "adjustment", label: "adjustment"), LabeledOption(value: "other", label: "other")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 40, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "expected", label: "expected"), LabeledOption(value: "pending", label: "pending"), LabeledOption(value: "posted", label: "posted"), LabeledOption(value: "void", label: "void")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 50, format: nil, mobileSlot: "meta", mobilePriority: 20),
+      FieldDescriptor(key: "amount", label: "Amount", kind: .number, nullable: false, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 30, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
+      FieldDescriptor(key: "transactionDate", label: "Transaction Date", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: "plainDate", mobileSlot: "meta", mobilePriority: 25),
+      FieldDescriptor(key: "postedDate", label: "Posted", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 80, format: "plainDate", mobileSlot: "meta", mobilePriority: 30),
+      FieldDescriptor(key: "merchant", label: "Merchant", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "identity", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "rawDescription", label: "Statement description", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceCategory", label: "Source category", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceRefs", label: "Source", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 90, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "notes", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "allocations", label: "Allocations", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 70, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "ledgerTransferId", label: "Ledger Transfer ID", kind: .identifier, nullable: true, reference: FieldReference(entity: .ledgerTransfer, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "accountName", label: "Account Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendorInference", label: "Possible vendor", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: 20, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "allocationIntegrity", urlKey: "allocationIntegrity", kind: .select, placeholder: "Filter allocation integrity...", label: nil, options: nil),
-      FilterDescriptor(columnId: "transaction", urlKey: "q", kind: .text, placeholder: "Search transactions...", label: nil, options: nil),
-      FilterDescriptor(columnId: "kind", urlKey: "kind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [FilterOption(value: "purchase", label: "Purchase"), FilterOption(value: "refund", label: "Refund"), FilterOption(value: "account_transfer", label: "Account transfer"), FilterOption(value: "credit_card_payment", label: "Credit card payment"), FilterOption(value: "fee", label: "Fee"), FilterOption(value: "interest", label: "Interest"), FilterOption(value: "income", label: "Income"), FilterOption(value: "adjustment", label: "Adjustment"), FilterOption(value: "other", label: "Other")]),
-      FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [FilterOption(value: "expected", label: "Expected"), FilterOption(value: "pending", label: "Pending"), FilterOption(value: "posted", label: "Posted"), FilterOption(value: "void", label: "Void")]),
-      FilterDescriptor(columnId: "postedDate", urlKey: "postedDate", kind: .range, placeholder: "Filter by posted date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "accountId", urlKey: "accountId", kind: .idMulti, placeholder: "Filter by account...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .multiselect, placeholder: "Filter by purchase...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchasePresence", urlKey: "purchasePresence", kind: .presence, placeholder: "Filter purchase links...", label: nil, options: [FilterOption(value: "has", label: "Has purchase"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "source", urlKey: "source", kind: .multiselect, placeholder: "Filter by source...", label: nil, options: nil),
-      FilterDescriptor(columnId: "externalId", urlKey: "externalId", kind: .multiselect, placeholder: "Filter by external id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "merchant", urlKey: "merchant", kind: .text, placeholder: "Filter by merchant...", label: nil, options: nil),
-      FilterDescriptor(columnId: "transactionDate", urlKey: "transactionDate", kind: .range, placeholder: "Filter by transaction date...", label: nil, options: nil),
-      FilterDescriptor(columnId: "amount", urlKey: "amount", kind: .range, placeholder: "Filter by amount...", label: nil, options: [FilterOption(value: "gte1000", label: "$1,000 and up"), FilterOption(value: "gte250", label: "$250 and up"), FilterOption(value: "gte50", label: "$50 and up"), FilterOption(value: "credits", label: "Credits (≤ $0)")]),
-      FilterDescriptor(columnId: "amountMin", urlKey: "amountMin", kind: .text, placeholder: "Minimum amount...", label: nil, options: nil),
-      FilterDescriptor(columnId: "amountMax", urlKey: "amountMax", kind: .text, placeholder: "Maximum amount...", label: nil, options: nil),
-      FilterDescriptor(columnId: "transactionDateFrom", urlKey: "transactionDateFrom", kind: .text, placeholder: "Transaction date from...", label: nil, options: nil),
-      FilterDescriptor(columnId: "transactionDateTo", urlKey: "transactionDateTo", kind: .text, placeholder: "Transaction date to...", label: nil, options: nil),
-      FilterDescriptor(columnId: "postedDateFrom", urlKey: "postedDateFrom", kind: .text, placeholder: "Posted date from...", label: nil, options: nil),
-      FilterDescriptor(columnId: "postedDateTo", urlKey: "postedDateTo", kind: .text, placeholder: "Posted date to...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:financialTransaction.vendor", urlKey: "related-vendor", kind: .text, placeholder: "Search related vendor...", label: nil, options: nil),
-      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendor id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "vendorPresenceFilter", urlKey: "vendorPresenceFilter", kind: .presence, placeholder: "Filter related vendor presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:financialTransaction.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:financialTransaction.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter related products presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "allocationIntegrity", urlKey: "allocationIntegrity", kind: .select, placeholder: "Filter allocation integrity...", label: nil, options: nil, wire: .param(name: "allocationIntegrity"), targetEntity: nil),
+      FilterDescriptor(columnId: "transaction", urlKey: "q", kind: .text, placeholder: "Search transactions...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "kind", urlKey: "kind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [LabeledOption(value: "purchase", label: "Purchase"), LabeledOption(value: "refund", label: "Refund"), LabeledOption(value: "account_transfer", label: "Account transfer"), LabeledOption(value: "credit_card_payment", label: "Credit card payment"), LabeledOption(value: "fee", label: "Fee"), LabeledOption(value: "interest", label: "Interest"), LabeledOption(value: "income", label: "Income"), LabeledOption(value: "adjustment", label: "Adjustment"), LabeledOption(value: "other", label: "Other")], wire: .param(name: "kind"), targetEntity: nil),
+      FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "expected", label: "Expected"), LabeledOption(value: "pending", label: "Pending"), LabeledOption(value: "posted", label: "Posted"), LabeledOption(value: "void", label: "Void")], wire: .param(name: "status"), targetEntity: nil),
+      FilterDescriptor(columnId: "postedDate", urlKey: "postedDate", kind: .range, placeholder: "Filter by posted date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "postedDateFrom", to: "postedDateTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "accountId", urlKey: "accountId", kind: .idMulti, placeholder: "Filter by account...", label: nil, options: nil, wire: .param(name: "accountId"), targetEntity: .financialAccount),
+      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .multiselect, placeholder: "Filter by purchase...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchasePresence", urlKey: "purchasePresence", kind: .presence, placeholder: "Filter purchase links...", label: nil, options: [LabeledOption(value: "has", label: "Has purchase"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "purchasePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "source", urlKey: "source", kind: .multiselect, placeholder: "Filter by source...", label: nil, options: nil, wire: .param(name: "source"), targetEntity: nil),
+      FilterDescriptor(columnId: "externalId", urlKey: "externalId", kind: .multiselect, placeholder: "Filter by external id...", label: nil, options: nil, wire: .param(name: "externalId"), targetEntity: nil),
+      FilterDescriptor(columnId: "merchant", urlKey: "merchant", kind: .text, placeholder: "Filter by merchant...", label: nil, options: nil, wire: .param(name: "merchant"), targetEntity: nil),
+      FilterDescriptor(columnId: "transactionDate", urlKey: "transactionDate", kind: .range, placeholder: "Filter by transaction date...", label: nil, options: nil, wire: .range(from: "transactionDateFrom", to: "transactionDateTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "amount", urlKey: "amount", kind: .range, placeholder: "Filter by amount...", label: nil, options: [LabeledOption(value: "gte1000", label: "$1,000 and up"), LabeledOption(value: "gte250", label: "$250 and up"), LabeledOption(value: "gte50", label: "$50 and up"), LabeledOption(value: "credits", label: "Credits (≤ $0)")], wire: .range(from: "amountMin", to: "amountMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "amountMin", urlKey: "amountMin", kind: .text, placeholder: "Minimum amount...", label: nil, options: nil, wire: .param(name: "amountMin"), targetEntity: nil),
+      FilterDescriptor(columnId: "amountMax", urlKey: "amountMax", kind: .text, placeholder: "Maximum amount...", label: nil, options: nil, wire: .param(name: "amountMax"), targetEntity: nil),
+      FilterDescriptor(columnId: "transactionDateFrom", urlKey: "transactionDateFrom", kind: .text, placeholder: "Transaction date from...", label: nil, options: nil, wire: .param(name: "transactionDateFrom"), targetEntity: nil),
+      FilterDescriptor(columnId: "transactionDateTo", urlKey: "transactionDateTo", kind: .text, placeholder: "Transaction date to...", label: nil, options: nil, wire: .param(name: "transactionDateTo"), targetEntity: nil),
+      FilterDescriptor(columnId: "postedDateFrom", urlKey: "postedDateFrom", kind: .text, placeholder: "Posted date from...", label: nil, options: nil, wire: .param(name: "postedDateFrom"), targetEntity: nil),
+      FilterDescriptor(columnId: "postedDateTo", urlKey: "postedDateTo", kind: .text, placeholder: "Posted date to...", label: nil, options: nil, wire: .param(name: "postedDateTo"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:financialTransaction.vendor", urlKey: "related-vendor", kind: .text, placeholder: "Search related vendor...", label: nil, options: nil, wire: .param(name: "vendorSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by related vendor id...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorPresenceFilter", urlKey: "vendorPresenceFilter", kind: .presence, placeholder: "Filter related vendor presence...", label: nil, options: nil, wire: .param(name: "vendorPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:financialTransaction.expenses", urlKey: "related-expense", kind: .text, placeholder: "Search related expenses...", label: nil, options: nil, wire: .param(name: "expenseSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "expenseId", urlKey: "expenseId", kind: .idMulti, placeholder: "Filter by related expenses id...", label: nil, options: nil, wire: .param(name: "expenseId"), targetEntity: nil),
+      FilterDescriptor(columnId: "expensePresenceFilter", urlKey: "expensePresenceFilter", kind: .presence, placeholder: "Filter related expenses presence...", label: nil, options: nil, wire: .param(name: "expensePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:financialTransaction.products", urlKey: "related-product", kind: .text, placeholder: "Search related products...", label: nil, options: nil, wire: .param(name: "productSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by related products id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: nil),
+      FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter related products presence...", label: nil, options: nil, wire: .param(name: "productPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    relations: [
+      RelationDescriptor(key: "account", label: "Financial account", target: .financialAccount, cardinality: .one),
+      RelationDescriptor(key: "ledger-transfer", label: "Ledger transfer", target: .ledgerTransfer, cardinality: .one),
+      RelationDescriptor(key: "purchase", label: "Purchase", target: .purchase, cardinality: .many),
+      RelationDescriptor(key: "vendor", label: "Vendor", target: .vendor, cardinality: .many),
+      RelationDescriptor(key: "expenses", label: "Expenses", target: .expense, cardinality: .many),
+      RelationDescriptor(key: "products", label: "Products", target: .product, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: ["amount", "status"],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["merchant", "vendorInference", "amount", "kind", "status", "accountId", "allocations", "postedDate", "sourceRefs"])),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "financialTransactionId", columns: ["name", "cost", "date", "product", "project"], sort: nil, limit: nil)))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let wishDescriptor: EntityDescriptor =
@@ -987,30 +1655,53 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .plan,
     sfSymbol: "star",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "candidateProductIds", label: "Candidate Product IDs", kind: .identifier, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "acquired", label: "Acquired", kind: .boolean, controlKind: .checkbox, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "acquiredAt", label: "Acquired At", kind: .timestamp, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "candidates", label: "Candidates", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "candidateProductIds", label: "Candidate Product IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .product, multiple: true), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "acquired", label: "Acquired", kind: .boolean, nullable: false, reference: nil, controlKind: .checkbox, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "acquiredAt", label: "Acquired At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "candidates", label: "Candidates", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search wishlist...", label: nil, options: nil),
-      FilterDescriptor(columnId: "acquired", urlKey: "acquired", kind: .boolean, placeholder: "Filter by status...", label: nil, options: [FilterOption(value: "false", label: "Wanted"), FilterOption(value: "true", label: "Acquired")]),
-      FilterDescriptor(columnId: "related:wish.candidates", urlKey: "related-product", kind: .idMulti, placeholder: "Filter by candidate product...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by candidate product id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter candidate presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search wishlist...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "acquired", urlKey: "acquired", kind: .boolean, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "false", label: "Wanted"), LabeledOption(value: "true", label: "Acquired")], wire: .param(name: "acquired"), targetEntity: nil),
+      FilterDescriptor(columnId: "related:wish.candidates", urlKey: "related-product", kind: .idMulti, placeholder: "Filter by candidate product...", label: nil, options: nil, wire: .param(name: "candidateProductId"), targetEntity: nil),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .idMulti, placeholder: "Filter by candidate product id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: nil),
+      FilterDescriptor(columnId: "productPresenceFilter", urlKey: "productPresenceFilter", kind: .presence, placeholder: "Filter candidate presence...", label: nil, options: nil, wire: .param(name: "productPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    relations: [
+      RelationDescriptor(key: "candidates", label: "Tool candidates", target: .product, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit", "markPurchased"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "notes", "acquiredAt", "createdAt", "updatedAt"])),
+        DetailSection(id: "candidates", title: "Tool alternatives", placement: .primary, collapsed: false, kind: .fields(["candidates"]))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["markPurchased", "delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let expenseDescriptor: EntityDescriptor =
@@ -1023,77 +1714,104 @@ public enum EntityCatalog {
     titleField: "name",
     domain: .finance,
     sfSymbol: "dollarsign.circle",
-    countable: true,
+    searchable: true,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "cost", label: "Cost", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 20, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
-      FieldDescriptor(key: "date", label: "Date", kind: .date, controlKind: .date, section: "overview", showInList: true, showInDetail: true, detailOrder: 30, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "lineKind", label: "Line kind", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 40, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "lineBasis", label: "Itemization", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 140, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "costType", label: "Cost Type", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 50, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "trade", label: "Trade", kind: .`enum`, controlKind: .select, section: "overview", showInList: true, showInDetail: true, detailOrder: 60, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "url", label: "URL", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 80, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: 90, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "future", label: "Planned", kind: .boolean, controlKind: .checkbox, section: "overview", showInList: true, showInDetail: true, detailOrder: 70, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "projectId", label: "Project", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 120, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "productId", label: "Product", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: true, detailOrder: 130, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "productQuantity", label: "Product quantity", kind: .number, controlKind: .number, section: "overview", showInList: true, showInDetail: true, detailOrder: 150, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "vendor", label: "Vendor", kind: .text, controlKind: .text, section: "overview", showInList: false, showInDetail: true, detailOrder: 100, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "orderId", label: "Order #", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: 110, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "purchaseId", label: "Purchase", kind: .identifier, controlKind: .specialized, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "beneficiaries", label: "Beneficiaries", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "funders", label: "Funders", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceClaims", label: "Source Claims", kind: .json, controlKind: .specialized, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "purchaseDate", label: "Purchase Date", kind: .date, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "purchaseDisplayLabel", label: "Purchase Display Label", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "vendorId", label: "Vendor ID", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "vendorLogo", label: "Vendor Logo", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "orderUrl", label: "Order Url", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "projectName", label: "Project Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "productName", label: "Product Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notionPageId", label: "Notion Page ID", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "name", label: "Name", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 10, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "cost", label: "Cost", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 20, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
+      FieldDescriptor(key: "date", label: "Date", kind: .date, nullable: false, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: "today", inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 30, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "lineKind", label: "Line kind", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 40, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "lineBasis", label: "Itemization", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 140, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "costType", label: "Cost Type", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 50, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "trade", label: "Trade", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 60, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "url", label: "URL", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 80, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 90, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "future", label: "Planned", kind: .boolean, nullable: false, reference: nil, controlKind: .checkbox, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 70, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "projectId", label: "Project", kind: .identifier, nullable: true, reference: FieldReference(entity: .project, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 120, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "productId", label: "Product", kind: .identifier, nullable: true, reference: FieldReference(entity: .product, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 130, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "productQuantity", label: "Product quantity", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 150, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendor", label: "Vendor", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 100, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "orderId", label: "Order #", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 110, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "purchaseId", label: "Purchase", kind: .identifier, nullable: true, reference: FieldReference(entity: .purchase, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 160, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "beneficiaries", label: "Beneficiaries", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "funders", label: "Funders", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceClaims", label: "Source Claims", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "purchaseDate", label: "Purchase Date", kind: .date, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "purchaseDisplayLabel", label: "Purchase Display Label", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendorId", label: "Vendor ID", kind: .identifier, nullable: true, reference: FieldReference(entity: .vendor, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendorLogo", label: "Vendor Logo", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "orderUrl", label: "Order Url", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "projectName", label: "Project Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "productName", label: "Product Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notionPageId", label: "Notion Page ID", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search expenses...", label: nil, options: nil),
-      FilterDescriptor(columnId: "date", urlKey: "date", kind: .range, placeholder: "Filter by date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "dateFrom", urlKey: "dateFrom", kind: .text, placeholder: "Expense date from...", label: nil, options: nil),
-      FilterDescriptor(columnId: "dateTo", urlKey: "dateTo", kind: .text, placeholder: "Expense date to...", label: nil, options: nil),
-      FilterDescriptor(columnId: "dateRelative", urlKey: "dateRelative", kind: .select, placeholder: "Filter by relative date...", label: nil, options: nil),
-      FilterDescriptor(columnId: "costType", urlKey: "costType", kind: .multiselect, placeholder: "Filter by cost type...", label: nil, options: [FilterOption(value: "materials", label: "Materials"), FilterOption(value: "tools", label: "Tools"), FilterOption(value: "services", label: "Services")]),
-      FilterDescriptor(columnId: "lineKind", urlKey: "lineKind", kind: .multiselect, placeholder: "Filter by line kind...", label: nil, options: [FilterOption(value: "principal", label: "Item or service"), FilterOption(value: "tax", label: "Tax"), FilterOption(value: "shipping", label: "Shipping or delivery"), FilterOption(value: "discount", label: "Discount"), FilterOption(value: "fee", label: "Fee"), FilterOption(value: "tip", label: "Tip"), FilterOption(value: "other_adjustment", label: "Other adjustment")]),
-      FilterDescriptor(columnId: "lineBasis", urlKey: "lineBasis", kind: .multiselect, placeholder: "Filter by itemization...", label: nil, options: [FilterOption(value: "item_line", label: "Line item"), FilterOption(value: "allocation", label: "Share of a lump sum")]),
-      FilterDescriptor(columnId: "trade", urlKey: "trade", kind: .multiselect, placeholder: "Filter by trade...", label: nil, options: nil),
-      FilterDescriptor(columnId: "future", urlKey: "future", kind: .boolean, placeholder: "Filter by status...", label: nil, options: [FilterOption(value: "true", label: "Planned"), FilterOption(value: "false", label: "Already made")]),
-      FilterDescriptor(columnId: "cost", urlKey: "cost", kind: .range, placeholder: "Filter by cost...", label: nil, options: [FilterOption(value: "has", label: "Has cost"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "gte500", label: "$500 and up"), FilterOption(value: "gte200", label: "$200 and up"), FilterOption(value: "gte100", label: "$100 and up"), FilterOption(value: "credits", label: "Credits (≤ $0)")]),
-      FilterDescriptor(columnId: "costMin", urlKey: "costMin", kind: .text, placeholder: "Minimum cost...", label: nil, options: nil),
-      FilterDescriptor(columnId: "costMax", urlKey: "costMax", kind: .text, placeholder: "Maximum cost...", label: nil, options: nil),
-      FilterDescriptor(columnId: "costSign", urlKey: "costSign", kind: .select, placeholder: "Filter by cost direction...", label: nil, options: nil),
-      FilterDescriptor(columnId: "disposalPurchasePresenceFilter", urlKey: "disposalPurchasePresenceFilter", kind: .presence, placeholder: "Filter disposal purchase presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productQuantity", urlKey: "productQuantity", kind: .range, placeholder: "Filter by quantity...", label: nil, options: [FilterOption(value: "has", label: "Has quantity"), FilterOption(value: "none", label: "(none)"), FilterOption(value: "exactly1", label: "Exactly 1"), FilterOption(value: "gte2", label: "2+ units"), FilterOption(value: "gte5", label: "5+ units")]),
-      FilterDescriptor(columnId: "productQuantityMin", urlKey: "productQuantityMin", kind: .text, placeholder: "Minimum product quantity...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productQuantityMax", urlKey: "productQuantityMax", kind: .text, placeholder: "Maximum product quantity...", label: nil, options: nil),
-      FilterDescriptor(columnId: "notesSearch", urlKey: "notesSearch", kind: .text, placeholder: "Search notes...", label: nil, options: nil),
-      FilterDescriptor(columnId: "urlSearch", urlKey: "urlSearch", kind: .text, placeholder: "Search url...", label: nil, options: nil),
-      FilterDescriptor(columnId: "project", urlKey: "project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil),
-      FilterDescriptor(columnId: "includeSubProjects", urlKey: "subprojects", kind: .boolean, placeholder: "Include sub-projects...", label: nil, options: nil),
-      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .id, placeholder: "Filter by product id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "product", urlKey: "product", kind: .presence, placeholder: "Filter by product...", label: nil, options: [FilterOption(value: "has", label: "Has product"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "vendor", urlKey: "vendor", kind: .idMulti, placeholder: "Filter by vendor...", label: nil, options: nil),
-      FilterDescriptor(columnId: "orderId", urlKey: "orderId", kind: .presence, placeholder: "Filter by order id...", label: nil, options: [FilterOption(value: "has", label: "Has order id"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "orderIdExact", urlKey: "order", kind: .id, placeholder: "Filter by order id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .id, placeholder: "Filter by purchase id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "related:expense.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related purchase transactions...", label: nil, options: nil),
-      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related purchase transactions id...", label: nil, options: nil),
-      FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related purchase transactions presence...", label: nil, options: nil),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "name", urlKey: "q", kind: .text, placeholder: "Search expenses...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "date", urlKey: "date", kind: .range, placeholder: "Filter by date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "dateFrom", to: "dateTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "dateFrom", urlKey: "dateFrom", kind: .text, placeholder: "Expense date from...", label: nil, options: nil, wire: .param(name: "dateFrom"), targetEntity: nil),
+      FilterDescriptor(columnId: "dateTo", urlKey: "dateTo", kind: .text, placeholder: "Expense date to...", label: nil, options: nil, wire: .param(name: "dateTo"), targetEntity: nil),
+      FilterDescriptor(columnId: "dateRelative", urlKey: "dateRelative", kind: .select, placeholder: "Filter by relative date...", label: nil, options: nil, wire: .param(name: "dateRelative"), targetEntity: nil),
+      FilterDescriptor(columnId: "costType", urlKey: "costType", kind: .multiselect, placeholder: "Filter by cost type...", label: nil, options: [LabeledOption(value: "materials", label: "Materials"), LabeledOption(value: "tools", label: "Tools"), LabeledOption(value: "services", label: "Services")], wire: .param(name: "costType"), targetEntity: nil),
+      FilterDescriptor(columnId: "lineKind", urlKey: "lineKind", kind: .multiselect, placeholder: "Filter by line kind...", label: nil, options: [LabeledOption(value: "principal", label: "Item or service"), LabeledOption(value: "tax", label: "Tax"), LabeledOption(value: "shipping", label: "Shipping or delivery"), LabeledOption(value: "discount", label: "Discount"), LabeledOption(value: "fee", label: "Fee"), LabeledOption(value: "tip", label: "Tip"), LabeledOption(value: "other_adjustment", label: "Other adjustment")], wire: .param(name: "lineKind"), targetEntity: nil),
+      FilterDescriptor(columnId: "lineBasis", urlKey: "lineBasis", kind: .multiselect, placeholder: "Filter by itemization...", label: nil, options: [LabeledOption(value: "item_line", label: "Line item"), LabeledOption(value: "allocation", label: "Share of a lump sum")], wire: .param(name: "lineBasis"), targetEntity: nil),
+      FilterDescriptor(columnId: "trade", urlKey: "trade", kind: .multiselect, placeholder: "Filter by trade...", label: nil, options: nil, wire: .param(name: "trade"), targetEntity: nil),
+      FilterDescriptor(columnId: "future", urlKey: "future", kind: .boolean, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "true", label: "Planned"), LabeledOption(value: "false", label: "Already made")], wire: .param(name: "future"), targetEntity: nil),
+      FilterDescriptor(columnId: "cost", urlKey: "cost", kind: .range, placeholder: "Filter by cost...", label: nil, options: [LabeledOption(value: "has", label: "Has cost"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "gte500", label: "$500 and up"), LabeledOption(value: "gte200", label: "$200 and up"), LabeledOption(value: "gte100", label: "$100 and up"), LabeledOption(value: "credits", label: "Credits (≤ $0)")], wire: .range(from: "costMin", to: "costMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "costMin", urlKey: "costMin", kind: .text, placeholder: "Minimum cost...", label: nil, options: nil, wire: .param(name: "costMin"), targetEntity: nil),
+      FilterDescriptor(columnId: "costMax", urlKey: "costMax", kind: .text, placeholder: "Maximum cost...", label: nil, options: nil, wire: .param(name: "costMax"), targetEntity: nil),
+      FilterDescriptor(columnId: "costSign", urlKey: "costSign", kind: .select, placeholder: "Filter by cost direction...", label: nil, options: nil, wire: .param(name: "costSign"), targetEntity: nil),
+      FilterDescriptor(columnId: "disposalPurchasePresenceFilter", urlKey: "disposalPurchasePresenceFilter", kind: .presence, placeholder: "Filter disposal purchase presence...", label: nil, options: nil, wire: .param(name: "disposalPurchasePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "productQuantity", urlKey: "productQuantity", kind: .range, placeholder: "Filter by quantity...", label: nil, options: [LabeledOption(value: "has", label: "Has quantity"), LabeledOption(value: "none", label: "(none)"), LabeledOption(value: "exactly1", label: "Exactly 1"), LabeledOption(value: "gte2", label: "2+ units"), LabeledOption(value: "gte5", label: "5+ units")], wire: .range(from: "productQuantityMin", to: "productQuantityMax", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "productQuantityMin", urlKey: "productQuantityMin", kind: .text, placeholder: "Minimum product quantity...", label: nil, options: nil, wire: .param(name: "productQuantityMin"), targetEntity: nil),
+      FilterDescriptor(columnId: "productQuantityMax", urlKey: "productQuantityMax", kind: .text, placeholder: "Maximum product quantity...", label: nil, options: nil, wire: .param(name: "productQuantityMax"), targetEntity: nil),
+      FilterDescriptor(columnId: "notesSearch", urlKey: "notesSearch", kind: .text, placeholder: "Search notes...", label: nil, options: nil, wire: .param(name: "notesSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "urlSearch", urlKey: "urlSearch", kind: .text, placeholder: "Search url...", label: nil, options: nil, wire: .param(name: "urlSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "project", urlKey: "project", kind: .idMulti, placeholder: "Filter by project...", label: nil, options: nil, wire: .param(name: "projectId"), targetEntity: .project),
+      FilterDescriptor(columnId: "includeSubProjects", urlKey: "subprojects", kind: .boolean, placeholder: "Include sub-projects...", label: nil, options: nil, wire: .param(name: "includeSubProjects"), targetEntity: nil),
+      FilterDescriptor(columnId: "productId", urlKey: "productId", kind: .id, placeholder: "Filter by product id...", label: nil, options: nil, wire: .param(name: "productId"), targetEntity: .product),
+      FilterDescriptor(columnId: "product", urlKey: "product", kind: .presence, placeholder: "Filter by product...", label: nil, options: [LabeledOption(value: "has", label: "Has product"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "productPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendor", urlKey: "vendor", kind: .idMulti, placeholder: "Filter by vendor...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: .vendor),
+      FilterDescriptor(columnId: "orderId", urlKey: "orderId", kind: .presence, placeholder: "Filter by order id...", label: nil, options: [LabeledOption(value: "has", label: "Has order id"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "orderIdPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "orderIdExact", urlKey: "order", kind: .id, placeholder: "Filter by order id...", label: nil, options: nil, wire: .param(name: "orderId"), targetEntity: nil),
+      FilterDescriptor(columnId: "purchaseId", urlKey: "purchaseId", kind: .id, placeholder: "Filter by purchase id...", label: nil, options: nil, wire: .param(name: "purchaseId"), targetEntity: .purchase),
+      FilterDescriptor(columnId: "related:expense.transactions", urlKey: "related-financialTransaction", kind: .text, placeholder: "Search related purchase transactions...", label: nil, options: nil, wire: .param(name: "financialTransactionSearch"), targetEntity: nil),
+      FilterDescriptor(columnId: "financialTransactionId", urlKey: "financialTransactionId", kind: .idMulti, placeholder: "Filter by related purchase transactions id...", label: nil, options: nil, wire: .param(name: "financialTransactionId"), targetEntity: .financialTransaction),
+      FilterDescriptor(columnId: "financialTransactionPresenceFilter", urlKey: "financialTransactionPresenceFilter", kind: .presence, placeholder: "Filter related purchase transactions presence...", label: nil, options: nil, wire: .param(name: "financialTransactionPresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .search, .create, .update, .bulkUpdate, .delete]
+    relations: [
+      RelationDescriptor(key: "purchase", label: "Purchase", target: .purchase, cardinality: .one),
+      RelationDescriptor(key: "project", label: "Project", target: .project, cardinality: .one),
+      RelationDescriptor(key: "product", label: "Product", target: .product, cardinality: .one),
+      RelationDescriptor(key: "transactions", label: "Purchase transactions", target: .financialTransaction, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .primary, collapsed: false, kind: .fields(["name", "cost", "date", "lineKind", "costType", "trade", "future", "url", "notes", "vendor", "orderId", "projectId", "productId", "lineBasis", "productQuantity"])),
+        DetailSection(id: "purchase", title: "Purchase", placement: .supporting, collapsed: false, kind: .fields(["purchaseId"])),
+        DetailSection(id: "settlement", title: "Settlement", placement: .supporting, collapsed: false, kind: .slot)
+      ],
+      listViews: [.table, .slot(id: "analytics", label: "Analytics", searchKeys: ["analyzeRows", "analyzeColumns", "analyzeMetric", "analyzeCompare", "analyzeShow"])],
+      shelfSubtitle: [],
+      listActions: ["setCostType", "setTrade", "moveToProject", "delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let usdaFoodDescriptor: EntityDescriptor =
@@ -1106,20 +1824,40 @@ public enum EntityCatalog {
     titleField: "description",
     domain: .pantry,
     sfSymbol: "leaf.fill",
-    countable: false,
+    searchable: false,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "fdc_id", label: "FDC ID", kind: .identifier, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "description", label: "Description", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "brandedFoodInfo", label: "Branded food information", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "foodInfo", label: "Food information", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "legacyFoodInfo", label: "Legacy food information", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "nutritionInfo", label: "Nutrition", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "portionInfoRaw", label: "Portions", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "inferredUnitMappings", label: "Inferred unit mappings", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "linkedProducts", label: "Linked products", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "fdc_id", label: "FDC ID", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "description", label: "Description", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "brandedFoodInfo", label: "Branded food information", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "foodInfo", label: "Food information", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "legacyFoodInfo", label: "Legacy food information", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "nutritionInfo", label: "Nutrition", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "portionInfoRaw", label: "Portions", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "inferredUnitMappings", label: "Inferred unit mappings", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "linkedProducts", label: "Linked products", kind: .json, nullable: false, reference: FieldReference(entity: .product, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [],
-    actions: []
+    relations: [],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: [],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .primary, collapsed: false, kind: .fields(["fdc_id", "brandedFoodInfo", "foodInfo", "legacyFoodInfo", "nutritionInfo", "portionInfoRaw", "inferredUnitMappings", "linkedProducts"]))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: [],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let imageDescriptor: EntityDescriptor =
@@ -1132,40 +1870,61 @@ public enum EntityCatalog {
     titleField: "filename",
     domain: nil,
     sfSymbol: "photo",
-    countable: true,
+    searchable: false,
+    timeline: nil,
     fields: [
-      FieldDescriptor(key: "filename", label: "Filename", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "url", label: "Url", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "key", label: "Key", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "size", label: "Size", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "contentType", label: "Content Type", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "width", label: "Width", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "height", label: "Height", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "perceptualHash", label: "Perceptual Hash", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceFingerprint", label: "Source Fingerprint", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "detectedContentType", label: "Detected Content Type", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sha256", label: "Sha256", kind: .text, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "renderStatus", label: "Render Status", kind: .`enum`, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "storageStatus", label: "Storage Status", kind: .`enum`, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "verifiedAt", label: "Verified At", kind: .timestamp, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "targetType", label: "Target Type", kind: .`enum`, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "targetId", label: "Target ID", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "idempotencyKey", label: "Idempotency Key", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "filename", label: "Filename", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "url", label: "Url", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "key", label: "Key", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "size", label: "Size", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "contentType", label: "Content Type", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "width", label: "Width", kind: .number, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "height", label: "Height", kind: .number, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "perceptualHash", label: "Perceptual Hash", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceFingerprint", label: "Source Fingerprint", kind: .json, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "detectedContentType", label: "Detected Content Type", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sha256", label: "Sha256", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "renderStatus", label: "Render Status", kind: .`enum`, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "storageStatus", label: "Storage Status", kind: .`enum`, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "verifiedAt", label: "Verified At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "targetType", label: "Target Type", kind: .`enum`, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "targetId", label: "Target ID", kind: .identifier, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "idempotencyKey", label: "Idempotency Key", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "filename", urlKey: "filename", kind: .text, placeholder: "Filter by filename...", label: nil, options: nil),
-      FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by upload status...", label: nil, options: [FilterOption(value: "PENDING", label: "Pending"), FilterOption(value: "UPLOADED", label: "Uploaded"), FilterOption(value: "FAILED", label: "Failed")]),
-      FilterDescriptor(columnId: "entity", urlKey: "entity", kind: .presence, placeholder: "Filter references...", label: nil, options: [FilterOption(value: "has", label: "Has reference"), FilterOption(value: "none", label: "(none)")]),
-      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "olderThan1h", label: "Older than 1 hour"), FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
-      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
+      FilterDescriptor(columnId: "filename", urlKey: "filename", kind: .text, placeholder: "Filter by filename...", label: nil, options: nil, wire: .param(name: "nameFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by upload status...", label: nil, options: [LabeledOption(value: "PENDING", label: "Pending"), LabeledOption(value: "UPLOADED", label: "Uploaded"), LabeledOption(value: "FAILED", label: "Failed")], wire: .param(name: "status"), targetEntity: nil),
+      FilterDescriptor(columnId: "entity", urlKey: "entity", kind: .presence, placeholder: "Filter references...", label: nil, options: [LabeledOption(value: "has", label: "Has reference"), LabeledOption(value: "none", label: "(none)")], wire: .param(name: "referencePresenceFilter"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "olderThan1h", label: "Older than 1 hour"), LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdAtFrom", to: "createdAtTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedAtFrom", to: "updatedAtTo", presence: nil), targetEntity: nil)
     ],
-    actions: [.get, .list, .update, .delete]
+    relations: [],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["filename", "url", "key", "size", "contentType", "status", "width", "height", "detectedContentType", "sha256", "renderStatus", "storageStatus", "verifiedAt", "createdAt", "updatedAt"])),
+        DetailSection(id: "associations", title: "Used by", placement: .primary, collapsed: false, kind: .slot)
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
   )
 
   private static let plantingDescriptor: EntityDescriptor =
@@ -1178,35 +1937,81 @@ public enum EntityCatalog {
     titleField: "displayName",
     domain: .house,
     sfSymbol: "leaf",
-    countable: true,
+    searchable: true,
+    timeline: .default,
     fields: [
-      FieldDescriptor(key: "ingredientId", label: "Ingredient Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sourceProductId", label: "Source Product Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "locationId", label: "Location Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "intendedLocationId", label: "Intended Location Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "parentPlantingId", label: "Parent Planting Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "variety", label: "Variety", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "quantity", label: "Quantity", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "plannedWindow", label: "Planned Window", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "plannedDate", label: "Planned Date", kind: .date, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "sowedOn", label: "Sowed On", kind: .date, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "transplantedOn", label: "Transplanted On", kind: .date, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "finishedOn", label: "Finished On", kind: .date, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "images", label: "Images", kind: .json, controlKind: nil, section: "overview", showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "ingredientId", label: "Crop", kind: .identifier, nullable: false, reference: FieldReference(entity: .ingredient, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceProductId", label: "Seed source", kind: .identifier, nullable: true, reference: FieldReference(entity: .product, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "locationId", label: "Location", kind: .identifier, nullable: true, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "intendedLocationId", label: "Intended location", kind: .identifier, nullable: true, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "parentPlantingId", label: "Split from", kind: .identifier, nullable: true, reference: FieldReference(entity: .planting, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 6, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "status", label: "Status", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "planned", label: "Planned"), LabeledOption(value: "growing", label: "Growing"), LabeledOption(value: "finished", label: "Finished")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "variety", label: "Variety", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "quantity", label: "Quantity", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 7, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 13, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "plannedWindow", label: "Planned Window", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 8, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "plannedDate", label: "Planned Date", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 9, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sowedOn", label: "Sowed On", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 10, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "transplantedOn", label: "Transplanted On", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 11, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "finishedOn", label: "Finished On", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 12, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "inLocationSince", label: "In location since", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "inLocationSinceKind", label: "Location start", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "actual", label: "Actual date"), LabeledOption(value: "recorded", label: "Recorded date")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "ingredientName", label: "Ingredient Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "sourceProductName", label: "Source Product Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "locationName", label: "Location Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "intendedLocationName", label: "Intended Location Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "gardenGuideKey", label: "Garden Guide Key", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
-    filters: [],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    filters: [
+      FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "planned", label: "Planned"), LabeledOption(value: "growing", label: "Growing"), LabeledOption(value: "finished", label: "Finished")], wire: .param(name: "status"), targetEntity: nil),
+      FilterDescriptor(columnId: "locationId", urlKey: "locationId", kind: .idMulti, placeholder: "Filter by location...", label: nil, options: nil, wire: .param(name: "locationId"), targetEntity: .location),
+      FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by crop...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: .ingredient),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
+    ],
+    relations: [
+      RelationDescriptor(key: "ingredient", label: "Ingredient", target: .ingredient, cardinality: .one),
+      RelationDescriptor(key: "source-product", label: "Source product", target: .product, cardinality: .one),
+      RelationDescriptor(key: "location", label: "Current location", target: .location, cardinality: .one),
+      RelationDescriptor(key: "intended-location", label: "Intended location", target: .location, cardinality: .one),
+      RelationDescriptor(key: "parent-planting", label: "Parent planting", target: .planting, cardinality: .one),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
+      RelationDescriptor(key: "location-history", label: "Location history", target: .location, cardinality: .many),
+      RelationDescriptor(key: "entries", label: "Journal entries", target: .gardenEntry, cardinality: .many),
+      RelationDescriptor(key: "location-history-entries", label: "Location history entries", target: .gardenEntry, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .journal,
+      heroChip: "status",
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit", "startPlanting", "movePlanting", "splitPlanting", "finishPlanting"],
+      detailSections: [
+        DetailSection(id: "garden-history", title: "Journal", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "entries", filterDescriptor: "plantingId", columns: ["kind", "observedOn", "locationId", "note", "harvestAmount"], sort: SectionSort(field: "observedOn", direction: .desc), limit: nil))),
+        DetailSection(id: "overview", title: "Planting details", placement: .supporting, collapsed: false, kind: .fields(["ingredientId", "variety", "status", "locationId", "intendedLocationId", "sourceProductId", "parentPlantingId", "quantity", "plannedWindow", "plannedDate", "sowedOn", "transplantedOn", "finishedOn", "notes"])),
+        DetailSection(id: "location-history", title: "Location history", placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "planting-guide", title: "Local planting guide", placement: .supporting, collapsed: false, kind: .slot)
+      ],
+      listViews: [.table, .timeline],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: ["plannedDate", "sowedOn", "transplantedOn", "finishedOn"],
+      lifecycle: TimelineLifecycle(start: "sowedOn", milestones: ["plannedDate", "transplantedOn"], end: "finishedOn"),
+      editSections: nil,
+      readOnlyOnUpdate: ["status", "locationId"],
+      readOnlyWhen: []
+    )
   )
 
   private static let gardenEntryDescriptor: EntityDescriptor =
@@ -1219,27 +2024,61 @@ public enum EntityCatalog {
     titleField: "displayName",
     domain: .house,
     sfSymbol: "text.badge.plus",
-    countable: true,
+    searchable: true,
+    timeline: .default,
     fields: [
-      FieldDescriptor(key: "locationId", label: "Location Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "plantingId", label: "Planting Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "observedOn", label: "Observed On", kind: .date, controlKind: .date, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "note", label: "Note", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "harvestAmount", label: "Harvest Amount", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "images", label: "Images", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+      FieldDescriptor(key: "locationId", label: "Location Id", kind: .identifier, nullable: false, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "plantingId", label: "Planting Id", kind: .identifier, nullable: true, reference: FieldReference(entity: .planting, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "observation", label: "Observation"), LabeledOption(value: "harvest", label: "Harvest"), LabeledOption(value: "move", label: "Move")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "observedOn", label: "Observed On", kind: .date, nullable: false, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: "today", inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "note", label: "Note", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "harvestAmount", label: "Harvest Amount", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "locationName", label: "Location Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "plantingName", label: "Planting Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "anchorsPeriod", label: "Anchors a location period", kind: .boolean, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 6, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
-    filters: [],
-    actions: [.get, .list, .search, .create, .update, .delete]
+    filters: [
+      FilterDescriptor(columnId: "kind", urlKey: "kind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [LabeledOption(value: "observation", label: "Observation"), LabeledOption(value: "harvest", label: "Harvest"), LabeledOption(value: "move", label: "Move")], wire: .param(name: "kind"), targetEntity: nil),
+      FilterDescriptor(columnId: "locationId", urlKey: "locationId", kind: .idMulti, placeholder: "Filter by location...", label: nil, options: nil, wire: .param(name: "locationId"), targetEntity: .location),
+      FilterDescriptor(columnId: "plantingId", urlKey: "plantingId", kind: .idMulti, placeholder: "Filter by planting...", label: nil, options: nil, wire: .param(name: "plantingId"), targetEntity: .planting),
+      FilterDescriptor(columnId: "journalPlantingId", urlKey: "journalPlantingId", kind: .id, placeholder: "Journal for planting...", label: nil, options: nil, wire: .param(name: "journalPlantingId"), targetEntity: .planting),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
+    ],
+    relations: [
+      RelationDescriptor(key: "location", label: "Location", target: .location, cardinality: .one),
+      RelationDescriptor(key: "planting", label: "Planting", target: .planting, cardinality: .one),
+      RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: true,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "entry", title: "Entry", placement: .primary, collapsed: false, kind: .fields(["kind", "observedOn", "locationId", "plantingId", "note", "harvestAmount", "anchorsPeriod"]))
+      ],
+      listViews: [.table, .timeline],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: ["observedOn"],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: [ReadOnlyRule(field: "kind", equals: .string("move"), fields: ["locationId", "plantingId", "kind", "observedOn"]), ReadOnlyRule(field: "anchorsPeriod", equals: .bool(true), fields: ["locationId", "plantingId", "kind", "observedOn"])]
+    )
   )
 
   public static let all: [EntityDescriptor] = [

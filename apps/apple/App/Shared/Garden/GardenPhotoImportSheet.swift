@@ -114,7 +114,7 @@ final class GardenPhotoImportModel {
     private var committedDestination: (locationID: String, plantingID: String?)?
 
     convenience init(client: CubbyClient, items: [PhotoSelectionItem]) async {
-        let uploader = GardenImageUploader(service: client)
+        let uploader = PendingImageUploader(entity: .gardenEntry, service: client)
         await self.init(
             items: items,
             client: client,
@@ -401,10 +401,12 @@ private struct GardenPhotoImportContent: View {
             .disabled(model.isSaving || !model.confirmedDraftIDs.isEmpty)
             ForEach($model.drafts) { $draft in
                 Section(draft.date.formatted(date: .abbreviated, time: .omitted)) {
-                    GardenObservationDatePicker(
+                    DatePicker(
+                        GardenStrings.date,
                         selection: Binding(
                             get: { draft.date },
-                            set: { model.setDate($0, for: draft.id) }))
+                            set: { model.setDate($0, for: draft.id) }),
+                        displayedComponents: .date)
                     if draft.requiresDateConfirmation {
                         Label(
                             "This photo has no capture date. Confirm the observation date.",

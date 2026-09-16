@@ -38,7 +38,6 @@ import {
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
 import { cn } from "~/lib/utils";
 
-import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
 import { NutritionLabel } from "../nutrition/NutritionLabel";
@@ -628,8 +627,6 @@ function RecipeReaderImages({
 
 const RecipeDetailInner: React.FC<{
   recipe: RecipeOut;
-  /** Route-only sections that belong in the same canonical anchor ledger. */
-  leadingSections?: DetailSection[];
   /** Controlled view mode (e.g. URL-driven on the detail route). */
   view?: RecipeViewMode;
   onViewChange?: (view: RecipeViewMode) => void;
@@ -646,7 +643,6 @@ const RecipeDetailInner: React.FC<{
   onCostingGapOpenChange?: (open: boolean) => void;
 }> = ({
   recipe,
-  leadingSections = [],
   view: controlledView,
   onViewChange,
   scale: controlledScale,
@@ -775,49 +771,37 @@ const RecipeDetailInner: React.FC<{
     [totalsGaps],
   );
 
-  const sections: DetailSection[] = [
-    ...leadingSections,
-    {
-      id: "recipe-workflow",
-      title: "Recipe",
-      icon: BookOpen,
-      placement: "full",
-      surface: "plain",
-      content: (
-        <RecipeWorkflowContent
-          recipe={recipe}
-          scaledRecipe={scaledRecipe}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          factor={factor}
-          setFactor={setFactor}
-          totals={totals}
-          missingWeightLinks={missingWeightLinks}
-          totalsGaps={totalsGaps}
-          openCostingGap={openCostingGap}
-          onCostingGapOpenChange={onCostingGapOpenChange}
-          costingCoverageResolved={costing !== null && ingMap !== null}
-          wakeLock={wakeLock}
-          tree={tree}
-          costing={costing}
-          flowLayout={flowLayout}
-          onFlowLayoutChange={onFlowLayoutChange}
-          ingredientDataItems={ingredientDataItems}
-          ingredients={ingredients}
-          ingMap={ingMap ?? undefined}
-          nutritionNutrients={nutritionNutrients}
-          nutritionServingLabel={nutritionServingLabel}
-          nutritionBasis={nutritionBasis}
-          onNutritionBasisChange={setNutritionBasis}
-          hasServingBasis={nutritionView.hasServing}
-          recipeImages={recipeImages}
-          isDebugEnabled={isDebugEnabled}
-        />
-      ),
-    },
-  ];
-
-  return <DetailSections sections={sections} rawData={recipe} />;
+  return (
+    <RecipeWorkflowContent
+      recipe={recipe}
+      scaledRecipe={scaledRecipe}
+      viewMode={viewMode}
+      setViewMode={setViewMode}
+      factor={factor}
+      setFactor={setFactor}
+      totals={totals}
+      missingWeightLinks={missingWeightLinks}
+      totalsGaps={totalsGaps}
+      openCostingGap={openCostingGap}
+      onCostingGapOpenChange={onCostingGapOpenChange}
+      costingCoverageResolved={costing !== null && ingMap !== null}
+      wakeLock={wakeLock}
+      tree={tree}
+      costing={costing}
+      flowLayout={flowLayout}
+      onFlowLayoutChange={onFlowLayoutChange}
+      ingredientDataItems={ingredientDataItems}
+      ingredients={ingredients}
+      ingMap={ingMap ?? undefined}
+      nutritionNutrients={nutritionNutrients}
+      nutritionServingLabel={nutritionServingLabel}
+      nutritionBasis={nutritionBasis}
+      onNutritionBasisChange={setNutritionBasis}
+      hasServingBasis={nutritionView.hasServing}
+      recipeImages={recipeImages}
+      isDebugEnabled={isDebugEnabled}
+    />
+  );
 };
 
 // Profiled boundary so the perf overlay can attribute the recipe-detail render

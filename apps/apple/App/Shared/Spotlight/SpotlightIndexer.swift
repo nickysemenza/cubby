@@ -35,8 +35,8 @@ actor SpotlightIndexer {
         defer { running = false }
         let index = CSSearchableIndex.default()
         do {
-            // `httpActions` is authoritative over the kernel roster's `descriptor.actions` — it's
-            // the set the HTTP document actually routes (see `GenericEntityListModel.load`).
+            // `httpActions` is the set the HTTP document routes; `nativeActions` is the subset the
+            // generated client carries for create/update/delete/timeline.
             for descriptor in EntityCatalog.intentExposed where descriptor.key.httpActions.contains(.list) {
                 let items = try await Self.items(for: descriptor, client: client)
                 try await index.deleteSearchableItems(withDomainIdentifiers: [

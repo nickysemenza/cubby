@@ -99,7 +99,7 @@ export default defineEntity({
       {
         key: "url",
         kind: "text",
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.url(),
           create: null,
@@ -109,7 +109,7 @@ export default defineEntity({
       {
         key: "key",
         kind: "text",
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.string(),
           create: null,
@@ -150,7 +150,7 @@ export default defineEntity({
         key: "width",
         kind: "number",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.number().int().positive().nullable(),
           create: null,
@@ -161,7 +161,7 @@ export default defineEntity({
         key: "height",
         kind: "number",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.number().int().positive().nullable(),
           create: null,
@@ -195,7 +195,7 @@ export default defineEntity({
         key: "sha256",
         kind: "text",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: null,

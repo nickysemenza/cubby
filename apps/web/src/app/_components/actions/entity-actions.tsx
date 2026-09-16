@@ -25,6 +25,7 @@ import {
   verbBulkAction,
 } from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
+import { declaredEntityActionDefinitions } from "./declared-entity-actions";
 import { deleteEntityActionDefinition } from "./delete-entity-action";
 import {
   defineEntityAction,
@@ -340,6 +341,7 @@ const entityActions: readonly EntityActionDefinition[] = [
   ...mergeEntityActionDefinitions,
   ...productRosterEntityActionDefinitions,
   ...specialistLifecycleEntityActionDefinitions,
+  ...declaredEntityActionDefinitions,
   deleteEntityActionDefinition,
   defineEntityAction({
     verb: "markPurchased",
@@ -707,9 +709,9 @@ const EntityActionsContext = createContext<EntityActionsContextValue | null>(
  * `createActionsColumn` builds a column def, and its callers build columns
  * inside a `useMemo` — neither is a legal place to call a hook, and mounting
  * the definitions per row would give each row its own copy of every dialog. A
- * cell *can* read a context, which is how `createExpenseProductImageColumn`
- * already reaches shared per-table data. So the surface resolves the actions
- * once (the same call that renders `dialogs`) and publishes them here.
+ * cell *can* read a context, which is how a column reaches shared per-table
+ * data. So the surface resolves the actions once (the same call that renders
+ * `dialogs`) and publishes them here.
  *
  * Nested providers **merge**: a table publishes its own entity, then nests a
  * second provider for the subject entity. The nearest entry for a given entity
@@ -787,15 +789,28 @@ export function EntityActionButtons({
   entity,
   record,
   surface = "detail",
+  verbs,
 }: {
   entity: Entity;
   record: EntityActionRow;
   surface?: "detail" | "inspector";
+  /**
+   * Only these verbs render (the manifest's declared `hero.actions`); the
+   * registry's full roster otherwise. `copyCodes` always stays reachable —
+   * it is the one generic verb every shortcode entity has.
+   */
+  verbs?: readonly ActionVerbId[];
 }) {
   const { detailActions, inspectorActions, dialogs } = useEntityActions(entity);
   const actions = surface === "inspector" ? inspectorActions : detailActions;
   if (actions.length === 0) return null;
   const visible = actions.flatMap((action) => {
+    if (
+      verbs !== undefined &&
+      action.verb !== "copyCodes" &&
+      !verbs.includes(action.verb)
+    )
+      return [];
     const availability = action.availability(record);
     return availability.status === "hidden" ? [] : [{ action, availability }];
   });

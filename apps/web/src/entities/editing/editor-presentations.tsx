@@ -1,3 +1,4 @@
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -741,6 +742,39 @@ const presentations = {
   >;
 };
 
+/**
+ * The presentation every entity gets without a hand-written one: the
+ * intent's declared fields in model order (`EntityIntentFields`), titled from
+ * the manifest singular. A bespoke entry above wins when it exists — it
+ * carries copy or a field layout the declaration cannot express.
+ */
+function genericPresentation<E extends EditableEntity>(input: {
+  entity: E;
+  operation: EntityEditOperation;
+  intent: string;
+}): EntityEditorPresentation<E> {
+  const { singular } = entitySummary[input.entity];
+  const isUpdate = input.operation === "update";
+  const Fields = () => (
+    <EntityIntentFields
+      entity={input.entity}
+      intent={input.intent}
+      mode={isUpdate ? "edit" : "create"}
+    />
+  );
+  return {
+    title: () => (isUpdate ? `Edit ${singular}` : `New ${singular}`),
+    description: () =>
+      isUpdate
+        ? `Change this ${singular.toLocaleLowerCase()}'s own fields.`
+        : `Add a ${singular.toLocaleLowerCase()}.`,
+    submitLabel: isUpdate ? "Save changes" : "Create",
+    Fields,
+    successMessage: () =>
+      isUpdate ? `${singular} updated` : `${singular} created`,
+  };
+}
+
 export function getEntityEditorPresentation<E extends EditableEntity>(input: {
   entity: E;
   operation: EntityEditOperation;
@@ -750,10 +784,9 @@ export function getEntityEditorPresentation<E extends EditableEntity>(input: {
   const presentation = Object.entries(presentations).find(
     ([candidate]) => candidate === key,
   )?.[1];
-  return z
-    .custom<EntityEditorPresentation<E>>(
-      (candidate) => candidate !== undefined,
-      `No entity editor presentation for ${key}`,
-    )
-    .parse(presentation);
+  if (presentation === undefined) return genericPresentation(input);
+  // SAFETY: `presentations` is keyed `${entity}:${operation}:${intent}` and
+  // each value is typed against that key's entity; the string match above
+  // recovers the entry for this call's entity.
+  return presentation as EntityEditorPresentation<E>;
 }

@@ -125,9 +125,9 @@ extension ScanStrayOut: Identifiable {
 // MARK: - Search
 
 extension SearchHit {
-    /// `entityType` spells entity keys the way `EntityKey` does, so this resolves for every
-    /// catalog entity and is `nil` only for a kind the catalog has not learned yet.
-    public var key: EntityKey? { EntityKey(rawValue: entityType.rawValue) }
+    /// `entityType` is the raw searchable-entity name; `nil` for a kind the catalog does not
+    /// declare, which `SearchModel` drops rather than renders.
+    public var key: EntityKey? { EntityKey(rawValue: entityType) }
     public var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
 
     /// The server's caps on a `search.find` query.
@@ -148,14 +148,6 @@ extension UpcLookupOutput {
 }
 
 // MARK: - Meals and nutrition
-
-extension MealOut {
-    public var recipeNames: [String] { recipes.map(\.recipe.name) }
-}
-
-extension MealListItem {
-    public var recipeNames: [String] { recipes.map(\.recipe.name) }
-}
 
 extension NutritionMeal {
     public var displayName: String {
@@ -221,51 +213,17 @@ extension MealNutritionFood: Identifiable {
     }
 }
 
-/// The four everyday macros out of a `MealTotals.nutrition` map, each an honest estimate.
-public struct MacroSummary: Sendable, Hashable {
-    public let calories: MeasureEstimate
-    public let protein: MeasureEstimate
-    public let carbs: MeasureEstimate
-    public let fat: MeasureEstimate
-
-    public init(
-        calories: MeasureEstimate, protein: MeasureEstimate, carbs: MeasureEstimate, fat: MeasureEstimate
-    ) {
-        self.calories = calories
-        self.protein = protein
-        self.carbs = carbs
-        self.fat = fat
-    }
-
-    public init(_ totals: MealTotals) {
-        let nutrition = totals.nutrition.additionalProperties
-        calories = nutrition["kcal"] ?? .noEstimate
-        protein = nutrition["protein"] ?? .noEstimate
-        carbs = nutrition["carbs"] ?? .noEstimate
-        fat = nutrition["fat"] ?? .noEstimate
-    }
-
-    public var containsPartialEstimate: Bool {
-        [calories, protein, carbs, fat].contains { $0.isPartial }
-    }
-}
-
-extension MeasureEstimate {
-    /// The estimate for a nutrient the totals map does not carry.
-    static let noEstimate = MeasureEstimate.unavailable(.init(status: .unavailable, reason: .noData))
-
-    public var isPartial: Bool {
-        if case .partial = self { return true }
-        return false
-    }
+extension MacroSummary {
+    /// The server's `partial`: at least one of the four macros is a partial estimate.
+    public var containsPartialEstimate: Bool { partial }
 }
 
 // MARK: - Dashboard and Today
 
 extension DashboardCountsOut {
-    /// Row counts keyed by `EntityKey.rawValue`, read off the JSON projection so a newly countable
+    /// Row counts keyed by `EntityKey.rawValue`, read off the JSON projection so a newly counted
     /// entity needs no hand-listed arm here. The response spells the USDA food count `usdaFoods`
-    /// (plural) and USDA foods are not `countable` in the manifest, so that key is mapped by hand.
+    /// (plural), so that key is mapped by hand.
     public func count(for key: EntityKey) -> Int? {
         guard let counts = try? JSONValue(encoding: self), case .object(let fields) = counts else {
             return nil
@@ -287,65 +245,6 @@ extension InitiateUploadWithoutEntity {
         self.init(filename: filename, size: size, contentType: format == .png ? .imagePng : .imageJpeg)
         entityType = EntityImage(rawValue: entity.rawValue.uppercased())
     }
-}
-
-// MARK: - Garden
-
-extension GardenPlantingOut {
-    /// `resources.planting.get` carries ids only; the names come from the garden options set.
-    public init(_ detail: PlantingDetail, options: GardenOptionsOut) {
-        let ingredient = options.ingredients.first { $0.id == detail.ingredientId }
-        self.init(
-            id: detail.id, ingredientId: detail.ingredientId, sourceProductId: detail.sourceProductId,
-            locationId: detail.locationId, intendedLocationId: detail.intendedLocationId,
-            parentPlantingId: detail.parentPlantingId, status: detail.status, variety: detail.variety,
-            quantity: detail.quantity, notes: detail.notes, plannedWindow: detail.plannedWindow,
-            plannedDate: detail.plannedDate, sowedOn: detail.sowedOn, transplantedOn: detail.transplantedOn,
-            finishedOn: detail.finishedOn, displayName: detail.displayName, createdAt: detail.createdAt,
-            updatedAt: detail.updatedAt, ingredientName: ingredient?.name ?? detail.ingredientId,
-            gardenGuideKey: ingredient?.gardenGuideKey,
-            sourceProductName: detail.sourceProductId.flatMap { id in
-                options.products.first { $0.id == id }?.name
-            },
-            locationName: detail.locationId.flatMap { id in options.locations.first { $0.id == id }?.name },
-            intendedLocationName: detail.intendedLocationId.flatMap { id in
-                options.locations.first { $0.id == id }?.name
-            })
-    }
-}
-
-extension GardenEntryOut {
-    public init(_ detail: GardenEntryDetail) {
-        self.init(
-            id: detail.id, locationId: detail.locationId, plantingId: detail.plantingId, kind: detail.kind,
-            observedOn: detail.observedOn, note: detail.note, harvestAmount: detail.harvestAmount,
-            images: detail.attachments.map {
-                ImageOut(
-                    id: $0.id, url: $0.url, key: $0.key, filename: $0.filename, size: $0.size,
-                    contentType: $0.contentType, status: $0.status, width: $0.width, height: $0.height,
-                    detectedContentType: $0.detectedContentType, sha256: $0.sha256,
-                    renderStatus: $0.renderStatus, storageStatus: $0.storageStatus,
-                    verifiedAt: $0.verifiedAt, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
-            },
-            displayName: detail.displayName, createdAt: detail.createdAt, updatedAt: detail.updatedAt,
-            locationName: detail.locationName, plantingName: detail.plantingName,
-            anchorsPeriod: detail.anchorsPeriod)
-    }
-
-    /// The journal row is the entry plus the bed context it was read through.
-    public init(_ journal: GardenJournalEntryOut) {
-        self.init(
-            id: journal.id, locationId: journal.locationId, plantingId: journal.plantingId,
-            kind: journal.kind, observedOn: journal.observedOn, note: journal.note,
-            harvestAmount: journal.harvestAmount, images: journal.images, displayName: journal.displayName,
-            createdAt: journal.createdAt, updatedAt: journal.updatedAt, locationName: journal.locationName,
-            plantingName: journal.plantingName, anchorsPeriod: journal.anchorsPeriod)
-    }
-}
-
-extension GardenJournalEntryOut {
-    /// The entry without its bed context, for views that render entries from either source.
-    public var entry: GardenEntryOut { GardenEntryOut(self) }
 }
 
 extension ImageOut {

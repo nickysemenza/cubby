@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Clock } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock } from "lucide-react";
 import {
   type FC,
   type ReactNode,
@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
 
+import type { ActionVerbId } from "../actions/action-verbs";
 import {
   EntityActionButtons,
   type EntityActionRow,
@@ -131,6 +132,32 @@ export interface DetailSection {
   /** Specialized workflows can supply their own internal surface while retaining
    * the shared index, relationship, activity, and debug extensions. */
   surface?: "card" | "plain";
+  /** Starts folded; the body mounts only once opened (a heavy analytics view). */
+  collapsed?: boolean;
+}
+
+function CollapsedSectionBody({
+  section,
+}: {
+  section: Pick<DetailSection, "title" | "content">;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <ChevronRight
+          className={cn("size-3.5 transition-transform", open && "rotate-90")}
+        />
+        {open ? "Hide" : "Show"} {section.title.toLocaleLowerCase()}
+      </Button>
+      {open ? <div className="mt-2">{section.content}</div> : null}
+    </div>
+  );
 }
 
 function SectionCard({
@@ -174,7 +201,11 @@ function SectionCard({
           <div className="shrink-0">{section.headerAction}</div>
         ) : null}
       </div>
-      <div className="mt-2">{section.content}</div>
+      {section.collapsed ? (
+        <CollapsedSectionBody section={section} />
+      ) : (
+        <div className="mt-2">{section.content}</div>
+      )}
     </section>
   );
 }
@@ -462,6 +493,8 @@ interface DetailSectionsProps {
   heroMedia?: ReactNode;
   /** Page-owned action hosts (such as Image's hero) suppress this generic one. */
   showEntityActions?: boolean;
+  /** Restrict the command strip's verbs to the manifest's declared ones. */
+  actionVerbs?: readonly ActionVerbId[];
 }
 
 function resolveRelationshipDetail(
@@ -566,6 +599,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   heroImages,
   heroMedia,
   showEntityActions = true,
+  actionVerbs,
 }) => {
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
@@ -595,11 +629,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     visibleSections,
   );
   const relationshipSection = relationshipDetail.section;
-  // Every auditable entity gets its audit trail for free — callers used to
-  // hand-wire an identical `AuditLogList` card themselves (five detail pages did,
-  // byte-for-byte). The id check is the opt-out: a page that already places its
-  // own `id: "history"` section (e.g. via `useEntityDetail`'s commonSections, or
-  // a custom placement) keeps that one instead of getting a second.
+  // Every auditable entity gets its audit trail for free. The id check is the
+  // opt-out: a page that already places its own `id: "history"` section
+  // keeps that one instead of getting a second.
   const activityDetail = resolveActivityDetail(
     pageDetail,
     sourceId,
@@ -691,7 +723,11 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const actionRecord = contextActionRecord(pageDetail, detailRecord, sourceId);
   const entityActions =
     showEntityActions && pageDetail && actionRecord ? (
-      <EntityActionButtons entity={pageDetail.entity} record={actionRecord} />
+      <EntityActionButtons
+        entity={pageDetail.entity}
+        record={actionRecord}
+        verbs={actionVerbs}
+      />
     ) : null;
   const hasOverviewTools =
     overviewSections.filter((section) => section.includeInIndex !== false)

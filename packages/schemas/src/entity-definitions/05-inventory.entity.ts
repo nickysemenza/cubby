@@ -49,7 +49,7 @@ export default defineEntity({
       ],
     },
     list: {
-      actions: ["moveTo", "bulkEdit", "delete"],
+      actions: ["moveTo", "delete"],
       links: [
         { label: "Recount", path: "/inventory/session" },
         { label: "Bulk edit", path: "/inventory/bulk-edit" },

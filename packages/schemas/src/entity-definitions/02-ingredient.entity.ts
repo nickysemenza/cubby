@@ -59,7 +59,13 @@ export default defineEntity({
         },
       ],
     },
-    list: { actions: ["setUsuallyOnHand", "merge", "delete"] },
+    list: {
+      actions: ["setUsuallyOnHand", "merge", "delete"],
+      links: [
+        { label: "Equivalences", path: "/ingredients/equivalences" },
+        { label: "Workbench", path: "/ingredients/workbench" },
+      ],
+    },
   },
   model: {
     fields: [

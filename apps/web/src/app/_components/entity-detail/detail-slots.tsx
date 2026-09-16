@@ -1,0 +1,205 @@
+import type { DetailSlotId } from "@cubby/schemas/entity-manifest";
+import { type FunctionComponent, lazy, type LazyExoticComponent } from "react";
+
+import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+
+/** A slot renders one declared section body against the loaded record. */
+export type DetailSlotComponent<E extends GenericDetailEntity> =
+  FunctionComponent<{ record: DetailRecordOf<E> }>;
+
+export interface DetailSlot<E extends GenericDetailEntity> {
+  component: LazyExoticComponent<DetailSlotComponent<E>>;
+  /**
+   * Whether the section renders for this record at all — a garden section
+   * on a product that grows nothing has no header to show. Synchronous on
+   * purpose: it decides the section ledger before anything loads.
+   */
+  applies?(record: DetailRecordOf<E>): boolean;
+}
+
+type SlotModule<T> = Promise<{ default: T }>;
+const slot = <E extends GenericDetailEntity>(
+  load: () => SlotModule<DetailSlotComponent<E>>,
+  applies?: (record: DetailRecordOf<E>) => boolean,
+): DetailSlot<E> =>
+  applies ? { component: lazy(load), applies } : { component: lazy(load) };
+
+/**
+ * The web fills for every `kind: "slot"` section the declarations name.
+ * Keyed by `DetailSlotId<E>`, so a slot id the declaration drops (or
+ * misspells) fails to compile here. Each fill is lazy: a detail route's
+ * chunk carries only the slots its own entity declares.
+ */
+export const detailSlots = {
+  product: {
+    garden: slot(
+      () =>
+        import("~/app/garden/slots").then((m) => ({
+          default: m.ProductGarden,
+        })),
+      (product) => product.growsIngredientId !== null,
+    ),
+    nutrition: slot(() =>
+      import("~/app/products/slots").then((m) => ({
+        default: m.ProductNutrition,
+      })),
+    ),
+    "unit-mappings": slot(() =>
+      import("~/app/products/slots").then((m) => ({
+        default: m.ProductUnitMappings,
+      })),
+    ),
+    "fits-with": slot(() =>
+      import("~/app/products/slots").then((m) => ({
+        default: m.ProductFitsWith,
+      })),
+    ),
+    cookbooks: slot(
+      () =>
+        import("~/app/products/slots").then((m) => ({
+          default: m.ProductCookbooks,
+        })),
+      (product) => product.cookbooks.length > 0,
+    ),
+    "recipe-appearances": slot(
+      () =>
+        import("~/app/products/slots").then((m) => ({
+          default: m.ProductRecipeAppearances,
+        })),
+      (product) => product.ingredient !== null,
+    ),
+  },
+  recipe: {
+    workflow: slot(() =>
+      import("~/app/recipes/slots").then((m) => ({
+        default: m.RecipeWorkflow,
+      })),
+    ),
+  },
+  ingredient: {
+    garden: slot(
+      () =>
+        import("~/app/garden/slots").then((m) => ({
+          default: m.IngredientGarden,
+        })),
+      (ingredient) => ingredient.gardenGuideKey !== null,
+    ),
+    "nutrition-product": slot(() =>
+      import("~/app/ingredients/slots").then((m) => ({
+        default: m.IngredientNutritionProduct,
+      })),
+    ),
+  },
+  cookbook: {
+    toc: slot(() =>
+      import("~/app/cookbooks/slots").then((m) => ({
+        default: m.CookbookContents,
+      })),
+    ),
+    "import-progress": slot(() =>
+      import("~/app/cookbooks/slots").then((m) => ({
+        default: m.CookbookImportProgress,
+      })),
+    ),
+  },
+  location: {
+    garden: slot(
+      () =>
+        import("~/app/garden/slots").then((m) => ({
+          default: m.LocationGarden,
+        })),
+      (location) => location.gardenKind !== null,
+    ),
+    "contents-valuation": slot(() =>
+      import("~/app/locations/slots").then((m) => ({
+        default: m.LocationContentsValuation,
+      })),
+    ),
+    "ai-description": slot(() =>
+      import("~/app/locations/slots").then((m) => ({
+        default: m.LocationAiDescription,
+      })),
+    ),
+  },
+  meal: {
+    composition: slot(() =>
+      import("~/app/meals/slots").then((m) => ({
+        default: m.MealComposition,
+      })),
+    ),
+    nutrition: slot(() =>
+      import("~/app/meals/slots").then((m) => ({ default: m.MealNutrition })),
+    ),
+  },
+  project: {
+    budget: slot(() =>
+      import("~/app/projects/slots").then((m) => ({
+        default: m.ProjectBudget,
+      })),
+    ),
+    contribution: slot(() =>
+      import("~/app/projects/slots").then((m) => ({
+        default: m.ProjectContribution,
+      })),
+    ),
+    analytics: slot(() =>
+      import("~/app/projects/slots").then((m) => ({
+        default: m.ProjectAnalytics,
+      })),
+    ),
+  },
+  purchase: {
+    "project-allocation": slot(() =>
+      import("~/app/purchases/slots").then((m) => ({
+        default: m.PurchaseProjectAllocation,
+      })),
+    ),
+    reconciliation: slot(() =>
+      import("~/app/purchases/slots").then((m) => ({
+        default: m.PurchaseReconciliation,
+      })),
+    ),
+    "financial-settlement": slot(() =>
+      import("~/app/purchases/slots").then((m) => ({
+        default: m.PurchaseFinancialSettlement,
+      })),
+    ),
+  },
+  expense: {
+    settlement: slot(() =>
+      import("~/app/expenses/slots").then((m) => ({
+        default: m.ExpenseSettlement,
+      })),
+    ),
+  },
+  image: {
+    associations: slot(() =>
+      import("~/app/images/slots").then((m) => ({
+        default: m.ImageAssociations,
+      })),
+    ),
+  },
+  planting: {
+    "location-history": slot(() =>
+      import("~/app/garden/slots").then((m) => ({
+        default: m.PlantingLocationHistory,
+      })),
+    ),
+    "planting-guide": slot(() =>
+      import("~/app/garden/slots").then((m) => ({
+        default: m.PlantingGuide,
+      })),
+    ),
+  },
+} satisfies {
+  [E in GenericDetailEntity]?: Partial<Record<DetailSlotId<E>, DetailSlot<E>>>;
+};
+
+/** The slots for one entity, read through the erased map the page walks. */
+export const detailSlotsFor = (
+  entity: GenericDetailEntity,
+): Partial<Record<string, DetailSlot<never>>> | undefined =>
+  Object.hasOwn(detailSlots, entity)
+    ? // SAFETY: `hasOwn` proves `entity` is one of the registry's own keys.
+      detailSlots[entity as keyof typeof detailSlots]
+    : undefined;

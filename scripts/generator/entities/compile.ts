@@ -808,9 +808,12 @@ const validateRouteRosters = (
     throw new EntityDeclarationError(
       `${context}.route.detail.query is for entities outside the kernel detail roster; use detail: true.`,
     );
-  if (route.list === true && !inDetailRoster)
+  // A generated index route needs rows to list: the kernel list read for a
+  // roster entity, or (outside the roster) a client-paged override module in
+  // `apps/web/src/entities/list-columns` over the entity's own projection.
+  if (route.list === true && contract === null)
     throw new EntityDeclarationError(
-      `${context}.route.list is true but the entity has no create+update contract (no generated list); declare list: null.`,
+      `${context}.route.list is true but the entity has no contract (nothing to list); declare list: null.`,
     );
 };
 

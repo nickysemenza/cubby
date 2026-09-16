@@ -7,7 +7,7 @@ import Testing
 struct SearchHitTests {
     @Test func decodesHitsAndResolvesKinds() throws {
         let hits = try Fixtures.decode([SearchHit].self, from: "search-find.json")
-        #expect(hits.count == 2)
+        #expect(hits.count == 3)
         #expect(hits[0].key == .product)
         #expect(hits[0].imageURL?.host() == "images.example")
         #expect(hits[1].key == .location)
@@ -15,30 +15,11 @@ struct SearchHitTests {
         #expect(hits[1].typeHint == "box")
     }
 
-    @Test func stockedAtReadsInventoryEntries() throws {
-        let raw: JSONValue = [
-            "id": "PRD-2345",
-            "name": "Sample Product",
-            "inventoryEntry": [
-                [
-                    "id": "INV-2345",
-                    "amount": ["value": 3, "unit": "each"],
-                    "placement": "stock",
-                    "location": [
-                        "id": "LOC-5678", "name": "Bin 1",
-                        "ancestors": [["name": "Home"], ["name": "Garage"]],
-                    ],
-                ],
-                ["id": "INV-3456", "location": ["id": "LOC-9ABC", "name": "Unknown", "ancestors": []]],
-            ],
-        ]
-        let row = try #require(EntityCatalog[.product].row(from: raw))
-        let stocked = ProductRelations.stockedAt(from: row)
-        #expect(stocked.count == 2)
-        #expect(stocked[0].locationID == LocationCode("LOC-5678"))
-        #expect(stocked[0].ancestorPath == "Home › Garage")
-        #expect(stocked[0].amount == Amount(value: 3, unit: "each"))
-        #expect(stocked[1].ancestorPath == nil)
-        #expect(stocked[1].amount == nil)
+    /// `entityType` is a raw string on the wire, so a kind the catalog has not declared still
+    /// decodes; it surfaces as `key == nil` and `SearchModel` drops it instead of failing the page.
+    @Test func unknownKindIsNil() throws {
+        let hits = try Fixtures.decode([SearchHit].self, from: "search-find.json")
+        #expect(hits[2].entityType == "widget")
+        #expect(hits[2].key == nil)
     }
 }

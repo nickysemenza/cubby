@@ -1,0 +1,1016 @@
+import { displayGtin } from "@cubby/schemas/external-id";
+import {
+  productCategory,
+  productCategoryValues,
+  type ProductFilters,
+  type ProductListItem,
+} from "@cubby/schemas/product";
+import type { KitComponentRowOut } from "@cubby/schemas/product-components";
+import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import {
+  createBooleanColumn,
+  createCurrencyColumn,
+  createExternalLinkColumn,
+  createFilterableSelectColumn,
+  createInventoryEntriesColumn,
+  createPlainDateColumn,
+  createSingleEntityInlineLinkColumn,
+  createTextColumn,
+  productPriceClearLabel,
+  renderOptionCell,
+  renderProductPriceValue,
+} from "~/app/_components/data-table/columnHelpers";
+import { EditableCell } from "~/app/_components/data-table/editable-cell";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  type CubbyColumnCollection,
+} from "~/app/_components/data-table/table-features";
+import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
+import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
+import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import { useProductTagOptions } from "~/app/_components/hooks/useProductTagOptions";
+import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
+import { InventoryEntriesQuickEditDialog } from "~/app/_components/inventory/inventory-entries-quick-edit-dialog";
+import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
+import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
+import {
+  ProductFoodSummariesProvider,
+  useHydratedProductFood,
+  useProductFoodSummaries,
+} from "~/app/_components/products/product-food-summaries";
+import { TruncatedList } from "~/app/_components/TruncatedList";
+import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
+import {
+  buildProductTreeRows,
+  groupComponentsByParent,
+  isKitComponentRow,
+  type ProductTreeRow,
+  productTreeRowKey,
+  productTreeSubRows,
+} from "~/app/products/product-kit-rows";
+import { product as productOperations } from "~/app/products/product.functions";
+import { Badge } from "~/components/ui/badge";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { NoneValue } from "~/components/ui/none-value";
+import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListHiddenColumns } from "~/entities/entity-display";
+import { dataQualityOptions } from "~/lib/data-quality-options";
+import { relatedData } from "~/lib/related-data.functions";
+import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { formatCurrency } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
+
+import { useStableIds } from "./stable-ids";
+import { defineListOverride, interleaveDeclared } from "./types";
+
+// Module-level fallbacks keep the runtime options reference stable while a
+// roster query is loading.
+const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
+/** Stable empty default so `nest` keeps its identity while kits load. */
+const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
+
+// The generic tones fit here: tracked really is the resolved/good outcome.
+const STOCK_TRACKED_OPTIONS = booleanCellOptions({
+  true: "Tracked",
+  false: "Not tracked",
+});
+const MODEL_PRESENCE_OPTIONS = presenceCellOptions("model");
+const UPC_PRESENCE_OPTIONS = presenceCellOptions("UPC");
+const NOTES_PRESENCE_OPTIONS = presenceCellOptions("notes");
+
+// Stateless, so one per module; the collections below capture its row type.
+const columnHelper = createCubbyColumnHelper<ProductTreeRow>();
+
+// `dataGaps`/`modelPresence`/`upcPresence`/`notesPresence` are filter-hosting
+// synthetic columns and `components` is a relation column — none has a
+// matching `model.fields` entry, so they stay hand-declared here.
+const PRODUCT_INITIAL_COLUMN_VISIBILITY = {
+  dataGaps: false,
+  modelPresence: false,
+  upcPresence: false,
+  notesPresence: false,
+  components: false,
+  ...entityListHiddenColumns("product"),
+};
+
+function renderNotesValue(notes: string | null): ReactNode {
+  if (!notes) return <NoneValue />;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className="block truncate text-muted-foreground" />}
+      >
+        {notes}
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs">
+        {notes}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Units bought minus units gone, with its own uncertainty attached.
+ *
+ * The `+N?` / `−N?` suffixes are load-bearing: an expense line with no
+ * recorded quantity contributes nothing to the number, so a product with six
+ * unquantified receipts would otherwise read as a confident 0. Both directions
+ * are disclosed — an unknown acquisition means the real count could be
+ * higher, an unknown exit that it could be lower.
+ */
+function ExpectedQuantityCell({
+  ledger,
+}: {
+  ledger: ProductListItem["quantityLedger"];
+}) {
+  const detail = [
+    `${ledger.acquiredUnits} acquired − ${ledger.exitedUnits} gone`,
+    ledger.unknownAcquisitionLines > 0
+      ? `${ledger.unknownAcquisitionLines} acquisition line(s) carry no quantity`
+      : null,
+    ledger.unknownExitLines > 0
+      ? `${ledger.unknownExitLines} exit line(s) carry no quantity`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="tabular-nums" />}>
+        <OptionalStatusText
+          tone={ledger.expectedQuantity < 0 ? "destructive" : undefined}
+        >
+          {ledger.expectedQuantity}
+        </OptionalStatusText>
+        {ledger.unknownAcquisitionLines > 0 ? (
+          <StatusText tone="warning">
+            {` +${ledger.unknownAcquisitionLines}?`}
+          </StatusText>
+        ) : null}
+        {ledger.unknownExitLines > 0 ? (
+          <StatusText tone="warning">
+            {` −${ledger.unknownExitLines}?`}
+          </StatusText>
+        ) : null}
+      </TooltipTrigger>
+      <TooltipContent side="top">{detail}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ProductFoodCell({ product }: { product: ProductListItem }) {
+  const food = useHydratedProductFood(product);
+  return food ? (
+    <EntityInlineLink
+      displayImage={undefined}
+      entity="usda-food"
+      data={food}
+      compact
+    />
+  ) : (
+    <NoneValue />
+  );
+}
+
+function useProductFilterOptions() {
+  // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
+  const { options: tagOptions } = useProductTagOptions();
+  const projectOptions = useDeferredFilterOptions("project");
+  const locationOptions = useDeferredFilterOptions("locationWithInventory");
+  const ingredientOptions = useDeferredFilterOptions("ingredientWithProduct");
+  const manufacturerOptionsQuery = useQuery(
+    productOperations.manufacturerOptions.queryOptions(),
+  );
+  const externalIdSourceOptionsQuery = useQuery(
+    productOperations.externalIdSourceOptions.queryOptions(),
+  );
+  const manufacturerOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      manufacturerOptionsQuery.data?.map(({ manufacturer, count }) => ({
+        value: manufacturer,
+        label: manufacturer,
+        hint: String(count),
+      })) ?? NO_FILTER_OPTIONS,
+    [manufacturerOptionsQuery.data],
+  );
+  const externalIdSourceOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      externalIdSourceOptionsQuery.data?.map(({ source, count }) => ({
+        value: source,
+        label: source,
+        hint: String(count),
+      })) ?? NO_FILTER_OPTIONS,
+    [externalIdSourceOptionsQuery.data],
+  );
+  // The graph owns these picklists: their count is distinct matching
+  // Products, and keying by the relation offers only Vendors/Purchases that
+  // can match a Product.
+  const vendorOptionsQuery = useQuery(
+    relatedData.options.queryOptions({
+      relationKey: "product.vendors",
+      limit: 100,
+    }),
+  );
+  const purchaseOptionsQuery = useQuery(
+    relatedData.options.queryOptions({
+      relationKey: "product.purchases",
+      limit: 100,
+    }),
+  );
+  const vendorOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      vendorOptionsQuery.data?.map(({ id, label, count }) => ({
+        value: id,
+        label,
+        hint: String(count),
+      })) ?? NO_FILTER_OPTIONS,
+    [vendorOptionsQuery.data],
+  );
+  const purchaseOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      purchaseOptionsQuery.data?.map(({ id, label, count }) => ({
+        value: id,
+        label,
+        hint: String(count),
+      })) ?? NO_FILTER_OPTIONS,
+    [purchaseOptionsQuery.data],
+  );
+  return useFilterOptions({
+    tags: tagOptions,
+    productVendors: vendorOptions,
+    project: projectOptions,
+    productLocations: locationOptions,
+    productIngredients: ingredientOptions,
+    manufacturers: manufacturerOptions,
+    productPurchases: purchaseOptions,
+    externalIdSources: externalIdSourceOptions,
+  });
+}
+
+const groupKeyFn = (item: ProductTreeRow) => formatCategoryLabel(item.category);
+const groupColorFn = (key: string) => {
+  const category = productCategoryValues.find(
+    (candidate) => formatCategoryLabel(candidate) === key,
+  );
+  return getCategoryColor(category ?? null);
+};
+const PRODUCT_GROUP_CONFIG: GroupConfig<ProductTreeRow> = {
+  field: "category",
+  keyFn: groupKeyFn,
+  colorFn: groupColorFn,
+};
+
+export const productListOverride = defineListOverride<
+  ProductTreeRow,
+  ProductFilters,
+  ProductListItem
+>({
+  use() {
+    const filterOptions = useProductFilterOptions();
+    const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
+      [],
+    );
+    const foodByProductId = useProductFoodSummaries(foodHydrationIds);
+
+    const updateProductMutation = useUpdateMutation({
+      mutationFn: entityMutationOptionsFactory("product", "update"),
+      entity: "product",
+    });
+    const updateInventoryMutation = useUpdateMutation({
+      mutationFn: entityMutationOptionsFactory("inventory", "update"),
+      entity: "inventory",
+    });
+    const createInventoryMutation = useCreateInventoryMutation();
+    const nameEditable = useNameEditable<ProductTreeRow>(
+      updateProductMutation.mutateAsync,
+    );
+
+    // The dialog tracks an id and derives the product from live list data, so
+    // post-save invalidation refreshes the open dialog too.
+    const [quickEditProductId, setQuickEditProductId] = useState<string | null>(
+      null,
+    );
+
+    const getMappings = useCallback(
+      (product: ProductListItem) =>
+        getAllUnitMappingsFromProduct({
+          ...product,
+          food: foodByProductId[product.id] ?? null,
+        }),
+      [foodByProductId],
+    );
+
+    const overrides = useMemo(
+      () =>
+        createCubbyColumnCollection<ProductTreeRow>((add) => {
+          add(
+            createFilterableSelectColumn(columnHelper, "category", {
+              header: "Category",
+              className: "w-32",
+              placeholder: "Filter by category...",
+              selectOptions: productCategoryOptionsWithTheme,
+              renderCell: (cat) => <CategoryLabel category={cat} />,
+              // Mobile lists group by category (section headers), so the
+              // chip is redundant per-row — manufacturer is the subtitle.
+              mobile: { slot: "subtitle", priority: 30 },
+              editable: {
+                parseValue: (value) => productCategory.nullable().parse(value),
+                onSave: async (newCategory, product) => {
+                  await updateProductMutation.mutateAsync({
+                    id: product.id,
+                    data: { category: newCategory },
+                  });
+                },
+              },
+            }),
+          );
+          add(
+            createTextColumn(columnHelper, "manufacturer", {
+              header: "Manufacturer",
+              className: "min-w-0 w-40 truncate",
+              mobile: { slot: "subtitle", priority: 20 },
+              editable: {
+                onSave: async (newValue, product) => {
+                  await updateProductMutation.mutateAsync({
+                    id: product.id,
+                    data: { manufacturer: newValue ?? "" },
+                  });
+                },
+              },
+            }),
+          );
+          add(
+            columnHelper.accessor("primaryGtin", {
+              header: "Barcode / ISBN",
+              meta: {
+                className: "w-32 font-mono",
+                mobile: { interactive: true },
+              },
+              cell: (info) => {
+                const value = info.getValue();
+                return (
+                  <EditableCell
+                    value={value}
+                    onSave={async (newValue) => {
+                      await updateProductMutation.mutateAsync({
+                        id: info.row.original.id,
+                        data:
+                          newValue != null &&
+                          wasm.normalize_isbn(newValue) != null
+                            ? { isbn: newValue }
+                            : { upc: newValue },
+                      });
+                    }}
+                    config={{ type: "text" }}
+                    trigger="pencil"
+                    renderValue={(current) => {
+                      if (!current) return <NoneValue />;
+                      const isbn = wasm.isbn_from_gtin(current);
+                      if (isbn) {
+                        return (
+                          <span className="font-mono tabular-nums">
+                            {isbn.isbn13}
+                          </span>
+                        );
+                      }
+                      const shown = displayGtin(current);
+                      return (
+                        <Link
+                          to="/usda/upc/$code"
+                          params={{ code: shown }}
+                          className="text-primary hover:underline"
+                        >
+                          {shown}
+                        </Link>
+                      );
+                    }}
+                  />
+                );
+              },
+            }),
+          );
+          add(
+            createExternalLinkColumn(columnHelper, "fdc_id", "/usda/$id", {
+              header: "FDC",
+              className: "w-32",
+              editable: {
+                onSave: async (newValue, product) => {
+                  await updateProductMutation.mutateAsync({
+                    id: product.id,
+                    data: { fdc_id: newValue ? Number(newValue) : null },
+                  });
+                },
+              },
+            }),
+          );
+          add(
+            createTextColumn(columnHelper, "model", {
+              className: "min-w-0 w-40 truncate",
+              editable: {
+                onSave: async (newValue, product) => {
+                  await updateProductMutation.mutateAsync({
+                    id: product.id,
+                    data: { model: newValue },
+                  });
+                },
+              },
+            }),
+          );
+          add(
+            createTextColumn(columnHelper, "notes", {
+              header: "Notes",
+              className: "min-w-0 w-40",
+              renderValue: renderNotesValue,
+              editable: {
+                onSave: async (newNotes, product) => {
+                  await updateProductMutation.mutateAsync({
+                    id: product.id,
+                    data: { notes: newNotes },
+                  });
+                },
+              },
+            }),
+          );
+          // Editable, and tri-state on purpose: `null` is the undecided
+          // backlog the "Products the ledger says you own" saved view filters
+          // on, so this cell is where that view gets worked.
+          add(
+            createBooleanColumn(columnHelper, "stockTracked", {
+              header: "Stock tracking",
+              className: "w-28",
+              placeholder: "Filter stock tracking...",
+              trueFalseOptions: STOCK_TRACKED_OPTIONS,
+              undecided: { label: "Undecided" },
+              // The header control stays the manifest's presence filter
+              // (undecided vs reviewed), which backs the worklist view.
+              filterConfig: null,
+              editable: {
+                onSave: async (stockTracked, product) => {
+                  await updateProductMutation.mutateAsync({
+                    id: product.id,
+                    data: { stockTracked },
+                  });
+                },
+              },
+            }),
+          );
+          add(
+            columnHelper.accessor((row) => row.dataQuality.status, {
+              id: "dataQuality",
+              header: "Data quality",
+              enableSorting: false,
+              meta: {
+                className: "w-28",
+                mobile: { slot: "meta", priority: 75 },
+              },
+              cell: (info) =>
+                renderOptionCell(info.getValue(), dataQualityOptions),
+            }),
+          );
+          add(
+            columnHelper.accessor("externalIds", {
+              id: "externalIds",
+              header: "External IDs",
+              enableSorting: false,
+              meta: {
+                className: "w-36",
+                mobile: { slot: "meta", priority: 85 },
+              },
+              cell: (info) => {
+                const ids = info.getValue();
+                if (!ids.length) return <NoneValue />;
+                return (
+                  <span className="text-xs text-muted-foreground">
+                    {ids.map((externalId) => externalId.source).join(", ")}
+                  </span>
+                );
+              },
+            }),
+          );
+          add(
+            columnHelper.accessor((product) => product.pricing.effectivePrice, {
+              id: "price",
+              // A header FUNCTION: `createEntityDisplayColumns` replaces a
+              // plain-string override header with the declared label
+              // ("Valuation price", for the detail page's sake); a function
+              // is the one shape it lets through, so the list heads "Price".
+              header: () => "Price",
+              meta: {
+                numeric: true,
+                className: "w-20",
+                mobile: { slot: "trailing", priority: 10, interactive: true },
+              },
+              footer: (info) => {
+                const total =
+                  info.table.options.meta?.serverTotals?.sums?.price;
+                return total ? (
+                  <span className="font-mono text-positive tabular-nums">
+                    {formatCurrency(total)}
+                  </span>
+                ) : null;
+              },
+              cell: (info) => {
+                const product = info.row.original;
+                return (
+                  <EditableCell
+                    value={product.price}
+                    onSave={async (price) => {
+                      await updateProductMutation.mutateAsync({
+                        id: product.id,
+                        data: { price },
+                      });
+                    }}
+                    config={{
+                      type: "currency",
+                      clearable: {
+                        label: productPriceClearLabel(product.pricing),
+                      },
+                    }}
+                    renderValue={() => renderProductPriceValue(product.pricing)}
+                  />
+                );
+              },
+            }),
+          );
+          // Net cost basis — SUM(cost) over this product's live expenses, so
+          // an exit (a sale booked as a negative row) telescopes against its
+          // acquisition.
+          add(
+            createCurrencyColumn(columnHelper, "expenseTotal", {
+              header: "Net basis",
+              className: "w-28",
+              signedTone: true,
+              mobile: { slot: "trailing", priority: 5 },
+            }),
+          );
+          // Counts render a literal `0`, not a dash: `locationCount` and
+          // `componentCount` are never null, so "none" is a known fact and a
+          // dash would claim "unknown".
+          add(
+            columnHelper.accessor((row) => row.quantityLedger.locationCount, {
+              id: "servingAsLocations",
+              header: "In service",
+              meta: {
+                numeric: true,
+                className: "w-24",
+                mobile: { slot: "meta", priority: 43 },
+              },
+              cell: (info) => info.getValue(),
+            }),
+          );
+          add(
+            columnHelper.accessor((row) => row.componentCount, {
+              id: "components",
+              header: "Components",
+              meta: {
+                numeric: true,
+                className: "w-28",
+                mobile: { slot: "meta", priority: 44 },
+              },
+              cell: (info) => info.getValue(),
+            }),
+          );
+          add(
+            columnHelper.accessor(
+              (row) => row.quantityLedger.expectedQuantity,
+              {
+                id: "expectedQuantity",
+                header: "Expected",
+                meta: {
+                  numeric: true,
+                  className: "w-24",
+                  mobile: { slot: "meta", priority: 45 },
+                },
+                cell: (info) => (
+                  <ExpectedQuantityCell
+                    ledger={info.row.original.quantityLedger}
+                  />
+                ),
+              },
+            ),
+          );
+          // Shelf minus ledger. Dashes when the product isn't stocked, and
+          // when its entries carry more than one unit (see `deriveOnHandUnits`).
+          add(
+            columnHelper.accessor((row) => row.quantityVariance, {
+              id: "quantityVariance",
+              header: "Variance",
+              meta: {
+                numeric: true,
+                className: "w-24",
+                mobile: { slot: "meta", priority: 44 },
+              },
+              cell: (info) => {
+                const { quantityVariance, onHandUnits, quantityLedger } =
+                  info.row.original;
+                if (quantityVariance === null || onHandUnits === null) {
+                  return <NoneValue />;
+                }
+                return (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        quantityVariance === 0 ? (
+                          <span className="tabular-nums" />
+                        ) : (
+                          <StatusText
+                            as="span"
+                            tone="warning"
+                            className="tabular-nums"
+                          />
+                        )
+                      }
+                    >
+                      {quantityVariance > 0
+                        ? `+${quantityVariance}`
+                        : quantityVariance}
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {`${onHandUnits} on hand vs. ${quantityLedger.expectedQuantity} expected`}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              },
+            }),
+          );
+          add(
+            createPlainDateColumn(columnHelper, "purchaseDate", {
+              header: "Purchase date",
+              className: "w-32",
+              mobile: { slot: "meta", priority: 55 },
+            }),
+          );
+          // Read-only: the Tags filter spec declares `columnId: "tags"`, and
+          // the header-filter machinery needs a real column to hang on.
+          add(
+            columnHelper.accessor("tags", {
+              id: "tags",
+              header: "Tags",
+              meta: {
+                className: "w-40",
+                mobile: { slot: "meta", priority: 60 },
+              },
+              cell: (info) => {
+                const tags = info.getValue();
+                if (!tags.length) return <NoneValue />;
+                return (
+                  <TruncatedList
+                    items={tags}
+                    maxItems={2}
+                    // `stopPropagation`: rows carry the preview onRowClick and
+                    // TanStack's Link preventDefaults without stopping
+                    // propagation, so the chip would also open the sheet.
+                    renderItem={(tag) => (
+                      <Link
+                        key={tag}
+                        to="/products"
+                        search={{ tags: tag }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Badge variant="outline">{tag}</Badge>
+                      </Link>
+                    )}
+                  />
+                );
+              },
+            }),
+          );
+          add(
+            columnHelper.accessor("expenseCount", {
+              id: "expenses",
+              header: "Expenses",
+              // The column id is `expenses` while the row field is
+              // `expenseCount`: the id is persisted per-user in the
+              // `table-columns:product` localStorage key and matched by
+              // `productSortableFields` and repo/product/crud.ts's orderBy.
+              enableSorting: true,
+              meta: {
+                numeric: true,
+                className: "w-24",
+                mobile: { slot: "meta", priority: 50, interactive: true },
+              },
+              cell: (info) => {
+                const count = info.getValue();
+                if (!count) return <NoneValue />;
+                return (
+                  <Link
+                    to="/expenses"
+                    search={{ productId: info.row.original.id }}
+                    className="font-mono text-primary tabular-nums transition-colors hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {count}
+                  </Link>
+                );
+              },
+            }),
+          );
+        }),
+      // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
+      [],
+    );
+
+    const compose = useCallback(
+      (declared: CubbyColumnCollection<ProductTreeRow>) =>
+        createCubbyColumnCollection<ProductTreeRow>((add) => {
+          const { place, rest } = interleaveDeclared(declared, add);
+          // Interleaved with the declared columns to keep the column order:
+          // these aren't scalars of the product row (a relation, computed
+          // presence flags, a client-hydrated value, a second projection
+          // hosting a filter control), so they stay explicit `add()`s per
+          // docs/entities.md's third bucket.
+          place("category");
+          add(
+            createSingleEntityInlineLinkColumn(
+              columnHelper,
+              "ingredient",
+              "ingredient",
+              {
+                header: "Ingredient",
+                className: "w-32",
+                mobile: { slot: "meta", priority: 45, interactive: true },
+                enableSorting: true,
+                editable: {
+                  onSave: async (newIngredientId, product) => {
+                    await updateProductMutation.mutateAsync({
+                      id: product.id,
+                      data: { ingredientId: newIngredientId },
+                    });
+                  },
+                  clearable: true,
+                },
+              },
+            ),
+          );
+          place("manufacturer");
+          place("primaryGtin");
+          place("fdc_id");
+          place("model");
+          place("notes");
+          add(
+            columnHelper.accessor((row) => row.model, {
+              id: "modelPresence",
+              header: "Model present",
+              enableSorting: false,
+              meta: { className: "w-24" },
+              cell: (info) =>
+                renderOptionCell(
+                  info.getValue() ? "yes" : "no",
+                  MODEL_PRESENCE_OPTIONS,
+                ),
+            }),
+          );
+          add(
+            columnHelper.accessor((row) => row.primaryGtin, {
+              id: "upcPresence",
+              header: "UPC present",
+              enableSorting: false,
+              meta: { className: "w-24" },
+              cell: (info) =>
+                renderOptionCell(
+                  info.getValue() ? "yes" : "no",
+                  UPC_PRESENCE_OPTIONS,
+                ),
+            }),
+          );
+          add(
+            columnHelper.accessor((row) => row.notes, {
+              id: "notesPresence",
+              header: "Notes present",
+              enableSorting: false,
+              meta: { className: "w-24" },
+              cell: (info) =>
+                renderOptionCell(
+                  info.getValue() ? "yes" : "no",
+                  NOTES_PRESENCE_OPTIONS,
+                ),
+            }),
+          );
+          place("stockTracked");
+          place("dataQuality");
+          add(
+            columnHelper.accessor((row) => row.dataQuality.gaps, {
+              id: "dataGaps",
+              header: "Data gaps",
+              enableSorting: false,
+              meta: {
+                className: "w-36",
+                mobile: { slot: "meta", priority: 80 },
+              },
+              cell: (info) => {
+                const gaps = info.getValue();
+                if (!gaps.length) return <NoneValue />;
+                return (
+                  <span className="text-xs text-muted-foreground">
+                    {gaps
+                      .map((gap) => gap.check.replaceAll("_", " "))
+                      .join(", ")}
+                  </span>
+                );
+              },
+            }),
+          );
+          place("externalIds");
+          place("price");
+          // Comparable unit price. A DISPLAY column, not an accessor: the
+          // value is derived client-side from the loaded page, so a sortable
+          // header would order only the rows in front of you; display-only
+          // also keeps it clear of the `row._valuesCache` trap.
+          add(
+            columnHelper.display({
+              id: "unitPrice",
+              header: "Unit price",
+              meta: { numeric: true, className: "w-24" },
+              cell: (info) => (
+                <UnitPriceLine
+                  mappings={getMappings(info.row.original)}
+                  compact
+                />
+              ),
+            }),
+          );
+          place("expenseTotal");
+          place("servingAsLocations");
+          place("components");
+          place("expectedQuantity");
+          place("quantityVariance");
+          place("purchaseDate");
+          add(
+            columnHelper.display({
+              id: "food",
+              header: "USDA Food",
+              // No mobile slot: a display column escapes the model's
+              // empty-value check, and most products have no USDA link.
+              meta: { className: "w-32" },
+              cell: ({ row }) => <ProductFoodCell product={row.original} />,
+            }),
+          );
+          add(
+            createInventoryEntriesColumn(
+              columnHelper,
+              "inventoryEntry",
+              "location",
+              (e) => e.location,
+              {
+                id: "location",
+                enableSorting: true,
+                mobile: { slot: "meta", priority: 40, interactive: true },
+                onQuickEdit: (product) => setQuickEditProductId(product.id),
+                inlineEdit: {
+                  SearchProvider: (props) => (
+                    <WithEntitySearch entity="location" {...props} />
+                  ),
+                  onMoveEntry: async (entry, locationId) => {
+                    await updateInventoryMutation.mutateAsync({
+                      id: entry.id,
+                      data: { locationId },
+                    });
+                  },
+                  onCreateEntry: async (product, locationId) => {
+                    await createInventoryMutation.mutateAsync({
+                      productId: product.id,
+                      locationId,
+                      amount: { value: 1, unit: "each" },
+                    });
+                  },
+                },
+              },
+            ),
+          );
+          place("tags");
+          place("expenses");
+          rest();
+        }),
+      // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
+      [getMappings],
+    );
+
+    // Kits on the currently loaded pages, fetched for the whole page rather
+    // than per expanded row: fetching on expand would deliver children AFTER
+    // render, where `DesktopDataRow`'s memo (which compares `row.original`)
+    // cannot see them. Nesting before rows are built sidesteps that.
+    const [kitIds, setKitIds] = useState<string[]>([]);
+    const kitComponentsQuery = useQuery({
+      ...productOperations.kitComponentRows.queryOptions({
+        parentProductIds: kitIds,
+      }),
+      enabled: kitIds.length > 0,
+    });
+    const componentsByParent = useMemo(
+      () => groupComponentsByParent(kitComponentsQuery.data ?? EMPTY_KIT_ROWS),
+      [kitComponentsQuery.data],
+    );
+    const tree = useMemo(
+      () => ({
+        nest: (rows: ProductListItem[]) =>
+          buildProductTreeRows(rows, componentsByParent),
+        getSubRows: productTreeSubRows,
+        expandable: true,
+        // `id` stays the real shortcode at both depths, so uniqueness lives
+        // here — see `ProductTreeRow.rowKey`.
+        rowKey: productTreeRowKey,
+        // A component IS a Product, but it is shown as part of its kit: bulk
+        // delete and the row menu act on whole selections, so its affordances
+        // live on its own page.
+        rowIsEntity: (row: ProductTreeRow) => !isKitComponentRow(row),
+      }),
+      [componentsByParent],
+    );
+
+    const list = useMemo(
+      () => ({
+        deletable: true as const,
+        filterOptions,
+        nameEditable,
+        getMappings,
+        initialColumnVisibility: PRODUCT_INITIAL_COLUMN_VISIBILITY,
+        groupConfig: PRODUCT_GROUP_CONFIG,
+      }),
+      [filterOptions, nameEditable, getMappings],
+    );
+
+    return {
+      overrides,
+      compose,
+      tree,
+      list,
+      below: ({ data }) => {
+        const quickEditProduct = quickEditProductId
+          ? (data.find((p) => p.id === quickEditProductId) ?? null)
+          : null;
+        return quickEditProduct ? (
+          <InventoryEntriesQuickEditDialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setQuickEditProductId(null);
+            }}
+            productName={quickEditProduct.name}
+            entries={quickEditProduct.inventoryEntry}
+          />
+        ) : null;
+      },
+      wrap: (children, { data }) => (
+        <ProductListHydration
+          data={data}
+          summaries={foodByProductId}
+          onIds={setFoodHydrationIds}
+          onKitIds={setKitIds}
+        >
+          {children}
+        </ProductListHydration>
+      ),
+    };
+  },
+});
+
+/**
+ * Derives the food-hydration and kit id sets from the loaded rows (stable
+ * arrays, so the query keys don't churn) and provides the food summaries the
+ * USDA cell and unit-price line read.
+ */
+function ProductListHydration({
+  data,
+  summaries,
+  onIds,
+  onKitIds,
+  children,
+}: {
+  data: ProductListItem[];
+  summaries: ReturnType<typeof useProductFoodSummaries>;
+  onIds: (ids: readonly string[]) => void;
+  onKitIds: (ids: string[]) => void;
+  children: ReactNode;
+}) {
+  const productIds = useMemo(() => data.map((product) => product.id), [data]);
+  const stableIds = useStableIds(productIds);
+  const kitCandidates = useMemo(
+    () => data.filter((product) => product.componentCount > 0).map((p) => p.id),
+    [data],
+  );
+  const stableKitIds = useStableIds(kitCandidates);
+  useEffect(() => onIds(stableIds), [onIds, stableIds]);
+  useEffect(() => onKitIds([...stableKitIds]), [onKitIds, stableKitIds]);
+  return (
+    <ProductFoodSummariesProvider productIds={productIds} summaries={summaries}>
+      {children}
+    </ProductFoodSummariesProvider>
+  );
+}

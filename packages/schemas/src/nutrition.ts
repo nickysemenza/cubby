@@ -11,7 +11,9 @@ const coverage = z
   .refine(
     (value) => value.covered <= value.total,
     "Coverage exceeds the contributor count",
-  );
+  )
+  // A type-driven mock cannot satisfy `covered <= total`; pin one example.
+  .meta({ mockValue: { covered: 1, total: 1 } });
 export type MeasureEstimateCoverage = z.infer<typeof coverage>;
 
 const knownEstimate = {

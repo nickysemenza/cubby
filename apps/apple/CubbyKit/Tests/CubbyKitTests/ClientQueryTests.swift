@@ -71,7 +71,9 @@ struct ClientQueryTests {
         return data
     }
 
-    @Test func wholeBedCorrectionEncodesNullWhileAttachmentPatchesPreserveContent() async throws {
+    /// An attach patch carries only `pendingImageIds`: an omitted field means "leave as is", so
+    /// attaching a photo must never clear the entry's content.
+    @Test func attachmentPatchesPreserveContent() async throws {
         defer { QueryStub.handler.withLock { $0 = nil } }
         let seen = Mutex<[[String: JSONValue]]>([])
         QueryStub.handler.withLock { handler in
@@ -87,23 +89,12 @@ struct ClientQueryTests {
         }
         let client = try makeClient()
         await #expect(throws: CubbyAPIError.self) {
-            try await client.updateGardenEntry(
-                id: "GDE-2345",
-                .init(
-                    locationId: LocationCode("LOC-2345"), plantingId: nil, kind: .observation,
-                    observedOn: PlainDate(Date(timeIntervalSince1970: 1_700_000_000)), note: nil,
-                    harvestAmount: nil, pendingImageIds: [], removeImageIds: []))
-        }
-        await #expect(throws: CubbyAPIError.self) {
             try await client.attachImages(
                 [ImageCode("IMG-2345")], to: EntityCatalog[.gardenEntry], id: "GDE-2345")
         }
         let requests = seen.withLock { $0 }
-        try #require(requests.count == 2)
-        #expect(requests[0]["plantingId"] == JSONValue.null)
-        #expect(requests[0]["note"] == JSONValue.null)
-        #expect(requests[0]["harvestAmount"] == JSONValue.null)
-        #expect(requests[1] == ["pendingImageIds": .array([.string("IMG-2345")])])
+        try #require(requests.count == 1)
+        #expect(requests[0] == ["pendingImageIds": .array([.string("IMG-2345")])])
     }
 
     @Test func listSendsPlainPagingParamsWithTheBearerHeader() async throws {
@@ -128,43 +119,6 @@ struct ClientQueryTests {
         #expect(items.contains(URLQueryItem(name: "pageSize", value: "20")))
         // Not `"has"` (JSON-quoted).
         #expect(items.contains(URLQueryItem(name: "relatedInventoryPresenceFilter", value: "has")))
-    }
-
-    /// `GardenModel.create(_:rememberSource:)` makes exactly these two calls when the "remember
-    /// that this product grows this crop" toggle is on and the product's current association
-    /// differs from the chosen crop: create the planting, then patch the product's association.
-    /// This pins the wire shape of both — a regression a real save would hit.
-    @Test func rememberedSourceWriteBackSendsCreateThenScopedProductPatch() async throws {
-        defer { QueryStub.handler.withLock { $0 = nil } }
-        let seen = Mutex<[(path: String, body: [String: JSONValue])]>([])
-        QueryStub.handler.withLock { handler in
-            handler = { request in
-                let fields =
-                    (try? JSONDecoder().decode([String: JSONValue].self, from: Self.requestBody(request)))
-                    ?? [:]
-                seen.withLock { $0.append((path: request.url?.path ?? "", body: fields)) }
-                // The test only cares about outgoing request shape; reject before response mapping.
-                return (400, Data("{}".utf8))
-            }
-        }
-        let client = try makeClient()
-        await #expect(throws: CubbyAPIError.self) {
-            try await client.createGardenPlanting(
-                .init(
-                    ingredientId: "ING-2345", locationId: LocationCode("LOC-2345"), status: .growing,
-                    sourceProductId: ProductCode("PRD-2345"))
-            )
-        }
-        await #expect(throws: CubbyAPIError.self) {
-            try await client.setGardenProduct(id: "PRD-2345", growsIngredientID: "ING-2345")
-        }
-        let requests = seen.withLock { $0 }
-        try #require(requests.count == 2)
-        #expect(requests[0].path == "/api/v1/garden/createPlanting")
-        #expect(requests[0].body["ingredientId"] == "ING-2345")
-        #expect(requests[0].body["sourceProductId"] == "PRD-2345")
-        #expect(requests[1].path == "/api/v1/products/PRD-2345")
-        #expect(requests[1].body == ["growsIngredientId": "ING-2345"])
     }
 
     @Test func inventoryMoveReturnsTheSurvivingMergedEntry() async throws {

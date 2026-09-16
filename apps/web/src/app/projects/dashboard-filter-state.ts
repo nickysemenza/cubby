@@ -24,14 +24,14 @@ export type Filters = {
 };
 
 /**
- * The URL shape the dashboard route validates search params into — a subset
- * of the route's full search schema (`projects.index.tsx`), just the fields
- * this filter bar owns.
+ * The URL shape the generated `/projects` search validates into — the
+ * fields this filter bar owns. List values are comma-joined strings, the
+ * manifest's `urlEnumListParam` encoding.
  */
 export type FilterSearchParams = {
-  statuses?: ProjectStatus[];
-  kinds?: ProjectKind[];
-  locations?: string[];
+  statuses?: string;
+  kinds?: string;
+  locations?: string;
   date?: string;
   completed?: string;
 };
@@ -39,12 +39,17 @@ export type FilterSearchParams = {
 /** The search-param serialization of a `Filters` value — same shape as
  * `FilterSearchParams`, produced by `filtersToSearch`. */
 export type FilterSearchOutput = {
-  statuses: ProjectStatus[] | undefined;
-  kinds: ProjectKind[] | undefined;
-  locations: string[] | undefined;
+  statuses: string | undefined;
+  kinds: string | undefined;
+  locations: string | undefined;
   date: string | undefined;
   completed: string | undefined;
 };
+
+const splitList = (value: string | undefined): string[] =>
+  value ? value.split(",").filter((item) => item.length > 0) : [];
+const joinList = (values: ReadonlySet<string>): string | undefined =>
+  values.size > 0 ? [...values].join(",") : undefined;
 
 /** The search-param keys this filter bar owns. Used to assert disjointness
  * against the project table's manifest-managed keys (see
@@ -168,9 +173,19 @@ export function filtersFromSavedViewFilters(
 /** Parse ordinary URL filters. Absent means unrestricted. */
 export function filtersFromSearch(search: FilterSearchParams): Filters {
   return {
-    statuses: new Set(search.statuses ?? []),
-    kinds: new Set(search.kinds ?? []),
-    locations: new Set(search.locations ?? []),
+    statuses: new Set(
+      splitList(search.statuses).flatMap((item) => {
+        const parsed = projectStatusSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+    kinds: new Set(
+      splitList(search.kinds).flatMap((item) => {
+        const parsed = projectKindSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+    locations: new Set(splitList(search.locations)),
     dateRange: search.date ?? null,
     completionYear: search.completed ?? null,
   };
@@ -184,9 +199,9 @@ export function filtersFromSearch(search: FilterSearchParams): Filters {
  */
 export function filtersToSearch(filters: Filters): FilterSearchOutput {
   return {
-    statuses: filters.statuses.size > 0 ? [...filters.statuses] : undefined,
-    kinds: filters.kinds.size > 0 ? [...filters.kinds] : undefined,
-    locations: filters.locations.size > 0 ? [...filters.locations] : undefined,
+    statuses: joinList(filters.statuses),
+    kinds: joinList(filters.kinds),
+    locations: joinList(filters.locations),
     date: filters.dateRange ?? undefined,
     completed: filters.completionYear ?? undefined,
   };

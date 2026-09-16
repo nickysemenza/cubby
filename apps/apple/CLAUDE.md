@@ -47,14 +47,13 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
 - Never hand-write a `(method, path)` pair. `OperationRoute.all` is generated from the OpenAPI
   document by `scripts/generator/http-api/native.ts` into `Generated/OperationRoutes.swift`
   (`pnpm generate`; `pnpm check` fails when stale). Look routes up
-  by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. `resources.<entity>.list`
-  and `resources.<entity>.get` are generated automatically for whichever entities actually have that
-  operation in the OpenAPI document — not every entity (`image` has only `update`/`delete`;
-  `cookbook` and `usda-food` have neither, per `Generated/EntityOperations.swift`'s `httpActions`);
-  `resources.*.create/update/delete` are opt-in through the entity declaration's `native`
-  block (`packages/schemas/src/entity-definitions/*.entity.ts`), and the RPC operation ids
-  CubbyKit calls are flagged `native: "<why>"` on their contract member
-  (`apps/web/src/contracts/*.contract.ts`) — flagging an automatic list/get id is rejected.
+  by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Every
+  `resources.<entity>.{list,get,create,update,timeline}` operation the OpenAPI document exposes is
+  generated (not every entity has every verb: `image` has only `update`/`delete`; `cookbook` and
+  `usda-food` have no resource verbs, per `Generated/EntityOperations.swift`'s `httpActions`;
+  `delete` stays off the client). The RPC operation ids CubbyKit calls are flagged
+  `native: "<why>"` on their contract member (`apps/web/src/contracts/*.contract.ts`) — flagging
+  an automatic resource id is rejected.
   `openapi/openapi-generator-config.yaml` and `Generated/EntityOperations.swift` are
   emitter-owned, derived from those flags — edit the flags, never the two files. `generate-openapi.sh`
   fails the build on any swift-openapi-generator warning (a silently dropped schema), not just a
@@ -102,10 +101,13 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   which is why it is excluded from the `swift format` targets in `scripts/apple-check.sh`. Regenerate
   with `apps/apple/scripts/generate-openapi.sh`; `generate-openapi.sh --check` fails when stale.
 - `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,APITypes}.swift` — the
-  runtime route table (`OperationRoute.all`), the per-entity `list`/`get`/image-attach switches,
-  and the public aliases for every generated type the native client carries, from
-  `scripts/generator/http-api/native.ts` reading the `native` flags on contracts and entity
-  declarations. Regenerate with `pnpm generate`; `pnpm check` fails when stale.
+  runtime route table (`OperationRoute.all`), the per-entity `list`/`timeline`/`get`/`create`/
+  `update`/image-attach switches with `EntityKey.httpActions`/`nativeActions` and the generated
+  filter arms (one per list/timeline query parameter, from
+  `scripts/generator/http-api/swift-operations.ts`; a parameter schema shape outside its table
+  fails generation), and the public aliases for every generated type the native client carries,
+  from `scripts/generator/http-api/native.ts` reading the `native` flags on contracts. Regenerate
+  with `pnpm generate`; `pnpm check` fails when stale.
   That same script also (re)writes `openapi/openapi-generator-config.yaml` from those flags, so
   it is generated too even though nothing above reads it directly.
 

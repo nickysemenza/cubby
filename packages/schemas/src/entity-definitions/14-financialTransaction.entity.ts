@@ -73,7 +73,6 @@ export default defineEntity({
             "kind",
             "status",
             "accountId",
-            "purchaseId",
             "allocations",
             "postedDate",
             "sourceRefs",
@@ -113,7 +112,9 @@ export default defineEntity({
         label: "Purchase",
         reference: { entity: "purchase" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, detailOrder: 65, listOrder: 50 },
+        // Detail shows `allocations` instead: this mirror is NULL exactly
+        // when a charge settles more than one purchase.
+        display: { list: true, detail: false, listOrder: 50 },
         validation: {
           read: purchaseShortcode.nullable(),
           create: purchaseShortcode.nullable().default(null),

@@ -5,7 +5,7 @@ import {
   mealAddRecipeInput,
   mealOut,
 } from "@cubby/schemas/meal";
-import { buildNutrition } from "@cubby/schemas/nutrition";
+import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -24,13 +24,13 @@ const updatedMeals: MealUpdateInput[] = [];
 const addedRecipes: Array<z.output<typeof mealAddRecipeInput>> = [];
 const mutationOrder: string[] = [];
 let mealRequests = 0;
-const emptyTotals = {
+const emptyTotals = withMacros({
   cost: { status: "unavailable" as const, reason: "empty" as const },
   nutrition: buildNutrition(() => ({
     status: "unavailable",
     reason: "empty",
   })),
-};
+});
 
 const tuesdayDinner = mealOut.parse({
   id: testShortcode("meal", "MEL-4K7M"),

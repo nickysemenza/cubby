@@ -1,44 +1,13 @@
-import {
-  mealKindSchema,
-  mealTypeSchema,
-} from "@cubby/schemas/meal-classification";
 import { addDays, format, isValid, parseISO, startOfWeek } from "date-fns";
 import { z } from "zod";
 
-import { calendarPeriodParam } from "~/app/calendar/calendar-search";
-import { entitySearch } from "~/entities/generated/entity-search.gen";
-import { urlEnumListParam, urlStringParam } from "~/lib/search-params";
+import { urlStringParam } from "~/lib/search-params";
 
 const dateParamSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .optional()
   .catch(undefined);
-
-export type MealCalendarView = "calendar" | "table" | "nutrition";
-
-// The generated meal search carries the manifest filters, the table keys
-// (sort/page/pageSize) the Table view's useTableState urlSync round-trips,
-// and `create` — meals have no /meals/new route, the create is a dialog
-// opened by that param, which is what lets the action registry and the
-// empty-state CTA point at it. The calendar keys sit on top.
-export const mealCalendarSearchSchema = z.object({
-  ...entitySearch.meal.schema.shape,
-  view: z.enum(["calendar", "table", "nutrition"]).optional().catch(undefined),
-  period: calendarPeriodParam,
-  week: dateParamSchema,
-  date: z.iso.date().optional().catch(undefined),
-  mealType: urlEnumListParam(mealTypeSchema),
-  mealKind: urlEnumListParam(mealKindSchema),
-});
-
-export const mealCalendarSearchDefaults = {
-  ...entitySearch.meal.defaults,
-  view: undefined,
-  period: undefined,
-  week: undefined,
-  date: undefined,
-} as const;
 
 /** A renderer, not a view: both draw the same server-selected set. */
 export type ShoppingListView = "list" | "matrix";

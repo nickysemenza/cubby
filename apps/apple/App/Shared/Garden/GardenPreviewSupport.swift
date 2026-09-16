@@ -60,28 +60,14 @@ nonisolated enum GardenPreviewFixtures {
         id: "PLT-4003", ingredient: tomatoIngredient, status: "finished", location: bedLocation,
         finishedOn: day(-5), displayName: "Tomato")
 
-    private static func entry(
-        id: String, kind: String, observedOn: String, note: String, harvestAmount: String? = nil,
-        displayName: String, anchorsPeriod: Bool = false
-    ) -> GardenEntryOut {
-        PreviewFixtures.decode(
-            """
-            {"id": "\(id)", "locationId": "\(bedLocation.id)", "plantingId": "\(growingPlanting.id)",
-             "kind": "\(kind)", "observedOn": "\(observedOn)", "note": "\(note)",
-             "harvestAmount": \(harvestAmount.map { "\"\($0)\"" } ?? "null"), "images": [],
-             "displayName": "\(displayName)", "createdAt": "2026-03-01T10:00:00.000Z",
-             "updatedAt": "2026-03-01T10:00:00.000Z", "locationName": "\(bedLocation.name)",
-             "plantingName": "\(growingPlanting.displayName)", "anchorsPeriod": \(anchorsPeriod)}
-            """)
-    }
-
-    static let anchorEntry = entry(
-        id: "GDE-5001", kind: "observation", observedOn: day(-10), note: "Transplanted from the tray.",
-        displayName: "Note · \(bedLocation.name)", anchorsPeriod: true)
-
-    static let harvestEntry = entry(
-        id: "GDE-5002", kind: "harvest", observedOn: day(-2), note: "First ripe ones of the season.",
-        harvestAmount: "6 tomatoes", displayName: "Harvest · \(bedLocation.name)")
+    /// The growing planting as the generic detail reads it (`EntityRow.raw`), for slot previews.
+    static let growingPlantingRow: EntityRow = {
+        let raw = (try? JSONValue(encoding: growingPlanting)) ?? .null
+        return EntityCatalog[.planting].row(from: raw)
+            ?? EntityRow(
+                id: growingPlanting.id, title: growingPlanting.displayName, subtitle: nil,
+                imageURL: nil, raw: raw)
+    }()
 
     static let overview = GardenOverviewOut(
         locations: [
@@ -123,20 +109,6 @@ nonisolated enum GardenPreviewFixtures {
                 ], notes: nil)
         ]
     )
-
-    static let journal: [GardenJournalEntryOut] = [harvestEntry, anchorEntry].map { entry in
-        PreviewFixtures.decode(
-            """
-            {"id": "\(entry.id)", "locationId": "\(entry.locationId.rawValue)", "plantingId": "\(entry.plantingId ?? "")",
-             "kind": "\(entry.kind.rawValue)", "observedOn": "\(entry.observedOn.rawValue)",
-             "note": \(entry.note.map { "\"\($0)\"" } ?? "null"),
-             "harvestAmount": \(entry.harvestAmount.map { "\"\($0)\"" } ?? "null"), "images": [],
-             "displayName": "\(entry.displayName)", "createdAt": "2026-03-01T10:00:00.000Z",
-             "updatedAt": "2026-03-01T10:00:00.000Z", "locationName": "\(entry.locationName)",
-             "plantingName": \(entry.plantingName.map { "\"\($0)\"" } ?? "null"),
-             "anchorsPeriod": \(entry.anchorsPeriod), "context": "direct"}
-            """)
-    }
 }
 
 /// An in-memory `GardenService` for previews: every call answers immediately from
@@ -145,31 +117,12 @@ final class PreviewGardenService: GardenService {
     func gardenOverview() async throws -> GardenOverviewOut { GardenPreviewFixtures.overview }
     func gardenOptions(search: String?) async throws -> GardenOptions { GardenPreviewFixtures.options }
     func gardenGuides() async throws -> GardenGuidesDocument { GardenPreviewFixtures.guides }
-    func createGardenPlanting(_ input: GardenCreatePlantingInput) async throws {}
-    func recordGardenEntry(_ input: GardenRecordEntryInput) async throws {}
     func startGardenPlanting(
         id: String, locationID: String, startedAt: Date, method: GardenStartMethod
     ) async throws {}
     func moveGardenPlanting(_ input: GardenMovePlantingInput) async throws {}
     func splitGardenPlanting(_ input: GardenSplitPlantingInput) async throws {}
     func finishGardenPlanting(id: String, finishedAt: Date, note: String?) async throws {}
-    func createGardenLocation(name: String, kind: GardenLocationKind, conditions: String?) async throws {}
-    func updateGardenLocation(
-        id: String, name: String?, kind: GardenLocationKind?, conditions: String?
-    ) async throws {}
-    func setGardenProduct(id: String, growsIngredientID: String?) async throws {}
-    func setGardenIngredient(id: String, guideKey: String?) async throws {}
-    func updateGardenPlanting(id: String, _ data: PlantingUpdateData) async throws {}
-    func gardenEntries(
-        locationID: String?, plantingID: String?, page: Int
-    ) async throws -> (items: [GardenEntryOut], hasMore: Bool) {
-        (items: [GardenPreviewFixtures.harvestEntry, GardenPreviewFixtures.anchorEntry], hasMore: false)
-    }
-    func gardenJournal(
-        plantingID: String, includeBedContext: Bool, page: Int
-    ) async throws -> (items: [GardenJournalEntryOut], hasMore: Bool) {
-        (items: GardenPreviewFixtures.journal, hasMore: false)
-    }
     func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriodOut] {
         [
             GardenLocationPeriodOut(
@@ -183,5 +136,4 @@ final class PreviewGardenService: GardenService {
     func correctGardenLocationDates(
         plantingID: String, periods: [GardenLocationPeriodOut]
     ) async throws -> [GardenLocationPeriodOut] { periods }
-    func updateGardenEntry(id: String, _ data: GardenEntryUpdateData) async throws {}
 }

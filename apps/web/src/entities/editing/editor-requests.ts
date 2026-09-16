@@ -1,16 +1,17 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import type {
   ProductShortcode,
   ProjectShortcode,
 } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
 import type { z } from "zod";
 
+import { readReferenceField } from "../entity-references";
 import type { EntityEditDraft } from "./intent-types";
 import type { EditableEntity, EntityEditRequest } from "./types";
 
@@ -124,7 +125,7 @@ export const projectCaptureRequest = (input?: {
   };
 };
 
-export const financialAccountEditRequest = (
+const financialAccountEditRequest = (
   account: FinancialAccountOut,
 ): Omit<EntityEditRequest<"financialAccount", "update", "full">, "surface"> & {
   intent: "full";
@@ -141,7 +142,7 @@ export const financialAccountEditRequest = (
   },
 });
 
-export const financialTransactionEditRequest = (
+const financialTransactionEditRequest = (
   transaction: FinancialTransactionOut,
 ): Omit<
   EntityEditRequest<"financialTransaction", "update", "full">,
@@ -169,7 +170,7 @@ export const financialTransactionEditRequest = (
   },
 });
 
-export const wishEditRequest = (
+const wishEditRequest = (
   wish: WishOut,
 ): Omit<EntityEditRequest<"wish", "update", "full">, "surface"> & {
   intent: "full";
@@ -185,25 +186,7 @@ export const wishEditRequest = (
   },
 });
 
-/**
- * Every field the ingredient "full" intent edits (`name`, `aliases`,
- * `naKinds`, `usuallyOnHand`) is already a top-level key on `ingredientOut`,
- * so the generic per-field `initial` lookup seeds the dialog with no help —
- * unlike location/inventory below, whose reference fields read from a
- * relation object the record carries under a different key.
- */
-export const ingredientEditRequest = (
-  ingredient: IngredientWithFoodOut,
-): Omit<EntityEditRequest<"ingredient", "update", "full">, "surface"> & {
-  intent: "full";
-} => ({
-  entity: "ingredient",
-  operation: "update",
-  intent: "full",
-  record: ingredient,
-});
-
-export const inventoryEditRequest = (
+const inventoryEditRequest = (
   item: z.infer<typeof inventoryWithLocationAndProductOut>,
 ): Omit<EntityEditRequest<"inventory", "update", "full">, "surface"> & {
   intent: "full";
@@ -221,7 +204,7 @@ export const inventoryEditRequest = (
   },
 });
 
-export const locationEditRequest = (
+const locationEditRequest = (
   location: InfLocation,
 ): Omit<EntityEditRequest<"location", "update", "full">, "surface"> & {
   intent: "full";
@@ -237,3 +220,69 @@ export const locationEditRequest = (
     parentId: location.parent?.id ?? null,
   },
 });
+
+type UpdateRequest<E extends EditableEntity> = Omit<
+  EntityEditRequest<E, "update">,
+  "surface" | "intent"
+> & { intent: "full" };
+
+/**
+ * The per-entity update requests whose seed cannot be read off the record
+ * by field key: a projection that nests a reference under another key, or
+ * an editor field folded from several record fields.
+ */
+const bespokeEditRequests = {
+  financialAccount: financialAccountEditRequest,
+  financialTransaction: financialTransactionEditRequest,
+  wish: wishEditRequest,
+  inventory: inventoryEditRequest,
+  location: locationEditRequest,
+} as const;
+
+type BespokeEditRequest = (record: never) => UpdateRequest<EditableEntity>;
+
+/** One bespoke builder, read through the erased map. */
+const bespokeEditRequestFor = (
+  entity: EditableEntity,
+): BespokeEditRequest | undefined =>
+  Object.hasOwn(bespokeEditRequests, entity)
+    ? // SAFETY: `hasOwn` proves `entity` is one of the map's own keys.
+      bespokeEditRequests[entity as keyof typeof bespokeEditRequests]
+    : undefined;
+
+/**
+ * The generic `update:full` request for a detail record. Single reference
+ * fields are seeded from wherever the projection carries them
+ * (`readReferenceField`: `<key>`, `<key minus Id>.id`), so a nested relation
+ * object needs no per-entity seed; a bespoke builder above still wins.
+ */
+export function detailEditRequest<E extends EditableEntity>(
+  entity: E,
+  record: { id: string },
+): UpdateRequest<E> {
+  const bespoke = bespokeEditRequestFor(entity);
+  if (bespoke !== undefined) {
+    // SAFETY: `bespokeEditRequestFor(entity)` is the builder for exactly
+    // this entity, so its request is this entity's own `update:full` and
+    // `record` is the detail record it was typed against.
+    const built = bespoke(record as never) as UpdateRequest<E>;
+    return built;
+  }
+  const seed: Partial<Record<string, string | null>> = {};
+  for (const field of entityFieldModels[entity].fields) {
+    if (field.reference === null || field.reference.multiple) continue;
+    const reference = readReferenceField(record, field);
+    if (reference === null) continue;
+    seed[field.key] = reference.items[0]?.id ?? null;
+  }
+  // SAFETY: the seed names this entity's own single-reference fields with
+  // the shortcodes its record carries; the registry validates every value,
+  // which is what lets this generic builder stand in for a typed draft.
+  return {
+    entity,
+    operation: "update",
+    intent: "full",
+    record,
+    seed,
+  } as UpdateRequest<E>;
+}

@@ -24,8 +24,8 @@ extension Entity {
         func run() async throws {
             try await CLI.run {
                 let descriptor = try Entity.descriptor(for: key)
-                // `httpActions` is authoritative over the kernel roster's `descriptor.actions` —
-                // it's the set the HTTP document actually routes.
+                // `httpActions` is the set the HTTP document routes; `nativeActions` is the subset
+                // the generated client carries for create/update/delete/timeline.
                 guard descriptor.key.httpActions.contains(.list) else {
                     throw CLIError.message("\(descriptor.plural) has no list route.")
                 }

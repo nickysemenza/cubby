@@ -51,10 +51,9 @@ struct GenericEntityListModelTests {
         #expect(calls.withLock { $0 } == 1)
     }
 
-    /// `image` is exactly the case the guard exists for: the kernel roster grants it `.list`
-    /// (`EntityCatalog[.image].actions.contains(.list)` is true), but the HTTP document has no
-    /// `resources.image.list` route. `GenericEntityListModel.load()` must defer to
-    /// `EntityKey.httpActions`, not the kernel roster, or it would fire a request that 404s.
+    /// `image` is exactly the case the guard exists for: it is a catalog entity, but the HTTP
+    /// document has no `resources.image.list` route. `GenericEntityListModel.load()` must defer
+    /// to `EntityKey.httpActions` or it would fire a request that 404s.
     @Test func unavailableForADescriptorWithoutAnHTTPListRouteNeverHitsTheNetwork() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         ListStub.handler.withLock { handler in
@@ -64,7 +63,6 @@ struct GenericEntityListModelTests {
             }
         }
         let descriptor = EntityCatalog[.image]
-        #expect(descriptor.actions.contains(.list))
         #expect(!descriptor.key.httpActions.contains(.list))
 
         let model = GenericEntityListModel(descriptor: descriptor, client: try makeClient())

@@ -15,7 +15,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "location",
   names: { singular: "Location", plural: "Locations" },
-  route: { basePath: "locations", create: "dialog", list: null, detail: true },
+  route: { basePath: "locations", create: "dialog", list: true, detail: true },
   table: "Location",
   identifiers: { brand: "LocationId", shortcode: "LOC-" },
   presentation: {
@@ -90,6 +90,7 @@ export default defineEntity({
       links: [
         { label: "Arrange", path: "/locations/arrange" },
         { label: "Photo pass", path: "/locations/photo-pass" },
+        { label: "Print labels", path: "/labels" },
       ],
     },
   },

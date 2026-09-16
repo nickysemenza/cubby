@@ -964,15 +964,18 @@ describe("typed entity compiler", () => {
     expect(
       missingBrowserRouteFiles(entities, (path) => path.endsWith(expected[0]!)),
     ).toEqual([expected[1]]);
-    // A generated list/detail page reads the kernel projections, which need
-    // a create+update contract.
-    for (const route of [
-      { basePath: "alphas", list: true, detail: null },
-      { basePath: "alphas", list: null, detail: true },
-    ] as const)
-      expect(() => compileEntityDeclarations([{ ...base, route }])).toThrow(
-        "no create+update contract",
-      );
+    // A generated detail page reads the kernel projections, which need a
+    // create+update contract; a generated index only needs something to list.
+    expect(() =>
+      compileEntityDeclarations([
+        { ...base, route: { basePath: "alphas", list: null, detail: true } },
+      ]),
+    ).toThrow("no create+update contract");
+    expect(() =>
+      compileEntityDeclarations([
+        { ...base, route: { basePath: "alphas", list: true, detail: null } },
+      ]),
+    ).toThrow("has no contract (nothing to list)");
     // A dialog-created entity needs a capture intent for the dialog to open.
     expect(() =>
       compileEntityDeclarations([

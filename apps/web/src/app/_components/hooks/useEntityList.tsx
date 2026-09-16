@@ -75,7 +75,7 @@ const routeSearchSchema = z.record(z.string(), z.json().optional());
  * Server-backed tree presentation. Filtering and pagination remain manual, so
  * `filterFromLeafRows` and `paginateExpandedRows` would be inert here.
  */
-interface EntityListTreeConfig<TData, TRow> {
+export interface EntityListTreeConfig<TData, TRow> {
   /**
    * Maps flat server rows to table rows and must be referentially stable. The
    * two row types differ when foreign-entity children are nested under a row.

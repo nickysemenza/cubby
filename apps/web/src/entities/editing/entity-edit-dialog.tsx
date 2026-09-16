@@ -1,79 +1,37 @@
 import { Suspense } from "react";
 
 import { EntityEditDialogContent } from "./entity-edit-dialog-content";
-import type { EntityEditResultFor } from "./intent-types";
+import type {
+  EntityEditIntent as TypedEntityEditIntent,
+  EntityEditResultFor,
+} from "./intent-types";
 import type {
   EditableEntity,
   EntityEditRequest,
   EntityMutationPort,
 } from "./types";
 
-type SupportedEntityEditDialogRequest =
-  | (Omit<EntityEditRequest<"meal", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"task", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"ingredient", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"ingredient", "update", "full">, "surface"> & {
-      intent: "full";
-    })
-  | (Omit<EntityEditRequest<"inventory", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"inventory", "update", "full">, "surface"> & {
-      intent: "full";
-    })
-  | (Omit<EntityEditRequest<"location", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"location", "update", "full">, "surface"> & {
-      intent: "full";
-    })
-  | (Omit<EntityEditRequest<"expense", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"project", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"vendor", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"purchase", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<
-      EntityEditRequest<"financialAccount", "create", "capture">,
-      "surface"
-    > & { intent: "capture" })
-  | (Omit<
-      EntityEditRequest<"financialAccount", "update", "full">,
-      "surface"
-    > & { intent: "full" })
-  | (Omit<
-      EntityEditRequest<"financialTransaction", "create", "capture">,
-      "surface"
-    > & { intent: "capture" })
-  | (Omit<
-      EntityEditRequest<"financialTransaction", "update", "full">,
-      "surface"
-    > & { intent: "full" })
-  | (Omit<EntityEditRequest<"wish", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"wish", "create", "full">, "surface"> & {
-      intent: "full";
-    })
-  | (Omit<EntityEditRequest<"wish", "update", "full">, "surface"> & {
-      intent: "full";
-    });
+/**
+ * A dialog request names its intent explicitly: the generic shell has no
+ * per-entity default beyond the registry's, and a caller that means "the
+ * default" spells it so the presentation lookup (`editor-presentations.tsx`)
+ * is a plain key match.
+ */
+type DialogRequestFor<
+  E extends EditableEntity,
+  O extends "create" | "update",
+> = Omit<EntityEditRequest<E, O>, "surface"> & {
+  intent: TypedEntityEditIntent<E, O>;
+};
 
-export type EntityEditDialogRequest<
-  E extends EditableEntity = SupportedEntityEditDialogRequest["entity"],
-> = Extract<SupportedEntityEditDialogRequest, { entity: E }>;
+type SupportedEntityEditDialogRequest = {
+  [K in EditableEntity]:
+    | DialogRequestFor<K, "create">
+    | DialogRequestFor<K, "update">;
+}[EditableEntity];
+
+export type EntityEditDialogRequest<E extends EditableEntity = EditableEntity> =
+  Extract<SupportedEntityEditDialogRequest, { entity: E }>;
 
 export interface EntityEditDialogProps<E extends EditableEntity> {
   open: boolean;

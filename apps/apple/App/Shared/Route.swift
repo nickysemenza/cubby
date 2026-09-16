@@ -6,9 +6,9 @@ enum Route: Hashable {
     case graph(EntityRef?)
     case garden
     case nutrition(day: String)
-    case entityList(EntityKey)
+    /// A generic list, optionally opened with filters already applied (keyed by wire name).
+    case entityList(EntityKey, filters: EntityFilterState = EntityFilterState())
     case entityDetail(EntityKey, id: String)
-    case gardenBedJournal(id: String)
     /// A walk-the-shelf recount, optionally pre-scoped to a location.
     case audit(locationID: LocationCode?)
     /// The products-without-a-photo queue, optionally narrowed to a location.

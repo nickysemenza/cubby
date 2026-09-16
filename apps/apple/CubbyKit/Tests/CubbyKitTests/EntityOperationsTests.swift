@@ -85,17 +85,16 @@ struct EntityOperationsTests {
         #expect(row == nil)
     }
 
-    /// `image` is the case `httpActions` exists for: the kernel roster (`EntityDescriptor.actions`)
-    /// grants it `.list`/`.get` (Browse could, in principle, drill into an image), but the HTTP
-    /// document never exposed `resources.image.list`/`.get` — only `.update`/`.delete`, for photo
-    /// attach/reorder and removal. `httpActions` is what `GenericEntityListModel`/`CubbyClient`
-    /// actually gate on, and it must say so.
-    @Test func imageHTTPActionsExcludeListAndGet() {
+    /// `image` has only `resources.image.update`/`.delete` (photo attach/reorder and removal), so
+    /// the list/detail screens gate it out; `delete` is exposed but not generated, so it is in
+    /// `httpActions` and not in `nativeActions`.
+    @Test func imageActionsExcludeListAndGetAndDeleteIsNotNative() {
         #expect(!EntityKey.image.httpActions.contains(.list))
         #expect(!EntityKey.image.httpActions.contains(.get))
         #expect(EntityKey.image.httpActions.contains(.update))
         #expect(EntityKey.image.httpActions.contains(.delete))
-        #expect(EntityCatalog[.image].actions.contains(.list))
-        #expect(EntityCatalog[.image].actions.contains(.get))
+        #expect(EntityKey.image.nativeActions == [.update])
+        #expect(EntityKey.product.nativeActions.isSubset(of: EntityKey.product.httpActions))
+        #expect(!EntityKey.product.nativeActions.contains(.delete))
     }
 }

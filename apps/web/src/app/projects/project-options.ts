@@ -11,8 +11,6 @@ import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
  * for `project.tree`, which pages by root of the filtered forest so the nesting
  * has an honest shape.
  */
-export const PROJECT_ROWS_RENDERERS = ["flat", "tree"] as const;
-export type ProjectRowsRenderer = (typeof PROJECT_ROWS_RENDERERS)[number];
 
 /**
  * Status select options — the detail page's inline `EditableCell`, the create

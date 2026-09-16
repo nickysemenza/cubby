@@ -21,6 +21,7 @@ import {
   SideBySideFields,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
+import { EntityMultiValueField } from "~/app/_components/form-utils/entity-multi-value-field";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
@@ -398,8 +399,32 @@ function AmountField({ field, form }: SpecializedIntentRendererProps) {
 }
 
 /**
+ * A multi-reference field (`blockedByIds`, `candidateProductIds`): the full
+ * id set, edited as chips plus the target's search picker.
+ */
+function EntityMultiSelectField({
+  field,
+  form,
+}: SpecializedIntentRendererProps) {
+  const referenceEntity = field.reference?.entity;
+  if (referenceEntity === undefined)
+    throw new Error(`Field ${field.key} is a multi-select without a reference`);
+  return (
+    <EntityMultiValueField
+      form={form}
+      name={field.key}
+      // SAFETY: `referenceEntity` is a manifest-declared reference target,
+      // always one of the picker's supported entities.
+      entity={referenceEntity as never}
+      label={field.label}
+      SearchProvider={referenceEntitySearch(referenceEntity)}
+    />
+  );
+}
+
+/**
  * Renderers for `control.kind: "specialized"` fields that are not a
- * reference (those are handled generically below). Keyed by
+ * singular reference (those are handled generically below). Keyed by
  * `control.renderer`. Populated as bespoke forms move onto
  * `EntityIntentFields` (Lane A5) — an entity whose intent includes a
  * specialized, non-reference field with no entry here fails loudly rather
@@ -408,6 +433,7 @@ function AmountField({ field, form }: SpecializedIntentRendererProps) {
 const specializedIntentRenderers = {
   "tag-list": TagListField,
   amount: AmountField,
+  "entity-multi-select": EntityMultiSelectField,
   // The gallery block the dialog shell mounts owns reordering (it writes
   // `imageOrder` through `onExistingImagesReorder`); the field itself has no
   // control of its own to draw.

@@ -92,8 +92,12 @@ export function compileEntityListInput<E extends ListEntity>(
  * carry that entity's types. Throws for an entity the operation is not
  * registered for.
  */
-export function entityListFor<E extends ListEntity>(entity: E) {
-  const operation = entityList.list.forEntity(entity);
+export function entityListFor<E extends ListEntity>(
+  entity: E,
+  /** Test seam: a `withTransport` twin of the production list operation. */
+  listOperation: typeof entityList.list = entityList.list,
+) {
+  const operation = listOperation.forEntity(entity);
   const wireInputFor = (input: EntityListParams<E>) =>
     entityListInputFor(entity, input);
   const queryKeyFor = (

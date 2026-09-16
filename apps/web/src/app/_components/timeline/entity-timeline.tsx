@@ -53,7 +53,7 @@ interface EntityTimelineControls {
 }
 
 /** The read the component performs; a test substitutes a transport-less descriptor. */
-interface EntityTimelineOperations {
+export interface EntityTimelineOperations {
   readonly timeline: typeof entityTimeline.timeline;
 }
 

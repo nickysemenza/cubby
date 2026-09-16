@@ -1,88 +1,599 @@
-// step-4 placeholder: replaced by the generic page (rendered from
-// `entitySummary[entity].detail` sections, hero and slots). Until then the
-// generated detail routes mount the bespoke detail for each entity here.
-import type { ComponentProps } from "react";
+import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
+import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
+import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import { partitionEntityFiles } from "@cubby/schemas/image";
+import { Link } from "@tanstack/react-router";
+import { Clock, FileText, ImageIcon, Info, Link2, Puzzle } from "lucide-react";
+import { Suspense, useMemo, useState } from "react";
+import { z } from "zod";
 
-import { IngredientDetail } from "~/app/_components/ingredients/ingredient-detail";
-import { InventoryDetail } from "~/app/_components/inventory/inventory-detail";
-import { LocationDetail } from "~/app/_components/locations/location-detail";
-import { ProductDetail } from "~/app/_components/products/product-detail";
-import { ExpenseDetail } from "~/app/expenses/expense-detail";
-import { FinancialAccountDetail } from "~/app/finance/financial-account-detail";
-import { FinancialTransactionDetail } from "~/app/finance/financial-transaction-detail";
-import { LedgerPartyDetail } from "~/app/finance/ledger-party-detail";
-import { LedgerTransferDetail } from "~/app/finance/ledger-transfer-detail";
-import { PlantingDetail } from "~/app/garden/planting-detail";
-import { ImageDetailPage } from "~/app/images/image-detail-page";
-import { MealDetailPage } from "~/app/meals/meal-detail-page";
-import { PurchaseDetail } from "~/app/purchases/purchase-detail";
-import { TaskDetail } from "~/app/tasks/task-detail";
-import { VendorDetail } from "~/app/vendors/vendor-detail";
-import { WishDetail } from "~/app/wishes/wish-detail";
-import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
+import { Page } from "~/components/page/Page";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "~/components/ui/breadcrumb";
+import { DetailEditAction } from "~/components/ui/detail-edit-action";
+import { Skeleton } from "~/components/ui/skeleton";
+import { detailFieldRenderersFor } from "~/entities/detail-field-renderers";
+import { detailEditRequest } from "~/entities/editing/editor-requests";
+import {
+  EntityEditDialog,
+  type EntityEditDialogRequest,
+} from "~/entities/editing/entity-edit-dialog";
+import type { EditableEntity } from "~/entities/editing/types";
+import {
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
+import {
+  entityMutationOptionsFactory,
+  isGeneratedBrowserCrudEntity,
+} from "~/entities/entity-contracts";
+import {
+  editableFieldOverrides,
+  EntityBasicInfo,
+  renderDetailFieldValue,
+  type DetailFieldRenderer,
+} from "~/entities/entity-display";
+import {
+  readRecordField,
+  readReferenceField,
+} from "~/entities/entity-references";
+import { getErrorMessage } from "~/lib/error-utils";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
-/** The entities whose detail route is generated (`route.detail` non-null). */
-type RosterDetailEntity =
-  | "product"
-  | "ingredient"
-  | "location"
-  | "inventory"
-  | "meal"
-  | "ledgerParty"
-  | "ledgerTransfer"
-  | "task"
-  | "vendor"
-  | "purchase"
-  | "financialAccount"
-  | "financialTransaction"
-  | "wish"
-  | "expense"
-  | "planting";
+import { actionVerbs, type ActionVerbId } from "../actions/action-verbs";
+import { type DetailSection, DetailSections } from "../data-table/detail-page";
+import { DocumentViewerList } from "../DocumentViewerList";
+import EntityImageList from "../EntityImageList";
+import { useEntityActionMutation } from "../hooks/useActionMutation";
+import { EntityPhotosSection } from "../photos/entity-photos-section";
+import {
+  EntityTimeline,
+  type EntityTimelineOperations,
+} from "../timeline/entity-timeline";
+import { detailEditOverrideFor } from "./detail-edit-overrides";
+import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+import { detailSlotsFor } from "./detail-slots";
+import {
+  EntityRelationTable,
+  type EntityRelationTableOperations,
+} from "./entity-relation-table";
 
-// A discriminated union rather than `{ entity: E; record: Record<E> }`, so the
-// `switch` below narrows `record` with `entity` and no cast is needed.
-export type GenericEntityDetailProps =
-  | {
-      [E in RosterDetailEntity]: { entity: E; record: EntityDetailByEntity[E] };
-    }[RosterDetailEntity]
-  | {
-      entity: "image";
-      record: ComponentProps<typeof ImageDetailPage>["record"];
-    };
+export type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 
-export function GenericEntityDetail(props: GenericEntityDetailProps) {
-  switch (props.entity) {
-    case "product":
-      return <ProductDetail record={props.record} />;
-    case "ingredient":
-      return <IngredientDetail record={props.record} />;
-    case "location":
-      return <LocationDetail record={props.record} />;
-    case "inventory":
-      return <InventoryDetail record={props.record} />;
-    case "meal":
-      return <MealDetailPage record={props.record} />;
-    case "ledgerParty":
-      return <LedgerPartyDetail record={props.record} />;
-    case "ledgerTransfer":
-      return <LedgerTransferDetail record={props.record} />;
-    case "task":
-      return <TaskDetail record={props.record} />;
-    case "vendor":
-      return <VendorDetail record={props.record} />;
-    case "purchase":
-      return <PurchaseDetail record={props.record} />;
-    case "financialAccount":
-      return <FinancialAccountDetail record={props.record} />;
-    case "financialTransaction":
-      return <FinancialTransactionDetail record={props.record} />;
-    case "wish":
-      return <WishDetail record={props.record} />;
-    case "expense":
-      return <ExpenseDetail record={props.record} />;
-    case "planting":
-      return <PlantingDetail record={props.record} />;
-    case "image":
-      return <ImageDetailPage record={props.record} />;
+/** What every detail read carries that the generic page reads by name. */
+const detailRecordSchema = z.looseObject({
+  id: z.string(),
+  attachments: z.array(entityAttachmentRead).optional(),
+});
+type DetailRecordBag = z.output<typeof detailRecordSchema>;
+
+type DeclaredSection = CompiledEntityPresentation["detail"]["sections"][number];
+type DisplayField = EntityFieldModel["fields"][number];
+
+/**
+ * A declaration's presentation through the widened compiled shape: the
+ * per-entity literal types are what the registries key on, but the page
+ * itself walks every entity the same way.
+ */
+const presentationOf = (
+  entity: GenericDetailEntity,
+): CompiledEntityPresentation & { singular: string } => entitySummary[entity];
+
+const sectionIcon = (kind: DeclaredSection["kind"]) => {
+  switch (kind) {
+    case "fields":
+      return Info;
+    case "relation":
+      return Link2;
+    case "timeline":
+      return Clock;
+    case "slot":
+      return Puzzle;
   }
+};
+
+/** Scalar controls the generic inline editor renders as an `EditableCell`. */
+const INLINE_EDITABLE_CONTROLS = new Set([
+  "text",
+  "textarea",
+  "number",
+  "date",
+  "select",
+]);
+
+/**
+ * The field keys of one `fields` section that the record's update contract
+ * edits through a plain scalar control — those get an inline `EditableCell`;
+ * reference, structured and boolean fields keep their read-only rendering
+ * and are changed through the edit dialog.
+ */
+function inlineEditableKeys(
+  entity: GenericDetailEntity,
+  fields: readonly string[],
+): string[] {
+  if (!isGeneratedBrowserCrudEntity(entity)) return [];
+  const model: EntityFieldModel = entityFieldModels[entity];
+  const updateRoster: readonly string[] = model.update;
+  const editable = new Set<string>(
+    model.fields
+      .filter(
+        (field) =>
+          updateRoster.includes(field.key) &&
+          field.control !== null &&
+          field.reference === null &&
+          INLINE_EDITABLE_CONTROLS.has(field.control.kind) &&
+          field.readKey !== null,
+      )
+      .map((field) => field.key),
+  );
+  return fields.filter((key) => editable.has(key));
+}
+
+function useInlineFieldOverrides(
+  entity: GenericDetailEntity,
+  record: DetailRecordBag,
+  fields: readonly string[],
+): Record<string, DetailFieldRenderer<DetailRecordBag>> {
+  const crud = isGeneratedBrowserCrudEntity(entity) ? entity : null;
+  const mutation = useEntityActionMutation({
+    // A non-CRUD entity (image, cookbook) never edits inline; the hook still
+    // has to run unconditionally, so it binds to `product` and is never
+    // invoked (the override set below is empty).
+    entity: crud ?? "product",
+    operation: "update",
+    intent: "full",
+    mutationFn: entityMutationOptionsFactory(crud ?? "product", "update"),
+    success: (data) => savedWithBackgroundWork(data.sideEffects),
+    error: (error) => getErrorMessage(error) || "Failed to save",
+  });
+  const keys = useMemo(
+    () => inlineEditableKeys(entity, fields),
+    [entity, fields],
+  );
+  if (crud === null || keys.length === 0) return {};
+  // SAFETY: `keys` names fields of `crud`'s own update contract; the wire
+  // variables are parsed by that contract before the mutation executes.
+  return editableFieldOverrides(crud, record, keys, (variables) =>
+    mutation.mutateAsync(variables as never),
+  );
+}
+
+function FieldsSection<E extends GenericDetailEntity>({
+  entity,
+  record,
+  fields,
+}: {
+  entity: E;
+  record: DetailRecordOf<E>;
+  fields: readonly string[];
+}) {
+  const bag = detailRecordSchema.parse(record);
+  const inline = useInlineFieldOverrides(entity, bag, fields);
+  // A domain renderer for a structured field wins over the generic cell; the
+  // inline editor covers the plain scalars a renderer never claims.
+  const renderers = detailFieldRenderersFor(entity) ?? {};
+  const overrides = { ...inline };
+  for (const [key, render] of Object.entries(renderers)) {
+    if (!fields.includes(key)) continue;
+    // SAFETY: `detailFieldRenderersFor` hands back this entity's own
+    // renderers, each typed against the record this page received.
+    overrides[key] = () => render(record as never);
+  }
+  return (
+    <EntityBasicInfo
+      entity={entity}
+      fields={fields}
+      record={bag}
+      overrides={overrides}
+    />
+  );
+}
+
+const chipValue = z.union([z.string(), z.boolean()]).nullish();
+
+/** The label a chip field's value reads as: its option label, or Yes/Not for a boolean. */
+function chipLabel(
+  field: DisplayField,
+  value: z.output<typeof chipValue>,
+): string | null {
+  if (value === null || value === undefined) return null;
+  if (value === true) return field.label;
+  if (value === false) return `Not ${field.label.toLocaleLowerCase()}`;
+  return (
+    field.control?.options?.find((option) => option.value === value)?.label ??
+    value
+  );
+}
+
+/** The chip, stats and breadcrumb the hero declares, read off the record. */
+function heroOf<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+) {
+  const { hero } = presentationOf(entity).detail;
+  const fields: readonly DisplayField[] = entityFieldModels[entity].fields;
+  const field = (key: string) =>
+    fields.find((candidate) => candidate.key === key);
+  const chipField = hero.chip === null ? undefined : field(hero.chip);
+  const chip = chipField
+    ? chipLabel(
+        chipField,
+        readRecordField(record, chipField.readKey ?? chipField.key, chipValue),
+      )
+    : null;
+  const heroStamp =
+    chip === null ? undefined : { label: chip, tone: "ink" as const };
+  const heroStats: DetailHeroStat[] = hero.stats.flatMap((key) => {
+    const statField = field(key);
+    return statField
+      ? [
+          {
+            label: statField.label,
+            value: renderDetailFieldValue(record, statField),
+          },
+        ]
+      : [];
+  });
+  const breadcrumbField =
+    hero.breadcrumb === null ? undefined : field(hero.breadcrumb);
+  return { heroStamp, heroStats, breadcrumbField };
+}
+
+const ancestorSchema: z.ZodType<{
+  id: string;
+  name?: string | null;
+  parent?: unknown;
+}> = z.looseObject({
+  id: z.string(),
+  name: z.string().nullish(),
+  parent: z.unknown().optional(),
+});
+
+/**
+ * The ancestry a breadcrumb reference field implies: the nested chain under
+ * the key minus `Id` (`parent.parent…`) when the projection carries one,
+ * else the one linked record.
+ */
+function ancestry<TRecord extends object>(
+  record: TRecord,
+  field: DisplayField,
+): Array<{ id: string; name: string }> {
+  const reference = readReferenceField(record, field);
+  if (reference === null || reference.items.length === 0) return [];
+  const base = field.key.replace(/Ids?$/u, "");
+  const chain: Array<{ id: string; name: string }> = [];
+  let current = ancestorSchema.safeParse(
+    readRecordField(record, base, z.unknown()),
+  );
+  while (current.success) {
+    chain.unshift({
+      id: current.data.id,
+      name: current.data.name ?? current.data.id,
+    });
+    current = ancestorSchema.safeParse(current.data.parent);
+  }
+  if (chain.length > 0) return chain;
+  const [item] = reference.items;
+  return item ? [{ id: item.id, name: item.name ?? item.id }] : [];
+}
+
+function AncestryBreadcrumb({
+  entity,
+  chain,
+  current,
+}: {
+  entity: GenericDetailEntity;
+  chain: Array<{ id: string; name: string }>;
+  current: string;
+}) {
+  if (chain.length === 0 || !isBrowserRoutedEntity(entity)) return null;
+  return (
+    <Breadcrumb className="min-h-11 border-y border-border px-2">
+      <BreadcrumbList>
+        {chain.map((ancestor) => (
+          <BreadcrumbItem key={ancestor.id}>
+            <BreadcrumbLink
+              render={
+                <Link
+                  to={entities[entity].routes.detail}
+                  params={entityDetailParams(ancestor.id)}
+                />
+              }
+            >
+              {ancestor.name}
+            </BreadcrumbLink>
+            <BreadcrumbSeparator />
+          </BreadcrumbItem>
+        ))}
+        <BreadcrumbItem>
+          <BreadcrumbPage>{current}</BreadcrumbPage>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
+function SlotFallback() {
+  return <Skeleton className="h-16 w-full" />;
+}
+
+/** The journal variant leads with its relation; the record's own fields become the rail. */
+function orderSections(
+  variant: CompiledEntityPresentation["detail"]["variant"],
+  declared: readonly DeclaredSection[],
+  built: DetailSection[],
+): DetailSection[] {
+  if (variant !== "journal") return built;
+  const kindOf = new Map(declared.map((section) => [section.id, section.kind]));
+  const relations = built.filter(
+    (section) => kindOf.get(section.id) === "relation",
+  );
+  const rest = built
+    .filter((section) => kindOf.get(section.id) !== "relation")
+    .map((section) =>
+      section.placement === "primary"
+        ? { ...section, placement: "supporting" as const }
+        : section,
+    );
+  return [...relations, ...rest];
+}
+
+/** Reads the relation tables and timeline section perform; a test seam. */
+export interface GenericEntityDetailOperations {
+  list?: EntityRelationTableOperations;
+  timeline?: EntityTimelineOperations;
+}
+
+function declaredSections<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+  bag: DetailRecordBag,
+  operations: GenericEntityDetailOperations,
+): DetailSection[] {
+  const { detail, singular } = presentationOf(entity);
+  const slots = detailSlotsFor(entity);
+  const built = detail.sections.flatMap((section): DetailSection[] => {
+    const base = {
+      id: section.id,
+      placement: section.placement,
+      icon: sectionIcon(section.kind),
+      collapsed: section.collapsed,
+    };
+    switch (section.kind) {
+      case "fields":
+        return [
+          {
+            ...base,
+            title: section.title,
+            content: (
+              <FieldsSection
+                entity={entity}
+                record={record}
+                fields={section.fields}
+              />
+            ),
+          },
+        ];
+      case "relation":
+        return [
+          {
+            ...base,
+            title: section.title,
+            overflowVisible: true,
+            content: (
+              <EntityRelationTable
+                entity={entity}
+                section={section}
+                recordId={bag.id}
+                operations={operations.list}
+                createLabel={
+                  detail.variant === "journal" ? "Log entry" : undefined
+                }
+                emptyLabel={
+                  detail.variant === "journal"
+                    ? "Nothing logged yet — the first entry starts the journal."
+                    : undefined
+                }
+              />
+            ),
+          },
+        ];
+      case "timeline":
+        // SAFETY: the compiler only admits a timeline section on an entity
+        // with `capabilities.timeline`.
+        return [
+          {
+            ...base,
+            title: section.title,
+            content: (
+              <EntityTimeline
+                entity={entity as never}
+                ids={[bag.id]}
+                mode={section.mode}
+                operations={operations.timeline}
+              />
+            ),
+          },
+        ];
+      case "slot": {
+        const slot = slots?.[section.id];
+        // SAFETY: `detailSlotsFor` hands back this entity's own slots, each
+        // typed against the record this page received.
+        if (slot === undefined || slot.applies?.(record as never) === false)
+          return [];
+        const Slot = slot.component;
+        // SAFETY: the slot is this entity's own (see above).
+        return [
+          {
+            ...base,
+            title: section.title ?? singular,
+            surface: section.title === null ? ("plain" as const) : undefined,
+            content: (
+              <Suspense fallback={<SlotFallback />}>
+                <Slot record={record as never} />
+              </Suspense>
+            ),
+          },
+        ];
+      }
+    }
+  });
+  return orderSections(detail.variant, detail.sections, built);
+}
+
+/**
+ * The entity's own `update:full` request, which the dialog resolves against
+ * the editing registry at runtime.
+ */
+function editRequestFor<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+): EntityEditDialogRequest<EditableEntity> {
+  // SAFETY: the caller proved `isGeneratedBrowserCrudEntity(entity)`, i.e.
+  // the entity has the standard update contract this request names.
+  const request: unknown = detailEditRequest(
+    entity as EditableEntity,
+    record as never,
+  );
+  // SAFETY: `detailEditRequest` returns exactly the `update:full` member of
+  // the dialog's request union for this entity.
+  return request as EntityEditDialogRequest<EditableEntity>;
+}
+
+/**
+ * The one detail page: every section, the hero and the edit affordance come
+ * from `entitySummary[entity].detail`; a slot is the only hand-written fill
+ * and renders only where `detailSlots` provides it.
+ */
+export function GenericEntityDetail<E extends GenericDetailEntity>({
+  entity,
+  record,
+  operations = {},
+}: {
+  entity: E;
+  record: DetailRecordOf<E>;
+  operations?: GenericEntityDetailOperations;
+}) {
+  const { detail, titleField } = presentationOf(entity);
+  const bag = detailRecordSchema.parse(record);
+  const title =
+    readRecordField(record, titleField, z.string().catch("")) || bag.id;
+  const { heroStamp, heroStats, breadcrumbField } = heroOf(entity, record);
+  const [editing, setEditing] = useState(false);
+  const EditOverride = detailEditOverrideFor(entity);
+  const heroActions: readonly string[] = detail.hero.actions;
+  const editable =
+    heroActions.includes("edit") &&
+    (EditOverride !== undefined || isGeneratedBrowserCrudEntity(entity));
+
+  const { images, documents } = partitionEntityFiles(bag.attachments ?? []);
+  const heroImages = detail.hero.images ? images : undefined;
+  const sections = declaredSections(entity, record, bag, operations);
+
+  // Derived from capabilities, never declared: a gallery's photos edit
+  // inline; a cover/logo shows what is attached; documents get a viewer.
+  if (isGalleryEntity(entity) && isGeneratedBrowserCrudEntity(entity)) {
+    // SAFETY: `isGalleryEntity` proves the entity stores a gallery, and a
+    // gallery entity's detail id is its own branded shortcode; the record
+    // schema above only widens it to string.
+    sections.push({
+      id: "images",
+      title: "Photos",
+      icon: ImageIcon,
+      placement: "supporting",
+      content: (
+        <EntityPhotosSection
+          entity={entity as never}
+          id={bag.id as never}
+          images={images}
+        />
+      ),
+    });
+  } else if (images.length > 0) {
+    sections.push({
+      id: "images",
+      title: "Images",
+      icon: ImageIcon,
+      placement: "supporting",
+      content: <EntityImageList images={images} />,
+    });
+  }
+  if (documents.length > 0) {
+    sections.push({
+      id: "documents",
+      title: "Documents",
+      icon: FileText,
+      placement: "primary",
+      content: <DocumentViewerList documents={documents} />,
+    });
+  }
+
+  // `edit` is the page's own affordance (the hero button); every other
+  // declared verb is offered from the registry through the command strip.
+  const declaredVerbs = heroActions.filter(
+    (verb): verb is ActionVerbId => verb !== "edit" && verb in actionVerbs,
+  );
+  const breadcrumbChain = breadcrumbField
+    ? ancestry(record, breadcrumbField)
+    : [];
+  // SAFETY: `detailEditOverrideFor` hands back this entity's own override,
+  // typed against the record this page received.
+  const overrideRecord = record as never;
+
+  return (
+    <Page
+      variant="detail"
+      entity={entity}
+      title={title}
+      rawData={record}
+      heroImages={heroImages}
+      heroNo={bag.id}
+      heroStamp={heroStamp}
+      heroStats={heroStats.length > 0 ? heroStats : undefined}
+      heroActions={
+        editable
+          ? { primary: <DetailEditAction onClick={() => setEditing(true)} /> }
+          : undefined
+      }
+    >
+      <AncestryBreadcrumb
+        entity={entity}
+        chain={breadcrumbChain}
+        current={title}
+      />
+      <DetailSections
+        sections={sections}
+        rawData={record}
+        heroImages={heroImages}
+        actionVerbs={declaredVerbs}
+      />
+      {editable && editing ? (
+        EditOverride ? (
+          <EditOverride
+            record={overrideRecord}
+            onClose={() => setEditing(false)}
+          />
+        ) : (
+          <EntityEditDialog<EditableEntity>
+            open
+            onOpenChange={setEditing}
+            request={editRequestFor(entity, record)}
+          />
+        )
+      ) : null}
+    </Page>
+  );
 }

@@ -39,7 +39,8 @@ struct FindEntityIntent: AppIntent {
     }
 }
 
-/// "Where is my <product>?" — answers from the product's stocked-at relation.
+/// "Where is my <product>?" — answers from the inventory list filtered to the product (the same
+/// read as the detail's declared "Stocked at" relation section).
 struct WhereIsProductIntent: AppIntent {
     static let title: LocalizedStringResource = "Where Is a Product"
     static let description = IntentDescription("Says which location a product is stocked in.")
@@ -58,26 +59,25 @@ struct WhereIsProductIntent: AppIntent {
             return .result(dialog: "No product in Cubby matches \(product).")
         }
         RecentEntities.record(hit.id)
-        let descriptor = EntityCatalog[.product]
-        guard let row = try await client.row(descriptor, id: hit.id) else {
-            throw IntentContext.Failure.notFound("product \(hit.id)")
+        let inventory = EntityCatalog[.inventory]
+        guard let filter = inventory.filter("productId"), case .param(let wire) = filter.wire else {
+            throw IntentContext.Failure.notFound("inventory product filter")
         }
-        let stocked = ProductRelations.stockedAt(from: row).filter { $0.placement != "installed" }
+        let page = try await client.list(
+            inventory, pageSize: 50, filters: EntityFilterState([wire: .single(hit.id)]))
+        let stocked = page.items.filter { $0.raw["placement"]?.stringValue != "installed" }
         guard !stocked.isEmpty else {
-            return .result(dialog: "\(row.title) isn't stocked anywhere.")
+            return .result(dialog: "\(hit.title) isn't stocked anywhere.")
         }
-        let places = stocked.prefix(3).map { place in
-            let path = place.ancestorPath.map { " (\($0))" } ?? ""
-            let amount = place.amount.map { " — \(Self.format($0))" } ?? ""
-            return "\(place.locationName)\(path)\(amount)"
+        let places = stocked.prefix(3).map { row in
+            let location =
+                row.raw["locationName"]?.stringValue ?? row.raw["location"]?["name"]?.stringValue
+                ?? row.raw["location"]?["id"]?.stringValue ?? "an unknown location"
+            let amount = EntityFieldValue.amount(row.raw["amount"]).map { " — \($0)" } ?? ""
+            return "\(location)\(amount)"
         }
         let more = stocked.count > 3 ? " and \(stocked.count - 3) more" : ""
-        return .result(dialog: "\(row.title) is in \(places.joined(separator: "; "))\(more).")
-    }
-
-    private static func format(_ amount: Amount) -> String {
-        let value = amount.value == amount.value.rounded() ? String(Int(amount.value)) : String(amount.value)
-        return "\(value) \(amount.unit)"
+        return .result(dialog: "\(hit.title) is in \(places.joined(separator: "; "))\(more).")
     }
 }
 

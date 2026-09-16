@@ -11,15 +11,22 @@ import CubbyAPI
 // MARK: - Entities
 
 public typealias Expense = Components.Schemas.ExpenseOut
+public typealias FinancialAccount = Components.Schemas.FinancialAccountOut
+public typealias FinancialTransaction = Components.Schemas.FinancialTransactionOut
 public typealias GardenEntry = Components.Schemas.GardenEntryOut
 public typealias Ingredient = Components.Schemas.IngredientOut
 public typealias Inventory = Components.Schemas.InventoryEntryOut
+public typealias LedgerParty = Components.Schemas.LedgerPartyOut
+public typealias LedgerTransfer = Components.Schemas.LedgerTransferOut
 public typealias Location = Components.Schemas.LocationOut
 public typealias Meal = Components.Schemas.MealOut
 public typealias Planting = Components.Schemas.PlantingOut
 public typealias Product = Components.Schemas.ProductTopLevelOut
+public typealias Project = Components.Schemas.ProjectOut
 public typealias Purchase = Components.Schemas.PurchaseOut
 public typealias TaskRecord = Components.Schemas.TaskOut
+public typealias Vendor = Components.Schemas.VendorOut
+public typealias Wish = Components.Schemas.WishOut
 
 // MARK: - Components
 
@@ -73,6 +80,13 @@ public typealias EntityRecommendationGroupInventoryPlacement = Components.Schema
 public typealias EntityRecommendationGroupProductRelated = Components.Schemas.EntityRecommendationGroupProductRelated
 public typealias EntityRecommendationsOut = Components.Schemas.EntityRecommendationsOut
 public typealias EntityRef = Components.Schemas.EntityRef
+public typealias EntityTimelineEvent = Components.Schemas.EntityTimelineEvent
+public typealias EntityTimelineGroup = Components.Schemas.EntityTimelineGroup
+public typealias EntityTimelineLink = Components.Schemas.EntityTimelineLink
+public typealias EntityTimelineOut = Components.Schemas.EntityTimelineOut
+public typealias EntityTimelineRow = Components.Schemas.EntityTimelineRow
+public typealias EntityTimelineStat = Components.Schemas.EntityTimelineStat
+public typealias ExpenseCreateInput = Components.Schemas.ExpenseCreateInput
 public typealias ExpenseDetail = Components.Schemas.ExpenseDetail
 public typealias ExpenseLineBasis = Components.Schemas.ExpenseLineBasis
 public typealias ExpenseLineKind = Components.Schemas.ExpenseLineKind
@@ -88,36 +102,55 @@ public typealias ExternalIdKind = Components.Schemas.ExternalIdKind
 public typealias ExternalIdOut = Components.Schemas.ExternalIdOut
 public typealias ExternalIdSource = Components.Schemas.ExternalIdSource
 public typealias FdcId = Components.Schemas.FdcId
+public typealias FinancialAccountCreateInput = Components.Schemas.FinancialAccountCreateInput
 public typealias FinancialAccountDetail = Components.Schemas.FinancialAccountDetail
 public typealias FinancialAccountIdentity = Components.Schemas.FinancialAccountIdentity
 public typealias FinancialAccountIdentityBankAccount = Components.Schemas.FinancialAccountIdentityBankAccount
+public typealias FinancialAccountIdentityBankAccountInput = Components.Schemas.FinancialAccountIdentityBankAccountInput
 public typealias FinancialAccountIdentityCash = Components.Schemas.FinancialAccountIdentityCash
+public typealias FinancialAccountIdentityCashInput = Components.Schemas.FinancialAccountIdentityCashInput
 public typealias FinancialAccountIdentityCreditCard = Components.Schemas.FinancialAccountIdentityCreditCard
+public typealias FinancialAccountIdentityCreditCardInput = Components.Schemas.FinancialAccountIdentityCreditCardInput
+public typealias FinancialAccountIdentityInput = Components.Schemas.FinancialAccountIdentityInput
 public typealias FinancialAccountIdentityOther = Components.Schemas.FinancialAccountIdentityOther
+public typealias FinancialAccountIdentityOtherInput = Components.Schemas.FinancialAccountIdentityOtherInput
 public typealias FinancialAccountIdentityStoredValue = Components.Schemas.FinancialAccountIdentityStoredValue
+public typealias FinancialAccountIdentityStoredValueInput = Components.Schemas.FinancialAccountIdentityStoredValueInput
 public typealias FinancialAccountLast4 = Components.Schemas.FinancialAccountLast4
 public typealias FinancialAccountListItem = Components.Schemas.FinancialAccountListItem
 public typealias FinancialAccountListPage = Components.Schemas.FinancialAccountListPage
+public typealias FinancialAccountOut = Components.Schemas.FinancialAccountOut
 public typealias FinancialAccountShortcode = Components.Schemas.FinancialAccountShortcode
 public typealias FinancialAccountSourceAlias = Components.Schemas.FinancialAccountSourceAlias
 public typealias FinancialAccountSourceAliases = Components.Schemas.FinancialAccountSourceAliases
+public typealias FinancialAccountSourceAliasesInput = Components.Schemas.FinancialAccountSourceAliasesInput
+public typealias FinancialAccountSourceAliasInput = Components.Schemas.FinancialAccountSourceAliasInput
+public typealias FinancialAccountUpdateData = Components.Schemas.FinancialAccountUpdateData
 public typealias FinancialReconciliationStatus = Components.Schemas.FinancialReconciliationStatus
 public typealias FinancialReconciliationSummary = Components.Schemas.FinancialReconciliationSummary
 public typealias FinancialTransactionAllocationInput = Components.Schemas.FinancialTransactionAllocationInput
+public typealias FinancialTransactionAllocationInputRequest = Components.Schemas.FinancialTransactionAllocationInputRequest
 public typealias FinancialTransactionAllocations = Components.Schemas.FinancialTransactionAllocations
+public typealias FinancialTransactionAllocationsInput = Components.Schemas.FinancialTransactionAllocationsInput
+public typealias FinancialTransactionCreateInput = Components.Schemas.FinancialTransactionCreateInput
 public typealias FinancialTransactionDetail = Components.Schemas.FinancialTransactionDetail
 public typealias FinancialTransactionListItem = Components.Schemas.FinancialTransactionListItem
 public typealias FinancialTransactionListPage = Components.Schemas.FinancialTransactionListPage
 public typealias FinancialTransactionNonZeroAmount = Components.Schemas.FinancialTransactionNonZeroAmount
+public typealias FinancialTransactionOut = Components.Schemas.FinancialTransactionOut
 public typealias FinancialTransactionShortcode = Components.Schemas.FinancialTransactionShortcode
 public typealias FinancialTransactionSourceRef = Components.Schemas.FinancialTransactionSourceRef
+public typealias FinancialTransactionSourceRefInput = Components.Schemas.FinancialTransactionSourceRefInput
 public typealias FinancialTransactionSourceRefs = Components.Schemas.FinancialTransactionSourceRefs
+public typealias FinancialTransactionSourceRefsInput = Components.Schemas.FinancialTransactionSourceRefsInput
+public typealias FinancialTransactionUpdateData = Components.Schemas.FinancialTransactionUpdateData
 public typealias FoodInfo = Components.Schemas.FoodInfo
 public typealias FoodPortion = Components.Schemas.FoodPortion
 public typealias FoodSummary = Components.Schemas.FoodSummary
 public typealias GardenCorrectLocationDatesInput = Components.Schemas.GardenCorrectLocationDatesInput
 public typealias GardenCreatePlantingInput = Components.Schemas.GardenCreatePlantingInput
 public typealias GardenEntriesOut = Components.Schemas.GardenEntriesOut
+public typealias GardenEntryCreateInput = Components.Schemas.GardenEntryCreateInput
 public typealias GardenEntryDetail = Components.Schemas.GardenEntryDetail
 public typealias GardenEntryKind = Components.Schemas.GardenEntryKind
 public typealias GardenEntryListItem = Components.Schemas.GardenEntryListItem
@@ -146,18 +179,43 @@ public typealias GardenPlantingOut = Components.Schemas.GardenPlantingOut
 public typealias GardenRecordEntryInput = Components.Schemas.GardenRecordEntryInput
 public typealias GardenSplitPlantingInput = Components.Schemas.GardenSplitPlantingInput
 public typealias GardenStartPlantingInput = Components.Schemas.GardenStartPlantingInput
+public typealias GeneratedEntityMutationCreateResultExpense = Components.Schemas.GeneratedEntityMutationCreateResultExpense
+public typealias GeneratedEntityMutationCreateResultFinancialAccount = Components.Schemas.GeneratedEntityMutationCreateResultFinancialAccount
+public typealias GeneratedEntityMutationCreateResultFinancialTransaction = Components.Schemas.GeneratedEntityMutationCreateResultFinancialTransaction
+public typealias GeneratedEntityMutationCreateResultGardenEntry = Components.Schemas.GeneratedEntityMutationCreateResultGardenEntry
+public typealias GeneratedEntityMutationCreateResultIngredient = Components.Schemas.GeneratedEntityMutationCreateResultIngredient
 public typealias GeneratedEntityMutationCreateResultInventory = Components.Schemas.GeneratedEntityMutationCreateResultInventory
+public typealias GeneratedEntityMutationCreateResultLedgerParty = Components.Schemas.GeneratedEntityMutationCreateResultLedgerParty
+public typealias GeneratedEntityMutationCreateResultLedgerTransfer = Components.Schemas.GeneratedEntityMutationCreateResultLedgerTransfer
 public typealias GeneratedEntityMutationCreateResultLocation = Components.Schemas.GeneratedEntityMutationCreateResultLocation
+public typealias GeneratedEntityMutationCreateResultMeal = Components.Schemas.GeneratedEntityMutationCreateResultMeal
+public typealias GeneratedEntityMutationCreateResultPlanting = Components.Schemas.GeneratedEntityMutationCreateResultPlanting
+public typealias GeneratedEntityMutationCreateResultProduct = Components.Schemas.GeneratedEntityMutationCreateResultProduct
+public typealias GeneratedEntityMutationCreateResultProject = Components.Schemas.GeneratedEntityMutationCreateResultProject
+public typealias GeneratedEntityMutationCreateResultPurchase = Components.Schemas.GeneratedEntityMutationCreateResultPurchase
+public typealias GeneratedEntityMutationCreateResultRecipe = Components.Schemas.GeneratedEntityMutationCreateResultRecipe
+public typealias GeneratedEntityMutationCreateResultTask = Components.Schemas.GeneratedEntityMutationCreateResultTask
+public typealias GeneratedEntityMutationCreateResultVendor = Components.Schemas.GeneratedEntityMutationCreateResultVendor
+public typealias GeneratedEntityMutationCreateResultWish = Components.Schemas.GeneratedEntityMutationCreateResultWish
 public typealias GeneratedEntityMutationUpdateResultExpense = Components.Schemas.GeneratedEntityMutationUpdateResultExpense
+public typealias GeneratedEntityMutationUpdateResultFinancialAccount = Components.Schemas.GeneratedEntityMutationUpdateResultFinancialAccount
+public typealias GeneratedEntityMutationUpdateResultFinancialTransaction = Components.Schemas.GeneratedEntityMutationUpdateResultFinancialTransaction
 public typealias GeneratedEntityMutationUpdateResultGardenEntry = Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry
+public typealias GeneratedEntityMutationUpdateResultImage = Components.Schemas.GeneratedEntityMutationUpdateResultImage
 public typealias GeneratedEntityMutationUpdateResultIngredient = Components.Schemas.GeneratedEntityMutationUpdateResultIngredient
+public typealias GeneratedEntityMutationUpdateResultInventory = Components.Schemas.GeneratedEntityMutationUpdateResultInventory
+public typealias GeneratedEntityMutationUpdateResultLedgerParty = Components.Schemas.GeneratedEntityMutationUpdateResultLedgerParty
+public typealias GeneratedEntityMutationUpdateResultLedgerTransfer = Components.Schemas.GeneratedEntityMutationUpdateResultLedgerTransfer
 public typealias GeneratedEntityMutationUpdateResultLocation = Components.Schemas.GeneratedEntityMutationUpdateResultLocation
 public typealias GeneratedEntityMutationUpdateResultMeal = Components.Schemas.GeneratedEntityMutationUpdateResultMeal
 public typealias GeneratedEntityMutationUpdateResultPlanting = Components.Schemas.GeneratedEntityMutationUpdateResultPlanting
 public typealias GeneratedEntityMutationUpdateResultProduct = Components.Schemas.GeneratedEntityMutationUpdateResultProduct
+public typealias GeneratedEntityMutationUpdateResultProject = Components.Schemas.GeneratedEntityMutationUpdateResultProject
 public typealias GeneratedEntityMutationUpdateResultPurchase = Components.Schemas.GeneratedEntityMutationUpdateResultPurchase
 public typealias GeneratedEntityMutationUpdateResultRecipe = Components.Schemas.GeneratedEntityMutationUpdateResultRecipe
 public typealias GeneratedEntityMutationUpdateResultTask = Components.Schemas.GeneratedEntityMutationUpdateResultTask
+public typealias GeneratedEntityMutationUpdateResultVendor = Components.Schemas.GeneratedEntityMutationUpdateResultVendor
+public typealias GeneratedEntityMutationUpdateResultWish = Components.Schemas.GeneratedEntityMutationUpdateResultWish
 public typealias GetImageById = Components.Schemas.GetImageById
 public typealias Gtin = Components.Schemas.Gtin
 public typealias GtinInput = Components.Schemas.GtinInput
@@ -174,11 +232,13 @@ public typealias ImageSourceFingerprint = Components.Schemas.ImageSourceFingerpr
 public typealias ImageSourceFingerprintInput = Components.Schemas.ImageSourceFingerprintInput
 public typealias ImageStatus = Components.Schemas.ImageStatus
 public typealias ImageStorageStatus = Components.Schemas.ImageStorageStatus
+public typealias ImageUpdateInput = Components.Schemas.ImageUpdateInput
 public typealias ImageUrlSummary = Components.Schemas.ImageUrlSummary
 public typealias ImageWithEntity = Components.Schemas.ImageWithEntity
 public typealias ImpactItem = Components.Schemas.ImpactItem
 public typealias InfLocation = Components.Schemas.InfLocation
 public typealias InfLocationListOut = Components.Schemas.InfLocationListOut
+public typealias IngredientCreateInput = Components.Schemas.IngredientCreateInput
 public typealias IngredientDetail = Components.Schemas.IngredientDetail
 public typealias IngredientListItem = Components.Schemas.IngredientListItem
 public typealias IngredientListPage = Components.Schemas.IngredientListPage
@@ -204,6 +264,7 @@ public typealias InventorySessionResolutionRelocate = Components.Schemas.Invento
 public typealias InventorySessionResolutionRemove = Components.Schemas.InventorySessionResolutionRemove
 public typealias InventorySessionResolutionVerify = Components.Schemas.InventorySessionResolutionVerify
 public typealias InventoryShortcode = Components.Schemas.InventoryShortcode
+public typealias InventoryUpdatePayloadData = Components.Schemas.InventoryUpdatePayloadData
 public typealias InventoryWithLocationAndProductListAndSideEffectsOut = Components.Schemas.InventoryWithLocationAndProductListAndSideEffectsOut
 public typealias InventoryWithLocationAndProductListOut = Components.Schemas.InventoryWithLocationAndProductListOut
 public typealias InventoryWithLocationAndProductOut = Components.Schemas.InventoryWithLocationAndProductOut
@@ -211,11 +272,14 @@ public typealias LedgerAttributionInput = Components.Schemas.LedgerAttributionIn
 public typealias LedgerAttributionInputRequest = Components.Schemas.LedgerAttributionInputRequest
 public typealias LedgerAttributions = Components.Schemas.LedgerAttributions
 public typealias LedgerAttributionsInput = Components.Schemas.LedgerAttributionsInput
+public typealias LedgerPartyCreateInput = Components.Schemas.LedgerPartyCreateInput
 public typealias LedgerPartyDetail = Components.Schemas.LedgerPartyDetail
 public typealias LedgerPartyKind = Components.Schemas.LedgerPartyKind
 public typealias LedgerPartyListItem = Components.Schemas.LedgerPartyListItem
 public typealias LedgerPartyListPage = Components.Schemas.LedgerPartyListPage
+public typealias LedgerPartyOut = Components.Schemas.LedgerPartyOut
 public typealias LedgerPartyShortcode = Components.Schemas.LedgerPartyShortcode
+public typealias LedgerPartyUpdateData = Components.Schemas.LedgerPartyUpdateData
 public typealias LedgerSource = Components.Schemas.LedgerSource
 public typealias LedgerSourceClaimInput = Components.Schemas.LedgerSourceClaimInput
 public typealias LedgerSourceClaimNormalizedEvidence = Components.Schemas.LedgerSourceClaimNormalizedEvidence
@@ -229,11 +293,16 @@ public typealias LedgerSourceClaimReconciliationAmountsMatchInput = Components.S
 public typealias LedgerSourceClaimReconciliationInput = Components.Schemas.LedgerSourceClaimReconciliationInput
 public typealias LedgerSourceClaims = Components.Schemas.LedgerSourceClaims
 public typealias LedgerSourceClaimsOut = Components.Schemas.LedgerSourceClaimsOut
+public typealias LedgerTransferAmount = Components.Schemas.LedgerTransferAmount
 public typealias LedgerTransferClassification = Components.Schemas.LedgerTransferClassification
+public typealias LedgerTransferCreateInput = Components.Schemas.LedgerTransferCreateInput
 public typealias LedgerTransferDetail = Components.Schemas.LedgerTransferDetail
+public typealias LedgerTransferEvidenceTransactionIds = Components.Schemas.LedgerTransferEvidenceTransactionIds
 public typealias LedgerTransferListItem = Components.Schemas.LedgerTransferListItem
 public typealias LedgerTransferListPage = Components.Schemas.LedgerTransferListPage
+public typealias LedgerTransferOut = Components.Schemas.LedgerTransferOut
 public typealias LedgerTransferShortcode = Components.Schemas.LedgerTransferShortcode
+public typealias LedgerTransferUpdateData = Components.Schemas.LedgerTransferUpdateData
 public typealias LegacyFoodInfo = Components.Schemas.LegacyFoodInfo
 public typealias ListPageMeta = Components.Schemas.ListPageMeta
 public typealias LocationBulkUpdateParentInput = Components.Schemas.LocationBulkUpdateParentInput
@@ -250,6 +319,8 @@ public typealias LocationShortcode = Components.Schemas.LocationShortcode
 public typealias LocationType = Components.Schemas.LocationType
 public typealias LocationUpdateData = Components.Schemas.LocationUpdateData
 public typealias LocationValuation = Components.Schemas.LocationValuation
+public typealias MacroSummary = Components.Schemas.MacroSummary
+public typealias MealCreateInput = Components.Schemas.MealCreateInput
 public typealias MealDetail = Components.Schemas.MealDetail
 public typealias MealFoodAmount = Components.Schemas.MealFoodAmount
 public typealias MealFoodEntryId = Components.Schemas.MealFoodEntryId
@@ -267,6 +338,7 @@ public typealias MealNutritionOut = Components.Schemas.MealNutritionOut
 public typealias MealNutritionPerson = Components.Schemas.MealNutritionPerson
 public typealias MealOut = Components.Schemas.MealOut
 public typealias MealRecipeId = Components.Schemas.MealRecipeId
+public typealias MealRecipeInput = Components.Schemas.MealRecipeInput
 public typealias MealRecipeOut = Components.Schemas.MealRecipeOut
 public typealias MealRecipeSummary = Components.Schemas.MealRecipeSummary
 public typealias MealScale = Components.Schemas.MealScale
@@ -299,6 +371,7 @@ public typealias NutritionMeal = Components.Schemas.NutritionMeal
 public typealias OperationEffect = Components.Schemas.OperationEffect
 public typealias PerceptualHash = Components.Schemas.PerceptualHash
 public typealias PlainDate = Components.Schemas.PlainDate
+public typealias PlantingCreateInput = Components.Schemas.PlantingCreateInput
 public typealias PlantingDetail = Components.Schemas.PlantingDetail
 public typealias PlantingListItem = Components.Schemas.PlantingListItem
 public typealias PlantingListPage = Components.Schemas.PlantingListPage
@@ -313,6 +386,7 @@ public typealias PositiveMoney = Components.Schemas.PositiveMoney
 public typealias ProblemsCount = Components.Schemas.ProblemsCount
 public typealias ProductCategory = Components.Schemas.ProductCategory
 public typealias ProductCookbookRefOut = Components.Schemas.ProductCookbookRefOut
+public typealias ProductCreateInput = Components.Schemas.ProductCreateInput
 public typealias ProductDataCheck = Components.Schemas.ProductDataCheck
 public typealias ProductDetail = Components.Schemas.ProductDetail
 public typealias ProductFindOrCreateByCodeInput = Components.Schemas.ProductFindOrCreateByCodeInput
@@ -334,15 +408,19 @@ public typealias ProductTopLevelOut = Components.Schemas.ProductTopLevelOut
 public typealias ProductUpdateData = Components.Schemas.ProductUpdateData
 public typealias ProductWithMappingsAndFoodOut = Components.Schemas.ProductWithMappingsAndFoodOut
 public typealias ProductWithMappingsOut = Components.Schemas.ProductWithMappingsOut
+public typealias ProjectCreateInput = Components.Schemas.ProjectCreateInput
 public typealias ProjectDetail = Components.Schemas.ProjectDetail
 public typealias ProjectKind = Components.Schemas.ProjectKind
 public typealias ProjectListItem = Components.Schemas.ProjectListItem
 public typealias ProjectListPage = Components.Schemas.ProjectListPage
+public typealias ProjectOut = Components.Schemas.ProjectOut
 public typealias ProjectOutputFieldsProjectDateSource = Components.Schemas.ProjectOutputFieldsProjectDateSource
 public typealias ProjectOutputFieldsProjectDateWindow = Components.Schemas.ProjectOutputFieldsProjectDateWindow
 public typealias ProjectOutputFieldsProjectRollup = Components.Schemas.ProjectOutputFieldsProjectRollup
 public typealias ProjectShortcode = Components.Schemas.ProjectShortcode
 public typealias ProjectStatus = Components.Schemas.ProjectStatus
+public typealias ProjectUpdateData = Components.Schemas.ProjectUpdateData
+public typealias PurchaseCreateInput = Components.Schemas.PurchaseCreateInput
 public typealias PurchaseDataCheck = Components.Schemas.PurchaseDataCheck
 public typealias PurchaseDetail = Components.Schemas.PurchaseDetail
 public typealias PurchaseFieldsPurchaseDocumentKind = Components.Schemas.PurchaseFieldsPurchaseDocumentKind
@@ -353,6 +431,7 @@ public typealias PurchaseListPage = Components.Schemas.PurchaseListPage
 public typealias PurchaseOut = Components.Schemas.PurchaseOut
 public typealias PurchaseShortcode = Components.Schemas.PurchaseShortcode
 public typealias PurchaseUpdateData = Components.Schemas.PurchaseUpdateData
+public typealias RecipeCreateInput = Components.Schemas.RecipeCreateInput
 public typealias RecipeDetail = Components.Schemas.RecipeDetail
 public typealias RecipeDetailMcpOut = Components.Schemas.RecipeDetailMcpOut
 public typealias RecipeFieldsRecipeSectionOut = Components.Schemas.RecipeFieldsRecipeSectionOut
@@ -404,6 +483,7 @@ public typealias SearchMatchKind = Components.Schemas.SearchMatchKind
 public typealias SetPerceptualHashesInput = Components.Schemas.SetPerceptualHashesInput
 public typealias SetPerceptualHashesOutput = Components.Schemas.SetPerceptualHashesOutput
 public typealias SignedProductQuantity = Components.Schemas.SignedProductQuantity
+public typealias TaskCreateInput = Components.Schemas.TaskCreateInput
 public typealias TaskDetail = Components.Schemas.TaskDetail
 public typealias TaskListItem = Components.Schemas.TaskListItem
 public typealias TaskListPage = Components.Schemas.TaskListPage
@@ -421,16 +501,22 @@ public typealias UnitMappingWithMetadataManual = Components.Schemas.UnitMappingW
 public typealias UnitMappingWithMetadataProduct = Components.Schemas.UnitMappingWithMetadataProduct
 public typealias Upc = Components.Schemas.Upc
 public typealias UpcLookupOutput = Components.Schemas.UpcLookupOutput
+public typealias VendorCreateInput = Components.Schemas.VendorCreateInput
 public typealias VendorDetail = Components.Schemas.VendorDetail
 public typealias VendorListItem = Components.Schemas.VendorListItem
 public typealias VendorListPage = Components.Schemas.VendorListPage
+public typealias VendorOut = Components.Schemas.VendorOut
 public typealias VendorShortcode = Components.Schemas.VendorShortcode
+public typealias VendorUpdateData = Components.Schemas.VendorUpdateData
 public typealias WholeCentAmount = Components.Schemas.WholeCentAmount
 public typealias WishCandidateOut = Components.Schemas.WishCandidateOut
+public typealias WishCreateInput = Components.Schemas.WishCreateInput
 public typealias WishDetail = Components.Schemas.WishDetail
 public typealias WishListItem = Components.Schemas.WishListItem
 public typealias WishListPage = Components.Schemas.WishListPage
+public typealias WishOut = Components.Schemas.WishOut
 public typealias WishShortcode = Components.Schemas.WishShortcode
+public typealias WishUpdateData = Components.Schemas.WishUpdateData
 
 // MARK: - Identifiable
 
@@ -439,6 +525,9 @@ extension Components.Schemas.DisplayImageSummary: Identifiable {}
 extension Components.Schemas.DuplicateUniqueProduct: Identifiable {}
 extension Components.Schemas.EntityAttachmentRead: Identifiable {}
 extension Components.Schemas.EntityGraphEdge: Identifiable {}
+extension Components.Schemas.EntityTimelineEvent: Identifiable {}
+extension Components.Schemas.EntityTimelineLink: Identifiable {}
+extension Components.Schemas.EntityTimelineRow: Identifiable {}
 extension Components.Schemas.ExpenseDetail: Identifiable {}
 extension Components.Schemas.ExpenseListItem: Identifiable {}
 extension Components.Schemas.ExpenseOut: Identifiable {}
@@ -446,8 +535,10 @@ extension Components.Schemas.ExternalIdInput: Identifiable {}
 extension Components.Schemas.ExternalIdOut: Identifiable {}
 extension Components.Schemas.FinancialAccountDetail: Identifiable {}
 extension Components.Schemas.FinancialAccountListItem: Identifiable {}
+extension Components.Schemas.FinancialAccountOut: Identifiable {}
 extension Components.Schemas.FinancialTransactionDetail: Identifiable {}
 extension Components.Schemas.FinancialTransactionListItem: Identifiable {}
+extension Components.Schemas.FinancialTransactionOut: Identifiable {}
 extension Components.Schemas.GardenEntryDetail: Identifiable {}
 extension Components.Schemas.GardenEntryListItem: Identifiable {}
 extension Components.Schemas.GardenEntryOut: Identifiable {}
@@ -472,8 +563,10 @@ extension Components.Schemas.InventoryListProductOut: Identifiable {}
 extension Components.Schemas.InventoryWithLocationAndProductOut: Identifiable {}
 extension Components.Schemas.LedgerPartyDetail: Identifiable {}
 extension Components.Schemas.LedgerPartyListItem: Identifiable {}
+extension Components.Schemas.LedgerPartyOut: Identifiable {}
 extension Components.Schemas.LedgerTransferDetail: Identifiable {}
 extension Components.Schemas.LedgerTransferListItem: Identifiable {}
+extension Components.Schemas.LedgerTransferOut: Identifiable {}
 extension Components.Schemas.LocationDetail: Identifiable {}
 extension Components.Schemas.LocationIdentityProductOut: Identifiable {}
 extension Components.Schemas.LocationListItem: Identifiable {}
@@ -500,6 +593,7 @@ extension Components.Schemas.ProductWithMappingsAndFoodOut: Identifiable {}
 extension Components.Schemas.ProductWithMappingsOut: Identifiable {}
 extension Components.Schemas.ProjectDetail: Identifiable {}
 extension Components.Schemas.ProjectListItem: Identifiable {}
+extension Components.Schemas.ProjectOut: Identifiable {}
 extension Components.Schemas.PurchaseDetail: Identifiable {}
 extension Components.Schemas.PurchaseListItem: Identifiable {}
 extension Components.Schemas.PurchaseOut: Identifiable {}
@@ -528,6 +622,8 @@ extension Components.Schemas.UnitMappingInput: Identifiable {}
 extension Components.Schemas.UnitMappingOut: Identifiable {}
 extension Components.Schemas.VendorDetail: Identifiable {}
 extension Components.Schemas.VendorListItem: Identifiable {}
+extension Components.Schemas.VendorOut: Identifiable {}
 extension Components.Schemas.WishCandidateOut: Identifiable {}
 extension Components.Schemas.WishDetail: Identifiable {}
 extension Components.Schemas.WishListItem: Identifiable {}
+extension Components.Schemas.WishOut: Identifiable {}

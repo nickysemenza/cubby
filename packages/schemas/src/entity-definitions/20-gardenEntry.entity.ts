@@ -14,7 +14,7 @@ const optionalText = z.string().trim().min(1).nullable();
 export default defineEntity({
   key: "gardenEntry",
   names: { singular: "Garden Entry", plural: "Garden Entries" },
-  route: { basePath: "garden-entries", list: null, detail: null },
+  route: { basePath: "garden-entries", list: true, detail: true },
   table: "GardenEntry",
   identifiers: { brand: "GardenEntryId", shortcode: "GDE-" },
   presentation: {

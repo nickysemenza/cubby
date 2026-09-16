@@ -9,11 +9,14 @@
 apps/web/src/routeTree.gen.ts linguist-generated
 # Generated entity route modules (`pnpm generate`); TanStack's file router
 # needs them as physical files beside the hand-written routes.
+apps/web/src/routes/_authenticated/cookbooks.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/expenses.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/expenses.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/financial-accounts.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/financial-accounts.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/financial-transactions.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/financial-transactions.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/garden-entries.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/images.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/ingredients.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/ingredients.index.tsx linguist-generated
@@ -24,12 +27,18 @@ apps/web/src/routes/_authenticated/ledger-parties.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/ledger-transfers.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/ledger-transfers.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/locations.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/locations.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/meals.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/meals.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/plantings.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/products.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/products.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/projects.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/purchases.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/purchases.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/recipes.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/tasks.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/tasks.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/vendors.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/vendors.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/wishes.$shortcode.tsx linguist-generated

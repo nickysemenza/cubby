@@ -27,7 +27,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
-  route: { basePath: "products", create: "page", list: null, detail: true },
+  route: { basePath: "products", create: "page", list: true, detail: true },
   table: "Product",
   identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {
@@ -66,6 +66,7 @@ export default defineEntity({
             "ingredientId",
             "externalIds",
             "tags",
+            "notes",
           ],
         },
         { kind: "slot", id: "garden", placement: "supporting" },
@@ -310,7 +311,13 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea", section: "notes" },
-        display: { list: true, listOrder: 5, width: "md", listHidden: true },
+        display: {
+          list: true,
+          detail: true,
+          listOrder: 5,
+          width: "md",
+          listHidden: true,
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),

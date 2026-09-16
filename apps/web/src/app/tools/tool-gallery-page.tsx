@@ -19,7 +19,6 @@ import { z } from "zod";
 
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
-import { ProductWorkbenchInspector } from "~/app/_components/products/product-workbench-inspector";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -69,16 +68,6 @@ const GROUP_NOUN = {
 
 function toolGroupSectionId(groupKey: string): string {
   return `tool-gallery-group-${encodeURIComponent(groupKey)}`;
-}
-
-function renderProductInspector({
-  preview,
-  onClose,
-}: {
-  preview: { id: string };
-  onClose: () => void;
-}) {
-  return <ProductWorkbenchInspector productId={preview.id} onClose={onClose} />;
 }
 
 export function toolLocationPath(entry: ToolGalleryInventoryEntryOut): string {
@@ -597,10 +586,7 @@ export function ToolGalleryPage({
     PreviewSheet,
     dockedInspector,
     inspectorToggle,
-  } = useEntityPreview("product", {
-    responsiveInspector: true,
-    renderInspector: renderProductInspector,
-  });
+  } = useEntityPreview("product", { responsiveInspector: true });
 
   useEffect(() => setDraftQuery(query), [query]);
   useEffect(() => {

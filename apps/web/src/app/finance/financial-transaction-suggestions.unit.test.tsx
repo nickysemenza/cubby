@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useForm, useWatch } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { entityListHiddenColumns } from "~/entities/entity-display";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { purchaseSearchFilters } from "./financial-selectors";
@@ -13,7 +14,6 @@ import {
   FinancialTransactionFormFields,
   type FinancialTransactionFormValues,
 } from "./financial-transaction-form";
-import { FINANCIAL_TRANSACTION_INITIAL_COLUMN_VISIBILITY } from "./financial-transaction-list";
 
 const suggestion = (
   vendorId: VendorShortcode,
@@ -128,7 +128,7 @@ describe("Financial Transaction Vendor suggestions", () => {
       search: "invoice 42",
       vendorId: undefined,
     });
-    expect(FINANCIAL_TRANSACTION_INITIAL_COLUMN_VISIBILITY).toMatchObject({
+    expect(entityListHiddenColumns("financialTransaction")).toMatchObject({
       possibleVendor: false,
     });
   });

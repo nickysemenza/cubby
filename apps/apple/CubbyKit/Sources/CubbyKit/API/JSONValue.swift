@@ -134,7 +134,7 @@ extension JSONValue: ExpressibleByDictionaryLiteral {
 
 extension JSONValue {
     /// Projects a decoded wire value into the dynamic tree `EntityRow.raw` exposes, using the
-    /// same date spelling the client decodes, so `EntityFacts` still parses timestamps. A typed
+    /// same date spelling the client decodes, so `EntityFieldValue` still parses timestamps. A typed
     /// value's absent optionals become absent keys (the wire sent `null`; consumers treat the
     /// two alike).
     public init<T: Encodable>(encoding value: T) throws {

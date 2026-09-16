@@ -1,10 +1,10 @@
 import CubbyAPI
 import Foundation
 
-/// The garden's wire types are the generated ones (`GardenPlantingOut`, `GardenEntryOut`,
-/// `GardenOverviewOut`, the `*Input` bodies and `PlantingUpdateData`/`GardenEntryUpdateData`
-/// drafts). What lives here is the picker vocabulary the options endpoint returns under
-/// positional names, and the start method the forms choose before it becomes a wire enum.
+/// The garden's wire types are the generated ones (`GardenPlantingOut`, `GardenOverviewOut`, the
+/// workflow `*Input` bodies); a planting or entry itself is edited through the generic resource
+/// operations. What lives here is the picker vocabulary the options endpoint returns under
+/// positional names, and the start method the action sheet chooses before it becomes a wire enum.
 
 public enum GardenStartMethod: String, CaseIterable, Codable, Sendable, Hashable {
     case sow

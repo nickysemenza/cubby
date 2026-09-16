@@ -1,20 +1,57 @@
 import CubbyKit
 import SwiftUI
 
-/// A deliberately small garden home: current lists by place, planning stays visible, and every
-/// write starts with a short sheet rather than a spatial editor or a scheduler.
+/// A deliberately small garden home: what is growing by place, planning stays visible, and every
+/// write is the generic editor or one of the four workflow verbs. Growing areas are ordinary
+/// `.area` locations; their details, plantings and entries are the generic screens.
 struct GardenRootView: View {
     /// The pseudo-location that groups plantings not yet in a bed or tray; never sent anywhere.
     static let unassignedID = LocationCode("unassigned")
 
     @Environment(AppModel.self) private var appModel
     @State private var garden: GardenModel?
-    @State private var showingCreate = false
-    @State private var entryTarget: GardenEntryTarget?
-    @State private var action: GardenPlantingAction?
-    @State private var detailPlanting: GardenPlantingOut?
-    @State private var showingFinished = false
-    @State private var showingSetup = false
+    @State private var creating: GardenCreate?
+    @State private var action: PendingAction?
+
+    private struct PendingAction: Identifiable {
+        let verb: GardenPlantingAction
+        let planting: EntityRow
+        var id: String { "\(verb.rawValue)-\(planting.id)" }
+    }
+
+    private enum GardenCreate: Identifiable {
+        case planting
+        case growingArea
+        case entry(locationID: String?, plantingID: String?)
+
+        var id: String {
+            switch self {
+            case .planting: "planting"
+            case .growingArea: "growingArea"
+            case .entry(let locationID, let plantingID): "entry-\(locationID ?? "")-\(plantingID ?? "")"
+            }
+        }
+
+        var key: EntityKey {
+            switch self {
+            case .planting: .planting
+            case .growingArea: .location
+            case .entry: .gardenEntry
+            }
+        }
+
+        var prefill: [String: JSONValue] {
+            switch self {
+            case .planting: return ["status": .string("growing")]
+            case .growingArea: return ["type": .string("area")]
+            case .entry(let locationID, let plantingID):
+                var draft: [String: JSONValue] = ["observedOn": .string(PlainDate(.now).rawValue)]
+                if let locationID { draft["locationId"] = .string(locationID) }
+                if let plantingID { draft["plantingId"] = .string(plantingID) }
+                return draft
+            }
+        }
+    }
 
     var body: some View {
         Group {
@@ -27,48 +64,43 @@ struct GardenRootView: View {
         .porcelainScreen()
         .navigationTitle("Garden")
         .task(id: appModel.host) { await setup() }
-        .sheet(isPresented: $showingCreate) {
-            if let garden { GardenPlantingSheet(model: garden) }
+        .task(id: appModel.entityMutationRevision) {
+            guard appModel.entityMutationRevision > 0,
+                !appModel.entityMutationKeys.isDisjoint(with: [.planting, .gardenEntry, .location]),
+                garden?.phase == .loaded
+            else { return }
+            await garden?.refresh()
         }
-        .sheet(item: $entryTarget) { target in
-            if let garden {
-                GardenEntrySheet(
-                    model: garden,
-                    target: target,
-                    uploader: GardenImageUploader(service: appModel.client)
-                )
+        .sheet(item: $creating) { create in
+            EntityEditorSheet(key: create.key, mode: .create(prefill: create.prefill)) { _ in
+                Task { await garden?.refresh() }
             }
+            .environment(appModel)
         }
-        .sheet(item: $action) { action in
-            if let garden { GardenPlantingActionSheet(model: garden, action: action) }
-        }
-        .navigationDestination(item: $detailPlanting) { planting in
-            if let garden {
-                GardenPlantingDetailView(
-                    model: garden, planting: planting, guide: garden.guide(for: planting.ingredientId),
-                    source: garden.guideSource, uploader: GardenImageUploader(service: appModel.client))
+        .sheet(item: $action) { pending in
+            GardenPlantingActionSheet(
+                model: GardenActionsModel(service: appModel.client), action: pending.verb,
+                planting: pending.planting
+            ) {
+                appModel.recordEntityMutation(keys: [.planting, .gardenEntry, .location])
             }
-        }
-        .sheet(isPresented: $showingFinished) {
-            if let garden { FinishedPlantingsSheet(plantings: garden.overview.finished) }
-        }
-        .sheet(isPresented: $showingSetup) {
-            if let garden { GardenSetupSheet(model: garden) }
+            .environment(appModel)
         }
         .toolbar {
             ToolbarItem(placement: .secondaryAction) {
                 Button {
-                    showingSetup = true
+                    creating = .growingArea
                 } label: {
-                    Label(GardenStrings.gardenSetup, systemImage: "slider.horizontal.3")
+                    Label(GardenStrings.addGrowingArea, systemImage: "square.dashed")
                 }
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showingCreate = true
+                    creating = .planting
                 } label: {
                     Label(GardenStrings.addPlanting, systemImage: "plus")
                 }
+                .accessibilityIdentifier("garden.addPlanting")
             }
         }
     }
@@ -88,11 +120,6 @@ struct GardenRootView: View {
             }
         case .loaded:
             List {
-                if let error = garden.saveError {
-                    Text(error)
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.destructive)
-                }
                 if garden.guideError != nil {
                     Text("Planting guides are temporarily unavailable. You can still record the garden.")
                         .font(.porcelainLabel)
@@ -104,22 +131,21 @@ struct GardenRootView: View {
                     } description: {
                         Text(GardenStrings.noGardenLocationsDescription)
                     } actions: {
-                        Button(GardenStrings.gardenSetup) { showingSetup = true }
+                        Button(GardenStrings.addGrowingArea) { creating = .growingArea }
                     }
                     .frame(maxWidth: .infinity)
                 }
                 ForEach(garden.overview.locations) { location in
                     GardenLocationSection(
                         location: location,
-                        onEntry: { entryTarget = .location(location) },
-                        onAction: { selection in
-                            if case .entry(let planting) = selection {
-                                entryTarget = .planting(planting)
-                            } else {
-                                action = selection
-                            }
+                        onEntry: { creating = .entry(locationID: location.id.rawValue, plantingID: nil) },
+                        onLogEntry: { planting in
+                            creating = .entry(
+                                locationID: planting.locationId?.rawValue, plantingID: planting.id)
                         },
-                        onDetail: { detailPlanting = $0 }
+                        onAction: { verb, planting in
+                            action = PendingAction(verb: verb, planting: Self.row(planting))
+                        }
                     )
                 }
                 if !garden.overview.unassigned.isEmpty {
@@ -132,36 +158,33 @@ struct GardenRootView: View {
                             plantings: garden.overview.unassigned
                         ),
                         onEntry: {},
-                        onAction: { selection in
-                            if case .entry(let planting) = selection {
-                                entryTarget = .planting(planting)
-                            } else {
-                                action = selection
-                            }
+                        onLogEntry: { planting in
+                            creating = .entry(locationID: nil, plantingID: planting.id)
                         },
-                        onDetail: { detailPlanting = $0 }
+                        onAction: { verb, planting in
+                            action = PendingAction(verb: verb, planting: Self.row(planting))
+                        }
                     )
                 }
-                if !garden.overview.finished.isEmpty {
-                    Button {
-                        showingFinished = true
-                    } label: {
-                        Label(
-                            "Finished plantings (\(garden.overview.finished.count))",
-                            systemImage: "archivebox"
-                        )
-                        .font(.porcelainBody)
+                Section {
+                    if !garden.overview.finished.isEmpty {
+                        NavigationLink(
+                            value: Route.entityList(
+                                .planting, filters: EntityFilterState(["status": .many(["finished"])]))
+                        ) {
+                            Label(
+                                "Finished plantings (\(garden.overview.finished.count))",
+                                systemImage: "archivebox"
+                            )
+                            .font(.porcelainBody)
+                        }
                     }
-                    .buttonStyle(.borderless)
+                    NavigationLink(value: Route.entityList(.gardenEntry)) {
+                        Label(GardenStrings.gardenJournal, systemImage: "clock.arrow.circlepath")
+                            .font(.porcelainBody)
+                    }
+                    .accessibilityHint("Browse past garden notes, harvests, moves, and photos")
                 }
-                NavigationLink {
-                    GardenHistoryView(
-                        model: garden, uploader: GardenImageUploader(service: appModel.client))
-                } label: {
-                    Label(GardenStrings.gardenJournal, systemImage: "clock.arrow.circlepath")
-                        .font(.porcelainBody)
-                }
-                .accessibilityHint("Browse past garden notes, harvests, moves, and photos")
             }
             .accessibilityIdentifier("garden.overview")
             .refreshControl { await garden.refresh() }
@@ -173,13 +196,20 @@ struct GardenRootView: View {
         self.garden = garden
         await garden.loadIfNeeded()
     }
+
+    /// The overview's planting as the generic screens read it, for the action sheets.
+    private static func row(_ planting: GardenPlantingOut) -> EntityRow {
+        let raw = (try? JSONValue(encoding: planting)) ?? .null
+        return EntityCatalog[.planting].row(from: raw)
+            ?? EntityRow(id: planting.id, title: planting.displayName, subtitle: nil, imageURL: nil, raw: raw)
+    }
 }
 
 private struct GardenLocationSection: View {
     let location: GardenLocationSummaryOut
     let onEntry: () -> Void
-    let onAction: (GardenPlantingAction) -> Void
-    let onDetail: (GardenPlantingOut) -> Void
+    let onLogEntry: (GardenPlantingOut) -> Void
+    let onAction: (GardenPlantingAction, GardenPlantingOut) -> Void
 
     var body: some View {
         Section {
@@ -187,7 +217,7 @@ private struct GardenLocationSection: View {
                 Text("Nothing recorded here yet").foregroundStyle(.secondary)
             } else {
                 ForEach(location.plantings) { planting in
-                    GardenPlantingRow(planting: planting, onAction: onAction, onDetail: onDetail)
+                    GardenPlantingRow(planting: planting, onLogEntry: onLogEntry, onAction: onAction)
                 }
             }
         } header: {
@@ -195,10 +225,20 @@ private struct GardenLocationSection: View {
                 if location.id == GardenRootView.unassignedID {
                     Text(location.name)
                 } else {
-                    NavigationLink(value: Route.gardenBedJournal(id: location.id.rawValue)) {
+                    NavigationLink(value: Route.entityDetail(.location, id: location.id.rawValue)) {
                         Text(location.name)
                     }
                     Spacer()
+                    NavigationLink(
+                        value: Route.entityList(
+                            .gardenEntry,
+                            filters: EntityFilterState(["locationId": .many([location.id.rawValue])]))
+                    ) {
+                        Label(GardenStrings.gardenJournal, systemImage: "clock.arrow.circlepath")
+                    }
+                    .labelStyle(.iconOnly)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel("\(location.name) journal")
                     Button(action: onEntry) { Label(GardenStrings.logEntry, systemImage: "camera") }
                         .labelStyle(.iconOnly)
                         .frame(minWidth: 44, minHeight: 44)
@@ -211,71 +251,49 @@ private struct GardenLocationSection: View {
     }
 
     private var locationDetail: String? {
-        [location.gardenKind?.rawValue, location.gardenConditions].compactMap { $0 }.joined(separator: " · ")
-            .nilIfEmpty
+        let detail = [location.gardenKind?.rawValue, location.gardenConditions].compactMap { $0 }
+            .joined(separator: " · ")
+        return detail.isEmpty ? nil : detail
     }
 }
 
 private struct GardenPlantingRow: View {
     let planting: GardenPlantingOut
-    let onAction: (GardenPlantingAction) -> Void
-    let onDetail: (GardenPlantingOut) -> Void
+    let onLogEntry: (GardenPlantingOut) -> Void
+    let onAction: (GardenPlantingAction, GardenPlantingOut) -> Void
 
     var body: some View {
         HStack(spacing: PorcelainTokens.Space.md) {
-            Button {
-                onDetail(planting)
-            } label: {
+            NavigationLink(value: Route.entityDetail(.planting, id: planting.id)) {
                 HStack(spacing: PorcelainTokens.Space.md) {
                     Image(systemName: planting.status == .planned ? "calendar" : "leaf")
                         .foregroundStyle(PorcelainTokens.cobalt)
                         .frame(width: 22)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(planting.displayName).font(.porcelainBody.weight(.semibold))
-                        Text(subtitle).font(.porcelainLabel).foregroundStyle(
-                            PorcelainTokens.graphiteSecondary)
+                        Text(subtitle).font(.porcelainLabel)
+                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
                     }
                     Spacer(minLength: PorcelainTokens.Space.sm)
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier("garden.planting.\(planting.id)")
             Menu {
                 Button {
-                    onDetail(planting)
-                } label: {
-                    Label(GardenStrings.viewPlanting, systemImage: "info.circle")
-                }
-                Button {
-                    onAction(.entry(planting))
+                    onLogEntry(planting)
                 } label: {
                     Label(GardenStrings.logEntry, systemImage: "square.and.pencil")
                 }
-                if planting.status == .planned {
-                    Button {
-                        onAction(.start(planting))
-                    } label: {
-                        Label(GardenStrings.startPlanting, systemImage: "play")
+                ForEach(
+                    [GardenPlantingAction.start, .move, .split, .finish].filter {
+                        $0.applies(to: planting.status.rawValue)
                     }
-                }
-                if planting.status != .finished {
-                    if planting.status == .growing {
-                        Button {
-                            onAction(.move(planting))
-                        } label: {
-                            Label(GardenStrings.moveEverything, systemImage: "arrow.right")
-                        }
-                        Button {
-                            onAction(.split(planting))
-                        } label: {
-                            Label(GardenStrings.moveSomeSeedlings, systemImage: "arrow.triangle.branch")
-                        }
-                    }
+                ) { verb in
                     Button {
-                        onAction(.finish(planting))
+                        onAction(verb, planting)
                     } label: {
-                        Label(GardenStrings.finishPlanting, systemImage: "checkmark.circle")
+                        Label(verb.title, systemImage: verb.symbol)
                     }
                 }
             } label: {
@@ -289,55 +307,9 @@ private struct GardenPlantingRow: View {
 
     private var subtitle: String {
         let details = [planting.status.rawValue.capitalized, planting.variety, planting.quantity]
-            .compactMap { $0?.nilIfEmpty }
+            .compactMap { $0 }.filter { !$0.isEmpty }
         return details.joined(separator: " · ")
     }
-}
-
-enum GardenEntryTarget: Identifiable {
-    case location(GardenLocationSummaryOut)
-    case planting(GardenPlantingOut)
-
-    var id: String {
-        switch self {
-        case .location(let location): "location-\(location.id.rawValue)"
-        case .planting(let planting): "planting-\(planting.id)"
-        }
-    }
-
-    var locationID: String? {
-        switch self {
-        case .location(let location): location.id.rawValue
-        case .planting(let planting): planting.locationId?.rawValue
-        }
-    }
-
-    var planting: GardenPlantingOut? {
-        if case .planting(let planting) = self { return planting }
-        return nil
-    }
-}
-
-enum GardenPlantingAction: Identifiable {
-    case entry(GardenPlantingOut)
-    case start(GardenPlantingOut)
-    case move(GardenPlantingOut)
-    case split(GardenPlantingOut)
-    case finish(GardenPlantingOut)
-
-    var id: String {
-        switch self {
-        case .entry(let planting): "entry-\(planting.id)"
-        case .start(let planting): "start-\(planting.id)"
-        case .move(let planting): "move-\(planting.id)"
-        case .split(let planting): "split-\(planting.id)"
-        case .finish(let planting): "finish-\(planting.id)"
-        }
-    }
-}
-
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 #Preview(traits: .modifier(SignedInPreview())) {

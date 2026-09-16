@@ -53,6 +53,39 @@
             "status": "pending",
             "reason": "totals_stale"
           }
+        },
+        "macros": {
+          "calories": {
+            "status": "partial",
+            "lower": 642,
+            "upper": null,
+            "coverage": {
+              "covered": 1,
+              "total": 2
+            }
+          },
+          "protein": {
+            "status": "complete",
+            "lower": 31.4,
+            "upper": null,
+            "coverage": {
+              "covered": 2,
+              "total": 2
+            }
+          },
+          "carbs": {
+            "status": "unavailable",
+            "reason": "no_data",
+            "coverage": {
+              "covered": 0,
+              "total": 2
+            }
+          },
+          "fat": {
+            "status": "pending",
+            "reason": "totals_stale"
+          },
+          "partial": true
         }
       },
       "meals": [
@@ -103,6 +136,39 @@
                 "status": "pending",
                 "reason": "totals_stale"
               }
+            },
+            "macros": {
+              "calories": {
+                "status": "partial",
+                "lower": 642,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 2
+                }
+              },
+              "protein": {
+                "status": "complete",
+                "lower": 31.4,
+                "upper": null,
+                "coverage": {
+                  "covered": 2,
+                  "total": 2
+                }
+              },
+              "carbs": {
+                "status": "unavailable",
+                "reason": "no_data",
+                "coverage": {
+                  "covered": 0,
+                  "total": 2
+                }
+              },
+              "fat": {
+                "status": "pending",
+                "reason": "totals_stale"
+              },
+              "partial": true
             }
           }
         }
@@ -154,6 +220,40 @@
                 "status": "unavailable",
                 "reason": "no_data"
               }
+            },
+            "macros": {
+              "calories": {
+                "status": "complete",
+                "lower": 130,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "protein": {
+                "status": "complete",
+                "lower": 13,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "carbs": {
+                "status": "complete",
+                "lower": 16,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "fat": {
+                "status": "unavailable",
+                "reason": "no_data"
+              },
+              "partial": false
             }
           },
           "sourceKind": "product",
@@ -223,6 +323,40 @@
                 "status": "unavailable",
                 "reason": "no_data"
               }
+            },
+            "macros": {
+              "calories": {
+                "status": "complete",
+                "lower": 130,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "protein": {
+                "status": "complete",
+                "lower": 13,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "carbs": {
+                "status": "complete",
+                "lower": 16,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "fat": {
+                "status": "unavailable",
+                "reason": "no_data"
+              },
+              "partial": false
             }
           },
           "sourceKind": "ingredient",
@@ -287,6 +421,40 @@
                 "status": "unavailable",
                 "reason": "no_data"
               }
+            },
+            "macros": {
+              "calories": {
+                "status": "complete",
+                "lower": 130,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "protein": {
+                "status": "complete",
+                "lower": 13,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "carbs": {
+                "status": "complete",
+                "lower": 16,
+                "upper": null,
+                "coverage": {
+                  "covered": 1,
+                  "total": 1
+                }
+              },
+              "fat": {
+                "status": "unavailable",
+                "reason": "no_data"
+              },
+              "partial": false
             }
           },
           "sourceKind": "recipe",

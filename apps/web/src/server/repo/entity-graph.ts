@@ -108,8 +108,12 @@ const reversePath = (path: LocalPath): LocalPath => ({
   })),
 });
 
-// The first declared view of a physical path owns its arrow and label. Reverse
+// One declared view of a physical path owns its arrow and label; reverse
 // reads reuse that view, while opposite self-links retain ordered endpoints.
+// The side holding the foreign key (a path that leaves along an outgoing
+// edge) owns it, so declaring the reverse relation on the other entity — a
+// detail page's relation section — never flips an existing arrow. Among
+// equally-directed declarations the first declared wins.
 const canonicalPaths = new Map<
   string,
   {
@@ -120,21 +124,26 @@ const canonicalPaths = new Map<
     sourceKey: string;
   }
 >();
-for (const entity of allEntities) {
-  for (const relationship of entityManifest[entity].relationships) {
-    for (const source of localSources(relationship)) {
-      if (source.provenance.kind !== "local-path") continue;
-      const descriptor = {
-        path: source.provenance,
-        relationshipKey: relationship.key,
-        label: relationship.label,
-        sourceKey: source.key,
-      };
-      const forward = pathKey(source.provenance);
-      const backward = pathKey(reversePath(source.provenance));
-      if (!canonicalPaths.has(forward)) {
-        canonicalPaths.set(forward, { ...descriptor, reversed: false });
-        canonicalPaths.set(backward, { ...descriptor, reversed: true });
+const leavesOutgoing = (path: LocalPath) =>
+  path.steps[0]?.direction === "outgoing";
+for (const pass of [leavesOutgoing, () => true]) {
+  for (const entity of allEntities) {
+    for (const relationship of entityManifest[entity].relationships) {
+      for (const source of localSources(relationship)) {
+        if (source.provenance.kind !== "local-path") continue;
+        if (!pass(source.provenance)) continue;
+        const descriptor = {
+          path: source.provenance,
+          relationshipKey: relationship.key,
+          label: relationship.label,
+          sourceKey: source.key,
+        };
+        const forward = pathKey(source.provenance);
+        const backward = pathKey(reversePath(source.provenance));
+        if (!canonicalPaths.has(forward)) {
+          canonicalPaths.set(forward, { ...descriptor, reversed: false });
+          canonicalPaths.set(backward, { ...descriptor, reversed: true });
+        }
       }
     }
   }

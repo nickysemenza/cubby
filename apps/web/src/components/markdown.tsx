@@ -16,11 +16,11 @@ import { cn } from "~/lib/utils";
  * raw HTML in the source is not rendered.
  */
 
-export type ElementProps<T extends keyof React.JSX.IntrinsicElements> =
+type ElementProps<T extends keyof React.JSX.IntrinsicElements> =
   ComponentPropsWithoutRef<T> & { node?: unknown };
 
 // Strip the `node` prop react-markdown injects so it doesn't hit the DOM.
-export function clean<T extends keyof React.JSX.IntrinsicElements>({
+function clean<T extends keyof React.JSX.IntrinsicElements>({
   node: _node,
   ...rest
 }: ElementProps<T>) {
@@ -28,7 +28,7 @@ export function clean<T extends keyof React.JSX.IntrinsicElements>({
 }
 
 /** Anchor styling shared with custom `a` overrides (see componentOverrides). */
-export const markdownAnchorClass =
+const markdownAnchorClass =
   "text-primary underline underline-offset-2 hover:text-primary/80";
 
 const components = {

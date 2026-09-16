@@ -7,7 +7,7 @@ import Foundation
 /// 2. PUT the bytes (no auth header; see `PresignedUpload`).
 /// 3. `image.markUploaded` — never skipped, a `PENDING` image is culled.
 /// 4. `PATCH <entity>/{id} {pendingImageIds}` attaches it.
-/// 5. For a product cover, a **second** PATCH `{imageOrder: [new] + existing}`: the server
+/// 5. For a cover (`makeCover`), a **second** PATCH `{imageOrder: [new] + existing}`: the server
 ///    applies `imageOrder` before `pendingImageIds`, so ordering in the same call as attaching
 ///    would name an image that is not yet attached.
 public actor PhotoUploader {
@@ -134,13 +134,12 @@ public actor PhotoUploader {
                 current.attached = true
                 saved = current
             }
-            if request.makeCover, request.entity == .product {
+            if request.makeCover {
                 progress?(.ordering)
-                let product = ProductCode(request.entityID)
-                let existing = try await service.productImageIDs(product).filter {
-                    $0 != current.outcome.imageID
-                }
-                try await service.setImageOrder([current.outcome.imageID] + existing, product: product)
+                let existing = try await service.imageIDs(entity: request.entity, id: request.entityID)
+                    .filter { $0 != current.outcome.imageID }
+                try await service.setImageOrder(
+                    [current.outcome.imageID] + existing, entity: request.entity, id: request.entityID)
             }
             progress?(.done)
             return current.outcome
@@ -158,11 +157,10 @@ public actor PhotoUploader {
     ) async throws {
         progress?(.attaching)
         try await service.attachImages([imageID], to: entity, id: entityID)
-        if makeCover, entity == .product {
+        if makeCover {
             progress?(.ordering)
-            let product = ProductCode(entityID)
-            let existing = try await service.productImageIDs(product).filter { $0 != imageID }
-            try await service.setImageOrder([imageID] + existing, product: product)
+            let existing = try await service.imageIDs(entity: entity, id: entityID).filter { $0 != imageID }
+            try await service.setImageOrder([imageID] + existing, entity: entity, id: entityID)
         }
         progress?(.done)
     }

@@ -9,7 +9,7 @@ import Foundation
 /// batch/partial-failure semantics.
 public struct PendingImageUpload: Sendable {
     /// The two sub-steps this type performs, for callers that report progress at that
-    /// granularity. `PhotoUploader` surfaces both; `GardenImageUploader` only cares about
+    /// granularity. `PhotoUploader` surfaces both; `PendingImageUploader` only cares about
     /// `.uploading` (it never reported presigning separately).
     public enum Phase: Sendable, Equatable {
         case presigning, uploading

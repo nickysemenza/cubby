@@ -20,6 +20,7 @@ export default defineEntity({
     },
     icons: { lucide: "Heart", sfSymbol: "star" },
     detail: {
+      hero: { actions: ["edit", "markPurchased"] },
       sections: [
         {
           kind: "fields",
@@ -100,7 +101,9 @@ export default defineEntity({
         key: "acquiredAt",
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true },
+        // `acquired` is the persisted column id the status cell and the
+        // boolean filter spec hang on.
+        display: { list: true, detail: true, columnId: "acquired" },
         validation: {
           read: z.date().nullable(),
           create: null,

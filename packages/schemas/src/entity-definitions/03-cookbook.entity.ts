@@ -5,7 +5,17 @@ import { z } from "zod";
 export default defineEntity({
   key: "cookbook",
   names: { singular: "Cookbook", plural: "Cookbooks" },
-  route: { basePath: "cookbooks", list: null, detail: null },
+  route: {
+    basePath: "cookbooks",
+    list: true,
+    // No kernel `get`: the detail reads the cookbook summary query.
+    detail: {
+      query: {
+        module: "~/entities/cookbook.functions",
+        export: "cookbookDetailQuery",
+      },
+    },
+  },
   table: "Cookbook",
   identifiers: { brand: "CookbookId", shortcode: "CKB-" },
   presentation: {

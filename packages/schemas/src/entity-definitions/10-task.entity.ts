@@ -12,7 +12,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
-  route: { basePath: "tasks", create: "dialog", list: null, detail: true },
+  route: { basePath: "tasks", create: "dialog", list: true, detail: true },
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {
@@ -73,7 +73,7 @@ export default defineEntity({
           kind: "slot",
           id: "board",
           label: "Board",
-          searchKeys: ["cols", "lane"],
+          searchKeys: ["cols", "lane", "q"],
         },
         "timeline",
       ],

@@ -1,5 +1,4 @@
 import type {
-  EmbeddedProjectScope,
   ProjectDashboardSummaryOut,
   ProjectFilters,
   ProjectOut,
@@ -55,7 +54,6 @@ import {
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
-import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { image, type ProjectImageSummaries } from "~/entities/image.functions";
@@ -72,18 +70,12 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import {
-  ProjectDataExpenseList,
-  ProjectDataTaskList,
-} from "./project-data-lists";
-import type { ProjectRowsRenderer } from "./project-options";
 import { project } from "./project.functions";
 import {
   capitalize,
   formatDate,
   formatDateRange,
   PROJECT_STATUS_LABELS,
-  ProjectTable,
   StatusIcon,
 } from "./shared";
 
@@ -100,14 +92,8 @@ const TaskStatusBoard = lazy(() =>
   })),
 );
 
-export type DashboardView = "overview" | "analytics" | "data" | "gallery";
-
-export const DASHBOARD_VIEW_OPTIONS: ViewSwitcherOption<DashboardView>[] = [
-  { value: "overview", label: "Overview" },
-  { value: "analytics", label: "Analytics" },
-  { value: "data", label: "Data" },
-  { value: "gallery", label: "Gallery" },
-];
+/** The three slot views the project manifest declares beside the table. */
+export type DashboardView = "overview" | "analytics" | "gallery";
 
 /** Cover image (first attached image) per project id — keyed lookup for the gallery/overview cards. */
 type CoverImages = ProjectImageSummaries;
@@ -120,10 +106,7 @@ const NO_YEARS: string[] = [];
 
 const route = getRouteApi("/_authenticated/projects/");
 
-export function ProjectsDashboard() {
-  const search = route.useSearch();
-  const view: DashboardView = search.view ?? "overview";
-
+export function ProjectsDashboard({ view }: { view: DashboardView }) {
   return <MainDashboard view={view} />;
 }
 
@@ -189,39 +172,18 @@ function DashboardContent({
   coverImages,
   analyticsData,
   analyticsLoading,
-  projectScope,
-  rowsRenderer,
-  onRowsRendererChange,
-  onClearDate,
 }: {
   view: DashboardView;
   data: ProjectDashboardSummaryOut;
   coverImages: CoverImages | undefined;
   analyticsData: ProjectPortfolioAnalyticsViewProps["data"] | undefined;
   analyticsLoading: boolean;
-  projectScope: EmbeddedProjectScope;
-  rowsRenderer: ProjectRowsRenderer;
-  onRowsRendererChange: (rows: ProjectRowsRenderer) => void;
-  onClearDate: () => void;
 }) {
   if (view === "overview") {
     return <OverviewView data={data} coverImages={coverImages} />;
   }
   if (view === "analytics") {
     return <AnalyticsView data={analyticsData} isLoading={analyticsLoading} />;
-  }
-  if (view === "data") {
-    return (
-      <DataViewContent
-        projectScope={projectScope}
-        locations={data.filterOptions.locations}
-        completionYears={data.filterOptions.completionYears}
-        hiddenByDate={data.hiddenByDate}
-        onClearDate={onClearDate}
-        rowsRenderer={rowsRenderer}
-        onRowsRendererChange={onRowsRendererChange}
-      />
-    );
   }
   return (
     <div className="pt-4">
@@ -237,16 +199,14 @@ function MainDashboard({ view }: { view: DashboardView }) {
   const search = route.useSearch();
   const navigate = route.useNavigate();
 
-  // Keyed on the joined primitive values (not the array references
-  // themselves) so a fresh-array-per-parse from validateSearch doesn't
-  // rebuild the Sets — and every downstream memo keyed on `filters` — on
-  // every render.
-  const statusesKey = search.statuses?.join(",");
-  const kindsKey = search.kinds?.join(",");
-  const locationsKey = search.locations?.join(",");
+  // Keyed on the primitive values so a fresh object per parse doesn't rebuild
+  // the Sets — and every downstream memo keyed on `filters` — every render.
+  const statusesKey = search.statuses;
+  const kindsKey = search.kinds;
+  const locationsKey = search.locations;
   const filters = useMemo<Filters>(
     () => filtersFromSearch(search),
-    // oxlint-disable-next-line react/exhaustive-deps -- keyed on the joined-string primitives above, not the array references, on purpose
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on the primitive values above, not the search object, on purpose
     [statusesKey, kindsKey, locationsKey, search.date, search.completed],
   );
 
@@ -283,17 +243,6 @@ function MainDashboard({ view }: { view: DashboardView }) {
     [statusesKey, kindsKey, locationsKey, search.date, search.completed],
   );
 
-  const projectScope = useMemo<EmbeddedProjectScope>(
-    () => ({
-      statuses: scopeInput.statusScope,
-      kinds: scopeInput.kinds,
-      locations: scopeInput.locations,
-      dateFrom: scopeInput.dateFrom,
-      dateTo: scopeInput.dateTo,
-      completionYear: scopeInput.completionYear,
-    }),
-    [scopeInput],
-  );
   const dashboardQuery = useQuery({
     ...project.dashboardSummary.queryOptions(scopeInput),
   });
@@ -369,17 +318,6 @@ function MainDashboard({ view }: { view: DashboardView }) {
           coverImages={coverImages}
           analyticsData={analyticsQuery.data}
           analyticsLoading={analyticsQuery.isLoading}
-          projectScope={projectScope}
-          rowsRenderer={search.rows ?? "flat"}
-          onRowsRendererChange={(rows) =>
-            navigate({
-              search: (prev) => ({ ...prev, rows }),
-              replace: true,
-            })
-          }
-          onClearDate={() =>
-            handleFiltersChange({ ...filters, dateRange: null })
-          }
         />
       )}
     </Stack>
@@ -461,7 +399,7 @@ function OverviewView({
         {data.completedCount > 0 && (
           <Link
             to="/projects"
-            search={{ view: "data", statuses: ["done"] }}
+            search={{ view: "table", statuses: "done" }}
             className="text-xs text-muted-foreground hover:text-foreground hover:underline"
           >
             {data.completedCount} completed project
@@ -537,97 +475,6 @@ function AnalyticsView({
     <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
       <ProjectAnalytics data={data} isLoading={isLoading} />
     </Suspense>
-  );
-}
-
-function DataViewContent({
-  projectScope,
-  locations,
-  completionYears,
-  hiddenByDate,
-  onClearDate,
-  rowsRenderer,
-  onRowsRendererChange,
-}: {
-  projectScope: EmbeddedProjectScope;
-  locations: string[];
-  completionYears: string[];
-  hiddenByDate: ProjectDashboardSummaryOut["hiddenByDate"];
-  onClearDate: () => void;
-  rowsRenderer: ProjectRowsRenderer;
-  onRowsRendererChange: (renderer: ProjectRowsRenderer) => void;
-}) {
-  return (
-    <Stack className="pt-4">
-      <Stack as="section">
-        <h2 className="font-heading text-xl font-semibold">Projects</h2>
-        <ProjectTable
-          locations={locations}
-          completionYears={completionYears}
-          mode={rowsRenderer}
-          onModeChange={onRowsRendererChange}
-        />
-        <HiddenByDateNote
-          count={hiddenByDate.projects}
-          label="projects"
-          onClear={onClearDate}
-        />
-      </Stack>
-
-      <Stack as="section">
-        <h2 className="font-heading text-xl font-semibold">Tasks</h2>
-        <ProjectDataTaskList projectScope={projectScope} />
-        <HiddenByDateNote
-          count={hiddenByDate.tasks}
-          label="tasks"
-          onClear={onClearDate}
-        />
-      </Stack>
-
-      <Stack as="section">
-        <h2 className="font-heading text-xl font-semibold">Expenses</h2>
-        <ProjectDataExpenseList projectScope={projectScope} />
-        <HiddenByDateNote
-          count={hiddenByDate.expenses}
-          label="expenses"
-          onClear={onClearDate}
-        />
-      </Stack>
-    </Stack>
-  );
-}
-
-/**
- * Honesty footnote for the Data view: the active date window
- * (`dateFrom`/`dateTo`) silently drops rows with no date at all, per entity
- * (see `ProjectDashboardSummaryOut.hiddenByDate`). Renders nothing at count
- * 0 — most loads have no date filter applied. Same dotted-underline
- * "click to reveal more" idiom as `BoardColumn`'s hidden-done-tasks note
- * (`~/app/tasks/board/BoardColumn.tsx`), but clicking here clears the Date
- * chip instead of expanding a list, since there's no "show them anyway"
- * short of dropping the filter.
- */
-function HiddenByDateNote({
-  count,
-  label,
-  onClear,
-}: {
-  count: number;
-  /** Plural entity noun, e.g. "tasks", "expenses", "projects". */
-  label: string;
-  onClear: () => void;
-}) {
-  if (count === 0) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={onClear}
-      className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
-    >
-      {count} {label} without dates hidden by the date filter — clear it to show
-      them
-    </button>
   );
 }
 
