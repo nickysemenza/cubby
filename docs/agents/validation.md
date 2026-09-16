@@ -73,8 +73,9 @@ it. 24% of all test runs used to be a re-run of one that had just failed.
 
 Narrow the other gates too: `pnpm typecheck:web` is useful when only the web app
 is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
-entity freshness, Knip, script types, and the high-risk SQL/soft-delete guards
-concurrently. `pnpm check:all` adds bindings, OpenAPI, all orchestration tests,
+entity freshness, Knip, and script types concurrently; the high-risk
+SQL/soft-delete and unsafe-identifier guards are Oxlint rules now (see Quality
+policy below), not a separate script step. `pnpm check:all` adds bindings, OpenAPI, all orchestration tests,
 and security validation. Dependency
 deduplication runs separately when a package manifest, workspace file, patch, or
 lockfile changed; CI and pre-PR validation run the applicable superset.
@@ -131,6 +132,30 @@ and underscore-prefixed bindings are established schema and library interop
 patterns; and mutating `sort`/`reverse` calls cannot be mechanically replaced by
 copying variants without changing behavior. Intentional local exceptions to
 enabled rules use a one-line Oxlint directive with a constraint-focused reason.
+
+The `cubby` Oxlint plugin (`tools/oxlint/cubby/`) ports two former standalone
+scripts. `cubby/no-unsafe-identifiers` (repo-wide `error`, off for `*.test.*`,
+`*.spec.*`, `*.fixtures.*`, `tests/`, `test/`, `__fixtures__/`, `test-support/`,
+and `tooling/` paths, and `packages/*/src/testing.ts`) replaces the deleted
+`scripts/check-unsafe-identifiers.ts`. Its `unsafe-helper-declaration`/
+`unsafe-helper-import`/`unsafe-helper-call` checks are exact, purely syntactic
+ports. Its `branded-assertion` check is NOT: the deleted script walked
+import/re-export chains across files to resolve whether an asserted-to type was
+ultimately branded; a single-file Oxlint rule cannot see another file's AST, so
+this rule only resolves types and values declared in the SAME file. Asserting a
+value into a type/alias imported from elsewhere is not flagged even when that
+type is branded at its declaration site — an accepted, documented coverage loss
+(operator decision). `anti-slop/require-safety-comment-for-type-assertion`
+still requires a `SAFETY:` comment on every non-const assertion regardless, so
+an unflagged branded assertion on an imported alias still needs a justification
+comment. `cubby/require-soft-delete-filter` (scoped to
+`apps/web/src/server/**/*.ts` and `packages/*/src/**/*.ts`, excluding
+`*.test.ts`) replaces the deleted `scripts/check-soft-delete-filters.ts` +
+`scripts/schema-storage.ts`; its soft-deletable table catalog is parsed once,
+at plugin load, directly from `schema.ts` + the generated entity-columns file —
+the same parser the deleted `schema-storage.ts` used — never from the
+`application-schema.json` snapshot, whose `lowerFirst(sqlName)` convention does
+not hold for the `oauth_*` auth tables.
 
 Oxfmt owns maintained JavaScript, TypeScript, JSX, TSX, JSON/JSONC, CSS, and HTML.
 It sorts imports only in maintained web source, excluding generated files; sorts

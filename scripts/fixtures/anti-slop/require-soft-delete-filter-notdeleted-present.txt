@@ -1,0 +1,11 @@
+import { exists, sql } from "drizzle-orm";
+import { db } from "~/server/db/db";
+import { notDeleted } from "~/server/db/predicates";
+import { recipe } from "~/server/db/schema";
+
+export function guardedGuard() {
+  return db
+    .select()
+    .from(recipe)
+    .where(exists(db.select().from(recipe).where(notDeleted(recipe))));
+}

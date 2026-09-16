@@ -46,14 +46,6 @@
         "!{workspaceRoot}/cubby-ffi/**"
       ]
     },
-    "soft-delete": {
-      "command": "node scripts/check-soft-delete-filters.ts",
-      "cache": false
-    },
-    "identifiers": {
-      "command": "node scripts/check-unsafe-identifiers.ts --include-tests",
-      "cache": true
-    },
     "knip": {
       "command": "knip --no-config-hints --cache",
       "cache": false
