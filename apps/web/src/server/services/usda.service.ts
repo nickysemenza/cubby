@@ -295,7 +295,6 @@ export class USDAService {
       this.foodLookup(foodSummary),
     );
 
-    // Get all inferred unit mappings from the food
     const inferredUnitMappings = unitMappingsFromFood(foodSummary);
 
     return {

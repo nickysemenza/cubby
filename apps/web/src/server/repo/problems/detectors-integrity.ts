@@ -15,11 +15,11 @@
  * missed) that skips it.
  *
  * **This is a REGRESSION GUARD, not a hypothetical.** Run against production
- * data on 2026-07-30 (the day this detector was written), it returned zero
- * violations: the only live rows pointing at soft-deleted targets anywhere in
- * the schema were the 12 `Ingredient.recipeId` tombstones — see below — and
- * every one of those is on the sole edge that is deliberately exempt. A
- * non-empty result from this detector is a real bug, not noise to tune away.
+ * data, it returns zero violations: the only live rows pointing at
+ * soft-deleted targets anywhere in the schema are `Ingredient.recipeId`
+ * tombstones — see below — and every one of those is on the sole edge that is
+ * deliberately exempt. A non-empty result from this detector is a real bug,
+ * not noise to tune away.
  *
  * **Why `Ingredient.recipeId` is exempt.** It is the one edge marked
  * `allow-target-deleted` in `ENTITY_EDGE_SEMANTICS`: deleting a recipe

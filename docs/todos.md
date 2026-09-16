@@ -27,49 +27,29 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
-- **Define `__GIT_COMMIT__` in the e2e worker runtime.** The AI-usage
-  recorder logs `failed to record usage { error: '__GIT_COMMIT__ is not
-  defined' }` on every request under Playwright because
-  `tests/e2e/e2e-worker-runtime.ts` never defines the Vite constant; one
-  global in the runtime silences it.
-
-- **Recipe rows lost their "N servings" trailing figure on native.** The
-  per-entity `trailing` arm in `App/Shared/Browse/EntityFacts.swift` is gone
-  and expense/purchase got manifest slots; recipe did not. Declare
-  `mobile: { slot: "trailing" }` on `servings` in `01-recipe.entity.ts`.
-
-- **Drop `--cache` from the `knip` target.** After `packages/wasm` was
-  rebuilt in a fresh worktree, knip's own cache kept reporting the stale
-  unresolved imports until `node_modules/.cache/knip` was deleted; the Nx
-  cache on the target already skips unchanged trees and the run is ~3.5s.
-
-- **Silence or prune the 58 redocly `no-unused-components` warnings** that
-  print on every `pnpm check`: the filtered OpenAPI document carries
-  components no native operation references. Prune them in
-  `scripts/generator/http-api/openapi.ts` or disable the rule in `redocly.yaml`.
-
-- **Give `SearchHit.entityType` an unknown fallback.** It is a closed Swift
-  enum now, so a search result for an entity kind the native catalog does not
-  know fails the whole search decode instead of that one hit.
-
-- **Guard `apps/web/tooling/test-setup.ts` against server imports.** It is
-  also vitest's `globalSetup`, which runs in the main process before
-  `test.env` applies, so importing anything that reaches `env.ts` fails env
-  validation for the whole Postgres tier (the race helper's import is lazy for
-  this reason). A `no-restricted-imports` override for that file is cheaper
-  than the next debugging session.
-
-- **`graph-map-state` "places a dense fan compactly" runs near its 5s
-  timeout** and was the one unit test to trip when the tiers ran in parallel;
-  either the layout under test does too much work or the case wants its own
-  timeout.
-
 ---
 
 ## Ready projects
 
 - (P3) **`/locations/arrange` and `/locations/photo-pass` ignore growing
   areas.** Neither existing bulk-location tool is garden-aware.
+
+- **Native "Add growing area" prefills `type: area` invisibly.** Location's
+  `type` and `gardenKind` fields have no `control`, so the generic native
+  editor cannot render them; the create flow hard-codes `type: area` instead
+  of letting a user pick or later edit it. Give both fields a `control` so
+  native can render and edit them like any other field.
+
+- **Product edit still opens `ProductForm` in a dialog** instead of the
+  generic editor's `structured-field` renderers, because `unitMappings` and
+  `labelNutrition` have no generic port yet. Port them (see
+  `product-form-fields.tsx`) and delete the dedicated dialog.
+
+- **Native slot list views are hidden from the view picker.** Calendar,
+  board, gallery, and analytics `list.views` slot entries exist in the
+  manifest, but `EntityListView.swift`'s view picker does not surface `slot`
+  kind views yet, so they are unreachable on Apple platforms even where a
+  native slot component exists.
 
 - **`resolve_ingredients` suggests product links.** It created `ground chicken`
   (ING-ZEU3) while PRD-FGC5 "Ground Chicken Breast" sat unlinked; four of the
@@ -128,29 +108,15 @@ history is the archive. Permanent product constraints live in the
 
 - (P2) **Growing-area Location page still trails its design canvas**
   (https://claude.ai/artifact/Y7fvFetWNAndGYjJe2AeDu, "Location detail —
-  growing-area variant"). #1050 landed the Garden section; the rest, in
-  order of leverage:
-  1. Inventory panels are not demoted — the compartment map, contents, and
-     recount actions still render full-width under the Garden section.
-     `DetailSections` (`app/_components/data-table/detail-page.tsx`) has no
-     collapsible/`defaultCollapsed` section flag; add it at that seam, then
-     collapse the inventory-first sections into one "Inventory · N items" row
-     whenever `gardenKind` is set.
-  2. The hero carries no growing-area identity or actions: add the
-     "growing area · <kind>" chip beside the title and Log entry / Add
-     planting / More actions through `detailPage`'s `heroActions`.
-  3. Planting rows lack the per-row Actions ▾ (Start for planned), the "here
-     since <date>" wording, and the amber "location dates unconfirmed" state;
-     reuse `PlantingActionRow`'s menu and the location-history data.
-  4. Recent entries are plain text: add the `JournalPhotoStrip` and link each
-     line to its entry.
-  5. Kind / conditions / parent belong in a supporting "Growing area" card
-     with an **Edit area** action (the growing-area form is only on `/garden`
-     today), plus a collapsed "Photos of the area" row for location photos.
-  Planting detail (`Main.dc.html` on the same canvas) is close; remaining:
-  the supporting "Planting details" table with mono labels and a Source
-  link, location-history periods as a dated table with linked areas, and
-  the guide as a collapsed row instead of a `<details>`.
+  growing-area variant"). The manifest-declared hero (chip/breadcrumb),
+  collapsed sections, and the `garden` slot now cover the demotion and
+  identity work; residue:
+  1. Planting rows in `LocationGarden`'s `GardenPlantingRow`
+     (`apps/web/src/app/garden/slots.tsx`) lack the per-row Actions ▾ (Start
+     for planned) and the amber "location dates unconfirmed" state — the
+     "here since <date>" wording already renders.
+  2. Planting detail's guide slot (`PlantingGuide`, same file) still folds
+     behind a plain `<details>` instead of a collapsed section row.
 
 - **Guided placement pass for unlocated products.** Walk a value- or
   category-bounded worklist one product at a time with three answers: not tracked,
@@ -159,7 +125,7 @@ history is the archive. Permanent product constraints live in the
 
 - **Import extracted cookbook bundles.** Accept ingredient-parser's `.cookbook`
   archives with extracted recipes and images through the existing cookbook
-  review/import flow (`cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
+  review/import flow (`recipe/cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
   incrementally in a Web Worker and upload selected assets with bounded
   concurrency; keep validation and recipe creation on the server. Large bundles
   must not require loading the entire archive into memory. The first version
@@ -284,8 +250,9 @@ history is the archive. Permanent product constraints live in the
   not a scheduler or RRULE system.
 
 - **Saved user-created views.** Persist named filter and sort sets using the
-  versioned external-state pattern, and render them alongside manifest-defined
-  views without creating a second query language.
+  versioned external-state pattern, and render them alongside the
+  manifest-defined `presentation.list.views` without creating a second query
+  language.
 
 ---
 
@@ -403,8 +370,8 @@ history is the archive. Permanent product constraints live in the
 
 - **Core native inventory experience.** Promote when everyday use of the native
   redesign exposes a specific inventory bottleneck. Deepen location-first browsing,
-  stock comparison, capture/recount, and photo completion; introduce sortable Mac
-  tables, filtering, unit-aware steppers, bulk actions, or drag/drop only for a
+  stock comparison, capture/recount, and photo completion; introduce
+  unit-aware steppers, bulk actions, or drag/drop only for a
   demonstrated workflow. Owners: `apps/apple/App/Shared/Browse`, `Capture`, and
   `Audit`; see [native design](../apps/apple/DESIGN.md).
 
@@ -511,9 +478,26 @@ history is the archive. Permanent product constraints live in the
 - **Multi-product Expense links** — Promote when one Expense genuinely needs several
   Products and `splitExpense` cannot truthfully split the money.
 
+- **Named web fidelity losses from the manifest-rendering pass** — Promote a
+  follow-up if a household workflow misses one: the task subtask checklist is
+  now a relation table, not an interactive checklist; project's in-detail
+  tasks list/board toggle is gone; purchase lost its per-line
+  quantity/unit-cost columns; location's merged sub-locations+items surface
+  split into two sections; product's hero lost its stock-stats row.
+
+- **Native specialized-renderer editors** — Promote per field as a native
+  workflow needs to write it. The generic editor has no native control for
+  product `unitMappings`/`labelNutrition`, recipe `sections`/`yield`/`meta`,
+  meal `recipes`, expense `beneficiaries`/`funders`/`sourceClaims`,
+  ledgerTransfer `sourceClaims`, financialAccount `identity`/`sourceAliases`,
+  or financialTransaction `sourceRefs`; those fields are silently left out of
+  the native create/edit form (`EntityFieldControls.swift`).
+
 - **Native workflow parity with web.** Promote when a recurring household task
-  still requires switching to the web. Port one complete create/edit/action loop
-  at a time, preserving existing contracts and specialized behavior. Owners:
+  still requires switching to the web. Native already renders every manifest
+  create/update through the generic editor, so the parity mechanism is a slot
+  per workflow: port one complete detail/list slot or action loop at a time,
+  preserving existing contracts and specialized behavior. Owners:
   `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability context
   lives in [the native README](../apps/apple/README.md).
 
@@ -544,13 +528,6 @@ history is the archive. Permanent product constraints live in the
   inferred Trade matches” by reusing Product-to-Trade inference. Trade remains
   on the Product's linked Expense lines, not its parent Purchase. Dashboard
   expansion still includes combined Project/Task/Expense views.
-
-- **Persisted query cache across account changes** — Promote when sign-out or
-  account switching exposes stale cached state, or auth-lifecycle work changes
-  cache ownership. `integrations/tanstack-query/persister.ts` uses one device-wide
-  key, and `root-provider.tsx` busts it by deploy revision. Review account scoping
-  and clearing of both persisted and in-memory state together; verify sign-out,
-  account switching, and same-account relaunch before treating this as resolved.
 
 - **Portion solver** — Promote if agent-side amount iteration remains painful after
   the recipe nutrition MCP projection ships; solve component weights against macro
@@ -705,6 +682,8 @@ history is the archive. Permanent product constraints live in the
 
 - **House timeline.** A chronological house journal with project milestones,
   before/after photos, and an annual wrapped-style view over existing records.
+  Build on the generic `resources.<entity>.timeline` capability rather than a
+  bespoke aggregation.
 
 - **Receipt-shaped import.** Move the deterministic half of a vendor import
   server-side: a `create_purchase_with_lines` (or `import_vendor_orders`)
@@ -734,29 +713,7 @@ history is the archive. Permanent product constraints live in the
 
 ## Next pass
 
-Deferred from the 2026-09 code-deletion PR; unordered.
-
-- **Generic native list, detail and edit views from the manifest.** Render
-  `EntityListView`/`EntityDetailView`/`EntityFacts`/`DetailRelations` from
-  `FieldDescriptor` (`format`, `mobileSlot`, sections) and the typed
-  `<Entity>Detail` aliases instead of `EntityRow.raw` probes, so the remaining
-  product/location/inventory arms in `App/Shared/Browse/EntityFacts.swift` and
-  the product/location readers in `DetailRelations.swift` disappear. Owners:
-  `apps/apple/App/Shared/Browse`, `scripts/generator/entities/render/swift-catalog.ts`.
-
-- **Garden forms onto the generic native editor.** `App/Shared/Garden/
-  GardenForms.swift` (1.8k lines), `GardenRouteViews.swift`, `GardenModel.swift`
-  and `GardenEditEncodingMiddleware.swift` hand-code fields the manifest
-  declares; move them onto the generic edit path over the generated
-  `PlantingUpdateData`/`GardenEntryUpdateData` inputs once the item above
-  exists. Blocked on it.
-
-- **Web manifest-declared page composition.** List and detail page components
-  (`apps/web/src/app/<entity>/*list*.tsx`, `*-detail.tsx`) still hand-compose
-  sections, relation tables and actions; declare them (`presentation.detail.
-  sections`, `presentation.list.actions`) and render from one generic page with
-  explicit extension slots for recipes, cookbooks and products. Needs a design
-  pass first; it is the web twin of the native item above.
+Deferred from the 2026-09 manifest-rendering PRs; unordered.
 
 - **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
   only alongside the first native screen that scales a recipe or prices a meal.
@@ -768,22 +725,6 @@ Deferred from the 2026-09 code-deletion PR; unordered.
   only from the local pre-push gate when `apps/apple/` or `cubby-ffi/` changed;
   a `workflow_dispatch` macOS job that caches the OpenAPI generator build and
   the Nx `apple-ffi` output would make it hosted.
-
-- **Native image reordering from the generic edit dialog.** The generic image
-  block adds and removes photos but does not reorder them; the old per-entity
-  location form did. Extend the block when reordering is wanted.
-
-- **`resources.planting.get` name projections.** Native still joins
-  `ingredientName`/`locationName`/`sourceProductName` from `garden.options`
-  (`GardenPlantingOut(PlantingDetail, options:)` in
-  `API/GeneratedTypeExtensions.swift`); carrying them on the detail read the way
-  `GardenPlantingOut` already does deletes that join.
-
-- **Shrink `API/GeneratedTypeExtensions.swift` with server projections.** It
-  is 373 lines against the ~120 planned because native still derives what the
-  server could carry: `MacroSummary` over the nutrition map, graph `stableKey`
-  / `destination`, `recipeNames`, and the planting name joins already listed
-  above. Each projection added to the read deletes its extension.
 
 ## Deferred: deploy surface
 

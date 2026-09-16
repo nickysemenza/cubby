@@ -47,9 +47,8 @@ import { buildWishWhere } from "~/server/repo/wish";
  * and `{}` means unfiltered. TypeScript checks each thunk against the real
  * signature, so a drifted one is a compile error rather than a wrong number.
  *
- * `filter-application.integration.test.ts` asserts every count still equals its
- * list's own `count`, which is what caught the shape of this problem in the
- * first place and now guards the result.
+ * `build-where.unit.test.ts` renders each `buildXWhere` to SQL and guards
+ * against a thunk drifting from its list's own filter clause.
  */
 type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
 

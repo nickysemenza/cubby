@@ -1,8 +1,3 @@
-/**
- * Core database access functions.
- * Unwrap opaque Database type and handle transactions.
- */
-
 import {
   Database,
   type DrizzleClient,

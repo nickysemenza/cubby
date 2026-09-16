@@ -13,7 +13,7 @@ import { createExpense } from "~/server/repo/expense/crud";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { createVendor } from "~/server/repo/vendor";
-import { createWish, updateWish } from "~/server/repo/wish";
+import { createWish, updateWish, wishList } from "~/server/repo/wish";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { setCookbookProduct, upsertCookbook } from "./cookbook";
@@ -350,6 +350,20 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
+        { id: imgA.shortcode, url: getR2PublicUrl(imgA.key) },
+        { id: imgB.shortcode, url: getR2PublicUrl(imgB.key) },
+      ]);
+
+      // Regression: `wishList` handed hydrated rows (shortcode `id`) to the
+      // uuid-keyed resolver, so /wishes failed with "invalid input syntax for
+      // type uuid" whenever any wish existed.
+      const listed = await wishList(ctx.db, {}, [], {
+        pageIndex: 0,
+        pageSize: 10,
+      });
+      expect(
+        listed.data.find((row) => row.id === wish.output.id)?.displayImages,
+      ).toEqual([
         { id: imgA.shortcode, url: getR2PublicUrl(imgA.key) },
         { id: imgB.shortcode, url: getR2PublicUrl(imgB.key) },
       ]);

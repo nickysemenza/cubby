@@ -166,10 +166,10 @@ describe("expense quantity filters", () => {
     });
   });
 
-  // Fractional since 2026-08-22. A bound that could only be whole could not
-  // bracket a fractional quantity at all — half a coil binned is -0.5 — so the
-  // filter would silently exclude the rows it exists to find. The string case
-  // is the URL/MCP path, which coerces.
+  // Fractional: a bound that could only be whole could not bracket a
+  // fractional quantity at all — half a coil binned is -0.5 — so the filter
+  // would silently exclude the rows it exists to find. The string case is the
+  // URL/MCP path, which coerces.
   it.each([[1.5, 1.5] as const, ["0.5", 0.5] as const])(
     "accepts a fractional productQuantityMin of %s",
     (productQuantityMin, expected) => {

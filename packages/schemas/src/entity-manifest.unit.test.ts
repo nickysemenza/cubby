@@ -225,10 +225,9 @@ describe("entity manifest", () => {
     const withTable = allEntities.filter(
       (entity) => entityManifest[entity].dbTable !== null,
     );
-    // No carve-out any more. `image` used to opt out — "no MCP surface, no
-    // name, only ever reached through the entity that owns it" — but being the
-    // one entity addressed by raw uuid made it a permanent special case in
-    // every shape that can name an entity, so it was given `IMG-` instead.
+    // No carve-out for `image`: being the one entity addressed by raw uuid
+    // makes it a permanent special case in every shape that can name an
+    // entity, so it is given `IMG-` like everything else.
     expect(sorted(withTable)).toEqual(sorted(shortcodeEntities));
     // `usda-food` is the only entity without one, and it has no local table:
     // its identity is USDA's own `fdc_id`.

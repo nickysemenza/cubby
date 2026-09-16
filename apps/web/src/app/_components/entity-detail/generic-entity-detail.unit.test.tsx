@@ -189,6 +189,28 @@ describe("GenericEntityDetail", () => {
     );
   });
 
+  // Regression: `externalIds` is a `text-array` field whose read shape is an
+  // array of objects; deriving its cohort link used to parse it as strings
+  // and crash the whole product page.
+  it("renders a product whose external ids are structured records", () => {
+    const product = mock(getEntityDetailOutputSchema("product"), {
+      seed: 11,
+      overrides: { attachments: [] },
+    });
+    expect(product.externalIds.length).toBeGreaterThan(0);
+    render(
+      <GenericEntityDetail
+        entity="product"
+        record={product}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      product.name,
+    );
+  });
+
   it("derives a cohort action exactly for fields a list filter can select on", () => {
     // Manufacturer has a multiselect descriptor on product; model only a
     // text one, so it must not gain a link the list cannot honour exactly.

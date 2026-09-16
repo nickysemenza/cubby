@@ -202,10 +202,10 @@ The household project tracker (migrated from Notion) is a self-contained module:
 
 ## Vendor vs Purchase vs Expense
 
-> ⚠️ **`Purchase` changed meaning.** It used to *be* the ledger line — a name, a
-> cost, a date, a trade. That row is now **`Expense`**. Any older note, commit
+> ⚠️ **`Purchase` is the transaction, not the ledger line.** The ledger line — a
+> name, a cost, a date, a trade — is **`Expense`**. Any older note, commit
 > message, or agent transcript saying "purchase" about a line of spend means
-> `Expense`. `Purchase` today is the *transaction* the Expense was part of.
+> `Expense`; `Purchase` is the *transaction* the Expense was part of.
 
 ```
 Vendor ──< Purchase ──< Expense

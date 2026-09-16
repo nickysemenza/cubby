@@ -281,10 +281,9 @@ export type UpdateStatementRowsInput = z.infer<typeof updateStatementRowsInput>;
  *
  * The hash covers `rawDescription`, so a charge re-exported after its
  * descriptor firms up (`AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*XD8AR9RG3`)
- * mints a SECOND identity for money already recorded. 9 of 188 rows in the
- * 2026-08-19 Monarch export were this. The hash cannot be fixed — it is stored
- * externally in `FinancialTransaction.sourceRefs` with no back-reference — so
- * drift is detected rather than prevented.
+ * mints a SECOND identity for money already recorded. The hash cannot be
+ * fixed — it is stored externally in `FinancialTransaction.sourceRefs` with
+ * no back-reference — so drift is detected rather than prevented.
  *
  * Reported, never acted on: the remedy links one row to the other with
  * `supersededByExternalId`, and which row superseded which is a judgment.

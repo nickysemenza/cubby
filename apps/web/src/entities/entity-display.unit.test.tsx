@@ -250,13 +250,6 @@ describe("declared entity displays", () => {
     expect(ids).toContain("notes");
   });
 
-  it("requires specialized columns for relations instead of exposing raw ids", () => {
-    const helper = createCubbyColumnHelper<{ fromPartyId: string }>();
-    expect(() => createEntityDisplayColumns("ledgerTransfer", helper)).toThrow(
-      "needs a specialized column",
-    );
-  });
-
   it("preserves declared legacy column ids for specialized computed values", () => {
     const helper = createCubbyColumnHelper<{
       fromPartyId: string;

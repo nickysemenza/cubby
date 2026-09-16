@@ -3,10 +3,9 @@ import { describe, expect, it } from "vitest";
 import { assertQuantitySignMatchesCost } from "./helpers";
 
 /**
- * The negative-cost half of this rule was unenforced until 2026-08-16 because
- * live rows violated it. They were normalized first, so these cases pin the
- * door shut behind that cleanup — an importer writing `+1` on a refund row is
- * exactly how the 69 violations arrived.
+ * The negative-cost half of this rule is enforced unconditionally: an
+ * importer writing `+1` on a refund row is exactly the violation these cases
+ * guard against.
  */
 describe("assertQuantitySignMatchesCost", () => {
   it("rejects a positive quantity on a negative-cost line", () => {

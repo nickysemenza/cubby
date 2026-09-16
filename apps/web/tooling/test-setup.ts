@@ -322,10 +322,10 @@ async function getFileDb() {
  * 7 enum types and 2 extensions all survive — that is precisely the per-database
  * work a `CREATE DATABASE ... TEMPLATE` was repeating for all 294 tests.
  *
- * Re-measured 2026-08-17 after docker-compose.yml was tuned for tests
- * (`fsync=off`, `synchronous_commit=off`, `full_page_writes=off`, statement
- * logging off) and the 1603 leaked IntegreSQL databases were dropped. Both
- * halves of the original trade-off moved, and the conclusion survives:
+ * Measured with docker-compose.yml tuned for tests (`fsync=off`,
+ * `synchronous_commit=off`, `full_page_writes=off`, statement logging off)
+ * and no leaked IntegreSQL databases dragging on the pool. Both halves of the
+ * original trade-off moved, and the conclusion survives:
  *
  *   - a fresh `getTestDatabase()` per test: **777ms -> 34ms**
  *   - this TRUNCATE-all reset:             **266ms -> 31ms**

@@ -26,7 +26,7 @@ export const locationTypeValues = [
 export type LocationType = (typeof locationTypeValues)[number];
 
 /**
- * Location type colors — Warm-Paper Ledger (2026-06-25). Drawn from the app's
+ * Location type colors — Warm-Paper Ledger. Drawn from the app's
  * retoned categorical chart ramp: the lone ultramarine (chart-1) for the
  * top-level "room", then the monochrome ink ladder (chart-2..8) for everything
  * else. Grouped families share a rung so related types read together; matte,

@@ -246,9 +246,9 @@ export const resolveOrCreateIngredients = async (
   }
 
   if (uniqueNames.length > 0) {
-    // Fetch all already-existing name/alias matches at once. The previous loop
-    // paid a find-or-create SELECT for every input, including cookbook-sized
-    // requests that were overwhelmingly existing ingredients.
+    // Fetch all already-existing name/alias matches at once, avoiding a
+    // find-or-create SELECT per input — a cookbook-sized request is
+    // overwhelmingly existing ingredients.
     const existing = await unwrapDb(db).query.ingredient.findMany({
       where: buildIngredientWhere(true, uniqueNames[0]!, uniqueNames.slice(1)),
       columns: { id: true, shortcode: true, name: true, aliases: true },

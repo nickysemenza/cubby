@@ -168,6 +168,30 @@ describe("GenericEntityList", () => {
     },
   });
 
+  // Regression: the projects index crashed at column build because a
+  // reference column (`parentProjectId`) had no override; every declared
+  // table view must build its columns from the manifest alone.
+  it.each(
+    listedEntities.filter((entity) =>
+      entitySummary[entity].list.views.includes("table"),
+    ),
+  )(
+    "table: %s builds its columns and header without an override",
+    async (entity) => {
+      await renderListPage(
+        entity,
+        `${entities[entity].routes.list}?view=table`,
+        [],
+      );
+      expect(
+        await screen.findByRole("table", { name: /table$/i }),
+      ).toBeVisible();
+      expect(
+        screen.queryByText("Something went wrong"),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it("table: renders server-backed rows through the entity's column module", async () => {
     await renderListPage("meal", "/meals?view=table", [meal]);
     expect(

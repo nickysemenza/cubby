@@ -478,7 +478,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const imageState = useImageState();
   const { getImageData, hasImageChanges } = imageState;
 
-  // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
 
   // PDF manuals share the images relation; split them so the image editor

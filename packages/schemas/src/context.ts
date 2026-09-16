@@ -22,8 +22,8 @@ export const APPLICATION_AUDIT_SOURCES = [
  * Source of an action for audit logging.
  *
  * Open-ended on purpose: a one-off maintenance script is a legitimate actor, and
- * a closed enum turned that into an outage. 567 rows written by out-of-band
- * scripts during the 2026-07-28 expense-import work (`script:url-cleanup-…`,
+ * a closed enum turned that into an outage. Rows written by out-of-band
+ * scripts during an expense-import pass (`script:url-cleanup-…`,
  * `script:home-depot-export-…`, …) sat outside the enum, so `auditLog.list`
  * failed **output** validation — and because one bad row rejects the whole
  * array, the activity feed and the home page rendered an error rather than

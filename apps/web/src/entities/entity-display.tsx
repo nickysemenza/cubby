@@ -363,7 +363,16 @@ function cohortFilterAction<TRecord extends object>(
       ? linkTo(item.id, item.name ?? item.id)
       : undefined;
   }
-  const value = readScalarField(record, field);
+  // A structured array (product `externalIds` reads as objects behind a
+  // `text-array` kind) has a domain renderer and no scalar cohort value.
+  // SAFETY: the generated model owns `readKey`; the value is parsed before use.
+  const value = z
+    .array(z.string())
+    .or(z.string())
+    .safeParse(record[field.readKey as keyof TRecord]).success
+    ? readScalarField(record, field)
+    : null;
+  if (value === null) return undefined;
   switch (value.kind) {
     case "text":
       return linkTo(value.raw, value.label);
@@ -736,14 +745,16 @@ export function createEntityDisplayColumns<TRecord extends object>(
         field.kind === "json" ||
         field.kind === "identifier"
       ) {
-        if (only === undefined) {
+        // A computed column (`readKey: null`, no reference) has nothing
+        // generic to read: a full list page needs an override for it, while a
+        // relation table (`only`) keeps it visible but empty. References and
+        // structured values render through the detail renderer.
+        const readable = field.readKey !== null || field.reference !== null;
+        if (!readable && only === undefined) {
           throw new Error(
             `Display field ${entity}.${field.key} needs a specialized column`,
           );
         }
-        // A computed column (`readKey: null`, no reference) has nothing
-        // generic to read; it stays visible but empty rather than throwing.
-        const readable = field.readKey !== null || field.reference !== null;
         add(
           helper.display({
             id: columnId,

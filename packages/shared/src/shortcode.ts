@@ -23,13 +23,13 @@ export const PUBLIC_SHORTCODE_PREFIXES = Object.values(SHORTCODE_PREFIX);
 
 /**
  * The single-letter prefixes still needed for physical location and product QR
- * labels minted before the 2026-07 cutover.
+ * labels that predate the canonical prefix format.
  *
  * INBOUND ONLY. Nothing emits these — `parseShortcode` rewrites a legacy code to
- * its canonical form because the cutover preserved each code's 4-char body
- * (`P-4K7M` became `PRD-4K7M`). This table is the only accepted set of swaps;
- * it is deliberately not part of the entity manifest, so no generated surface
- * (catalog, inspector, native) advertises the legacy form.
+ * its canonical form, preserving each code's 4-char body (`P-4K7M` becomes
+ * `PRD-4K7M`). This table is the only accepted set of swaps; it is deliberately
+ * not part of the entity manifest, so no generated surface (catalog, inspector,
+ * native) advertises the legacy form.
  */
 export const LEGACY_SHORTCODE_PREFIX = {
   "P-": "product",

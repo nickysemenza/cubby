@@ -8,7 +8,8 @@ export const externalIdSource = z
   .regex(
     /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
     "source must be a lowercase kebab-case slug",
-  );
+  )
+  .meta({ mockValue: "example-vendor" });
 
 export const externalIdKind = z.enum([
   "asin",

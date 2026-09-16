@@ -10,7 +10,7 @@
  *    Jaeger. Rich span semantics (status, recorded exceptions, W3C context
  *    propagation) all work.
  *  - Deployed CF Worker → the runtime `cloudflare:workers` `tracing.enterSpan`
- *    API (shipped 2026-06-16). Its spans nest under CF's automatic platform
+ *    API. Its spans nest under CF's automatic platform
  *    spans and flow into the `grafana-traces` OTLP destination — no OTel SDK
  *    runs in the Worker. The CF `Span` is thinner (`setAttribute` only), so
  *    status / exceptions degrade to attributes and context propagation is
@@ -337,10 +337,10 @@ const getActiveTraceId = (): string | undefined =>
  *
  * Dev/Node: the OTel trace id of the active span. Deployed CF Worker: there is
  * no accessor for the active span (or any trace id) outside an `enterSpan`
- * callback — still true as of the 2026-07-28 tracing release — so fall back to
- * the request's `cf-ray`. That only resolves to a trace because `cf-server.ts`
- * also records the ray on the `cf.fetch` span as `cloudflare.ray_id`; the two
- * must stay in lockstep or this id becomes unsearchable.
+ * callback, so fall back to the request's `cf-ray`. That only resolves to a
+ * trace because `cf-server.ts` also records the ray on the `cf.fetch` span as
+ * `cloudflare.ray_id`; the two must stay in lockstep or this id becomes
+ * unsearchable.
  *
  * Callers pass the inbound request headers; the two ids come from different
  * systems and look nothing alike, so present it neutrally ("Request ID"), never

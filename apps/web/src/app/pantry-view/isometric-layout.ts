@@ -398,7 +398,6 @@ export function buildRooms(
     // Default zone: direct furniture children + room-level items
     const defaultPieces: FurniturePiece[] = [];
     for (const child of directFurniture) {
-      // Create a synthetic root for this child subtree
       const childPieces = collectPiecesFromSubtree(
         child,
         itemsByLocation,
