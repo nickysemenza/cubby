@@ -139,7 +139,7 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     await page.getByRole("button", { name: "Log entry", exact: true }).click();
     dialog = page.getByRole("dialog");
     const entryLocation = dialog.getByRole("combobox", {
-      name: "Location Id",
+      name: "Location",
       exact: true,
     });
     await entryLocation.click();
@@ -148,8 +148,9 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
       .getByRole("option", { name: new RegExp(bedName) })
       .first()
       .click();
+    // `SelectField` names its picker with the lower-cased label.
     const kindPicker = dialog.getByRole("combobox", {
-      name: "Kind",
+      name: "kind",
       exact: true,
     });
     await kindPicker.click();
@@ -217,9 +218,10 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     await expect(
       page.getByText("Another shared bed observation", { exact: true }),
     ).not.toBeVisible();
-    // Location dates are confirmed from the Location history section.
+    // Start planting recorded the first period, so the Location history
+    // section offers a correction rather than a first confirmation.
     await page
-      .getByRole("button", { name: "Confirm location dates", exact: true })
+      .getByRole("button", { name: "Correct location dates", exact: true })
       .click();
     dialog = page.getByRole("dialog");
     await dialog.getByLabel("In this location since").fill("2026-07-01");

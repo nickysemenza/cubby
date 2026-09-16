@@ -200,6 +200,15 @@ function toMobileColumnMeta(
   };
 }
 
+// A structured array behind a `text-array` kind (product `externalIds` reads
+// as objects) renders as readable JSON unless a domain renderer claims it.
+const listOrJson = z.union([
+  z.array(z.string()).transform((raw) => ({ kind: "list" as const, raw })),
+  z.unknown().transform((raw) => ({ kind: "json" as const, raw })),
+]);
+const readListValue = (value: unknown): ScalarDisplayValue =>
+  listOrJson.parse(value);
+
 function readScalarField<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
@@ -235,7 +244,7 @@ function readScalarField<TRecord extends object>(
         raw: z.union([z.string(), z.date()]).parse(value),
       };
     case "text-array":
-      return { kind: "list", raw: z.array(z.string()).parse(value) };
+      return readListValue(value);
     // A reference reads as its shortcode(s) here; `readReferenceField` below
     // resolves the linked record for the detail surface.
     case "identifier": {
@@ -363,16 +372,7 @@ function cohortFilterAction<TRecord extends object>(
       ? linkTo(item.id, item.name ?? item.id)
       : undefined;
   }
-  // A structured array (product `externalIds` reads as objects behind a
-  // `text-array` kind) has a domain renderer and no scalar cohort value.
-  // SAFETY: the generated model owns `readKey`; the value is parsed before use.
-  const value = z
-    .array(z.string())
-    .or(z.string())
-    .safeParse(record[field.readKey as keyof TRecord]).success
-    ? readScalarField(record, field)
-    : null;
-  if (value === null) return undefined;
+  const value = readScalarField(record, field);
   switch (value.kind) {
     case "text":
       return linkTo(value.raw, value.label);

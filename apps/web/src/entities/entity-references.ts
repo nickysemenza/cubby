@@ -34,6 +34,8 @@ export const readRecordField = <TRecord extends object, TValue>(
   schema: z.ZodType<TValue>,
 ): TValue => schema.parse(projection.parse(record)[key]);
 
+const referenceIds = z.union([z.string(), z.array(z.string())]).nullish();
+
 const multipleItems = (raw: unknown, nested: unknown): ReferenceItem[] => {
   const ids = z.array(z.string()).nullish().parse(raw) ?? [];
   const nestedItems = z.array(referenceObject).nullish().safeParse(nested);
@@ -81,6 +83,10 @@ export function readReferenceField<TRecord extends object>(
     field.readKey === null
       ? undefined
       : readRecordField(record, field.readKey, z.unknown());
+  // A reference whose read key carries a count (recipe `meals` reads
+  // `mealCount`) names related records without listing them; it renders as
+  // the scalar it is.
+  if (!referenceIds.safeParse(raw).success) return null;
   return {
     entity: reference.entity,
     items: reference.multiple

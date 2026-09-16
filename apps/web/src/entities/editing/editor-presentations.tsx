@@ -775,6 +775,12 @@ function genericPresentation<E extends EditableEntity>(input: {
   };
 }
 
+// One generic presentation per key: the dialog resolves its presentation on
+// every render, and a fresh `Fields` component identity would remount the
+// whole form on each value change — dropping focus mid-click and the
+// keystrokes that follow (a date commit on blur showed exactly that).
+const genericPresentations = new Map<string, EntityEditorPresentation<never>>();
+
 export function getEntityEditorPresentation<E extends EditableEntity>(input: {
   entity: E;
   operation: EntityEditOperation;
@@ -784,7 +790,17 @@ export function getEntityEditorPresentation<E extends EditableEntity>(input: {
   const presentation = Object.entries(presentations).find(
     ([candidate]) => candidate === key,
   )?.[1];
-  if (presentation === undefined) return genericPresentation(input);
+  if (presentation === undefined) {
+    const cached = genericPresentations.get(key);
+    if (cached !== undefined) {
+      // SAFETY: the cache is keyed by entity, so the entry is this entity's.
+      return cached as EntityEditorPresentation<E>;
+    }
+    const generic = genericPresentation(input);
+    // SAFETY: stored under this entity's key; read back only for that key.
+    genericPresentations.set(key, generic as EntityEditorPresentation<never>);
+    return generic;
+  }
   // SAFETY: `presentations` is keyed `${entity}:${operation}:${intent}` and
   // each value is typed against that key's entity; the string match above
   // recovers the entry for this call's entity.

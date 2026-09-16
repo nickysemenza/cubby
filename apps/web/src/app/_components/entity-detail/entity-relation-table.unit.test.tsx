@@ -4,8 +4,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityList } from "~/entities/entity-list.functions";
-import type { EntityListInputByEntity } from "~/entities/generated/entity-lists.gen";
+import {
+  type EntityListInputByEntity,
+  productListItem,
+} from "~/entities/generated/entity-lists.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { mock } from "~/lib/test/mock-schema";
 
 import {
   EntityRelationTable,
@@ -115,5 +119,29 @@ describe("EntityRelationTable", () => {
     expect(input?.entity).toBe("task");
     expect(input?.filters).toMatchObject({ projectId: "PRJ-TEST" });
     expect(input?.sort).toEqual([{ orderBy: "createdAt", direction: "desc" }]);
+  });
+
+  // Regression: an ingredient's products section crashed on a product row
+  // because `externalIds` is a `text-array` kind whose list read is an array
+  // of objects; the generic cell now renders it as readable JSON.
+  it("renders a target row whose text-array field carries structured values", async () => {
+    const product = mock(productListItem, { seed: 3 });
+    expect(product.externalIds.length).toBeGreaterThan(0);
+    const list = entityList.list.withTransport(async () => ({
+      items: [product],
+      meta: { pageIndex: 0, pageSize: 50, totalCount: 1, sums: {} },
+    }));
+    render(
+      <EntityRelationTable
+        entity="ingredient"
+        section={relationSection("ingredient", "products")}
+        recordId={testShortcode("ingredient", "ING-TEST")}
+        operations={{ list }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      await screen.findByRole("link", { name: product.name }),
+    ).toBeVisible();
   });
 });

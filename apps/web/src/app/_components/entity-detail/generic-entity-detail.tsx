@@ -487,7 +487,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
   record: DetailRecordOf<E>;
   operations?: GenericEntityDetailOperations;
 }) {
-  const { detail, titleField } = presentationOf(entity);
+  const { detail, titleField, singular } = presentationOf(entity);
   const bag = detailRecordSchema.parse(record);
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
@@ -565,7 +565,16 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
       heroStats={heroStats.length > 0 ? heroStats : undefined}
       heroActions={
         editable
-          ? { primary: <DetailEditAction onClick={() => setEditing(true)} /> }
+          ? {
+              // Visible text stays "Edit"; the name carries the entity so the
+              // control reads "Edit Ingredient" to assistive tech and tests.
+              primary: (
+                <DetailEditAction
+                  aria-label={`Edit ${singular}`}
+                  onClick={() => setEditing(true)}
+                />
+              ),
+            }
           : undefined
       }
     >

@@ -73,6 +73,7 @@ export default defineEntity({
       {
         key: "locationId",
         kind: "identifier",
+        label: "Location",
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true, detailOrder: 2 },
@@ -86,6 +87,7 @@ export default defineEntity({
         key: "plantingId",
         kind: "identifier",
         nullable: true,
+        label: "Planting",
         reference: { entity: "planting" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true, detailOrder: 3 },
