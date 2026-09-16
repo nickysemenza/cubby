@@ -441,6 +441,7 @@ describe("typed entity compiler", () => {
     expect(entity.fieldModel.sort).toEqual({
       fields: ["name", "related:example.count"],
       default: "name",
+      direction: "desc",
       computed: ["related:example.count"],
       groupable: ["name"],
     });
