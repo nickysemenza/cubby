@@ -1159,26 +1159,6 @@ const locationRosterPage = async (
 };
 
 /**
- * Breadcrumb-only roster — for filter picklists, which render a name and its
- * ancestry and nothing else. Skips the cover-image load entirely; the product
- * list pulls 500 of these on every options load and draws no thumbnails.
- */
-export const locationOptions = async (
-  db: Database,
-  filters: LocationRosterFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-): Promise<{ data: LocationOptionItemOut[]; count: number }> => {
-  const { data, count } = await locationRosterPage(
-    db,
-    filters,
-    sorts,
-    pagination,
-  );
-  return { data, count };
-};
-
-/**
  * Location typeahead for picker comboboxes — the roster plus each row's cover
  * photo, which is the other half of telling two same-named shelves apart.
  */

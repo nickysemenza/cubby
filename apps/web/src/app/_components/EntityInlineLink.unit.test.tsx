@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { EntityInlineLink } from "./EntityInlineLink";
+import { displayImageFromData, EntityInlineLink } from "./EntityInlineLink";
 
 const enrichedProduct = {
   id: "PRD-TEST",
@@ -26,106 +26,56 @@ function productLink() {
   return screen.getByRole("link", { name: "Test product" });
 }
 
-function inlineImage(link: HTMLElement): HTMLImageElement {
-  const image = link.querySelector("img");
-  if (!image) throw new Error("Expected an inline identity image.");
-  return image;
-}
-
-describe("EntityInlineLink display images", () => {
+describe("displayImageFromData", () => {
   it("derives the image from an established enriched read projection", () => {
-    render(
-      <EntityInlineLink
-        entity="product"
-        data={enrichedProduct}
-        displayImage={undefined}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
-    expect(inlineImage(productLink())).toHaveAttribute(
-      "src",
-      enrichedProduct.images[0]?.url,
-    );
-    expect(productLink()).toHaveAttribute("href", "/products/PRD-TEST");
+    expect(displayImageFromData(enrichedProduct)).toEqual({
+      url: enrichedProduct.images[0]?.url,
+    });
   });
 
   it("prefers a location's own photo over the cover of the SKU it is", () => {
-    render(
-      <EntityInlineLink
-        entity="location"
-        data={{
-          id: "LOC-BIN",
-          name: "Blue tote",
-          images: [{ url: "https://example.com/tote-in-place.jpg" }],
-          product: {
-            category: null,
-            coverImage: { url: "https://example.com/sku.jpg" },
-          },
-        }}
-        displayImage={undefined}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
     expect(
-      inlineImage(screen.getByRole("link", { name: "Blue tote" })),
-    ).toHaveAttribute("src", "https://example.com/tote-in-place.jpg");
+      displayImageFromData({
+        images: [{ url: "https://example.com/tote-in-place.jpg" }],
+        product: {
+          coverImage: { url: "https://example.com/sku.jpg" },
+        },
+      }),
+    ).toEqual({ url: "https://example.com/tote-in-place.jpg" });
   });
 
   it("falls back to the cover of the SKU a location is when it has no photo", () => {
-    render(
-      <EntityInlineLink
-        entity="location"
-        data={{
-          id: "LOC-BIN",
-          name: "Metal rack",
-          images: [],
-          product: {
-            category: null,
-            coverImage: { url: "https://example.com/rack.jpg" },
-          },
-        }}
-        displayImage={undefined}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
     expect(
-      inlineImage(screen.getByRole("link", { name: "Metal rack" })),
-    ).toHaveAttribute("src", "https://example.com/rack.jpg");
+      displayImageFromData({
+        images: [],
+        product: {
+          coverImage: { url: "https://example.com/rack.jpg" },
+        },
+      }),
+    ).toEqual({ url: "https://example.com/rack.jpg" });
   });
 
   it("never draws an attached PDF manual as a thumbnail", () => {
-    render(
-      <EntityInlineLink
-        entity="location"
-        data={{
-          id: "LOC-BIN",
-          name: "Workbench",
-          // Documents share the images relation on purpose, so the sniffer has
-          // to skip them rather than trust position.
-          images: [
-            {
-              url: "https://example.com/manual.pdf",
-              contentType: PDF_CONTENT_TYPE,
-            },
-            {
-              url: "https://example.com/bench.jpg",
-              contentType: "image/jpeg",
-            },
-          ],
-        }}
-        displayImage={undefined}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
+    // Documents share the images relation on purpose, so the sniffer has to
+    // skip them rather than trust position.
     expect(
-      inlineImage(screen.getByRole("link", { name: "Workbench" })),
-    ).toHaveAttribute("src", "https://example.com/bench.jpg");
+      displayImageFromData({
+        images: [
+          {
+            url: "https://example.com/manual.pdf",
+            contentType: PDF_CONTENT_TYPE,
+          },
+          {
+            url: "https://example.com/bench.jpg",
+            contentType: "image/jpeg",
+          },
+        ],
+      }),
+    ).toEqual({ url: "https://example.com/bench.jpg" });
   });
+});
 
+describe("EntityInlineLink display images", () => {
   it("suppresses its identity mark when adjacent media already supplies it", () => {
     render(
       <EntityInlineLink

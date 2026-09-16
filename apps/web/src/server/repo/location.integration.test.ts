@@ -2,6 +2,7 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { count, eq } from "drizzle-orm";
 import {
+  raceUniqueInsert,
   TEST_HOME_ID,
   TEST_HOME_SHORTCODE,
   withTestDb,
@@ -51,34 +52,23 @@ describe("findOrCreateLocationByName", () => {
     // no unique-violation 500, no duplicate.
     const name = "Garage";
 
-    let releaseWinner!: () => void;
-    const winnerCommitted = new Promise<void>((resolve) => {
-      releaseWinner = resolve;
+    const { winner: winnerId, loser: result } = await raceUniqueInsert(ctx, {
+      winner: (releaseSignal) =>
+        getDb(ctx.db).transaction(async (tx) => {
+          const [row] = await tx
+            .insert(location)
+            .values({
+              name,
+              type: "room",
+              shortcode: parseShortcodeFor("location", "LOC-RACE"),
+              parentId: TEST_HOME_ID,
+            })
+            .returning();
+          await releaseSignal; // hold the txn (and its lock) open
+          return row!.id;
+        }),
+      loser: () => findOrCreateLocationByName(ctx.db, name, null, "room"),
     });
-
-    let winnerId = "";
-    const winner = getDb(ctx.db).transaction(async (tx) => {
-      const [row] = await tx
-        .insert(location)
-        .values({
-          name,
-          type: "room",
-          shortcode: parseShortcodeFor("location", "LOC-RACE"),
-          parentId: TEST_HOME_ID,
-        })
-        .returning();
-      winnerId = row!.id;
-      await winnerCommitted; // hold the txn (and its lock) open
-    });
-
-    await new Promise((r) => setTimeout(r, 100));
-
-    const loser = findOrCreateLocationByName(ctx.db, name, null, "room");
-
-    await new Promise((r) => setTimeout(r, 100));
-    releaseWinner();
-
-    const [, result] = await Promise.all([winner, loser]);
 
     expect(result.created).toBe(false);
     expect(result.locationId).toEqual(winnerId);

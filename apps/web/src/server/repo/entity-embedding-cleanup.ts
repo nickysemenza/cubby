@@ -111,17 +111,6 @@ export async function softDeleteEntitySearchArtifactsTx(
     );
 }
 
-export async function getEntityEmbeddingDeletedAt(
-  db: Database | DrizzleTransaction,
-  id: string,
-): Promise<Date | null | undefined> {
-  const row = await unwrapDb(db).query.entityEmbedding.findFirst({
-    where: eq(entityEmbedding.id, id),
-    columns: { deletedAt: true },
-  });
-  return row?.deletedAt;
-}
-
 export async function getEntityEmbeddingDeletedAtForRef(
   db: Database | DrizzleTransaction,
   ref: SearchableEntityRef,

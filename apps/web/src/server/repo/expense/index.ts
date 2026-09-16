@@ -41,10 +41,8 @@ export {
 export {
   createExpense,
   deleteExpenses,
-  deleteExpensesWithPurchaseEffects,
   getExpenseByID,
   getExpenseByShortcode,
-  moveExpenses,
   setExpensesCostType,
   setExpensesTrade,
   updateExpense,

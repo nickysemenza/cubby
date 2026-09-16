@@ -2,10 +2,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type ImageShortcode,
   type PurchaseId,
@@ -37,14 +34,7 @@ import {
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  expense,
-  financialTransactionAllocation,
-  image,
-  purchase,
-  purchaseImage,
-  vendor,
-} from "~/server/db/schema";
+import { image, purchase, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -56,7 +46,6 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   rangeConditions,
-  unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { patchEntityRows } from "~/server/repo/entity-patch";
@@ -65,10 +54,9 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
-import { countByTarget, impact, present } from "~/server/repo/impact";
+import { countByTarget } from "~/server/repo/impact";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
-  assertDistinctMergeTargets,
   finalizeMerge,
   planSlotCollisions,
   repointEdge,
@@ -832,135 +820,4 @@ export const deleteVendors = async (
       deleted,
     };
   });
-};
-
-export const previewMergeVendors = async (
-  db: Database | DrizzleTransaction,
-  input: { keepId: VendorId; mergeIds: VendorId[] },
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  const { keepId } = input;
-  assertDistinctMergeTargets("vendor", keepId, input.mergeIds);
-  const losers = input.mergeIds;
-  if (losers.length === 0)
-    return { blockers: [], changes: [], sideEffects: [] };
-
-  const dbClient = unwrapDb(db);
-  const plan = await planVendorMerge(dbClient, keepId, losers);
-
-  const repointedByVendor: Record<string, number> = {};
-  for (const p of plan.repointed) {
-    repointedByVendor[p.vendorId] = (repointedByVendor[p.vendorId] ?? 0) + 1;
-  }
-  const foldedByVendor: Record<string, number> = {};
-  for (const f of plan.folded) {
-    foldedByVendor[f.vendorId] = (foldedByVendor[f.vendorId] ?? 0) + 1;
-  }
-
-  const changes = present([
-    impact({
-      disposition: VENDOR_MERGE_EDGE_POLICY["Purchase.vendorId"],
-      edgeKey: "Purchase.vendorId",
-      label: "purchases re-pointed to the keeper",
-      byTargetId: repointedByVendor,
-    }),
-    impact({
-      disposition: {
-        code: "fold-live-purchase-by-order",
-        effect: "move-dedupe",
-        description:
-          "A merged vendor's purchase that collides on the same order id as another purchase in the merge set is folded into the survivor instead of re-pointed.",
-      },
-      edgeKey: "Purchase.vendorId",
-      label: "purchases folded into a same-order survivor",
-      byTargetId: foldedByVendor,
-    }),
-  ]);
-
-  const foldedPurchaseIds = plan.folded.map((f) => f.deadId);
-  const byVendorFromPurchase = (counts: Record<string, number>) => {
-    const out: Record<string, number> = {};
-    for (const f of plan.folded) {
-      const n = counts[f.deadId];
-      if (n) out[f.vendorId] = (out[f.vendorId] ?? 0) + n;
-    }
-    return out;
-  };
-  const expenseMoveCounts = await countByTarget(
-    dbClient,
-    expense,
-    expense.purchaseId,
-    foldedPurchaseIds,
-  );
-  const imageMoveCounts = await countByTarget(
-    dbClient,
-    purchaseImage,
-    purchaseImage.purchaseId,
-    foldedPurchaseIds,
-  );
-  const transactionMoveCounts = await countByTarget(
-    dbClient,
-    financialTransactionAllocation,
-    financialTransactionAllocation.purchaseId,
-    foldedPurchaseIds,
-  );
-
-  const sideEffects = present([
-    impact({
-      disposition: {
-        code: "transitive-expense-repoint",
-        effect: "repoint",
-        description:
-          "Expenses on a folded purchase move onto the surviving purchase along with it.",
-      },
-      label: "expenses moved by a fold",
-      byTargetId: byVendorFromPurchase(expenseMoveCounts),
-    }),
-    impact({
-      disposition: {
-        code: "transitive-document-move-dedupe",
-        effect: "move-dedupe",
-        description:
-          "Documents on a folded purchase move onto the surviving purchase, skipping any already filed there.",
-      },
-      label: "documents moved by a fold",
-      byTargetId: byVendorFromPurchase(imageMoveCounts),
-    }),
-    impact({
-      disposition: {
-        code: "transitive-financial-transaction-repoint",
-        effect: "repoint",
-        description:
-          "Financial settlement entries on a folded purchase move onto the surviving purchase.",
-      },
-      label: "financial transactions moved by a fold",
-      byTargetId: byVendorFromPurchase(transactionMoveCounts),
-    }),
-    impact({
-      disposition: {
-        code: "soft-delete-source-vendor",
-        effect: "soft-delete",
-        description: "The merged-away vendor rows are soft-deleted.",
-      },
-      label: "source vendors removed",
-      byTargetId: Object.fromEntries(losers.map((id) => [id, 1])),
-    }),
-    Object.keys(plan.carried).length > 0
-      ? impact({
-          disposition: {
-            code: "carry-empty-vendor-fields",
-            effect: "preserve",
-            description:
-              "The keeper's empty website/notes fields are filled in from a source vendor being merged away.",
-          },
-          label: "keeper fields filled from a source",
-          byTargetId: { [keepId]: Object.keys(plan.carried).length },
-        })
-      : null,
-  ]);
-
-  return { blockers: [], changes, sideEffects };
 };
