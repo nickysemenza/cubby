@@ -9683,10 +9683,6 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/updatedTo`.
                 public var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/fromPartyId`.
-                public var fromPartyId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/toPartyId`.
-                public var toPartyId: [Swift.String]?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dateFrom`.
@@ -9695,6 +9691,10 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dateTo`.
                 public var dateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/fromPartyId`.
+                public var fromPartyId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/toPartyId`.
+                public var toPartyId: [Swift.String]?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/page`.
@@ -9725,10 +9725,10 @@ public enum Operations {
                 ///   - createdTo: Calendar day as "YYYY-MM-DD"
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - fromPartyId:
-                ///   - toPartyId:
                 ///   - dateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - dateTo: Calendar day as "YYYY-MM-DD"
+                ///   - fromPartyId:
+                ///   - toPartyId:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, amount, createdAt, updatedAt. Default: -date
@@ -9738,10 +9738,10 @@ public enum Operations {
                     createdTo: Swift.String? = nil,
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
-                    fromPartyId: [Swift.String]? = nil,
-                    toPartyId: [Swift.String]? = nil,
                     dateFrom: Swift.String? = nil,
                     dateTo: Swift.String? = nil,
+                    fromPartyId: [Swift.String]? = nil,
+                    toPartyId: [Swift.String]? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -9751,10 +9751,10 @@ public enum Operations {
                     self.createdTo = createdTo
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
-                    self.fromPartyId = fromPartyId
-                    self.toPartyId = toPartyId
                     self.dateFrom = dateFrom
                     self.dateTo = dateTo
+                    self.fromPartyId = fromPartyId
+                    self.toPartyId = toPartyId
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort

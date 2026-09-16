@@ -5057,20 +5057,6 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
-                    name: "fromPartyId",
-                    value: input.query.fromPartyId
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "toPartyId",
-                    value: input.query.toPartyId
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
                     name: "dateFrom",
                     value: input.query.dateFrom
                 )
@@ -5080,6 +5066,20 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "dateTo",
                     value: input.query.dateTo
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "fromPartyId",
+                    value: input.query.fromPartyId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "toPartyId",
+                    value: input.query.toPartyId
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
