@@ -1,5 +1,5 @@
 import type { CalendarDaySummary } from "@cubby/schemas/calendar";
-import { buildNutrition } from "@cubby/schemas/nutrition";
+import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,7 +8,7 @@ import { WeekSummaryGrid } from "./calendar-week-summary";
 const summary: CalendarDaySummary = {
   actualSpend: 1299,
   plannedSpend: 4200,
-  mealTotals: {
+  mealTotals: withMacros({
     cost: { status: "unavailable", reason: "no_data" },
     nutrition: buildNutrition((key) =>
       key === "kcal"
@@ -20,7 +20,7 @@ const summary: CalendarDaySummary = {
           }
         : { status: "unavailable", reason: "no_data" },
     ),
-  },
+  }),
   taskCount: 3,
   expenseCount: 1,
   mealCount: 2,

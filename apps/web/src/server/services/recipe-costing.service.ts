@@ -24,11 +24,13 @@ import {
   hasKnownEstimate,
   type MeasureEstimate,
   nutrientKey,
+  withMacros,
 } from "@cubby/schemas/nutrition";
 import type { RecipeGraphOut } from "@cubby/schemas/recipe";
 import type {
   RecipeCostingExplain,
   RecipeTotals,
+  StoredRecipeTotals,
 } from "@cubby/schemas/recipe-shared";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
 import { keyBy, uniq } from "es-toolkit";
@@ -110,8 +112,8 @@ const estimateDiffers = (
 };
 
 const totalsDiffer = (
-  a: RecipeTotals | null | undefined,
-  b: RecipeTotals,
+  a: StoredRecipeTotals | null | undefined,
+  b: StoredRecipeTotals,
 ): boolean =>
   !a ||
   estimateDiffers(a.cost, b.cost) ||
@@ -324,7 +326,7 @@ export class RecipeCostingService {
 
     return {
       persisted: {
-        totals: state.totals,
+        totals: state.totals ? withMacros(state.totals) : null,
         totalsComputedAt: state.totalsComputedAt,
         stale: state.totalsComputedAt == null,
       },

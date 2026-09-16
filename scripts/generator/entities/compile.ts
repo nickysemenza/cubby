@@ -24,6 +24,10 @@ import type {
   FilterDescriptor,
   RelationMutation,
 } from "./declarations.ts";
+import {
+  compilePresentation,
+  validateRelationSections,
+} from "./presentation.ts";
 
 const entityPorts = (
   ports: EntityDeclarationMetadata["extensions"]["ports"],
@@ -40,6 +44,7 @@ const entityPorts = (
       semanticText: ports.search.semanticText,
       dependentRefresh: ports.search.dependentRefresh,
     },
+    timeline: ports.timeline,
   };
 };
 
@@ -110,10 +115,6 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${fieldContext}.display.columnId must not be blank.`,
       );
-    if (!field.display.detailSection.trim())
-      throw new EntityDeclarationError(
-        `${fieldContext}.display.detailSection must not be blank.`,
-      );
     return {
       key,
       kind: field.kind,
@@ -130,7 +131,6 @@ const compileFieldModel = (
       display: {
         columnId: field.display.columnId,
         standard: field.display.standard,
-        detailSection: field.display.detailSection,
         width: field.display.width ?? null,
         format: field.display.format ?? null,
         mobile: field.display.mobile ?? null,
@@ -426,6 +426,28 @@ const validateStoredFilter = (
   return { columns, array };
 };
 
+/**
+ * The list-route query parameter a filter binds to: the filter field (or the
+ * column id) for a scalar, the `From/To` (date) or `Min/Max` (number) pair
+ * for a range. A declaration overrides it only where the hand-written filter
+ * schema diverges; the http-api stage checks every binding against the list
+ * route's parameters.
+ */
+const filterWire = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  range: FilterDescriptor["range"],
+  modelField: EntityField | undefined,
+): FilterDescriptor["wire"] => {
+  if (value.wire != null) return value.wire;
+  const name = value.field ?? value.columnId;
+  if (kind !== "range") return { kind: "param", name };
+  const rangeKind = range?.kind ?? inferredRangeKind(modelField) ?? "date";
+  return rangeKind === "date"
+    ? { kind: "range", from: `${name}From`, to: `${name}To` }
+    : { kind: "range", from: `${name}Min`, to: `${name}Max` };
+};
+
 const filterDescriptor = (
   value: RawFilterDescriptor,
   fields: readonly EntityField[],
@@ -446,6 +468,7 @@ const filterDescriptor = (
   const modelField = fields.find((field) => field.key === value.columnId);
   validateDerivedFilter(value, parsedKind, modelField, context);
   const stored = validateStoredFilter(value, parsedKind, storage, context);
+  const range = resolveFilterRange(value, parsedKind, modelField, context);
   return {
     columnId: value.columnId,
     field: value.field ?? null,
@@ -463,9 +486,10 @@ const filterDescriptor = (
     expandRef: value.expandRef ?? null,
     schemaRef: value.schemaRef ?? null,
     stored,
-    range: resolveFilterRange(value, parsedKind, modelField, context),
+    range,
     urlOnly: value.urlOnly ?? false,
     nullable: value.nullable ?? null,
+    wire: filterWire(value, parsedKind, range, modelField),
   };
 };
 
@@ -756,35 +780,41 @@ const validateTitleField = (
 };
 
 /**
- * Native resource verbs must name HTTP routes that exist: `httpResourcesFor`
- * derives list/get/create/update/delete from these same facts.
+ * `route.list: true` / `route.detail: true` generate the page over the
+ * generic renderers, which read the kernel's list/detail projections: the
+ * detail roster is every entity with create and update contracts, the list
+ * roster its browser-routed members. An entity outside the detail roster
+ * declares `detail: { query }` instead (image); one outside the list roster
+ * hand-writes its index route.
  */
-const compiledNative = (
-  declared: CompiledEntity["native"] | undefined,
-  facts: Pick<CompiledEntity, "route" | "contract" | "operationOwners">,
+const validateRouteRosters = (
+  route: EntityDeclarationMetadata["route"],
+  contract: CompiledEntity["contract"],
+  timeline: CompiledEntity["timeline"],
   context: string,
-): CompiledEntity["native"] => {
-  const native = declared ?? {};
-  if (
-    Object.keys(native).length > 0 &&
-    (facts.route === null || facts.contract === null)
-  )
+) => {
+  if (timeline !== null && contract === null)
     throw new EntityDeclarationError(
-      `${context}.native needs a routed entity with a contract: only HTTP resources can be native.`,
+      `${context}.capabilities.timeline needs a contract (the timeline is an HTTP resource verb).`,
     );
-  if (native.create !== undefined && facts.contract?.create === null)
+  if (route === null) return;
+  const inDetailRoster =
+    contract !== null && contract.create !== null && contract.update !== null;
+  if (route.detail === true && !inDetailRoster)
     throw new EntityDeclarationError(
-      `${context}.native.create requires a create contract.`,
+      `${context}.route.detail is true but the entity has no create+update contract; declare detail: { query } or null.`,
     );
-  if (native.update !== undefined && facts.contract?.update === null)
+  if (route.detail !== null && route.detail !== true && inDetailRoster)
     throw new EntityDeclarationError(
-      `${context}.native.update requires an update contract.`,
+      `${context}.route.detail.query is for entities outside the kernel detail roster; use detail: true.`,
     );
-  if (native.delete !== undefined && facts.operationOwners.delete !== "kernel")
+  // A generated index route needs rows to list: the kernel list read for a
+  // roster entity, or (outside the roster) a client-paged override module in
+  // `apps/web/src/entities/list-columns` over the entity's own projection.
+  if (route.list === true && contract === null)
     throw new EntityDeclarationError(
-      `${context}.native.delete requires a kernel-owned delete.`,
+      `${context}.route.list is true but the entity has no contract (nothing to list); declare list: null.`,
     );
-  return native;
 };
 
 /**
@@ -805,6 +835,28 @@ const validateRouteCreate = (
     );
   }
 };
+
+/** Names plus the declaration's `presentation` block with its defaults resolved. */
+const compiledInspector = (
+  declaration: EntityDeclarationMetadata,
+  fieldModel: EntityFieldModel,
+  ports: EntityPorts,
+  context: string,
+): CompiledEntity["inspector"] => ({
+  singular: declaration.names.singular,
+  plural: declaration.names.plural,
+  ...compilePresentation(
+    declaration.presentation,
+    {
+      fieldModel,
+      relations: declaration.relations,
+      capabilities: declaration.capabilities,
+      ports,
+      hasUpdate: declaration.fields?.update != null,
+    },
+    `${context}.presentation`,
+  ),
+});
 
 // One compiler pass keeps cross-field capability errors attached to the exact
 // entity declaration rather than losing context across partial validators.
@@ -844,11 +896,6 @@ export const compileEntity = (
     key,
     context,
   );
-  const inspector = {
-    singular: declaration.names.singular,
-    plural: declaration.names.plural,
-    ...declaration.presentation,
-  };
   const filters = declaration.filters;
   const filterAudit = filters.audit === undefined ? false : filters.audit;
   const filterSchema =
@@ -914,6 +961,7 @@ export const compileEntity = (
           },
           urlOnly: false,
           nullable: null,
+          wire: { kind: "range", from: "createdFrom", to: "createdTo" },
         },
         {
           columnId: "updatedAt",
@@ -943,6 +991,7 @@ export const compileEntity = (
           },
           urlOnly: false,
           nullable: null,
+          wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
         },
       ]
     : [];
@@ -961,6 +1010,8 @@ export const compileEntity = (
   }
   const route = declaration.route;
   validateRouteCreate(route, fieldModel, context);
+  const ports = entityPorts(declaration.extensions.ports);
+  const inspector = compiledInspector(declaration, fieldModel, ports, context);
   const shortcode = compiledShortcode(descriptor, context);
   booleanValue(
     required(descriptor, "auditable", `${context}.descriptor`),
@@ -1002,7 +1053,12 @@ export const compileEntity = (
       `${context} cannot declare a contract without a shortcode.`,
     );
   }
-  const ports = entityPorts(declaration.extensions.ports);
+  validateRouteRosters(
+    route,
+    contract,
+    declaration.capabilities.timeline,
+    context,
+  );
   const relationMutations = declaration.relations.flatMap(
     (relation): RelationMutation[] =>
       relation.mutation === undefined
@@ -1020,16 +1076,11 @@ export const compileEntity = (
           ],
   );
   const bulkUpdateFields = declaration.capabilities.bulkUpdate?.fields ?? null;
-  const native = compiledNative(
-    declaration.native,
-    { route, contract, operationOwners },
-    context,
-  );
   return {
     key,
     shortcode,
-    native,
     inspector,
+    timeline: declaration.capabilities.timeline,
     contract,
     descriptor,
     route,
@@ -1081,5 +1132,6 @@ export const compileEntityDeclarations = (
     throw new EntityDeclarationError("Entity declarations must not be empty.");
   const entities = declarations.map(compileEntity);
   validateEntityIdentities(entities);
+  validateRelationSections(entities);
   return entities;
 };

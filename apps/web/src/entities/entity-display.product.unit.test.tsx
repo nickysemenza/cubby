@@ -379,14 +379,14 @@ describe("product list display columns", () => {
     const byId = Object.fromEntries(
       buildProductColumnMeta().map((d) => [d.id, d]),
     );
-    // `usdaUnavailable` and `onHandUnits` declare no width/mobile at all —
-    // hidden by default in `productlist.tsx`'s `initialColumnVisibility`,
+    // `usdaUnavailable` declares no width/mobile at all — hidden by default
     // but still built (same shape as the task entity's
-    // `dueEndDate`/`sortOrder`).
+    // `dueEndDate`/`sortOrder`); `onHandUnits` is the mobile card's trailing
+    // value.
     expect(byId.usdaUnavailable?.className).toBeUndefined();
     expect(byId.usdaUnavailable?.mobile).toBeUndefined();
     expect(byId.onHandUnits?.className).toBeUndefined();
-    expect(byId.onHandUnits?.mobile).toBeUndefined();
+    expect(byId.onHandUnits?.mobile).toMatchObject({ slot: "trailing" });
   });
 
   it("renders the category override's own cell against the row", () => {

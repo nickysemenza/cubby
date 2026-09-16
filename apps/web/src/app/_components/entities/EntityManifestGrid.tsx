@@ -515,9 +515,9 @@ const nativeDomain = (domain: EntityPresentation["domain"]): string =>
  * What the native app can do with this entity, from
  * `entity-native-coverage.gen.ts` (emitted by the same script that writes
  * `EntityOperations.swift`). "HTTP exposes" is the web API's resource verbs
- * — what Swift's `httpActions` mirrors; "Native client" is the narrower set
- * the filtered OpenAPI client actually carries (create/update/delete are
- * opt-in via the entity declaration's `native` block).
+ * — what Swift's `httpActions` mirrors; "Native client" is the set the
+ * filtered OpenAPI client carries (every list/get/create/update/timeline
+ * verb; delete stays off it).
  */
 function NativeSection({ entity }: { entity: Entity }) {
   const metadata = entityInspectorMetadata[entity];

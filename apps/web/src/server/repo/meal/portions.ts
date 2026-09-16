@@ -17,7 +17,10 @@ import {
 } from "@cubby/schemas/meal";
 import type { MealKind } from "@cubby/schemas/meal-classification";
 import { type NutritionTotals } from "@cubby/schemas/nutrition";
-import type { RecipeTotals, RecipeYield } from "@cubby/schemas/recipe-shared";
+import type {
+  RecipeYield,
+  StoredRecipeTotals,
+} from "@cubby/schemas/recipe-shared";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -116,7 +119,7 @@ export const yieldBasisFor = (
 
 /** Recalculate a preparation from the current recipe totals on every read. */
 export const batchTotalsFor = (
-  totals: RecipeTotals | null,
+  totals: StoredRecipeTotals | null,
   totalsComputedAt: Date | null,
   scale: number,
 ): NutritionTotals => {

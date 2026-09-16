@@ -1,5 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { buildNutrition } from "@cubby/schemas/nutrition";
+import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
@@ -26,7 +26,7 @@ const meal = (title = "Dinner"): CalendarItem => ({
   mealKind: "cooked",
   recipeNames: ["Soup"],
   coverImageUrl: null,
-  mealTotals: {
+  mealTotals: withMacros({
     cost: {
       status: "complete",
       lower: 5,
@@ -43,7 +43,7 @@ const meal = (title = "Dinner"): CalendarItem => ({
           }
         : { status: "unavailable", reason: "no_data" },
     ),
-  },
+  }),
 });
 
 const task = (): CalendarItem => ({

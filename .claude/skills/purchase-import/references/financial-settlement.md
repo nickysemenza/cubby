@@ -46,11 +46,6 @@ as two rows.
 is exactly one allocation, NULL for a split. NULL there means "not exactly one
 purchase", never "unsettled" — read `allocations` for the general case.
 
-⚠️ **Superseded: the void-aggregate convention.** Splits used to be faked with
-one posted transaction per Purchase, plus the real combined line kept as `void`
-to hold the statement hash. Do not do this any more, and do not add new rows in
-that shape. It made the database assert card events that never occurred.
-
 ## Statement import
 
 Use `preview_financial_statement_import` for normalized client-side Monarch
@@ -155,8 +150,8 @@ Three traps, each found the hard way:
   is the write path for ordinary imports, where a few hundred rows is
   unremarkable; a backfill big enough that a model cannot carry it is a one-off
   migration script, not a reason to fork the write path permanently. Reconcile
-  afterwards either way with `apps/web/scripts/audit-statement-rows.ts` — a row
-  present in the ledger but absent from every export is the signature.
+  afterwards either way with `find_statement_row_drift` — a row present in the
+  ledger but absent from every export is the signature.
 
 ## Purchases and refunds
 

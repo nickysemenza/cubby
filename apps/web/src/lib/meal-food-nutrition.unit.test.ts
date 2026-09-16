@@ -1,5 +1,5 @@
 import { saveMealFoodInput } from "@cubby/schemas/meal";
-import { buildNutrition } from "@cubby/schemas/nutrition";
+import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -63,7 +63,7 @@ describe("food logging amounts", () => {
       { value: 2, unit: "servings" },
       {
         kind: "recipe",
-        batch: {
+        batch: withMacros({
           cost: {
             status: "complete",
             lower: 20,
@@ -80,7 +80,7 @@ describe("food logging amounts", () => {
                 }
               : { status: "unavailable", reason: "no_data" },
           ),
-        },
+        }),
         yieldBasis: {
           kind: "actual",
           lowerGrams: 800,
@@ -107,7 +107,7 @@ describe("food logging amounts", () => {
       { value: 100, unit: "g" },
       {
         kind: "recipe",
-        batch: {
+        batch: withMacros({
           cost: { status: "unavailable", reason: "no_data" },
           nutrition: buildNutrition((key) =>
             key === "kcal"
@@ -119,7 +119,7 @@ describe("food logging amounts", () => {
                 }
               : { status: "unavailable", reason: "no_data" },
           ),
-        },
+        }),
         yieldBasis: {
           kind: "recipe",
           lowerGrams: 800,
@@ -153,13 +153,13 @@ describe("food logging amounts", () => {
       { value: 1, unit: "mystery ladle" },
       {
         kind: "recipe",
-        batch: {
+        batch: withMacros({
           cost: { status: "unavailable", reason: "no_data" },
           nutrition: buildNutrition(() => ({
             status: "unavailable",
             reason: "no_data",
           })),
-        },
+        }),
         yieldBasis: {
           kind: "actual",
           lowerGrams: 800,

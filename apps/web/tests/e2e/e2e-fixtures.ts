@@ -1,3 +1,5 @@
+import "./build-constants";
+
 import { upsertCookbook } from "~/server/repo/cookbook";
 import {
   makeCookbookExtraction,

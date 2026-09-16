@@ -314,26 +314,4 @@ describe("financial transaction list display columns", () => {
       "Undeclared display renderer for financialTransaction.accountName",
     );
   });
-
-  it("rejects building without an override for a json-kind field (sourceRefs)", () => {
-    const helper = createCubbyColumnHelper<FinancialTransactionRow>();
-    expect(() =>
-      createEntityDisplayColumns(
-        "financialTransaction",
-        helper,
-        createCubbyColumnCollection((add) => {
-          add(helper.display({ id: "accountId", cell: () => null }));
-          add(helper.display({ id: "kind", cell: () => null }));
-          add(helper.display({ id: "status", cell: () => null }));
-          add(helper.display({ id: "amount", cell: () => null }));
-          add(helper.display({ id: "purchaseId", cell: () => null }));
-          add(helper.display({ id: "postedDate", cell: () => null }));
-          add(helper.display({ id: "possibleVendor", cell: () => null }));
-          // "source" (sourceRefs) override intentionally omitted.
-        }),
-      ),
-    ).toThrow(
-      "Display field financialTransaction.sourceRefs needs a specialized column",
-    );
-  });
 });

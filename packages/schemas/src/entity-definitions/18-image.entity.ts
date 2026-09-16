@@ -22,14 +22,10 @@ export default defineEntity({
   names: { singular: "Image", plural: "Images" },
   route: {
     basePath: "images",
-    list: {
-      component: { module: "~/app/images/imagelist", export: "ImageList" },
-    },
+    // The image list is not a kernel list (no create contract), so its index
+    // route stays hand-written; the detail reads its own query.
+    list: null,
     detail: {
-      component: {
-        module: "~/app/images/image-detail-page",
-        export: "ImageDetailPage",
-      },
       query: {
         module: "~/entities/image.functions",
         export: "imageDetailQuery",
@@ -48,6 +44,35 @@ export default defineEntity({
         "Add photos to attach them to recipes, products, and places.",
     },
     icons: { lucide: "Image", sfSymbol: "photo" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "filename",
+            "url",
+            "key",
+            "size",
+            "contentType",
+            "status",
+            "width",
+            "height",
+            "detectedContentType",
+            "sha256",
+            "renderStatus",
+            "storageStatus",
+            "verifiedAt",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+        { kind: "slot", id: "associations", title: "Used by" },
+      ],
+    },
+    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -74,7 +99,7 @@ export default defineEntity({
       {
         key: "url",
         kind: "text",
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.url(),
           create: null,
@@ -84,7 +109,7 @@ export default defineEntity({
       {
         key: "key",
         kind: "text",
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.string(),
           create: null,
@@ -125,7 +150,7 @@ export default defineEntity({
         key: "width",
         kind: "number",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.number().int().positive().nullable(),
           create: null,
@@ -136,7 +161,7 @@ export default defineEntity({
         key: "height",
         kind: "number",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.number().int().positive().nullable(),
           create: null,
@@ -170,7 +195,7 @@ export default defineEntity({
         key: "sha256",
         kind: "text",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: null,

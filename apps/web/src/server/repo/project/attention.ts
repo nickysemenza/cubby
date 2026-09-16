@@ -266,13 +266,12 @@ export async function computeAttentionItems(
   // activity in the last 30 days. (Note/image activity isn't included — no
   // cheap existing "last activity" timestamp for those; see module doc.)
   //
-  // Task activity is `max(dueEndDate ?? dueDate)`, NOT `max(updatedAt)`.
-  // Measured on production: 1,111 of 1,116 done tasks were Notion-imported in
-  // one window, so `updatedAt` spans only 2 distinct months (2026-07-18 →
-  // 2026-08-12) while `dueDate` spans 32 months (2023-10 → 2026-08) — the real
-  // work timeline. Zero rows have `dueDate` equal to `updatedAt`'s day; 1,110
-  // are off by 30+ days. `max(updatedAt)` therefore dates every project to the
-  // import, not the work, and can't tell a live project from a dormant one.
+  // Task activity is `max(dueEndDate ?? dueDate)`, NOT `max(updatedAt)`. In
+  // production almost all done tasks were bulk-imported in one window, so
+  // `updatedAt` clusters tightly around the import while `dueDate` spans the
+  // real work timeline, and the two rarely land on the same day.
+  // `max(updatedAt)` therefore dates every project to the import, not the
+  // work, and can't tell a live project from a dormant one.
   // `dueDate` also does double duty as a *forward* signal: a task due next
   // month means the project has scheduled live work, so it correctly reads as
   // "not stalled" even before that task is touched again.

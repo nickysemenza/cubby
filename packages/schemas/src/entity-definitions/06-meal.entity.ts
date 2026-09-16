@@ -15,17 +15,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "meal",
   names: { singular: "Meal", plural: "Meals" },
-  route: {
-    basePath: "meals",
-    create: "dialog",
-    list: null,
-    detail: {
-      component: {
-        module: "~/app/meals/meal-detail-page",
-        export: "MealDetailPage",
-      },
-    },
-  },
+  route: { basePath: "meals", create: "dialog", list: true, detail: true },
   table: "Meal",
   identifiers: { brand: "MealId", shortcode: "MEL-" },
   presentation: {
@@ -39,6 +29,48 @@ export default defineEntity({
       actionLabel: "Plan a Meal",
     },
     icons: { lucide: "CalendarDays", sfSymbol: "fork.knife.circle" },
+    detail: {
+      hero: { images: true },
+      sections: [
+        { kind: "slot", id: "composition", title: "Recipes" },
+        { kind: "slot", id: "nutrition", title: "Nutrition" },
+        {
+          kind: "fields",
+          id: "meal-details",
+          title: "Meal details",
+          placement: "supporting",
+          fields: [
+            "date",
+            "name",
+            "mealType",
+            "mealKind",
+            "recipeNames",
+            "sortOrder",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+      ],
+    },
+    list: {
+      views: [
+        {
+          kind: "slot",
+          id: "calendar",
+          label: "Calendar",
+          searchKeys: ["period", "week", "date"],
+        },
+        {
+          kind: "slot",
+          id: "nutrition",
+          label: "Nutrition",
+          searchKeys: ["date"],
+        },
+        "table",
+      ],
+      actions: ["delete"],
+      links: [{ label: "Shopping list", path: "/meals/shopping-list" }],
+    },
   },
   model: {
     fields: [
@@ -122,7 +154,7 @@ export default defineEntity({
         key: "recipes",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true },
+        // Rendered by the `composition` detail slot.
         validation: {
           read: z.array(mealRecipeOut),
           create: z.array(mealRecipeInput).optional(),
@@ -186,12 +218,21 @@ export default defineEntity({
       {
         key: "totals",
         kind: "json",
-        display: { detail: true },
+        // Rendered by the `nutrition` detail slot.
         validation: {
           read: mealTotals,
           create: null,
           update: null,
         },
+      },
+      {
+        // The names of `recipes[].recipe`, so a generic row or facts list can
+        // show what the meal is without decoding the composition.
+        key: "recipeNames",
+        kind: "text-array",
+        label: "Recipes",
+        display: { detail: true },
+        validation: { read: z.array(z.string()), create: null, update: null },
       },
       {
         key: "createdAt",
@@ -268,6 +309,8 @@ export default defineEntity({
           "mealKind",
           "sortOrder",
           "pendingImageIds",
+          "removeImageIds",
+          "imageOrder",
         ],
         calendar: ["date", "name", "mealType", "mealKind"],
       },
@@ -285,6 +328,7 @@ export default defineEntity({
       "totals",
       "images",
       "displayName",
+      "recipeNames",
       "createdAt",
       "updatedAt",
     ],
@@ -375,6 +419,7 @@ export default defineEntity({
         columnId: "recipeId",
         kind: "idMulti",
         placeholder: "Filter by related recipe id...",
+        brandRef: { entity: "recipe", kind: "id" },
         urlOnly: true,
       },
       {

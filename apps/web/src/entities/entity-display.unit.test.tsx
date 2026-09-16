@@ -9,8 +9,13 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnDef,
 } from "~/app/_components/data-table/table-features";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { createEntityDisplayColumns, EntityBasicInfo } from "./entity-display";
+import {
+  createEntityDisplayColumns,
+  EntityBasicInfo,
+  entitySectionFields,
+} from "./entity-display";
 
 /**
  * Narrows a column's `cell` to a callable renderer taking only `{ row }` —
@@ -42,7 +47,7 @@ describe("declared entity displays", () => {
     render(
       <EntityBasicInfo
         entity="project"
-        section="resources"
+        fields={entitySectionFields("project", "resources")}
         record={{
           name: "Fixture project",
           googleDriveFolderUrl: "https://example.com/folder",
@@ -61,7 +66,7 @@ describe("declared entity displays", () => {
       render(
         <EntityBasicInfo
           entity="project"
-          section="resources"
+          fields={entitySectionFields("project", "resources")}
           record={{ name: "Fixture project" }}
           overrides={{ name: (record) => ({ value: record.name }) }}
         />,
@@ -70,6 +75,9 @@ describe("declared entity displays", () => {
   });
 
   it("keeps computed facts next to their declared owner and permits value-dependent labels", () => {
+    // `kind` has a list filter descriptor, so the fact row carries a cohort
+    // link and needs the router the harness provides.
+    const harness = createBrowserTestHarness();
     render(
       <EntityBasicInfo
         entity="ledgerParty"
@@ -81,6 +89,7 @@ describe("declared entity displays", () => {
           kind: [{ label: "Reference", value: "Computed reference" }],
         }}
       />,
+      { wrapper: harness.wrapper },
     );
     const type = screen.getByText("Guest type");
     const reference = screen.getByText("Reference");
@@ -95,6 +104,7 @@ describe("declared entity displays", () => {
     ).not.toBe(0);
     expect(screen.getByText("Visitor")).toBeVisible();
     expect(screen.getByText("Computed reference")).toBeVisible();
+    harness.dispose();
   });
   it("rejects computed facts anchored to absent detail fields", () => {
     expect(() =>
@@ -177,7 +187,9 @@ describe("declared entity displays", () => {
         record={{ name: "Vendor fixture", purchaseCount: 0, spend: 0 }}
       />,
     );
-    expect(screen.getAllByText("0")).toHaveLength(2);
+    // `spend` declares `format: signedCurrency`, which the detail honours.
+    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByText("$0.00")).toBeInTheDocument();
   });
 
   it.each([undefined, "Old local label"])(
@@ -236,13 +248,6 @@ describe("declared entity displays", () => {
     expect(ids).not.toContain("name");
     expect(ids).not.toContain("logo");
     expect(ids).toContain("notes");
-  });
-
-  it("requires specialized columns for relations instead of exposing raw ids", () => {
-    const helper = createCubbyColumnHelper<{ fromPartyId: string }>();
-    expect(() => createEntityDisplayColumns("ledgerTransfer", helper)).toThrow(
-      "needs a specialized column",
-    );
   });
 
   it("preserves declared legacy column ids for specialized computed values", () => {

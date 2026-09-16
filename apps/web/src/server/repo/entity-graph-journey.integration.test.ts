@@ -143,7 +143,9 @@ describe("entity graph cross-entity journey", () => {
 
     await follow(
       { entityType: "cookbook", entityId: cookbook.output.id },
-      "inverse:recipe.cookbook",
+      // Declared on the cookbook for its TOC section, so the derived
+      // `inverse:recipe.cookbook` branch is superseded by this key.
+      "recipes",
       { entityType: "recipe", entityId: recipe.shortcode },
       {
         source: { entityType: "recipe", entityId: recipe.shortcode },
@@ -158,7 +160,7 @@ describe("entity graph cross-entity journey", () => {
     );
     await follow(
       { entityType: "ingredient", entityId: ingredient.id },
-      "inverse:product.ingredient",
+      "products",
       { entityType: "product", entityId: product.id },
       {
         source: { entityType: "product", entityId: product.id },
@@ -166,20 +168,22 @@ describe("entity graph cross-entity journey", () => {
         relationshipKey: "ingredient",
       },
     );
+    // The side holding the foreign key owns the arrow: both reads share the
+    // inventory → product edge, whichever entity declared its relation first.
     const fromProduct = await follow(
       { entityType: "product", entityId: product.id },
       "inventory",
       { entityType: "inventory", entityId: inventory.id },
+      {
+        source: { entityType: "inventory", entityId: inventory.id },
+        target: { entityType: "product", entityId: product.id },
+        relationshipKey: "product",
+      },
     );
     const fromInventory = await follow(
       { entityType: "inventory", entityId: inventory.id },
       "product",
       { entityType: "product", entityId: product.id },
-      {
-        source: { entityType: "product", entityId: product.id },
-        target: { entityType: "inventory", entityId: inventory.id },
-        relationshipKey: "inventory",
-      },
     );
     expect(fromProduct.edges).toHaveLength(1);
     expect(fromInventory.edges).toHaveLength(1);
@@ -197,6 +201,11 @@ describe("entity graph cross-entity journey", () => {
       { entityType: "purchase", entityId: purchase.output.id },
       "expenses",
       { entityType: "expense", entityId: expense.output.id },
+      {
+        source: { entityType: "expense", entityId: expense.output.id },
+        target: { entityType: "purchase", entityId: purchase.output.id },
+        relationshipKey: "purchase",
+      },
     );
 
     const explored = await getEntityGraphExplore(ctx.db, {
@@ -224,7 +233,7 @@ describe("entity graph cross-entity journey", () => {
     });
   });
 
-  it("keeps opposite self-referential edges distinct while inverse expansion preserves their identity", async () => {
+  it("keeps opposite self-referential edges distinct while the declared reverse relation preserves their identity", async () => {
     const first = await createLocation(
       ctx.db,
       makeLocationInput({ name: "First cyclic location" }),
@@ -253,7 +262,7 @@ describe("entity graph cross-entity journey", () => {
     });
     const inverseOfSecond = await getEntityGraph(ctx.db, {
       roots: [{ entityType: "location", entityId: second.id }],
-      relationshipKeys: ["inverse:location.parent"],
+      relationshipKeys: ["children"],
     });
 
     const firstEdge = firstParent.edges[0];
@@ -274,7 +283,7 @@ describe("entity graph cross-entity journey", () => {
     expect(inverseOfSecond.branches).toContainEqual(
       expect.objectContaining({
         root: { entityType: "location", entityId: second.id },
-        relationshipKey: "inverse:location.parent",
+        relationshipKey: "children",
         items: [
           expect.objectContaining({
             entityType: "location",

@@ -102,7 +102,6 @@ type ImageHandlers = Pick<
   ReturnType<typeof useImageState>,
   | "handlePendingImagesChange"
   | "handleRemovedImagesChange"
-  | "handleExistingImagesReorder"
   | "handlePendingDocumentsChange"
   | "handleRemovedDocumentsChange"
 >;
@@ -718,7 +717,6 @@ function ProductMediaFields<TFieldValues extends ProductFormFieldValues>({
         onImagesChange={imageHandlers.handlePendingImagesChange}
         existingImages={existingImages}
         onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
-        onExistingImagesReorder={imageHandlers.handleExistingImagesReorder}
       />
       {/* Unconditional: the button disables itself and says why. Gating it
           here is what made the affordance vanish, so nobody learned that a

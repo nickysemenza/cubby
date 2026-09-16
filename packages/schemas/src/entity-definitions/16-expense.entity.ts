@@ -27,20 +27,9 @@ import { z } from "zod";
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
-  route: {
-    basePath: "expenses",
-    create: "dialog",
-    list: null,
-    detail: {
-      component: {
-        module: "~/app/expenses/expense-detail",
-        export: "ExpenseDetail",
-      },
-    },
-  },
+  route: { basePath: "expenses", create: "dialog", list: true, detail: true },
   table: "Expense",
   identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
-  native: { update: "Accept expense project recommendation" },
   presentation: {
     titleField: "name",
     domain: "finance",
@@ -52,6 +41,63 @@ export default defineEntity({
       actionLabel: "New Expense",
     },
     icons: { lucide: "ReceiptText", sfSymbol: "dollarsign.circle" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          fields: [
+            "name",
+            "cost",
+            "date",
+            "lineKind",
+            "costType",
+            "trade",
+            "future",
+            "url",
+            "notes",
+            "vendor",
+            "orderId",
+            "projectId",
+            "productId",
+            "lineBasis",
+            "productQuantity",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "purchase",
+          title: "Purchase",
+          placement: "supporting",
+          fields: ["purchaseId"],
+        },
+        {
+          kind: "slot",
+          id: "settlement",
+          title: "Settlement",
+          placement: "supporting",
+        },
+      ],
+    },
+    list: {
+      views: [
+        "table",
+        {
+          kind: "slot",
+          id: "analytics",
+          label: "Analytics",
+          searchKeys: [
+            "analyzeRows",
+            "analyzeColumns",
+            "analyzeMetric",
+            "analyzeCompare",
+            "analyzeShow",
+          ],
+        },
+      ],
+      actions: ["setCostType", "setTrade", "moveToProject", "delete"],
+    },
   },
   model: {
     fields: [
@@ -293,7 +339,12 @@ export default defineEntity({
         label: "Purchase",
         reference: { entity: "purchase" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, columnId: "vendor" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 160,
+          columnId: "vendor",
+        },
         validation: {
           read: purchaseShortcode.nullable(),
           create: purchaseShortcode.nullable().default(null),
@@ -962,6 +1013,7 @@ export default defineEntity({
         columnId: "financialTransactionId",
         kind: "idMulti",
         placeholder: "Filter by related purchase transactions id...",
+        brandRef: { entity: "financialTransaction", kind: "id" },
         urlOnly: true,
       },
       {

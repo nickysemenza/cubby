@@ -97,6 +97,7 @@ import {
   lockAndValidateForDelete,
   mapImages,
   notDeleted,
+  shortcodeSetCondition,
   presenceCondition,
   rangeConditions,
   relations,
@@ -841,6 +842,15 @@ export const buildProductWhere = async (
       filters.imagePresenceFilter,
       productIdsWithImages,
     ),
+    filters.kitId === undefined
+      ? undefined
+      : sql`EXISTS (
+          SELECT 1
+          FROM "ProductComponent" kit_pc
+          JOIN "Product" kit ON kit."id" = kit_pc."parentProductId" AND kit."deletedAt" IS NULL
+          WHERE kit_pc."componentProductId" = ${product.id}
+            AND kit_pc."deletedAt" IS NULL
+            AND ${shortcodeSetCondition(sql`kit."shortcode"`, filters.kitId)})`,
     idSetPresence(
       product.id,
       filters.unitMappingPresenceFilter,

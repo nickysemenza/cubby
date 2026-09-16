@@ -17,6 +17,7 @@
     "./entity-definitions/definition": "./src/entity-definitions/definition.ts",
     "./entity-manifest": "./src/entity-manifest.ts",
     "./entity-summary": "./src/generated/entity-summary.gen.ts",
+    "./entity-timeline": "./src/entity-timeline.ts",
     "./entity-sort": "./src/generated/entity-sort.gen.ts",
     "./entity-edit-intents": "./src/generated/entity-edit-intents.gen.ts",
     "./entity-field-schema-maps": "./src/generated/entity-field-schema-maps.gen.ts",

@@ -26,5 +26,19 @@
     "matchTerms": [
       "sample"
     ]
+  },
+  {
+    "id": "WDG-2345",
+    "entityType": "widget",
+    "title": "Sample Widget",
+    "subtitle": null,
+    "typeHint": null,
+    "imageUrl": null,
+    "matchKind": "fuzzy",
+    "matchField": "title",
+    "matchReason": "Title resembles \"sample\"",
+    "matchTerms": [
+      "sample"
+    ]
   }
 ]

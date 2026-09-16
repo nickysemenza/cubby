@@ -108,8 +108,8 @@ export const plantingEntityAdapter = defineEntityAdapter({
   repository: {
     get: async (ctx, shortcode) =>
       getPlanting(ctx.db, await plantings.one(ctx.db, shortcode)),
-    list: (ctx, _filters, sorts, pagination) =>
-      plantingList(ctx.readDb, pagination, sorts),
+    list: (ctx, filters, sorts, pagination) =>
+      plantingList(ctx.readDb, filters, pagination, sorts),
     create: async (ctx, data) => {
       const output = await createPlanting(ctx.db, data, ctx.actorContext);
       return { output, entityId: await plantings.one(ctx.db, output.id) };
@@ -162,8 +162,8 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
   repository: {
     get: async (ctx, shortcode) =>
       getGardenEntry(ctx.db, await entries.one(ctx.db, shortcode)),
-    list: (ctx, _filters, sorts, pagination) =>
-      gardenEntryList(ctx.readDb, pagination, sorts),
+    list: (ctx, filters, sorts, pagination) =>
+      gardenEntryList(ctx.readDb, filters, pagination, sorts),
     create: async (ctx, data) => {
       if (data.kind === "move") {
         throw createAppError("CONSTRAINT_VIOLATION", MOVE_ENTRY_MESSAGE);

@@ -1,10 +1,27 @@
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  isSlotListView,
+  listViewId,
+} from "@cubby/schemas/entity-definitions/definition";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, notFound, useParams } from "@tanstack/react-router";
+import { CalendarClock, type LucideIcon, Rows3, Table2 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
+import { z } from "zod";
 
+import {
+  GenericEntityDetail,
+  type GenericDetailEntity,
+} from "~/app/_components/entity-detail/generic-entity-detail";
+import {
+  GenericEntityList,
+  type GenericEntityListProps,
+  resolveListView,
+  useListSearch,
+} from "~/app/_components/entity-list/generic-entity-list";
 import type { PageLayout } from "~/components/layout/page-wrapper";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -14,7 +31,9 @@ import {
   EmptyDescription,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities } from "~/entities/entities";
+import { readRecordField } from "~/entities/entity-references";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 
 /**
@@ -50,40 +69,94 @@ import { useDetailTitle } from "~/hooks/useDocumentTitle";
 /* List pages                                                                  */
 /* -------------------------------------------------------------------------- */
 
-interface ListPageOptions {
-  title: string;
-  /** The list body, rendered inside the standard workbench page shell. */
-  list: ComponentType;
-  /** Only needed where the route path doesn't name the entity. */
-  entity?: Entity;
-  layout?: PageLayout;
+interface EntityListPageOptions {
+  /** The entity whose manifest (`entitySummary[entity].list`) drives the page. */
+  entity: BrowserRoutedEntity;
   /**
-   * Header actions. A thunk rather than a `ReactNode` so nothing in it — a
-   * capture-request builder, an icon module — runs at module load.
+   * The route's own trigger beside the manifest's header links (the create
+   * dialog, an upload dialog). A thunk so nothing in it — a capture-request
+   * builder, an icon module — runs at module load.
    */
   actions?: () => ReactNode;
-  /**
-   * A `ViewSwitcher` or similar, rendered in the workbench header's first
-   * tier. A thunk for the same reason as `actions`: it closes over that
-   * route's own `Route.useSearch()`/`useNavigate()`, so it has to be called
-   * during this shell's render rather than built at module load.
-   */
-  workbenchControls?: () => ReactNode;
-  /**
-   * Passed straight through to `Page`. A thunk because the routes that need
-   * it derive it from the same live view state as `workbenchControls`.
-   */
-  bodyGutter?: () => "none" | "standard";
+  /** Test seam, forwarded to the generic list. */
+  operations?: GenericEntityListProps["operations"];
+}
+
+const VIEW_ICONS = {
+  table: Table2,
+  shelf: Rows3,
+  timeline: CalendarClock,
+} satisfies Record<"table" | "shelf" | "timeline", LucideIcon>;
+
+/** The segmented view control, rendered only when the manifest declares more than one view. */
+function ListViewSwitcher({ entity }: { entity: BrowserRoutedEntity }) {
+  const { search, navigate } = useListSearch();
+  const { views, view } = resolveListView(entity, search);
+  if (views.length < 2) return null;
+  const options = views.map((candidate) => ({
+    value: listViewId(candidate),
+    label: isSlotListView(candidate)
+      ? candidate.label
+      : candidate.slice(0, 1).toUpperCase() + candidate.slice(1),
+    icon: isSlotListView(candidate) ? undefined : VIEW_ICONS[candidate],
+  }));
+  const defaultView = listViewId(views[0] ?? "table");
+  return (
+    <ViewSwitcher
+      ariaLabel={`${entities[entity].pluralLabel} view`}
+      options={options}
+      value={listViewId(view)}
+      compactOnMobile
+      // Merge, don't replace: filter params survive a renderer switch and
+      // stay shareable in the URL; the default view is the bare URL.
+      onValueChange={(next) =>
+        navigate({ view: next === defaultView ? undefined : next })
+      }
+    />
+  );
+}
+
+/** A table sits flush to the viewport edge; every other renderer wants the gutter. */
+function useListBodyGutter(entity: BrowserRoutedEntity): "none" | "standard" {
+  const { search } = useListSearch();
+  return resolveListView(entity, search).view === "table" ? "none" : "standard";
 }
 
 /**
- * The standard `variant="list" listChrome="workbench"` page body for an
- * entity list. Same shell as {@link listChromePage}; this narrower signature
- * exists so entity-list routes can't accidentally pass chrome the standard
- * lists never use.
+ * The generated index routes' page: title, header links, view switcher and
+ * body gutter derive from the entity's manifest; the body is the generic
+ * list. `actions` adds the route's own trigger beside the links.
  */
-export function listPage({ list, ...options }: ListPageOptions) {
-  return listChromePage({ ...options, page: list });
+export function listPage({
+  entity,
+  actions,
+  operations,
+}: EntityListPageOptions) {
+  const { singular, plural, list } = entitySummary[entity];
+  return listChromePage({
+    entity,
+    title: plural ?? singular,
+    page: () => <GenericEntityList entity={entity} operations={operations} />,
+    workbenchControls: () => <ListViewSwitcher entity={entity} />,
+    bodyGutter: function useBodyGutter() {
+      return useListBodyGutter(entity);
+    },
+    actions: () => (
+      <>
+        {list.links.map((link) => (
+          <Button
+            key={link.path}
+            variant="outline"
+            render={<Link to={link.path} />}
+            nativeButton={false}
+          >
+            {link.label}
+          </Button>
+        ))}
+        {actions?.()}
+      </>
+    ),
+  });
 }
 
 interface ListChromeOptions {
@@ -183,6 +256,8 @@ type DetailRecord<TQuery extends DetailQueryFactory> = NonNullable<
 >;
 
 interface DetailPageOptions<TQuery extends DetailQueryFactory> {
+  /** The entity the route serves; the generated routes name it. */
+  entity?: BrowserRoutedEntity;
   /**
    * The record's query — the same one the route's loader prefetches, so this
    * suspense read is always a cache hit.
@@ -193,17 +268,41 @@ interface DetailPageOptions<TQuery extends DetailQueryFactory> {
    * context-sensitive callback contributes no inference candidate, so `TQuery`
    * has to be fixed by the property above before this one is checked — order
    * it first and `data` degrades to the constraint's `unknown`.
+   *
+   * Omitted by the generated routes: with `entity` set, the body is the
+   * generic detail page rendered from the manifest.
    */
-  render: (data: DetailRecord<TQuery>, shortcode: string) => ReactNode;
-  /** Document title for the loaded record; the shortcode is the fallback. */
-  title: (data: DetailRecord<TQuery>) => string | null | undefined;
+  render?: (data: DetailRecord<TQuery>, shortcode: string) => ReactNode;
+  /**
+   * Document title for the loaded record; the shortcode is the fallback.
+   * Omitted by the generated routes: `entity`'s `titleField` is read.
+   */
+  title?: (data: DetailRecord<TQuery>) => string | null | undefined;
 }
+
+const recordTitle = z.string().nullish();
 
 /** The `$shortcode` detail body: suspense-read the loader's record, render it. */
 export function detailPage<TQuery extends DetailQueryFactory>({
+  entity,
   query,
-  render,
-  title,
+  render = (data, shortcode) => {
+    if (entity === undefined)
+      throw new Error("detailPage needs `render` or `entity`");
+    // SAFETY: a generated route pairs `entity` with that entity's own detail
+    // query, so the loaded record is the entity's detail shape.
+    return (
+      <GenericEntityDetail
+        key={shortcode}
+        entity={entity as GenericDetailEntity}
+        record={data as never}
+      />
+    );
+  },
+  title = (data) =>
+    entity === undefined
+      ? undefined
+      : readRecordField(data, entitySummary[entity].titleField, recordTitle),
 }: DetailPageOptions<TQuery>) {
   return function EntityDetailPage() {
     // `useParams({ strict: false })` because this component is built before any

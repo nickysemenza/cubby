@@ -16,13 +16,13 @@ import { renderFilterArtifacts } from "./entities/render/filters.ts";
 import {
   entityOutputsFor,
   httpResourcesFor,
-  nativeResourceOperationsFor,
   renderEntityArtifacts,
 } from "./entities/render/index.ts";
 import { renderKernelBindingsArtifacts } from "./entities/render/kernel-bindings.ts";
 import { renderRelationArtifacts } from "./entities/render/relations.ts";
 import { missingBrowserRouteFiles } from "./entities/render/routes.ts";
 import { renderSearchArtifacts } from "./entities/render/search.ts";
+import { renderTimelineArtifacts } from "./entities/render/entity-timelines.ts";
 import { renderHttpApiArtifacts } from "./http-api/openapi.ts";
 import { renderStartOperationArtifacts } from "./start-operations/render.ts";
 
@@ -68,6 +68,7 @@ const main = async () => {
     ...renderKernelBindingsArtifacts(entities),
     ...renderFilterArtifacts(entities),
     ...renderSearchArtifacts(entities),
+    ...renderTimelineArtifacts(entities),
     ...renderBrowserRouteArtifacts(entities),
   ]);
   const missingRoutes = missingBrowserRouteFiles(entities);
@@ -80,17 +81,12 @@ const main = async () => {
   const resources = httpResourcesFor(entities);
   const startOperations = await renderStartOperationArtifacts(resources);
   await settle(startOperations.artifacts);
-  const nativeOperations = [
-    ...new Set([
-      ...nativeResourceOperationsFor(entities),
-      ...startOperations.nativeOperations,
-    ]),
-  ].sort((a, b) => a.localeCompare(b));
   await settle(
     await renderHttpApiArtifacts(
       resources,
-      nativeOperations,
+      startOperations.nativeOperations,
       entityOutputsFor(entities),
+      entities,
     ),
   );
 

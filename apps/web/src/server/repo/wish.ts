@@ -211,12 +211,11 @@ export const buildWishWhere = async (
     : undefined;
   // Resolved to uuids up front, same idiom as `expense/lookup.ts`'s
   // `toUuids`: matching the raw shortcode STRING against `p.shortcode`
-  // (the previous shape here) compares byte-for-byte, so a lowercase code
-  // silently matched nothing instead of being canonicalized — the #591 bug
-  // class, caught by filter-application.integration.test.ts's generic guard.
-  // `resolveLiveShortcodes` also means an unknown/malformed/soft-deleted code
-  // resolves to nothing rather than throwing, matching every other filter
-  // here.
+  // compares byte-for-byte, so a lowercase code would silently match nothing
+  // instead of being canonicalized — the #591 bug class, guarded generically
+  // by `shortcode.integration.test.ts`. `resolveLiveShortcodes` also means an
+  // unknown/malformed/soft-deleted code resolves to nothing rather than
+  // throwing, matching every other filter here.
   const candidateProductUuids = candidateProductIds
     ? [
         ...(
@@ -308,8 +307,14 @@ export const wishList = async (
       .where(where),
   ]);
   const hydrated = await hydrateWishes(db, rows);
+  // Display images key on the row uuid; hydrated rows already carry the
+  // public shortcode as `id`, so pair each raw row with its output.
+  const paired = rows.map((row, index) => ({
+    id: row.id,
+    out: hydrated[index]!,
+  }));
   return {
-    data: await withDisplayImages(db, "wish", hydrated, (row) => row),
+    data: await withDisplayImages(db, "wish", paired, (entry) => entry.out),
     count,
     sums: {
       priceLow: Number(totals?.priceLow ?? 0),

@@ -107,8 +107,9 @@ struct SubjectLiftTests {
 /// Records the exact call sequence; `failPut` makes the presigned PUT fail.
 final class StubPhotoService: PhotoService, Sendable {
     enum Call: Equatable, Sendable {
-        case create(ImageUploadRequest), put(URL, String, Int), mark(ImageCode),
-            attach([ImageCode], EntityKey, String), ids(ProductCode), order([ImageCode], ProductCode)
+        case create(ImageUploadRequest), put(URL, String, Int), mark(ImageCode)
+        case attach([ImageCode], EntityKey, String), ids(EntityKey, String)
+        case order([ImageCode], EntityKey, String)
     }
 
     let calls = Mutex<[Call]>([])
@@ -143,13 +144,13 @@ final class StubPhotoService: PhotoService, Sendable {
         record(.attach(ids, entity, id))
     }
 
-    func productImageIDs(_ product: ProductCode) async throws -> [ImageCode] {
-        record(.ids(product))
+    func imageIDs(entity: EntityKey, id: String) async throws -> [ImageCode] {
+        record(.ids(entity, id))
         return existing
     }
 
-    func setImageOrder(_ order: [ImageCode], product: ProductCode) async throws {
-        record(.order(order, product))
+    func setImageOrder(_ order: [ImageCode], entity: EntityKey, id: String) async throws {
+        record(.order(order, entity, id))
     }
 }
 
@@ -205,9 +206,9 @@ struct PhotoUploaderTests {
         #expect(putSize == request.size)
         #expect(calls[2] == .mark(ImageCode("IMG-2345")))
         #expect(calls[3] == .attach([ImageCode("IMG-2345")], .product, "PRD-2345"))
-        #expect(calls[4] == .ids(ProductCode("PRD-2345")))
+        #expect(calls[4] == .ids(.product, "PRD-2345"))
         // New first, existing after, the new id not repeated.
-        #expect(calls[5] == .order([ImageCode("IMG-2345"), ImageCode("IMG-0001")], ProductCode("PRD-2345")))
+        #expect(calls[5] == .order([ImageCode("IMG-2345"), ImageCode("IMG-0001")], .product, "PRD-2345"))
         #expect(steps.withLock { $0 } == PhotoUploader.Step.allCases)
         #expect(outcome.imageID == ImageCode("IMG-2345"))
         #expect(outcome.byteCount > 0)
@@ -234,8 +235,24 @@ struct PhotoUploaderTests {
         #expect(
             service.calls.withLock { $0 } == [
                 .attach([ImageCode("IMG-2345")], .product, "PRD-2345"),
-                .ids(ProductCode("PRD-2345")),
-                .order([ImageCode("IMG-2345"), ImageCode("IMG-0001")], ProductCode("PRD-2345")),
+                .ids(.product, "PRD-2345"),
+                .order([ImageCode("IMG-2345"), ImageCode("IMG-0001")], .product, "PRD-2345"),
+            ])
+    }
+
+    /// `makeCover` is not a product-only affordance: any entity whose update body takes
+    /// `imageOrder` gets the same read-then-reorder pair, keyed by the request's own entity.
+    @Test func setImageOrderSendsImageOrderForAnyEntity() async throws {
+        let service = StubPhotoService(existing: [ImageCode("IMG-0001")])
+        let uploader = PhotoUploader(service: service) { _, _, _ in }
+        try await uploader.attachExisting(
+            ImageCode("IMG-2345"), entity: .location, entityID: "LOC-2345", makeCover: true)
+
+        #expect(
+            service.calls.withLock { $0 } == [
+                .attach([ImageCode("IMG-2345")], .location, "LOC-2345"),
+                .ids(.location, "LOC-2345"),
+                .order([ImageCode("IMG-2345"), ImageCode("IMG-0001")], .location, "LOC-2345"),
             ])
     }
 
@@ -312,11 +329,13 @@ struct PhotoUploaderTests {
     }
 }
 
-@Suite("GardenImageUploader")
-struct GardenImageUploaderTests {
+@Suite("PendingImageUploader")
+struct PendingImageUploaderTests {
+    /// The record mutation that attaches a pending batch marks it uploaded; this path must not.
     @Test func leavesCompletedPhotosPendingForTheEntryWorkflow() async throws {
         let service = StubPhotoService()
-        let uploader = GardenImageUploader(service: service) { fileURL, url, contentType in
+        let uploader = PendingImageUploader(entity: .gardenEntry, service: service) {
+            fileURL, url, contentType in
             service.record(.put(url, contentType, try Data(contentsOf: fileURL).count))
         }
         let image = TestImages.canvas(width: 1200, height: 800, subject: true)

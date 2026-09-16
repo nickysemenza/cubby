@@ -16,6 +16,7 @@ import {
   resourceListInputFrom,
   resourceQueryNesting,
   resourceQueryValues,
+  resourceTimelineInputFrom,
 } from "~/lib/http-api/resource-query";
 import { type HttpMetadata, httpMetadataSchema } from "~/lib/http-api/router";
 import { httpRoutes } from "~/lib/http-api/routes";
@@ -142,6 +143,15 @@ function requestInput(
           ),
           entity,
         };
+      case "timeline": {
+        const { filters, window } = resourceTimelineInputFrom(
+          resourceQueryValues.parse(payload),
+          route.query instanceof z.ZodType
+            ? resourceQueryNesting(route.query)
+            : new Map(),
+        );
+        return { entity, filters, window };
+      }
       case "get":
         return { entity, shortcode: id() };
       case "create":

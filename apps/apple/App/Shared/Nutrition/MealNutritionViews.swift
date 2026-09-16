@@ -20,7 +20,7 @@ struct MealNutritionPeopleView: View {
                         personPanel(person)
                     }
                 }
-                if summary.people.contains(where: { MacroSummary($0.totals).containsPartialEstimate }) {
+                if summary.people.contains(where: { $0.totals.macros.containsPartialEstimate }) {
                     Text("+ means a known subtotal; some food nutrition is missing. — means unavailable.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -36,7 +36,7 @@ struct MealNutritionPeopleView: View {
     private func personPanel(_ person: MealNutritionPerson) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
-                MacroGrid(totals: MacroSummary(person.totals), prominent: true)
+                MacroGrid(totals: person.totals.macros, prominent: true)
                 if person.foods.isEmpty {
                     Text("No foods assigned")
                         .font(.callout)
@@ -76,7 +76,7 @@ struct MealNutritionPeopleView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            MacroGrid(totals: MacroSummary(food.totals))
+            MacroGrid(totals: food.totals.macros)
         }
         .padding(.vertical, PorcelainTokens.Space.xs)
     }
@@ -109,7 +109,7 @@ struct MealNutritionPeopleView: View {
             mealLink(meal)
                 .font(.porcelainTitle)
             if let subtotal = person.meals.first(where: { $0.meal.id == meal.id }) {
-                MacroGrid(totals: MacroSummary(subtotal.totals))
+                MacroGrid(totals: subtotal.totals.macros)
             }
         }
         .padding(.top, PorcelainTokens.Space.xs)
@@ -128,7 +128,7 @@ struct MealNutritionCompactView: View {
             ForEach(summary.people) { person in
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
                     Text(person.name).font(.porcelainTitle)
-                    MacroGrid(totals: MacroSummary(person.totals))
+                    MacroGrid(totals: person.totals.macros)
                 }
                 .padding(.vertical, PorcelainTokens.Space.xs)
             }
@@ -230,6 +230,6 @@ private extension MeasureEstimate {
 }
 
 #Preview("Macro grid") {
-    MacroGrid(totals: MacroSummary(PreviewFixtures.sampleMealNutrition.people[0].totals), prominent: true)
+    MacroGrid(totals: PreviewFixtures.sampleMealNutrition.people[0].totals.macros, prominent: true)
         .padding()
 }

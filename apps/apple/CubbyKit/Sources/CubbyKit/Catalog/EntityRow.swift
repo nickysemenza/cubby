@@ -16,6 +16,19 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
         self.imageURL = imageURL
         self.raw = raw
     }
+
+    /// The row's `raw` payload as a typed alias (`row.decode(ProductDetail.self)`), for a slot
+    /// that needs more than keyed access. `raw` was projected from the decoded typed value with
+    /// the same date spelling `JSONDecoder.cubby()` reads, so the round trip is lossless.
+    public func decode<T: Decodable>(_ type: T.Type = T.self) throws -> T {
+        try JSONDecoder.cubby().decode(T.self, from: JSONEncoder.cubby().encode(raw))
+    }
+
+    /// The entity's image ids in display order — the order `setImageOrder` rewrites. Read from a
+    /// detail payload's `attachments`; a list row carries none and answers `[]`.
+    public var imageIDs: [ImageCode] {
+        raw["attachments"]?.arrayValue?.compactMap { $0["id"]?.stringValue.map { ImageCode($0) } } ?? []
+    }
 }
 
 extension EntityDescriptor {
@@ -31,7 +44,15 @@ extension EntityDescriptor {
             title = id
         }
 
-        let subtitle = object["manufacturer"]?.stringValue ?? object["category"]?.stringValue
+        // The catalog's mobile `subtitle` columns, in declared priority; a row carries no hand-named key.
+        let subtitle =
+            fields.filter { $0.mobileSlot == "subtitle" }
+            .sorted { ($0.mobilePriority ?? .max) < ($1.mobilePriority ?? .max) }
+            .compactMap { field -> String? in
+                guard let value = object[field.key]?.stringValue, !value.isEmpty else { return nil }
+                return value
+            }
+            .first
 
         return EntityRow(
             id: id,

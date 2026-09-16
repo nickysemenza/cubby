@@ -1,7 +1,11 @@
 import { mcpToolName } from "@cubby/schemas/entity-manifest";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import {
+  buildNutrition,
+  type NutritionTotals,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import {
   productTopLevelOut,
   productWithFoodOut,
@@ -187,7 +191,7 @@ describe("MCP protocol smoke", () => {
   });
 
   it("projects storage-only child ids out of generic entity results", async () => {
-    const totals: NutritionTotals = {
+    const totals: NutritionTotals = withMacros({
       cost: { status: "unavailable", reason: "no_data" },
       nutrition: buildNutrition((key) =>
         key === "sodium"
@@ -199,7 +203,7 @@ describe("MCP protocol smoke", () => {
             }
           : { status: "pending", reason: "totals_missing" },
       ),
-    };
+    });
     const mealRecipe = mock(mealRecipeOut, {
       overrides: { scaledTotals: totals },
     });

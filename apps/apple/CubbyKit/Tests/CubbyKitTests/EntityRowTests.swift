@@ -141,7 +141,33 @@ struct EntityRowTests {
         #expect(EntityCatalog[key].row(from: object)?.title == expectedTitle)
     }
 
-    @Test func subtitlePrefersManufacturerThenCategory() {
+    /// A slot that needs a typed view of a row gets it from `raw`, dates included: the fixture
+    /// mixes fractional and plain timestamps, which only `JSONDecoder.cubby()` accepts.
+    @Test func decodesTheRawPayloadIntoATypedAlias() throws {
+        let raw = try Fixtures.decode(JSONValue.self, from: "product-get.json")
+        let row = try #require(product.row(from: raw))
+        let detail = try row.decode(ProductDetail.self)
+        #expect(detail.id == ProductCode("PRD-2345"))
+        #expect(detail.name == row.title)
+        #expect(detail.manufacturer == "Sample Manufacturer")
+        #expect(detail.createdAt.timeIntervalSince1970 > 0)
+    }
+
+    @Test func imageIDsReadAttachmentsInOrder() {
+        let object: JSONValue = [
+            "id": "PRD-2345", "name": "Sample",
+            "attachments": [
+                ["id": "IMG-0002", "url": "https://images.example/b.jpg"],
+                ["id": "IMG-0001", "url": "https://images.example/a.jpg"],
+            ],
+        ]
+        #expect(product.row(from: object)?.imageIDs == [ImageCode("IMG-0002"), ImageCode("IMG-0001")])
+        #expect(product.row(from: ["id": "PRD-2345"])?.imageIDs == [])
+    }
+
+    /// The subtitle is the catalog's `mobile.slot: subtitle` columns in priority order (product:
+    /// manufacturer 20, category 30), not a hand-named key.
+    @Test func subtitleFollowsTheCatalogSubtitleSlotPriority() {
         let withManufacturer: JSONValue = [
             "id": "PRD-2345", "name": "Sample", "manufacturer": "Acme", "category": "tools",
         ]

@@ -181,9 +181,9 @@ const pkUuid = <T extends string = string>() =>
 /**
  * Uniqueness over the WHOLE table, soft-deleted rows included. That is the
  * point: a code must never be reused, so a deleted row's code stays a permanent
- * tombstone rather than becoming available again. These indexes were partial on
- * `deletedAt IS NULL` before the 2026-07 cutover, which had already let 269
- * codes be handed to a second entity.
+ * tombstone rather than becoming available again. A partial index on
+ * `deletedAt IS NULL` would let a deleted row's code be handed to a second
+ * entity.
  */
 const shortcodeUnique = (tableName: string, column: AnyPgColumn) =>
   uniqueIndex(`${tableName}_shortcode_unique`).on(column);

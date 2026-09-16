@@ -92,6 +92,7 @@ describe("useListBulkActions", () => {
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
       "add-to-inventory",
+      "merge",
       "print-labels",
       "set-stock-tracking",
     ]);
@@ -185,6 +186,7 @@ describe("useListBulkActions", () => {
       "inspect",
       "copy-shortcodes",
       "add-to-inventory",
+      "merge",
       "print-labels",
       "set-stock-tracking",
     ]);

@@ -1,9 +1,14 @@
+import {
+  isSlotListView,
+  listViewId,
+} from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { generatedHeader } from "../../artifacts.ts";
-import type {
-  CompiledEntity,
-  EntityArtifacts,
-  FilterDescriptor,
-  SourceRef,
+import {
+  type CompiledEntity,
+  type EntityArtifacts,
+  EntityDeclarationError,
+  type FilterDescriptor,
+  type SourceRef,
 } from "../declarations.ts";
 import { sourceRefImports } from "./filters.ts";
 import { entityProjectionMaps } from "./index.ts";
@@ -68,6 +73,12 @@ export const renderSearchArtifacts = (
     "searchRef",
   );
   const tableKeys = ["sort", "page", "pageSize", "worklist"];
+  const timelineKeys = [
+    "timelineFrom",
+    "timelineTo",
+    "timelineOrder",
+    "timelineMode",
+  ];
   const entries = filterEntities
     .map((entity) => {
       const fields = entity.filterDescriptors.map(
@@ -75,14 +86,52 @@ export const renderSearchArtifacts = (
           `${JSON.stringify(descriptor.urlKey)}:${searchCodec(descriptor, alias)},`,
       );
       const dialog = entity.route?.create === "dialog";
+      // Declared list views: `view` is an enum over their ids when there is
+      // more than one (the first is the default, so it is never written);
+      // a slot view's route-only keys ride along as plain strings; a
+      // timeline view (list or detail) reads the shared timeline window.
+      const views = entity.inspector.list.views;
+      const viewIds = views.map(listViewId);
+      // Two slot views may share a key (a calendar and its nutrition view
+      // both read `date`); one key is emitted once.
+      const slotKeys = [
+        ...new Set(
+          views.flatMap((view) =>
+            isSlotListView(view) ? view.searchKeys : [],
+          ),
+        ),
+      ];
+      const timeline =
+        entity.timeline !== null &&
+        (views.includes("timeline") ||
+          entity.inspector.detail.sections.some(
+            (section) => section.kind === "timeline",
+          ));
+      const viewField =
+        viewIds.length > 1
+          ? `view:z.enum(${JSON.stringify(viewIds)}).optional().catch(undefined),\n`
+          : "";
+      const slotFields = slotKeys
+        .map((key) => `${JSON.stringify(key)}:urlStringParam,`)
+        .join("\n");
+      const timelineFields = timeline
+        ? 'timelineFrom:urlPlainDateParam,\ntimelineTo:urlPlainDateParam,\ntimelineOrder:z.enum(["asc","desc"]).optional().catch(undefined),\ntimelineMode:z.enum(["events","lifecycles"]).optional().catch(undefined),\n'
+        : "";
       const keys = [
         ...entity.filterDescriptors.map(({ urlKey }) => urlKey),
         ...tableKeys,
         ...(dialog ? ["create"] : []),
+        ...(viewIds.length > 1 ? ["view"] : []),
+        ...slotKeys,
+        ...(timeline ? timelineKeys : []),
       ];
+      if (new Set(keys).size !== keys.length)
+        throw new EntityDeclarationError(
+          `${entity.key} list search keys collide: ${keys.filter((key, index) => keys.indexOf(key) !== index).join(", ")}.`,
+        );
       return (
         `${JSON.stringify(entity.key)}:{\n` +
-        `schema:z.object({\n${fields.join("\n")}\n...tableSearchFields,\n${dialog ? "create:createSearchField,\n" : ""}}),\n` +
+        `schema:z.object({\n${fields.join("\n")}\n...tableSearchFields,\n${dialog ? "create:createSearchField,\n" : ""}${viewField}${slotFields}${slotFields ? "\n" : ""}${timelineFields}}),\n` +
         `defaults:{${keys.map((key) => `${JSON.stringify(key)}:undefined`).join(",")}},\n},`
       );
     })
@@ -97,7 +146,7 @@ export const renderSearchArtifacts = (
         'import { z } from "zod";\n\n' +
         'import { tableSearchFields } from "~/app/_components/data-table/table-search";\n' +
         'import { FILTER_ANY, FILTER_NONE } from "~/entities/filters";\n' +
-        'import { urlEnumListParam, urlShortcodeListParam, urlShortcodeParam, urlStringParam } from "~/lib/search-params";\n\n' +
+        'import { urlEnumListParam, urlPlainDateParam, urlShortcodeListParam, urlShortcodeParam, urlStringParam } from "~/lib/search-params";\n\n' +
         renderRecord({
           name: "entityFilterUrlKeyRoster",
           entries: Object.fromEntries(

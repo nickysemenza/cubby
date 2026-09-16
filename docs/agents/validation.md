@@ -77,7 +77,7 @@ Vitest suites — `pnpm -r --filter '!@cubby/web' run test` after touching
 **Never re-run a tier to find out what failed.** Every run ends with a compact
 list of the failing tests, and writes the same list to
 `apps/web/.vitest-failures.txt`, so a `| tail` or a later turn can both recover
-it. 24% of all test runs used to be a re-run of one that had just failed.
+it. Measured: 24% of all test runs were a re-run of one that had just failed.
 
 Narrow the other gates too: `pnpm typecheck:web` is useful when only the web app
 is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,

@@ -1,5 +1,5 @@
 import { getMealPreparationsOut } from "@cubby/schemas/meal";
-import { buildNutrition } from "@cubby/schemas/nutrition";
+import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -13,14 +13,14 @@ const complete = {
   upper: 600,
   coverage: { covered: 1, total: 1 },
 };
-const nutritionTotals = {
+const nutritionTotals = withMacros({
   cost: complete,
   nutrition: buildNutrition((key) =>
     key === "kcal" || key === "protein"
       ? complete
       : { status: "unavailable", reason: "no_data" },
   ),
-};
+});
 const mealToday = testShortcode("meal", "MEL-4K7M");
 const recipePasta = testShortcode("recipe", "RCP-4K7M");
 const recipeSalad = testShortcode("recipe", "RCP-9Q2X");
@@ -166,23 +166,23 @@ describe("MealPortionsSection", () => {
           totals: {
             confirmed: {
               portionCount: 0,
-              totals: {
+              totals: withMacros({
                 cost: { status: "unavailable", reason: "empty" },
                 nutrition: buildNutrition(() => ({
                   status: "unavailable",
                   reason: "empty",
                 })),
-              },
+              }),
             },
             projected: {
               portionCount: 0,
-              totals: {
+              totals: withMacros({
                 cost: { status: "unavailable", reason: "empty" },
                 nutrition: buildNutrition(() => ({
                   status: "unavailable",
                   reason: "empty",
                 })),
-              },
+              }),
             },
           },
         })}

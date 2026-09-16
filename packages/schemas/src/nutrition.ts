@@ -11,7 +11,9 @@ const coverage = z
   .refine(
     (value) => value.covered <= value.total,
     "Coverage exceeds the contributor count",
-  );
+  )
+  // A type-driven mock cannot satisfy `covered <= total`; pin one example.
+  .meta({ mockValue: { covered: 1, total: 1 } });
 export type MeasureEstimateCoverage = z.infer<typeof coverage>;
 
 const knownEstimate = {
@@ -53,11 +55,59 @@ export type MeasureEstimate = z.infer<typeof measureEstimate>;
 export const nutritionEstimate = z.record(nutrientKey, measureEstimate);
 export type NutritionEstimate = z.infer<typeof nutritionEstimate>;
 
-export const nutritionTotals = z.object({
+/**
+ * What `Recipe.totals` persists: cost plus the full nutrient catalog. The
+ * read shape adds `macros`, a projection every reader would otherwise
+ * derive by hand; it is never stored.
+ */
+export const storedNutritionTotals = z.object({
   cost: measureEstimate,
   nutrition: nutritionEstimate,
 });
+export type StoredNutritionTotals = z.infer<typeof storedNutritionTotals>;
+
+/** The four everyday macros, each an honest estimate; `partial` when any is only partly known. */
+export const macroSummary = z.object({
+  calories: measureEstimate,
+  protein: measureEstimate,
+  carbs: measureEstimate,
+  fat: measureEstimate,
+  partial: z.boolean(),
+});
+export type MacroSummary = z.infer<typeof macroSummary>;
+
+export const nutritionTotals = storedNutritionTotals.extend({
+  macros: macroSummary,
+});
 export type NutritionTotals = z.infer<typeof nutritionTotals>;
+
+export const macrosOf = (nutrition: NutritionEstimate): MacroSummary => {
+  const macros = {
+    calories: nutrition.kcal,
+    protein: nutrition.protein,
+    carbs: nutrition.carbs,
+    fat: nutrition.fat,
+  };
+  return {
+    ...macros,
+    partial: Object.values(macros).some(
+      (estimate) => estimate.status === "partial",
+    ),
+  };
+};
+
+/** The read shape of stored or freshly computed totals. */
+export const withMacros = (totals: StoredNutritionTotals): NutritionTotals => ({
+  cost: totals.cost,
+  nutrition: totals.nutrition,
+  macros: macrosOf(totals.nutrition),
+});
+
+/** What to persist: `macros` is a projection and never reaches the column. */
+export const toStoredTotals = ({
+  cost,
+  nutrition,
+}: StoredNutritionTotals): StoredNutritionTotals => ({ cost, nutrition });
 
 /**
  * Totals whose nutrient record may be a subset of the 22 keys — the shape an

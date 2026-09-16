@@ -4,7 +4,11 @@ import {
   parseShortcodeFor,
   type ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import {
+  buildNutrition,
+  type NutritionTotals,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -44,28 +48,29 @@ const recipeTotals = (macros: {
   protein: number;
   carbs: number;
   fat: number;
-}): NutritionTotals => ({
-  cost: estimate(4),
-  nutrition: buildNutrition((key) => {
-    const value = (() => {
-      switch (key) {
-        case "kcal":
-          return macros.kcal;
-        case "protein":
-          return macros.protein;
-        case "carbs":
-          return macros.carbs;
-        case "fat":
-          return macros.fat;
-        default:
-          return null;
-      }
-    })();
-    return value == null
-      ? { status: "unavailable", reason: "no_data" }
-      : estimate(value);
-  }),
-});
+}): NutritionTotals =>
+  withMacros({
+    cost: estimate(4),
+    nutrition: buildNutrition((key) => {
+      const value = (() => {
+        switch (key) {
+          case "kcal":
+            return macros.kcal;
+          case "protein":
+            return macros.protein;
+          case "carbs":
+            return macros.carbs;
+          case "fat":
+            return macros.fat;
+          default:
+            return null;
+        }
+      })();
+      return value == null
+        ? { status: "unavailable", reason: "no_data" }
+        : estimate(value);
+    }),
+  });
 
 describe("meal nutrition service", () => {
   const ctx = withTestDb();

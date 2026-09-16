@@ -57,8 +57,8 @@ describe("loadProductQuantityLedgers", () => {
       productQuantity: 8,
     });
     // A return: negative cost, POSITIVE quantity — the legacy shape, no longer
-    // writable through the repo since `assertQuantitySignMatchesCost` closed
-    // that door on 2026-08-16. Forced past it with raw SQL on purpose: the
+    // writable through the repo since `assertQuantitySignMatchesCost` closes
+    // that door. Forced past it with raw SQL on purpose: the
     // reader's `abs()` is defence-in-depth for rows that arrive some other way,
     // and without a test pinning it, a later reader would look at the assert
     // and "simplify" the tolerance away. The sign of the money decides, so this

@@ -7,6 +7,7 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { z } from "zod";
 
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -14,6 +15,15 @@ import { useHydratedLoading } from "~/hooks/useHydrated";
 
 import { task } from "../task.functions";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
+
+const boardColsSchema = z
+  .enum(["status", "project", "trade"])
+  .optional()
+  .catch(undefined);
+const boardLaneSchema = z
+  .enum(["project", "trade"])
+  .optional()
+  .catch(undefined);
 import { BoardControls } from "./BoardControls";
 import { TaskBoard } from "./TaskBoard";
 import type { BoardCacheTarget } from "./use-board-mutations";
@@ -56,10 +66,12 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
   const search = route.useSearch();
   const navigate = route.useNavigate();
 
-  const cols: BoardColsMode = search.cols ?? "status";
+  // The generated search carries the board's keys as plain strings (the
+  // slot's `searchKeys`); the board's own enums validate them here.
+  const cols: BoardColsMode = boardColsSchema.parse(search.cols) ?? "status";
   // Swimlanes are only meaningful with status columns.
   const lane: BoardLaneMode | null =
-    cols === "status" ? (search.lane ?? null) : null;
+    cols === "status" ? (boardLaneSchema.parse(search.lane) ?? null) : null;
 
   // Local state gives instant filtering while typing; the `q` URL param
   // (shared with the list view's deep-link seed) syncs on a debounce so

@@ -20,8 +20,6 @@ import {
   productInventoryEntriesByIdOut,
   productManufacturerOptionsOut,
   productMergeSummaryOut,
-  productMovementTimelineInput,
-  productMovementTimelineOut,
   productPickerItemOut,
   productQuantitySummariesOut,
   productQuantitySummaryBatchInput,
@@ -154,10 +152,6 @@ export const productWorkflowSchemas = {
   externalIdSourceOptions: {
     input: z.undefined(),
     output: productExternalIdSourceOptionsOut,
-  },
-  movementTimeline: {
-    input: productMovementTimelineInput,
-    output: productMovementTimelineOut,
   },
   getByShortcodes: {
     input: productShortcodesInput,

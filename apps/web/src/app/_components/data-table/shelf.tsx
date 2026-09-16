@@ -1,24 +1,15 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
-import { LayoutGrid, LayoutList } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
-import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { EntityIcon } from "~/entities/entities";
 
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
-
-export type ShelfView = "shelf" | "table";
-
-export const SHELF_VIEW_OPTIONS: ViewSwitcherOption<ShelfView>[] = [
-  { value: "shelf", label: "Shelf", icon: LayoutGrid },
-  { value: "table", label: "Table", icon: LayoutList },
-];
 
 const SHELF_GRID_CLASS =
   "grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";

@@ -1,23 +1,8 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
-import { ImageIcon, Info, Link2 } from "lucide-react";
-import prettyBytes from "pretty-bytes";
+import { ImageIcon } from "lucide-react";
 
-import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
-import {
-  type DetailSection,
-  DetailSections,
-} from "~/app/_components/data-table/detail-page";
-import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
-import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
-import { imageStatusOptions } from "~/app/images/image-options";
-import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
-import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
-import { image as imageOperations } from "~/entities/image.functions";
-
-import { EditableCell } from "../data-table/editable-cell";
-import { useImageUpdateMutation } from "../hooks/useUpdateMutation";
 
 interface ImageDetailProps {
   image: ImageWithEntity;
@@ -47,87 +32,5 @@ export function ImageDetailMedia({ image }: ImageDetailProps) {
         </div>
       )}
     </div>
-  );
-}
-
-export function ImageDetail({ image }: ImageDetailProps) {
-  const updateMutation = useImageUpdateMutation({
-    mutationFn: () => imageOperations.update.mutationOptions(),
-  });
-
-  const sections: DetailSection[] = [
-    {
-      id: "associations",
-      title: "Associations",
-      icon: Link2,
-      placement: "primary",
-      content:
-        image.associations.length > 0 ? (
-          <ImageAssociationLinks associations={image.associations} showRole />
-        ) : (
-          <Description>This image is not attached to a record.</Description>
-        ),
-    },
-    {
-      id: "metadata",
-      title: "Metadata",
-      icon: Info,
-      placement: "supporting",
-      content: (
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Filename</dt>
-          <dd className="min-w-0">
-            <EditableCell
-              value={image.filename}
-              config={{ type: "text" }}
-              onSave={async (filename) => {
-                if (!filename) return;
-                await updateMutation.mutateAsync({
-                  id: image.id,
-                  data: { filename },
-                });
-              }}
-              renderValue={(value) => value}
-            />
-          </dd>
-          <dt className="text-muted-foreground">Type</dt>
-          <dd className="min-w-0 font-mono text-xs break-all">
-            {image.contentType}
-          </dd>
-          <dt className="text-muted-foreground">Size</dt>
-          <dd>{prettyBytes(image.size)}</dd>
-          <dt className="text-muted-foreground">Dimensions</dt>
-          <dd>
-            {image.width && image.height
-              ? `${image.width} × ${image.height}`
-              : "—"}
-          </dd>
-          <dt className="text-muted-foreground">Status</dt>
-          <dd>
-            <Row align="center" gap="sm">
-              {renderOptionCell(image.status, imageStatusOptions)}
-              <EntityFilterLink
-                to="/images"
-                search={{ status: image.status }}
-                label={`Show all ${image.status.toLowerCase()} images`}
-              />
-            </Row>
-          </dd>
-          <dt className="text-muted-foreground">Created</dt>
-          <dd>
-            <HoverableTimestamp timestamp={image.createdAt} />
-          </dd>
-        </dl>
-      ),
-    },
-  ];
-
-  return (
-    <DetailSections
-      sections={sections}
-      rawData={image}
-      heroMedia={<ImageDetailMedia image={image} />}
-      showEntityActions={false}
-    />
   );
 }

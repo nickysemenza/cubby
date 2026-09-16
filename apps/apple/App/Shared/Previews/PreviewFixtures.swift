@@ -36,7 +36,7 @@ enum PreviewFixtures {
     ]
 
     /// A product-shaped detail row for `EntityDetailView`'s preview: enough fields to exercise
-    /// every `displayValue(for:)` branch (string, date, boolean, array) without a network call.
+    /// every `EntityFieldValue.text` branch (string, date, boolean, array) without a network call.
     static let sampleDetailRow = EntityRow(
         id: "PRD-2345",
         title: "Cast Iron Skillet",
@@ -52,6 +52,27 @@ enum PreviewFixtures {
             "tags": .array([.string("kitchen"), .string("cast-iron")]),
         ])
     )
+
+    /// A product movement timeline for `EntityTimelineView`'s preview: one confident interval,
+    /// one open unconfirmed one, a sale marker, and two date groups.
+    static let sampleTimeline: EntityTimelineOut = decode(
+        """
+        {"groups": [
+           {"key": "2026-03-02", "date": "2026-03-02", "label": "Sample Vendor order",
+            "link": {"entity": "purchase", "id": "PUR-2345"},
+            "events": [
+              {"id": "EXP-2345", "kind": "purchase", "label": "Sample Product", "amount": 12.5,
+               "link": {"entity": "product", "id": "PRD-2345"}, "detail": "1 each"},
+              {"id": "audit:1", "kind": "audit:update", "label": "Updated"}]},
+           {"key": "2026-03-09", "date": "2026-03-09",
+            "events": [{"id": "EXP-3456", "kind": "sale", "label": "Sample Product", "amount": -4}]}],
+         "rows": [{"id": "PRD-2345", "name": "Sample Product",
+                   "intervals": [{"start": "2026-03-02", "end": "2026-03-09", "confident": true},
+                                 {"start": "2026-03-09", "confident": false}],
+                   "markers": [{"date": "2026-03-09", "kind": "sale"}]}],
+         "stats": [{"key": "events", "label": "Events", "value": "3"}],
+         "notes": [], "extent": {"from": "2026-03-02", "to": "2026-03-09"}}
+        """)
 
     /// Ranked candidates for `IdentifyResultsSection` previews; distances are illustrative only.
     static let sampleCandidates: [IdentificationCandidate] = [
@@ -196,7 +217,10 @@ enum PreviewFixtures {
         return """
             {"cost": {"status": "unavailable", "reason": "no_data"},
              "nutrition": {"kcal": \(estimate(kcal)), "protein": \(estimate(protein)),
-                           "carbs": \(estimate(carbs)), "fat": \(estimate(fat))}}
+                           "carbs": \(estimate(carbs)), "fat": \(estimate(fat))},
+             "macros": {"calories": \(estimate(kcal)), "protein": \(estimate(protein)),
+                        "carbs": \(estimate(carbs)), "fat": \(estimate(fat)),
+                        "partial": \(status == "partial")}}
             """
     }
 }

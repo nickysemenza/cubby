@@ -13,29 +13,9 @@ import { z } from "zod";
 export default defineEntity({
   key: "inventory",
   names: { singular: "Inventory Item", plural: "Inventory" },
-  route: {
-    basePath: "inventory",
-    create: "dialog",
-    list: {
-      component: {
-        module: "~/app/inventory/inventoryitemlist",
-        export: "InventoryItemList",
-      },
-      actions: {
-        module: "~/app/inventory/inventory-actions",
-        export: "InventoryActions",
-      },
-    },
-    detail: {
-      component: {
-        module: "~/app/_components/inventory/inventory-detail",
-        export: "InventoryDetail",
-      },
-    },
-  },
+  route: { basePath: "inventory", create: "dialog", list: true, detail: true },
   table: "InventoryEntry",
   identifiers: { brand: "InventoryId", shortcode: "INV-" },
-  native: { create: "CubbyClient.createInventory ad-hoc count" },
   // Inventory has no name field; `displayName` ("<product> · <location>")
   // is declared here for the titleField compiler check, but the joins it
   // needs (product/location names) aren't loaded on the bare entity output —
@@ -52,6 +32,30 @@ export default defineEntity({
       actionLabel: "Add to Inventory",
     },
     icons: { lucide: "Package", sfSymbol: "cube.box" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "inventory-details",
+          title: "Inventory item details",
+          fields: [
+            "productId",
+            "locationId",
+            "amount",
+            "placement",
+            "verifiedAt",
+          ],
+        },
+      ],
+    },
+    list: {
+      actions: ["moveTo", "delete"],
+      links: [
+        { label: "Recount", path: "/inventory/session" },
+        { label: "Bulk edit", path: "/inventory/bulk-edit" },
+        { label: "Bulk move", path: "/inventory/bulk-move" },
+      ],
+    },
   },
   model: {
     fields: [
@@ -87,7 +91,13 @@ export default defineEntity({
         key: "amount",
         kind: "json",
         control: { kind: "specialized", renderer: "amount" },
-        display: { list: true, detail: true, detailOrder: 0 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 0,
+          format: "amount",
+          mobile: { slot: "trailing", priority: 0 },
+        },
         validation: {
           read: amount.describe("Quantity on hand"),
           create: positiveAmount,
@@ -98,7 +108,7 @@ export default defineEntity({
         key: "placement",
         kind: "enum",
         control: { kind: "select" },
-        display: { list: true },
+        display: { list: true, detail: true, detailOrder: 4 },
         validation: {
           read: inventoryPlacement.describe(
             "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
@@ -321,6 +331,12 @@ export default defineEntity({
       {
         columnId: "verifiedAt",
         kind: "range",
+        wire: {
+          kind: "range",
+          from: "verifiedFrom",
+          to: "verifiedTo",
+          presence: "verifiedPresenceFilter",
+        },
         placeholder: "Filter verification date...",
         options: [
           { value: "has", label: "Has verification", meta: true },

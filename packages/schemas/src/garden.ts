@@ -24,6 +24,8 @@ import {
 
 export {
   gardenEntryCreateInput,
+  gardenEntryFilterFields,
+  type GardenEntryFilters,
   gardenEntryListItemOut,
   gardenEntryListOut,
   gardenEntryOut,
@@ -34,6 +36,8 @@ export {
 export {
   gardenPlantingOut,
   plantingCreateInput,
+  plantingFilterFields,
+  type PlantingFilters,
   plantingListItemOut,
   plantingListOut,
   plantingOut,

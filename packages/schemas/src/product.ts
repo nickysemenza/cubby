@@ -17,12 +17,7 @@ import {
 } from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
-import {
-  money,
-  moneyNullable,
-  positiveMoney,
-  positiveMoneyNullable,
-} from "./money";
+import { money, moneyNullable, positiveMoneyNullable } from "./money";
 import { externalIdKind, externalIdOut, externalIdSource } from "./external-id";
 import {
   cookbookShortcode,
@@ -32,9 +27,6 @@ import {
   inventoryShortcode,
   locationShortcode,
   productShortcode,
-  projectShortcode,
-  purchaseShortcode,
-  vendorShortcode,
 } from "./identifiers";
 import {
   imageOut,
@@ -232,6 +224,8 @@ export const productFilterFields = {
   ...auditDateFilterFields,
   ...productRelatedFilterFields,
   ...generatedProductFilterFields,
+  /** Components of the given kit(s): products on their `ProductComponent` rows. */
+  kitId: oneOrMany(productShortcode).optional(),
   upcPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
@@ -394,95 +388,6 @@ export const productMovementKind = z.enum([
   "unknown",
 ]);
 export type ProductMovementKind = z.infer<typeof productMovementKind>;
-
-export const productMovementTimelineInput = z
-  .object({
-    filters: productFiltersSchema,
-    ...dateRangeFields("movement"),
-    order: z.enum(["asc", "desc"]).default("desc"),
-  })
-  .refine(
-    ({ movementFrom, movementTo }) =>
-      !movementFrom || !movementTo || movementFrom <= movementTo,
-    { message: "Movement start must not be after movement end" },
-  );
-export type ProductMovementTimelineInput = z.infer<
-  typeof productMovementTimelineInput
->;
-
-const productMovementProjectOut = z.object({
-  id: projectShortcode,
-  name: z.string(),
-});
-
-const productMovementLineOut = z.object({
-  expenseId: expenseShortcode.nullable(),
-  productId: productShortcode,
-  name: z.string(),
-  kind: productMovementKind,
-  cost: moneyNullable,
-  quantity: z.number().nullable(),
-  signedQuantity: z.number().nullable(),
-  expenseDate: plainDate,
-  chargedTo: productMovementProjectOut.nullable(),
-  provenanceOnly: z.boolean(),
-});
-export type ProductMovementLineOut = z.infer<typeof productMovementLineOut>;
-
-const productMovementPurchaseOut = z.object({
-  id: purchaseShortcode,
-  displayLabel: z.string().nullable(),
-  orderId: z.string().nullable(),
-  date: plainDate.nullable(),
-  vendor: z.object({ id: vendorShortcode, name: z.string() }).nullable(),
-});
-
-const productMovementGroupOut = z.object({
-  key: z.string(),
-  date: plainDate,
-  purchase: productMovementPurchaseOut.nullable(),
-  movements: z.array(productMovementLineOut),
-});
-export type ProductMovementGroupOut = z.infer<typeof productMovementGroupOut>;
-
-const productMovementProductOut = z.object({
-  id: productShortcode,
-  name: z.string(),
-  manufacturer: z.string(),
-  category: productCategory.nullable(),
-  coverImageUrl: z.string().nullable(),
-  usedOnProjects: z.array(productMovementProjectOut),
-  ownershipIntervals: z.array(z.object({ start: plainDate, end: plainDate })),
-  confidenceLostAt: plainDate.nullable(),
-});
-export type ProductMovementProductOut = z.infer<
-  typeof productMovementProductOut
->;
-
-export const productMovementTimelineOut = z.object({
-  products: z.array(productMovementProductOut),
-  groups: z.array(productMovementGroupOut),
-  summary: z.object({
-    matchingProducts: z.number().int().nonnegative(),
-    productsWithMovements: z.number().int().nonnegative(),
-    movementCount: z.number().int().nonnegative(),
-    spent: money,
-    // Read shape but constrained nonnegative like a write boundary — a
-    // refunded/recovered amount can't be negative by construction, so this is
-    // an intentional invariant rather than a convention drift. See money.ts.
-    recovered: positiveMoney,
-    netCost: money,
-    unknownAmountCount: z.number().int().nonnegative(),
-  }),
-  extent: z.object({ from: plainDate, to: plainDate }).nullable(),
-  omitted: z.object({
-    productsWithoutMovements: z.number().int().nonnegative(),
-    plannedMovements: z.number().int().nonnegative(),
-  }),
-});
-export type ProductMovementTimelineOut = z.infer<
-  typeof productMovementTimelineOut
->;
 
 // `expectedQuantity` and `quantityVariance` (units bought minus units gone,
 // and shelf minus that) are correlated subqueries in

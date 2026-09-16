@@ -48,7 +48,7 @@ export const isNonFoodCategory = (
 ): boolean => category != null && category !== FOOD_CATEGORY;
 
 /**
- * Color palette for product categories — Warm-Paper Ledger (2026-06-25).
+ * Color palette for product categories — Warm-Paper Ledger.
  * Pulls from the app's retoned categorical chart ramp: a monochrome ink ladder
  * (chart-2..8, dark→light) with the lone ultramarine (chart-1) reserved for the
  * dominant "food" category. Matte, off the warm axis — distinguishes categories

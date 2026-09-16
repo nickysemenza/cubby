@@ -3,7 +3,11 @@ import {
   mealOut,
   mealRecipeOut,
 } from "@cubby/schemas/meal";
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import {
+  buildNutrition,
+  type NutritionTotals,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
@@ -21,13 +25,13 @@ it("loads allocation choices only after an editor opens", async () => {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   const mealId = testShortcode("meal", "MEA-2222");
-  const totals: NutritionTotals = {
+  const totals: NutritionTotals = withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
       status: "unavailable",
       reason: "empty",
     })),
-  };
+  });
   const preparation = mock(getMealPreparationsOut, {
     overrides: {
       mealId,
@@ -105,13 +109,13 @@ it("offers another meal from the same day as a leftovers source", () => {
   });
   const mealId = testShortcode("meal", "MEA-2222");
   const otherMealId = testShortcode("meal", "MEA-3333");
-  const totals: NutritionTotals = {
+  const totals: NutritionTotals = withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
       status: "unavailable",
       reason: "empty",
     })),
-  };
+  });
   client.setQueryData(
     meal.getPreparations.queryKey({ mealId }),
     mock(getMealPreparationsOut, {

@@ -8,8 +8,8 @@ import {
 import { oneOrMany } from "./pagination";
 
 /**
- * Regression guard for the closed-enum outage: 567 `AuditLog` rows written by
- * out-of-band maintenance scripts on 2026-07-28 carried sources outside
+ * Regression guard for the closed-enum outage: `AuditLog` rows written by
+ * out-of-band maintenance scripts carried sources outside
  * `auditSourceSchema`, so `auditLog.list` failed *output* validation and the
  * activity feed / home page rendered an error instead of content.
  *

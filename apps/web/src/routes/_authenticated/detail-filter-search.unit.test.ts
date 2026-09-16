@@ -1,7 +1,6 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 
-import { mealCalendarSearchSchema } from "~/app/meals/meal-search";
 import { entitySearch } from "~/entities/generated/entity-search.gen";
 
 describe("detail filter link route contracts", () => {
@@ -134,7 +133,7 @@ describe("detail filter link route contracts", () => {
     });
 
     expect(
-      mealCalendarSearchSchema.parse({
+      entitySearch.meal.schema.parse({
         view: "table",
         mealType: "dinner",
         mealKind: "cooked",
@@ -245,8 +244,8 @@ describe("detail filter link route contracts", () => {
         { accountId: "Visa" },
         UNRESOLVABLE_ENTITY_FILTER,
       ],
-      [mealCalendarSearchSchema, { mealType: "supper" }, undefined],
-      [mealCalendarSearchSchema, { mealKind: "delivery" }, undefined],
+      [entitySearch.meal.schema, { mealType: "supper" }, undefined],
+      [entitySearch.meal.schema, { mealKind: "delivery" }, undefined],
       [entitySearch.recipe.schema, { sourceType: "Magazine" }, undefined],
       [
         entitySearch.recipe.schema,

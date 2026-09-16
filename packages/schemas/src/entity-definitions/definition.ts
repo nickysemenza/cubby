@@ -68,6 +68,33 @@ export type FilterKind = (typeof FILTER_KINDS)[number];
 export type EntityPresentation = z.output<
   ReturnType<typeof metadataSchemas>["presentation"]
 >;
+/**
+ * `presentation` as the compiler emits it: the two hero defaults that depend
+ * on other declaration facts (`images` on the gallery capability, `actions`
+ * on the update contract) are resolved, so both renderers read one shape.
+ */
+export type CompiledEntityPresentation = Omit<EntityPresentation, "detail"> & {
+  detail: Omit<EntityPresentation["detail"], "hero"> & {
+    hero: Omit<EntityPresentation["detail"]["hero"], "images" | "actions"> & {
+      images: boolean;
+      actions: readonly string[];
+    };
+  };
+};
+export type EntityDetailSection =
+  EntityPresentation["detail"]["sections"][number];
+export type EntityListView = EntityPresentation["list"]["views"][number];
+export type EntitySlotListView = Exclude<EntityListView, string>;
+
+/** The three built-in renderers; every other view is a slot. */
+export const BUILT_IN_LIST_VIEWS = ["table", "shelf", "timeline"] as const;
+export const isSlotListView = (
+  view: EntityListView,
+): view is EntitySlotListView =>
+  !BUILT_IN_LIST_VIEWS.some((builtIn) => builtIn === view);
+/** The id a view is addressed by in `?view=`. */
+export const listViewId = (view: EntityListView): string =>
+  isSlotListView(view) ? view.id : view;
 
 /**
  * Executable entity declarations deliberately carry Zod instances.  This
@@ -157,7 +184,6 @@ const metadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
-      detailSection: nonEmptyString().optional().default("overview"),
       /** List column width bucket; the shared table maps it to a class. */
       width: z
         .enum(["xs", "sm", "md", "lg"])
@@ -172,6 +198,7 @@ const metadataSchemas = () => {
           "plainDate",
           "timestamp",
           "external-link",
+          "amount",
         ])
         .nullable()
         .optional()
@@ -293,42 +320,27 @@ const metadataSchemas = () => {
     .strict();
 
   /**
-   * Browser route ownership. `list` / `detail` name the page component the
-   * generator renders into `routes/_authenticated/<basePath>.index.tsx` /
-   * `.$<detailParam>.tsx`; `null` keeps that file hand-written. `create` is
-   * how a record is made from the list: `"dialog"` puts `?create=true` in
-   * the list's search schema and the generated index renders the capture
-   * dialog action; `"page"` means a hand-written `<basePath>.new.tsx`
-   * exists and is linked as `routes.new`. It sits beside `list` rather than
-   * inside it because a hand-written list (product, recipe) still owns a
-   * `/new` page.
+   * Browser route ownership. `list` / `detail` `true` generates the page
+   * module (`routes/_authenticated/<basePath>.index.tsx` / `.$<detailParam>.tsx`)
+   * over the generic list/detail renderers; `null` keeps that file
+   * hand-written. `detail.query` is `(shortcode: string) => queryOptions` for
+   * an entity outside the kernel detail roster (image). `create` is how a
+   * record is made from the list: `"dialog"` puts `?create=true` in the
+   * list's search schema and renders the capture dialog action; `"page"`
+   * means a hand-written `<basePath>.new.tsx` exists and is linked as
+   * `routes.new`.
    */
   const entityRouteMetadataSchema = z
     .object({
       basePath: nonEmptyString(),
       detailParam: nonEmptyString().optional(),
       create: z.enum(["dialog", "page"]).optional(),
-      list: z
-        .object({
-          component: sourceRefMetadataSchema,
-          /**
-           * Header actions component; omitted renders the capture dialog
-           * action when `create` is `"dialog"`, `null` renders none.
-           */
-          actions: sourceRefMetadataSchema.nullable().optional(),
-        })
-        .strict()
-        .nullable(),
+      list: z.literal(true).nullable(),
       detail: z
-        .object({
-          component: sourceRefMetadataSchema,
-          /**
-           * `(shortcode: string) => queryOptions` for an entity outside the
-           * kernel detail roster (image); the roster's use `entityDetailFor`.
-           */
-          query: sourceRefMetadataSchema.optional(),
-        })
-        .strict()
+        .union([
+          z.literal(true),
+          z.object({ query: sourceRefMetadataSchema }).strict(),
+        ])
         .nullable(),
     })
     .strict();
@@ -340,22 +352,101 @@ const metadataSchemas = () => {
     })
     .strict();
 
+  const fieldKey = nonEmptyString("must name a declared field");
+  const actionKey = nonEmptyString("must name an action verb");
+  const sectionId = z
+    .string()
+    .regex(/^[a-z][a-z0-9-]*$/u, { error: "must be a kebab-case id" });
+  const sectionPlacement = z
+    .enum(["primary", "supporting", "full"])
+    .optional()
+    .default("primary");
+  const sectionBase = {
+    id: sectionId,
+    title: nonEmptyString(),
+    placement: sectionPlacement,
+    collapsed: z
+      .boolean({ error: "must be a boolean" })
+      .optional()
+      .default(false),
+  };
   /**
-   * Resource verbs the Apple app calls, each with the reason. `list` and
-   * `get` are native for every HTTP entity, and `update` for every gallery
-   * entity (image attach/reorder), so only opt-in verbs are declared here.
+   * One detail section. `fields` names every `display.detail` field exactly
+   * once across the sections; `relation` renders the target entity's list
+   * filtered by the named descriptor against this record; `timeline` mounts
+   * the entity's timeline capability; `slot` is the one per-platform
+   * hand-written fill, rendered only where a registry provides it.
    */
-  const entityNativeMetadataSchema = z
-    .object({
-      create: nonEmptyString().optional(),
-      update: nonEmptyString().optional(),
-      delete: nonEmptyString().optional(),
-    })
-    .strict();
+  const detailSectionSchema = z.discriminatedUnion("kind", [
+    z
+      .object({
+        kind: z.literal("fields"),
+        ...sectionBase,
+        fields: z.array(fieldKey).min(1),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("relation"),
+        ...sectionBase,
+        relation: nonEmptyString("must name a declared relation"),
+        filter: z.object({ descriptor: nonEmptyString() }).strict(),
+        columns: z
+          .array(nonEmptyString())
+          .min(1)
+          .nullable()
+          .optional()
+          .default(null),
+        sort: z
+          .object({
+            field: nonEmptyString(),
+            direction: z.enum(["asc", "desc"]),
+          })
+          .strict()
+          .nullable()
+          .optional()
+          .default(null),
+        limit: z.number().int().positive().nullable().optional().default(null),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("timeline"),
+        ...sectionBase,
+        mode: z.enum(["events", "lifecycles"]).optional().default("events"),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("slot"),
+        id: sectionId,
+        title: nonEmptyString().nullable().optional().default(null),
+        placement: sectionPlacement,
+        collapsed: z
+          .boolean({ error: "must be a boolean" })
+          .optional()
+          .default(false),
+      })
+      .strict(),
+  ]);
+
+  const listViewSchema = z.union([
+    z.enum(["table", "shelf", "timeline"]),
+    z
+      .object({
+        kind: z.literal("slot"),
+        id: sectionId,
+        label: nonEmptyString(),
+        /** Route-only search keys the slot view reads (`urlStringParam`). */
+        searchKeys: z.array(nonEmptyString()).optional().default([]),
+      })
+      .strict(),
+  ]);
 
   // Everything a generic surface needs to present an entity — and nothing a
   // surface computes. Kept data-only (strings and enums) so the eager client
-  // roster and the Swift catalog can carry it verbatim.
+  // roster and the Swift catalog can carry it verbatim; one declaration, two
+  // renderers.
   const entityPresentationMetadataSchema = z
     .object({
       titleField: nonEmptyString(),
@@ -382,6 +473,115 @@ const metadataSchemas = () => {
           sfSymbol: nonEmptyString(),
         })
         .strict(),
+      detail: z
+        .object({
+          /**
+           * `journal`: the first (relation) section renders before the
+           * supporting fields, with a "Log entry" create button prefilled
+           * from its filter.
+           */
+          variant: z
+            .enum(["standard", "journal"])
+            .optional()
+            .default("standard"),
+          hero: z
+            .object({
+              /** An enum or boolean field rendered as the title chip. */
+              chip: fieldKey.nullable().optional().default(null),
+              stats: z.array(fieldKey).optional().default([]),
+              /** A reference field rendered as the ancestry breadcrumb. */
+              breadcrumb: fieldKey.nullable().optional().default(null),
+              /** Defaults to whether the entity stores a gallery. */
+              images: z.boolean({ error: "must be a boolean" }).optional(),
+              /** Defaults to `["edit"]` when the entity has an update contract. */
+              actions: z.array(actionKey).optional(),
+            })
+            .strict()
+            .optional()
+            .prefault({}),
+          sections: z.array(detailSectionSchema).optional().default([]),
+        })
+        .strict()
+        .optional()
+        .prefault({}),
+      list: z
+        .object({
+          /** The first view is the default; `table` when omitted. */
+          views: z.array(listViewSchema).min(1).optional().default(["table"]),
+          shelf: z
+            .object({ subtitle: z.array(fieldKey).optional().default([]) })
+            .strict()
+            .nullable()
+            .optional()
+            .default(null),
+          /** Bulk/row verbs from `action-verbs.ts`. */
+          actions: z.array(actionKey).optional().default([]),
+          links: z
+            .array(
+              z
+                .object({ label: nonEmptyString(), path: nonEmptyString() })
+                .strict(),
+            )
+            .optional()
+            .default([]),
+          timeline: z
+            .object({
+              /** Date fields the default timeline emits `field:<key>` events for. */
+              fields: z.array(fieldKey).optional().default([]),
+              lifecycle: z
+                .object({
+                  start: fieldKey,
+                  milestones: z.array(fieldKey).optional().default([]),
+                  end: fieldKey.nullable().optional().default(null),
+                })
+                .strict()
+                .nullable()
+                .optional()
+                .default(null),
+            })
+            .strict()
+            .nullable()
+            .optional()
+            .default(null),
+        })
+        .strict()
+        .optional()
+        .prefault({}),
+      edit: z
+        .object({
+          /** Editor sections; derived from `control.section` when omitted. */
+          sections: z
+            .array(
+              z
+                .object({
+                  id: sectionId,
+                  title: nonEmptyString(),
+                  fields: z.array(fieldKey).min(1),
+                })
+                .strict(),
+            )
+            .nullable()
+            .optional()
+            .default(null),
+          /** Fields the update editor shows read-only, unconditionally. */
+          readOnlyOnUpdate: z.array(fieldKey).optional().default([]),
+          /** Fields locked when `field` equals `equals` on the record. */
+          readOnlyWhen: z
+            .array(
+              z
+                .object({
+                  field: fieldKey,
+                  equals: z.union([z.string(), z.boolean()]),
+                  fields: z.array(fieldKey).min(1),
+                })
+                .strict(),
+            )
+            .optional()
+            .default([]),
+        })
+        .strict()
+        .optional()
+        .prefault({}),
     })
     .strict();
 
@@ -419,6 +619,15 @@ const metadataSchemas = () => {
         })
         .strict(),
       mcp: z.array(nonEmptyString()),
+      /**
+       * `resources.<entity>.timeline`: `default` is the audit log plus the
+       * declared date fields; `custom` binds `extensions.ports.timeline`.
+       */
+      timeline: z
+        .enum(["default", "custom"])
+        .nullable()
+        .optional()
+        .default(null),
     })
     .strict();
 
@@ -510,6 +719,27 @@ const metadataSchemas = () => {
         .strict()
         .nullable()
         .optional(),
+      /**
+       * The list-route query parameter(s) the filter binds to. Compiled as
+       * `field ?? columnId` (a range as `<columnId>From/To`); declared only
+       * where the hand-written filter schema diverges from that rule.
+       */
+      wire: z
+        .union([
+          z
+            .object({ kind: z.literal("param"), name: nonEmptyString() })
+            .strict(),
+          z
+            .object({
+              kind: z.literal("range"),
+              from: nonEmptyString(),
+              to: nonEmptyString(),
+              presence: nonEmptyString().optional(),
+            })
+            .strict(),
+        ])
+        .nullable()
+        .optional(),
     })
     .strict();
 
@@ -597,6 +827,8 @@ const metadataSchemas = () => {
               dependentRefresh: sourceRefMetadataSchema.nullable(),
             })
             .strict(),
+          /** `(context, input) => EntityTimelineOut` for `capabilities.timeline: "custom"`. */
+          timeline: sourceRefMetadataSchema.nullable().optional().default(null),
         })
         .strict(),
     })
@@ -620,7 +852,6 @@ const metadataSchemas = () => {
       route: entityRouteMetadataSchema.nullable(),
       table: nonEmptyString().nullable(),
       identifiers: entityIdentifiersMetadataSchema,
-      native: entityNativeMetadataSchema.optional(),
       presentation: entityPresentationMetadataSchema,
       fields: entityContractMetadataSchema.nullable(),
       model: entityFieldModelMetadataSchema.optional(),
@@ -714,7 +945,6 @@ export function parseEntityFieldModelMetadata(
     field === "key" ||
     field === "entity" ||
     field === "columnId" ||
-    field === "detailSection" ||
     field === "section"
   )
     throw new Error(`${path} must be a non-empty string.`);

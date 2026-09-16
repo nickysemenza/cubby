@@ -22,9 +22,7 @@ export type RunReportSummary = {
   cancelled: boolean;
 };
 
-export const summarizeRunReport = (
-  report: CookbookRunReport,
-): RunReportSummary => ({
+const summarizeRunReport = (report: CookbookRunReport): RunReportSummary => ({
   costUsd: report.total_cost_usd,
   costComplete: report.cost_complete,
   wallMs: report.wall_ms,

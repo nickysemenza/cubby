@@ -49,6 +49,32 @@ export const renderKernelBindingsArtifacts = (
         `  ${JSON.stringify(key)}: defineEntityOperations(${ports.repository?.export}),`,
     )
     .join("\n");
+  // `capabilities.timeline: "custom"` binds the declared port; `"default"`
+  // entities are served by the shared default implementation and stay out.
+  const timelineEntities = kernelEntities.filter(
+    ({ ports, timeline }) => timeline === "custom" && ports.timeline !== null,
+  );
+  const timelineImports = new Map<string, Set<string>>();
+  for (const { ports } of timelineEntities) {
+    const port = ports.timeline;
+    if (port === null) continue;
+    const exports = timelineImports.get(port.module) ?? new Set<string>();
+    exports.add(port.export);
+    timelineImports.set(port.module, exports);
+  }
+  const timelineImportSource = [...timelineImports.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const timelineBindings = timelineEntities
+    .map(
+      ({ key, ports }) =>
+        `  ${JSON.stringify(key)}: ${ports.timeline?.export},`,
+    )
+    .join("\n");
   const portExportChecks = [
     ...new Map(
       entities.flatMap((entity) => {
@@ -61,6 +87,7 @@ export const renderKernelBindingsArtifacts = (
           ports.search.projection,
           ports.search.semanticText,
           ports.search.dependentRefresh,
+          ports.timeline,
           ...entity.relationMutations.flatMap(({ itemSchema, adapter }) => [
             itemSchema,
             adapter,
@@ -97,7 +124,9 @@ export const renderKernelBindingsArtifacts = (
         generatedHeader +
         "// Generated port aliases retain deterministic import order.\n" +
         'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +
-        'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n\n' +
+        'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n' +
+        'import type { TimelineEntity } from "~/entities/generated/entity-timelines.gen";\n' +
+        'import type { EntityTimelineImplementation } from "~/server/entity-timeline/contracts";\n\n' +
         'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n\n' +
         `${portTypeImports}\n\n` +
         "/** Each literal module/export source reference is checked without a runtime import. */\n" +
@@ -107,14 +136,17 @@ export const renderKernelBindingsArtifacts = (
               `typeof ${portTypeModuleAliases.get(ref.module)}[${JSON.stringify(ref.export)}]`,
           )
           .join(", ")}];\n\n` +
-        `${runtimeAdapterImportSource}\n\n` +
+        `${runtimeAdapterImportSource}\n` +
+        `${timelineImportSource}\n\n` +
         "type CorrelatedEntityKernelBindings = {\n" +
         "  [E in EntityKernelEntity]: EntityKernelCoreBinding<E>;\n" +
         "};\n\n" +
         "// Generated runtime assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies CorrelatedEntityKernelBindings & { readonly __portExportChecks?: EntityPortExportChecks };\n` +
         "// Generated operation closures retain each binding's schema correlation.\n// oxfmt-ignore\n" +
-        `export const ENTITY_KERNEL_OPERATIONS = {\n${runtimeOperations}\n} as const;\n`,
+        `export const ENTITY_KERNEL_OPERATIONS = {\n${runtimeOperations}\n} as const;\n` +
+        "// Custom timeline implementations, keyed by entity; default-timeline entities are absent.\n// oxfmt-ignore\n" +
+        `export const ENTITY_TIMELINE_BINDINGS = {\n${timelineBindings}\n} as const satisfies { [E in TimelineEntity]?: EntityTimelineImplementation<E> };\n`,
     },
   ];
 };

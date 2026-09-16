@@ -43,6 +43,7 @@ import {
   lockAndValidateForDelete,
   matchesStringValues,
   notDeleted,
+  shortcodeSetCondition,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -183,6 +184,10 @@ export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
   financialAccountScaffold.where(filters, [
     ...auditDateWhereConditions(financialAccount, filters),
     ...relatedWhereConditions("financialAccount", filters, financialAccount.id),
+    shortcodeSetCondition(
+      sql`(SELECT lp."shortcode" FROM "LedgerParty" lp WHERE lp."id" = "FinancialAccount"."ledgerPartyId")`,
+      filters.ledgerPartyId,
+    ),
     // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
     // JS array in a template into a row constructor (`ANY(($1, $2))`), which
     // postgres rejects.

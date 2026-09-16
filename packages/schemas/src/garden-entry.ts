@@ -1,8 +1,16 @@
 import { z } from "zod";
 
-import { gardenEntryShortcode } from "./identifiers";
-import { createPaginatedResponseSchema } from "./pagination";
-import { generatedGardenEntryFieldSchemas } from "./generated/entity-field-schemas.gardenEntry.gen";
+import { auditDateFilterFields } from "./base-entity";
+import {
+  gardenEntryShortcode,
+  locationShortcode,
+  plantingShortcode,
+} from "./identifiers";
+import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
+import {
+  generatedGardenEntryFieldSchemas,
+  generatedGardenEntryFilterFields,
+} from "./generated/entity-field-schemas.gardenEntry.gen";
 import { displayImagesField } from "./display-images";
 
 export const gardenEntryCreateInput = z.object(
@@ -15,16 +23,20 @@ export const gardenEntryUpdateInput = z.object({
   id: gardenEntryShortcode,
   data: gardenEntryUpdateData,
 });
-export const gardenEntryOut = z
-  .object(generatedGardenEntryFieldSchemas.read)
-  .extend({
-    locationName: z.string(),
-    plantingName: z.string().nullable(),
-    // Anchor and `move` entries lock their location/planting/date fields —
-    // corrected only through location history, never the entry edit form.
-    // See `assertGardenEntryStructure` in `server/repo/garden/index.ts`.
-    anchorsPeriod: z.boolean(),
-  });
+export const gardenEntryFilterFields = {
+  ...auditDateFilterFields,
+  ...generatedGardenEntryFilterFields,
+  locationId: oneOrMany(locationShortcode).optional(),
+  plantingId: oneOrMany(plantingShortcode).optional(),
+  /**
+   * A planting's journal: its own entries plus whole-location entries
+   * observed during one of its confirmed location periods.
+   */
+  journalPlantingId: plantingShortcode.optional(),
+};
+export const gardenEntryFiltersSchema = z.object(gardenEntryFilterFields);
+export type GardenEntryFilters = z.infer<typeof gardenEntryFiltersSchema>;
+export const gardenEntryOut = z.object(generatedGardenEntryFieldSchemas.read);
 export type GardenEntryOut = z.infer<typeof gardenEntryOut>;
 export const gardenEntryListItemOut = gardenEntryOut.extend({
   displayImages: displayImagesField,

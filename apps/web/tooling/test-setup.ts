@@ -322,10 +322,10 @@ async function getFileDb() {
  * 7 enum types and 2 extensions all survive — that is precisely the per-database
  * work a `CREATE DATABASE ... TEMPLATE` was repeating for all 294 tests.
  *
- * Re-measured 2026-08-17 after docker-compose.yml was tuned for tests
- * (`fsync=off`, `synchronous_commit=off`, `full_page_writes=off`, statement
- * logging off) and the 1603 leaked IntegreSQL databases were dropped. Both
- * halves of the original trade-off moved, and the conclusion survives:
+ * Measured with docker-compose.yml tuned for tests (`fsync=off`,
+ * `synchronous_commit=off`, `full_page_writes=off`, statement logging off)
+ * and no leaked IntegreSQL databases dragging on the pool. Both halves of the
+ * original trade-off moved, and the conclusion survives:
  *
  *   - a fresh `getTestDatabase()` per test: **777ms -> 34ms**
  *   - this TRUNCATE-all reset:             **266ms -> 31ms**
@@ -448,6 +448,7 @@ async function waitForLockWaiter(db: Database): Promise<void> {
   // Lazy: this module is also vitest's `globalSetup`, which runs in the main
   // process before `test.env` applies, and `database-helpers/core` pulls in
   // `env.ts`, whose validation would fail there.
+  // oxlint-disable-next-line no-restricted-imports -- lazy by design, see above
   const { getDb } = await import("../src/server/repo/database-helpers/core");
   const deadline = Date.now() + LOCK_POLL_TIMEOUT_MS;
   for (;;) {
@@ -537,11 +538,17 @@ export async function seedEntity<E extends EntityKernelEntity>(
     { ENTITY_KERNEL_ENTITIES },
   ] = await Promise.all([
     import("../src/lib/test/mock-schema"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/entity-kernel/adapter"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/testing/request-context"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/request-context"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/generated/entity-bindings.gen"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/generated/entity-kernel-bindings.gen"),
+    // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/entity-kernel/contracts"),
   ]);
 

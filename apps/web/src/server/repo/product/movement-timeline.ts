@@ -1,10 +1,17 @@
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
+import {
+  type ExpenseShortcode,
+  parseEntityId,
+  parseShortcodeFor,
+  type ProductShortcode,
+  type ProjectShortcode,
+  type PurchaseShortcode,
+  type VendorShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
-  ProductMovementGroupOut,
-  ProductMovementLineOut,
-  ProductMovementProductOut,
-  ProductMovementTimelineInput,
-  ProductMovementTimelineOut,
+  ProductCategory,
+  ProductFilters,
+  ProductMovementKind,
 } from "@cubby/schemas/product";
 import { and, eq, inArray } from "drizzle-orm";
 import { groupBy, sumBy } from "es-toolkit";
@@ -13,7 +20,9 @@ import { householdLocalDate } from "~/lib/household-date";
 import {
   buildConfidentOwnershipIntervals,
   classifyProductMovement,
+  type ProductOwnershipInterval,
 } from "~/lib/product-movement";
+import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -23,14 +32,85 @@ import {
   purchaseProduct,
   vendor,
 } from "~/server/db/schema";
+import type { EntityTimelineImplementation } from "~/server/entity-timeline/contracts";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 
-import { productList } from "./crud";
+import { getProductsByShortcodes, productList } from "./crud";
 
 const ALL_PRODUCTS = { pageIndex: 0, pageSize: 100_000 } as const;
 
-const emptyTimeline = (): ProductMovementTimelineOut => ({
+export interface ProductMovementTimelineInput {
+  filters: ProductFilters;
+  /** Narrows the cohort to these products; the filters are ignored then. */
+  ids?: readonly string[] | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+  order: "asc" | "desc";
+}
+
+type MovementProject = { id: ProjectShortcode; name: string };
+export type ProductMovementLine = {
+  expenseId: ExpenseShortcode | null;
+  productId: ProductShortcode;
+  name: string;
+  kind: ProductMovementKind;
+  /** Positive when money left the household, negative when it came back. */
+  cost: number | null;
+  quantity: number | null;
+  signedQuantity: number | null;
+  expenseDate: string;
+  chargedTo: MovementProject | null;
+  provenanceOnly: boolean;
+};
+export type ProductMovementPurchase = {
+  id: PurchaseShortcode;
+  displayLabel: string | null;
+  orderId: string | null;
+  date: string | null;
+  vendor: { id: VendorShortcode; name: string } | null;
+};
+export type ProductMovementGroup = {
+  key: string;
+  date: string;
+  purchase: ProductMovementPurchase | null;
+  movements: ProductMovementLine[];
+};
+export type ProductMovementProduct = {
+  id: ProductShortcode;
+  name: string;
+  manufacturer: string;
+  category: ProductCategory | null;
+  coverImageUrl: string | null;
+  usedOnProjects: MovementProject[];
+  ownershipIntervals: ProductOwnershipInterval[];
+  confidenceLostAt: string | null;
+};
+export interface ProductMovementTimeline {
+  products: ProductMovementProduct[];
+  groups: ProductMovementGroup[];
+  summary: {
+    matchingProducts: number;
+    productsWithMovements: number;
+    movementCount: number;
+    spent: number;
+    recovered: number;
+    netCost: number;
+    unknownAmountCount: number;
+  };
+  extent: { from: string; to: string } | null;
+  omitted: { productsWithoutMovements: number; plannedMovements: number };
+}
+
+type CohortProduct = {
+  id: ProductShortcode;
+  name: string;
+  manufacturer: string;
+  category: ProductCategory | null;
+  coverImageUrl: string | null;
+};
+
+const emptyTimeline = (): ProductMovementTimeline => ({
   products: [],
   groups: [],
   summary: {
@@ -46,16 +126,45 @@ const emptyTimeline = (): ProductMovementTimelineOut => ({
   omitted: { productsWithoutMovements: 0, plannedMovements: 0 },
 });
 
-export async function getProductMovementTimeline(
+async function loadCohort(
   db: Database,
   input: ProductMovementTimelineInput,
-): Promise<ProductMovementTimelineOut> {
+): Promise<{ data: CohortProduct[]; count: number }> {
+  if (input.ids) {
+    const data = (await getProductsByShortcodes(db, [...input.ids])).map(
+      (item) => ({
+        id: item.id,
+        name: item.name,
+        manufacturer: item.manufacturer,
+        category: item.category,
+        coverImageUrl: item.coverImageUrl,
+      }),
+    );
+    return { data, count: data.length };
+  }
   const cohort = await productList(
     db,
     input.filters,
     [{ orderBy: "name", direction: "asc" }],
     ALL_PRODUCTS,
   );
+  return {
+    data: cohort.data.map((item) => ({
+      id: item.id,
+      name: item.name,
+      manufacturer: item.manufacturer,
+      category: item.category,
+      coverImageUrl: item.displayImages[0]?.url ?? null,
+    })),
+    count: cohort.count,
+  };
+}
+
+export async function getProductMovementTimeline(
+  db: Database,
+  input: ProductMovementTimelineInput,
+): Promise<ProductMovementTimeline> {
+  const cohort = await loadCohort(db, input);
   if (cohort.data.length === 0) return emptyTimeline();
 
   const resolved = await resolveLiveShortcodes(
@@ -145,9 +254,9 @@ export async function getProductMovementTimeline(
     if (!productId) return [];
     const classification = classifyProductMovement(row.cost, row.quantity);
     const date = row.purchaseDate ?? row.expenseDate;
-    if (input.movementFrom && date < input.movementFrom) return [];
-    if (input.movementTo && date > input.movementTo) return [];
-    const movement: ProductMovementLineOut = {
+    if (input.from && date < input.from) return [];
+    if (input.to && date > input.to) return [];
+    const movement: ProductMovementLine = {
       expenseId: parseShortcodeFor("expense", row.expenseCode),
       productId,
       name: row.expenseName,
@@ -194,9 +303,9 @@ export async function getProductMovementTimeline(
   const provenanceMovementRows = unitemizedRows.flatMap((row) => {
     const productId = codeById.get(row.productId);
     if (!productId) return [];
-    if (input.movementFrom && row.purchaseDate < input.movementFrom) return [];
-    if (input.movementTo && row.purchaseDate > input.movementTo) return [];
-    const movement: ProductMovementLineOut = {
+    if (input.from && row.purchaseDate < input.from) return [];
+    if (input.to && row.purchaseDate > input.to) return [];
+    const movement: ProductMovementLine = {
       expenseId: null,
       productId,
       name:
@@ -235,7 +344,7 @@ export async function getProductMovementTimeline(
   const movementRows = [...expenseMovementRows, ...provenanceMovementRows];
 
   const grouped = groupBy(movementRows, (row) => row.key);
-  const groups: ProductMovementGroupOut[] = Object.values(grouped).map(
+  const groups: ProductMovementGroup[] = Object.values(grouped).map(
     (members) => ({
       key: members[0]!.key,
       date: members[0]!.date,
@@ -289,7 +398,7 @@ export async function getProductMovementTimeline(
           );
   const usagesByProduct = groupBy(usageRows, (row) => row.productId);
   const today = householdLocalDate();
-  const products: ProductMovementProductOut[] = cohort.data.flatMap((item) => {
+  const products: ProductMovementProduct[] = cohort.data.flatMap((item) => {
     if (!productCodesWithMovements.has(item.id)) return [];
     const privateId = idByCode.get(item.id);
     if (!privateId) return [];
@@ -311,7 +420,7 @@ export async function getProductMovementTimeline(
         name: item.name,
         manufacturer: item.manufacturer,
         category: item.category,
-        coverImageUrl: item.displayImages[0]?.url ?? null,
+        coverImageUrl: item.coverImageUrl,
         usedOnProjects: (usagesByProduct[privateId] ?? [])
           .map((row) => ({
             id: parseShortcodeFor("project", row.projectCode),
@@ -357,3 +466,158 @@ export async function getProductMovementTimeline(
     },
   };
 }
+
+const KIND_LABEL = {
+  acquired: "Acquired",
+  exited: "Exited",
+  discarded: "Discarded",
+  adjusted: "Price adjusted",
+  unknown: "Unknown",
+} as const satisfies Record<ProductMovementKind, string>;
+
+const purchaseLabel = (purchase: ProductMovementPurchase) =>
+  [purchase.vendor?.name, purchase.displayLabel ?? purchase.orderId]
+    .filter((part): part is string => typeof part === "string" && part !== "")
+    .join(" · ") || "Purchase";
+
+const unitsLabel = (movement: ProductMovementLine) =>
+  movement.provenanceOnly
+    ? "Amount and quantity not itemized"
+    : movement.quantity === null
+      ? "Quantity unknown"
+      : movement.quantity === 0
+        ? "No unit moved"
+        : `${Math.abs(movement.quantity)} unit${Math.abs(movement.quantity) === 1 ? "" : "s"}`;
+
+/**
+ * The movement timeline in the generic `EntityTimelineOut` shape: purchase
+ * groups become dated groups, movements become events whose `amount` keeps
+ * the ledger sign (positive spent, negative recovered), proven ownership
+ * spans become confident intervals and the span after `confidenceLostAt`
+ * an open unconfident one.
+ */
+export function toEntityTimeline(
+  timeline: ProductMovementTimeline,
+): EntityTimelineOut {
+  const groups = timeline.groups.map((group) => ({
+    key: group.key,
+    date: group.date,
+    label: group.purchase ? purchaseLabel(group.purchase) : null,
+    link: group.purchase ? { entity: "purchase", id: group.purchase.id } : null,
+    events: group.movements.map((movement) => ({
+      id: movement.expenseId
+        ? `expense:${movement.expenseId}`
+        : `${group.key}:${movement.productId}:provenance`,
+      kind: movement.kind,
+      label: movement.name,
+      amount: movement.cost,
+      link: movement.expenseId
+        ? { entity: "expense", id: movement.expenseId }
+        : { entity: "product", id: movement.productId },
+      detail: [
+        KIND_LABEL[movement.kind],
+        unitsLabel(movement),
+        movement.chargedTo ? `Charged to ${movement.chargedTo.name}` : null,
+        movement.expenseDate !== group.date
+          ? `Ledger date ${movement.expenseDate}`
+          : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(" · "),
+    })),
+  }));
+  const markersByProduct = new Map<
+    string,
+    { date: string; kind: string; link: { entity: string; id: string } }[]
+  >();
+  for (const group of timeline.groups) {
+    for (const movement of group.movements) {
+      const marker = {
+        date: group.date,
+        kind: movement.kind,
+        link: movement.expenseId
+          ? { entity: "expense", id: movement.expenseId }
+          : { entity: "product", id: movement.productId },
+      };
+      const current = markersByProduct.get(movement.productId);
+      if (current) current.push(marker);
+      else markersByProduct.set(movement.productId, [marker]);
+    }
+  }
+  const rows = timeline.products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    imageUrl: product.coverImageUrl,
+    intervals: [
+      ...product.ownershipIntervals.map((interval) => ({
+        start: interval.start,
+        end: interval.end,
+        confident: true,
+      })),
+      ...(product.confidenceLostAt
+        ? [{ start: product.confidenceLostAt, end: null, confident: false }]
+        : []),
+    ],
+    markers: markersByProduct.get(product.id) ?? [],
+  }));
+  const { summary, omitted } = timeline;
+  const notes: string[] = [];
+  if (omitted.productsWithoutMovements > 0)
+    notes.push(
+      `${omitted.productsWithoutMovements} matching product${omitted.productsWithoutMovements === 1 ? " has" : "s have"} no recorded movement in this window.`,
+    );
+  if (omitted.plannedMovements > 0)
+    notes.push(
+      `${omitted.plannedMovements} planned movement${omitted.plannedMovements === 1 ? " is" : "s are"} omitted.`,
+    );
+  const out: EntityTimelineOut = {
+    groups,
+    rows,
+    stats: [
+      {
+        key: "products",
+        label: "Products",
+        value: String(summary.matchingProducts),
+      },
+      {
+        key: "movements",
+        label: "Movements",
+        value: String(summary.movementCount),
+      },
+      { key: "spent", label: "Spent", value: formatCurrency(summary.spent) },
+      {
+        key: "recovered",
+        label: "Recovered",
+        value: formatCurrency(summary.recovered),
+      },
+      {
+        key: "netCost",
+        label: "Net cost",
+        value: formatCurrency(summary.netCost),
+      },
+      {
+        key: "unknown",
+        label: "Unknown / unitemized",
+        value: String(summary.unknownAmountCount),
+      },
+    ],
+    notes,
+  };
+  if (timeline.extent) out.extent = timeline.extent;
+  return out;
+}
+
+/** `resources.product.timeline`, bound through `ports.timeline`. */
+export const productTimeline: EntityTimelineImplementation<"product"> = async (
+  context,
+  input,
+) =>
+  toEntityTimeline(
+    await getProductMovementTimeline(context.readDb, {
+      filters: input.filters,
+      ids: input.window.ids,
+      from: input.window.from,
+      to: input.window.to,
+      order: input.window.order,
+    }),
+  );

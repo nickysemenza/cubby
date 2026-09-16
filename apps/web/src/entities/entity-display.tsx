@@ -1,9 +1,15 @@
+import { amount as amountSchema } from "@cubby/schemas/codec";
 import type { Entity } from "@cubby/schemas/entity";
 import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
+import {
+  entityInspectorMetadata,
+  type BrowserRoutedEntity,
+} from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -28,13 +34,24 @@ import {
   type MobileColumnMeta,
 } from "~/app/_components/data-table/table-meta";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
+import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
+import { TableLink } from "~/app/_components/table/TableLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import {
   renderScalarValue,
   type ScalarDisplayValue,
 } from "~/components/common/scalar-value";
+import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
+
+import {
+  entities,
+  entityDetailParams,
+  entityPluralLabel,
+  isBrowserRoutedEntity,
+} from "./entities";
+import { readReferenceField, type ReferenceItem } from "./entity-references";
 
 type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
@@ -104,14 +121,15 @@ function widthClassName(
 function renderFormattedScalar(
   format: DisplayField["display"]["format"],
   value: ScalarDisplayValue,
+  surface: "list" | "detail" = "list",
 ): ReactNode {
-  if (value.kind === "empty") return renderScalarValue(value, "list");
+  if (value.kind === "empty") return renderScalarValue(value, surface);
   switch (format) {
     case "currency":
       return value.kind === "number" ? (
         <span className="text-positive">{formatCurrency(value.raw)}</span>
       ) : (
-        renderScalarValue(value, "list")
+        renderScalarValue(value, surface)
       );
     // Negative money is legitimate domain-wide (a refund-only vendor, a
     // credit), so a signed renderer — flat "text-positive" only reads as
@@ -122,7 +140,7 @@ function renderFormattedScalar(
           {formatCurrency(value.raw)}
         </span>
       ) : (
-        renderScalarValue(value, "list")
+        renderScalarValue(value, surface)
       );
     case "plainDate":
       return renderScalarValue(
@@ -130,7 +148,7 @@ function renderFormattedScalar(
           kind: "date",
           raw: value.kind === "date" ? value.raw : String(value.raw),
         },
-        "list",
+        surface,
       );
     case "timestamp":
       return renderScalarValue(
@@ -138,14 +156,27 @@ function renderFormattedScalar(
           kind: "timestamp",
           raw: value.kind === "timestamp" ? value.raw : String(value.raw),
         },
-        "list",
+        surface,
       );
     case "external-link": {
       const href = value.kind === "text" ? value.raw : String(value.raw);
       return href ? <ExternalLinkText href={href} truncate /> : <NoneValue />;
     }
+    // A `{ value, unit }` measure; anything else declared `amount` falls back
+    // to the kind-derived rendering rather than crashing the page.
+    case "amount": {
+      const parsed =
+        value.kind === "json" ? amountSchema.safeParse(value.raw) : null;
+      return parsed?.success ? (
+        <span className="font-mono tabular-nums">
+          {tryFormatAmount(parsed.data)}
+        </span>
+      ) : (
+        renderScalarValue(value, surface)
+      );
+    }
     case null:
-      return renderScalarValue(value, "list");
+      return renderScalarValue(value, surface);
   }
 }
 
@@ -169,14 +200,21 @@ function toMobileColumnMeta(
   };
 }
 
+// A structured array behind a `text-array` kind (product `externalIds` reads
+// as objects) renders as readable JSON unless a domain renderer claims it.
+const listOrJson = z.union([
+  z.array(z.string()).transform((raw) => ({ kind: "list" as const, raw })),
+  z.unknown().transform((raw) => ({ kind: "json" as const, raw })),
+]);
+const readListValue = (value: unknown): ScalarDisplayValue =>
+  listOrJson.parse(value);
+
 function readScalarField<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): ScalarDisplayValue {
   if (!field.readKey)
     throw new Error(`Display field ${field.key} needs a renderer`);
-  if (field.reference)
-    throw new Error(`Display field ${field.key} needs a specialized renderer`);
   // SAFETY: The generated model owns the read key; its scalar schema checks the value
   // before rendering, including absent fields in partial detail responses.
   const value = record[field.readKey as keyof TRecord];
@@ -206,11 +244,19 @@ function readScalarField<TRecord extends object>(
         raw: z.union([z.string(), z.date()]).parse(value),
       };
     case "text-array":
-      return { kind: "list", raw: z.array(z.string()).parse(value) };
-    default:
-      throw new Error(
-        `Display field ${field.key} needs a specialized renderer`,
-      );
+      return readListValue(value);
+    // A reference reads as its shortcode(s) here; `readReferenceField` below
+    // resolves the linked record for the detail surface.
+    case "identifier": {
+      if (field.reference?.multiple)
+        return { kind: "list", raw: z.array(z.string()).parse(value) };
+      const raw = z.string().parse(value);
+      return { kind: "text", raw, label: raw };
+    }
+    // A structured value renders as readable JSON unless a domain renderer
+    // claims it; the detail page never crashes on an undeclared shape.
+    case "json":
+      return { kind: "json", raw: value };
   }
 }
 
@@ -226,30 +272,180 @@ function copyScalarField<TRecord extends object>(
       return value.raw.join(", ");
     case "timestamp":
       return new Date(value.raw).toISOString();
+    case "json":
+      return JSON.stringify(value.raw);
     default:
       return String(value.raw);
   }
 }
+
+function referenceLink(entity: string, item: ReferenceItem): ReactNode {
+  const label = item.name ?? item.id;
+  // SAFETY: a manifest reference target is always a declared entity key.
+  if (!isBrowserRoutedEntity(entity as Entity) || entity === "usda-food")
+    return <span className="font-mono text-xs">{label}</span>;
+  return (
+    <TableLink
+      // SAFETY: `isBrowserRoutedEntity` above proves the manifest reference
+      // target names a routed entity.
+      to={entities[entity as BrowserRoutedEntity].routes.detail}
+      params={entityDetailParams(item.id)}
+      title={label}
+    >
+      {label}
+    </TableLink>
+  );
+}
+
+/** Reference fields link to the target's detail route; everything else
+ * renders through its declared `display.format`. */
+export function renderDetailFieldValue<TRecord extends object>(
+  record: TRecord,
+  field: DisplayField,
+): ReactNode {
+  const reference = readReferenceField(record, field);
+  if (reference !== null) {
+    if (reference.items.length === 0) return <NoneValue />;
+    return (
+      <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+        {reference.items.map((item) => (
+          <span key={item.id}>{referenceLink(reference.entity, item)}</span>
+        ))}
+      </span>
+    );
+  }
+  return renderFormattedScalar(
+    field.display.format,
+    readScalarField(record, field),
+    "detail",
+  );
+}
+
+/** Filter kinds whose URL value is one option or one id. */
+const COHORT_FILTER_KINDS = new Set(["select", "multiselect", "id", "idMulti"]);
+
+/**
+ * The list filter a detail field can seed: a descriptor on the same entity
+ * whose `field`/`columnId` names the field (or the key minus `Id` for a
+ * reference, `ingredientId` → `ingredient`) and whose kind takes one value.
+ */
+function cohortDescriptorFor(entity: Entity, field: DisplayField) {
+  const base = field.key.replace(/Ids?$/u, "");
+  return (
+    entityInspectorMetadata[entity].filterDescriptors.find(
+      (descriptor) =>
+        COHORT_FILTER_KINDS.has(descriptor.kind) &&
+        (descriptor.columnId === field.key ||
+          descriptor.field === field.key ||
+          (field.reference !== null && descriptor.columnId === base)),
+    ) ?? null
+  );
+}
+
+/**
+ * "Show all <plural> with <label> <value>" beside a field that a list filter
+ * can select on. Reference and enum fields get one icon link; a text-array
+ * with a multiselect filter links every value.
+ */
+function cohortFilterAction<TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+  field: DisplayField,
+): ReactNode {
+  if (!isBrowserRoutedEntity(entity)) return undefined;
+  const descriptor = cohortDescriptorFor(entity, field);
+  if (descriptor === null) return undefined;
+  const plural = entityPluralLabel(entity).toLocaleLowerCase();
+  const label = field.label.toLocaleLowerCase();
+  const linkTo = (value: string, text: string) => (
+    <EntityFilterLink
+      key={value}
+      to={entities[entity].routes.list}
+      search={{ [descriptor.urlKey]: value }}
+      label={`Show all ${plural} with ${label} ${text}`}
+    />
+  );
+  const reference = readReferenceField(record, field);
+  if (reference !== null) {
+    const [item] = reference.items;
+    return item && reference.items.length === 1
+      ? linkTo(item.id, item.name ?? item.id)
+      : undefined;
+  }
+  const value = readScalarField(record, field);
+  switch (value.kind) {
+    case "text":
+      return linkTo(value.raw, value.label);
+    case "list":
+      return value.raw.length > 0 ? (
+        <span className="flex flex-wrap">
+          {value.raw.map((item) => linkTo(item, item))}
+        </span>
+      ) : undefined;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The detail fields a `fields` section of `entitySummary[entity].detail`
+ * names, in declared order; without a section, every `display.detail` field
+ * by `detailOrder`.
+ */
+const entityDetailFields = (
+  entity: Entity,
+  fields?: readonly string[],
+): DisplayField[] => {
+  const detail = entityDisplayFields(entity, "detail");
+  if (fields === undefined)
+    return [...detail].sort(
+      (left, right) =>
+        (left.display.detailOrder ?? Number.MAX_SAFE_INTEGER) -
+        (right.display.detailOrder ?? Number.MAX_SAFE_INTEGER),
+    );
+  return fields.map((key) => {
+    const field = detail.find((candidate) => candidate.key === key);
+    if (field === undefined)
+      throw new Error(`${entity}.${key} is not a display.detail field`);
+    return field;
+  });
+};
+
+/** The field keys of one declared `fields` detail section. */
+export const entitySectionFields = (
+  entity: Entity,
+  sectionId: string,
+): readonly string[] => {
+  const section = entitySummary[entity].detail.sections.find(
+    (candidate) => candidate.id === sectionId,
+  );
+  if (section === undefined || section.kind !== "fields")
+    throw new Error(`${entity} declares no fields section ${sectionId}`);
+  return section.fields;
+};
+
+export type DetailFieldRenderer<TRecord extends object> = (
+  record: TRecord,
+) => Omit<BasicInfoField, "label"> & { label?: string };
 
 export function EntityBasicInfo<TRecord extends object>({
   entity,
   record,
   overrides = {},
   afterFields = {},
-  section = "overview",
+  fields: fieldKeys,
+  cohortLinks = true,
   actions,
   header,
   footer,
 }: {
   entity: Entity;
   record: TRecord;
-  section?: string;
-  overrides?: Readonly<
-    Record<
-      string,
-      (record: TRecord) => Omit<BasicInfoField, "label"> & { label?: string }
-    >
-  >;
+  /** A declared `fields` section's keys; every `display.detail` field when omitted. */
+  fields?: readonly string[];
+  overrides?: Readonly<Record<string, DetailFieldRenderer<TRecord>>>;
+  /** Derive a "show all" list link for fields a filter descriptor can select on. */
+  cohortLinks?: boolean;
   /** Computed facts retain their domain renderer beside the declared field
    * they enrich. They do not become persisted entity fields. */
   afterFields?: Readonly<Record<string, readonly BasicInfoField[]>>;
@@ -257,13 +453,7 @@ export function EntityBasicInfo<TRecord extends object>({
   header?: ReactNode;
   footer?: ReactNode;
 }) {
-  const fields = entityDisplayFields(entity, "detail")
-    .filter((field) => field.display.detailSection === section)
-    .sort(
-      (left, right) =>
-        (left.display.detailOrder ?? Number.MAX_SAFE_INTEGER) -
-        (right.display.detailOrder ?? Number.MAX_SAFE_INTEGER),
-    );
+  const fields = entityDetailFields(entity, fieldKeys);
   for (const key of [...Object.keys(overrides), ...Object.keys(afterFields)]) {
     if (!fields.some((field) => field.key === key)) {
       throw new Error(`Undeclared detail renderer for ${entity}.${key}`);
@@ -274,22 +464,32 @@ export function EntityBasicInfo<TRecord extends object>({
       actions={actions}
       header={header}
       footer={footer}
-      fields={fields.flatMap((field) => [
-        {
-          label: field.label,
-          ...(overrides[field.key]?.(record) ?? {
-            value: renderScalarValue(readScalarField(record, field), "detail"),
-          }),
-        },
-        ...(afterFields[field.key] ?? []),
-      ])}
+      fields={fields.flatMap((field) => {
+        const rendered = overrides[field.key]?.(record) ?? {
+          value: renderDetailFieldValue(record, field),
+        };
+        // A renderer that names `filterAction` (even as null) owns the
+        // cohort affordance; otherwise the manifest's descriptor supplies it.
+        const filterAction =
+          "filterAction" in rendered
+            ? rendered.filterAction
+            : cohortLinks
+              ? cohortFilterAction(entity, record, field)
+              : undefined;
+        return [
+          { label: field.label, ...rendered, filterAction },
+          ...(afterFields[field.key] ?? []),
+        ];
+      })}
     />
   );
 }
 
 /** The concrete value shapes a generic `EditableCell` config can save. */
 type EditableFieldValue = string | number | null;
-const editableFieldValue = z.union([z.string(), z.number()]).nullable();
+// `nullish`: an optional read key absent from a partial projection edits
+// from empty rather than failing the whole fields section.
+const editableFieldValue = z.union([z.string(), z.number()]).nullish();
 
 /**
  * A field's editable control, derived from its declared `control.kind` and
@@ -416,9 +616,9 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
       // trusts throughout (see `readScalarField` above); the parse turns
       // the untyped indexed read into the concrete `EditableFieldValue`
       // every generic control branch renders.
-      const value = editableFieldValue.parse(
-        record[field.readKey as keyof TRecord],
-      );
+      const value =
+        editableFieldValue.parse(record[field.readKey as keyof TRecord]) ??
+        null;
       const save = async (next: EditableFieldValue): Promise<void> => {
         await mutate({ id: record.id, data: { [key]: next } });
       };
@@ -469,6 +669,16 @@ export function createEntityDisplayColumns<TRecord extends object>(
   entity: Entity,
   helper: CubbyColumnHelper<TRecord>,
   overrides?: CubbyColumnCollection<TRecord>,
+  options: {
+    /**
+     * Restrict to these column ids, in this order (a relation section's
+     * declared `columns`). Reference and structured fields without an
+     * override then render generically — a link to the target, readable
+     * JSON — instead of failing: an embedded table shows the declaration's
+     * columns as-is.
+     */
+    only?: readonly string[];
+  } = {},
 ): CubbyColumnCollection<TRecord> {
   // SAFETY: `generatedEntitySort` is `as const satisfies Partial<Record<Entity,
   // ...>>`, so its inferred type carries only the entity keys actually present
@@ -483,9 +693,22 @@ export function createEntityDisplayColumns<TRecord extends object>(
     >
   )[entity];
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
+  const { only } = options;
+  const listFields = orderedListFields(entity);
+  const selected =
+    only === undefined
+      ? listFields
+      : only.flatMap((id) => {
+          const field = listFields.find(
+            (candidate) => (candidate.display.columnId ?? candidate.key) === id,
+          );
+          if (field === undefined)
+            throw new Error(`${entity}.${id} is not a list column`);
+          return [field];
+        });
   return createCubbyColumnCollection<TRecord>((add) => {
     const usedOverrides = new Set<string>();
-    for (const field of orderedListFields(entity)) {
+    for (const field of selected) {
       if (field.display.standard) continue;
       const columnId = field.display.columnId ?? field.key;
       const defaultEnableSorting = sortableColumnIds.includes(columnId);
@@ -522,9 +745,34 @@ export function createEntityDisplayColumns<TRecord extends object>(
         field.kind === "json" ||
         field.kind === "identifier"
       ) {
-        throw new Error(
-          `Display field ${entity}.${field.key} needs a specialized column`,
+        // A computed column (`readKey: null`, no reference) has nothing
+        // generic to read: a full list page needs an override for it, while a
+        // relation table (`only`) keeps it visible but empty. References and
+        // structured values render through the detail renderer.
+        const readable = field.readKey !== null || field.reference !== null;
+        if (!readable && only === undefined) {
+          throw new Error(
+            `Display field ${entity}.${field.key} needs a specialized column`,
+          );
+        }
+        add(
+          helper.display({
+            id: columnId,
+            header: field.label,
+            enableSorting: defaultEnableSorting,
+            meta: attachCubbyColumnMeta({
+              className: widthClassName(field.display.width),
+              mobile: toMobileColumnMeta(field.display.mobile),
+            }),
+            cell: ({ row }) =>
+              readable ? (
+                renderDetailFieldValue(row.original, field)
+              ) : (
+                <NoneValue />
+              ),
+          }),
         );
+        continue;
       }
       const format = field.display.format;
       add(

@@ -7,7 +7,10 @@ import {
   plantingShortcode,
   productShortcode,
 } from "../identifier-fields.js";
-import { plantingStatus } from "@cubby/schemas/garden-fields";
+import {
+  plantingLocationStartKind,
+  plantingStatus,
+} from "@cubby/schemas/garden-fields";
 import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 
@@ -15,16 +18,7 @@ const optionalText = z.string().trim().min(1).nullable();
 export default defineEntity({
   key: "planting",
   names: { singular: "Planting", plural: "Plantings" },
-  route: {
-    basePath: "plantings",
-    list: null,
-    detail: {
-      component: {
-        module: "~/app/garden/planting-detail",
-        export: "PlantingDetail",
-      },
-    },
-  },
+  route: { basePath: "plantings", list: null, detail: true },
   table: "Planting",
   identifiers: { brand: "PlantingId", shortcode: "PLT-" },
   presentation: {
@@ -37,6 +31,84 @@ export default defineEntity({
         "Record what is growing now or plan the next crop for one of your garden locations.",
     },
     icons: { lucide: "Sprout", sfSymbol: "leaf" },
+    detail: {
+      variant: "journal",
+      hero: {
+        chip: "status",
+        images: false,
+        actions: [
+          "edit",
+          "startPlanting",
+          "movePlanting",
+          "splitPlanting",
+          "finishPlanting",
+        ],
+      },
+      sections: [
+        {
+          kind: "relation",
+          id: "garden-history",
+          title: "Journal",
+          relation: "entries",
+          filter: { descriptor: "plantingId" },
+          columns: [
+            "kind",
+            "observedOn",
+            "locationId",
+            "note",
+            "harvestAmount",
+          ],
+          sort: { field: "observedOn", direction: "desc" },
+        },
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Planting details",
+          placement: "supporting",
+          fields: [
+            "ingredientId",
+            "variety",
+            "status",
+            "locationId",
+            "intendedLocationId",
+            "sourceProductId",
+            "parentPlantingId",
+            "quantity",
+            "plannedWindow",
+            "plannedDate",
+            "sowedOn",
+            "transplantedOn",
+            "finishedOn",
+            "notes",
+          ],
+        },
+        {
+          kind: "slot",
+          id: "location-history",
+          title: "Location history",
+          placement: "supporting",
+        },
+        {
+          kind: "slot",
+          id: "planting-guide",
+          title: "Local planting guide",
+          placement: "supporting",
+        },
+      ],
+    },
+    list: {
+      views: ["table", "timeline"],
+      actions: ["delete"],
+      timeline: {
+        fields: ["plannedDate", "sowedOn", "transplantedOn", "finishedOn"],
+        lifecycle: {
+          start: "sowedOn",
+          milestones: ["plannedDate", "transplantedOn"],
+          end: "finishedOn",
+        },
+      },
+    },
+    edit: { readOnlyOnUpdate: ["status", "locationId"] },
   },
   model: {
     fields: [
@@ -44,6 +116,9 @@ export default defineEntity({
         key: "ingredientId",
         kind: "identifier",
         reference: { entity: "ingredient" },
+        label: "Crop",
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true, detailOrder: 0 },
         validation: {
           read: ingredientShortcode,
           create: ingredientShortcode,
@@ -55,6 +130,9 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "product" },
+        label: "Seed source",
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { detail: true, detailOrder: 5 },
         validation: {
           read: productShortcode.nullable(),
           create: productShortcode.nullable().default(null),
@@ -66,6 +144,9 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "location" },
+        label: "Location",
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true, detailOrder: 3 },
         validation: {
           read: locationShortcode.nullable(),
           create: locationShortcode.nullable().default(null),
@@ -77,6 +158,9 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "location" },
+        label: "Intended location",
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { detail: true, detailOrder: 4 },
         validation: {
           read: locationShortcode.nullable(),
           create: locationShortcode.nullable().default(null),
@@ -88,6 +172,8 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "planting" },
+        label: "Split from",
+        display: { detail: true, detailOrder: 6 },
         validation: {
           read: plantingShortcode.nullable(),
           create: null,
@@ -97,6 +183,15 @@ export default defineEntity({
       {
         key: "status",
         kind: "enum",
+        control: {
+          kind: "select",
+          options: [
+            { value: "planned", label: "Planned" },
+            { value: "growing", label: "Growing" },
+            { value: "finished", label: "Finished" },
+          ],
+        },
+        display: { list: true, detail: true, detailOrder: 2 },
         validation: {
           read: plantingStatus,
           create: plantingStatus.default("planned"),
@@ -107,6 +202,8 @@ export default defineEntity({
         key: "variety",
         kind: "text",
         nullable: true,
+        control: { kind: "text" },
+        display: { list: true, detail: true, detailOrder: 1 },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -117,6 +214,8 @@ export default defineEntity({
         key: "quantity",
         kind: "text",
         nullable: true,
+        control: { kind: "text" },
+        display: { detail: true, detailOrder: 7 },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -127,6 +226,8 @@ export default defineEntity({
         key: "notes",
         kind: "text",
         nullable: true,
+        control: { kind: "textarea" },
+        display: { detail: true, detailOrder: 13 },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -137,6 +238,8 @@ export default defineEntity({
         key: "plannedWindow",
         kind: "text",
         nullable: true,
+        control: { kind: "text" },
+        display: { detail: true, detailOrder: 8 },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -147,6 +250,8 @@ export default defineEntity({
         key: "plannedDate",
         kind: "date",
         nullable: true,
+        control: { kind: "date" },
+        display: { detail: true, detailOrder: 9, format: "plainDate" },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -157,6 +262,13 @@ export default defineEntity({
         key: "sowedOn",
         kind: "date",
         nullable: true,
+        control: { kind: "date" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 10,
+          format: "plainDate",
+        },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -167,6 +279,8 @@ export default defineEntity({
         key: "transplantedOn",
         kind: "date",
         nullable: true,
+        control: { kind: "date" },
+        display: { detail: true, detailOrder: 11, format: "plainDate" },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -177,11 +291,82 @@ export default defineEntity({
         key: "finishedOn",
         kind: "date",
         nullable: true,
+        control: { kind: "date" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 12,
+          format: "plainDate",
+        },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
           update: plainDate.nullable().optional(),
         },
+      },
+      {
+        // Create-only: the first location period's start. Must stay the same
+        // Zod as `gardenCreatePlantingInput` (`packages/schemas/src/garden.ts`),
+        // which `createPlanting` reads.
+        key: "inLocationSince",
+        kind: "date",
+        nullable: true,
+        readKey: null,
+        label: "In location since",
+        control: { kind: "date" },
+        validation: {
+          read: null,
+          create: plainDate.nullable().optional(),
+          update: null,
+        },
+      },
+      {
+        key: "inLocationSinceKind",
+        kind: "enum",
+        readKey: null,
+        label: "Location start",
+        control: {
+          kind: "select",
+          options: [
+            { value: "actual", label: "Actual date" },
+            { value: "recorded", label: "Recorded date" },
+          ],
+        },
+        validation: {
+          read: null,
+          create: plantingLocationStartKind.default("actual"),
+          update: null,
+        },
+      },
+      {
+        key: "ingredientName",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
+        key: "sourceProductName",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
+      },
+      {
+        key: "locationName",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
+      },
+      {
+        key: "intendedLocationName",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
+      },
+      {
+        // The crop ingredient's guide key, for the `planting-guide` slot.
+        key: "gardenGuideKey",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "pendingImageIds",
@@ -290,6 +475,8 @@ export default defineEntity({
       "sowedOn",
       "transplantedOn",
       "finishedOn",
+      "inLocationSince",
+      "inLocationSinceKind",
       "pendingImageIds",
     ],
     update: [
@@ -312,7 +499,10 @@ export default defineEntity({
     ],
     bulk: [],
     audit: ["status", "locationId"],
-    sort: { fields: ["createdAt", "updatedAt"], default: "createdAt" },
+    sort: {
+      fields: ["createdAt", "updatedAt", "status", "sowedOn", "finishedOn"],
+      default: "createdAt",
+    },
     intents: {
       fields: {
         capture: ["ingredientId", "locationId", "status", "pendingImageIds"],
@@ -329,7 +519,11 @@ export default defineEntity({
           "plannedDate",
           "sowedOn",
           "transplantedOn",
+          "inLocationSince",
+          "inLocationSinceKind",
           "pendingImageIds",
+          "removeImageIds",
+          "imageOrder",
         ],
       },
       create: ["capture", "full"],
@@ -353,6 +547,11 @@ export default defineEntity({
       "finishedOn",
       "images",
       "displayName",
+      "ingredientName",
+      "sourceProductName",
+      "locationName",
+      "intendedLocationName",
+      "gardenGuideKey",
       "createdAt",
       "updatedAt",
     ],
@@ -363,9 +562,36 @@ export default defineEntity({
     output: { module: "@cubby/schemas/garden", export: "plantingOut" },
     list: { module: "@cubby/schemas/garden", export: "plantingListItemOut" },
   },
-  // The initial garden list has no public filter vocabulary; lifecycle views
-  // are served by the dedicated overview and history operations.
-  filters: { audit: false, schema: null, descriptors: [] },
+  filters: {
+    audit: true,
+    schema: { module: "@cubby/schemas/garden", export: "plantingFilterFields" },
+    descriptors: [
+      {
+        columnId: "status",
+        kind: "multiselect",
+        placeholder: "Filter by status...",
+        options: [
+          { value: "planned", label: "Planned" },
+          { value: "growing", label: "Growing" },
+          { value: "finished", label: "Finished" },
+        ],
+        deriveSchema: true,
+        stored: true,
+      },
+      {
+        columnId: "locationId",
+        kind: "idMulti",
+        placeholder: "Filter by location...",
+        brandRef: { entity: "location", kind: "id" },
+      },
+      {
+        columnId: "ingredientId",
+        kind: "idMulti",
+        placeholder: "Filter by crop...",
+        brandRef: { entity: "ingredient", kind: "id" },
+      },
+    ],
+  },
   relations: [
     {
       key: "ingredient",
@@ -471,6 +697,19 @@ export default defineEntity({
       },
     },
     {
+      key: "entries",
+      label: "Journal entries",
+      target: "gardenEntry",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "GardenEntry.plantingId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "GardenEntry.plantingId", direction: "outgoing" }],
+      },
+    },
+    {
       key: "location-history-entries",
       label: "Location history entries",
       target: "gardenEntry",
@@ -501,6 +740,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
+    timeline: "default",
     images: "gallery",
     countable: true,
     softDelete: true,

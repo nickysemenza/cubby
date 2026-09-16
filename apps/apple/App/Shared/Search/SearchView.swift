@@ -309,7 +309,7 @@ private struct SearchHitRow: View {
                 ForEach(PreviewFixtures.sampleRows) { row in
                     SearchHitRow(
                         hit: SearchHit(
-                            id: row.id, entityType: .product, title: row.title, subtitle: row.subtitle,
+                            id: row.id, entityType: "product", title: row.title, subtitle: row.subtitle,
                             typeHint: nil, imageUrl: row.imageURL?.absoluteString, matchKind: .prefix,
                             matchField: .title, matchReason: "name", matchTerms: []))
                 }

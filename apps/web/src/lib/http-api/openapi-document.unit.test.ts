@@ -127,7 +127,6 @@ const POST_QUERIES = [
   "/api/v1/image/list",
   "/api/v1/ingredient/enrichmentWorkbench",
   "/api/v1/location/search",
-  "/api/v1/product/movementTimeline",
   "/api/v1/product/search",
   "/api/v1/project/getDependencyGraph",
   "/api/v1/project/toolGallery",
@@ -190,6 +189,25 @@ describe("generated HTTP OpenAPI document", () => {
     for (const ref of references) resolve(ref);
   });
 
+  it("carries no component unreachable from a path", () => {
+    // Every named export is registered as a component whether or not a
+    // route uses it; each orphan is a type the generated client would carry.
+    const reachable = new Set<string>();
+    const refsIn = (serialized: string): string[] =>
+      [...serialized.matchAll(/"\$ref":"([^"]+)"/gu)].flatMap((match) => {
+        const name = componentName(match[1]);
+        return name === undefined ? [] : [name];
+      });
+    const queue = refsIn(JSON.stringify(document.paths));
+    for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
+      if (reachable.has(name)) continue;
+      reachable.add(name);
+      queue.push(...refsIn(JSON.stringify(schemas[name])));
+    }
+    const orphans = Object.keys(schemas).filter((name) => !reachable.has(name));
+    expect(orphans).toEqual([]);
+  });
+
   it("returns every success body without an envelope", () => {
     for (const entry of operations) {
       const successes = Object.keys(entry.responses).filter((status) =>
@@ -222,7 +240,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(331);
+    expect(operations).toHaveLength(334);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -280,7 +298,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 156, post: 137, patch: 19, delete: 19 });
+    expect(methods).toEqual({ get: 160, post: 136, patch: 19, delete: 19 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();

@@ -368,6 +368,7 @@ export const mealMcpOut = z.object({
   mealKind: mealOutFields.mealKind,
   recipes: mealOutFields.recipes,
   totals: mealOutFields.totals,
+  recipeNames: mealOutFields.recipeNames,
 });
 export type MealMcpOut = z.infer<typeof mealMcpOut>;
 

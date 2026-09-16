@@ -363,6 +363,20 @@ const INTENTIONAL_RESPELLINGS = {
   "ledgerTransfer::ledgerTransferFiltersSchema::toPartyId":
     "multi-value filter (oneOrMany(ledgerPartyShortcode)) over the generated scalar toPartyId field",
 
+  // --- financialAccount ---
+  "financialAccount::financialAccountFiltersSchema::ledgerPartyId":
+    "multi-value filter (oneOrMany(ledgerPartyShortcode)) over the generated scalar ledgerPartyId field",
+
+  // --- planting / gardenEntry: id filters over the generated scalar reference fields ---
+  "planting::plantingFiltersSchema::locationId":
+    "multi-value filter (oneOrMany(locationShortcode)) over the generated scalar locationId field",
+  "planting::plantingFiltersSchema::ingredientId":
+    "multi-value filter (oneOrMany(ingredientShortcode)) over the generated scalar ingredientId field",
+  "gardenEntry::gardenEntryFiltersSchema::locationId":
+    "multi-value filter (oneOrMany(locationShortcode)) over the generated scalar locationId field",
+  "gardenEntry::gardenEntryFiltersSchema::plantingId":
+    "multi-value filter (oneOrMany(plantingShortcode)) over the generated scalar plantingId field",
+
   // --- location: picker/breadcrumb/ancestor-roster projections of
   // location's own name/type/aliases fields (see the file comments on each
   // export — deliberately narrower than the read schema, same split as

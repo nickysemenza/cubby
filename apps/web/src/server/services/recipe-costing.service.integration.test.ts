@@ -1,5 +1,9 @@
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
-import { recipeTotals } from "@cubby/schemas/recipe-shared";
+import {
+  buildNutrition,
+  type NutritionTotals,
+  storedNutritionTotals,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -262,21 +266,22 @@ describe("RecipeCostingService", () => {
       const totals = (
         value: number | null,
         incomplete = false,
-      ): NutritionTotals => ({
-        cost: { status: "unavailable", reason: "no_data" },
-        nutrition: buildNutrition((key) => {
-          if (key !== "kcal" || value == null)
-            return { status: "unavailable", reason: "no_data" };
-          const amount = {
-            lower: value,
-            upper: null,
-            coverage: { covered: 1, total: incomplete ? 2 : 1 },
-          };
-          return incomplete
-            ? { status: "partial", ...amount }
-            : { status: "complete", ...amount };
-        }),
-      });
+      ): NutritionTotals =>
+        withMacros({
+          cost: { status: "unavailable", reason: "no_data" },
+          nutrition: buildNutrition((key) => {
+            if (key !== "kcal" || value == null)
+              return { status: "unavailable", reason: "no_data" };
+            const amount = {
+              lower: value,
+              upper: null,
+              coverage: { covered: 1, total: incomplete ? 2 : 1 },
+            };
+            return incomplete
+              ? { status: "partial", ...amount }
+              : { status: "complete", ...amount };
+          }),
+        });
       for (const [saved, value, isPartial] of [
         [zero, 0, false],
         [partial, 40, true],
@@ -336,7 +341,9 @@ describe("RecipeCostingService", () => {
       expect(await selectAllStaleRecipeIds(ctx.db)).toContain(saved.entityId);
       expect(await service().recomputeQueued([saved.entityId])).toBe(1);
       const state = await getRecipeTotalsState(ctx.db, saved.entityId);
-      expect(recipeTotals.safeParse(state?.totals).success).toBe(true);
+      // The column holds cost + nutrition only; `macros` is a read projection.
+      expect(storedNutritionTotals.safeParse(state?.totals).success).toBe(true);
+      expect(state?.totals).not.toHaveProperty("macros");
       expect(state?.totalsComputedAt).toBeInstanceOf(Date);
       expect(await selectAllStaleRecipeIds(ctx.db)).not.toContain(
         saved.entityId,

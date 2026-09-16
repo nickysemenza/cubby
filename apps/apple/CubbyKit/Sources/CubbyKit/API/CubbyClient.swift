@@ -14,7 +14,6 @@ public actor CubbyClient {
     public let baseURL: URL
     public let credentials: CredentialProvider
     private let api: Client
-    private let gardenEditAPI: Client
 
     public init(baseURL: URL, credentials: CredentialProvider, session: URLSession = .cubbyShared) {
         self.baseURL = baseURL
@@ -22,19 +21,13 @@ public actor CubbyClient {
         let transport = URLSessionTransport(configuration: .init(session: session))
         let auth = CubbyAuthMiddleware(credentials: credentials)
         // The spec's `servers` entry is "/", so the base URL must always be supplied here.
+        // `PatchNullMiddleware` is inert unless `update(_:id:patch:)` scopes cleared keys around
+        // a call, so every other request through `api` keeps its omitted-field semantics.
         self.api = Client(
             serverURL: baseURL,
             configuration: .cubby,
             transport: transport,
-            middlewares: [auth]
-        )
-        // Only full Garden editors encode nil as null. Generic attachment/order patches keep
-        // using `api`, where omitted optional fields must never clear the entry's content.
-        self.gardenEditAPI = Client(
-            serverURL: baseURL,
-            configuration: .cubby,
-            transport: transport,
-            middlewares: [auth, GardenEditEncodingMiddleware()]
+            middlewares: [auth, PatchNullMiddleware()]
         )
     }
 
@@ -115,14 +108,6 @@ public actor CubbyClient {
 
     /// `search` (≥2 chars) widens the garden-scoped options set with prefix matches, for an
     /// "Add…" picker outside the household's existing garden associations.
-    ///
-    /// The generated `GardenOptionsInput` is currently self-referential — `scripts/generator/
-    /// http-api/openapi.ts` registers the Zod wire projection and its `{ input: ... }`
-    /// wrapper under the same `"GardenOptionsInput"` component id, so the wrapper's `input` field
-    /// recurses into itself with no reachable `search` leaf (confirmed against the source Zod
-    /// schema at `packages/schemas/src/garden.ts`, which does carry `search`). Until that
-    /// generator bug is fixed upstream, `search` cannot be encoded on the wire; this always
-    /// requests the unscoped body so callers do not have to change again once it can be.
     public func gardenOptions(search: String? = nil) async throws -> GardenOptions {
         try await perform {
             GardenOptions(try await api.garden_options(query: .init(search: search)).ok.body.json)
@@ -133,14 +118,7 @@ public actor CubbyClient {
         try await perform { try await api.garden_guides().ok.body.json }
     }
 
-    public func createGardenPlanting(_ input: GardenCreatePlantingInput) async throws {
-        try await perform { _ = try await api.garden_createPlanting(body: .json(input)).ok }
-    }
-
-    public func recordGardenEntry(_ input: GardenRecordEntryInput) async throws {
-        _ = try await recordGardenEntryReturningID(input)
-    }
-
+    /// The photo import's batch entry; an editor-made entry goes through `create(_:body:)`.
     public func recordGardenEntryReturningID(_ input: GardenRecordEntryInput) async throws -> String {
         try await perform { try await api.garden_recordEntry(body: .json(input)).ok.body.json.id }
     }
@@ -177,104 +155,6 @@ public actor CubbyClient {
         }
     }
 
-    /// A garden bed or tray remains an ordinary `.area` location, with garden-only context held
-    /// in its additive classification fields.
-    public func createGardenLocation(name: String, kind: GardenLocationKind, conditions: String?) async throws
-    {
-        try await perform {
-            _ = try await api.resources_location_create(
-                body: .json(
-                    .init(
-                        name: name,
-                        _type: .area,
-                        gardenKind: kind,
-                        gardenConditions: conditions
-                    )
-                )
-            ).created
-        }
-    }
-
-    public func updateGardenLocation(
-        id: String, name: String?, kind: GardenLocationKind?, conditions: String?
-    ) async throws {
-        try await perform {
-            _ = try await api.resources_location_update(
-                path: .init(id: id),
-                body: .json(
-                    .init(
-                        name: name,
-                        gardenKind: kind,
-                        gardenConditions: conditions
-                    )
-                )
-            ).ok
-        }
-    }
-
-    /// This association only says what the product grows; it never creates edible inventory.
-    public func setGardenProduct(id: String, growsIngredientID: String?) async throws {
-        try await perform {
-            _ = try await api.resources_product_update(
-                path: .init(id: id),
-                body: .json(.init(growsIngredientId: growsIngredientID))
-            ).ok
-        }
-    }
-
-    public func setGardenIngredient(id: String, guideKey: String?) async throws {
-        try await perform {
-            _ = try await api.resources_ingredient_update(
-                path: .init(id: id),
-                body: .json(.init(gardenGuideKey: guideKey))
-            ).ok
-        }
-    }
-
-    /// Through `gardenEditAPI`, which encodes an absent editor field as `null`
-    /// (`GardenEditEncodingMiddleware`): the draft is the complete editor value, not a patch.
-    public func updateGardenPlanting(id: String, _ data: PlantingUpdateData) async throws {
-        try await perform {
-            _ = try await gardenEditAPI.resources_planting_update(path: .init(id: id), body: .json(data)).ok
-        }
-    }
-
-    public func gardenEntry(id: String) async throws -> GardenEntryOut {
-        try await perform {
-            GardenEntryOut(try await api.resources_gardenEntry_get(path: .init(id: id)).ok.body.json)
-        }
-    }
-
-    public func gardenPlanting(id: String) async throws -> GardenPlantingOut {
-        try await perform {
-            async let options = api.garden_options(query: .init()).ok.body.json
-            let output = try await api.resources_planting_get(path: .init(id: id)).ok.body.json
-            return GardenPlantingOut(output, options: try await options)
-        }
-    }
-
-    public func gardenEntries(
-        locationID: String? = nil, plantingID: String? = nil, page: Int = 1
-    ) async throws -> (items: [GardenEntryOut], hasMore: Bool) {
-        try await perform {
-            let result = try await api.garden_entries(
-                query: .init(locationId: locationID, plantingId: plantingID, page: page)
-            ).ok.body.json
-            return (result.items, result.hasMore)
-        }
-    }
-
-    public func gardenJournal(
-        plantingID: String, includeBedContext: Bool = false, page: Int = 1
-    ) async throws -> (items: [GardenJournalEntryOut], hasMore: Bool) {
-        try await perform {
-            let result = try await api.garden_journal(
-                query: .init(plantingId: plantingID, includeBedContext: includeBedContext, page: page)
-            ).ok.body.json
-            return (result.items, result.hasMore)
-        }
-    }
-
     public func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriodOut] {
         try await perform {
             try await api.garden_locationHistory(query: .init(plantingId: plantingID)).ok.body.json.periods
@@ -298,30 +178,56 @@ public actor CubbyClient {
         }
     }
 
-    /// Through `gardenEditAPI`, which encodes an absent `plantingId`/`note`/`harvestAmount` as
-    /// `null` (`GardenEditEncodingMiddleware`); an absent structural field (`locationId`, `kind`,
-    /// `observedOn`) is left alone, so a locked field is simply omitted from the draft.
-    public func updateGardenEntry(id: String, _ data: GardenEntryUpdateData) async throws {
-        try await perform {
-            _ = try await gardenEditAPI.resources_gardenEntry_update(path: .init(id: id), body: .json(data))
-                .ok
-        }
-    }
-
     // MARK: - Generic entity access
 
-    /// One page of rows for any entity the HTTP document lists.
+    /// One page of rows for any entity the HTTP document lists. `filters` are keyed by the list
+    /// route's query parameter names (`FilterDescriptor.wire`); an unknown name throws
+    /// `EntityFilterError` before any request.
     public func list(
         _ descriptor: EntityDescriptor,
         page: Int = 1,
         pageSize: Int = 50,
-        sort: String? = nil
+        sort: String? = nil,
+        filters: EntityFilterState = EntityFilterState()
     ) async throws -> ListPage<EntityRow> {
         try await perform {
             let result = try await descriptor.listPage(
-                client: api, page: page, pageSize: pageSize, sort: sort)
+                client: api, page: page, pageSize: pageSize, sort: sort, filters: filters)
             return ListPage(items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
         }
+    }
+
+    /// `resources.<entity>.timeline` for the same filter state a list takes, plus `ids`, `from`,
+    /// `to` and `order` under their wire names.
+    public func timeline(
+        _ descriptor: EntityDescriptor, filters: EntityFilterState = EntityFilterState()
+    ) async throws -> EntityTimelineOut {
+        try await perform { try await descriptor.timeline(client: api, filters: filters) }
+    }
+
+    /// `resources.<entity>.create` from an editor's draft; returns the new record's id. The body
+    /// is decoded into the typed create payload first, so an unknown key or malformed value fails
+    /// before any request.
+    public func create(_ descriptor: EntityDescriptor, body: [String: JSONValue]) async throws -> String {
+        try await perform { try await descriptor.create(.object(body), client: api) }
+    }
+
+    /// `resources.<entity>.update` from an editor's patch: changed values travel in the typed
+    /// body, cleared keys as `null` through `PatchNullMiddleware` (the generated client can only
+    /// omit an optional, and an omitted field means "leave as is"). An empty patch sends nothing.
+    public func update(_ descriptor: EntityDescriptor, id: String, patch: EntityPatch) async throws {
+        guard !patch.isEmpty else { return }
+        try await perform {
+            try await PatchNullMiddleware.$clearedFields.withValue(patch.cleared) {
+                try await descriptor.update(.object(patch.values), id: id, client: api)
+            }
+        }
+    }
+
+    /// `resources.<entity>.delete`; throws `EntityOperationError.unsupported` for an entity whose
+    /// delete operation the generated client does not carry.
+    public func delete(_ descriptor: EntityDescriptor, id: String) async throws {
+        try await perform { try await descriptor.delete(id: id, client: api) }
     }
 
     /// One row by id, or `nil` when the server does not have it.
@@ -489,13 +395,12 @@ public actor CubbyClient {
         }
     }
 
-    /// The product's image ids in display order — the order `setImageOrder` rewrites. The detail
-    /// payload's direct `attachments` carry full `ImageOut` bodies (URLs included); only the id is
-    /// projected out here because that is all this call is for.
-    public func productImageIDs(_ product: ProductCode) async throws -> [ImageCode] {
+    /// The entity's image ids in display order — the order `setImageOrder` rewrites. The detail
+    /// payload's `attachments` carry full bodies (URLs included); only the id is projected out
+    /// here because that is all this call is for.
+    public func imageIDs(_ descriptor: EntityDescriptor, id: String) async throws -> [ImageCode] {
         try await perform {
-            try await api.resources_product_get(path: .init(id: product.rawValue)).ok.body.json.attachments
-                .map(\.id)
+            descriptor.row(from: try await descriptor.getRow(client: api, id: id))?.imageIDs ?? []
         }
     }
 
@@ -622,8 +527,9 @@ public actor CubbyClient {
         var query = Operations.Search_find.Input.Query(
             query: trimmed, limit: min(max(limit, 1), SearchHit.maxLimit)
         )
-        // `search.find` declares its own copy of the searchable-entity enum, so catalog keys are
-        // matched into it by raw value; a key it has not heard of is dropped rather than sent.
+        // `search.find`'s query declares its own searchable-entity enum, so catalog keys are
+        // matched into it by raw value; a key it has not heard of is dropped rather than sent. Hits
+        // name their entity by raw string (`SearchHit.key` is nil for an undeclared kind).
         query.entityTypes = (kinds ?? EntityCatalog.intentExposed.map(\.key)).compactMap {
             .init(rawValue: $0.rawValue)
         }

@@ -30,6 +30,11 @@ const planting = plantingOut.parse({
   finishedOn: null,
   images: [],
   displayName: "Test crop",
+  ingredientName: "Test crop",
+  sourceProductName: null,
+  locationName: null,
+  intendedLocationName: null,
+  gardenGuideKey: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 });

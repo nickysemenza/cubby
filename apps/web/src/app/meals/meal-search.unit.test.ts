@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   formatWeekSearch,
   getDefaultShoppingRange,
-  mealCalendarSearchSchema,
   mealSuggestionsSearchSchema,
   parseWeekStart,
   shoppingListSearchDefaults,
@@ -11,65 +10,6 @@ import {
 } from "./meal-search";
 
 describe("meal route search", () => {
-  it("round-trips a nutrition date alongside independent table state", () => {
-    expect(
-      mealCalendarSearchSchema.parse({
-        view: "nutrition",
-        date: "2026-09-15",
-        sort: "-date",
-        page: 2,
-      }),
-    ).toMatchObject({
-      view: "nutrition",
-      date: "2026-09-15",
-      sort: "-date",
-      page: 2,
-    });
-    expect(
-      mealCalendarSearchSchema.parse({ view: "nutrition", date: "2026-02-30" })
-        .date,
-    ).toBeUndefined();
-  });
-  it("accepts typed calendar view/week params", () => {
-    expect(
-      mealCalendarSearchSchema.parse({
-        view: "table",
-        period: "week",
-        week: "2026-06-24",
-      }),
-    ).toEqual({ view: "table", period: "week", week: "2026-06-24" });
-  });
-
-  it("soft-falls back for malformed calendar params", () => {
-    expect(
-      mealCalendarSearchSchema.parse({
-        view: "board",
-        period: "agenda",
-        week: "next-week",
-      }),
-    ).toEqual({ view: undefined, period: undefined, week: undefined });
-  });
-
-  /**
-   * This route's `validateSearch` is a strict `z.object`, so any key it doesn't
-   * declare is stripped on every navigate. Before `tableSearchFields` was
-   * merged in, that silently ate the Table view's urlSync: `useTableState`
-   * wrote sort/page/pageSize, the route dropped them, and since
-   * `lastWrittenUrlState` was already set it never retried — no error, no
-   * loop, the sort just never stuck.
-   */
-  it("preserves the table-state keys useTableState writes", () => {
-    expect(
-      mealCalendarSearchSchema.parse({
-        view: "table",
-        week: "2026-06-24",
-        sort: "-date",
-        page: 2,
-        pageSize: 50,
-      }),
-    ).toMatchObject({ sort: "-date", page: 2, pageSize: 50 });
-  });
-
   it("normalizes arbitrary dates to the visible week start", () => {
     expect(formatWeekSearch(parseWeekStart("2026-06-24"))).toBe("2026-06-21");
   });

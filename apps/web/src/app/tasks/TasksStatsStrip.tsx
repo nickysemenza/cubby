@@ -20,12 +20,12 @@ export function TasksStatsStrip() {
   if (isLoading || !data) return <DrilldownMetricStrip loadingCount={7} />;
 
   const goToNext = () =>
-    navigate({ search: (prev) => ({ ...prev, view: "next" }) });
+    navigate({ search: (prev) => ({ ...prev, view: "agenda" }) });
   const goToInbox = () =>
     navigate({
       search: (prev) => ({
         ...prev,
-        view: "list",
+        view: "table",
         q: undefined,
         status: "not_started,later,in_progress,blocked",
         project: "__none__",

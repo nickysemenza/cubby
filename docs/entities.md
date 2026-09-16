@@ -52,9 +52,10 @@ export default defineEntity({
     // "dialog" puts `?create=true` in the list search and renders the capture
     // action; "page" links a hand-written `examples.new.tsx` as `routes.new`.
     create: "dialog",
-    // `null` keeps the route module hand-written; a component ref generates it.
-    list: { component: { module: "~/app/examples/example-list", export: "ExampleList" } },
-    detail: { component: { module: "~/app/examples/example-detail", export: "ExampleDetail" } },
+    // `true` generates the route module over the generic list/detail page;
+    // `null` keeps it hand-written.
+    list: true,
+    detail: true,
   },
   table: "Example",
   identifiers: { brand: "ExampleId", shortcode: "EXM-" },
@@ -64,6 +65,22 @@ export default defineEntity({
     description: "One sentence for the records catalog.",
     emptyState: { title: "No examples yet", description: "…", actionLabel: "New Example" },
     icons: { lucide: "Box", sfSymbol: "cube" },
+    detail: {
+      hero: { chip: "status", actions: ["edit"] },
+      sections: [
+        { kind: "fields", id: "overview", title: "Overview", fields: ["name", "status"] },
+        {
+          kind: "relation",
+          id: "tasks",
+          title: "Tasks",
+          relation: "tasks",
+          filter: { descriptor: "exampleId" },
+          columns: ["name", "status"],
+        },
+        { kind: "slot", id: "analytics", title: "Analytics", placement: "full" },
+      ],
+    },
+    list: { views: ["table", "shelf"], actions: ["delete"] },
   },
   fields: {
     create: { module: "@cubby/schemas/example", export: "exampleCreateInput" },
@@ -150,6 +167,29 @@ data only, safe for eagerly-loaded client code), spreads it into the inspector,
 and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. Navigation
 grouping, the Records catalog, empty states and the native shell's sections
 all read it; none of them keep a per-entity list of their own.
+
+`presentation.detail`, `.list` and `.edit` are the one declaration both the
+web and the native renderers draw from. `detail.hero` names the chip (an
+enum/boolean field), stat fields, a breadcrumb reference field, whether the
+gallery renders, and the action verbs; `detail.sections` is an ordered list of
+`fields` (a named subset of the `display.detail` fields — every such field is
+placed exactly once), `relation` (the target entity's list filtered by an
+id/idMulti descriptor on the target whose `brandRef` points back here, with
+optional `columns`/`sort`/`limit`), `timeline` (the entity's timeline
+capability) and `slot` (the one per-platform hand-written fill, rendered
+only where a registry provides it — `DetailSlotId<E>` / `ListSlotId<E>` in
+`entity-manifest.ts` type those registries). `history`, `relationships` and
+`images` are derived from capabilities and never declared. `list.views` names
+the renderers (`table`, `shelf`, `timeline`, or a `slot` view with its
+route-only `searchKeys`); the first is the default and the generated search
+schema carries `view` when there is more than one. `list.actions`/`links` are
+the header verbs and links; `list.timeline` names the date fields and
+lifecycle keys the default timeline emits. `edit.readOnlyOnUpdate` and
+`edit.readOnlyWhen` lock fields in the update editor. `capabilities.timeline`
+(`"default"`: audit log plus the declared date fields; `"custom"`: the
+`extensions.ports.timeline` implementation) publishes
+`resources.<entity>.timeline`. The compiler checks every named field,
+relation, descriptor, view and section id.
 
 `capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
 table, bound in `apps/web/src/server/repo/database-helpers/crud.ts`
@@ -268,10 +308,9 @@ label when the value changes its meaning, such as ISBN versus UPC. Static labels
 remain declared. `EntityBasicInfo.afterFields` anchors computed facts after a
 declared detail field without inventing persisted fields or API contracts.
 Unknown detail override keys and computed-fact anchors fail explicitly.
-`display.detailSection` assigns a fact to an authored section, defaulting to
-`overview`. Pass that section to `EntityBasicInfo` instead of maintaining a local
-field subset. Project resource links use this to retain their own card while
-the declaration still owns their labels and membership.
+`EntityBasicInfo` takes a declared `fields` section's keys
+(`entitySectionFields(entity, id)`) instead of a local field subset, so the
+declaration owns each section's labels and membership.
 
 `model.sort` owns the declared list-sort roster: `fields` (the ordered, complete
 sortable-column list), `default`, and optional `groupable`/`computed` subsets.
@@ -469,7 +508,7 @@ irreducible transaction and collision rules.
    and relationship projections explicit. A physical change still requires a
    compatible migration; generation does not apply production DDL.
 3. Add a kernel repository adapter for the capabilities the spec declares.
-4. Point `route.list` / `route.detail` at the page components (or set them
+4. Set `route.list` / `route.detail` to `true` for the generic pages (or
    `null` and hand-write the route module); add workflow extensions where needed.
 5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,

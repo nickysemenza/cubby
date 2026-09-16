@@ -51,6 +51,7 @@ export {
   isNotDeleted,
   lockAndValidateForDelete,
   matchesStringValues,
+  shortcodeSetCondition,
   notDeleted,
   presenceCondition,
   rangeConditions,

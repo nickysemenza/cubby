@@ -51,47 +51,20 @@ describe("executeListQueryWithCount", () => {
 });
 
 describe("formatSearchTerm", () => {
-  it("should return undefined for undefined input", () => {
+  it("should return undefined for undefined, empty, or whitespace-only input", () => {
     expect(formatSearchTerm(product.name, undefined)).toBeUndefined();
-  });
-
-  it("should return undefined for empty string", () => {
     expect(formatSearchTerm(product.name, "")).toBeUndefined();
-  });
-
-  it("should return undefined for whitespace only string", () => {
     expect(formatSearchTerm(product.name, "   ")).toBeUndefined();
   });
 
-  it("should return ilike SQL condition for valid term", () => {
-    const result = formatSearchTerm(product.name, "chicken");
-    expect(result).toBeDefined();
-    // The result is a SQL object from drizzle-orm, we just verify it's returned
-    expect(result).toBeTruthy();
-  });
-
-  it("should handle multi-word terms", () => {
-    const result = formatSearchTerm(product.name, "chicken breast");
-    expect(result).toBeDefined();
-    expect(result).toBeTruthy();
-  });
-
-  it("should handle special characters", () => {
-    const result = formatSearchTerm(product.name, "test@example.com");
-    expect(result).toBeDefined();
-    expect(result).toBeTruthy();
-  });
-
-  it("should handle unicode characters", () => {
-    const result = formatSearchTerm(product.name, "café résumé");
-    expect(result).toBeDefined();
-    expect(result).toBeTruthy();
-  });
-
-  it("should preserve whitespace in search term", () => {
+  it("wraps the term in an ilike pattern without trimming it", () => {
     const result = formatSearchTerm(product.name, "  trimmed  ");
-    expect(result).toBeDefined();
-    expect(result).toBeTruthy();
+    expect(result && dialect.sqlToQuery(result).sql).toBe(
+      `"Product"."name" ilike $1`,
+    );
+    expect(result && dialect.sqlToQuery(result).params).toEqual([
+      "%  trimmed  %",
+    ]);
   });
 });
 
@@ -141,21 +114,19 @@ describe("eqAnyOrPresence", () => {
     expect(eqAnyOrPresence(product.category, [], undefined)).toBeUndefined();
   });
 
-  it("falls back to eqAny's clause when presence is unset", () => {
-    const result = eqAnyOrPresence(product.category, ["food"], undefined);
-    expect(result).toBeDefined();
-  });
-
-  it("returns a presence-only clause when value is empty/undefined", () => {
-    expect(eqAnyOrPresence(product.category, undefined, "none")).toBeDefined();
-    expect(eqAnyOrPresence(product.category, [], "has")).toBeDefined();
-  });
-
-  it("ORs the value clause with the presence clause when both are set", () => {
-    const none = eqAnyOrPresence(product.category, ["food"], "none");
-    const has = eqAnyOrPresence(product.category, ["food"], "has");
-    expect(none).toBeDefined();
-    expect(has).toBeDefined();
+  it("ORs the value clause with the presence clause: a picked value plus (none) widens, it never ANDs into a contradiction", () => {
+    const result = eqAnyOrPresence(
+      product.category,
+      ["food", "produce"],
+      "none",
+    );
+    expect(result && dialect.sqlToQuery(result).sql).toBe(
+      `("Product"."category" in ($1, $2) or "Product"."category" is null)`,
+    );
+    expect(result && dialect.sqlToQuery(result).params).toEqual([
+      "food",
+      "produce",
+    ]);
   });
 });
 

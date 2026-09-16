@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import type { ReactNode } from "react";
 
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
+import JsonRenderer from "~/app/_components/json-renderer";
 import { NoneValue } from "~/components/ui/none-value";
 import { parsePlainDate } from "~/lib/plain-date";
 
@@ -12,7 +13,9 @@ export type ScalarDisplayValue =
   | { kind: "boolean"; raw: boolean }
   | { kind: "date"; raw: string }
   | { kind: "timestamp"; raw: string | Date }
-  | { kind: "list"; raw: string[] };
+  | { kind: "list"; raw: string[] }
+  /** A structured value with no domain renderer; shown as readable JSON. */
+  | { kind: "json"; raw: unknown };
 
 export function renderScalarValue(
   value: ScalarDisplayValue,
@@ -31,6 +34,8 @@ export function renderScalarValue(
       return value.raw;
     case "list":
       return value.raw.length ? value.raw.join(", ") : <NoneValue />;
+    case "json":
+      return <JsonRenderer input={value.raw} />;
     case "text":
       if (surface === "plain") return value.label || <NoneValue />;
       return value.label ? (

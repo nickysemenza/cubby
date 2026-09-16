@@ -2,7 +2,7 @@ import {
   getMealPreparationsOut,
   saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
-import { buildNutrition } from "@cubby/schemas/nutrition";
+import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { useMutation } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -19,16 +19,17 @@ const complete = (lower: number) => ({
   upper: null,
   coverage: { covered: 1, total: 1 },
 });
-const nutritionTotals = (cost: number, kcal: number, protein: number) => ({
-  cost: complete(cost),
-  nutrition: buildNutrition((key) =>
-    key === "kcal"
-      ? complete(kcal)
-      : key === "protein"
-        ? complete(protein)
-        : { status: "unavailable", reason: "no_data" },
-  ),
-});
+const nutritionTotals = (cost: number, kcal: number, protein: number) =>
+  withMacros({
+    cost: complete(cost),
+    nutrition: buildNutrition((key) =>
+      key === "kcal"
+        ? complete(kcal)
+        : key === "protein"
+          ? complete(protein)
+          : { status: "unavailable", reason: "no_data" },
+    ),
+  });
 
 const view = getMealPreparationsOut.parse({
   mealId: testShortcode("meal", "MEL-4K7M"),

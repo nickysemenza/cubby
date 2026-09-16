@@ -7,9 +7,6 @@ import type { PendingImage } from "~/app/_components/PendingImageUpload";
 export function useImageState() {
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
-  // null = untouched; an array is the full display order of the existing
-  // images (first = cover) after the user reordered them.
-  const [imageOrder, setImageOrder] = useState<string[] | null>(null);
   // Documents (PDF manuals) ride the same pendingImageIds/removeImageIds
   // plumbing but are tracked separately so the image UI (cover, reorder)
   // never sees them.
@@ -22,10 +19,6 @@ export function useImageState() {
 
   const handleRemovedImagesChange = (ids: string[]) => {
     setRemovedImageIds(ids);
-  };
-
-  const handleExistingImagesReorder = (orderedIds: string[]) => {
-    setImageOrder(orderedIds);
   };
 
   const handlePendingDocumentsChange = (documents: PendingImage[]) => {
@@ -53,25 +46,16 @@ export function useImageState() {
       );
     }
 
-    // `removedImageIds`/`imageOrder` name EXISTING images — ids that came
-    // back from the server as `ImageOut.id`, i.e. real `IMG-` shortcodes —
-    // same shortcode shape as `pendingIds` above, both asserted here because
-    // the callback props that feed this state
-    // (`onExistingImagesRemove`/`onExistingImagesReorder`) are typed as plain
-    // `string[]` since the same gallery component also handles pending
-    // images.
+    // `removedImageIds` names EXISTING images — ids that came back from the
+    // server as `ImageOut.id`, i.e. real `IMG-` shortcodes — the same
+    // shortcode shape as `pendingIds` above, asserted here because the
+    // callback prop that feeds this state (`onExistingImagesRemove`) is typed
+    // as plain `string[]` since the same gallery component also handles
+    // pending images. Reordering existing images is the generic edit
+    // dialog's affordance (`imageOrder`), not a full-page form's.
     const removedIds = [...removedImageIds, ...removedDocumentIds];
     if (!isCreate && removedIds.length > 0) {
       imageData.removeImageIds = removedIds.map((id) =>
-        parseShortcodeFor("image", id),
-      );
-    }
-
-    // If the user reordered the existing images, persist the new order.
-    // Removed ids may still appear here; the server applies order before the
-    // removal, so they are harmless.
-    if (!isCreate && imageOrder !== null) {
-      imageData.imageOrder = imageOrder.map((id) =>
         parseShortcodeFor("image", id),
       );
     }
@@ -84,15 +68,13 @@ export function useImageState() {
       pendingImages.length > 0 ||
       removedImageIds.length > 0 ||
       pendingDocuments.length > 0 ||
-      removedDocumentIds.length > 0 ||
-      imageOrder !== null
+      removedDocumentIds.length > 0
     );
   };
 
   const reset = () => {
     setPendingImages([]);
     setRemovedImageIds([]);
-    setImageOrder(null);
     setPendingDocuments([]);
     setRemovedDocumentIds([]);
   };
@@ -102,7 +84,6 @@ export function useImageState() {
     removedImageIds,
     handlePendingImagesChange,
     handleRemovedImagesChange,
-    handleExistingImagesReorder,
     handlePendingDocumentsChange,
     handleRemovedDocumentsChange,
     getImageData,

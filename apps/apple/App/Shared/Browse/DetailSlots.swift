@@ -1,0 +1,81 @@
+import CubbyKit
+import SwiftUI
+
+/// The one sanctioned `switch (key, id)` in the App: which declared detail slots and hero verbs
+/// native fills. A slot the catalog declares but this registry does not know renders nothing,
+/// and a verb it does not know is not offered (Q12: a slot is the only per-platform fill).
+enum DetailSlotRegistry {
+    /// Section content for `slot` on `key`'s detail; nil renders nothing (the section is skipped).
+    @MainActor
+    static func view(for key: EntityKey, slot: String, row: EntityRow, appModel: AppModel) -> AnyView? {
+        switch (key, slot) {
+        case (.meal, "nutrition"):
+            AnyView(MealNutritionSlot(mealID: row.id))
+        case (.planting, "location-history"):
+            AnyView(GardenLocationHistorySlot(row: row))
+        case (.planting, "planting-guide"):
+            AnyView(GardenGuideSlot(row: row))
+        default:
+            nil
+        }
+    }
+
+    /// The hero action row for the verbs `declared` on `key`'s presentation, minus `edit`
+    /// (the toolbar's); nil when none of the declared verbs has a native handler.
+    @MainActor
+    static func heroActions(
+        for key: EntityKey, declared: [String], row: EntityRow, onChanged: @escaping () -> Void
+    ) -> AnyView? {
+        switch key {
+        case .planting where declared.contains { GardenPlantingAction(rawValue: $0) != nil }:
+            AnyView(GardenPlantingActionsRow(row: row, declared: declared, onChanged: onChanged))
+        default:
+            nil
+        }
+    }
+}
+
+/// `meal.nutrition`: the per-person macro summary from `meal.nutrition` for one meal.
+private struct MealNutritionSlot: View {
+    let mealID: String
+    @Environment(AppModel.self) private var appModel
+    @State private var nutrition: MealNutritionModel?
+
+    var body: some View {
+        Group {
+            if let nutrition {
+                switch nutrition.state {
+                case .loading:
+                    LoadingIndicator(label: "Loading nutrition")
+                case .failed(let message):
+                    failure(message, nutrition)
+                case .loaded(let summary):
+                    MealNutritionPeopleView(summary: summary)
+                }
+                if let error = nutrition.refreshError, case .loaded = nutrition.state {
+                    failure(error, nutrition)
+                }
+            } else {
+                LoadingIndicator(label: "Loading nutrition")
+            }
+        }
+        .task(id: mealID) {
+            let model = MealNutritionModel(query: .meal(mealID), client: appModel.client)
+            nutrition = model
+            await model.refresh()
+        }
+        .task(id: appModel.entityMutationRevision) {
+            guard appModel.entityMutationRevision > 0, appModel.entityMutationKeys.contains(.meal)
+            else { return }
+            await nutrition?.refresh()
+        }
+    }
+
+    private func failure(_ message: String, _ nutrition: MealNutritionModel) -> some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            Text(message).font(.callout).foregroundStyle(.secondary)
+            if nutrition.isLoading { LoadingIndicator(label: "Retrying") }
+            Button("Retry") { Task { await nutrition.refresh() } }.disabled(nutrition.isLoading)
+        }
+    }
+}

@@ -37,8 +37,10 @@ final class AppModel {
     let photoMatches = PhotoMatchStore()
     let photoLibrary = PhotoLibraryStore()
     var lastError: String?
-    private(set) var relationshipMutationRevision = 0
-    private(set) var relationshipMutationEntities: Set<EntityKey> = []
+    /// Bumped by every write the app makes to an entity; a list or detail showing one of
+    /// `entityMutationKeys` refreshes on the next revision (`.task(id:)` on the views).
+    private(set) var entityMutationRevision = 0
+    private(set) var entityMutationKeys: Set<EntityKey> = []
     private(set) var relationshipMutationReplacement: RelationshipAcceptance?
 
     /// The app's model, for App Intents (which run in-process). Set once in `CubbyApp.init`.
@@ -154,15 +156,24 @@ final class AppModel {
         }
     }
 
+    /// Any screen that created, updated, or deleted an entity calls this with every entity kind
+    /// the write could have changed (a placement touches inventory, location, and product).
+    func recordEntityMutation(keys: Set<EntityKey>) {
+        entityMutationKeys = keys
+        relationshipMutationReplacement = nil
+        entityMutationRevision += 1
+    }
+
+    /// An accepted recommendation is an entity mutation on the kinds it links, plus a jump to the
+    /// surviving row when accepting merged the subject away.
     func recordRelationshipMutation(_ acceptance: RelationshipAcceptance) {
         switch acceptance.recommendation {
         case .expenseProject:
-            relationshipMutationEntities = [.expense, .project]
+            recordEntityMutation(keys: [.expense, .project])
         case .inventoryPlacement:
-            relationshipMutationEntities = [.inventory, .location, .product]
+            recordEntityMutation(keys: [.inventory, .location, .product])
         }
         relationshipMutationReplacement = acceptance.replacedSubject ? acceptance : nil
-        relationshipMutationRevision += 1
         if acceptance.replacedSubject {
             navigator.replaceCurrentRecord(
                 with: RecordSelection(

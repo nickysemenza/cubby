@@ -95,7 +95,10 @@ building and again before deploying. Production never depends on a test job.
 This trusts verification performed before merging. Builds/deployments still use
 GitHub Actions minutes; this policy removes repeated hosted verification costs,
 not all Actions usage. No self-hosted runner or Cloudflare Builds is required.
-The Cloudflare CI pilot is retired; its evaluation remains historical.
+Cloudflare Workers Builds was piloted and rejected: native PostgreSQL/pgvector/
+IntegreSQL and both browser engines worked, but no run reached a complete
+hosted pass with a cold-plus-two-warm timing result, so the pilot was
+disconnected and CI stayed on GitHub Actions plus local verification.
 
 The workflow policy takes effect after merging this branch. On September 7,
 2026, the complete warm `pnpm verify:local:full` passed in **124.47 seconds**
@@ -147,10 +150,8 @@ files (one, `garden.integration.test.ts`, moved from
 `integration-families/` to `src/server/repo/`, a real 1,070-line contract, not
 an index) — with `pool: "forks"`, `isolate: false`, so a worker's fork shares
 one module graph across its share of those files instead of re-isolating for
-each. `test:file:postgres <path>` now runs that exact file directly
-(`vitest run --project integration <path>`, no resolver); the deleted
-`tooling/run-postgres-file.ts` used to resolve a contract module to its owning
-family file first.
+each. `test:file:postgres <path>` runs that exact file directly
+(`vitest run --project integration <path>`, no resolver or family indirection).
 
 Measured on the same 8-core, 24 GiB Mac, `VITEST_MAX_WORKERS=6`, comparing the
 old family structure against the new one on the same commit (only

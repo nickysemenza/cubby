@@ -6,6 +6,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import { z } from "zod";
 
 import { Grid, Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -30,9 +31,17 @@ import { VendorBreakdown } from "./charts/vendor-breakdown";
 import {
   type ExpenseAnalyzeConfig,
   expenseAnalyzeConfigFromSearch,
+  expenseAnalyzeSearchFields,
   expenseAnalyzeSearchPatch,
   normalizeExpenseAnalyzeConfig,
 } from "./expense-analyze-config";
+
+const expenseAnalyzeSearchSchema = z.object(expenseAnalyzeSearchFields);
+const dateSearch = (search: {
+  date?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) => ({ date: search.date, dateFrom: search.dateFrom, dateTo: search.dateTo });
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
 import { expense } from "./expense.functions";
 
@@ -80,8 +89,14 @@ export function ExpenseAnalyticsView() {
   const { data, isLoading } = useQuery({
     ...expense.analytics.queryOptions(filters),
   });
+  // The generated search carries the analyzer keys as plain strings (the
+  // slot's `searchKeys`); the analyzer's own enums validate them here.
   const analyzeConfig = useMemo(
-    () => expenseAnalyzeConfigFromSearch(search, filters),
+    () =>
+      expenseAnalyzeConfigFromSearch(
+        { ...expenseAnalyzeSearchSchema.parse(search), ...dateSearch(search) },
+        filters,
+      ),
     [filters, search],
   );
   const handleAnalyzeConfigChange = useCallback(
@@ -133,7 +148,7 @@ export function ExpenseAnalyticsView() {
             // Exact month bounds supersede a relative date preset.
             date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
             ...filter,
-            view: "ledger" as const,
+            view: "table" as const,
           };
           return filter.dateFrom || filter.dateTo
             ? { ...nextSearch, dateRelative: undefined }

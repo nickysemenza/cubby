@@ -1,6 +1,10 @@
 import { imageOut } from "@cubby/schemas/image";
 import { mealOut } from "@cubby/schemas/meal";
-import { buildNutrition, nutritionTotals } from "@cubby/schemas/nutrition";
+import {
+  buildNutrition,
+  nutritionTotals,
+  withMacros,
+} from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -44,13 +48,15 @@ const existing = imageOut.parse(
 // so every nutrient is pinned to the "unavailable" branch instead, which
 // carries no `coverage` field at all. Built once, at import time, and reused
 // by every test below — only `images` varies per case.
-const zeroTotals = nutritionTotals.parse({
-  cost: { status: "unavailable", reason: "no_data" },
-  nutrition: buildNutrition(() => ({
-    status: "unavailable",
-    reason: "no_data",
-  })),
-});
+const zeroTotals = nutritionTotals.parse(
+  withMacros({
+    cost: { status: "unavailable", reason: "no_data" },
+    nutrition: buildNutrition(() => ({
+      status: "unavailable",
+      reason: "no_data",
+    })),
+  }),
+);
 const mealTemplate = mock(mealOut, {
   seed: 2,
   overrides: { id: mealId, recipes: [], totals: zeroTotals },

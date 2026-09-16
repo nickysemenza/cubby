@@ -237,7 +237,13 @@ const renderDerivedFilterFields = (
 };
 
 // One render pass preserves deterministic cross-artifact ordering and hashes.
-export type HttpResourceVerb = "list" | "get" | "create" | "update" | "delete";
+export type HttpResourceVerb =
+  | "list"
+  | "timeline"
+  | "get"
+  | "create"
+  | "update"
+  | "delete";
 export type HttpResources = Readonly<
   Record<
     string,
@@ -259,8 +265,19 @@ export const httpResourcesFor = (
     kernelEntitiesFor(entities).flatMap((entity) => {
       if (!entity.route || !entity.contract) return [];
       const verbs: HttpResourceVerb[] = [];
-      if (projections.list.some((candidate) => candidate.key === entity.key))
-        verbs.push("list");
+      const listed = projections.list.some(
+        (candidate) => candidate.key === entity.key,
+      );
+      if (listed) verbs.push("list");
+      // `/<basePath>/timeline` is registered before `/<basePath>/:id`: the
+      // contract keeps key order and itty-router takes the first match.
+      if (entity.timeline !== null) {
+        if (!listed)
+          throw new EntityDeclarationError(
+            `${entity.key}.capabilities.timeline needs a generated list (the timeline reads the list filters).`,
+          );
+        verbs.push("timeline");
+      }
       if (projections.detail.some((candidate) => candidate.key === entity.key))
         verbs.push("get");
       if (entity.contract.create) verbs.push("create");
@@ -270,18 +287,6 @@ export const httpResourcesFor = (
     }),
   );
 };
-
-/**
- * `resources.<key>.<verb>` ids the entity declarations flag `native`, for the
- * swift-openapi-generator filter (the OpenAPI stage adds the RPC ids flagged
- * on contract members and the automatic list/get verbs).
- */
-export const nativeResourceOperationsFor = (
-  entities: readonly CompiledEntity[],
-): string[] =>
-  entities.flatMap(({ key, native }) =>
-    Object.keys(native).map((verb) => `resources.${key}.${verb}`),
-  );
 
 /** Entity key -> output schema export name, for the OpenAPI stage's Swift aliases. */
 export const entityOutputsFor = (
@@ -978,9 +983,9 @@ export const renderEntityArtifacts = (
         // `identifiers.ts`, and `entity.ts` reaches back into the (much
         // larger) manifest module.
         'import type { Entity } from "../entity-core";\n' +
-        'import type { EntityPresentation } from "../entity-definitions/definition";\n\n' +
+        'import type { CompiledEntityPresentation } from "../entity-definitions/definition";\n\n' +
         'export { WAYFINDING_DOMAINS } from "../entity-definitions/definition";\n' +
-        'export type { EntityPresentation, WayfindingDomain } from "../entity-definitions/definition";\n\n' +
+        'export type { CompiledEntityPresentation as EntityPresentation, EntityDetailSection, EntityListView, WayfindingDomain } from "../entity-definitions/definition";\n\n' +
         "/**\n" +
         " * Display names for one entity, exactly as its literal declares them.\n" +
         " *\n" +
@@ -991,12 +996,13 @@ export const renderEntityArtifacts = (
         " */\n" +
         "export type EntityNames = { singular: string; plural: string | null };\n\n" +
         "/**\n" +
-        " * One entity's names plus its `presentation` block, verbatim: domain,\n" +
-        " * description, empty-state copy, icon names, title field. Data only —\n" +
-        " * for eagerly-loaded client code (the entity registry, navigation, empty\n" +
-        " * states, `identifiers.ts`) that must not pull the inspector.\n" +
+        " * One entity's names plus its `presentation` block with the hero defaults\n" +
+        " * resolved: domain, description, empty-state copy, icon names, title field,\n" +
+        " * detail sections, list views, edit rules. Data only — for eagerly-loaded\n" +
+        " * client code (the entity registry, navigation, empty states,\n" +
+        " * `identifiers.ts`) that must not pull the inspector.\n" +
         " */\n" +
-        "export type EntitySummary = EntityNames & EntityPresentation;\n\n" +
+        "export type EntitySummary = EntityNames & CompiledEntityPresentation;\n\n" +
         "/**\n" +
         " * Every entity key, in declaration order. The leaf roster: `entity-core`'s\n" +
         " * `entitySchema` is `z.enum(entityKeys)`, so this tuple carries no `Entity`\n" +
@@ -1025,7 +1031,7 @@ export const renderEntityArtifacts = (
         `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
         `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string; placeholder: string | null; initial: "today" | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; detailSection: string; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string; placeholder: string | null; initial: "today" | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | "amount" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +
@@ -1123,8 +1129,8 @@ export const renderEntityArtifacts = (
       source:
         generatedHeader +
         'import type { Entity } from "../entity";\n\n' +
-        'import type { EntityPresentation } from "../entity-definitions/definition";\n\n' +
-        "export type EntityInspectorMetadata = EntityPresentation & {\n" +
+        'import type { CompiledEntityPresentation } from "../entity-definitions/definition";\n\n' +
+        "export type EntityInspectorMetadata = CompiledEntityPresentation & {\n" +
         "  singular: string;\n" +
         "  plural: string | null;\n" +
         "  shortcodePrefix: string | null;\n" +
@@ -1154,12 +1160,14 @@ export const renderEntityArtifacts = (
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
         '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
+        '  wire: { kind: "param"; name: string } | { kind: "range"; from: string; to: string; presence?: string };\n' +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +
         "  repository: EntityPortSourceRef | null;\n" +
         "  references: { label: EntityPortSourceRef | null; resolver: EntityPortSourceRef | null };\n" +
         "  filters: EntityPortSourceRef | null;\n" +
         "  search: { projection: EntityPortSourceRef | null; semanticText: EntityPortSourceRef | null; dependentRefresh: EntityPortSourceRef | null };\n" +
+        "  timeline: EntityPortSourceRef | null;\n" +
         "};\n\n" +
         renderRecord({
           name: "entityInspectorMetadata",
@@ -1296,7 +1304,7 @@ export const renderEntityArtifacts = (
         generatedHeader +
         "/** HTTP resource verbs per entity; consumed by the start-operation registry generator. */\n" +
         "// oxfmt-ignore\n" +
-        `export const HTTP_RESOURCES = {\n${httpResources}\n} as const satisfies Record<string, { basePath: string; verbs: readonly ("list" | "get" | "create" | "update" | "delete")[] }>;\n`,
+        `export const HTTP_RESOURCES = {\n${httpResources}\n} as const satisfies Record<string, { basePath: string; verbs: readonly ("list" | "timeline" | "get" | "create" | "update" | "delete")[] }>;\n`,
     },
     ...renderSwiftEntityCatalog(entities, kernelContractCases),
     {

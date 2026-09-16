@@ -6,7 +6,8 @@
  */
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
-import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
+import { toStoredTotals } from "@cubby/schemas/nutrition";
+import type { StoredRecipeTotals } from "@cubby/schemas/recipe-shared";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -36,13 +37,14 @@ const recipeTotalsAreStale = sql`(${recipe.totalsComputedAt} IS NULL OR ${recipe
  */
 const updateRecipeTotalsBatch = async (
   db: Database | DrizzleTransaction,
-  entries: ReadonlyArray<{ id: RecipeId; totals: RecipeTotals }>,
+  entries: ReadonlyArray<{ id: RecipeId; totals: StoredRecipeTotals }>,
 ): Promise<void> => {
   if (entries.length === 0) return;
   const computedAt = new Date();
   const values = sql.join(
     entries.map(
-      (e) => sql`(${e.id}::uuid, ${JSON.stringify(e.totals)}::jsonb)`,
+      (e) =>
+        sql`(${e.id}::uuid, ${JSON.stringify(toStoredTotals(e.totals))}::jsonb)`,
     ),
     sql`, `,
   );
@@ -170,7 +172,7 @@ export const getRecipeTotalsState = async (
   db: Database | DrizzleTransaction,
   id: RecipeId,
 ): Promise<{
-  totals: RecipeTotals | null;
+  totals: StoredRecipeTotals | null;
   totalsComputedAt: Date | null;
 } | null> =>
   withTrace(TraceNames.db("recipe.getRecipeTotalsState"), async (span) => {
@@ -387,7 +389,7 @@ const findSubRecipeDescendantIds = async (
 export const commitRecipeTotals = async (
   db: Database,
   input: {
-    updates: ReadonlyArray<{ id: RecipeId; totals: RecipeTotals }>;
+    updates: ReadonlyArray<{ id: RecipeId; totals: StoredRecipeTotals }>;
     freshOnlyIds: RecipeId[];
     changedIds: RecipeId[];
     /**

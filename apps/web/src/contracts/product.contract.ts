@@ -45,7 +45,6 @@ export const productContract = defineContract("product", {
   externalIdSourceOptions: query({
     ...productWorkflowSchemas.externalIdSourceOptions,
   }),
-  movementTimeline: query({ ...productWorkflowSchemas.movementTimeline }),
   getByShortcodes: query({ ...productWorkflowSchemas.getByShortcodes }),
   merge: mutation({ ...productWorkflowSchemas.merge }),
   projectUses: query({ ...productWorkflowSchemas.projectUses }),

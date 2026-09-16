@@ -147,12 +147,6 @@ describe("entity kernel bindings", () => {
       }
       expect(binding.entity).toBe(entity);
       expect(binding.sort.fields).toContain(binding.sort.default);
-      expect(binding.lifecycle.delete).toBeDefined();
-      expect(binding.schemas.id).toBeDefined();
-      expect(binding.schemas.output).toBeDefined();
-      expect(binding.schemas.detail).toBeDefined();
-      expect(binding.schemas.list).toBeDefined();
-      expect(binding.schemas.filters).toBeDefined();
       expect(binding.schemas).toBe(ENTITY_SCHEMA_BINDINGS[entity]);
     }
   });

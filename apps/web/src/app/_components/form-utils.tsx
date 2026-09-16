@@ -84,7 +84,7 @@ interface CreateModeProps<TCreateData> extends BaseFormProps {
 }
 
 // Generic edit mode props
-export interface EditModeProps<TEditData, TEntity> extends BaseFormProps {
+interface EditModeProps<TEditData, TEntity> extends BaseFormProps {
   mode: "edit";
   onEdit: (data: TEditData) => void;
   onCreate?: never;
@@ -96,8 +96,8 @@ export interface EditModeProps<TEditData, TEntity> extends BaseFormProps {
  * `useEntityFormController` — replaces each form's hand-rolled
  * `Create*FormProps`/`Edit*FormProps` pair. Keeps `EditModeProps`'s `entity`
  * field name (rather than e.g. `record`) so these forms stay assignable to
- * `ComponentType<EditModeProps<TEditData, TEntity>>`, the shape
- * `editableDetailSection` invokes a detail page's edit form with.
+ * `ComponentType<EditModeProps<TEditData, TEntity>>`, the shape a detail
+ * edit surface (`ProductEditDialog`) invokes the form with.
  */
 export type EntityFormProps<
   TCreateData,

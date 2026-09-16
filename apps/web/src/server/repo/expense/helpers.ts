@@ -37,13 +37,11 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
  * contradicting sign says nothing and only corrupts the aggregates that sum the
  * raw column.
  *
- * The negative-cost half was NOT enforced until 2026-08-16, because 302 live
- * rows stored a positive quantity there — returns and refunds imported as
- * written. Those were normalized on 2026-08-06, and the 69 that imports had
- * reintroduced since were normalized on 2026-08-16, so the stored sign is now
- * consistent and this closes the door behind it. The readers deliberately keep
- * their `abs()` (see `expenseSignedUnitsSql`): this makes the column
- * trustworthy, it does not make them depend on it.
+ * The negative-cost half is enforced unconditionally: a returns/refund row
+ * must store a negative quantity matching its negative cost, keeping the
+ * aggregates that sum the raw column trustworthy. The readers deliberately
+ * keep their `abs()` (see `expenseSignedUnitsSql`): this enforcement makes the
+ * column trustworthy, it does not make them depend on it.
  *
  * A negative-cost line where no unit actually left — an Amazon "Account
  * adjustment" is a price concession with the item KEPT — takes `0`, not a

@@ -5,9 +5,9 @@
  * delete. Two mechanisms enforce that together, and they are not redundant:
  *
  * 1. `generateUniqueShortcode` pre-checks against the WHOLE table — soft-deleted
- *    rows included — so a retired code is a permanent tombstone. (Before the
- *    2026-07 cutover this check filtered on `notDeleted`, which is how 269 codes
- *    ended up shared between a deleted row and a live one.)
+ *    rows included — so a retired code is a permanent tombstone. A pre-check
+ *    filtered on `notDeleted` would let a retired code end up shared between a
+ *    deleted row and a live one.
  * 2. The `<Table>_shortcode_unique` index is authoritative. `insertWithShortcode`
  *    treats a violation of it as a lost race and retries with a fresh code rather
  *    than trusting the pre-check, which is only advisory across concurrent
@@ -201,11 +201,10 @@ const isShortcodeCollision = <TError>(
  * A conflict is only ASSUMED to be the shortcode after checking that the minted
  * code is now taken. Every other unique index on the table produces the exact
  * same silent-insert symptom, so retrying on the symptom alone spends three
- * attempts and then blames the shortcode for someone else's collision — which
- * is precisely how a sub-recipe link ingredient colliding on `lower(name)`
- * reported itself as "3 shortcode collisions" (#716 follow-up). When the code
- * is free, the conflict was an index this `where` cannot see: that's a caller
- * bug, and it says so.
+ * attempts and then blames the shortcode for someone else's collision — a
+ * sub-recipe link ingredient colliding on `lower(name)` can just as easily
+ * report itself as a shortcode collision. When the code is free, the conflict
+ * was an index this `where` cannot see: that's a caller bug, and it says so.
  */
 export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   db: Database | DrizzleTransaction,

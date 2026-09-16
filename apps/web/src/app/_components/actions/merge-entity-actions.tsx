@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { z } from "zod";
 
+import { product } from "~/app/products/product.functions";
 import { purchase } from "~/app/purchases/purchase.functions";
 import { vendor } from "~/app/vendors/vendor.functions";
 
@@ -10,7 +11,7 @@ import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
-type MergeEntity = "ingredient" | "purchase" | "vendor";
+type MergeEntity = "ingredient" | "product" | "purchase" | "vendor";
 type MergeRow = EntityActionRow & { name: string };
 export type MergeMutation<TOutput> = {
   mutateAsync: (input: {
@@ -95,6 +96,14 @@ function useMergeVendorsEntityAction(): EntityActionHandles {
   return useStagedMerge("vendor", mutation);
 }
 
+function useMergeProductsEntityAction(): EntityActionHandles {
+  const mutation = useActionMutation({
+    mutationFn: product.merge.mutationOptions,
+    success: "Products merged",
+  });
+  return useStagedMerge("product", mutation);
+}
+
 function useMergePurchasesEntityAction(): EntityActionHandles {
   const mutation = useActionMutation({
     mutationFn: purchase.merge.mutationOptions,
@@ -125,6 +134,15 @@ function useMergePurchasesEntityAction(): EntityActionHandles {
 }
 
 export const mergeEntityActionDefinitions = [
+  defineEntityAction({
+    verb: "merge",
+    entities: ["product"],
+    arity: "both",
+    minSelection: 2,
+    group: "organize",
+    priority: 100,
+    use: useMergeProductsEntityAction,
+  }),
   defineEntityAction({
     verb: "merge",
     entities: ["vendor"],

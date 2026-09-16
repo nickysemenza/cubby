@@ -15,9 +15,9 @@ Recovery is a bucket listing, not a query:
 2. Subtract `SELECT key FROM "Image"` **including soft-deleted rows** — they
    still name their object.
 3. Ignore two prefixes that a naive diff over-reports ~4×: `vendors/*` (vendor
-   logos seeded by `seed-vendor-logos.ts`, referenced by URL convention rather
-   than an `Image` row — in active use) and `recipehub-dev/*` (another app's
-   legacy prefix). Only `cubby/images/*` is a genuine Cubby orphan set.
+   logos fetched by the vendor-logo action, referenced by URL convention
+   rather than an `Image` row — in active use) and `recipehub-dev/*` (another
+   app's legacy prefix). Only `cubby/images/*` is a genuine Cubby orphan set.
 
 `R2_BUCKET_NAME` in `apps/web/.env` looks like a placeholder but is the real
 bucket (it matches `R2_PUBLIC_URL`). The fastest existence check for one key is

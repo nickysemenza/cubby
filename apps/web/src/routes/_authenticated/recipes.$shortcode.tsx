@@ -1,43 +1,32 @@
-import {
-  nutritionBasis as nutritionBasisSchema,
-  type NutritionBasis,
-} from "@cubby/schemas/nutrition";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import { nutritionBasis as nutritionBasisSchema } from "@cubby/schemas/nutrition";
 import {
   createFileRoute,
-  notFound,
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import { Edit, PackageCheck, X } from "lucide-react";
+import { X } from "lucide-react";
 import { z } from "zod";
 
-import type { DetailSection } from "~/app/_components/data-table/detail-page";
-import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
+import { GenericEntityDetail } from "~/app/_components/entity-detail/generic-entity-detail";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
-import { getRecipeNutritionBasis } from "~/app/_components/recipe/recipe-utils";
-import { RecipeAvailabilityPanel } from "~/app/_components/recipe/RecipeAvailabilityPanel";
-import RecipeDetail, {
-  type RecipeViewMode,
-  remapLegacyView,
-} from "~/app/_components/recipe/RecipeDetail";
-import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
+import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
 import {
   detailPage,
   notFoundPage,
 } from "~/app/_components/routing/entity-routes";
-import { AddToMeal } from "~/app/meals/add-to-meal";
-import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { scaleTotals } from "~/lib/nutrition-estimates";
-import { formatEstimate } from "~/lib/nutrition-format";
+import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { shortcodeHead } from "~/lib/page-title";
-import { formatCurrency } from "~/lib/utils";
 
+/**
+ * Hand-written because the workflow slot's state (`view`, `scale`,
+ * `nutritionBasis`, `flowLayout`, `costingGap`) and the page-level `edit`
+ * mode are URL keys the generic detail route has no search schema for.
+ */
 const searchSchema = z.object({
   nutritionBasis: nutritionBasisSchema.optional().catch(undefined),
   costingGap: z.boolean().optional().catch(undefined),
@@ -78,9 +67,46 @@ const searchDefaults = {
   scale: undefined,
 } as const;
 
+function RecipeDetailBody({
+  recipe,
+}: {
+  recipe: EntityDetailByEntity["recipe"];
+}) {
+  const { edit: isEditing } = Route.useSearch();
+  const navigate = useNavigate();
+  if (!isEditing)
+    return <GenericEntityDetail entity="recipe" record={recipe} />;
+  const stopEditing = () => {
+    void navigate({ to: ".", search: { edit: undefined } });
+  };
+  return (
+    <Page
+      variant="detail"
+      entity="recipe"
+      title={recipe.name}
+      rawData={recipe}
+      heroNo={recipe.id}
+      heroActions={{
+        primary: (
+          <Button onClick={stopEditing} variant="outline" size="sm">
+            <X />
+            Cancel
+          </Button>
+        ),
+      }}
+    >
+      <EditRecipeForm recipe={recipe} onCancel={stopEditing} />
+    </Page>
+  );
+}
+
 const RecipeNotFound = notFoundPage("recipe");
 
+// Bound to a const, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
 const RecipeDetailPage = detailPage({
+  entity: "recipe",
   query: (shortcode) => entityDetailFor("recipe").queryOptions(shortcode),
   render: (recipe) => <RecipeDetailBody recipe={recipe} />,
   title: (recipe) => recipe.name,
@@ -89,174 +115,15 @@ const RecipeDetailPage = detailPage({
 export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
-  loader: async ({ params, context }) => {
-    const data = await context.queryClient.ensureQueryData(
+  loader: ({ params, context, location }) =>
+    ensureDetailRecord(
+      context.queryClient,
       entityDetailFor("recipe").queryOptions(params.shortcode),
-    );
-    if (!data) throw notFound();
-  },
+      { shortcode: params.shortcode, href: location.href },
+    ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: RecipeNotFound,
   head: shortcodeHead,
   component: RecipeDetailPage,
 });
-
-function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
-  const {
-    costingGap: openCostingGap,
-    edit: isEditing,
-    view,
-    flowLayout,
-    scale,
-    nutritionBasis = "whole",
-  } = Route.useSearch();
-  const navigate = useNavigate();
-
-  // Normalize the (possibly legacy) URL view into a current view.
-  const recipeView = remapLegacyView(view);
-
-  const setRecipeView = (next: RecipeViewMode) => {
-    // Keep the default ("read") out of the URL for clean links.
-    navigate({
-      to: ".",
-      search: (prev) => ({
-        ...prev,
-        view: next === "read" ? undefined : next,
-      }),
-    });
-  };
-
-  const setScale = (factor: number) => {
-    // Strip the default (1×) so unscaled links stay clean.
-    navigate({
-      to: ".",
-      search: (prev) => ({ ...prev, scale: factor === 1 ? undefined : factor }),
-    });
-  };
-  const setFlowLayout = (next: RecipeFlowLayoutMode) => {
-    navigate({
-      to: ".",
-      search: (prev) => ({ ...prev, flowLayout: next }),
-    });
-  };
-
-  const setNutritionBasis = (basis: NutritionBasis) => {
-    navigate({
-      to: ".",
-      search: (previous) => ({
-        ...previous,
-        nutritionBasis: basis === "whole" ? undefined : basis,
-      }),
-    });
-  };
-  const nutritionView = getRecipeNutritionBasis(recipe, nutritionBasis);
-  const nutritionScale =
-    nutritionView.basis === "serving" ? nutritionView.factor : (scale ?? 1);
-  const totals = recipe.totals
-    ? scaleTotals(recipe.totals, nutritionScale)
-    : null;
-  const heroStats: DetailHeroStat[] = [
-    ...(totals
-      ? [
-          {
-            label: "Cost",
-            value: formatEstimate(totals.cost, formatCurrency),
-          },
-          {
-            label:
-              nutritionView.basis === "serving"
-                ? "Calories per serving"
-                : "Calories · whole recipe",
-            value: formatEstimate(
-              totals.nutrition.kcal,
-              (value) => `${Math.round(value)} kcal`,
-            ),
-          },
-        ]
-      : []),
-    ...(recipe.servings != null
-      ? [{ label: "Servings", value: recipe.servings }]
-      : []),
-  ];
-
-  const startEditing = () => {
-    navigate({ to: ".", search: { edit: true } });
-  };
-
-  const stopEditing = () => {
-    navigate({ to: ".", search: { edit: undefined } });
-  };
-  const setCostingGapOpen = (open: boolean) => {
-    navigate({
-      to: ".",
-      search: (prev) => ({ ...prev, costingGap: open ? true : undefined }),
-      replace: !open,
-    });
-  };
-  const routeSections: DetailSection[] = [
-    {
-      id: "availability",
-      title: "Availability",
-      icon: PackageCheck,
-      placement: "full",
-      // Availability owns a separate inventory query. The canonical route adds
-      // it to RecipeDetail's one section ledger; embedded search previews omit
-      // it so opening a preview never starts that extra read.
-      content: <RecipeAvailabilityPanel recipeId={recipe.id} />,
-    },
-  ];
-
-  return (
-    <Page
-      variant="detail"
-      entity="recipe"
-      title={recipe.name}
-      rawData={recipe}
-      heroNo={recipe.id}
-      heroStats={heroStats.length > 0 ? heroStats : undefined}
-      heroActions={
-        !isEditing
-          ? {
-              primary: <AddToMeal recipeId={recipe.id} />,
-              secondary: (
-                <>
-                  <CopyRecipeParseButton recipe={recipe} />
-                  <Button onClick={startEditing} variant="outline" size="sm">
-                    <Edit />
-                    Edit Recipe
-                  </Button>
-                </>
-              ),
-            }
-          : {
-              primary: (
-                <Button onClick={stopEditing} variant="outline" size="sm">
-                  <X />
-                  Cancel
-                </Button>
-              ),
-            }
-      }
-    >
-      {isEditing ? (
-        <EditRecipeForm recipe={recipe} onCancel={stopEditing} />
-      ) : (
-        <RecipeDetail
-          recipe={recipe}
-          leadingSections={routeSections}
-          openCostingGap={openCostingGap}
-          onCostingGapOpenChange={setCostingGapOpen}
-          view={recipeView}
-          onViewChange={setRecipeView}
-          nutritionBasis={nutritionBasis}
-          onNutritionBasisChange={setNutritionBasis}
-          scale={scale}
-          onScaleChange={setScale}
-          flowLayout={flowLayout}
-          onFlowLayoutChange={setFlowLayout}
-        />
-      )}
-    </Page>
-  );
-}

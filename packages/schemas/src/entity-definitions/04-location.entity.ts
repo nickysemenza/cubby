@@ -15,20 +15,9 @@ import { z } from "zod";
 export default defineEntity({
   key: "location",
   names: { singular: "Location", plural: "Locations" },
-  route: {
-    basePath: "locations",
-    create: "dialog",
-    list: null,
-    detail: {
-      component: {
-        module: "~/app/_components/locations/location-detail",
-        export: "LocationDetail",
-      },
-    },
-  },
+  route: { basePath: "locations", create: "dialog", list: true, detail: true },
   table: "Location",
   identifiers: { brand: "LocationId", shortcode: "LOC-" },
-  native: { create: "Garden location setup" },
   presentation: {
     titleField: "name",
     domain: "pantry",
@@ -40,6 +29,70 @@ export default defineEntity({
       actionLabel: "Create Location",
     },
     icons: { lucide: "MapPin", sfSymbol: "mappin.and.ellipse" },
+    detail: {
+      hero: { breadcrumb: "parentId", images: true },
+      sections: [
+        {
+          kind: "relation",
+          id: "inventory",
+          title: "Contents",
+          relation: "inventory",
+          filter: { descriptor: "locationId" },
+          columns: ["amount", "placement", "verifiedAt"],
+        },
+        {
+          kind: "relation",
+          id: "children",
+          title: "Sub-locations",
+          relation: "children",
+          filter: { descriptor: "parent" },
+          columns: ["name", "type", "valuation"],
+        },
+        {
+          kind: "fields",
+          id: "basic-information",
+          title: "Basic information",
+          placement: "supporting",
+          fields: [
+            "id",
+            "type",
+            "productId",
+            "parentId",
+            "lastBulkInventory",
+            "aliases",
+            "tags",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+        { kind: "slot", id: "garden", placement: "supporting" },
+        {
+          kind: "slot",
+          id: "contents-valuation",
+          title: "Valuation",
+          placement: "supporting",
+        },
+        {
+          kind: "slot",
+          id: "ai-description",
+          title: "AI description",
+          placement: "supporting",
+        },
+      ],
+    },
+    list: {
+      views: [
+        { kind: "slot", id: "gallery", label: "Gallery" },
+        "table",
+        { kind: "slot", id: "visualizations", label: "Visualizations" },
+      ],
+      actions: ["moveUnder", "delete"],
+      links: [
+        { label: "Arrange", path: "/locations/arrange" },
+        { label: "Photo pass", path: "/locations/photo-pass" },
+        { label: "Print labels", path: "/labels" },
+      ],
+    },
   },
   model: {
     fields: [
@@ -252,7 +305,8 @@ export default defineEntity({
         key: "aiDescription",
         kind: "text",
         nullable: true,
-        display: { list: true, detail: true, listHidden: true },
+        // Rendered (and regenerated) by the `ai-description` detail slot.
+        display: { list: true, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: null,
@@ -389,6 +443,7 @@ export default defineEntity({
           "collections",
           "pendingImageIds",
           "removeImageIds",
+          "imageOrder",
         ],
         identity: ["name", "aliases", "type", "productId"],
         parent: ["parentId"],
@@ -448,6 +503,7 @@ export default defineEntity({
       {
         columnId: "lastBulkInventory",
         kind: "range",
+        wire: { kind: "param", name: "lastBulkInventoryOlderThanDays" },
         placeholder: "Filter recounts...",
         options: [
           { value: "30", label: "Not counted in 30 days" },
@@ -529,6 +585,11 @@ export default defineEntity({
       {
         columnId: "inventoryEntries",
         kind: "range",
+        wire: {
+          kind: "range",
+          from: "directItemCountMin",
+          to: "directItemCountMax",
+        },
         placeholder: "Filter inventory...",
         options: [
           { value: "has", label: "Has items", meta: true },
@@ -545,6 +606,7 @@ export default defineEntity({
       {
         columnId: "valuation",
         kind: "range",
+        wire: { kind: "range", from: "valuationMin", to: "valuationMax" },
         placeholder: "Filter valuation...",
         options: [
           { value: "positive", label: "Positive basis" },
@@ -599,6 +661,32 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "children",
+      label: "Sub-locations",
+      target: "location",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Location.parentId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Location.parentId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "inventory",
+      label: "Inventory",
+      target: "inventory",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "InventoryEntry.locationId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "InventoryEntry.locationId", direction: "outgoing" }],
+      },
+    },
     {
       key: "parent",
       label: "Parent location",

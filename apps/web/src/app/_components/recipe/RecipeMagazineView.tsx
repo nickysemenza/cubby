@@ -1,8 +1,8 @@
 import {
   hasKnownEstimate,
   type NutritionEstimate,
-  type NutritionTotals,
   type MeasureEstimate,
+  type StoredNutritionTotals,
 } from "@cubby/schemas/nutrition";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { sumBy } from "es-toolkit";
@@ -54,7 +54,7 @@ function VitalsPanel({
   show,
   onToggle,
 }: {
-  stats: NutritionTotals & { basisLabel: string };
+  stats: StoredNutritionTotals & { basisLabel: string };
   show: boolean;
   onToggle: () => void;
 }) {

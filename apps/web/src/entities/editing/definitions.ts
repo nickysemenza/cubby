@@ -4,6 +4,7 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   collectionSlugsFromTags,
@@ -54,6 +55,25 @@ const changed = (
   id: string,
   value: EntityEditValue,
 ) => !record || !isEqual(valueFor(record, id), value);
+
+/**
+ * The gallery pseudo-fields have no stored twin on the record: `images` is
+ * the read shape, and `pendingImageIds`/`removeImageIds`/`imageOrder` are
+ * write-only instructions. Their baseline is derived from `images` (order)
+ * or is the empty list, and a patch carries them only when they instruct
+ * something — an untouched gallery sends none of them.
+ */
+const IMAGE_LIST_FIELDS = new Set(["pendingImageIds", "removeImageIds"]);
+const recordImageIds = (record: EntityEditRecord | undefined): string[] =>
+  z
+    .array(z.object({ id: z.string() }).loose())
+    .catch([])
+    .parse(record?.images)
+    .map((image) => image.id);
+const imageIdList = (value: EntityEditValue): string[] | undefined => {
+  const parsed = z.array(z.string()).safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+};
 
 const noIssues = (): readonly EntityEditIssue[] => [];
 
@@ -210,6 +230,36 @@ const genericCreateDefault = <E extends EditableEntity>(
   return kindDefault(field);
 };
 
+/**
+ * The update-surface locks the declaration carries: `edit.readOnlyOnUpdate`
+ * (unconditional) and `edit.readOnlyWhen` (a field's value locks a set of
+ * fields — a garden entry that anchors a location period keeps its kind,
+ * location, planting and date). The server enforces the same rule; this is
+ * what turns the refusal into a disabled control instead of an error.
+ */
+const declaredAccess = (
+  entity: EditableEntity,
+  id: string,
+): EditField<EditableEntity>["access"] => {
+  const { readOnlyOnUpdate, readOnlyWhen } = entitySummary[entity].edit;
+  const unconditional = readOnlyOnUpdate.some((key) => key === id);
+  const rules = readOnlyWhen.filter((rule) =>
+    rule.fields.some((key) => key === id),
+  );
+  if (!unconditional && rules.length === 0) return () => editable;
+  return ({ operation, record }) => {
+    if (operation !== "update") return editable;
+    if (unconditional)
+      return readOnly("Changed through the record's own lifecycle actions.");
+    const locked = rules.find(
+      (rule) => record !== undefined && record[rule.field] === rule.equals,
+    );
+    return locked
+      ? readOnly(`Locked while ${locked.field} is ${String(locked.equals)}.`)
+      : editable;
+  };
+};
+
 const builderFor = <E extends EditableEntity>(
   entity: E,
 ): EntityEditBuilder<E> => {
@@ -223,16 +273,13 @@ const builderFor = <E extends EditableEntity>(
   const makeField = (id: string, options?: FieldOptions<E>): EditField<E> => ({
     entity,
     id,
-    access: options?.access ?? (() => editable),
+    access: options?.access ?? declaredAccess(entity, id),
     initial: (input) => {
       if (options?.initial) return options.initial(input);
       const { operation, record, context } = input;
-      // Every gallery entity's `pendingImageIds` is array-valued and
-      // `readKey: null` (never populated from a record), so its one true
-      // default is an empty array — not the generic text field's `null` —
-      // for every entity that declares it, with no per-entity literal
-      // required.
-      if (id === "pendingImageIds") return [];
+      if (IMAGE_LIST_FIELDS.has(id)) return [];
+      if (id === "imageOrder")
+        return operation === "update" ? recordImageIds(record) : [];
       const existing = valueFor(record, id);
       if (existing !== undefined) return existing;
       if (id === "parentProjectId" && context.parentProjectId !== undefined) {
@@ -261,8 +308,19 @@ const builderFor = <E extends EditableEntity>(
       }
       return options?.validate?.(input) ?? noIssues();
     },
-    toPatch: ({ value, record }) =>
-      changed(record, id, value) ? { [id]: value } : undefined,
+    toPatch: ({ value, record }) => {
+      if (IMAGE_LIST_FIELDS.has(id)) {
+        const ids = imageIdList(value);
+        return ids && ids.length > 0 ? { [id]: ids } : undefined;
+      }
+      if (id === "imageOrder") {
+        const ids = imageIdList(value);
+        return ids && record && !isEqual(ids, recordImageIds(record))
+          ? { imageOrder: ids }
+          : undefined;
+      }
+      return changed(record, id, value) ? { [id]: value } : undefined;
+    },
   });
 
   return {
@@ -626,28 +684,10 @@ export const entityEditRegistry: EntityEditRegistry = {
       full: { buildData: locationBuildData },
     },
   })),
+  // `status`/`locationId` lock on update through the declared
+  // `edit.readOnlyOnUpdate` (the Start/Move/Split/Finish actions own them).
   planting: buildDefinition("planting", (f) => ({
-    // `status` and `locationId` are lifecycle/location state — corrected only
-    // through the Start/Move/Split/Finish actions, never a plain field edit,
-    // so an update-surface edit leaves both read-only.
-    fields: f.fieldsFrom(["capture", "full"], {
-      status: {
-        access: ({ operation }) =>
-          operation === "update"
-            ? readOnly(
-                "Use Start, Move, or Finish to change lifecycle or location.",
-              )
-            : editable,
-      },
-      locationId: {
-        access: ({ operation }) =>
-          operation === "update"
-            ? readOnly(
-                "Use Start, Move, or Finish to change lifecycle or location.",
-              )
-            : editable,
-      },
-    }),
+    fields: f.fieldsFrom(["capture", "full"]),
   })),
   gardenEntry: buildDefinition("gardenEntry", (f) => ({
     fields: f.fieldsFrom(["capture", "full"]),

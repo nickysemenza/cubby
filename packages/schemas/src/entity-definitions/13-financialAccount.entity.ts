@@ -14,18 +14,8 @@ export default defineEntity({
   route: {
     basePath: "financial-accounts",
     create: "dialog",
-    list: {
-      component: {
-        module: "~/app/finance/financial-account-list",
-        export: "FinancialAccountList",
-      },
-    },
-    detail: {
-      component: {
-        module: "~/app/finance/financial-account-detail",
-        export: "FinancialAccountDetail",
-      },
-    },
+    list: true,
+    detail: true,
   },
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-" },
@@ -40,6 +30,37 @@ export default defineEntity({
       actionLabel: "New Account",
     },
     icons: { lucide: "CreditCard", sfSymbol: "building.columns" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "name",
+            "identity",
+            "provisional",
+            "sourceAliases",
+            "ledgerPartyId",
+            "notes",
+            "transactionCount",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+        {
+          kind: "relation",
+          id: "transactions",
+          title: "Transactions",
+          relation: "transactions",
+          filter: { descriptor: "accountId" },
+          columns: ["merchant", "amount", "kind", "status", "postedDate"],
+          sort: { field: "postedDate", direction: "desc" },
+        },
+      ],
+    },
+    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -292,6 +313,13 @@ export default defineEntity({
       export: "financialAccountFilterFields",
     },
     descriptors: [
+      {
+        columnId: "ledgerPartyId",
+        kind: "idMulti",
+        placeholder: "Filter by ledger party...",
+        brandRef: { entity: "ledgerParty", kind: "id" },
+        urlOnly: true,
+      },
       {
         columnId: "name",
         field: "search",

@@ -4,7 +4,7 @@
  * @cubby/worker-tracing
  *
  * Minimal custom-span helper over the `cloudflare:workers` `tracing.enterSpan`
- * API (shipped 2026-06-16). For the downstream Workers (usda-api, upc-lookup),
+ * API. For the downstream Workers (usda-api, upc-lookup),
  * which run on workerd in dev *and* prod — so, unlike apps/web, they need no
  * Node/OTel backend. Mirrors the `wrapCf` shape in
  * apps/web/src/server/tracing.ts.
@@ -20,8 +20,7 @@
  * `waitUntil`, as long as it stays awaited inside the callback. If a span ever
  * needs to outlive its callback (returning a `ReadableStream` to the client and
  * measuring until it is consumed, rather than awaiting it), that is what
- * `tracing.startActiveSpan` + `span.end()` are for (shipped 2026-07-28). Nothing
- * needs it today.
+ * `tracing.startActiveSpan` + `span.end()` are for. Nothing needs it today.
  *
  * The `cloudflare:workers` import is resolved LAZILY and tolerantly: on workerd
  * it's present; under Node (vitest / any non-worker context) the import throws

@@ -211,8 +211,8 @@ export const AppErrors = {
   // A write COMMITTED but the read that builds its response failed. Its own
   // reason so the message can carry the new id and tell the caller not to
   // retry the create: an agent that sees a plain 5xx on `create` re-sends it
-  // and mints a duplicate (seen 2026-09-12 on a product create whose
-  // post-commit ProductImage query failed transiently).
+  // and mints a duplicate (seen on a product create whose post-commit
+  // ProductImage query failed transiently).
   WRITE_COMMITTED_READBACK_FAILED: "INTERNAL_SERVER_ERROR",
 
   // Image operations

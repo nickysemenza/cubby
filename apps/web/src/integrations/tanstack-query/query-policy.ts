@@ -9,10 +9,10 @@ export const IDEMPOTENT_MUTATION_RETRY = 2;
  * App-wide transport and recovery policy. Domain descriptors choose a cache
  * profile below; they do not restate these defaults.
  *
- * `refetchOnWindowFocus` intentionally keeps TanStack's default `true`, but
- * PR #978 replaced the browser focus signal with a human-activity gate. A
- * hidden or offline tab therefore revalidates on its first trusted user input,
- * not merely when it becomes visible or reconnects.
+ * `refetchOnWindowFocus` intentionally keeps TanStack's default `true`; a
+ * human-activity gate replaces the raw browser focus signal, so a hidden or
+ * offline tab revalidates on its first trusted user input, not merely when it
+ * becomes visible or reconnects.
  */
 export const QUERY_CLIENT_DEFAULT_OPTIONS = {
   queries: {

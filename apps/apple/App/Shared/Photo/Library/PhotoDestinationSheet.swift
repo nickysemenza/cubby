@@ -316,8 +316,8 @@ private final class PhotoBatchUploadModel {
         do {
             var attached: [ImageCode] = []
             if key == .gardenEntry {
-                let entry = try await client.gardenEntry(id: id)
-                var represented = Set(entry.images.map(\.id.rawValue))
+                let existingImages = try await client.imageIDs(EntityCatalog[.gardenEntry], id: id)
+                var represented = Set(existingImages.map(\.rawValue))
                 var selectedReferences: [String: String] = [:]
                 for item in items {
                     let reference: String
@@ -342,7 +342,7 @@ private final class PhotoBatchUploadModel {
                         "A garden entry can contain at most 20 photos. Close this review and choose fewer photos."
                     return
                 }
-                let gardenUploader = GardenImageUploader(service: client)
+                let gardenUploader = PendingImageUploader(entity: .gardenEntry, service: client)
                 for item in items {
                     try checkCancelled()
                     currentSelectionID = item.id
@@ -374,12 +374,12 @@ private final class PhotoBatchUploadModel {
                     attached.append(outcome.imageID)
                 }
             }
-            if key == .product && makeCover {
+            if makeCover {
                 status = "Updating photo order…"
-                let existing = try await client.productImageIDs(ProductCode(id))
+                let existing = try await client.imageIDs(entity: key, id: id)
                 var seen = Set<ImageCode>()
                 let order = (attached + existing).filter { seen.insert($0).inserted }
-                try await client.setImageOrder(order, product: ProductCode(id))
+                try await client.setImageOrder(order, entity: key, id: id)
             }
             finished = true
             await appModelRefresh()
@@ -426,9 +426,9 @@ private final class PhotoBatchUploadModel {
         return resolved
     }
 
-    private func resolveOrUpload(_ item: PhotoSelectionItem, gardenUploader: GardenImageUploader) async throws
-        -> ImageCode
-    {
+    private func resolveOrUpload(
+        _ item: PhotoSelectionItem, gardenUploader: PendingImageUploader
+    ) async throws -> ImageCode {
         if let uploaded = uploadedBySelection[item.id] { return uploaded }
         if let existing = try resolve(item.existingImageID, for: item.id) { return existing }
         let file = try await materialize(item)

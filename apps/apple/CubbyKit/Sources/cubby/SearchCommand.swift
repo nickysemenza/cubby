@@ -16,7 +16,7 @@ struct Search: AsyncParsableCommand {
             let context = try CLIContext.make(from: global)
             let hits = try await context.client.search(text.joined(separator: " "), limit: limit)
             for hit in hits {
-                let kind = hit.key.map { EntityCatalog[$0].singular } ?? hit.entityType.rawValue
+                let kind = hit.key.map { EntityCatalog[$0].singular } ?? hit.entityType
                 print("\(hit.id)  \(kind): \(hit.title)\(hit.subtitle.map { " — \($0)" } ?? "")")
             }
         }

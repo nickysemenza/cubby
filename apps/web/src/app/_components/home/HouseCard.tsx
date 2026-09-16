@@ -110,7 +110,7 @@ export function TodayAttention() {
           </div>
         </div>
         <Button
-          render={<Link to="/tasks" search={{ view: "next" }} />}
+          render={<Link to="/tasks" search={{ view: "agenda" }} />}
           nativeButton={false}
           variant="ghost"
           size="sm"

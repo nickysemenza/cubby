@@ -27,17 +27,7 @@ import { z } from "zod";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
-  route: {
-    basePath: "products",
-    create: "page",
-    list: null,
-    detail: {
-      component: {
-        module: "~/app/_components/products/product-detail",
-        export: "ProductDetail",
-      },
-    },
-  },
+  route: { basePath: "products", create: "page", list: true, detail: true },
   table: "Product",
   identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {
@@ -53,6 +43,121 @@ export default defineEntity({
       actionLabel: "Add Product",
     },
     icons: { lucide: "Barcode", sfSymbol: "shippingbox" },
+    detail: {
+      hero: {
+        images: true,
+        actions: ["edit", "addToInventory", "recordSale", "discard"],
+      },
+      sections: [
+        {
+          kind: "fields",
+          id: "basic-information",
+          title: "Basic information",
+          placement: "supporting",
+          fields: [
+            "name",
+            "id",
+            "manufacturer",
+            "model",
+            "price",
+            "category",
+            "primaryGtin",
+            "fdc_id",
+            "ingredientId",
+            "externalIds",
+            "tags",
+            "notes",
+          ],
+        },
+        { kind: "slot", id: "garden", placement: "supporting" },
+        {
+          kind: "relation",
+          id: "stocked-at",
+          title: "Stocked at",
+          relation: "inventory",
+          filter: { descriptor: "productId" },
+          columns: ["amount", "placement", "verifiedAt"],
+        },
+        {
+          kind: "relation",
+          id: "expense-history",
+          title: "Expense history",
+          relation: "expenses",
+          filter: { descriptor: "productId" },
+          columns: ["name", "cost", "date", "lineKind", "project"],
+          sort: { field: "date", direction: "desc" },
+        },
+        {
+          kind: "relation",
+          id: "purchases",
+          title: "Purchases",
+          relation: "purchases",
+          filter: { descriptor: "productId" },
+          columns: ["vendor", "displayLabel", "date", "statedTotal"],
+          sort: { field: "date", direction: "desc" },
+        },
+        {
+          kind: "relation",
+          id: "kit-components",
+          title: "Kit components",
+          relation: "components",
+          filter: { descriptor: "kitId" },
+          columns: ["name", "manufacturer", "onHandUnits"],
+        },
+        {
+          kind: "relation",
+          id: "vendors",
+          title: "Vendors",
+          relation: "vendors",
+          filter: { descriptor: "productId" },
+          columns: ["name", "purchaseCount", "spend", "latestPurchaseDate"],
+        },
+        {
+          kind: "relation",
+          id: "project-uses",
+          title: "Used on projects",
+          relation: "project-uses",
+          filter: { descriptor: "usedToolId" },
+          columns: ["name", "status", "kind", "startDate"],
+        },
+        {
+          kind: "relation",
+          id: "tasks",
+          title: "Tasks",
+          relation: "tasks",
+          filter: { descriptor: "subjectProduct" },
+          columns: ["name", "status", "dueDate", "trade"],
+          sort: { field: "dueDate", direction: "desc" },
+        },
+        {
+          kind: "timeline",
+          id: "movements",
+          title: "Movements",
+          placement: "full",
+        },
+        { kind: "slot", id: "nutrition", title: "Nutrition" },
+        // `unitMappings` is composed onto the detail read beside the generated
+        // read map (it is not a read-projection field), so it cannot be a
+        // `fields` section.
+        { kind: "slot", id: "unit-mappings", title: "Unit mappings" },
+        { kind: "slot", id: "fits-with", title: "Fits with" },
+        { kind: "slot", id: "cookbooks", title: "Cookbooks" },
+        { kind: "slot", id: "recipe-appearances", title: "Appears in recipes" },
+      ],
+    },
+    list: {
+      views: ["table", "shelf", "timeline"],
+      shelf: { subtitle: ["price", "category"] },
+      actions: [
+        "addToInventory",
+        "discard",
+        "setStockTracking",
+        "printLabels",
+        "merge",
+        "delete",
+      ],
+      timeline: { fields: ["purchaseDate"] },
+    },
   },
   model: {
     fields: [
@@ -206,7 +311,13 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea", section: "notes" },
-        display: { list: true, listOrder: 5, width: "md", listHidden: true },
+        display: {
+          list: true,
+          detail: true,
+          listOrder: 5,
+          width: "md",
+          listHidden: true,
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -580,7 +691,12 @@ export default defineEntity({
         key: "onHandUnits",
         kind: "number",
         nullable: true,
-        display: { list: true, listOrder: 19, listHidden: true },
+        display: {
+          list: true,
+          listOrder: 19,
+          listHidden: true,
+          mobile: { slot: "trailing", priority: 0 },
+        },
         validation: {
           read: z.number().nullable(),
           create: null,
@@ -939,6 +1055,12 @@ export default defineEntity({
       {
         columnId: "expenses",
         kind: "range",
+        wire: {
+          kind: "range",
+          from: "expenseCountMin",
+          to: "expenseCountMax",
+          presence: "expensePresenceFilter",
+        },
         placeholder: "Filter expenses...",
         options: [
           { value: "has", label: "Has expenses", meta: true },
@@ -988,6 +1110,7 @@ export default defineEntity({
       {
         columnId: "quantityVariance",
         kind: "range",
+        wire: { kind: "param", name: "quantityVarianceFilter" },
         placeholder: "Filter shelf vs. ledger...",
         options: [
           { value: "mismatched", label: "Shelf disagrees with ledger" },
@@ -1071,6 +1194,7 @@ export default defineEntity({
       {
         columnId: "price",
         kind: "range",
+        wire: { kind: "param", name: "pricePresenceFilter" },
         placeholder: "Filter price...",
         options: [
           { value: "has", label: "Has price", meta: true },
@@ -1221,9 +1345,18 @@ export default defineEntity({
         placeholder: "Search related used on projects...",
       },
       {
+        // Components of a kit: products on the kit's `ProductComponent` rows.
+        columnId: "kitId",
+        kind: "idMulti",
+        placeholder: "Filter by kit...",
+        brandRef: { entity: "product", kind: "id" },
+        urlOnly: true,
+      },
+      {
         columnId: "usedOnProjectId",
         kind: "idMulti",
         placeholder: "Filter by related used on projects id...",
+        brandRef: { entity: "project", kind: "id" },
         urlOnly: true,
       },
       {
@@ -1302,6 +1435,12 @@ export default defineEntity({
       {
         columnId: "related:product.tasks",
         kind: "range",
+        wire: {
+          kind: "range",
+          from: "taskDueFrom",
+          to: "taskDueTo",
+          presence: "taskPresenceFilter",
+        },
         placeholder: "Filter tasks...",
         options: [
           { value: "has", label: "Has task", meta: true },
@@ -1714,6 +1853,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
+    timeline: "custom",
     images: "gallery",
     countable: true,
     softDelete: true,
@@ -1767,6 +1907,10 @@ export default defineEntity({
       filters: {
         module: "~/entities/filter-manifest",
         export: "getEntityFilters",
+      },
+      timeline: {
+        module: "~/server/repo/product/movement-timeline",
+        export: "productTimeline",
       },
       search: {
         projection: {

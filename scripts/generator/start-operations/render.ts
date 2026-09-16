@@ -80,6 +80,7 @@ const renderStartOperationHandlers = async (): Promise<string> => {
 
 const RESOURCE_HELPERS = {
   list: "resourceList",
+  timeline: "resourceTimeline",
   get: "resourceGet",
   create: "resourceCreate",
   update: "resourceUpdate",
@@ -159,7 +160,7 @@ const renderHttpContract = async (
   return (
     generatedHeader +
     `import * as contracts from "~/contracts/index";\n` +
-    `import { httpContractBuilder, httpRouterOptions, rpcMutation, rpcQuery, rpcQueryPost, resourceCreate, resourceDelete, resourceGet, resourceList, resourceUpdate } from "~/lib/http-api/router";\n` +
+    `import { httpContractBuilder, httpRouterOptions, rpcMutation, rpcQuery, rpcQueryPost, resourceCreate, resourceDelete, resourceGet, resourceList, resourceTimeline, resourceUpdate } from "~/lib/http-api/router";\n` +
     `export const httpContract = httpContractBuilder.router({\n` +
     [...domains]
       .map(

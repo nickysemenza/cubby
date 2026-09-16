@@ -1,10 +1,6 @@
 import type { GardenEntryOut } from "@cubby/schemas/garden";
-import {
-  gardenEntryShortcode,
-  locationShortcode,
-  plantingShortcode,
-} from "@cubby/schemas/identifiers";
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { gardenEntryShortcode } from "@cubby/schemas/identifiers";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -21,18 +17,16 @@ import { householdDateTime } from "~/lib/household-date";
 import { EntryForm } from "./entry-form";
 import { GardenDialogFooterSlot } from "./garden-fields";
 import { gardenEntryKindLabel, JournalPhotoStrip } from "./garden-photos";
-import { garden } from "./garden.functions";
 
 /**
- * `variant="detail"` (the default — matches the entry's own canonical detail
- * route, `garden-entries.$shortcode.tsx`, which renders this with no variant)
- * omits the "date · kind" heading: that route's page title already spells out
- * kind, date, and location (`GardenEntryOut.displayName`), so the heading
+ * `variant="detail"` (the default) omits the "date · kind" heading: the
+ * entry's page title already spells out kind, date, and location
+ * (`GardenEntryOut.displayName`), so the heading
  * would just be a self-link back to the page already on screen. `variant="list"`
  * is the journal-list presentation and renders it — every timeline call site
  * below passes it explicitly.
  */
-export function GardenEntryContent({
+function GardenEntryContent({
   entry,
   variant = "detail",
 }: {
@@ -115,66 +109,6 @@ export function GardenEntryContent({
         detailLink={(image) => ({ shortcode: image.id })}
       />
     </Stack>
-  );
-}
-
-export function GardenTimeline({
-  locationId,
-  plantingId,
-  hasConfirmedLocationPeriod = false,
-}: {
-  locationId?: string;
-  plantingId?: string;
-  /** Only meaningful with `plantingId`: gates the whole-area entries hint. */
-  hasConfirmedLocationPeriod?: boolean;
-}) {
-  return plantingId ? (
-    <PlantingTimeline
-      key={plantingId}
-      plantingId={plantingId}
-      hasConfirmedLocationPeriod={hasConfirmedLocationPeriod}
-    />
-  ) : (
-    <LocationTimeline key={locationId ?? "all"} locationId={locationId} />
-  );
-}
-
-function PlantingTimeline({
-  plantingId,
-  hasConfirmedLocationPeriod,
-}: {
-  plantingId: string;
-  hasConfirmedLocationPeriod: boolean;
-}) {
-  const [page, setPage] = useState(1);
-  const entries = useQuery(
-    garden.journal.queryOptions({
-      plantingId: plantingShortcode.parse(plantingId),
-      includeBedContext: true,
-      page,
-    }),
-  );
-  return (
-    <GardenTimelineContent
-      entries={entries}
-      page={page}
-      setPage={setPage}
-      plantingId={plantingId}
-      hasConfirmedLocationPeriod={hasConfirmedLocationPeriod}
-    />
-  );
-}
-
-function LocationTimeline({ locationId }: { locationId?: string }) {
-  const [page, setPage] = useState(1);
-  const entries = useQuery(
-    garden.entries.queryOptions({
-      locationId: locationId ? locationShortcode.parse(locationId) : undefined,
-      page,
-    }),
-  );
-  return (
-    <GardenTimelineContent entries={entries} page={page} setPage={setPage} />
   );
 }
 

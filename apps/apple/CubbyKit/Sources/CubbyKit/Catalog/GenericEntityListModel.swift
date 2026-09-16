@@ -1,7 +1,9 @@
 import Observation
 
 /// Drives a generic Browse list screen for one `EntityDescriptor`. The model owns the complete
-/// accumulated result so pagination cannot be lost when a view is recreated or adapted.
+/// accumulated result so pagination cannot be lost when a view is recreated or adapted, the
+/// active filters (keyed by wire name), the selected declared view, and — when that view is the
+/// timeline — the timeline payload for the same filters.
 @MainActor
 @Observable
 public final class GenericEntityListModel {
@@ -29,22 +31,43 @@ public final class GenericEntityListModel {
     public private(set) var initialError: String?
     public private(set) var refreshError: String?
     public private(set) var nextPageError: String?
+    /// The active filters; `apply(filters:)` replaces them and restarts from page 1.
+    public private(set) var filters: EntityFilterState
+    /// The selected declared view; `select(view:)` loads the timeline when it is `.timeline`.
+    public private(set) var view: ListView
+    public private(set) var timeline: EntityTimelineOut?
+    public private(set) var timelineError: String?
+    public private(set) var isLoadingTimeline = false
 
     public var hasMore: Bool {
         guard let meta else { return false }
         return page * meta.pageSize < meta.totalCount
     }
 
+    public var views: [ListView] { descriptor.presentation.listViews }
+
     private let client: CubbyClient
     private let pageSize: Int
+    private let sort: String?
     private var requestGeneration = 0
     private var requestTask: Task<ListPage<EntityRow>, Error>?
     private var hasLoaded = false
+    private var timelineGeneration = 0
 
-    public init(descriptor: EntityDescriptor, client: CubbyClient, pageSize: Int = 50) {
+    public init(
+        descriptor: EntityDescriptor,
+        client: CubbyClient,
+        pageSize: Int = 50,
+        sort: String? = nil,
+        filters: EntityFilterState = EntityFilterState(),
+        view: ListView? = nil
+    ) {
         self.descriptor = descriptor
         self.client = client
         self.pageSize = pageSize
+        self.sort = sort
+        self.filters = filters
+        self.view = view ?? descriptor.presentation.listViews.first ?? .table
     }
 
     /// Loads the first page once. A failed initial request can be retried, while a successfully
@@ -52,12 +75,48 @@ public final class GenericEntityListModel {
     public func loadInitial() async {
         guard !hasLoaded, activity != .loadingInitial else { return }
         await loadFirstPage(as: .loadingInitial)
+        if view == .timeline { await loadTimeline() }
     }
 
     /// Replaces the accumulated result with a fresh first page. Existing rows remain visible
     /// while the request is running and if it fails.
     public func refresh() async {
         await loadFirstPage(as: rows.isEmpty && !hasLoaded ? .loadingInitial : .refreshing)
+        if view == .timeline { await loadTimeline() }
+    }
+
+    /// Replaces the filters and restarts from page 1 (and reloads the timeline when shown).
+    public func apply(filters newFilters: EntityFilterState) async {
+        guard newFilters != filters else { return }
+        filters = newFilters
+        await refresh()
+    }
+
+    /// Switches the declared view; the timeline loads on first selection and after filter changes.
+    public func select(view newView: ListView) async {
+        view = newView
+        if newView == .timeline, timeline == nil, !isLoadingTimeline { await loadTimeline() }
+    }
+
+    /// `resources.<entity>.timeline` for the active filters. No-op for an entity without one.
+    public func loadTimeline() async {
+        guard descriptor.key.nativeActions.contains(.timeline) else {
+            timelineError = "No timeline for \(descriptor.plural)"
+            return
+        }
+        timelineGeneration += 1
+        let generation = timelineGeneration
+        isLoadingTimeline = true
+        timelineError = nil
+        do {
+            let result = try await client.timeline(descriptor, filters: filters)
+            guard generation == timelineGeneration else { return }
+            timeline = result
+        } catch {
+            guard generation == timelineGeneration else { return }
+            timelineError = Self.describe(error)
+        }
+        isLoadingTimeline = false
     }
 
     /// Appends the next page. Duplicate triggers collapse into the one in-flight request, and a
@@ -147,9 +206,12 @@ public final class GenericEntityListModel {
         let client = client
         let descriptor = descriptor
         let pageSize = pageSize
+        let sort = sort
+        let filters = filters
         requestTask = Task {
             try Task.checkCancellation()
-            return try await client.list(descriptor, page: page, pageSize: pageSize)
+            return try await client.list(
+                descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
         }
         return generation
     }

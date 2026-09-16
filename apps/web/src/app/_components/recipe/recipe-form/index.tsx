@@ -67,7 +67,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const {
     handlePendingImagesChange,
     handleRemovedImagesChange,
-    handleExistingImagesReorder,
     getImageData,
     hasImageChanges,
   } = useImageState();
@@ -482,7 +481,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   mode === "edit" && recipe?.images ? recipe.images : []
                 }
                 onExistingImagesRemove={handleRemovedImagesChange}
-                onExistingImagesReorder={handleExistingImagesReorder}
                 autoImportUrl={scrapedImageUrl}
               />
             </CardContent>

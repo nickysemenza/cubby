@@ -89,7 +89,7 @@ const browserPreviewPresentation: PreviewPresentationPort = {
   subscribe: subscribePreviewPresentation,
 };
 
-export type PreviewIdField = "id" | "previewId" | "fdc_id";
+type PreviewIdField = "id" | "previewId" | "fdc_id";
 
 export interface EntityPreviewRowData {
   id?: string | number | null;

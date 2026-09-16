@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
+import "./build-constants";
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "../../src/server/ai/features";
 import { fillInput, waitForFormHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";

@@ -72,9 +72,11 @@ public protocol PhotoService: Sendable {
     /// Attaches uploaded images to any entity whose update body takes `pendingImageIds`; throws
     /// `EntityOperationError.unsupported` for one that does not.
     func attachImages(_ ids: [ImageCode], to entity: EntityKey, id: String) async throws
-    /// The product's image ids in display order.
-    func productImageIDs(_ product: ProductCode) async throws -> [ImageCode]
-    func setImageOrder(_ order: [ImageCode], product: ProductCode) async throws
+    /// The entity's image ids in display order — the order `setImageOrder` rewrites.
+    func imageIDs(entity: EntityKey, id: String) async throws -> [ImageCode]
+    /// Rewrites the display order for any entity whose update body takes `imageOrder`; throws
+    /// `EntityOperationError.unsupported` for one that does not.
+    func setImageOrder(_ order: [ImageCode], entity: EntityKey, id: String) async throws
 }
 
 extension CubbyClient: PhotoService {
@@ -86,7 +88,11 @@ extension CubbyClient: PhotoService {
         try await attachImages(ids, to: EntityCatalog[entity], id: id)
     }
 
-    public func setImageOrder(_ order: [ImageCode], product: ProductCode) async throws {
-        try await setImageOrder(order, on: EntityCatalog[.product], id: product.rawValue)
+    public func imageIDs(entity: EntityKey, id: String) async throws -> [ImageCode] {
+        try await imageIDs(EntityCatalog[entity], id: id)
+    }
+
+    public func setImageOrder(_ order: [ImageCode], entity: EntityKey, id: String) async throws {
+        try await setImageOrder(order, on: EntityCatalog[entity], id: id)
     }
 }

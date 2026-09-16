@@ -5,7 +5,17 @@ import { z } from "zod";
 export default defineEntity({
   key: "cookbook",
   names: { singular: "Cookbook", plural: "Cookbooks" },
-  route: { basePath: "cookbooks", list: null, detail: null },
+  route: {
+    basePath: "cookbooks",
+    list: true,
+    // No kernel `get`: the detail reads the cookbook summary query.
+    detail: {
+      query: {
+        module: "~/entities/cookbook.functions",
+        export: "cookbookDetailQuery",
+      },
+    },
+  },
   table: "Cookbook",
   identifiers: { brand: "CookbookId", shortcode: "CKB-" },
   presentation: {
@@ -18,6 +28,43 @@ export default defineEntity({
         "Drag an EPUB cookbook into the Recipes import page and Cubby will extract its recipes.",
     },
     icons: { lucide: "BookOpen", sfSymbol: "book.closed" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "name",
+            "author",
+            "subjects",
+            "recipeCount",
+            "sourceRecipeCount",
+            "needsReextract",
+            "coverUrl",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "physical-copy",
+          title: "Physical copy",
+          placement: "supporting",
+          fields: ["product"],
+        },
+        { kind: "slot", id: "toc", title: "Contents" },
+        {
+          kind: "relation",
+          id: "recipes",
+          title: "Recipes",
+          relation: "recipes",
+          filter: { descriptor: "source" },
+          columns: ["name", "tags", "costTotal"],
+        },
+        { kind: "slot", id: "import-progress", title: "Import" },
+      ],
+    },
+    list: { links: [{ label: "Import", path: "/recipes/import" }] },
   },
   model: {
     fields: [
@@ -203,6 +250,19 @@ export default defineEntity({
   },
   filters: { descriptors: [] },
   relations: [
+    {
+      key: "recipes",
+      label: "Recipes",
+      target: "recipe",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Recipe.cookbookId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Recipe.cookbookId", direction: "outgoing" }],
+      },
+    },
     {
       key: "cover",
       label: "Cover image",

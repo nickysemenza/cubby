@@ -9,8 +9,8 @@ import type {
   MealRecipeOut,
   MealType,
 } from "@cubby/schemas/meal";
-import type { NutritionTotals } from "@cubby/schemas/nutrition";
-import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
+import { type NutritionTotals, withMacros } from "@cubby/schemas/nutrition";
+import type { StoredRecipeTotals } from "@cubby/schemas/recipe-shared";
 
 import {
   aggregateTotals,
@@ -23,7 +23,7 @@ import {
 } from "~/server/repo/database-helpers";
 
 const scaledRecipeTotals = (
-  totals: RecipeTotals | null,
+  totals: StoredRecipeTotals | null,
   totalsComputedAt: Date | null,
   scale: number,
 ): NutritionTotals => {
@@ -60,7 +60,7 @@ type MealRow = {
       name: string;
       servings: number | null;
       yield: MealRecipeOut["recipe"]["yield"];
-      totals: RecipeTotals | null;
+      totals: StoredRecipeTotals | null;
       totalsComputedAt: Date | null;
       deletedAt: Date | null;
     };
@@ -85,7 +85,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
         name: mr.recipe.name,
         servings: mr.recipe.servings,
         yield: mr.recipe.yield,
-        totals: mr.recipe.totals,
+        totals: mr.recipe.totals ? withMacros(mr.recipe.totals) : null,
       },
       scale: mr.scale,
       sortOrder: mr.sortOrder,
@@ -111,6 +111,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     // `name` is a nullable, user-editable label; an unnamed meal falls back to
     // its date so every surface has a non-blank identity to show.
     displayName: row.name?.trim() || row.date,
+    recipeNames: recipes.map((recipe) => recipe.recipe.name),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

@@ -94,14 +94,12 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
   const [simulatedNodes, setSimulatedNodes] = useState<NetworkNode[]>([]);
   const [simulatedLinks, setSimulatedLinks] = useState<NetworkLink[]>([]);
 
-  // Helper to get a stable key for a link
   const getLinkKey = useCallback((link: NetworkLink) => {
     const sourceId = isNetworkNode(link.source) ? link.source.id : link.source;
     const targetId = isNetworkNode(link.target) ? link.target.id : link.target;
     return [sourceId, targetId].sort().join("|");
   }, []);
 
-  // Get the currently selected link object
   const selectedLink = useMemo(() => {
     if (!selectedLinkKey) return null;
     return (

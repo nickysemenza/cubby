@@ -25,6 +25,25 @@ export default defineEntity({
       description: "Search for a food to pull in its nutrition details.",
     },
     icons: { lucide: "Apple", sfSymbol: "leaf.fill" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          fields: [
+            "fdc_id",
+            "brandedFoodInfo",
+            "foodInfo",
+            "legacyFoodInfo",
+            "nutritionInfo",
+            "portionInfoRaw",
+            "inferredUnitMappings",
+            "linkedProducts",
+          ],
+        },
+      ],
+    },
   },
   model: {
     fields: [

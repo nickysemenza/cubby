@@ -510,9 +510,8 @@ export async function recordStatementRows(
  * The identity hash covers `rawDescription`, so a charge re-exported after its
  * descriptor firms up — `AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*XD8AR9RG3`,
  * `THE HOME DEPOT #1092` → `THE HOME DEPOT #1092 800-466-3337 CA` — hashes to
- * a SECOND identity for money already recorded. 9 of 188 rows in the
- * 2026-08-19 Monarch export were this shape, found by hand-writing this
- * self-join.
+ * a SECOND identity for money already recorded, a shape found by hand-writing
+ * this self-join against a real Monarch export.
  *
  * Detection, not prevention: the hash is stored externally in
  * `FinancialTransaction.sourceRefs` with no back-reference, so changing what it

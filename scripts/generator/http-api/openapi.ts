@@ -2,7 +2,10 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
-import type { EntityArtifacts } from "../entities/declarations.ts";
+import type {
+  CompiledEntity,
+  EntityArtifacts,
+} from "../entities/declarations.ts";
 import type { HttpResources } from "../entities/render/index.ts";
 import type { HttpMetadata } from "../../../apps/web/src/lib/http-api/router.ts";
 import {
@@ -32,6 +35,7 @@ import {
 import type { EntityOutputs } from "./api-types.ts";
 import { renderNativeArtifacts } from "./native.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
+import { TYPE_OVERRIDES } from "./type-overrides.ts";
 
 const WEB_SRC = new URL("../../../apps/web/src/", import.meta.url);
 const webModule = (path: string) =>
@@ -196,6 +200,8 @@ const buildOpenApiDocument = async (): Promise<{
       switch (metadata.resource) {
         case "list":
           return `${entity}ListPage`;
+        case "timeline":
+          return `${entity}Timeline`;
         case "get":
           return `${entity}Detail`;
         case "create":
@@ -346,7 +352,10 @@ const buildOpenApiDocument = async (): Promise<{
     integerLiterals,
     openTupleItems,
   ];
-  const components = passes.reduce((current, pass) => pass(current), emitted);
+  const components = pruneUnreachableComponents(
+    document,
+    passes.reduce((current, pass) => pass(current), emitted),
+  );
   /**
    * Nullability the passes above could not express in a form a generated
    * client keeps. Each pointer here is a decision, not a bucket.
@@ -409,6 +418,100 @@ const buildOpenApiDocument = async (): Promise<{
   return { document, components, serialized };
 };
 
+const queryParameters = z.array(
+  z.looseObject({ name: z.string().optional(), in: z.string().optional() }),
+);
+
+const componentName = (ref: string) =>
+  ref.startsWith("#/components/schemas/")
+    ? ref.slice("#/components/schemas/".length)
+    : undefined;
+
+/** The component names a JSON value references (`#/components/schemas/<name>`). */
+const refsIn = (value: OpenApiDocument["paths"] | JsonSchema | undefined) =>
+  [...JSON.stringify(value ?? null).matchAll(/"\$ref":"([^"]+)"/gu)].flatMap(
+    (match) => {
+      const name = componentName(match[1] ?? "");
+      return name === undefined ? [] : [name];
+    },
+  );
+
+/**
+ * Only the components some path reaches survive: every named export is
+ * registered as a component whether or not a route uses it, and each unused
+ * one is another type a generated client carries. The overrides must name
+ * live components (a stale override makes swift-openapi-generator fail).
+ */
+const pruneUnreachableComponents = (
+  document: OpenApiDocument,
+  components: Record<string, JsonSchema>,
+): Record<string, JsonSchema> => {
+  const reachable = new Set<string>();
+  const queue = refsIn(document.paths);
+  for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
+    if (reachable.has(name)) continue;
+    reachable.add(name);
+    queue.push(...refsIn(components[name]));
+  }
+  const missingOverrides = Object.keys(TYPE_OVERRIDES).filter(
+    (name) => !reachable.has(name),
+  );
+  if (missingOverrides.length > 0)
+    throw new Error(
+      `TYPE_OVERRIDES name components no route reaches: ${missingOverrides.join(", ")}`,
+    );
+  return Object.fromEntries(
+    Object.entries(components).filter(([name]) => reachable.has(name)),
+  );
+};
+
+/**
+ * Every compiled filter `wire` binding must be a query parameter of the
+ * entity's list route: the native filter UI sends exactly those names.
+ */
+const checkFilterWires = (
+  document: OpenApiDocument,
+  resources: HttpResources,
+  entities: readonly CompiledEntity[],
+) => {
+  const problems: string[] = [];
+  for (const entity of entities) {
+    const resource = resources[entity.key];
+    if (resource === undefined || !resource.verbs.includes("list")) continue;
+    const route = document.paths[`/api/v1/${resource.basePath}`]?.get;
+    const parameters = new Set(
+      queryParameters
+        .parse(route?.parameters ?? [])
+        .flatMap((parameter) =>
+          parameter.in === "query" && parameter.name !== undefined
+            ? [parameter.name]
+            : [],
+        ),
+    );
+    for (const descriptor of entity.filterDescriptors) {
+      const names =
+        descriptor.wire.kind === "param"
+          ? [descriptor.wire.name]
+          : [
+              descriptor.wire.from,
+              descriptor.wire.to,
+              ...(descriptor.wire.presence === undefined
+                ? []
+                : [descriptor.wire.presence]),
+            ];
+      for (const name of names)
+        if (!parameters.has(name))
+          problems.push(
+            `${entity.key}.filters.${descriptor.columnId} binds to ${name}, which is not a query parameter of GET /${resource.basePath}`,
+          );
+    }
+  }
+  if (problems.length > 0)
+    throw new Error(
+      `Filter wire bindings do not match the list routes:\n${problems.join("\n")}`,
+    );
+};
+
 /**
  * Stage 3 of `pnpm generate`: the OpenAPI document and everything derived
  * from it. Imports stage 2's `http-contract.gen.ts` from disk, so it runs
@@ -418,8 +521,10 @@ export async function renderHttpApiArtifacts(
   resources: HttpResources,
   nativeOperations: readonly string[],
   entityOutputs: EntityOutputs,
+  entities: readonly CompiledEntity[],
 ): Promise<EntityArtifacts[]> {
   const { document, components, serialized } = await buildOpenApiDocument();
+  checkFilterWires(document, resources, entities);
   return [
     {
       relativePath: "apps/web/src/lib/generated/http-openapi.gen.json",

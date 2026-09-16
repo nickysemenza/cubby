@@ -8,22 +8,11 @@ export default defineEntity({
   route: {
     basePath: "ingredients",
     create: "dialog",
-    list: {
-      component: {
-        module: "~/app/ingredients/ingredientlist",
-        export: "IngredientList",
-      },
-    },
-    detail: {
-      component: {
-        module: "~/app/_components/ingredients/ingredient-detail",
-        export: "IngredientDetail",
-      },
-    },
+    list: true,
+    detail: true,
   },
   table: "Ingredient",
   identifiers: { brand: "IngredientId", shortcode: "ING-" },
-  native: { update: "Garden guide association" },
   presentation: {
     titleField: "name",
     domain: "cook",
@@ -35,6 +24,48 @@ export default defineEntity({
       actionLabel: "Add Ingredient",
     },
     icons: { lucide: "Carrot", sfSymbol: "leaf" },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "basic-information",
+          title: "Basic information",
+          placement: "supporting",
+          fields: [
+            "name",
+            "aliases",
+            "usuallyOnHand",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+        { kind: "slot", id: "nutrition-product", title: "Nutrition" },
+        {
+          kind: "relation",
+          id: "products",
+          title: "Products",
+          relation: "products",
+          filter: { descriptor: "ingredient" },
+          columns: ["name", "manufacturer", "category", "onHandUnits"],
+        },
+        { kind: "slot", id: "garden", placement: "supporting" },
+        {
+          kind: "relation",
+          id: "recipes",
+          title: "Appears in recipes",
+          relation: "recipes",
+          filter: { descriptor: "related:recipe.ingredients" },
+          columns: ["name", "tags", "meals"],
+        },
+      ],
+    },
+    list: {
+      actions: ["setUsuallyOnHand", "merge", "delete"],
+      links: [
+        { label: "Equivalences", path: "/ingredients/equivalences" },
+        { label: "Workbench", path: "/ingredients/workbench" },
+      ],
+    },
   },
   model: {
     fields: [
@@ -340,6 +371,52 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "products",
+      label: "Products",
+      target: "product",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Product.ingredientId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Product.ingredientId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "recipes",
+      label: "Recipes",
+      target: "recipe",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "RecipeSectionIngredient.ingredientId",
+            direction: "incoming",
+          },
+          {
+            edge: "RecipeSectionIngredient.recipeSectionId",
+            direction: "outgoing",
+          },
+          { edge: "RecipeSection.recipeId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "RecipeSection.recipeId", direction: "incoming" },
+          {
+            edge: "RecipeSectionIngredient.recipeSectionId",
+            direction: "incoming",
+          },
+          {
+            edge: "RecipeSectionIngredient.ingredientId",
+            direction: "outgoing",
+          },
+        ],
+      },
+    },
     {
       key: "recipe",
       label: "Recipe",

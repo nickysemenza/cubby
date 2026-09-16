@@ -8,6 +8,8 @@ import {
   type MeasureEstimate,
   type NutritionEstimate,
   type NutritionTotals,
+  type StoredNutritionTotals,
+  withMacros,
 } from "@cubby/schemas/nutrition";
 import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 
@@ -42,7 +44,7 @@ export const fromNamedEstimates = (
   );
 };
 
-const toWTotals = (totals: NutritionTotals): WNutritionTotals => ({
+const toWTotals = (totals: StoredNutritionTotals): WNutritionTotals => ({
   cost: totals.cost,
   nutrition: toNamedEstimates(totals.nutrition),
 });
@@ -50,10 +52,11 @@ const toWTotals = (totals: NutritionTotals): WNutritionTotals => ({
 const fromWTotals = (
   totals: WNutritionTotals,
   missingReason: "no_data" | "empty" = "no_data",
-): NutritionTotals => ({
-  cost: fromWMeasureEstimate(totals.cost),
-  nutrition: fromNamedEstimates(totals.nutrition, missingReason),
-});
+): NutritionTotals =>
+  withMacros({
+    cost: fromWMeasureEstimate(totals.cost),
+    nutrition: fromNamedEstimates(totals.nutrition, missingReason),
+  });
 
 export const scaleEstimate = (
   estimate: MeasureEstimate,
@@ -76,7 +79,7 @@ export const scaleNutrition = (
   );
 
 export const scaleTotals = (
-  totals: NutritionTotals,
+  totals: StoredNutritionTotals,
   factor: number,
 ): NutritionTotals =>
   fromWTotals(wasm.scale_nutrition_totals(toWTotals(totals), factor));
@@ -87,7 +90,7 @@ export const aggregateEstimates = (
   fromWMeasureEstimate(wasm.aggregate_estimates([...entries]));
 
 export const aggregateTotals = (
-  entries: readonly NutritionTotals[],
+  entries: readonly StoredNutritionTotals[],
 ): NutritionTotals =>
   fromWTotals(
     wasm.aggregate_nutrition_totals(entries.map(toWTotals)),
@@ -98,14 +101,17 @@ export type PendingTotalsReason = "totals_missing" | "totals_stale";
 
 export const pendingTotals = (reason: PendingTotalsReason): NutritionTotals => {
   const estimate = { status: "pending" as const, reason };
-  return { cost: estimate, nutrition: buildNutrition(() => estimate) };
+  return withMacros({
+    cost: estimate,
+    nutrition: buildNutrition(() => estimate),
+  });
 };
 
 /** Persisted totals are authoritative only while stamped fresh; otherwise the read shows pending with the reason. */
 export const totalsForRead = (
-  totals: NutritionTotals | null,
+  totals: StoredNutritionTotals | null,
   totalsComputedAt: Date | null,
 ): NutritionTotals =>
   totals != null && totalsComputedAt != null
-    ? totals
+    ? withMacros(totals)
     : pendingTotals(totals == null ? "totals_missing" : "totals_stale");

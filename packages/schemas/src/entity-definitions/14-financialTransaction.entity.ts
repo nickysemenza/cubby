@@ -36,18 +36,8 @@ export default defineEntity({
   route: {
     basePath: "financial-transactions",
     create: "dialog",
-    list: {
-      component: {
-        module: "~/app/finance/financial-transaction-list",
-        export: "FinancialTransactionList",
-      },
-    },
-    detail: {
-      component: {
-        module: "~/app/finance/financial-transaction-detail",
-        export: "FinancialTransactionDetail",
-      },
-    },
+    list: true,
+    detail: true,
   },
   table: "FinancialTransaction",
   identifiers: {
@@ -68,6 +58,37 @@ export default defineEntity({
       actionLabel: "New Transaction",
     },
     icons: { lucide: "CreditCard", sfSymbol: "arrow.left.arrow.right" },
+    detail: {
+      hero: { stats: ["amount", "status"] },
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Overview",
+          placement: "supporting",
+          fields: [
+            "merchant",
+            "vendorInference",
+            "amount",
+            "kind",
+            "status",
+            "accountId",
+            "allocations",
+            "postedDate",
+            "sourceRefs",
+          ],
+        },
+        {
+          kind: "relation",
+          id: "expenses",
+          title: "Expenses",
+          relation: "expenses",
+          filter: { descriptor: "financialTransactionId" },
+          columns: ["name", "cost", "date", "product", "project"],
+        },
+      ],
+    },
+    list: { actions: ["delete"] },
   },
   model: {
     fields: [
@@ -91,7 +112,9 @@ export default defineEntity({
         label: "Purchase",
         reference: { entity: "purchase" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, listOrder: 50 },
+        // Detail shows `allocations` instead: this mirror is NULL exactly
+        // when a charge settles more than one purchase.
+        display: { list: true, detail: false, listOrder: 50 },
         validation: {
           read: purchaseShortcode.nullable(),
           create: purchaseShortcode.nullable().default(null),

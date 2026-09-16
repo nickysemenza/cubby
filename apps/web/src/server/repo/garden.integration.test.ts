@@ -869,6 +869,7 @@ describe("garden workflows", () => {
 
     const { data } = await plantingList(
       ctx.db,
+      {},
       { pageIndex: 0, pageSize: 200 },
       [
         { orderBy: "createdAt", direction: "asc" },
@@ -919,6 +920,7 @@ describe("garden workflows", () => {
 
     const { data } = await gardenEntryList(
       ctx.db,
+      {},
       { pageIndex: 0, pageSize: 200 },
       [
         { orderBy: "observedOn", direction: "asc" },

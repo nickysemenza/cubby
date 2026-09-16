@@ -1,0 +1,21 @@
+import type { ListSlotId } from "@cubby/schemas/entity-manifest";
+
+import type { ListSlotComponent } from "~/app/_components/entity-list/list-slot-types";
+
+import { ProjectsDashboard } from "./projects-dashboard";
+
+const ProjectOverviewSlot: ListSlotComponent = () => (
+  <ProjectsDashboard view="overview" />
+);
+const ProjectAnalyticsSlot: ListSlotComponent = () => (
+  <ProjectsDashboard view="analytics" />
+);
+const ProjectGallerySlot: ListSlotComponent = () => (
+  <ProjectsDashboard view="gallery" />
+);
+
+export const projectListSlots = {
+  overview: ProjectOverviewSlot,
+  analytics: ProjectAnalyticsSlot,
+  gallery: ProjectGallerySlot,
+} satisfies Record<ListSlotId<"project">, ListSlotComponent>;
