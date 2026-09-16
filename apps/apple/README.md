@@ -67,8 +67,7 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 
 - `pnpm apple check` runs native formatting, CubbyKit package tests, generated API
   drift checks, and an iOS simulator build.
-- `pnpm apple test` runs package tests only. It does **not** run the hosted app tests
-  or snapshots.
+- `pnpm apple test` runs package tests only. It does **not** run the hosted app tests.
 - Run the hosted iPhone tests explicitly, using a simulator ID from `xcrun simctl
   list devices available`:
 
@@ -81,11 +80,6 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 - Run Mac navigation contracts with `xcodebuild -project apps/apple/Cubby.xcodeproj
   -scheme Cubby-macOS -destination 'platform=macOS,arch=arm64' test`, then interact
   with the built app.
-- Snapshot baselines use the iPhone 13 layout (390 × 844 points) on the iOS 26.5
-  runtime (23F77), recorded with Xcode 27.0 (27A266a). Keep that runtime for
-  comparisons; a runtime update needs deliberate visual review and re-recording.
-  Coverage includes light/dark, accessibility text, partial failure, loading,
-  search, editing, and scan results; a separate iPad Pro 11 layout covers tablet detail.
 - Avoid simultaneous builds sharing one DerivedData directory. The dSYM upload
   phase runs only when archiving; ordinary builds/tests do not upload symbols.
 - UI and physical-device acceptance are separate from these gates; follow

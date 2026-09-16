@@ -7,25 +7,46 @@ import Testing
 
 @Suite("CubbyAPIError decoding")
 struct ErrorDecodingTests {
-    @Test func status401IsUnauthorized() throws {
-        let error = CubbyAPIError.decode(
-            status: 401, operationID: "resources.product.get",
-            body: try Fixtures.data(named: "error-unauthorized.json")
-        )
-        #expect(error.isUnauthorized)
-        #expect(error.detail?.code == "UNAUTHORIZED")
-        #expect(error.detail?.reason == "invalid_session")
-        #expect(error.detail?.requestId == "req_sample123")
+    /// 401 and 409 decode to different detail shapes; share the decode + fixture plumbing and
+    /// keep each status's distinct assertions named under one case.
+    private enum ExpectedError: Sendable {
+        case unauthorized(code: String, reason: String, requestId: String)
+        case staleInventory(reason: String)
     }
 
-    @Test func status409WithInventoryStaleReasonIsStaleInventory() throws {
+    @Test(
+        "status-coded errors decode to the right category and detail",
+        arguments: [
+            (
+                401, "resources.product.get", "error-unauthorized.json",
+                ExpectedError.unauthorized(
+                    code: "UNAUTHORIZED", reason: "invalid_session", requestId: "req_sample123")
+            ),
+            (
+                409, "inventory.reconcileSession", "reconcile-stale.json",
+                ExpectedError.staleInventory(reason: "INVENTORY_STALE")
+            ),
+        ]
+    )
+    private func statusCodedErrorsDecode(
+        status: Int, operationID: String, fixture: String, expected: ExpectedError
+    ) throws {
         let error = CubbyAPIError.decode(
-            status: 409, operationID: "inventory.reconcileSession",
-            body: try Fixtures.data(named: "reconcile-stale.json")
-        )
-        #expect(error.isStaleInventory)
-        #expect(error.reason == "INVENTORY_STALE")
-        #expect(!error.isUnauthorized)
+            status: status, operationID: operationID, body: try Fixtures.data(named: fixture))
+        switch expected {
+        case .unauthorized(let code, let reason, let requestId):
+            #expect(error.isUnauthorized)
+            #expect(error.detail?.code == code)
+            #expect(error.detail?.reason == reason)
+            #expect(error.detail?.requestId == requestId)
+        case .staleInventory(let reason):
+            #expect(error.isStaleInventory)
+            #expect(error.reason == reason)
+            #expect(!error.isUnauthorized)
+        }
+    }
+
+    @Test func staleInventoryRequiresADetailEvenAt409() {
         #expect(!CubbyAPIError(status: 409, operationID: "x", detail: nil).isStaleInventory)
     }
 
