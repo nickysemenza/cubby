@@ -106,6 +106,8 @@ type EntityFieldControl = Readonly<{
   renderer: string | null;
   options: readonly Readonly<{ value: string; label: string }>[] | null;
   section: string;
+  placeholder: string | null;
+  initial: "today" | null;
 }>;
 export type EntityField = Readonly<{
   key: string;

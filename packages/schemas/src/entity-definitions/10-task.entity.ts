@@ -39,7 +39,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        control: { kind: "text" },
+        control: { kind: "text", placeholder: "What needs doing?" },
         display: { list: true, detail: true, standard: "name", detailOrder: 0 },
         validation: {
           read: z.string().min(1),

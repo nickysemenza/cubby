@@ -86,7 +86,7 @@ export default defineEntity({
       {
         key: "date",
         kind: "date",
-        control: { kind: "date", section: "schedule" },
+        control: { kind: "date", section: "schedule", initial: "today" },
         display: { list: true, detail: true, detailOrder: 30 },
         validation: {
           read: plainDate,

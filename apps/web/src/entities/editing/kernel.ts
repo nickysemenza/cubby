@@ -129,9 +129,10 @@ export function initialEntityEditValues<E extends EditableEntity>(
     ),
     ...defaults,
   };
-  if (request.operation === "create" || intent.acceptsSeed === true) {
-    Object.assign(values, request.seed);
-  }
+  // A seed only exists when a caller explicitly supplied one, so every
+  // operation merges it unconditionally rather than requiring per-intent
+  // opt-in.
+  Object.assign(values, request.seed);
   return values;
 }
 

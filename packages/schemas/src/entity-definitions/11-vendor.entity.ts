@@ -39,7 +39,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        control: { kind: "text" },
+        control: { kind: "text", placeholder: "Who are you paying?" },
         display: { list: true, detail: true, standard: "name" },
         validation: {
           read: z.string().min(1),
@@ -51,7 +51,7 @@ export default defineEntity({
         key: "website",
         kind: "text",
         nullable: true,
-        control: { kind: "text", renderer: "url" },
+        control: { kind: "text", renderer: "url", placeholder: "https://…" },
         display: { list: true, detail: true },
         validation: {
           read: z.string().nullable(),
