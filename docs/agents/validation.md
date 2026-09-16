@@ -32,8 +32,9 @@ the spelling — the transcripts carried three competing ones (`pnpm vitest run`
 `apps/web`, because that is where Vitest's root is; a repo-root-relative path
 matches nothing and exits 1 with "No test files found". Use
 `pnpm test:file:postgres src/…` for a PostgreSQL contract file. That command
-resolves a source contract module to its owning family entrypoint, so it runs a
-small real-PostgreSQL family without bypassing the authoritative manifest.
+runs the given file directly against the `integration` Vitest project — there
+is no family resolver or entrypoint indirection; every `*.integration.test.ts`
+file under `apps/web/src` is its own Vitest test file.
 
 `pnpm test` runs all fast unit, UI, contract, and auxiliary-package tests;
 `pnpm test:postgres` runs the retained PostgreSQL contracts; and

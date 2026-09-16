@@ -74,10 +74,6 @@ function explicitlySelectsProject(name: string): boolean {
   );
 }
 
-const pureUnitTests = [
-  "src/entities/entity-contracts.unit.test.ts",
-  "src/entities/entities.unit.test.ts",
-];
 const mcpContractTests = [
   "src/server/mcp/catalog-schema.unit.test.ts",
   "src/server/mcp/mcp-apps.unit.test.ts",
@@ -137,19 +133,20 @@ export default defineConfig({
           extends: true,
           test: {
             name: "unit",
+            // Folds the former `unit-pure` project's 2 catalog/schema files
+            // in: they have no mocks, databases, env mutation, or global
+            // singleton state, so sharing this project's module graph is
+            // exactly as safe as their old dedicated one, without a second
+            // isolation startup tax.
             include: ["**/*.unit.test.ts"],
-            exclude: [
-              "**/node_modules/**",
-              ...pureUnitTests,
-              ...mcpContractTests,
-            ],
+            exclude: ["**/node_modules/**", ...mcpContractTests],
             // Unit files are order-independent and clean up their mutable state.
             // Sharing the module graph removes the dominant per-file startup cost.
             pool: "threads",
             isolate: false,
-            // Unit, unit-pure, and UI share group 0. Five workers is the
-            // measured memory-efficient ceiling; keep the cap aligned across
-            // the group so one project cannot starve the others.
+            // Unit and UI share group 0. Five workers is the measured
+            // memory-efficient ceiling; keep the cap aligned across the group
+            // so one project cannot starve the others.
             maxWorkers: 5,
             sequence: {
               groupOrder: 0,
@@ -164,24 +161,17 @@ export default defineConfig({
             name: "mcp-contract",
             include: mcpContractTests,
             pool: "threads",
-            // These files use no module mocks or mutable globals. One shared
-            // worker imports the MCP graph once instead of five times.
-            isolate: false,
-            fileParallelism: false,
-            sequence: { groupOrder: 1 },
-          },
-        },
-        {
-          // Catalog and schema invariants only: no mocks, databases, env
-          // mutation, or global singleton state. Sharing their module graph is
-          // therefore safe and removes the isolation startup tax.
-          extends: true,
-          test: {
-            name: "unit-pure",
-            include: pureUnitTests,
-            pool: "threads",
+            // These files use no module mocks or mutable globals: sharing the
+            // module graph (isolate: false) is what makes importing the MCP
+            // graph once safe. `maxWorkers` must match every other project in
+            // this groupOrder (Vitest requires it — they share one execution
+            // batch); the old dedicated `fileParallelism: false` tail forced a
+            // single worker, but that only mattered when this ran alone.
             isolate: false,
             maxWorkers: 5,
+            // Group 0, alongside unit/ui, instead of a serial tail after them:
+            // it shares the same "no mocks, no mutable globals" safety case,
+            // and running it after group 0 bought nothing but wall time.
             sequence: { groupOrder: 0 },
           },
         },
@@ -220,14 +210,28 @@ export default defineConfig({
             // registers — see `closeTestDb` in tooling/test-setup.ts.
             setupFiles: ["./tooling/integration-teardown.ts"],
             name: "integration",
-            include: ["**/integration-families/*.integration.test.ts"],
+            include: ["src/**/*.integration.test.ts"],
+            pool: "forks",
+            // The former per-file family resolver made 8 lumpy import-index
+            // files carry 76 real contract files with an isolated fork each.
+            // `isolate: false` shares one fork's module graph across a whole
+            // worker's share of those 76 files instead: `db.ts`'s
+            // `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`,
+            // `ai/models.ts`, `semantic/embeddings.ts`, and
+            // `clients/notion.ts`'s LRU caches are the per-worker module
+            // singletons this exposes — none bind to a per-file database, so a
+            // test asserting a cold cache/pool would be the first casualty.
+            // `withTestDb()`/`resetTestDb()` still gives every TEST a pristine
+            // database; this only changes whether the JS module registry is
+            // fresh per file (it no longer is, per worker).
+            isolate: false,
             testTimeout: 10000,
             // First-test database provisioning is the long tail; resets use the
             // full safe TRUNCATE path documented in tooling/test-setup.ts.
             hookTimeout: 30000,
-            // Integration stays on isolated forks: database clients and module
-            // singletons are file-scoped, while shared registries must not cross
-            // test-file boundaries. Larger IntegreSQL pools do not reduce CREATE latency.
+            // Larger IntegreSQL pools do not reduce CREATE latency; sequencing
+            // stays a distinct serial group so its shared-worker singletons
+            // above never interleave with the unit/UI/mcp-contract group.
             sequence: {
               groupOrder: 3,
               shuffle: { files: true, tests: false },

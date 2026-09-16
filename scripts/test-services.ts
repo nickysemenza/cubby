@@ -291,7 +291,7 @@ export async function runWithTestServices(
           "--env",
           "PGPASSWORD=password",
           "--env",
-          "INTEGRESQL_TEST_INITIAL_POOL_SIZE=4",
+          "INTEGRESQL_TEST_INITIAL_POOL_SIZE=8",
           "--env",
           "INTEGRESQL_TEST_MAX_POOL_SIZE=16",
           "--env",
