@@ -12,7 +12,7 @@ import { expect, test } from "./e2e-test";
 
 test("work graph renders through Viz, restores filters, and opens a graph node", async ({
   page,
-}, testInfo) => {
+}) => {
   const name = `e2e graph task ${Date.now()}`;
   const task = await seedTaskPrerequisite(page, { name });
   const disconnectedName = `e2e graph task disconnected ${Date.now()}`;
@@ -73,10 +73,6 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
   await expect(types).toHaveValue("task");
   await expect(graph).toBeVisible({ timeout: 15_000 });
 
-  await page.screenshot({
-    path: testInfo.outputPath("entity-dependency-graph-desktop.png"),
-    fullPage: true,
-  });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(graph).toBeVisible();
   await expectViewportBounded(page);
@@ -91,10 +87,6 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
       }),
     )
     .toBe(true);
-  await page.screenshot({
-    path: testInfo.outputPath("entity-dependency-graph-phone.png"),
-    fullPage: true,
-  });
 
   await graphLink.click();
   await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}$`));

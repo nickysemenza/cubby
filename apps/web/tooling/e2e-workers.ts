@@ -5,8 +5,8 @@ export function resolveE2EWorkers(
   const configured = env.CUBBY_E2E_WORKERS;
   if (configured !== undefined) {
     const workers = Number(configured);
-    if (!Number.isInteger(workers) || workers < 1 || workers > 3) {
-      throw new Error("CUBBY_E2E_WORKERS must be 1, 2, or 3");
+    if (!Number.isInteger(workers) || workers < 1 || workers > 4) {
+      throw new Error("CUBBY_E2E_WORKERS must be 1, 2, 3, or 4");
     }
     return workers;
   }

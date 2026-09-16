@@ -8,7 +8,7 @@ import { expect, test } from "./e2e-test";
 
 test("smart Collection rules remain temporary across navigation and refresh", async ({
   page,
-}, testInfo) => {
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const suffix = Date.now();
   const productName = `E2E finishing brush ${suffix}`;
@@ -71,19 +71,11 @@ test("smart Collection rules remain temporary across navigation and refresh", as
   await expect(
     page.getByText("Why this Product is included", { exact: true }),
   ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("smart-collection-phone.png"),
-    fullPage: true,
-  });
   await page.keyboard.press("Escape");
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await expectViewportBounded(page);
   await whyIncluded.click();
-  await page.screenshot({
-    path: testInfo.outputPath("smart-collection-desktop.png"),
-    fullPage: true,
-  });
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);

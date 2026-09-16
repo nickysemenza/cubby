@@ -352,7 +352,7 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   IntegreSQL at 1 CPU/256 MiB, with a 4/16 database pool and 4 provisioning tasks.
   `VITEST_MAX_WORKERS` overrides the measured PostgreSQL default of 6. Playwright
   gives each worker its own database, object storage, and Worker harness;
-  `CUBBY_E2E_WORKERS=1|2|3` overrides its local macOS default of 3. CI and Linux
+  `CUBBY_E2E_WORKERS=1|2|3|4` overrides its local macOS default of 3. CI and Linux
   default to one browser worker. Multiple pairs share the host's finite CPU and memory.
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
   instance (dev DB *is* prod). `db:push` and data changes from one worktree are

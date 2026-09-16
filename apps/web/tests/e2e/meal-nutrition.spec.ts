@@ -115,11 +115,6 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
     timeout: 5000,
   });
 
-  await page.screenshot({
-    path: testInfo.outputPath("meal-nutrition-desktop.png"),
-    fullPage: true,
-  });
-
   await page.goto(`/meals?view=nutrition&date=${fixture.futureDate}`);
   await waitForAppHydration(page);
   await expect(page).toHaveURL(
@@ -257,8 +252,4 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(
     page.getByText(`${name} snack break`, { exact: true }),
   ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("meal-nutrition-daily-desktop.png"),
-    fullPage: true,
-  });
 });

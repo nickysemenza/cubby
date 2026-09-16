@@ -12,7 +12,7 @@ const projectAssignment = z.object({ projectId: z.string().nullable() });
 export function relationshipDiscoveryContract() {
   test("assigned expense offers a reviewed alternative and explores multiple levels on desktop and phone", async ({
     page,
-  }, testInfo) => {
+  }) => {
     const name = `e2e relationship review ${Date.now()}`;
     const fixture = await seedRelationshipReviewPrerequisite(page, name);
     await page.goto(`/expenses/${fixture.expense.id}`);
@@ -83,10 +83,6 @@ export function relationshipDiscoveryContract() {
       await expect(inspectorHeading).toBeHidden();
     }
     await expectViewportBounded(page);
-    await page.screenshot({
-      path: testInfo.outputPath("relationship-discovery-phone.png"),
-      fullPage: true,
-    });
     await page
       .getByRole("button", { name: "Show record list", exact: true })
       .click();
