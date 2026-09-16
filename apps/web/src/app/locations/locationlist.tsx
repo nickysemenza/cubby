@@ -12,7 +12,10 @@ import {
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 
 import {
@@ -36,15 +39,17 @@ import { locationTypeOptionsWithTheme } from "../_components/locations/location-
 import { LocationTypeLabel } from "../_components/locations/LocationTypeLabel";
 
 /**
- * Module-level: `initialColumnVisibility` sits in the merged-visibility
- * `useMemo`'s dependency array, so an inline object literal would rebuild it
- * (and the table's column visibility) on every render.
+ * `aiDescription` is declared `display.listHidden` on `04-location.entity.ts`
+ * now; `children`/`inventoryEntries` are relation/computed columns outside
+ * the field model, so they stay hand-declared here. Module-level:
+ * `initialColumnVisibility` sits in the merged-visibility `useMemo`'s
+ * dependency array, so an inline object literal would rebuild it (and the
+ * table's column visibility) on every render.
  */
 const LOCATION_INITIAL_COLUMN_VISIBILITY = {
   children: false,
-  aiDescription: false,
-  createdAt: false,
   inventoryEntries: false,
+  ...entityListHiddenColumns("location"),
 };
 
 export function LocationList() {

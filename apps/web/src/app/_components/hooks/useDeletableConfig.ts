@@ -2,7 +2,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { entityDialogLabel as labelFor } from "~/entities/entities";
+import { entityLabel as labelFor } from "~/entities/entities";
 import {
   entityMutationOptionsFactory,
   isGeneratedBrowserCrudEntity,

@@ -6,7 +6,6 @@
  * costing path, and the enrichment-workbench worklist. None of these mutate.
  */
 
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type IngredientId,
   type IngredientShortcode,
@@ -17,11 +16,7 @@ import type {
   IngredientListItem,
   IngredientMergeCandidateImpact,
 } from "@cubby/schemas/ingredient";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { RecipeRef } from "@cubby/schemas/recipe";
 import {
   and,
@@ -48,7 +43,6 @@ import {
 } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
   buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
@@ -59,8 +53,8 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   enrichProductRowsWithPricing,
   loadProductPricingForIngredientIds,
@@ -487,6 +481,8 @@ export const getIngredientMatches = async (
   return map;
 };
 
+const ingredientScaffold = listScaffold("ingredient", ingredient);
+
 /**
  * The complete WHERE for an ingredient list. `getEntityCounts` calls it with
  * `{}` — see repo/dashboard.ts.
@@ -553,10 +549,10 @@ export const buildIngredientListWhere = async (
     )
     .where(notDeleted(recipeSectionIngredient));
 
-  // Always filter out deleted items and recipe ingredients
-  const conditions: (SQL | undefined)[] = [
+  // Always filter out recipe-scoped ingredients; `notDeleted` is folded into
+  // `ingredientScaffold.where` below.
+  const computed: Array<SQL | undefined> = [
     isNull(ingredient.recipeId),
-    notDeleted(ingredient),
     ...auditDateWhereConditions(ingredient, filters),
   ];
 
@@ -564,20 +560,17 @@ export const buildIngredientListWhere = async (
   if (filters.nameFilter) {
     const nameCondition = buildIngredientWhere(false, filters.nameFilter);
     if (nameCondition) {
-      conditions.push(nameCondition);
+      computed.push(nameCondition);
     }
   }
 
-  // `usuallyOnHand` is a declared stored filter. `nameFilter` above stays
-  // hand-written — it ORs the alias match in, which the standard text shape
-  // can't express — and the presence filters below stay hand-written too,
-  // since their descriptors aren't `deriveSchema: true` and resolve against a
-  // correlated id-set subquery, not a real column.
-  conditions.push(
-    ...declaredFilterPredicates("ingredient", ingredient, filters),
-  );
-
-  conditions.push(
+  // `usuallyOnHand` is a declared stored filter, folded into
+  // `ingredientScaffold.where` below. `nameFilter` above stays hand-written —
+  // it ORs the alias match in, which the standard text shape can't express —
+  // and the presence filters below stay hand-written too, since their
+  // descriptors aren't `deriveSchema: true` and resolve against a correlated
+  // id-set subquery, not a real column.
+  computed.push(
     idSetPresence(
       ingredient.id,
       filters.productPresenceFilter,
@@ -596,7 +589,7 @@ export const buildIngredientListWhere = async (
     ...relatedWhereConditions("ingredient", filters, ingredient.id),
   );
 
-  const whereClause = and(...conditions);
+  const whereClause = ingredientScaffold.where(filters, computed);
   return whereClause;
 };
 
@@ -637,14 +630,11 @@ const ingredientListImpl = async (
       ];
     return null;
   };
-  const orderByClause = buildOrderBy(
-    ingredient,
-    sorts,
-    [...generatedEntitySort.ingredient.fields],
-    { resolve: resolveIngredientSort },
-  );
+  const orderByClause = ingredientScaffold.orderBy(sorts, {
+    resolve: resolveIngredientSort,
+  });
 
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = ingredientScaffold.page(pagination);
 
   if (readIntent === "ids") {
     const rows = await dbClient

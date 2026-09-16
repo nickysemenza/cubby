@@ -6,7 +6,6 @@ import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { WithVendorSearch } from "~/app/_components/combobox/with-vendor-search";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { tradeOptions } from "~/app/projects/shared";
 import { VendorCell } from "~/components/entity/vendor-cell";
@@ -18,7 +17,10 @@ import { Button } from "~/components/ui/button";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  editableFieldOverrides,
+  EntityBasicInfo,
+} from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 
@@ -256,7 +258,18 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ record: expense }) => {
     data: expense,
   });
 
+  // `url` (external-link, via `control.renderer: "url"`) and `notes` are
+  // plain scalar → update {key} — generic. `name`/`date` keep required-field
+  // guards; `cost` renders with `decimals: 0` (whole dollars — the generic
+  // helper's currency default is 2); every select/reference field below adds
+  // a Badge, `filterAction`, or entity picker. All stay hand-written.
   const overrides = {
+    ...editableFieldOverrides(
+      "expense",
+      expense,
+      ["url", "notes"],
+      updateMutation.mutateAsync,
+    ),
     name: () => ({
       value: (
         <EditableCell
@@ -422,38 +435,6 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ record: expense }) => {
               ? "Show all planned expenses"
               : "Show all completed expenses"
           }
-        />
-      ),
-    }),
-    url: () => ({
-      value: (
-        <EditableCell
-          value={expense.url}
-          config={{ type: "text", placeholder: "https://…" }}
-          onSave={async (url) => {
-            await updateMutation.mutateAsync({
-              id: expense.id,
-              data: { url },
-            });
-          }}
-          renderValue={(v) =>
-            v ? <ExternalLinkText href={v} /> : <NoneValue />
-          }
-        />
-      ),
-    }),
-    notes: () => ({
-      value: (
-        <EditableCell
-          value={expense.notes}
-          config={{ type: "text", multiline: true, rows: 4 }}
-          onSave={async (notes) => {
-            await updateMutation.mutateAsync({
-              id: expense.id,
-              data: { notes },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
         />
       ),
     }),

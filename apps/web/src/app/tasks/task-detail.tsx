@@ -35,7 +35,10 @@ import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  editableFieldOverrides,
+  EntityBasicInfo,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -295,7 +298,17 @@ export const TaskDetail: FC<TaskDetailProps> = ({ record: task }) => {
   const blockedBy = resolveDeps(task.blockedByIds);
   const blocking = resolveDeps(task.blockingIds);
 
+  // `dueDate`/`dueEndDate` are plain scalar → update {key} — generic. `name`,
+  // `status` and `trade` keep required-field guards, a Badge, and/or a
+  // `filterAction`; `projectId`/`subjectProductId` are entity-reference
+  // pickers. All stay hand-written.
   const overrides = {
+    ...editableFieldOverrides(
+      "task",
+      task,
+      ["dueDate", "dueEndDate"],
+      updateMutation.mutateAsync,
+    ),
     name: () => ({
       value: (
         <EditableCell
@@ -364,36 +377,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ record: task }) => {
           to="/tasks"
           search={{ view: "list", trade: task.trade }}
           label={`Show all tasks for trade ${task.trade}`}
-        />
-      ),
-    }),
-    dueDate: () => ({
-      value: (
-        <EditableCell
-          value={task.dueDate}
-          config={{ type: "date" }}
-          onSave={async (dueDate) => {
-            await updateMutation.mutateAsync({
-              id: task.id,
-              data: { dueDate },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    }),
-    dueEndDate: () => ({
-      value: (
-        <EditableCell
-          value={task.dueEndDate}
-          config={{ type: "date" }}
-          onSave={async (dueEndDate) => {
-            await updateMutation.mutateAsync({
-              id: task.id,
-              data: { dueEndDate },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
         />
       ),
     }),

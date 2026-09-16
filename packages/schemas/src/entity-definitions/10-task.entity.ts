@@ -141,7 +141,7 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date", section: "schedule" },
-        display: { list: true, detail: true, detailOrder: 4 },
+        display: { list: true, detail: true, detailOrder: 4, listHidden: true },
         validation: {
           read: plainDate.describe("End of a due-date range").nullable(),
           create: plainDate
@@ -176,7 +176,7 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number", section: "ordering" },
-        display: { list: true },
+        display: { list: true, listHidden: true },
         validation: {
           read: z.number().nullable(),
           create: z.number().nullable().default(null),

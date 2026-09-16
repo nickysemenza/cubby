@@ -223,6 +223,7 @@ export default defineEntity({
           detailOrder: 10,
           width: "md",
           listOrder: 80,
+          listHidden: true,
         },
         validation: {
           read: z.string().nullable(),
@@ -236,7 +237,7 @@ export default defineEntity({
         nullable: true,
         label: "Statement description",
         control: { section: "details", kind: "textarea" },
-        display: { list: true, listOrder: 110 },
+        display: { list: true, listOrder: 110, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -249,7 +250,7 @@ export default defineEntity({
         nullable: true,
         label: "Source category",
         control: { section: "details", kind: "text" },
-        display: { list: true, listOrder: 120 },
+        display: { list: true, listOrder: 120, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -273,6 +274,7 @@ export default defineEntity({
           detailOrder: 90,
           columnId: "source",
           listOrder: 100,
+          listHidden: true,
         },
         validation: {
           read: financialTransactionSourceRefs,
@@ -285,7 +287,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { section: "notes", kind: "textarea" },
-        display: { list: true, listOrder: 130 },
+        display: { list: true, listOrder: 130, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -345,6 +347,7 @@ export default defineEntity({
           detailOrder: 20,
           columnId: "possibleVendor",
           listOrder: 90,
+          listHidden: true,
         },
         validation: {
           read: merchantVendorInference

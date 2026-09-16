@@ -126,6 +126,8 @@ export default defineEntity({
     sort: {
       fields: ["name", "kind", "createdAt", "updatedAt"],
       default: "name",
+      // A name roster reads A→Z, unlike the blanket descending default.
+      direction: "asc",
     },
     intents: {
       fields: {

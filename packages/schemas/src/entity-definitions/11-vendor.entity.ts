@@ -52,7 +52,13 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text", renderer: "url", placeholder: "https://…" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          format: "external-link",
+          width: "md",
+          mobile: { slot: "meta", priority: 30, interactive: true },
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -114,7 +120,12 @@ export default defineEntity({
         key: "purchaseCount",
         kind: "number",
         label: "Purchases",
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 20 },
+        },
         validation: {
           read: z.number().int().min(0),
           create: null,
@@ -124,7 +135,17 @@ export default defineEntity({
       {
         key: "spend",
         kind: "number",
-        display: { list: true, detail: true },
+        // Vendor spend genuinely goes negative (a refund-only vendor, or the
+        // family wedding contributions) — `signedCurrency` reads a credit as
+        // a credit rather than spend. The footer stays exact: `vendorList`
+        // returns a `sums.spend` over the whole filtered set.
+        display: {
+          list: true,
+          detail: true,
+          format: "signedCurrency",
+          width: "sm",
+          mobile: { slot: "trailing", priority: 5 },
+        },
         validation: {
           read: money,
           create: null,
@@ -135,7 +156,13 @@ export default defineEntity({
         key: "latestPurchaseDate",
         kind: "date",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          format: "plainDate",
+          width: "sm",
+          mobile: { slot: "meta", priority: 35 },
+        },
         validation: {
           read: plainDate.nullable(),
           create: null,

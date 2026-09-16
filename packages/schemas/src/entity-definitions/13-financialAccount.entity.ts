@@ -223,6 +223,9 @@ export default defineEntity({
         "updatedAt",
       ],
       default: "name",
+      // A name roster reads A→Z; the table's blanket descending default was
+      // opening the account list backwards.
+      direction: "asc",
     },
     intents: {
       fields: {

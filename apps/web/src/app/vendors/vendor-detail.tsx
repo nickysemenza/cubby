@@ -3,12 +3,14 @@ import { Info, Receipt } from "lucide-react";
 import type { FC } from "react";
 
 import { EntityHero } from "~/app/_components/EntityHero";
-import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  editableFieldOverrides,
+  EntityBasicInfo,
+} from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 
 import {
@@ -48,7 +50,19 @@ export const VendorDetail: FC<VendorDetailProps> = ({ record: vendor }) => {
     data: vendor,
   });
 
+  // `website` (external-link, `display.format` on `11-vendor.entity.ts`) and
+  // `notes` are plain scalar → update {key} — generic. `name` keeps its
+  // required-field guard (a cleared name is a no-op, not a write attempt);
+  // `orderUrlTemplate` renders as mono text (a URL *pattern*, not a
+  // followable link); the two rollups below are read-only. All three stay
+  // hand-written.
   const fieldOverrides = {
+    ...editableFieldOverrides(
+      "vendor",
+      vendor,
+      ["website", "notes"],
+      updateMutation.mutateAsync,
+    ),
     name: () => ({
       value: (
         <EditableCell
@@ -63,23 +77,6 @@ export const VendorDetail: FC<VendorDetailProps> = ({ record: vendor }) => {
             });
           }}
           renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    }),
-    website: () => ({
-      value: (
-        <EditableCell
-          value={vendor.website}
-          config={{ type: "text", placeholder: "https://…" }}
-          onSave={async (website) => {
-            await updateMutation.mutateAsync({
-              id: vendor.id,
-              data: { website },
-            });
-          }}
-          renderValue={(v) =>
-            v ? <ExternalLinkText href={v} /> : <NoneValue />
-          }
         />
       ),
     }),
@@ -109,21 +106,6 @@ export const VendorDetail: FC<VendorDetailProps> = ({ record: vendor }) => {
               <NoneValue />
             )
           }
-        />
-      ),
-    }),
-    notes: () => ({
-      value: (
-        <EditableCell
-          value={vendor.notes}
-          config={{ type: "text", multiline: true, rows: 4 }}
-          onSave={async (notes) => {
-            await updateMutation.mutateAsync({
-              id: vendor.id,
-              data: { notes },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
         />
       ),
     }),

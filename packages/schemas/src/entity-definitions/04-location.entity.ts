@@ -245,7 +245,7 @@ export default defineEntity({
         key: "aiDescription",
         kind: "text",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: null,

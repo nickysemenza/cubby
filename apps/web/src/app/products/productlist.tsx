@@ -40,7 +40,10 @@ import {
 } from "~/components/ui/tooltip";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { relatedData } from "~/lib/related-data.functions";
@@ -1066,26 +1069,18 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
       filterOptions,
       extraActions,
       nameEditable,
+      // `dataGaps`/`modelPresence`/`upcPresence`/`notesPresence` are
+      // filter-hosting synthetic columns and `components` is a relation
+      // column — none has a matching `model.fields` entry, so they stay
+      // hand-declared here. Every other key below is declared
+      // `display.listHidden` on `00-product.entity.ts` now.
       initialColumnVisibility: {
-        tags: false,
-        fdc_id: false,
-        model: false,
-        manufacturer: false,
-        createdAt: false,
-        notes: false,
-        expenseTotal: false,
-        expectedQuantity: false,
-        quantityVariance: false,
-        dataQuality: false,
         dataGaps: false,
-        externalIds: false,
         modelPresence: false,
         upcPresence: false,
         notesPresence: false,
-        stockTracked: false,
         components: false,
-        usdaUnavailable: false,
-        onHandUnits: false,
+        ...entityListHiddenColumns("product"),
       },
       groupConfig,
       tree: productTree,

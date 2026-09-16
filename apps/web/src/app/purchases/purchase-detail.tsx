@@ -21,7 +21,10 @@ import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  editableFieldOverrides,
+  EntityBasicInfo,
+} from "~/entities/entity-display";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -83,7 +86,19 @@ export const PurchaseDetail: FC<{ record: PurchaseOut }> = ({
 
   const status = purchaseReconciliationStatus(purchase);
 
+  // `displayLabel`, `statedTotal` (`currency`, via `control.renderer:
+  // "money"`) and `notes` are plain scalar → update {key} — generic.
+  // `vendorId` is an entity-reference picker with a `filterAction`;
+  // `orderId` adds a vendor order-page link beside the value; `date` keeps
+  // its required-field guard (a cleared date is a no-op). All three stay
+  // hand-written.
   const overrides = {
+    ...editableFieldOverrides(
+      "purchase",
+      purchase,
+      ["displayLabel", "statedTotal", "notes"],
+      updateMutation.mutateAsync,
+    ),
     vendorId: (record: PurchaseOut) => ({
       value: (
         <EditableEntityCell
@@ -159,24 +174,6 @@ export const PurchaseDetail: FC<{ record: PurchaseOut }> = ({
         />
       ),
     }),
-    displayLabel: (record: PurchaseOut) => ({
-      value: (
-        <EditableCell
-          value={record.displayLabel}
-          config={{
-            type: "text",
-            placeholder: "e.g. pocket hole jig + bits",
-          }}
-          onSave={async (displayLabel) => {
-            await updateMutation.mutateAsync({
-              id: record.id,
-              data: { displayLabel },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    }),
     date: (record: PurchaseOut) => ({
       value: (
         <EditableCell
@@ -187,36 +184,6 @@ export const PurchaseDetail: FC<{ record: PurchaseOut }> = ({
             await updateMutation.mutateAsync({
               id: record.id,
               data: { date },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    }),
-    statedTotal: (record: PurchaseOut) => ({
-      value: (
-        <EditableCell
-          value={record.statedTotal}
-          config={{ type: "currency" }}
-          onSave={async (statedTotal) => {
-            await updateMutation.mutateAsync({
-              id: record.id,
-              data: { statedTotal },
-            });
-          }}
-          renderValue={(v) => (v != null ? formatCurrency(v) : <NoneValue />)}
-        />
-      ),
-    }),
-    notes: (record: PurchaseOut) => ({
-      value: (
-        <EditableCell
-          value={record.notes}
-          config={{ type: "text", multiline: true, rows: 4 }}
-          onSave={async (notes) => {
-            await updateMutation.mutateAsync({
-              id: record.id,
-              data: { notes },
             });
           }}
           renderValue={(v) => v ?? <NoneValue />}

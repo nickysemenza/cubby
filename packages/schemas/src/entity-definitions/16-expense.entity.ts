@@ -113,7 +113,12 @@ export default defineEntity({
         kind: "enum",
         label: "Itemization",
         control: { kind: "select", section: "details" },
-        display: { list: true, detail: true, detailOrder: 140 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 140,
+          listHidden: true,
+        },
         validation: {
           read: expenseLineBasisSchema.describe(
             "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
@@ -263,7 +268,12 @@ export default defineEntity({
         nullable: true,
         label: "Order #",
         control: { kind: "text", section: "details" },
-        display: { list: true, detail: true, detailOrder: 110 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 110,
+          listHidden: true,
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),

@@ -17,8 +17,7 @@ import type {
 } from "@cubby/schemas/ledger-transfer";
 import { ledgerTransferOut } from "@cubby/schemas/ledger-transfer";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { buildTakeSkip } from "@cubby/schemas/pagination";
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -32,7 +31,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
   buildPartialUpdateValues,
   countWhere,
   executeListQueryWithCount,
@@ -48,6 +46,7 @@ import {
   replaceLedgerSourceClaims,
   softDeleteLedgerSourceClaims,
 } from "~/server/repo/ledger-source-claim";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { cents } from "~/server/repo/money";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -497,6 +496,8 @@ export async function deleteLedgerTransfers(
   });
 }
 
+const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer);
+
 export async function listLedgerTransfers(
   db: Database,
   filters: LedgerTransferFilters,
@@ -509,29 +510,22 @@ export async function listLedgerTransfers(
   const toIds = filters.toPartyId
     ? await resolveAllPresent(db, "ledgerParty", [filters.toPartyId].flat())
     : undefined;
-  const where = and(
-    notDeleted(ledgerTransfer),
+  // fromPartyId/toPartyId stay hand-written — they resolve shortcodes to ids
+  // before the query runs, which a declared stored predicate can't express.
+  // `date` (dateFrom/dateTo) is now a declared stored range descriptor.
+  const where = ledgerTransferScaffold.where(filters, [
     ...auditDateWhereConditions(ledgerTransfer, filters),
     fromIds?.length === 0 || toIds?.length === 0 ? sql`false` : undefined,
     fromIds ? inArray(ledgerTransfer.fromPartyId, fromIds) : undefined,
     toIds ? inArray(ledgerTransfer.toPartyId, toIds) : undefined,
-    filters.dateFrom ? gte(ledgerTransfer.date, filters.dateFrom) : undefined,
-    filters.dateTo ? lte(ledgerTransfer.date, filters.dateTo) : undefined,
-  );
-  const { take, skip } = buildTakeSkip(pagination);
+  ]);
+  const { take, skip } = ledgerTransferScaffold.page(pagination);
   const { data, count } = await executeListQueryWithCount(
     unwrapDb(db)
       .select(columns)
       .from(ledgerTransfer)
       .where(where)
-      .orderBy(
-        ...buildOrderBy(ledgerTransfer, sorts, [
-          "date",
-          "amount",
-          "createdAt",
-          "updatedAt",
-        ]),
-      )
+      .orderBy(...ledgerTransferScaffold.orderBy(sorts))
       .limit(take)
       .offset(skip),
     countWhere(db, ledgerTransfer, where),

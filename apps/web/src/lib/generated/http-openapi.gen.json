@@ -7868,6 +7868,28 @@
             "explode": true
           },
           {
+            "name": "dateFrom",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "fromPartyId",
             "in": "query",
             "schema": {
@@ -7891,28 +7913,6 @@
                 "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
                 "description": "ledgerParty shortcode, e.g. LPY-4K7M"
               }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "dateFrom",
-            "in": "query",
-            "description": "Calendar day as \"YYYY-MM-DD\"",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "dateTo",
-            "in": "query",
-            "description": "Calendar day as \"YYYY-MM-DD\"",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "style": "form",
             "explode": true
