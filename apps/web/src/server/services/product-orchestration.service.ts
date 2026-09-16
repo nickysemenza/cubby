@@ -537,7 +537,8 @@ const findProductByLabel = async (
   return { product, created: false };
 };
 
-export function findOrCreateByCode(
+// `async` so an unrecognized scan rejects instead of throwing synchronously.
+export async function findOrCreateByCode(
   db: Database,
   usdaClient: UsdaFoodLookupPort,
   upcLookupClient: UpcLookupPort,

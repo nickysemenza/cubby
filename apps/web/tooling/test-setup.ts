@@ -32,7 +32,6 @@ import type {
   EntityPublicOutput,
 } from "../src/server/entity-kernel/adapter";
 import type { EntityKernelEntity } from "../src/server/entity-kernel/contracts";
-import { getDb } from "../src/server/repo/database-helpers/core";
 import { ensureDbExtensions } from "./db-extensions";
 import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 import { z } from "zod";
@@ -446,6 +445,10 @@ const LOCK_POLL_TIMEOUT_MS = 5_000;
  * fast with a clear message instead of hanging the test.
  */
 async function waitForLockWaiter(db: Database): Promise<void> {
+  // Lazy: this module is also vitest's `globalSetup`, which runs in the main
+  // process before `test.env` applies, and `database-helpers/core` pulls in
+  // `env.ts`, whose validation would fail there.
+  const { getDb } = await import("../src/server/repo/database-helpers/core");
   const deadline = Date.now() + LOCK_POLL_TIMEOUT_MS;
   for (;;) {
     const result = await getDb(db).execute(sql`
