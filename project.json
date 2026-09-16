@@ -92,7 +92,7 @@
           "env": "CUBBY_TEST_INTEGRATION"
         },
         {
-          "env": "VITEST_MAX_THREADS"
+          "env": "VITEST_MAX_WORKERS"
         }
       ],
       "outputs": [

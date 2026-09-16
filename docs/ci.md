@@ -132,6 +132,76 @@ PostgreSQL, 35 seconds for Playwright, and 60 seconds end to end (55-second
 median target). Re-benchmark five warm `pnpm test:all` runs after changing test
 selection, worker counts, database provisioning, or browser harness startup.
 
+### Integration families to vitest-native (2026-09-15)
+
+The 8 `src/server/integration-families/*.integration.test.ts` import-index
+files (each importing many real `*.integration.test.ts` contract modules to
+fake a "family" Vitest could target as one file) are gone. The `integration`
+Vitest project now includes `src/**/*.integration.test.ts` directly — 77 real
+files (one, `garden.integration.test.ts`, moved from
+`integration-families/` to `src/server/repo/`, a real 1,070-line contract, not
+an index) — with `pool: "forks"`, `isolate: false`, so a worker's fork shares
+one module graph across its share of those files instead of re-isolating for
+each. `test:file:postgres <path>` now runs that exact file directly
+(`vitest run --project integration <path>`, no resolver); the deleted
+`tooling/run-postgres-file.ts` used to resolve a contract module to its owning
+family file first.
+
+Measured on the same 8-core, 24 GiB Mac, `VITEST_MAX_WORKERS=6`, comparing the
+old family structure against the new one on the same commit (only
+`vitest.config.ts`/the file layout differed). `uptime` load is the 1-minute
+average at the start of each run — the host was shared with other concurrent
+work, so absolute numbers are noisy; the comparison is same-host, same-load-ish,
+interleaved:
+
+| Structure | Wall times (s) | Median | Vitest-reported duration (s) | Load (1-min) at each run |
+|---|---|---|---|---|
+| 8 family files (before) | 28, 29, 31 | 29s | 25.25, 25.36, 26.77 | 4.6, 6.0, 6.7 |
+| 77 real files, `isolate: false` (after) | 34, 27, 35, 20, 20 | 27s | 27.23, 22.66, 30.86, 16.25, 16.40 | 28.6, 19.6, 14.1, 14.1, 11.2 |
+
+The after-column ran under markedly *higher* average load (other work
+contending for the same 8 cores) and still matched or beat the before-column's
+median on both wall time and Vitest's own duration; the two fastest after-runs
+(16.3s duration, 20s wall, load 11–14) landed well below every before-run. Both
+structures pass the same 420/425 tests with the same 5 pre-existing failures
+in `product-orchestration.service.integration.test.ts` and
+`recipe-costing.cascade.integration.test.ts` (a stale fixture missing fields
+added elsewhere, and a `warn` call-count assertion) — unrelated to this
+restructure and reproduced identically before and after it, so they are not a
+regression here. Bring-up cost (a single 5-test file via `test:file:postgres`,
+wall time minus Vitest's own reported duration): ~3.5s before, ~3.5s after —
+unchanged, as expected (bring-up is the container pair, not the test layout).
+Ten slowest files: before, the worst "file" was really a family lump (18.9s
+`integrity`, 18.3s `financial`, 15.2s `inventory`, 14.3s `recipe`); after, the
+worst real file is 5.0s (`repo/problems.integration.test.ts`), then 3.6s
+(`repo/ingredient.integration.test.ts`) — the balanced 77-file split removes
+the lumpy tail a handful of oversized family files used to create. Three
+shuffle seeds (default, `CUBBY_TEST_SHUFFLE_SEED=1`, `=2`) reproduced the exact
+same 5 failures with no additional flakes, so `isolate: false`'s per-worker
+module singletons (`db.ts`'s `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`,
+`ai/models.ts`, `semantic/embeddings.ts`, `clients/notion.ts`'s LRU caches)
+did not surface a cross-file dependency in this run. **Decision: kept
+vitest-native** — median wall and duration were ≤ the family baseline despite
+higher load during the after-runs.
+
+`mcp-contract` moved from `sequence.groupOrder: 1` (a serial tail after
+group 0) to `groupOrder: 0` (runs alongside `unit`/`ui`), and the former
+`unit-pure` project's 2 files folded into `unit`. This requires `mcp-contract`
+to share `unit`/`ui`'s `maxWorkers: 5` — Vitest rejects mismatched
+`maxWorkers` within one `groupOrder` — so the project's old dedicated
+`fileParallelism: false` (a single shared worker) was dropped in favor of
+`isolate: false` alone. Fast-tier (`pnpm test`, root `NX_SKIP_NX_CACHE=true`)
+before/after, interleaved on the same host: before 29s/30s/32s wall
+(`@cubby/web` Vitest duration 25.09/25.97/27.98s), after 31s/28s/28s wall
+(duration 26.62/24.38/24.41s) — a modest, consistent improvement, smaller than
+hoped for because this host's aux-package Nx overhead and general load
+dominate the wrapper's wall time more than the ~15s `@cubby/web` Vitest run
+itself. One run of the combined `unit`+`mcp-contract`+`ui` group hit a 15s
+timeout in `worker-validation.unit.test.ts` under a load spike (the group can
+now run up to 15 threads across 3 projects on 8 cores); it passed cleanly on
+every other run, including standalone, so this looks like host contention
+rather than a correctness regression — worth watching on a shared CI runner.
+
 ### Apple container worker measurements (2026-09-15)
 
 On the 8-core, 24 GiB Mac running macOS 27, `container` 1.4.1 and Node

@@ -253,7 +253,7 @@ pnpm run dev
 ```
 
 Database-backed tests start and stop their own services on macOS. For example,
-`pnpm test:file:postgres src/server/integration-families/project.integration.test.ts`
+`pnpm test:file:postgres src/server/repo/vendor.integration.test.ts`
 uses disposable databases, independently of your application's `DATABASE_URL`.
 For optional traces, run `pnpm trace` in another terminal and enable
 `CUBBY_OTEL=1` for the app. Ctrl-C stops Jaeger.

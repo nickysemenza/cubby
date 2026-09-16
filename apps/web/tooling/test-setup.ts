@@ -211,11 +211,23 @@ async function seedTestHome(rawDb: ReturnType<typeof drizzle>) {
 /**
  * The database for THIS test file.
  *
- * Vitest runs the integration project with the forks pool and `isolate: true`,
- * so each test file gets its own module registry — this cache is therefore
- * per-file, not per-worker. That is deliberate: several suites read global
- * "zero" invariants (`findOrphanedEntityEmbeddings`) and recent-N windows
- * (`listBackgroundBatches`) that are only meaningful within one file.
+ * Vitest runs the integration project with the forks pool and `isolate:
+ * false`, so the JS module registry is shared across every file a worker
+ * runs — this variable itself would leak across files in the same worker if
+ * nothing reset it. It doesn't: `tooling/integration-teardown.ts` registers a
+ * FILE-scoped `afterAll` (setupFiles run fresh per file even when the module
+ * graph is shared) that calls {@link closeTestDb}, which sets `fileDb = null`
+ * before the next file in the worker can call {@link getFileDb} again. So
+ * this cache is file-scoped in effect, not because the registry is fresh, but
+ * because it is explicitly torn down. That distinction matters for anything
+ * that ISN'T reset here — a true per-worker module singleton (`db.ts`'s
+ * `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`, `ai/models.ts`,
+ * `semantic/embeddings.ts`, `clients/notion.ts`'s LRU caches) now persists
+ * across files in the same worker, which is exactly what several suites'
+ * global "zero" invariants (`findOrphanedEntityEmbeddings`) and recent-N
+ * windows (`listBackgroundBatches`) rely on NOT happening — they stay correct
+ * only because they scope by `TEST_HOME_ID`/`TEST_USER_ID` rows that
+ * `resetTestDb()` truncates every test, not because the module graph resets.
  */
 let fileDb: {
   db: Database;

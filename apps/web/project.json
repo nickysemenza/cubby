@@ -3,7 +3,7 @@
   "name": "@cubby/web",
   "targets": {
     // Package.json infers a "test" target for the fast Vitest projects
-    // (unit/unit-pure/mcp-contract/ui); it spans multiple projects and isn't
+    // (unit/mcp-contract/ui); it spans multiple projects and isn't
     // scoped narrowly enough for the repo-wide `{projectRoot}` cache default
     // (targetDefaults in nx.json) to be safe here, so opt back out.
     "test": {
