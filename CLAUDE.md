@@ -26,7 +26,12 @@
 - Public text and fixtures contain no real household or production data. Use
   placeholders; internal shortcodes are safe.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not
-  narration. Do not weaken guard-backed tests as apparent duplication.
+  narration.
+- A test earns its place by failing on a behavior regression the type system
+  cannot catch. Delete tests that only prove existence, exercise a mock, or
+  restate a typecheck; consolidate same-shape per-entity tests into one
+  table-driven test. A test that names a regression or invariant in a comment
+  is consolidated, never dropped.
 - Git hooks are mandatory validation. Never use `--no-verify`; fix the failing
   pre-commit or scoped pre-push gate before committing or pushing.
 - Before merge, verify the exact final commit locally with `pnpm verify:local`.
