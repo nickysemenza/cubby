@@ -7,7 +7,6 @@
       "entry": [
         "scripts/apple.ts!",
         "scripts/test-services.ts!",
-        "scripts/test-services.test.ts!",
         "scripts/check-security-audit.ts!",
         "scripts/ensure-apple-ffi.ts!",
         "scripts/ensure-wasm.ts!",
