@@ -97,6 +97,16 @@ the whole file.
 - **Grocery → `wholefoodsmarket.com/product/dp/<ASIN>`**: one fetch, no search,
   and loose produce and raw meat usually have an Amazon Fresh package photo.
   Books → Open Library by ISBN (watch for undersized thumbnails).
+- **Grocery detail bullets carry a `UPC` row** (`#detailBullets_feature_div`
+  / `#prodDetails`). It is seller-supplied: corroborate with `lookup_upc`
+  (a USDA branded hit under the right brand owner is proof) or the barcode on
+  the back-of-bag gallery image. `Item model number` on grocery is the UPC
+  again or junk (`Ad-bm6-8005`) — never copy it to `model`.
+- **The back-of-bag gallery image is the nutrition label.** `curl` the
+  `hiRes` URLs (`m.media-amazon.com`, server-fetchable) and read the images:
+  one of them has the Nutrition Facts panel and the printed barcode. Transcribe
+  it into `labelNutrition` (`servingGrams` from "Serving size (140g)") only
+  when USDA has no record for the exact product.
 
 ## Home Depot
 

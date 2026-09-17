@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
 import { Database } from "~/server/db";
 
 import type { EmbeddingPorts } from "./embeddings";
@@ -88,7 +89,10 @@ describe("embedTexts over the AI Gateway", () => {
     const headers = new Headers(call?.init?.headers);
     expect(headers.get("authorization")).toBeNull();
     expect(headers.get("cf-aig-authorization")).toBe("Bearer test-gateway-key");
-    expect(headers.get("cf-aig-skip-cache")).toBe("true");
+    // Regression: embeddings once sent `cf-aig-skip-cache`, so identical
+    // search queries paid the full provider round-trip every time.
+    expect(headers.get("cf-aig-skip-cache")).toBeNull();
+    expect(headers.get("cf-aig-cache-ttl")).toBe(String(AI_CACHE_TTL_SECONDS));
     expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual({
       feature: "entity-embedding",
       operation: "entityEmbeddingRefreshBatch",

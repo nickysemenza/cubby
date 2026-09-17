@@ -98,3 +98,6 @@ apps/apple/CubbyKit/Frameworks/
 
 # Impeccable design-audit artifacts are session output, not source.
 .impeccable/
+
+# Local cargo overrides (patches to sibling checkouts); machine-specific
+.cargo/config.toml
