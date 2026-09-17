@@ -547,7 +547,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by vendor...",
         optionsKey: "vendor",
-        brandRef: { entity: "vendor", kind: "id" },
+        brandRef: { entity: "vendor" },
       },
       {
         columnId: "orderId",
@@ -745,7 +745,7 @@ export default defineEntity({
         columnId: "productId",
         kind: "idMulti",
         placeholder: "Filter by related products id...",
-        brandRef: { entity: "product", kind: "id" },
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
@@ -761,14 +761,14 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by project...",
         optionsKey: "project",
-        brandRef: { entity: "project", kind: "id" },
+        brandRef: { entity: "project" },
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
         columnId: "projectId",
         kind: "idMulti",
         placeholder: "Filter by project id...",
-        brandRef: { entity: "project", kind: "id" },
+        brandRef: { entity: "project" },
         urlOnly: true,
       },
       {

@@ -58,6 +58,8 @@ interface BulkActionDialogProps<T extends { id: string }> {
   unchangedLabel?: string;
   onSubmit: () => Promise<void>;
   isPending: boolean;
+  /** Caller-owned submission gate for incomplete but otherwise valid forms. */
+  submissionDisabled?: boolean;
   variant?: "default" | "destructive";
   children?: ReactNode;
   /**
@@ -82,6 +84,7 @@ export function BulkActionDialog<T extends { id: string }>({
   unchangedLabel = "already set",
   onSubmit,
   isPending,
+  submissionDisabled = false,
   variant = "default",
   children,
   error,
@@ -217,7 +220,7 @@ export function BulkActionDialog<T extends { id: string }>({
             <Button
               variant={variant}
               onClick={onSubmit}
-              disabled={isPending || blockedCount > 0}
+              disabled={isPending || submissionDisabled || blockedCount > 0}
             >
               {isPending
                 ? (pendingLabel ?? `${action}ing...`)

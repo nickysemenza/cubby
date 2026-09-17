@@ -84,11 +84,8 @@ export const renderFilterArtifacts = (
       ...(descriptor.brandRef === null
         ? []
         : [
-            `brand:(value) => ${
-              descriptor.brandRef.kind === "id"
-                ? `parseEntityId(${JSON.stringify(descriptor.brandRef.entity)}, value)`
-                : `parseShortcodeFor(${JSON.stringify(descriptor.brandRef.entity)}, value)`
-            }`,
+            `referenceEntity:${JSON.stringify(descriptor.brandRef.entity)}`,
+            `brand:(value) => parseShortcodeFor(${JSON.stringify(descriptor.brandRef.entity)}, value)`,
           ]),
       ...(descriptor.expandRef === null
         ? []
@@ -113,6 +110,16 @@ export const renderFilterArtifacts = (
         {
           descriptorColumns: filterDescriptors.map(({ columnId }) => columnId),
           urlKeys: filterDescriptors.map(({ urlKey }) => urlKey),
+          referenceFilters: filterDescriptors.flatMap((descriptor) =>
+            descriptor.brandRef === null
+              ? []
+              : [
+                  {
+                    columnId: descriptor.columnId,
+                    entity: descriptor.brandRef.entity,
+                  },
+                ],
+          ),
           schema:
             filterSchema === null
               ? null
@@ -150,9 +157,11 @@ export const renderFilterArtifacts = (
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n\n' +
+        'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n\n' +
         "export type EntityFilterContractCase = {\n" +
         "  descriptorColumns: readonly string[];\n" +
         "  urlKeys: readonly string[];\n" +
+        "  referenceFilters: readonly { columnId: string; entity: ShortcodeEntity }[];\n" +
         "  schema: string | null;\n" +
         "  optionSources: readonly string[];\n" +
         "  audit: boolean;\n" +
@@ -172,7 +181,7 @@ export const renderFilterArtifacts = (
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
-        'import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
+        'import { parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
         `${runtimeImports}\n` +
         'import type { FilterSpec } from "../filter-manifest";\n\n' +
         "// Generated runtime filter assembly stays one entity per line.\n// oxfmt-ignore\n" +

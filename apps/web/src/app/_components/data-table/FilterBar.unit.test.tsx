@@ -66,6 +66,33 @@ describe("FilterBar", () => {
     ).toBeInTheDocument();
   });
 
+  it("hydrates an active deferred filter before its editor is opened", () => {
+    const onActivate = vi.fn();
+    renderBar(
+      [
+        {
+          id: "filter-crop",
+          field: "crop",
+          operator: "is_any_of",
+          values: ["ING-C2YH"],
+        },
+      ],
+      {
+        fields: [
+          {
+            key: "crop",
+            label: "Crop",
+            type: "multiselect",
+            options: [],
+            onActivate,
+          },
+        ],
+      },
+    );
+
+    expect(onActivate).toHaveBeenCalledWith(["ING-C2YH"]);
+  });
+
   it("edits a text field's chip directly, with no separate add-filter step", () => {
     const { onChange } = renderBar([]);
 

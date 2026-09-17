@@ -1,5 +1,5 @@
 import type { FILTER_KINDS } from "@cubby/schemas/entity-definitions/definition";
-import { humanize } from "@cubby/shared";
+import { humanize, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
 import { z } from "zod";
@@ -145,11 +145,14 @@ export function buildFiltersFromManifest(
   get: (columnId: string) => FilterValue,
 ) {
   const filters: FilterPatch = {};
-  const brand = (spec: FilterSpecCore, value: string): string | undefined => {
+  const brand = (spec: FilterSpecCore, value: string): string => {
     try {
       return spec.brand?.(value) ?? value;
     } catch {
-      return undefined;
+      // A malformed or deleted public reference is still a requested
+      // constraint. Keep it explicit so the repository resolves it to zero
+      // rows instead of widening the list as though the URL had no filter.
+      return UNRESOLVABLE_ENTITY_FILTER;
     }
   };
 
@@ -172,19 +175,14 @@ export function buildFiltersFromManifest(
         const value = single(raw);
         if (!value) return undefined;
         const parsed = brand(spec, value);
-        return parsed === undefined ? undefined : { [field]: parsed };
+        return { [field]: parsed };
       })
       .with("multiselect", "idMulti", () => {
         const values = many(raw);
         if (!values) return undefined;
         // Only `idMulti` carries a brand, so the two kinds share one arm.
         const brandAll = (items: string[]) =>
-          items
-            .map((value) => brand(spec, value))
-            .filter(
-              (value): value is NonNullable<typeof value> =>
-                value !== undefined,
-            );
+          items.map((value) => brand(spec, value));
         const nullable = spec.nullable;
         if (!nullable) {
           const parsed = brandAll(values);

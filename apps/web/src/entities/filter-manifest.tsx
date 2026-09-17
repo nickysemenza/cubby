@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -27,12 +28,22 @@ export interface FilterSpec extends FilterSpecCore {
   options?: FilterableComboboxItem[];
   optionsKey?: string;
   label?: string;
+  /** Declared target for the shortcode-native reference, when applicable. */
+  referenceEntity?: ShortcodeEntity;
 }
 
 export { entityFilterFieldMaps };
 
 export const getEntityFilters = (entity: Entity): readonly FilterSpec[] =>
   generatedEntityFilters[entity];
+
+/** One deferred source per reference filter, even when two fields target the same entity. */
+export const referenceFilterOptionsKey = (
+  spec: Pick<FilterSpec, "columnId" | "referenceEntity">,
+): string | undefined =>
+  spec.referenceEntity
+    ? `reference:${spec.referenceEntity}:${spec.columnId}`
+    : undefined;
 
 const filterTypeForKind = (
   kind: FilterKind,
@@ -43,8 +54,9 @@ const resolveSpecOptions = (
   spec: FilterSpec,
   runtimeOptions?: RuntimeFilterOptions,
 ): FilterableComboboxItem[] => {
-  const resolved = spec.optionsKey
-    ? filterOptionItems(runtimeOptions?.[spec.optionsKey])
+  const optionsKey = spec.optionsKey ?? referenceFilterOptionsKey(spec);
+  const resolved = optionsKey
+    ? filterOptionItems(runtimeOptions?.[optionsKey])
     : (spec.options ?? []);
   return spec.nullable
     ? [...nullableSentinelOptions(spec.nullable.label), ...resolved]
@@ -55,8 +67,9 @@ const specFilterConfig = (
   spec: FilterSpec,
   runtimeOptions?: RuntimeFilterOptions,
 ): FilterConfig => {
-  const deferred = spec.optionsKey
-    ? deferredFilterOptionSource(runtimeOptions?.[spec.optionsKey])
+  const optionsKey = spec.optionsKey ?? referenceFilterOptionsKey(spec);
+  const deferred = optionsKey
+    ? deferredFilterOptionSource(runtimeOptions?.[optionsKey])
     : undefined;
   return {
     placeholder: spec.placeholder,

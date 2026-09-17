@@ -304,14 +304,14 @@ export default defineEntity({
         columnId: "fromPartyId",
         kind: "idMulti",
         placeholder: "Filter by from party...",
-        brandRef: { entity: "ledgerParty", kind: "id" },
+        brandRef: { entity: "ledgerParty" },
         urlOnly: true,
       },
       {
         columnId: "toPartyId",
         kind: "idMulti",
         placeholder: "Filter by to party...",
-        brandRef: { entity: "ledgerParty", kind: "id" },
+        brandRef: { entity: "ledgerParty" },
         urlOnly: true,
       },
       {

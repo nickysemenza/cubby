@@ -1588,76 +1588,22 @@
       }
     },
     "/api/v1/entity/filterOptions": {
-      "get": {
+      "post": {
         "tags": [
           "entity"
         ],
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "ingredientWithProduct",
-                "locationIdentityProduct",
-                "locationWithInventory",
-                "product",
-                "project",
-                "task",
-                "vendor"
-              ]
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "maxLength": 100
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "selectedIds",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 50
-            },
-            "style": "form",
-            "explode": true
-          }
-        ],
+        "parameters": [],
         "operationId": "entity.filterOptions",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilterOptionsInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "200",
@@ -28552,10 +28498,10 @@
             "type": "string"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "completionYear": {
             "type": "string",
@@ -28654,7 +28600,7 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema124"
@@ -30050,6 +29996,9 @@
           "name": {
             "type": "string"
           },
+          "link": {
+            "$ref": "#/components/schemas/EntityTimelineLink"
+          },
           "imageUrl": {
             "type": [
               "string",
@@ -31095,16 +31044,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "financialTransactionId": {
             "anyOf": [
@@ -31219,12 +31168,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema117"
+                "$ref": "#/components/schemas/input_schema121"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema117"
+                  "$ref": "#/components/schemas/input_schema121"
                 }
               }
             ]
@@ -31255,12 +31204,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema120"
+                "$ref": "#/components/schemas/input_schema124"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema120"
+                  "$ref": "#/components/schemas/input_schema124"
                 }
               }
             ]
@@ -31319,12 +31268,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema124"
+                "$ref": "#/components/schemas/input_schema128"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema124"
+                  "$ref": "#/components/schemas/input_schema128"
                 }
               }
             ]
@@ -32160,6 +32109,9 @@
           "id"
         ]
       },
+      "FilterOptionEntity": {
+        "$ref": "#/components/schemas/Entity"
+      },
       "FilterOptionItem": {
         "type": "object",
         "properties": {
@@ -32178,6 +32130,89 @@
           "label"
         ],
         "additionalProperties": false
+      },
+      "FilterOptionKind": {
+        "type": "string",
+        "enum": [
+          "ingredientWithProduct",
+          "locationIdentityProduct",
+          "locationWithInventory",
+          "product",
+          "project",
+          "task",
+          "vendor"
+        ]
+      },
+      "FilterOptionsInput": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "search": {
+                "default": "",
+                "type": "string",
+                "maxLength": 100
+              },
+              "cursor": {
+                "type": "string",
+                "pattern": "^\\d+$"
+              },
+              "selectedIds": {
+                "$ref": "#/components/schemas/input_schema32"
+              },
+              "limit": {
+                "default": 25,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              },
+              "source": {
+                "type": "string",
+                "const": "kind"
+              },
+              "kind": {
+                "$ref": "#/components/schemas/FilterOptionKind"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "search": {
+                "default": "",
+                "type": "string",
+                "maxLength": 100
+              },
+              "cursor": {
+                "type": "string",
+                "pattern": "^\\d+$"
+              },
+              "selectedIds": {
+                "$ref": "#/components/schemas/input_schema32"
+              },
+              "limit": {
+                "default": 25,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              },
+              "source": {
+                "type": "string",
+                "const": "entity"
+              },
+              "entity": {
+                "$ref": "#/components/schemas/FilterOptionEntity"
+              }
+            },
+            "required": [
+              "source",
+              "entity"
+            ]
+          }
+        ]
       },
       "FilterOptionsOut": {
         "type": "object",
@@ -35510,14 +35545,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema37"
+                "$ref": "#/components/schemas/input_schema41"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema37"
+                  "$ref": "#/components/schemas/input_schema41"
                 }
               }
             ]
@@ -35527,7 +35562,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema38"
+            "$ref": "#/components/schemas/input_schema42"
           },
           "groupBy": {
             "type": "string",
@@ -35659,16 +35694,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "nameFilter": {
             "type": "string",
@@ -35676,7 +35711,7 @@
           },
           "status": {
             "description": "Filter by upload status",
-            "$ref": "#/components/schemas/input_schema35"
+            "$ref": "#/components/schemas/input_schema39"
           },
           "referencePresenceFilter": {
             "type": "string",
@@ -36344,7 +36379,7 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
             "$ref": "#/components/schemas/output_schema156"
@@ -36681,7 +36716,7 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema124"
@@ -36814,7 +36849,7 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema124"
@@ -37087,7 +37122,7 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema124"
@@ -37310,7 +37345,7 @@
           },
           "aliases": {
             "description": "New aliases (replaces existing list)",
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           }
         }
       },
@@ -37367,7 +37402,7 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema124"
@@ -37475,7 +37510,7 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "naKinds": {
             "$ref": "#/components/schemas/output_schema124"
@@ -37665,7 +37700,7 @@
             "maximum": 52428800
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema41"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "contentType": {
             "type": "string",
@@ -37696,7 +37731,7 @@
             "maximum": 52428800
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema41"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "contentType": {
             "type": "string",
@@ -37762,7 +37797,7 @@
         ],
         "additionalProperties": false
       },
-      "input_schema100": {
+      "input_schema104": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -37776,7 +37811,7 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema108": {
+      "input_schema112": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -37816,7 +37851,7 @@
           }
         }
       },
-      "input_schema117": {
+      "input_schema121": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -37830,7 +37865,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema120": {
+      "input_schema124": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -37844,7 +37879,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema124": {
+      "input_schema128": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -37858,7 +37893,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema137": {
+      "input_schema141": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -37875,7 +37910,7 @@
           }
         }
       },
-      "input_schema138": {
+      "input_schema142": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -37889,7 +37924,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema150": {
+      "input_schema154": {
         "type": "object",
         "properties": {
           "kind": {
@@ -37905,7 +37940,7 @@
           "value"
         ]
       },
-      "input_schema154": {
+      "input_schema158": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -37929,7 +37964,7 @@
           }
         }
       },
-      "input_schema155": {
+      "input_schema159": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -37954,9 +37989,18 @@
         }
       },
       "input_schema32": {
+        "default": [],
+        "maxItems": 50,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "input_schema36": {
         "$ref": "#/components/schemas/PlainDate"
       },
-      "input_schema35": {
+      "input_schema39": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ImageStatus"
@@ -37969,7 +38013,7 @@
           }
         ]
       },
-      "input_schema37": {
+      "input_schema41": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -37993,7 +38037,7 @@
           }
         }
       },
-      "input_schema38": {
+      "input_schema42": {
         "type": "object",
         "properties": {
           "pageIndex": {
@@ -38010,22 +38054,22 @@
           }
         }
       },
-      "input_schema41": {
+      "input_schema45": {
         "$ref": "#/components/schemas/EntityImage"
       },
-      "input_schema45": {
+      "input_schema49": {
         "type": "array",
         "items": {
           "type": "string"
         }
       },
-      "input_schema55": {
+      "input_schema59": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageShortcode"
         }
       },
-      "input_schema59": {
+      "input_schema63": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -38039,7 +38083,7 @@
         "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "product shortcode, e.g. PRD-4K7M"
       },
-      "input_schema61": {
+      "input_schema65": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/LocationShortcode"
@@ -38053,10 +38097,10 @@
         "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "location shortcode, e.g. LOC-4K7M"
       },
-      "input_schema72": {
+      "input_schema76": {
         "$ref": "#/components/schemas/MealFoodEntryId"
       },
-      "input_schema89": {
+      "input_schema93": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductCategory"
@@ -38069,7 +38113,7 @@
           }
         ]
       },
-      "input_schema91": {
+      "input_schema95": {
         "anyOf": [
           {
             "type": "string"
@@ -40321,14 +40365,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema154"
+                "$ref": "#/components/schemas/input_schema158"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema154"
+                  "$ref": "#/components/schemas/input_schema158"
                 }
               }
             ]
@@ -40338,7 +40382,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema38"
+            "$ref": "#/components/schemas/input_schema42"
           },
           "groupBy": {
             "type": "string",
@@ -40415,10 +40459,10 @@
           "aliases": {
             "default": [],
             "description": "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -40437,7 +40481,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema55"
+            "$ref": "#/components/schemas/input_schema59"
           }
         },
         "required": [
@@ -40455,7 +40499,7 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
             "$ref": "#/components/schemas/output_schema156"
@@ -40557,16 +40601,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "ingredientId": {
             "anyOf": [
@@ -40619,12 +40663,12 @@
           "productId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema59"
+                "$ref": "#/components/schemas/input_schema63"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema59"
+                  "$ref": "#/components/schemas/input_schema63"
                 }
               }
             ]
@@ -40640,12 +40684,12 @@
           "parentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema61"
+                "$ref": "#/components/schemas/input_schema65"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema61"
+                  "$ref": "#/components/schemas/input_schema65"
                 }
               }
             ]
@@ -40800,7 +40844,7 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
             "$ref": "#/components/schemas/output_schema156"
@@ -41048,7 +41092,7 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
             "$ref": "#/components/schemas/output_schema156"
@@ -41341,10 +41385,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -41363,15 +41407,15 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema55"
+            "$ref": "#/components/schemas/input_schema59"
           },
           "removeImageIds": {
             "description": "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema55"
+            "$ref": "#/components/schemas/input_schema59"
           },
           "imageOrder": {
             "description": "existing image ids in display order; first = cover",
-            "$ref": "#/components/schemas/input_schema55"
+            "$ref": "#/components/schemas/input_schema59"
           }
         }
       },
@@ -41541,7 +41585,7 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
             "$ref": "#/components/schemas/output_schema156"
@@ -42214,7 +42258,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "createdAt": {
             "type": "string",
@@ -42380,7 +42424,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "createdAt": {
             "type": "string",
@@ -42823,7 +42867,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "createdAt": {
             "type": "string",
@@ -44409,7 +44453,7 @@
       },
       "output_schema156": {
         "description": "Namespaced Collection tags assigned directly to this location",
-        "$ref": "#/components/schemas/input_schema45"
+        "$ref": "#/components/schemas/input_schema49"
       },
       "output_schema16": {
         "oneOf": [
@@ -44632,7 +44676,7 @@
                 "description": "name of location"
               },
               "aliases": {
-                "$ref": "#/components/schemas/input_schema45"
+                "$ref": "#/components/schemas/input_schema49"
               },
               "tags": {
                 "$ref": "#/components/schemas/output_schema156"
@@ -46901,10 +46945,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -47193,16 +47237,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "vendorId": {
             "anyOf": [
@@ -47469,7 +47513,7 @@
           },
           "categoryFilter": {
             "description": "Filter by category",
-            "$ref": "#/components/schemas/input_schema89"
+            "$ref": "#/components/schemas/input_schema93"
           },
           "expectedQuantityMin": {
             "type": "number"
@@ -47493,7 +47537,7 @@
           },
           "tagFilters": {
             "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema95"
           },
           "kitId": {
             "anyOf": [
@@ -47592,12 +47636,12 @@
           "locationIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema61"
+                "$ref": "#/components/schemas/input_schema65"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema61"
+                  "$ref": "#/components/schemas/input_schema65"
                 }
               }
             ]
@@ -47608,12 +47652,12 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema100"
+                "$ref": "#/components/schemas/input_schema104"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema100"
+                  "$ref": "#/components/schemas/input_schema104"
                 }
               }
             ]
@@ -47621,12 +47665,12 @@
           "growsIngredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema100"
+                "$ref": "#/components/schemas/input_schema104"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema100"
+                  "$ref": "#/components/schemas/input_schema104"
                 }
               }
             ]
@@ -47648,10 +47692,10 @@
             "type": "boolean"
           },
           "taskDueFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "taskDueTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "tagsPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
@@ -48067,10 +48111,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -48230,10 +48274,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -49170,14 +49214,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema108"
+                "$ref": "#/components/schemas/input_schema112"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema108"
+                  "$ref": "#/components/schemas/input_schema112"
                 }
               }
             ]
@@ -49187,7 +49231,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema38"
+            "$ref": "#/components/schemas/input_schema42"
           },
           "groupBy": {
             "type": "string",
@@ -49297,10 +49341,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -49587,10 +49631,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -49826,10 +49870,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -49955,10 +49999,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -51257,7 +51301,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -51400,16 +51444,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "projectId": {
             "anyOf": [
@@ -51603,13 +51647,13 @@
           },
           "location": {
             "description": "Any exact match against locations[]",
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema95"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "completionYear": {
             "type": "string",
@@ -51632,12 +51676,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema117"
+                "$ref": "#/components/schemas/input_schema121"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema117"
+                  "$ref": "#/components/schemas/input_schema121"
                 }
               }
             ]
@@ -51735,7 +51779,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -51851,7 +51895,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -52021,7 +52065,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -53087,14 +53131,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema137"
+                "$ref": "#/components/schemas/input_schema141"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema137"
+                  "$ref": "#/components/schemas/input_schema141"
                 }
               }
             ]
@@ -53104,7 +53148,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema38"
+            "$ref": "#/components/schemas/input_schema42"
           },
           "groupBy": {
             "type": "string"
@@ -53295,7 +53339,7 @@
             ]
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "statedTotal": {
             "$ref": "#/components/schemas/WholeCentAmount"
@@ -53583,7 +53627,7 @@
             ]
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "statedTotal": {
             "$ref": "#/components/schemas/WholeCentAmount"
@@ -53783,7 +53827,7 @@
             ]
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "statedTotal": {
             "$ref": "#/components/schemas/WholeCentAmount"
@@ -54005,11 +54049,11 @@
           },
           "removeImageIds": {
             "description": "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema55"
+            "$ref": "#/components/schemas/input_schema59"
           },
           "imageOrder": {
             "description": "existing document ids in display order",
-            "$ref": "#/components/schemas/input_schema55"
+            "$ref": "#/components/schemas/input_schema59"
           }
         }
       },
@@ -57903,7 +57947,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema72"
+            "$ref": "#/components/schemas/input_schema76"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -57940,7 +57984,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema72"
+            "$ref": "#/components/schemas/input_schema76"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -57983,7 +58027,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema72"
+            "$ref": "#/components/schemas/input_schema76"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -58078,7 +58122,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema150"
+                "$ref": "#/components/schemas/input_schema154"
               }
             ],
             "description": "The scanned code."
@@ -59669,10 +59713,10 @@
             "type": "string"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "amountMin": {
             "type": "number"
@@ -60241,16 +60285,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "blockedByTaskId": {
             "anyOf": [
@@ -60278,12 +60322,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema138"
+                "$ref": "#/components/schemas/input_schema142"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema138"
+                  "$ref": "#/components/schemas/input_schema142"
                 }
               }
             ]
@@ -60326,12 +60370,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema117"
+                "$ref": "#/components/schemas/input_schema121"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema117"
+                  "$ref": "#/components/schemas/input_schema121"
                 }
               }
             ]
@@ -60339,12 +60383,12 @@
           "subjectProductId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema59"
+                "$ref": "#/components/schemas/input_schema63"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema59"
+                  "$ref": "#/components/schemas/input_schema63"
                 }
               }
             ]
@@ -62120,14 +62164,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema155"
+                "$ref": "#/components/schemas/input_schema159"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema155"
+                  "$ref": "#/components/schemas/input_schema159"
                 }
               }
             ]
@@ -62137,7 +62181,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema38"
+            "$ref": "#/components/schemas/input_schema42"
           },
           "groupBy": {
             "type": "string",

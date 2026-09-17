@@ -289,7 +289,7 @@ export default defineEntity({
         field: "productIdFilter",
         kind: "id",
         placeholder: "Filter by product id...",
-        brandRef: { entity: "product", kind: "id" },
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
@@ -297,7 +297,7 @@ export default defineEntity({
         field: "locationIdFilter",
         kind: "id",
         placeholder: "Filter by location id...",
-        brandRef: { entity: "location", kind: "id" },
+        brandRef: { entity: "location" },
         urlOnly: true,
       },
       {

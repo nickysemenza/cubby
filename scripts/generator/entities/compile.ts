@@ -448,6 +448,24 @@ const filterWire = (
     : { kind: "range", from: `${name}Min`, to: `${name}Max` };
 };
 
+const validateFilterReference = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  context: string,
+): void => {
+  const isIdentifier = kind === "id" || kind === "idMulti";
+  if (isIdentifier && !value.urlOnly && value.brandRef == null) {
+    throw new EntityDeclarationError(
+      `${context} rendered ${kind} filters require brandRef so browser URL values stay shortcode-native.`,
+    );
+  }
+  if (value.brandRef != null && !isIdentifier) {
+    throw new EntityDeclarationError(
+      `${context} brandRef is only valid for id/idMulti filters.`,
+    );
+  }
+};
+
 const filterDescriptor = (
   value: RawFilterDescriptor,
   fields: readonly EntityField[],
@@ -466,6 +484,7 @@ const filterDescriptor = (
     );
   }
   const modelField = fields.find((field) => field.key === value.columnId);
+  validateFilterReference(value, parsedKind, context);
   validateDerivedFilter(value, parsedKind, modelField, context);
   const stored = validateStoredFilter(value, parsedKind, storage, context);
   const range = resolveFilterRange(value, parsedKind, modelField, context);

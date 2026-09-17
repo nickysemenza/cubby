@@ -219,6 +219,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by candidate product...",
         optionsKey: "wishCandidates",
+        brandRef: { entity: "product" },
         nullable: { field: "productPresenceFilter", label: "candidate" },
       },
       {

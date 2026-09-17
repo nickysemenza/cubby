@@ -273,6 +273,7 @@ export const lifecycleRows = (
       {
         id: record.id,
         name: recordTitle(entity, record),
+        link: recordLink(entity, record),
         imageUrl: record.displayImages[0]?.url ?? null,
         intervals:
           start === null

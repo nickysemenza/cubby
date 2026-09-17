@@ -8,7 +8,7 @@ import {
   Settings2,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
@@ -88,6 +88,12 @@ function MultiselectEditor({
     () => new Set(filter?.values ?? []),
   );
   const options = visibleOptions(field, filter);
+  useEffect(() => {
+    field.onActivate?.(filter?.values ?? []);
+  }, [field, filter?.values]);
+  useEffect(() => {
+    field.onSearchChange?.(query);
+  }, [field, query]);
   const filtered = query
     ? options.filter((option) =>
         option.label.toLowerCase().includes(query.toLowerCase()),
@@ -307,6 +313,12 @@ export function FilterBar({
     () => new Map(filters.map((filter) => [filter.field, filter])),
     [filters],
   );
+  useEffect(() => {
+    for (const field of fields) {
+      const filter = filtersByField.get(field.key);
+      if (filter && isFieldActive(filter)) field.onActivate?.(filter.values);
+    }
+  }, [fields, filtersByField]);
   const searchField = fields.find((field) => field.key === searchKey);
   const chipFields = fields.filter((field) => field.key !== searchKey);
   const visibleChipFields = chipFields.slice(0, CHIP_CAP);

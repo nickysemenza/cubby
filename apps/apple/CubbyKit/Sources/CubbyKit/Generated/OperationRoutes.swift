@@ -42,7 +42,7 @@ extension OperationRoute {
         OperationRoute(operationID: "cookbook.list", method: .get, path: "/api/v1/cookbook/list", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "dashboard.counts", method: .get, path: "/api/v1/dashboard/counts", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "entity.explore", method: .post, path: "/api/v1/entity/explore", pathParameters: [], queryParameters: [], hasBody: true),
-        OperationRoute(operationID: "entity.filterOptions", method: .get, path: "/api/v1/entity/filterOptions", pathParameters: [], queryParameters: ["cursor", "kind", "limit", "search", "selectedIds"], hasBody: false),
+        OperationRoute(operationID: "entity.filterOptions", method: .post, path: "/api/v1/entity/filterOptions", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "entity.graph", method: .post, path: "/api/v1/entity/graph", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "entity.graphPaths", method: .post, path: "/api/v1/entity/graphPaths", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "entity.inspectorHealth", method: .get, path: "/api/v1/entity/inspectorHealth", pathParameters: [], queryParameters: [], hasBody: false),

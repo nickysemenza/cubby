@@ -506,7 +506,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by cookbook...",
         optionsKey: "cookbook",
-        brandRef: { entity: "cookbook", kind: "id" },
+        brandRef: { entity: "cookbook" },
         nullable: { field: "cookbookPresenceFilter", label: "cookbook" },
       },
       {
@@ -603,7 +603,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by ingredient...",
         optionsKey: "recipeIngredients",
-        brandRef: { entity: "ingredient", kind: "id" },
+        brandRef: { entity: "ingredient" },
         nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
       },
       {

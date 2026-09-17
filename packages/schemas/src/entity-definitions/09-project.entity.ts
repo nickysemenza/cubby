@@ -744,7 +744,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by parent project...",
         optionsKey: "project",
-        brandRef: { entity: "project", kind: "id" },
+        brandRef: { entity: "project" },
         nullable: {
           field: "parentProjectPresenceFilter",
           label: "parent project",
@@ -856,7 +856,7 @@ export default defineEntity({
         columnId: "usedToolId",
         kind: "idMulti",
         placeholder: "Filter by related reusable resources id...",
-        brandRef: { entity: "product", kind: "id" },
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
@@ -876,7 +876,7 @@ export default defineEntity({
         columnId: "vendorId",
         kind: "idMulti",
         placeholder: "Filter by related vendors id...",
-        brandRef: { entity: "vendor", kind: "id" },
+        brandRef: { entity: "vendor" },
         urlOnly: true,
       },
       {

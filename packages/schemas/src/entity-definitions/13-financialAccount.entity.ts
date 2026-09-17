@@ -317,7 +317,7 @@ export default defineEntity({
         columnId: "ledgerPartyId",
         kind: "idMulti",
         placeholder: "Filter by ledger party...",
-        brandRef: { entity: "ledgerParty", kind: "id" },
+        brandRef: { entity: "ledgerParty" },
         urlOnly: true,
       },
       {

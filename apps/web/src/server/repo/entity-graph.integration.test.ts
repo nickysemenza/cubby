@@ -1,3 +1,4 @@
+import { taskCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
@@ -31,6 +32,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "./repo.fixtures";
+import { createTask } from "./task/crud";
 import { createVendor, findOrCreateVendor } from "./vendor";
 
 describe("entity graph repository", () => {
@@ -350,6 +352,79 @@ describe("entity graph repository", () => {
       items: [],
     });
     expect(new Set(itemIds)).toHaveLength(3);
+  });
+
+  it("reads task plantings through the declared inverse with counts and pages", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Task graph crop", aliases: [] },
+      ctx.actor,
+    );
+    const task = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "Task graph source",
+      }),
+      ctx.actor,
+    );
+    const plantings = await Promise.all(
+      ["A", "B", "C"].map((variety) =>
+        createPlanting(
+          ctx.db,
+          {
+            ingredientId: crop.id,
+            taskId: task.output.id,
+            status: "planned",
+            variety,
+          },
+          ctx.actor,
+        ),
+      ),
+    );
+    const taskInput = {
+      roots: [{ entityType: "task" as const, entityId: task.output.id }],
+      relationshipKeys: ["inverse:planting.task"],
+      limit: 1,
+    };
+    const first = await getEntityGraph(ctx.db, taskInput);
+    const second = await getEntityGraph(ctx.db, {
+      ...taskInput,
+      offset: first.branches[0]?.nextOffset ?? 0,
+    });
+    const third = await getEntityGraph(ctx.db, {
+      ...taskInput,
+      offset: second.branches[0]?.nextOffset ?? 0,
+    });
+    const taskBranchItems = [first, second, third].flatMap(
+      (page) => page.branches[0]?.items.map((item) => item.entityId) ?? [],
+    );
+    expect(first.branches[0]).toMatchObject({
+      relationshipKey: "inverse:planting.task",
+      target: "planting",
+      totalCount: 3,
+      nextOffset: 1,
+    });
+    expect(second.branches[0]).toMatchObject({ totalCount: 3, nextOffset: 2 });
+    expect(third.branches[0]).toMatchObject({
+      totalCount: 3,
+      nextOffset: null,
+    });
+    expect(new Set(taskBranchItems)).toEqual(
+      new Set(plantings.map((planting) => planting.id)),
+    );
+
+    const plantingGraph = await getEntityGraph(ctx.db, {
+      roots: [{ entityType: "planting", entityId: plantings[0]!.id }],
+      relationshipKeys: ["task"],
+    });
+    expect(plantingGraph.branches[0]).toMatchObject({
+      relationshipKey: "task",
+      target: "task",
+      totalCount: 1,
+      nextOffset: null,
+      items: [{ entityType: "task", entityId: task.output.id }],
+    });
   });
 
   it("batches a capped 25-root graph without per-record queries", async () => {

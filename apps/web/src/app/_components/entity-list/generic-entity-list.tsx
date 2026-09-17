@@ -15,12 +15,14 @@ import { DataTableToolbar } from "~/app/_components/data-table/data-table-toolba
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
+import { useDeferredReferenceFilterOptions } from "~/app/_components/hooks/useDeferredReferenceFilterOptions";
 import {
   type BaseListRow,
   type EntityListTreeConfig,
   useEntityList,
   type UseEntityListReturn,
 } from "~/app/_components/hooks/useEntityList";
+import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { EntityTimeline } from "~/app/_components/timeline/entity-timeline";
 import { Stack } from "~/components/layout";
@@ -187,6 +189,11 @@ function ServerListBody({
   operations: GenericEntityListProps["operations"];
 }) {
   const parts = override.use(context);
+  const referenceFilterOptions = useDeferredReferenceFilterOptions(entity);
+  const filterOptions = useFilterOptions({
+    ...referenceFilterOptions,
+    ...parts.list?.filterOptions,
+  });
   const columns = useListColumns(entity, parts);
   const queryOptions = useMemo((): ListQueryOptionsFn<object, BaseListRow> => {
     if (operations?.list) return operations.list;
@@ -205,6 +212,7 @@ function ServerListBody({
     deletable: true,
     preview: DEFAULT_PREVIEW,
     ...parts.list,
+    filterOptions,
     // SAFETY: the flat and tree overloads only differ in whether `tree` is
     // present; the hook branches on it at runtime.
     tree: parts.tree as EntityListTreeConfig<BaseListRow, BaseListRow>,

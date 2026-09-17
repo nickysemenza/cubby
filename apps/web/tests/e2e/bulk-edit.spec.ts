@@ -60,13 +60,23 @@ test("plantings list bulk-edits status finished plus a date in one write", async
 }) => {
   const suffix = Date.now();
   const cropName = `e2e bulk crop ${suffix}`;
+  const otherCropName = `e2e unrelated crop ${suffix}`;
   const crop = await seedIngredientPrerequisite(page, cropName);
+  const otherCrop = await seedIngredientPrerequisite(page, otherCropName);
   const planting = await seedPlantingPrerequisite(page, {
     ingredientId: crop.id,
   });
+  await seedPlantingPrerequisite(page, { ingredientId: otherCrop.id });
 
   await page.goto(`/plantings?ingredientId=${crop.id}`);
   await waitForAppHydration(page);
+
+  await expect(
+    page.getByRole("button", { name: `Crop: ${cropName}`, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: otherCropName }),
+  ).toHaveCount(0);
 
   await page
     .getByRole("row")
@@ -81,6 +91,10 @@ test("plantings list bulk-edits status finished plus a date in one write", async
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Bulk edit 1 Planting?")).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Update", exact: true }),
+  ).toBeDisabled();
+  await expect(dialog.getByText(/cannot proceed/iu)).toHaveCount(0);
 
   await dialog.getByRole("combobox", { name: "status", exact: true }).click();
   await page.getByRole("option", { name: "Finished", exact: true }).click();

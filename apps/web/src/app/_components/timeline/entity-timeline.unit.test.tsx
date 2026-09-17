@@ -44,6 +44,7 @@ const withRows: EntityTimelineOut = {
     {
       id: "PRD-2222",
       name: "Bench vise",
+      link: { entity: "product", id: "PRD-2222" },
       intervals: [
         { start: "2026-01-10", end: "2026-02-01", confident: true },
         { start: "2026-02-01", end: null, confident: false },
@@ -55,6 +56,21 @@ const withRows: EntityTimelineOut = {
           link: { entity: "expense", id: "EXP-2222" },
         },
       ],
+    },
+    {
+      // A guide row's identity is synthetic, so its separate explicit link is
+      // the only valid navigation source.
+      id: "guide-transplant:PLT-2222",
+      name: "Recommended transplant · Tomato",
+      link: { entity: "planting", id: "PLT-2222" },
+      intervals: [{ start: "2026-02-01", end: "2026-02-28", confident: false }],
+      markers: [],
+    },
+    {
+      id: "guide-sow:PLT-2222",
+      name: "Unlinked recommendation",
+      intervals: [{ start: "2026-02-01", end: "2026-02-28", confident: false }],
+      markers: [],
     },
   ],
 };
@@ -112,9 +128,13 @@ describe("EntityTimeline", () => {
     fireEvent.click(screen.getByRole("button", { name: "Lifecycles view" }));
     expect(await screen.findByText("Record")).toBeInTheDocument();
     expect(
-      screen.getByTitle("Uncertain after Feb 1, 2026"),
-    ).toBeInTheDocument();
+      screen.getAllByTitle("Uncertain after Feb 1, 2026").length,
+    ).toBeGreaterThan(0);
     expect(screen.getByTitle("Jan 10, 2026 – Feb 1, 2026")).toBeInTheDocument();
     expect(screen.getByText("Inferred")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Recommended transplant · Tomato" }),
+    ).toHaveAttribute("href", "/plantings/PLT-2222");
+    expect(screen.getByText("Unlinked recommendation").closest("a")).toBeNull();
   });
 });

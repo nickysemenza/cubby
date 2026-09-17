@@ -1,6 +1,6 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
-import { testEntityId } from "@cubby/schemas/testing";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { getEntityFilters, manifestFilterConfig } from "./filter-manifest";
@@ -16,10 +16,10 @@ import {
 import { generatedEntityFilterContractCases } from "./generated/entity-filter-contracts.gen";
 import { entitySearch } from "./generated/entity-search.gen";
 
-const VENDOR_ONE = testEntityId("vendor", "VEN-4K7M");
-const VENDOR_TWO = testEntityId("vendor", "VEN-9Q2X");
-const PRODUCT_ID = testEntityId("product", "PRD-4K7M");
-const PURCHASE_ID = testEntityId("purchase", "PUR-4K7M");
+const VENDOR_ONE = testShortcode("vendor", "VEN-4K7M");
+const VENDOR_TWO = testShortcode("vendor", "VEN-9Q2X");
+const PRODUCT_ID = testShortcode("product", "PRD-4K7M");
+const PURCHASE_ID = testShortcode("purchase", "PUR-4K7M");
 
 describe("manifestFilterConfig", () => {
   it.each([
@@ -211,6 +211,38 @@ describe("generated filter contracts", () => {
       expect(specs.map((spec) => spec.urlKey ?? spec.columnId)).toEqual(
         contract.urlKeys,
       );
+      expect(
+        contract.referenceFilters.every(({ columnId, entity: target }) => {
+          const spec = specs.find(
+            (candidate) => candidate.columnId === columnId,
+          );
+          if (
+            spec === undefined ||
+            (spec.kind !== "id" && spec.kind !== "idMulti") ||
+            spec.brand === undefined
+          ) {
+            return false;
+          }
+          const shortcode = testShortcode(
+            target,
+            `${entity}-${columnId}-filter`,
+          );
+          const field = spec.field ?? spec.columnId;
+          const filters = buildFiltersFromManifest(
+            specs,
+            filterGetterFromSearch(specs, {
+              [spec.urlKey ?? columnId]: shortcode,
+            }),
+          );
+          return (
+            spec.brand(shortcode) === shortcode &&
+            (spec.kind === "id"
+              ? filters[field] === shortcode
+              : Array.isArray(filters[field]) &&
+                filters[field]?.[0] === shortcode)
+          );
+        }),
+      ).toBe(true);
       expect(new Set(contract.urlKeys).size).toBe(contract.urlKeys.length);
       expect(
         contract.rangeExpanders.every((entry) => {
@@ -231,6 +263,22 @@ describe("generated filter contracts", () => {
         );
       }
     }
+  });
+});
+
+describe("public entity-reference filters", () => {
+  it("parses a planting ingredient shortcode and never widens invalid URLs", () => {
+    const specs = getEntityFilters("planting");
+    const build = (ingredientId: string) =>
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, { ingredientId }),
+      );
+
+    expect(build("ING-C2YH")).toEqual({ ingredientId: ["ING-C2YH"] });
+    expect(build("not-an-ingredient")).toEqual({
+      ingredientId: ["__unresolvable_entity_filter__"],
+    });
   });
 });
 
