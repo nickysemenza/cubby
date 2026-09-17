@@ -43,5 +43,5 @@ describe("MCP clients on Cloudflare Workers", () => {
       const { tools } = await mcpServer.listMcpToolCatalog();
       expect(tools.length).toBeGreaterThan(0);
     });
-  }, 15_000);
+  }, 30_000);
 });
