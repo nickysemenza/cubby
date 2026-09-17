@@ -790,6 +790,7 @@ export function EntityActionButtons({
   record,
   surface = "detail",
   verbs,
+  overflow = "menu",
 }: {
   entity: Entity;
   record: EntityActionRow;
@@ -800,6 +801,13 @@ export function EntityActionButtons({
    * it is the one generic verb every shortcode entity has.
    */
   verbs?: readonly ActionVerbId[];
+  /**
+   * "menu" (default, unchanged behaviour): one primary button plus a "More
+   * actions" popover for the rest. "inline": every visible verb renders as
+   * its own button, no split — the detail plate's `md+` width, which has
+   * room to spell every verb out.
+   */
+  overflow?: "inline" | "menu";
 }) {
   const { detailActions, inspectorActions, dialogs } = useEntityActions(entity);
   const actions = surface === "inspector" ? inspectorActions : detailActions;
@@ -814,6 +822,28 @@ export function EntityActionButtons({
     const availability = action.availability(record);
     return availability.status === "hidden" ? [] : [{ action, availability }];
   });
+
+  if (overflow === "inline") {
+    return (
+      <>
+        {visible.map(({ action, availability }) => (
+          <VerbButton
+            key={action.id}
+            verb={action.verb}
+            disabled={availability.status === "disabled"}
+            disabledReason={
+              availability.status === "disabled"
+                ? availability.reason
+                : undefined
+            }
+            onClick={() => action.run(record)}
+          />
+        ))}
+        {dialogs}
+      </>
+    );
+  }
+
   const primaryIndex = visible.findIndex(
     ({ action, availability }) =>
       action.group !== "destructive" &&
@@ -821,7 +851,7 @@ export function EntityActionButtons({
       availability.status === "available",
   );
   const primary = primaryIndex >= 0 ? visible[primaryIndex] : undefined;
-  const overflow = visible.filter((_, index) => index !== primaryIndex);
+  const menuOverflow = visible.filter((_, index) => index !== primaryIndex);
   return (
     <>
       {primary ? (
@@ -830,7 +860,7 @@ export function EntityActionButtons({
           onClick={() => primary.action.run(record)}
         />
       ) : null}
-      {overflow.length > 0 ? (
+      {menuOverflow.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -841,10 +871,10 @@ export function EntityActionButtons({
             More actions
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {overflow.map(({ action, availability }, index) => (
+            {menuOverflow.map(({ action, availability }, index) => (
               <Fragment key={action.id}>
                 {action.group === "destructive" &&
-                overflow[index - 1]?.action.group !== "destructive" ? (
+                menuOverflow[index - 1]?.action.group !== "destructive" ? (
                   <DropdownMenuSeparator />
                 ) : null}
                 <VerbMenuItem

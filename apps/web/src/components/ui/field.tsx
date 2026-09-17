@@ -48,7 +48,10 @@ function FieldLabel({
     <Label
       data-slot="field-label"
       className={cn(
-        "has-data-checked:bg-primary/5 group/field-label peer/field-label flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-none has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-2",
+        // Line-height comes from Label's own text-xs/4 (max-md:13/18) now that
+        // labels are sentence case at every width — don't reintroduce a
+        // conflicting leading-* here.
+        "has-data-checked:bg-primary/5 group/field-label peer/field-label flex w-fit gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-none has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-2",
         "has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col",
         className,
       )}

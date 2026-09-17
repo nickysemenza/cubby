@@ -4,7 +4,7 @@ import { imageWithEntitySchema } from "@cubby/schemas/image";
 import { cookbookSummary } from "@cubby/schemas/recipe";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import {
   afterAll,
   afterEach,
@@ -23,6 +23,7 @@ import {
   detailEntities,
   getEntityDetailOutputSchema,
 } from "~/entities/generated/entity-details.gen";
+import { inventoryListItem } from "~/entities/generated/entity-lists.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
@@ -283,7 +284,7 @@ describe("GenericEntityDetail", () => {
     expect(screen.queryByText("UPC", { exact: true })).not.toBeInTheDocument();
     const labels = Array.from(
       container.querySelectorAll(
-        "#basic-information .basic-info-ledger .eyebrow",
+        '#basic-information .basic-info-ledger [data-slot="basic-info-label"]',
       ),
       (element) => element.textContent,
     );
@@ -299,5 +300,40 @@ describe("GenericEntityDetail", () => {
     );
     // Declared order, minus the fields whose value is empty on this record.
     expect(labels).toEqual(declared.filter((label) => labels.includes(label)));
+  });
+
+  it("relation section header carries the loaded count and actions", async () => {
+    const rows = [
+      mock(inventoryListItem, { seed: 1 }),
+      mock(inventoryListItem, { seed: 2 }),
+      mock(inventoryListItem, { seed: 3 }),
+    ];
+    const list = entityList.list.withTransport(async () => ({
+      items: rows,
+      meta: { pageIndex: 0, pageSize: 50, totalCount: rows.length, sums: {} },
+    }));
+    const { container } = render(
+      <GenericEntityDetail
+        entity="product"
+        record={recordFor("product")}
+        operations={{ ...operations, list: { list } }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const stockedAt = await waitFor(() => {
+      const element = container.querySelector("section#stocked-at");
+      if (!(element instanceof HTMLElement))
+        throw new Error("Expected the stocked-at section to render");
+      return element;
+    });
+    // The count only appears once the list resolves — `useSectionCount`
+    // reporting through the header, not the body reaching into its own DOM.
+    await within(stockedAt).findByText("3");
+    expect(
+      within(stockedAt).getByRole("button", { name: "New inventory item" }),
+    ).toBeInTheDocument();
+    expect(
+      within(stockedAt).getByRole("button", { name: /Open all/ }),
+    ).toBeInTheDocument();
   });
 });

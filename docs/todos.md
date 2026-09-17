@@ -27,6 +27,32 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
+- **Canvas conformance follow-ups.** The generic pages now render the
+  canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
+  workbench band with declared-filter chips and `Actions ▾`, plate verbs,
+  inline anchor index, counted relation sections with header verbs and
+  sentence + action empty states, sentence-case labels and facts, the phone
+  edit sheet with header actions, and phone rows as the manifest projection.
+  What the pass surfaced but did not finish:
+  - A relation section's empty copy is generic (`No products yet.` under
+    "Kit components"). Declare `empty` copy per relation section in the
+    manifest so web and native read the same sentence.
+  - The `Actions ▾` menu cannot preview bulk verbs at rest: it needs the
+    table's `BulkActionsConfig` threaded from `useListBulkActions` through
+    `RTable`; today the bar still replaces the chip run once rows are
+    selected, so nothing is unreachable.
+  - The timeline list view keeps its own controls inside the body; the
+    ListTimeline artboard draws them as a second 40px band (mode seg, From /
+    To chips, order seg, cohort line); the product read's own cap is the
+    next entry.
+  - The phone band still carries the grouped toggle beside the view seg;
+    the artboard's band has only seg · search · Filter — fold it into the
+    Filter sheet with sort and columns.
+  - Planting field labels come from the manifest in Title Case (`Sowed On`,
+    `Planned Window`); every other entity's are sentence case.
+  - The canvas's NEXT SESSION note still describes this pass; retire it on
+    the next canvas edit.
+
 - **Cap the product timeline like the default one.** `productTimeline`
   (`server/repo/product/movement-timeline.ts`) returns one lifecycle row per
   product in the cohort; an unfiltered `/products?view=timeline` ran 19.6 s
@@ -113,26 +139,6 @@ history is the archive. Permanent product constraints live in the
   manifest, but `EntityListView.swift`'s view picker does not surface `slot`
   kind views yet, so they are unreachable on Apple platforms even where a
   native slot component exists.
-
-- **Bring the shipped surfaces up to the generic-page canvas.** The canvas
-  (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>) is the app's own
-  DESIGN.md tokens and shell applied without accretion; the app diverges by
-  accumulation, not by palette (extra workbench chrome such as
-  Display/Custom/Saved views, uppercase dialog labels, "Jump to section" as a
-  button instead of an inline anchor index). Every entity page now renders
-  through `GenericEntityDetail`, `GenericEntityList`, `DetailSections`,
-  `ListWorkbench` and a few primitives, so conformance lands once. In order:
-  1. Extend the canvas to a complete reference: the generic edit dialog
-     (desktop and phone), a phone list, a section's empty/loading/error
-     states, and the workbench band in its filtered state.
-  2. Audit route by route against it with `/cubby-ui-design-audit`,
-     producing a drift list keyed by component, not page.
-  3. Remediate at the primitive/generic level (`ListWorkbench`,
-     `DetailSections`, `EntityBasicInfo`, `FormFieldGroup`/`SelectField`,
-     chips and eyebrows), deleting page-level chrome the canvas does not
-     have rather than restyling it; one PR with the audit's before/after as
-     evidence, DESIGN.md changed only where the canvas sharpened a rule.
-  Acceptance: a route beside its artboard is distinguishable only by data.
 
 - **`resolve_ingredients` suggests product links.** It created `ground chicken`
   (ING-ZEU3) while PRD-FGC5 "Ground Chicken Breast" sat unlinked; four of the

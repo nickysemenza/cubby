@@ -12,7 +12,10 @@ import { Clock, FileText, ImageIcon, Info, Link2, Puzzle } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
 import { z } from "zod";
 
-import type { DetailHeroStat } from "~/components/layouts/page-hero";
+import type {
+  DetailHeroActions,
+  DetailHeroStat,
+} from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import {
   Breadcrumb,
@@ -54,6 +57,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { actionVerbs, type ActionVerbId } from "../actions/action-verbs";
+import { EntityActionButtons } from "../actions/entity-actions";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { DocumentViewerList } from "../DocumentViewerList";
 import EntityImageList from "../EntityImageList";
@@ -69,6 +73,8 @@ import { detailSlotsFor } from "./detail-slots";
 import {
   EntityRelationTable,
   type EntityRelationTableOperations,
+  planRelationSection,
+  RelationSectionActions,
 } from "./entity-relation-table";
 
 export type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
@@ -387,21 +393,29 @@ function declaredSections<E extends GenericDetailEntity>(
             ),
           },
         ];
-      case "relation":
+      case "relation": {
+        const plan = planRelationSection(entity, section);
+        const createLabel =
+          detail.variant === "journal" ? "Log entry" : undefined;
         return [
           {
             ...base,
             title: section.title,
             overflowVisible: true,
+            headerAction: (
+              <RelationSectionActions
+                plan={plan}
+                recordId={bag.id}
+                title={section.title}
+                createLabel={createLabel}
+              />
+            ),
             content: (
               <EntityRelationTable
-                entity={entity}
-                section={section}
+                plan={plan}
                 recordId={bag.id}
+                title={section.title}
                 operations={operations.list}
-                createLabel={
-                  detail.variant === "journal" ? "Log entry" : undefined
-                }
                 emptyLabel={
                   detail.variant === "journal"
                     ? "Nothing logged yet — the first entry starts the journal."
@@ -411,6 +425,7 @@ function declaredSections<E extends GenericDetailEntity>(
             ),
           },
         ];
+      }
       case "timeline":
         // SAFETY: the compiler only admits a timeline section on an entity
         // with `capabilities.timeline`.
@@ -542,16 +557,45 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
   }
 
   // `edit` is the page's own affordance (the hero button); every other
-  // declared verb is offered from the registry through the command strip.
+  // declared verb is offered from the registry, on the plate.
   const declaredVerbs = heroActions.filter(
     (verb): verb is ActionVerbId => verb !== "edit" && verb in actionVerbs,
   );
+  const hasVerbs = declaredVerbs.length > 0;
   const breadcrumbChain = breadcrumbField
     ? ancestry(record, breadcrumbField)
     : [];
   // SAFETY: `detailEditOverrideFor` hands back this entity's own override,
   // typed against the record this page received.
   const overrideRecord = record as never;
+  const plateActions: DetailHeroActions | undefined =
+    editable || hasVerbs
+      ? {
+          // Visible text stays "Edit"; the name carries the entity so the
+          // control reads "Edit Ingredient" to assistive tech and tests.
+          primary: editable ? (
+            <DetailEditAction
+              aria-label={`Edit ${singular}`}
+              onClick={() => setEditing(true)}
+            />
+          ) : undefined,
+          // Overflow-aware: the plate spells every verb out at `md+` and
+          // falls back to a primary + "More actions" popover on phone.
+          secondary: hasVerbs
+            ? (overflow: "inline" | "menu") => (
+                <EntityActionButtons
+                  entity={entity}
+                  // The whole record, not just its id: a verb's availability
+                  // reads the fields it gates on (a planting's status hides
+                  // "Start planting" once it has started).
+                  record={{ ...record, id: bag.id }}
+                  verbs={declaredVerbs}
+                  overflow={overflow}
+                />
+              )
+            : undefined,
+        }
+      : undefined;
 
   return (
     <Page
@@ -563,20 +607,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
       heroNo={bag.id}
       heroStamp={heroStamp}
       heroStats={heroStats.length > 0 ? heroStats : undefined}
-      heroActions={
-        editable
-          ? {
-              // Visible text stays "Edit"; the name carries the entity so the
-              // control reads "Edit Ingredient" to assistive tech and tests.
-              primary: (
-                <DetailEditAction
-                  aria-label={`Edit ${singular}`}
-                  onClick={() => setEditing(true)}
-                />
-              ),
-            }
-          : undefined
-      }
+      heroActions={plateActions}
     >
       <AncestryBreadcrumb
         entity={entity}
@@ -587,7 +618,6 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
         sections={sections}
         rawData={record}
         heroImages={heroImages}
-        actionVerbs={declaredVerbs}
       />
       {editable && editing ? (
         EditOverride ? (

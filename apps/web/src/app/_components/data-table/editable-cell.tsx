@@ -324,9 +324,12 @@ function EditableDisplay<TSaved>({
           clipboard={clipboard}
           hidePencilIcon
           aria-label="Edit value"
-          className="shrink-0 p-1 opacity-40 transition-opacity group-hover/editable:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          // Fine pointers (mouse/trackpad) reveal the pencil only on
+          // hover/focus; touch has no hover, so coarse pointers keep a
+          // hairline-coloured pencil visible at rest.
+          className="shrink-0 p-1 transition-opacity group-hover/editable:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 pointer-fine:opacity-0"
         >
-          <Pencil className="size-3 text-muted-foreground" />
+          <Pencil className="size-3 text-muted-foreground pointer-coarse:text-hairline" />
         </CellEditTrigger>
       </span>
     );

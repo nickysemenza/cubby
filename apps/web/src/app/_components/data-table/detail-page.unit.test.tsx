@@ -48,14 +48,12 @@ function renderDetail({
   pageRawData = rawData,
   detailSections = sections,
   heroMedia,
-  showEntityActions = false,
 }: {
   entity?: Entity;
   rawData?: unknown;
   pageRawData?: unknown;
   detailSections?: DetailSection[];
   heroMedia?: ReactNode;
-  showEntityActions?: boolean;
 } = {}) {
   return render(
     <Page
@@ -68,7 +66,6 @@ function renderDetail({
         sections={detailSections}
         rawData={rawData}
         heroMedia={heroMedia}
-        showEntityActions={showEntityActions}
       />
     </Page>,
     { wrapper: harness.wrapper },
@@ -83,8 +80,18 @@ describe("DetailSections ledger", () => {
       "data-active",
     );
     expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
+    // md+: an inline anchor list; the first declared section is active.
+    expect(screen.getByRole("link", { name: "Story" })).toHaveAttribute(
+      "href",
+      "#story",
+    );
+    expect(screen.getByRole("link", { name: "Summary" })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
+    // Below md: the same list behind a "Jump to: <active>" trigger.
     expect(
-      screen.getByRole("button", { name: "Jump to section" }),
+      screen.getByRole("button", { name: /Jump to:\s*Summary/ }),
     ).toBeVisible();
     expect(screen.getByTestId("detail-overview-tools")).toHaveClass(
       "w-full",
@@ -109,11 +116,15 @@ describe("DetailSections ledger", () => {
       (section) => section.id,
     );
     expect(ids).toEqual(["story", "summary", "ledger"]);
-    fireEvent.click(screen.getByRole("button", { name: "Jump to section" }));
-    const story = screen.getByRole("menuitem", { name: "Story" });
-    expect(story).toHaveAttribute("href", "#story");
-    fireEvent.click(story);
+    // The inline anchor jumps directly.
+    fireEvent.click(screen.getByRole("link", { name: "Story" }));
     expect(document.activeElement).toBe(document.getElementById("story"));
+    // The phone dropdown offers the same targets.
+    fireEvent.click(screen.getByRole("button", { name: /Jump to:/ }));
+    const ledger = screen.getByRole("menuitem", { name: "Ledger" });
+    expect(ledger).toHaveAttribute("href", "#ledger");
+    fireEvent.click(ledger);
+    expect(document.activeElement).toBe(document.getElementById("ledger"));
   });
 
   it("CSS-gates detail media to Overview's desktop rail", async () => {
@@ -218,28 +229,33 @@ describe("DetailSections ledger", () => {
     });
     await screen.findByText("Summary content");
     expect(screen.queryByText("Empty")).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Jump to section" }),
-    ).toBeNull();
+    expect(screen.queryByRole("link", { name: "Summary" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Jump to:/ })).toBeNull();
     expect(screen.queryByTestId("detail-overview-tools")).toBeNull();
   });
 
-  it("keeps record actions when unrelated detail metadata is nullable", async () => {
+  it("collapsed header toggles and mounts body", async () => {
+    const [summary] = sections;
+    if (!summary) throw new Error("Expected a fixture section");
     renderDetail({
-      entity: "product",
-      rawData: {
-        id: "PRD-EXAMPLE",
-        name: "Fixture product",
-        fdc_id: null,
-        description: null,
-      },
-      pageRawData: undefined,
-      showEntityActions: true,
+      detailSections: [
+        summary,
+        {
+          id: "analytics",
+          title: "Analytics",
+          icon: Circle,
+          placement: "primary",
+          collapsed: true,
+          content: <p>Analytics content</p>,
+        },
+      ],
     });
-
-    expect(
-      await screen.findByRole("button", { name: "Add to inventory" }),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "More actions" })).toBeVisible();
+    await screen.findByText("Summary content");
+    const toggle = screen.getByRole("button", { name: /Analytics/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Analytics content")).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Analytics content")).toBeVisible();
   });
 });

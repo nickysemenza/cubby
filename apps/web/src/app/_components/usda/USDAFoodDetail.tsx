@@ -27,6 +27,7 @@ import {
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
 
+import { EntityActionButtons } from "../actions/entity-actions";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
@@ -293,7 +294,22 @@ export const USDAFoodDetail: React.FC<{
       entity="usda-food"
       title={foodInfo.description || "Unnamed Food"}
       rawData={food}
-      heroActions={{ secondary: <UsdaFoodActions food={food} /> }}
+      heroActions={{
+        // `UsdaFoodActions` is this page's own custom action set; the
+        // registry contributes `copyIdentifiers` (the one verb declared for
+        // `usda-food`) — `DetailSections` no longer surfaces registry verbs
+        // in the strip, so this is now the only place either renders.
+        secondary: (overflow) => (
+          <>
+            <UsdaFoodActions food={food} />
+            <EntityActionButtons
+              entity="usda-food"
+              record={{ id: String(fdc_id) }}
+              overflow={overflow}
+            />
+          </>
+        ),
+      }}
     >
       <DetailSections sections={sections} rawData={food} />
     </Page>

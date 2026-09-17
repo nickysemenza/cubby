@@ -1,17 +1,8 @@
 import type { RowData } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Check } from "lucide-react";
-import { type RefObject, useEffect, useState } from "react";
+import { ArrowDown, ArrowUp, Check } from "lucide-react";
 
 import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import { Eyebrow } from "~/components/ui/eyebrow";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "~/components/ui/sheet";
-import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
 
 import type {
@@ -20,34 +11,8 @@ import type {
 } from "./table-features";
 import { mobileColumnLabel } from "./useMobileListModel";
 
-/**
- * Whether `ref`'s element straddles the vertical middle of the viewport.
- *
- * The sort control is anchored to the bottom of the screen (thumb reach), and
- * a page can stack several lists — the projects dashboard renders three. A
- * plain fixed button would therefore stack three of itself. Collapsing the
- * observer root to a zero-height line at the viewport's midpoint makes the
- * answer exclusive: at most one list contains that line, so at most one sort
- * control is on screen, and it belongs to the list the user is actually
- * looking at.
- */
-function useOwnsViewportMidline(ref: RefObject<HTMLElement | null>): boolean {
-  const [owns, setOwns] = useState(false);
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const observer = new IntersectionObserver(
-      (entries) => setOwns(entries.some((entry) => entry.isIntersecting)),
-      { rootMargin: "-50% 0px -50% 0px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref]);
-  return owns;
-}
-
 /** The columns a phone may sort by — the same set the desktop headers expose. */
-function sortableColumns<TItem extends RowData>(
+export function sortableColumns<TItem extends RowData>(
   table: ITable<TItem>,
 ): Column<TItem, unknown>[] {
   const visible = table
@@ -65,144 +30,65 @@ function sortableColumns<TItem extends RowData>(
 }
 
 /**
- * The phone's sort control: a thumb-zone trigger plus a bottom sheet.
+ * The phone Filter sheet's "Sort" section: the same `sorting` table state the
+ * desktop column headers drive (read from `table.state`, written through
+ * `table.setSorting`), so the URL round-trip, the server query, and the
+ * desktop headers stay one source of truth rather than two that drift.
  *
- * Sorting otherwise lives on desktop column headers, and mobile cards have no
- * headers — so "what did I buy most recently" was a desktop-only question. It
- * drives the SAME `sorting` table state the headers do (read from
- * `table.state`, written through `table.setSorting`), so the URL
- * round-trip, the server query, and the desktop headers stay one source of
- * truth rather than two that drift.
- *
- * Single-sort by design: the desktop's shift-click stack has no phone gesture,
- * and picking a column here replaces the stack rather than silently editing an
- * invisible one.
+ * Single-sort by design: the desktop's shift-click stack has no phone
+ * gesture, and picking a column here replaces the stack rather than silently
+ * editing an invisible one.
  */
-export function MobileSortSheet<TItem extends RowData>({
+export function SortSection<TItem extends RowData>({
   table,
-  listRef,
-  disabled = false,
 }: {
   table: ITable<TItem>;
-  /** The list region this control belongs to — see `useOwnsViewportMidline`. */
-  listRef: RefObject<HTMLElement | null>;
-  disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const onScreen = useOwnsViewportMidline(listRef);
-  // Derived per render rather than memoized: TanStack already memoizes the
-  // column lookups behind it, and the inputs (sorting, column visibility) live
-  // on a table instance whose identity never changes — so a dependency array
-  // here would be a lie.
   const columns = sortableColumns(table);
-  const keyboardOpen = useVirtualKeyboard();
+  if (columns.length === 0) return null;
 
   const [activeSort] = table.state.sorting;
   const activeDesc = activeSort?.desc ?? false;
-  const activeColumn = activeSort
-    ? columns.find((column) => column.id === activeSort.id)
-    : undefined;
-  const activeLabel = activeColumn
-    ? mobileColumnLabel(activeColumn)
-    : "Default";
-
-  if (columns.length === 0) return null;
 
   return (
-    <>
-      {onScreen && !disabled && !keyboardOpen && (
-        <div
-          data-mobile-sort-trigger
-          // Clears the fixed bottom nav (a 3.5rem bar plus its safe-area pad)
-          // so the control sits in the thumb zone without covering navigation.
-          className="fixed right-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 md:hidden print:hidden"
-        >
-          <Button
-            variant="outline"
-            onClick={() => setOpen(true)}
-            className="h-11 gap-1 px-2 font-mono text-2xs tracking-wider uppercase"
-            aria-label={`Sort — currently ${activeLabel}`}
-          >
-            <ArrowUpDown className="size-3.5" />
-            <span className="max-w-24 truncate">{activeLabel}</span>
-            {activeSort ? (
-              activeDesc ? (
-                <ArrowDown className="size-3.5" />
-              ) : (
-                <ArrowUp className="size-3.5" />
-              )
-            ) : null}
-          </Button>
-        </div>
-      )}
-
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent
-          side="bottom"
-          showCloseButton={false}
-          className="flex max-h-[70vh] flex-col rounded-none"
-        >
-          <SheetHeader className="border-b border-[var(--border)] p-4">
-            <SheetTitle>Sort</SheetTitle>
-          </SheetHeader>
-
-          <div className="flex-1 overflow-y-auto">
-            <SortOption
-              label="Default"
-              // Cleared sort is not "unsorted" — the list falls back to the
-              // entity's own default order (see `buildSortsParams`), which is
-              // exactly what "reset" should mean here.
-              detail="Newest first"
-              selected={!activeSort}
-              onSelect={() => table.setSorting([])}
-            />
-            {columns.map((column) => {
-              const selected = activeSort?.id === column.id;
-              return (
-                <SortOption
-                  key={column.id}
-                  label={mobileColumnLabel(column)}
-                  selected={selected}
-                  direction={
-                    selected ? (activeDesc ? "desc" : "asc") : undefined
-                  }
-                  onSelect={() =>
-                    table.setSorting([
-                      {
-                        id: column.id,
-                        // Re-tapping the current column flips it; a fresh
-                        // column opens in whatever direction it reads best in
-                        // (dates and money descend, names ascend).
-                        desc: selected
-                          ? !activeDesc
-                          : column.getFirstSortDir() === "desc",
-                      },
-                    ])
-                  }
-                />
-              );
-            })}
-          </div>
-
-          <Row
-            gap="sm"
-            className="safe-bottom border-t border-[var(--border)] p-4"
-          >
-            <Button
-              variant="outline"
-              className="h-11 flex-1"
-              onClick={() => table.setSorting([])}
-              disabled={!activeSort}
-            >
-              Reset to default
-            </Button>
-            <Button className="h-11 flex-1" onClick={() => setOpen(false)}>
-              Done
-            </Button>
-          </Row>
-        </SheetContent>
-      </Sheet>
-    </>
+    <Stack gap="tight">
+      <Eyebrow as="div" className="px-4 pt-3 pb-1">
+        Sort
+      </Eyebrow>
+      <SortOption
+        label="Default"
+        // Cleared sort is not "unsorted" — the list falls back to the
+        // entity's own default order (see `buildSortsParams`), which is
+        // exactly what "reset" should mean here.
+        detail="Newest first"
+        selected={!activeSort}
+        onSelect={() => table.setSorting([])}
+      />
+      {columns.map((column) => {
+        const selected = activeSort?.id === column.id;
+        return (
+          <SortOption
+            key={column.id}
+            label={mobileColumnLabel(column)}
+            selected={selected}
+            direction={selected ? (activeDesc ? "desc" : "asc") : undefined}
+            onSelect={() =>
+              table.setSorting([
+                {
+                  id: column.id,
+                  // Re-tapping the current column flips it; a fresh column
+                  // opens in whatever direction it reads best in (dates and
+                  // money descend, names ascend).
+                  desc: selected
+                    ? !activeDesc
+                    : column.getFirstSortDir() === "desc",
+                },
+              ])
+            }
+          />
+        );
+      })}
+    </Stack>
   );
 }
 

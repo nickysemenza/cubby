@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -77,9 +77,15 @@ describe("ListWorkbench", () => {
     expect(await screen.findByText("Hammer")).toBeVisible();
     expect(screen.getByText("Net cost: $42")).toBeVisible();
     expect(screen.getByText("Delete Product")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Display" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Saved views" })).toBeVisible();
     expect(screen.getByText("Rows per page")).toBeVisible();
+
+    // Page mode folds Columns/Saved views into `Actions ▾` (L3) instead of
+    // standalone Display/Saved views triggers.
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    expect(
+      await screen.findByRole("menuitem", { name: /Columns/ }),
+    ).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: /Saved views/ })).toBeVisible();
   });
 
   it("keeps an embedded relationship ledger's empty copy in the real table", async () => {
@@ -102,8 +108,9 @@ describe("ListWorkbench", () => {
     });
 
     expect(await screen.findByText("Hammer")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Display" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Filter" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Columns" })).toBeVisible();
+    // The title field renders as a search input, not an add-filter button.
+    expect(screen.getByRole("textbox", { name: /^Search/ })).toBeVisible();
     expect(screen.getByText("Bulk actions")).toBeVisible();
     expect(screen.getByRole("button", { name: "Record sale" })).toBeVisible();
     expect(

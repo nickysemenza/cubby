@@ -128,30 +128,31 @@ function MoveToDialog({
           : "Choose the location to move this item to."
       }
       footer={
-        <Stack gap="sm">
-          {target.kind === "location" && (
-            <Button
-              variant="outline"
-              disabled={!target.roots[0]}
-              onClick={() => {
-                const home = target.roots[0];
-                if (home) commit(home.id);
-              }}
-            >
-              Move to Home
-            </Button>
-          )}
-          <DialogFormActions
-            onCancel={onClose}
-            submitLabel="Move"
-            error={error}
-            submitDisabled={destination === null}
-            onSubmit={() => destination && commit(destination.id)}
-          />
-        </Stack>
+        <DialogFormActions
+          onCancel={onClose}
+          submitLabel="Move"
+          error={error}
+          submitDisabled={destination === null}
+          onSubmit={() => destination && commit(destination.id)}
+        />
       }
     >
       <Stack gap="md">
+        {/* Lives in the body, not the footer: the phone sheet promotes the
+            footer's Cancel/Move into its header and hides the footer, which
+            would take this shortcut with it. */}
+        {target.kind === "location" && (
+          <Button
+            variant="outline"
+            disabled={!target.roots[0]}
+            onClick={() => {
+              const home = target.roots[0];
+              if (home) commit(home.id);
+            }}
+          >
+            Move to Home
+          </Button>
+        )}
         <WithEntitySearch entity="location">
           {({ items, onSearchChange, isLoading, onOpenChange }) => (
             <EntityPicker

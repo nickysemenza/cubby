@@ -33,13 +33,11 @@ import {
 import { Description } from "~/components/ui/description";
 import { FieldError } from "~/components/ui/field";
 import { Image } from "~/components/ui/image";
-import { sectionRuleClass } from "~/components/ui/section-rule";
 import { Spinner } from "~/components/ui/spinner";
 import type { EditMode } from "~/entities/editing/entity-field-presentation";
 import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 import type { useImageState } from "~/hooks/useImageState";
 import { upc } from "~/lib/upc.functions";
-import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -65,7 +63,8 @@ const EMPTY_PENDING_IMAGES: PendingImage[] = [];
 /**
  * Visual grouping for the product form. In `compact` mode (QuickInventoryAdd) it
  * renders children flat — the compact card is already small. In the full form it
- * adds a ledger eyebrow header, or — for the vitals group — a chunky spec plate
+ * adds a sentence-case group heading over a hairline, or — for the vitals
+ * group — a chunky spec plate
  * (`plate`), so the long field list reads as the entity's placard + sections.
  */
 function FormSection({
@@ -90,7 +89,7 @@ function FormSection({
   }
   return (
     <Stack as="section" gap="sm">
-      <h4 className={cn(sectionRuleClass, "my-0 eyebrow font-medium")}>
+      <h4 className="my-0 border-t border-border pt-2 text-xs font-medium text-muted-foreground">
         {title}
       </h4>
       {children}

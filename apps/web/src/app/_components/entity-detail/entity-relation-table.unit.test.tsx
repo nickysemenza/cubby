@@ -14,6 +14,7 @@ import { mock } from "~/lib/test/mock-schema";
 import {
   EntityRelationTable,
   planRelationSection,
+  RelationSectionActions,
 } from "./entity-relation-table";
 
 const relationSection = (entity: keyof typeof entitySummary, id: string) => {
@@ -25,15 +26,16 @@ const relationSection = (entity: keyof typeof entitySummary, id: string) => {
   return section;
 };
 
+const planFor = (entity: keyof typeof entitySummary, id: string) =>
+  // SAFETY: every fixture entity below is browser-routed.
+  planRelationSection(entity as never, relationSection(entity, id));
+
 describe("planRelationSection", () => {
   it("scopes the target list by the descriptor's field key and links Open all by its url key", () => {
     // inventory's `productId` descriptor filters through `productIdFilter`
     // on the wire but reads `productId` from the URL — the two keys differ,
     // which is exactly the drift a hand-written scope would reintroduce.
-    const plan = planRelationSection(
-      "product",
-      relationSection("product", "stocked-at"),
-    );
+    const plan = planFor("product", "stocked-at");
     expect(plan).toMatchObject({
       target: "inventory",
       filterKey: "productIdFilter",
@@ -47,13 +49,11 @@ describe("planRelationSection", () => {
   it("honours the declared sort and limit, and falls back to the target's default sort", () => {
     // The product tasks relation is where the old client-side "open work
     // first" ordering lived; the declaration now owns it as `dueDate desc`.
-    expect(
-      planRelationSection("product", relationSection("product", "tasks")).sort,
-    ).toEqual({ field: "dueDate", direction: "desc" });
-    const stockedAt = planRelationSection(
-      "product",
-      relationSection("product", "stocked-at"),
-    );
+    expect(planFor("product", "tasks").sort).toEqual({
+      field: "dueDate",
+      direction: "desc",
+    });
+    const stockedAt = planFor("product", "stocked-at");
     expect(stockedAt.sort).toEqual({ field: "createdAt", direction: "desc" });
     expect(stockedAt.limit).toBeNull();
   });
@@ -61,21 +61,61 @@ describe("planRelationSection", () => {
   it("offers no create button when no create intent of the target carries the seed field", () => {
     // A product cannot be captured "for a purchase"; the section stays
     // read-only rather than opening a dialog that would drop the scope.
-    const plan = planRelationSection(
-      "purchase",
-      relationSection("purchase", "products"),
-    );
-    expect(plan.seed).toBeNull();
+    expect(planFor("purchase", "products").seed).toBeNull();
   });
 
   it("picks the first create intent that can be seeded, not only the default one", () => {
     // gardenEntry's `capture` intent has no `plantingId`; `full` does — the
     // journal's "Log entry" button depends on falling through to it.
-    const plan = planRelationSection(
-      "planting",
-      relationSection("planting", "garden-history"),
+    expect(planFor("planting", "garden-history").seed).toEqual({
+      intent: "full",
+      field: "plantingId",
+    });
+  });
+});
+
+describe("RelationSectionActions", () => {
+  let harness: ReturnType<typeof createBrowserTestHarness>;
+  beforeEach(() => {
+    harness = createBrowserTestHarness();
+  });
+  afterEach(() => {
+    harness.dispose();
+  });
+
+  it("renders Open all and a New trigger for the scoped target", () => {
+    const plan = planFor("project", "tasks");
+    render(
+      <RelationSectionActions
+        plan={plan}
+        recordId={testShortcode("project", "PRJ-TEST")}
+        title="Tasks"
+      />,
+      { wrapper: harness.wrapper },
     );
-    expect(plan.seed).toEqual({ intent: "full", field: "plantingId" });
+    expect(
+      screen.getByRole("button", { name: "Open all tasks" }),
+    ).toHaveAttribute("href", "/tasks?project=PRJ-TEST");
+    // Visible text stays the generic "Add"; the accessible name carries the
+    // specific noun so several sections' "Add" buttons stay distinguishable.
+    const add = screen.getByRole("button", { name: "New task" });
+    expect(add).toHaveTextContent("Add");
+  });
+
+  it("uses the declared createLabel as both the visible text and the name", () => {
+    const plan = planFor("planting", "garden-history");
+    render(
+      <RelationSectionActions
+        plan={plan}
+        recordId={testShortcode("planting", "PLT-TEST")}
+        title="Journal"
+        createLabel="Log entry"
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      screen.getByRole("button", { name: "Log entry" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -88,7 +128,7 @@ describe("EntityRelationTable", () => {
     harness.dispose();
   });
 
-  it("issues the scoped list read and renders the header affordances", async () => {
+  it("issues the scoped list read, sorted and filtered per the plan", async () => {
     const inputs: EntityListInputByEntity["task"][] = [];
     const list = entityList.list.withTransport(async ({ input }) => {
       // SAFETY: the test only mounts the project → tasks relation.
@@ -100,25 +140,62 @@ describe("EntityRelationTable", () => {
     });
     render(
       <EntityRelationTable
-        entity="project"
-        section={relationSection("project", "tasks")}
+        plan={planFor("project", "tasks")}
         recordId={testShortcode("project", "PRJ-TEST")}
+        title="Tasks"
         operations={{ list }}
       />,
       { wrapper: harness.wrapper },
     );
-    // The link renders through the button primitive, hence the button role.
-    expect(
-      screen.getByRole("button", { name: "Open all tasks" }),
-    ).toHaveAttribute("href", "/tasks?project=PRJ-TEST");
-    expect(
-      screen.getByRole("button", { name: "New task" }),
-    ).toBeInTheDocument();
     await waitFor(() => expect(inputs.length).toBeGreaterThan(0));
     const [input] = inputs;
     expect(input?.entity).toBe("task");
     expect(input?.filters).toMatchObject({ projectId: "PRJ-TEST" });
     expect(input?.sort).toEqual([{ orderBy: "createdAt", direction: "desc" }]);
+  });
+
+  it("renders the empty sentence and a create action once the read resolves empty", async () => {
+    const list = entityList.list.withTransport(async () => ({
+      items: [],
+      meta: { pageIndex: 0, pageSize: 50, totalCount: 0, sums: {} },
+    }));
+    render(
+      <EntityRelationTable
+        plan={planFor("project", "tasks")}
+        recordId={testShortcode("project", "PRJ-TEST")}
+        title="Tasks"
+        operations={{ list }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(await screen.findByText("No tasks yet.")).toBeVisible();
+    expect(
+      screen.getByText("Add one and it appears here and on the tasks list."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "New task" })).toBeVisible();
+  });
+
+  it("keeps the journal's own single-line empty copy instead of the generic sentence", async () => {
+    const list = entityList.list.withTransport(async () => ({
+      items: [],
+      meta: { pageIndex: 0, pageSize: 50, totalCount: 0, sums: {} },
+    }));
+    render(
+      <EntityRelationTable
+        plan={planFor("planting", "garden-history")}
+        recordId={testShortcode("planting", "PLT-TEST")}
+        title="Journal"
+        emptyLabel="Nothing logged yet — the first entry starts the journal."
+        operations={{ list }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      await screen.findByText(
+        "Nothing logged yet — the first entry starts the journal.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/No .* yet\./)).toBeNull();
   });
 
   // Regression: an ingredient's products section crashed on a product row
@@ -133,9 +210,9 @@ describe("EntityRelationTable", () => {
     }));
     render(
       <EntityRelationTable
-        entity="ingredient"
-        section={relationSection("ingredient", "products")}
+        plan={planFor("ingredient", "products")}
         recordId={testShortcode("ingredient", "ING-TEST")}
+        title="Products"
         operations={{ list }}
       />,
       { wrapper: harness.wrapper },

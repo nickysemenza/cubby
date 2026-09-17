@@ -49,6 +49,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   bulkActions,
   onInspectRow,
   includeCatalogActions,
+  selectable,
   deleteEmptyLabel,
   selectionScope,
 }: {
@@ -59,6 +60,8 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   bulkActions?: BulkActionsConfig<TData>;
   onInspectRow?: (row: { id?: string; original: TData }) => void;
   includeCatalogActions?: boolean;
+  /** See `useListBulkActions`: no checkbox column or bulk bar, row menu kept. */
+  selectable?: boolean;
   deleteEmptyLabel?: (row: TData) => string;
   selectionScope: (tableState: TableStateReturn) => SelectionScope;
 }) {
@@ -78,6 +81,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     additionalActions,
     onInspectRow,
     includeCatalogActions,
+    selectable,
   });
   const defaultSort = defaultSortFor(entity);
   // The manifest declares direction alongside the field, so a name-sorted

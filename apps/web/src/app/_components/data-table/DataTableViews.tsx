@@ -41,14 +41,52 @@ interface SavedViewsMenuProps {
 }
 
 /**
- * Saved-view menu for a list table. Renders nothing for an entity with no
- * declared views, so every other table is untouched.
+ * Applies a declared view's exact layout onto live table state.
  *
- * Applying a view sets table STATE. `useTableState` writes that controlled
- * state through to the URL, while external navigation is reconciled back into
- * the table. That keeps views, shared links, and Back/Forward equivalent.
+ * A view's layout is source-controlled (`view-manifest.ts`), not user input —
+ * trust a non-empty slice as-is, falling back to the table's own computed
+ * default for whichever slice the view leaves empty. `withLockedEndLast`
+ * still guards the one invariant a view author could get wrong: the
+ * row-actions menu never leaves the trailing edge.
  */
-export function DataTableViews<TData extends RowData>({
+function applyTableLayout<TData extends RowData>(
+  table: Table<TData>,
+  savedLayout: SavedLayout,
+) {
+  const defaults = table.options.meta?.defaultLayout;
+  if (!defaults) return;
+  table.setColumnOrder(
+    savedLayout.columnOrder.length > 0
+      ? withLockedEndLast(savedLayout.columnOrder)
+      : defaults.columnOrder,
+  );
+  table.setColumnPinning({
+    start:
+      savedLayout.columnPinning.start.length > 0
+        ? savedLayout.columnPinning.start
+        : defaults.columnPinning.start,
+    end:
+      savedLayout.columnPinning.end.length > 0
+        ? withLockedEndLast(savedLayout.columnPinning.end)
+        : defaults.columnPinning.end,
+  });
+  table.setColumnVisibility({
+    ...defaults.columnVisibility,
+    ...savedLayout.columnVisibility,
+  });
+  table.setColumnSizing(
+    Object.keys(savedLayout.columnSizing).length > 0
+      ? savedLayout.columnSizing
+      : defaults.columnSizing,
+  );
+}
+
+/**
+ * The same table-backed saved views, as bare menu items rather than a
+ * standalone trigger — the `Actions ▾` menu (`data-table-toolbar.tsx`)
+ * nests this inside its own `Saved views ▸` submenu.
+ */
+export function TableSavedViewsMenuItems<TData extends RowData>({
   table,
   entity,
 }: DataTableViewsProps<TData>) {
@@ -58,52 +96,20 @@ export function DataTableViews<TData extends RowData>({
   const { columnFilters, sorting } = table.state;
 
   return (
-    <SavedViewsMenu
+    <SavedViewsMenuItems
       entity={entity}
       columnFilters={columnFilters}
       sorting={sorting}
       onApplyFilters={(filters) => table.setColumnFilters(filters)}
       onApplySort={(sort) => table.setSorting(sort)}
-      onApplyLayout={(savedLayout) => {
-        const defaults = table.options.meta?.defaultLayout;
-        if (!defaults) return;
-        // A view's layout is source-controlled (`view-manifest.ts`), not user
-        // input — trust a non-empty slice as-is, falling back to the table's
-        // own computed default for whichever slice the view leaves empty.
-        // `withLockedEndLast` still guards the one invariant a view author
-        // could get wrong: the row-actions menu never leaves the trailing edge.
-        table.setColumnOrder(
-          savedLayout.columnOrder.length > 0
-            ? withLockedEndLast(savedLayout.columnOrder)
-            : defaults.columnOrder,
-        );
-        table.setColumnPinning({
-          start:
-            savedLayout.columnPinning.start.length > 0
-              ? savedLayout.columnPinning.start
-              : defaults.columnPinning.start,
-          end:
-            savedLayout.columnPinning.end.length > 0
-              ? withLockedEndLast(savedLayout.columnPinning.end)
-              : defaults.columnPinning.end,
-        });
-        table.setColumnVisibility({
-          ...defaults.columnVisibility,
-          ...savedLayout.columnVisibility,
-        });
-        table.setColumnSizing(
-          Object.keys(savedLayout.columnSizing).length > 0
-            ? savedLayout.columnSizing
-            : defaults.columnSizing,
-        );
-      }}
+      onApplyLayout={(savedLayout) => applyTableLayout(table, savedLayout)}
       onResetPage={() => table.setPageIndex(0)}
     />
   );
 }
 
-/** Saved-view chooser decoupled from TanStack so dashboards can share it. */
-export function SavedViewsMenu({
+/** The saved-view rows shared by the standalone menu and the `Actions ▾` submenu. */
+function SavedViewsMenuItems({
   entity,
   columnFilters,
   sorting,
@@ -125,6 +131,33 @@ export function SavedViewsMenu({
   };
 
   return (
+    <DropdownMenuGroup>
+      <DropdownMenuLabel>Saved views</DropdownMenuLabel>
+      {views.map((view) => {
+        const active = isViewActive(view, columnFilters, sorting);
+        return (
+          <DropdownMenuItem key={view.id} onClick={() => applyView(view)}>
+            <Check
+              className={active ? "size-3.5" : "size-3.5 text-transparent"}
+            />
+            <Stack gap="tight">
+              <span>{view.label}</span>
+              <span className="text-xs text-muted-foreground">
+                {view.description}
+              </span>
+            </Stack>
+          </DropdownMenuItem>
+        );
+      })}
+    </DropdownMenuGroup>
+  );
+}
+
+/** Saved-view chooser decoupled from TanStack so dashboards can share it. */
+export function SavedViewsMenu(props: SavedViewsMenuProps) {
+  if (viewsForEntity(props.entity).length === 0) return null;
+
+  return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
@@ -139,25 +172,7 @@ export function SavedViewsMenu({
         Saved views
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[240px]">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Saved views</DropdownMenuLabel>
-          {views.map((view) => {
-            const active = isViewActive(view, columnFilters, sorting);
-            return (
-              <DropdownMenuItem key={view.id} onClick={() => applyView(view)}>
-                <Check
-                  className={active ? "size-3.5" : "size-3.5 text-transparent"}
-                />
-                <Stack gap="tight">
-                  <span>{view.label}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {view.description}
-                  </span>
-                </Stack>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuGroup>
+        <SavedViewsMenuItems {...props} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -173,12 +173,11 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     await expect(
       page.getByText("First harvest from this planting", { exact: true }),
     ).toBeVisible();
-    // The remaining lifecycle verbs sit behind the command strip's overflow.
-    await page.getByRole("button", { name: "More actions" }).click();
+    // Registry verbs render inline on the plate at desktop width — no
+    // overflow popover to open first.
     await expect(
-      page.getByRole("menuitem", { name: "Move some seedlings..." }),
+      page.getByRole("button", { name: "Move some seedlings..." }),
     ).toBeVisible();
-    await page.keyboard.press("Escape");
 
     const plantingUrl = page.url();
     const currentPlanting = await page.request.get(

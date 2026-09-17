@@ -37,7 +37,7 @@ function ToggleGroup({
       data-spacing={spacing}
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
-        "rounded-none data-[size=sm]:rounded-none group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))]",
+        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] data-[spacing=0]:overflow-hidden data-[spacing=0]:rounded-md data-[spacing=0]:data-[variant=outline]:border data-[spacing=0]:data-[variant=outline]:border-border",
         className
       )}
       {...props}
@@ -65,7 +65,9 @@ function ToggleGroupItem({
       data-size={context.size || size}
       data-spacing={context.spacing}
       className={cn(
-        "group-data-[spacing=0]/toggle-group:rounded-none group-data-[spacing=0]/toggle-group:px-2 group-data-[spacing=0]/toggle-group:first:rounded-l-none group-data-[spacing=0]/toggle-group:last:rounded-r-none shrink-0 focus:z-10 focus-visible:z-10 group-data-[spacing=0]/toggle-group:data-[variant=outline]:border-l-0 group-data-[spacing=0]/toggle-group:data-[variant=outline]:first:border-l",
+        // A spacing-0 group is one bordered segment: the group draws the
+        // outer border and radius, items draw only the hairline between them.
+        "shrink-0 focus:z-10 focus-visible:z-10 group-data-[spacing=0]/toggle-group:rounded-none group-data-[spacing=0]/toggle-group:data-[variant=outline]:border-0 group-data-[spacing=0]/toggle-group:data-[variant=outline]:border-l group-data-[spacing=0]/toggle-group:data-[variant=outline]:first:border-l-0",
         toggleVariants({
           variant: context.variant || variant,
           size: context.size || size,

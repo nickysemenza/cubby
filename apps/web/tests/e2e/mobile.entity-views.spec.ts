@@ -2,13 +2,14 @@ import { seedRecordListDisplayPrerequisite } from "./e2e-fixtures";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("display settings stay operable inside the phone viewport", async ({
-  page,
-}) => {
+test("columns stay operable inside the phone viewport", async ({ page }) => {
   await gotoAuthenticatedPage(page, "/products");
-  await page.getByRole("button", { name: "Display" }).click();
+  // The phone band's `Filter` sheet carries Columns in its footer — there is
+  // no standalone Display/Columns trigger in the page-mode phone band.
+  await page.getByRole("button", { name: "Filter" }).click();
+  await page.getByRole("button", { name: "Columns" }).click();
 
-  const settings = page.getByRole("dialog", { name: "Display settings" });
+  const settings = page.getByRole("dialog", { name: "Columns" });
   await expect(settings).toBeInViewport();
   const priceRow = settings.locator('[data-column-id="price"]');
   await priceRow.scrollIntoViewIfNeeded();

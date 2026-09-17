@@ -41,10 +41,18 @@ export type Filter = {
 
 export type FilterBarField = FilterFieldConfig;
 
-function operatorFor(field: FilterBarField): string {
+/** The operator a bare `values[]` implies for a field's declared type. */
+export function operatorFor(field: FilterBarField): string {
   if (field.type === "text") return "contains";
   if (field.type === "multiselect") return "is_any_of";
   return "is";
+}
+
+/** A filter is active (counts toward "Clear N", tints its chip) once it has a real value. */
+export function hasFilterValue(filter: Filter): boolean {
+  return (
+    filter.values.length > 0 && filter.values.some((value) => value !== "")
+  );
 }
 
 export function filterStateToBarFilters(

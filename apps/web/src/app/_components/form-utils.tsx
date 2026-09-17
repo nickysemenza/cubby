@@ -22,8 +22,10 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button, type buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
+import { useDialogHeaderActionsRegistration } from "~/components/ui/responsive-dialog";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
+import { useIsMobile } from "~/hooks/useMobile";
 import { FLAGS } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 
@@ -172,6 +174,89 @@ function useSubmitSuccessToast(
   }, [isPending, failed, successMessage]);
 }
 
+const FORM_FOOTER_CLASS = {
+  sticky:
+    "sticky bottom-[calc(var(--app-chrome-bottom)+0.5rem)] z-20 flex items-center gap-2 border border-[var(--border)] bg-card px-2 py-2 md:bottom-4",
+  dialog:
+    "flex shrink-0 flex-col-reverse gap-2 border-t bg-popover px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:pb-3",
+  inline: "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+} as const;
+
+function formFooterClassName(
+  stickyFooter: boolean,
+  footerMode: "inline" | "dialog",
+) {
+  return stickyFooter
+    ? FORM_FOOTER_CLASS.sticky
+    : FORM_FOOTER_CLASS[footerMode];
+}
+
+/**
+ * Phone edit-dialog vocabulary (DESIGN.md): a dialog-mode form on phone hands
+ * its Cancel/Submit to the enclosing ResponsiveDialog's 52px sheet header
+ * instead of rendering its own footer row. `formId` lets the header's submit
+ * button target this `<form>` via the native `form` attribute even though it
+ * renders outside this subtree. Returns whether the header owns the actions.
+ */
+function useDialogHeaderFormActions({
+  formId,
+  submitText,
+  isPending,
+  onCancel,
+}: {
+  formId: string;
+  submitText: string;
+  isPending: boolean;
+  onCancel: (() => void) | undefined;
+}): boolean {
+  const isMobile = useIsMobile();
+  const registerHeaderActions = useDialogHeaderActionsRegistration();
+  const useHeaderActions = isMobile && registerHeaderActions != null;
+
+  // `onCancel` reads through a ref rather than sitting in the effect's
+  // dependency array — callers routinely pass a fresh closure every render
+  // (e.g. `onCancel={close}` where `close` is a plain function literal), and
+  // depending on its identity would re-register — and re-render the
+  // enclosing ResponsiveDialog — every render, an infinite update loop.
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
+  useEffect(() => {
+    if (!useHeaderActions || !registerHeaderActions) return;
+    registerHeaderActions({
+      cancel: {
+        label: "Cancel",
+        onClick: () => onCancelRef.current?.(),
+        disabled: isPending,
+      },
+      submit: {
+        label: submitText,
+        type: "submit",
+        form: formId,
+        disabled: isPending,
+      },
+    });
+    return () => registerHeaderActions(null);
+  }, [useHeaderActions, registerHeaderActions, isPending, submitText, formId]);
+
+  return useHeaderActions;
+}
+
+/**
+ * The sticky bar's live tally (a running total, a count) survives the move to
+ * sheet-header actions as a plain line at the end of the form.
+ */
+function FormTallyLine({
+  stickyFooter,
+  footerStart,
+}: {
+  stickyFooter: boolean;
+  footerStart: ReactNode;
+}) {
+  if (!stickyFooter || !footerStart) return null;
+  return <div className="text-xs text-muted-foreground">{footerStart}</div>;
+}
+
 // Form wrapper component with common layout and buttons
 export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   form,
@@ -211,6 +296,22 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   // when the devtools are bundled (dev) AND the flag is on (see flags.ts).
   const formDevtoolsEnabled = FLAGS.formDevtools;
   useSubmitSuccessToast(isPending, error, successMessage);
+
+  const formId = useId();
+  const submitText = isPending
+    ? getPendingButtonText(submitButtonText)
+    : submitButtonText;
+  // Any form inside a phone ResponsiveDialog hands its actions to the sheet
+  // header: dialog-mode and sticky-bar forms alike (the product form opens
+  // in a dialog with its sticky bar). The registration context only exists
+  // inside a ResponsiveDialog, so page forms are unaffected.
+  const useHeaderActions = useDialogHeaderFormActions({
+    formId,
+    submitText,
+    isPending,
+    onCancel,
+  });
+
   return (
     <FormProvider {...form}>
       {FORM_DEVTOOLS_BUNDLED && formDevtoolsEnabled ? (
@@ -220,6 +321,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
       ) : null}
       <Stack
         as="form"
+        id={formId}
         gap={footerMode === "dialog" ? null : "sm"}
         className={cn(footerMode === "dialog" && "min-h-0 flex-1")}
         onSubmit={(e: React.FormEvent<HTMLElement>) => {
@@ -243,7 +345,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
         {footerMode === "dialog" ? (
           <div
             data-slot="dialog-form-body"
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4"
+            className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 pt-1 pb-4"
           >
             {children}
             <FormStatusBanner error={error} />
@@ -258,51 +360,53 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
         {/* flex-col-reverse: primary submit sits at the bottom (thumb reach)
             on mobile, full-width; reverts to submit-left/cancel-right on sm+.
             Sticky mode floats the actions in a chunky ledger bar that stays in
-            reach on long forms (offset above the mobile bottom nav). */}
-        <div
-          data-slot={
-            footerMode === "dialog" ? "dialog-form-footer" : "form-footer"
-          }
-          className={cn(
-            stickyFooter
-              ? "sticky bottom-[calc(var(--app-chrome-bottom)+0.5rem)] z-20 flex items-center gap-2 border border-[var(--border)] bg-card px-2 py-2 md:bottom-4"
-              : footerMode === "dialog"
-                ? "flex shrink-0 flex-col-reverse gap-2 border-t bg-popover p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:pb-4"
-                : "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-          )}
-        >
-          {stickyFooter && footerStart && (
-            <div className="min-w-0 flex-1">{footerStart}</div>
-          )}
+            reach on long forms (offset above the mobile bottom nav). On phone,
+            dialog mode hands these buttons to the ResponsiveDialog's sheet
+            header instead (see `useHeaderActions` above) and renders nothing
+            here — the phone edit dialog has no footer. */}
+        {useHeaderActions ? (
+          <FormTallyLine
+            stickyFooter={stickyFooter}
+            footerStart={footerStart}
+          />
+        ) : (
           <div
-            className={cn(
-              stickyFooter
-                ? "flex shrink-0 flex-row-reverse items-center gap-2"
-                : "contents",
-            )}
+            data-slot={
+              footerMode === "dialog" ? "dialog-form-footer" : "form-footer"
+            }
+            className={formFooterClassName(stickyFooter, footerMode)}
           >
-            <Button
-              type="submit"
-              disabled={isPending}
-              variant={submitButtonVariant}
-              className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
+            {stickyFooter && footerStart && (
+              <div className="min-w-0 flex-1">{footerStart}</div>
+            )}
+            <div
+              className={cn(
+                stickyFooter
+                  ? "flex shrink-0 flex-row-reverse items-center gap-2"
+                  : "contents",
+              )}
             >
-              {isPending && <Spinner size="sm" />}
-              {isPending
-                ? getPendingButtonText(submitButtonText)
-                : submitButtonText}
-            </Button>
-            <Button
-              type="button"
-              variant={stickyFooter ? "ghost" : "outline"}
-              onClick={onCancel}
-              disabled={isPending}
-              className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
-            >
-              Cancel
-            </Button>
+              <Button
+                type="submit"
+                disabled={isPending}
+                variant={submitButtonVariant}
+                className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
+              >
+                {isPending && <Spinner size="sm" />}
+                {submitText}
+              </Button>
+              <Button
+                type="button"
+                variant={stickyFooter ? "ghost" : "outline"}
+                onClick={onCancel}
+                disabled={isPending}
+                className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </Stack>
     </FormProvider>
   );

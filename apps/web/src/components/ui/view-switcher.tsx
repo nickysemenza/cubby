@@ -56,9 +56,12 @@ export function ChoiceSwitcher<T extends string>({
             // is 24px — well under half a finger.
             className="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
           >
+            {/* Icon-only below md (touch, no room for the label); text-only at
+                md+ — the band's segmented views read as words on desktop, not
+                a row of unlabelled glyphs. */}
             {Icon && (
               <Icon
-                className={cn("size-4", compactOnMobile ? "md:mr-2" : "mr-2")}
+                className={cn("size-4", compactOnMobile ? "mr-2 md:hidden" : "mr-2")}
               />
             )}
             <span className={cn(compactOnMobile && "max-md:sr-only")}>

@@ -45,7 +45,7 @@ test("nutrition matrix shares URL basis, preserves partial ranges and zero, and 
     table.getByRole("columnheader", { name: /Calcium/ }),
   ).toBeVisible();
   await expect(contributions).toContainText("25 mg–50 mg known · partial");
-  await page.getByRole("button", { name: /^Display/ }).click();
+  await page.getByRole("button", { name: /^Columns/ }).click();
   await expect(
     page.getByRole("button", { name: "Show Zinc (mg)", exact: true }),
   )

@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from "react";
+import { Fragment, type FC, type ReactNode } from "react";
 
 import { Stack } from "~/components/layout";
 
@@ -28,16 +28,31 @@ export const BasicInfo: FC<BasicInfoProps> = ({
   return (
     <Stack gap="sm">
       {header}
-      <div className="basic-info-ledger">
+      <div
+        className={
+          // Facts grid: a real two-column CSS grid (not one grid per row) so
+          // every label lines up, sentence-case secondary text rather than
+          // an eyebrow, and no per-row hairline. Phone widens the label
+          // column and the type a step, per DESIGN.md's fact-grid sentence.
+          "basic-info-ledger grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px]/[18px] max-md:grid-cols-[6.5rem_minmax(0,1fr)] max-md:gap-y-2.5 max-md:text-sm"
+        }
+      >
         {visibleFields.map((field) => (
-          <div
-            key={field.label}
-            className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-baseline gap-2 border-b border-border py-1.5" /* tight */
-          >
-            <span className="min-w-0 eyebrow">{field.label}</span>
-            <span className="min-w-0 text-xs">{field.value}</span>
-            {field.filterAction}
-          </div>
+          <Fragment key={field.label}>
+            <span
+              data-slot="basic-info-label"
+              className="min-w-0 text-muted-foreground"
+            >
+              {field.label}
+            </span>
+            {/* A value is often one inline-flex control (an edit trigger); as a
+                flex child its min-width is its content, so it has to be told
+                to shrink or a long note escapes the rail. */}
+            <span className="flex min-w-0 items-center gap-2 break-words [&>*]:max-w-full [&>*]:min-w-0">
+              {field.value}
+              {field.filterAction}
+            </span>
+          </Fragment>
         ))}
       </div>
       {footer}
