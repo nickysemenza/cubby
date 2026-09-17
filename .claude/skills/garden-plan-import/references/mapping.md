@@ -4,7 +4,7 @@
 
 | Plan concept | Field | Notes |
 |---|---|---|
-| Bed name ("Bed 3", "the north bed") | `name`, `type: "bed"` | Search before creating — beds are usually already in Cubby from a prior season. |
+| Bed name ("Bed 3", "the north bed") | `name`, `type: "bed"` | Search before creating — beds are usually already in Cubby from a prior season. Leave `type` null when the Location links a Product. |
 | Pot / container | `type: "planter"` | |
 | Open ground / yard / tree perimeter | `type: "area"` | |
 | Soil condition, sun exposure, drainage notes | `notes` | Generic textarea; this is the only garden-specific text field left on Location. |

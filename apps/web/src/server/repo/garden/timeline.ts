@@ -12,7 +12,7 @@ import {
   TIMELINE_ROW_CAP,
 } from "~/server/entity-timeline/default-timeline";
 import {
-  guideSowMonthsFor,
+  guideBandMonthsFor,
   resolveGardenGuideKey,
 } from "~/server/garden-guides/windows";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -57,13 +57,14 @@ const cohortPlantingIds = async (
 };
 
 /**
- * One extra lifecycle row per planting in the cohort, for the recommended
- * sow window (household microclimate, falling back to the regional one) in
- * the current year — only when the crop has a guide with a sow/direct-sow
- * window. `confident: false` since this is a recommendation, not a recorded
- * date.
+ * One extra lifecycle row per planting in the cohort per guide method that
+ * has a window — recommended sow and/or transplant (household microclimate,
+ * falling back to the regional one) in the current year. A crop such as
+ * tomato has a transplant window here but no sow window, so the transplant
+ * band is the only one it gets. `confident: false` since this is a
+ * recommendation, not a recorded date.
  */
-const guideSowRows = async (
+const guideRows = async (
   context: EntityKernelContext,
   plantingIds: readonly PlantingId[],
 ): Promise<EntityTimelineRow[]> => {
@@ -81,36 +82,40 @@ const guideSowRows = async (
   const year = Number(householdLocalDate().slice(0, 4));
   const out: EntityTimelineRow[] = [];
   for (const row of rows) {
-    const months = guideSowMonthsFor(resolveGardenGuideKey(row.gardenGuideKey));
-    if (!months || months.length === 0) continue;
-    const min = Math.min(...months);
-    const max = Math.max(...months);
-    out.push({
-      id: `guide-sow:${parseShortcodeFor("planting", row.shortcode)}`,
-      name: `Recommended sow · ${row.ingredientName}`,
-      imageUrl: null,
-      intervals: [
-        {
-          start: `${year}-${pad2(min)}-01`,
-          end: `${year}-${pad2(max)}-${pad2(lastDayOfMonth(year, max))}`,
-          confident: false,
-        },
-      ],
-      markers: [],
-    });
+    const bands = guideBandMonthsFor(resolveGardenGuideKey(row.gardenGuideKey));
+    const id = parseShortcodeFor("planting", row.shortcode);
+    for (const method of ["sow", "transplant"] as const) {
+      const months = bands[method];
+      if (!months || months.length === 0) continue;
+      const min = Math.min(...months);
+      const max = Math.max(...months);
+      out.push({
+        id: `guide-${method}:${id}`,
+        name: `Recommended ${method} · ${row.ingredientName}`,
+        imageUrl: null,
+        intervals: [
+          {
+            start: `${year}-${pad2(min)}-01`,
+            end: `${year}-${pad2(max)}-${pad2(lastDayOfMonth(year, max))}`,
+            confident: false,
+          },
+        ],
+        markers: [],
+      });
+    }
   }
   return out;
 };
 
 /** `resources.planting.timeline`, bound through `ports.timeline`: wraps the
  * shared default (audit events + the sowed/transplanted/finished lifecycle
- * rows) and appends one recommended-sow-window row per planting in scope. */
+ * rows) and appends the recommended sow/transplant rows per planting in scope. */
 export const plantingTimeline: EntityTimelineImplementation<
   "planting"
 > = async (context, input) => {
   const base = await defaultTimeline(context, input);
   const plantingIds = await cohortPlantingIds(context, input);
-  const guideRows = await guideSowRows(context, plantingIds);
-  if (guideRows.length === 0) return base;
-  return { ...base, rows: [...(base.rows ?? []), ...guideRows] };
+  const bands = await guideRows(context, plantingIds);
+  if (bands.length === 0) return base;
+  return { ...base, rows: [...(base.rows ?? []), ...bands] };
 };

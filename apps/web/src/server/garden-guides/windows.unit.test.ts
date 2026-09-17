@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { guideWindowsFor } from "./windows";
+import { guideBandMonthsFor, guideWindowsFor } from "./windows";
 
 describe("guideWindowsFor", () => {
   it.each([
@@ -19,5 +19,17 @@ describe("guideWindowsFor", () => {
 
   it("returns null on both sides for a crop with no guide", () => {
     expect(guideWindowsFor(null)).toEqual({ sow: null, transplant: null });
+  });
+});
+
+describe("guideBandMonthsFor", () => {
+  // The timeline draws one band per method that has a window, so a
+  // transplant-only crop still gets a band.
+  it.each([
+    ["tomato" as const, { sow: null, transplant: [4, 5, 6] }],
+    ["leek" as const, { sow: [2, 3, 4], transplant: [2, 3, 4] }],
+    [null, { sow: null, transplant: null }],
+  ])("resolves %s to %o", (key, expected) => {
+    expect(guideBandMonthsFor(key)).toEqual(expected);
   });
 });
