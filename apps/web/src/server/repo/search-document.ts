@@ -1,5 +1,6 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
+  embeddableEntities,
   type SearchableEntity,
   searchableEntities,
 } from "@cubby/schemas/search";
@@ -15,7 +16,6 @@ import {
   type SearchableEntityText,
 } from "~/server/repo/entity-embedding";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
-import { embeddingTextHash } from "~/server/semantic/hash";
 import { normalizeSearchText } from "~/server/semantic/text";
 
 interface SearchDocumentSource {
@@ -645,9 +645,21 @@ const SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE = 250;
 const normalizedTextSql = (column: SQL): SQL =>
   sql`lower(regexp_replace(btrim(${column}), '\\s+', ' ', 'g'))`;
 
+// Bound as individual parameters, joined by a literal comma — never a JS
+// array interpolated directly into `IN (...)`, which drizzle would render as
+// a row constructor rather than a list (the `no-unsafe-sql-array-interpolation`
+// Oxlint rule guards this).
+const embeddableEntityTypesSql = sql.join(
+  embeddableEntities.map((entityType) => sql`${entityType}`),
+  sql`, `,
+);
+
 /**
- * Live documents whose configured vector is missing or was computed from
- * different text. This predicate is shared by the awaiting-work count, the
+ * Live, embeddable documents whose configured vector is missing or was
+ * computed from different text. Restricted to `embeddableEntities`: the
+ * three financial entities are searchable but never get an `EntityEmbedding`
+ * row (see `entity-manifest.ts`), so without this filter they would show up
+ * here forever. This predicate is shared by the awaiting-work count, the
  * "Settle now" selection, and the cron assertion so they cannot disagree.
  */
 const unembeddedDocumentsSql = (config: SemanticEmbeddingConfig): SQL => sql`
@@ -660,6 +672,7 @@ const unembeddedDocumentsSql = (config: SemanticEmbeddingConfig): SQL => sql`
     AND ee.dimensions = ${config.dimensions}
     AND ee."deletedAt" IS NULL
   WHERE sd."deletedAt" IS NULL
+    AND sd."entityType" IN (${embeddableEntityTypesSql})
     AND (ee.id IS NULL
       OR ${normalizedTextSql(sql`ee."embeddingText"`)} <> ${normalizedTextSql(sql`sd."semanticText"`)})
 `;
@@ -714,96 +727,6 @@ export type SearchDocumentCursor = {
   entityType: SearchableEntity;
   entityId: string;
 };
-
-export type StaleSearchDocumentEmbeddingText = SearchableEntityText & {
-  /** Exact normalized text identity checked again before provider work. */
-  expectedEmbeddingHash: string;
-};
-
-/**
- * One keyset page of the embedding maintenance worklist.
- *
- * The query deliberately pages every configured document. An exact-text SQL
- * comparison is not a safe stale predicate: a model/configuration hash can be
- * wrong while its text remains identical. The exact normalized hash is checked
- * in JS, after no more than 250 rows have crossed the network.
- */
-export async function getStaleSearchDocumentEmbeddingTextPage(
-  db: Database | DrizzleTransaction,
-  entityTypes: SearchableEntity[],
-  config: SemanticEmbeddingConfig,
-  options: {
-    cursor?: SearchDocumentCursor;
-    pageSize?: number;
-  } = {},
-): Promise<{
-  rows: StaleSearchDocumentEmbeddingText[];
-  nextCursor: SearchDocumentCursor | null;
-}> {
-  if (entityTypes.length === 0) return { rows: [], nextCursor: null };
-  const pageSize = Math.min(
-    Math.max(options.pageSize ?? SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE, 1),
-    SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE,
-  );
-  const cursor = options.cursor
-    ? sql`AND (sd."entityType", sd."entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
-    : sql``;
-  const result = await unwrapDb(db).execute<{
-    entityType: SearchableEntity;
-    entityId: string;
-    embeddingText: string;
-    embeddingHash: string | null;
-  }>(sql`
-    SELECT sd."entityType", sd."entityId"::text AS "entityId",
-      sd."semanticText" AS "embeddingText", ee."embeddingHash"
-    FROM "SearchDocument" sd
-    LEFT JOIN "EntityEmbedding" ee
-      ON ee."entityType" = sd."entityType"
-      AND ee."entityId" = sd."entityId"
-      AND ee.provider = ${config.provider}
-      AND ee.model = ${config.model}
-      AND ee.dimensions = ${config.dimensions}
-      AND ee."deletedAt" IS NULL
-    WHERE sd."deletedAt" IS NULL
-      AND sd."entityType" IN (${sql.join(
-        entityTypes.map((entityType) => sql`${entityType}`),
-        sql`, `,
-      )})
-      ${cursor}
-    ORDER BY sd."entityType", sd."entityId"
-    LIMIT ${pageSize}
-  `);
-
-  const rows: StaleSearchDocumentEmbeddingText[] = [];
-  for (const row of result.rows) {
-    const expectedEmbeddingHash = await embeddingTextHash({
-      entityType: row.entityType,
-      provider: config.provider,
-      model: config.model,
-      dimensions: config.dimensions,
-      text: normalizeSearchText(row.embeddingText),
-    });
-    if (row.embeddingHash !== expectedEmbeddingHash) {
-      rows.push({
-        entityType: row.entityType,
-        entityId: row.entityId,
-        embeddingText: row.embeddingText,
-        expectedEmbeddingHash,
-      });
-    }
-  }
-  const last = result.rows.at(-1);
-  return {
-    rows,
-    nextCursor:
-      last && result.rows.length === pageSize
-        ? {
-            entityType: last.entityType,
-            entityId: last.entityId,
-          }
-        : null,
-  };
-}
 
 /**
  * Missing, orphaned, and stale rows for cutover/repair checks.

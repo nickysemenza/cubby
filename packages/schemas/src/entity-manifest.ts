@@ -43,6 +43,8 @@ export const entityDescriptor = z.object({
    */
   displayImages: z.boolean(),
   searchable: z.boolean(),
+  /** Whether this searchable entity also gets an `EntityEmbedding` vector. */
+  embeddable: z.boolean(),
   countable: z.boolean(),
   countFilter: z.enum(["recipeIdNull"]).optional(),
   relationships: z.array(entityRelationshipSchema).readonly(),
@@ -182,6 +184,7 @@ export const logoEntities: readonly LogoEntity[] = Object.freeze(
   ),
 );
 export const searchableEntities = entitiesWithTrait("searchable");
+export const embeddableEntities = entitiesWithTrait("embeddable");
 export const countableEntities = entitiesWithTrait("countable");
 
 type EntityWithBrowserRoute = {
@@ -212,6 +215,7 @@ export type BrowserRoutedEntity = EntityWithBrowserRoute;
 export type AuditableEntity = (typeof auditableEntities)[number];
 export type CountableEntity = (typeof countableEntities)[number];
 export type SearchableEntity = (typeof searchableEntities)[number];
+export type EmbeddableEntity = (typeof embeddableEntities)[number];
 
 export const isAuditableEntity = (entity: Entity): entity is AuditableEntity =>
   entityManifest[entity].auditable;

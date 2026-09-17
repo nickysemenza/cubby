@@ -140,6 +140,9 @@ describe("mutation side effects integration", () => {
 
     // Tasks/expenses embed their project's name, so a rename must fan out
     // (see refreshTrackerEmbeddingsForProject / findTrackerEmbeddingRefsForProjects).
+    // Expense is searchable but not embeddable (financial entity), so its
+    // SearchDocument still refreshes but no `entity-embedding.refresh` task is
+    // published for it — see `publishEmbeddingRefreshes`.
     await updateProject(
       ctx.db,
       project.id,
@@ -162,9 +165,12 @@ describe("mutation side effects integration", () => {
       expect.arrayContaining([
         { entityType: "project", entityId: projectId },
         { entityType: "task", entityId: taskId },
-        { entityType: "expense", entityId: expenseId },
       ]),
     );
+    expect(refs).not.toContainEqual({
+      entityType: "expense",
+      entityId: expenseId,
+    });
   });
 
   it("bulk wave publishes exactly one entity-embedding task list for N entities", async () => {
@@ -231,7 +237,6 @@ describe("mutation side effects integration", () => {
       entityId: product.entityId,
       embeddingText: "product: Manifest deleted embedding",
       config,
-      embedding: Array.from({ length: config.dimensions }, () => 0),
     });
 
     // Embedding cleanup lives in the repo delete cascade (not the mutation

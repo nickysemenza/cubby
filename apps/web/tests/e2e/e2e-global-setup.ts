@@ -15,6 +15,7 @@ async function globalSetup(): Promise<void> {
     .object({
       compatibility_date: z.string(),
       ai: z.json().optional(),
+      vectorize: z.json().optional(),
       queues: z
         .object({ consumers: z.array(z.json()).optional() })
         .loose()
@@ -27,8 +28,12 @@ async function globalSetup(): Promise<void> {
       ),
     );
 
-  // AI has no local binding, and browser acceptance does not own queue delivery.
+  // AI and Vectorize have no local binding (a local Vectorize stub exists but
+  // throws "needs to be run remotely" on every call, which would make
+  // `semanticEmbeddingsConfigured()` lie), and browser acceptance does not own
+  // queue delivery.
   delete e2eConfig.ai;
+  delete e2eConfig.vectorize;
   if (e2eConfig.queues) e2eConfig.queues.consumers = [];
   writeFileSync(
     path.join(webRoot, "dist/server/wrangler.e2e.json"),

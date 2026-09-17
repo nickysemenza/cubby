@@ -109,25 +109,6 @@ export {
 export type { Amount };
 export type Instruction = { text: string };
 
-const pgVector = customType<{
-  data: number[];
-  driverData: string;
-}>({
-  dataType() {
-    return "vector";
-  },
-  toDriver(value) {
-    return JSON.stringify(value);
-  },
-  fromDriver(value) {
-    return value
-      .slice(1, -1)
-      .split(",")
-      .filter(Boolean)
-      .map((v) => Number.parseFloat(v));
-  },
-});
-
 // `tsvector` is maintained by the search-document projection, rather than a
 // generated column, because each document has field-specific weights.
 const pgTsVector = customType<{
@@ -721,7 +702,6 @@ export const entityEmbedding = pgTable(
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     dimensions: integer("dimensions").notNull(),
-    embedding: pgVector("embedding").notNull(),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -741,21 +721,6 @@ export const entityEmbedding = pgTable(
       table.model,
       table.dimensions,
     ),
-    // HNSW nearest-neighbor index. The column is untyped `vector` (dimensions
-    // vary per model config row — prod uses 1536, tests seed 3), and pgvector
-    // only indexes fixed-dimension expressions. So index the cast, and:
-    //   1. findSemanticEntityCandidates must ORDER BY the same
-    //      `embedding::vector(1536)` cast for the planner to use it, and
-    //   2. the index is PARTIAL on `dimensions = 1536` — a non-partial index
-    //      would evaluate `::vector(1536)` on every inserted row and throw
-    //      "expected 1536 dimensions, not 3" on any smaller-dim row (the
-    //      integration tests seed 3-dim vectors). Postgres skips the
-    //      expression for rows failing the predicate, so those inserts pass.
-    //      The query inlines a literal `dimensions = 1536` so the planner can
-    //      prove the predicate and still use the index.
-    index("EntityEmbedding_embedding_hnsw_idx")
-      .using("hnsw", sql`(${table.embedding}::vector(1536)) vector_cosine_ops`)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.dimensions} = 1536`),
   ],
 );
 

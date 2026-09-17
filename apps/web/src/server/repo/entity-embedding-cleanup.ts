@@ -13,7 +13,7 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -41,6 +41,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import type { SearchDocumentCursor } from "~/server/repo/search-document";
 
 async function softDeleteEntityEmbeddingsTx(
   tx: DrizzleTransaction,
@@ -428,4 +429,68 @@ export async function findCommercialEmbeddingRefsForExpenses(
     { entityType: "purchase", entityId: row.purchaseId },
     { entityType: "vendor", entityId: row.vendorId },
   ]);
+}
+
+const RECONCILE_PAGE_SIZE = 500;
+
+/**
+ * One keyset page of `SearchDocument` refs soft-deleted since `since`, for
+ * the daily Vectorize reconcile: each ref's vector is safe to `deleteByIds`.
+ *
+ * includes-deleted: intentionally reads soft-deleted `SearchDocument` rows —
+ * that is the whole point, finding vectors Vectorize should drop.
+ * `EntityEmbedding.deletedAt` cannot stand in for this: an entity that was
+ * embedded but never got a slim `EntityEmbedding` row (create-then-delete
+ * before its first refresh, or a truncated table) has no soft-delete marker
+ * there to find, only in `SearchDocument`.
+ *
+ * DISTINCT on (entityType, entityId) and the NOT EXISTS guard both exist for
+ * the same reason: `SearchDocument_live_entity_key` is a partial unique index
+ * (`WHERE "deletedAt" IS NULL`), so `markSearchDocumentMissing` followed by a
+ * later successful refresh inserts a second, live row for the same entity
+ * rather than reviving the old one — the old row stays soft-deleted forever.
+ * A naive "soft-deleted since X" scan would return that stale row and delete
+ * a live entity's vector. NOT EXISTS excludes any entity that also has a live
+ * twin; DISTINCT collapses the (rarer) case of two soft-deleted rows for one
+ * entity into a single ref.
+ */
+export async function selectRecentlySoftDeletedSearchRefs(
+  db: Database | DrizzleTransaction,
+  options: { since: Date; cursor?: SearchDocumentCursor; limit?: number },
+): Promise<{
+  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  nextCursor: SearchDocumentCursor | null;
+}> {
+  const limit = Math.min(
+    Math.max(options.limit ?? RECONCILE_PAGE_SIZE, 1),
+    RECONCILE_PAGE_SIZE,
+  );
+  const cursor = options.cursor
+    ? sql`AND (sd."entityType", sd."entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
+    : sql``;
+  const result = await unwrapDb(db).execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+  }>(sql`
+    SELECT DISTINCT sd."entityType", sd."entityId"::text AS "entityId"
+    FROM "SearchDocument" sd
+    WHERE sd."deletedAt" > ${options.since}
+      AND NOT EXISTS (
+        SELECT 1 FROM "SearchDocument" live
+        WHERE live."entityType" = sd."entityType"
+          AND live."entityId" = sd."entityId"
+          AND live."deletedAt" IS NULL
+      )
+      ${cursor}
+    ORDER BY sd."entityType", sd."entityId"::text
+    LIMIT ${limit}
+  `);
+  const last = result.rows.at(-1);
+  return {
+    refs: result.rows,
+    nextCursor:
+      last && result.rows.length === limit
+        ? { entityType: last.entityType, entityId: last.entityId }
+        : null,
+  };
 }

@@ -70,6 +70,19 @@
   // back to gateway-REST with AI_GATEWAY_API_KEY. See
   // src/server/clients/ai-gateway.ts + src/server/cf-env.ts.
   "ai": { "binding": "AI" },
+  // Entity embedding vectors. One index per (model, dimensions) — the index's
+  // dimension count is immutable, so a model change is a new index. Only
+  // `entityType` is metadata-indexed (17 values); the slim `EntityEmbedding`
+  // Postgres row keeps the hash/readiness bookkeeping. Create via:
+  //   wrangler vectorize create cubby-openai-text-embedding-3-small-1536 --dimensions=1536 --metric=cosine
+  //   wrangler vectorize create-metadata-index cubby-openai-text-embedding-3-small-1536 --property-name=entityType --type=string
+  // Dev (vite Node) has no binding, so semantic search reports unconfigured.
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "cubby-openai-text-embedding-3-small-1536"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {

@@ -1044,12 +1044,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "embedding": {
-          "name": "embedding",
-          "type": "vector",
-          "primaryKey": false,
-          "notNull": true
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -1158,22 +1152,6 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
-          "with": {}
-        },
-        "EntityEmbedding_embedding_hnsw_idx": {
-          "name": "EntityEmbedding_embedding_hnsw_idx",
-          "columns": [
-            {
-              "expression": "(\"embedding\"::vector(1536)) vector_cosine_ops",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"EntityEmbedding\".\"deletedAt\" IS NULL AND \"EntityEmbedding\".\"dimensions\" = 1536",
-          "concurrently": false,
-          "method": "hnsw",
           "with": {}
         }
       },

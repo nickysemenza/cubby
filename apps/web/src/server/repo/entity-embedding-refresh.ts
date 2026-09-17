@@ -1,7 +1,7 @@
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -131,19 +131,7 @@ export interface EntityEmbeddingUpsert extends SearchableEntityText {
    */
   embeddingHash: string;
   config: SemanticEmbeddingConfig;
-  embedding: number[];
 }
-
-/** One bound `'[…]'::vector` parameter, never an inlined literal. */
-const vectorParam = (embedding: number[]): SQL => {
-  if (
-    embedding.length === 0 ||
-    embedding.some((value) => !Number.isFinite(value))
-  ) {
-    throw new Error("Invalid embedding vector");
-  }
-  return sql`${`[${embedding.join(",")}]`}::vector`;
-};
 
 /**
  * Write one vector only if the projection it was computed for is still the
@@ -164,12 +152,11 @@ export async function upsertEntityEmbeddingIfCurrent(
   const result = await unwrapDb(db).execute<{ entityId: string }>(sql`
     INSERT INTO "EntityEmbedding" (
       "entityType", "entityId", "embeddingText", "embeddingHash",
-      provider, model, dimensions, embedding, "updatedAt"
+      provider, model, dimensions, "updatedAt"
     )
     SELECT sd."entityType", sd."entityId", sd."semanticText",
       ${input.embeddingHash}::text, ${input.config.provider}::text,
-      ${input.config.model}::text, ${input.config.dimensions}::integer,
-      ${vectorParam(input.embedding)}, now()
+      ${input.config.model}::text, ${input.config.dimensions}::integer, now()
     FROM "SearchDocument" sd
     WHERE sd."entityType" = ${input.entityType}
       AND sd."entityId" = ${input.entityId}::uuid
@@ -180,7 +167,6 @@ export async function upsertEntityEmbeddingIfCurrent(
     DO UPDATE SET
       "embeddingText" = EXCLUDED."embeddingText",
       "embeddingHash" = EXCLUDED."embeddingHash",
-      embedding = EXCLUDED.embedding,
       "updatedAt" = now()
     RETURNING "entityId"::text AS "entityId"
   `);
@@ -203,7 +189,6 @@ export async function seedEntityEmbedding(
   db: Database | DrizzleTransaction,
   input: SearchableEntityText & {
     config: SemanticEmbeddingConfig;
-    embedding: number[];
   },
 ): Promise<void> {
   const embeddingHash = await embeddingTextHash({
@@ -236,7 +221,6 @@ export async function seedEntityEmbedding(
     provider: input.config.provider,
     model: input.config.model,
     dimensions: input.config.dimensions,
-    embedding: input.embedding,
     deletedAt: null,
   };
 

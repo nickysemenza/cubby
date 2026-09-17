@@ -3,9 +3,7 @@ import type {
   SearchableEntity,
   SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { searchableEntitySchema } from "@cubby/schemas/search";
-import { and, eq, type SQL, sql } from "drizzle-orm";
-import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { entityEmbedding } from "~/server/db/schema";
@@ -14,12 +12,13 @@ import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { embeddingTextHash } from "~/server/semantic/hash";
 import { normalizeSearchText } from "~/server/semantic/text";
+import type {
+  VectorMatch,
+  VectorStorePort,
+} from "~/server/semantic/vector-store";
 
-export interface EntityEmbeddingCandidate {
-  entityType: SearchableEntity;
-  entityId: string;
-  similarity: number;
-}
+/** Same shape as {@link VectorMatch}; aliased so repo callers don't import the store's type directly. */
+export type EntityEmbeddingCandidate = VectorMatch;
 
 /** Compare one entity's current document text to its configured stored vector. */
 export async function getEntityEmbeddingReadiness(
@@ -52,166 +51,39 @@ export async function getEntityEmbeddingReadiness(
   return embedding.embeddingHash === expectedHash ? "ready" : "stale";
 }
 
-/**
- * The query vector as ONE bound parameter, cast in SQL — not `sql.raw`, which
- * inlined ~30 KB of literal into the statement text so every search paid a
- * fresh parse and plan. Verified on production that binding it keeps the
- * `EntityEmbedding_embedding_hnsw_idx` index scan (1.17ms); the `dimensions`
- * literal beside it must still be raw, so the planner can prove that index's
- * partial predicate.
- */
-const vectorLiteral = (embedding: number[]): SQL => {
-  if (
-    embedding.length === 0 ||
-    embedding.some((value) => !Number.isFinite(value))
-  ) {
-    throw new Error("Invalid embedding vector");
-  }
-  return sql`${`[${embedding.join(",")}]`}::vector`;
-};
-
-const unparsedSemanticErrorSchema = z.unknown();
-const postgresErrorDetailsSchema = z.object({
-  code: z.string().optional(),
-  severity: z.string().optional(),
-  detail: z.string().optional(),
-  hint: z.string().optional(),
-  routine: z.string().optional(),
-});
-const semanticErrorCarrierSchema = z.object({
-  name: z.string().optional(),
-  cause: postgresErrorDetailsSchema.optional(),
-});
-type UnparsedSemanticError = z.input<typeof unparsedSemanticErrorSchema>;
-
-const semanticCandidateQueryErrorDetails = (error: UnparsedSemanticError) => {
-  const parsedError = semanticErrorCarrierSchema.safeParse(error);
-  const pgError = parsedError.success ? parsedError.data.cause : undefined;
-
-  return {
-    errorName:
-      parsedError.success && parsedError.data.name
-        ? parsedError.data.name
-        : "UnrecognizedError",
-    pgCode: pgError?.code,
-    severity: pgError?.severity,
-    detail: pgError?.detail,
-    hint: pgError?.hint,
-    routine: pgError?.routine,
-  };
-};
-
-const semanticCandidateRowSchema = z.object({
-  entityType: searchableEntitySchema,
-  entityId: z.string(),
-  similarity: z.coerce.number(),
-});
-
+/** Ranked nearest neighbours for an arbitrary query vector. */
 export async function findSemanticEntityCandidates(
-  db: Database,
+  vectorStore: VectorStorePort,
   queryEmbedding: number[],
-  config: SemanticEmbeddingConfig,
   opts: { entityTypes?: SearchableEntity[]; limit: number },
 ): Promise<EntityEmbeddingCandidate[]> {
-  try {
-    const typeFilter =
-      opts.entityTypes && opts.entityTypes.length > 0
-        ? sql`AND ee."entityType" IN (${sql.join(
-            opts.entityTypes.map((entityType) => sql`${entityType}`),
-            sql`, `,
-          )})`
-        : sql``;
-    const vector = vectorLiteral(queryEmbedding);
-    // The `embedding::vector(N)` cast must match the expression in
-    // EntityEmbedding_embedding_hnsw_idx exactly, or the planner falls back
-    // to a seq scan (the raw column is untyped `vector`, which pgvector
-    // can't index directly). config.dimensions is a number from
-    // AI_MODEL_REGISTRY, safe to inline raw.
-    const castEmbedding = sql.raw(
-      `ee."embedding"::vector(${config.dimensions})`,
-    );
-    // Inline the dimensions filter as a literal (config.dimensions is a
-    // trusted registry number) so the planner can prove the partial-index
-    // predicate `dimensions = 1536` and use EntityEmbedding_embedding_hnsw_idx.
-    const dimensionsFilter = sql.raw(`ee."dimensions" = ${config.dimensions}`);
-    const result = await getDb(db).execute<{
-      entityType: SearchableEntity;
-      entityId: string;
-      similarity: string | number;
-    }>(sql`
-      SELECT
-        ee."entityType" AS "entityType",
-        ee."entityId"::text AS "entityId",
-        1 - (${castEmbedding} <=> ${vector}) AS "similarity"
-      FROM "EntityEmbedding" ee
-      WHERE ee."deletedAt" IS NULL
-        AND ee."provider" = ${config.provider}
-        AND ee."model" = ${config.model}
-        AND ${dimensionsFilter}
-        ${typeFilter}
-      ORDER BY ${castEmbedding} <=> ${vector}
-      LIMIT ${opts.limit}
-    `);
-    return semanticCandidateRowSchema.array().parse(result.rows);
-  } catch (error) {
-    console.error("semantic.entity-candidates.failed", {
-      ...semanticCandidateQueryErrorDetails(error),
-      provider: config.provider,
-      model: config.model,
-      dimensions: config.dimensions,
-      entityTypes: opts.entityTypes ?? null,
-      limit: opts.limit,
-      embeddingDimensions: queryEmbedding.length,
-    });
-    throw new Error(
-      "Semantic search failed while reading entity embeddings. Check pgvector setup and embedding dimensions.",
-      { cause: error },
-    );
-  }
+  return vectorStore.query(queryEmbedding, {
+    entityTypes: opts.entityTypes,
+    topK: opts.limit,
+  });
 }
 
 /**
- * Entity-to-entity nearest neighbours: read the seed entity's own stored
- * embedding back out, then reuse it as the query vector.
+ * Entity-to-entity nearest neighbours: looks the seed vector up by id and
+ * reuses it as the query vector in one round trip.
  *
- * Two queries on purpose. The seed lookup rides the
- * `EntityEmbedding_entity_model_key` unique index, and the neighbour search
- * goes through {@link findSemanticEntityCandidates} **verbatim** so the
- * `embedding::vector(N)` cast and the literal `dimensions = N` predicate stay
- * syntactically identical to `EntityEmbedding_embedding_hnsw_idx`. A
- * hand-written self-join here would silently lose the index and seq-scan every
- * embedding in the table.
+ * +1 on `topK` so the seed itself (always its own nearest neighbour when
+ * source and target types match) can be dropped without shrinking the result
+ * set below `opts.limit`. The in-memory test fake returns the seed as a match
+ * (score 1); the real index may too, so this filter is load-bearing, not
+ * defensive-only.
  *
- * Returns `[]` when the seed has no embedding row yet (never embedded, or
- * embedded under a different model config).
+ * Returns `[]` when the seed has no vector yet (never embedded).
  */
 export async function findSimilarEntities(
-  db: Database,
+  vectorStore: VectorStorePort,
   seed: SearchableEntityRef,
-  config: SemanticEmbeddingConfig,
   opts: { targetType: SearchableEntity; limit: number },
 ): Promise<EntityEmbeddingCandidate[]> {
-  const seedRow = await getDb(db).query.entityEmbedding.findFirst({
-    where: and(
-      eq(entityEmbedding.entityType, seed.entityType),
-      eq(entityEmbedding.entityId, seed.entityId),
-      eq(entityEmbedding.provider, config.provider),
-      eq(entityEmbedding.model, config.model),
-      eq(entityEmbedding.dimensions, config.dimensions),
-      notDeleted(entityEmbedding),
-    ),
-    columns: { embedding: true },
+  const candidates = await vectorStore.queryById(seed, {
+    entityTypes: [opts.targetType],
+    topK: opts.limit + 1,
   });
-  if (!seedRow) return [];
-
-  // +1 so the seed itself (always its own nearest neighbour when source and
-  // target types match) can be dropped without shrinking the result set.
-  const candidates = await findSemanticEntityCandidates(
-    db,
-    seedRow.embedding,
-    config,
-    { entityTypes: [opts.targetType], limit: opts.limit + 1 },
-  );
 
   return candidates
     .filter(

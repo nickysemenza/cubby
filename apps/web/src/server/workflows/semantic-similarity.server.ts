@@ -7,7 +7,7 @@ import {
 import type { Database } from "~/server/db";
 import { findSimilarEntities } from "~/server/repo/entity-embedding";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
+import { productionVectorStore } from "~/server/semantic/vector-store";
 import { getEmbeddingReadiness } from "~/server/services/embedding-readiness.service";
 import { hydrateSearchHitRefs } from "~/server/services/search.service";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
@@ -32,16 +32,11 @@ export const findSimilarEntitiesWorkflow = bindWorkflow(
       when: async (_, { readiness }) => readiness === "ready",
       whenTrue: (branch) =>
         branch
-          .call("candidates", ({ context }, { input }) =>
-            findSimilarEntities(
-              context,
-              input.source,
-              getSemanticEmbeddingConfig(),
-              {
-                targetType: input.pair.target,
-                limit: input.input.limit,
-              },
-            ),
+          .call("candidates", (_, { input }) =>
+            findSimilarEntities(productionVectorStore, input.source, {
+              targetType: input.pair.target,
+              limit: input.input.limit,
+            }),
           )
           .call("hits", ({ context }, { candidates }) =>
             hydrateSearchHitRefs(context, candidates),

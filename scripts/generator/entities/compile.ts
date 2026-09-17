@@ -697,6 +697,8 @@ const declarationDescriptor = (
   descriptor.imageStorage = declaration.capabilities.images;
   descriptor.displayImages = true;
   descriptor.searchable = declaration.search.enabled;
+  descriptor.embeddable =
+    declaration.search.enabled && (declaration.search.embedding ?? true);
   descriptor.countable = declaration.capabilities.countable;
   descriptor.relationships = serializedDeclarationRelations(
     declaration.relations,
@@ -1025,6 +1027,10 @@ export const compileEntity = (
   booleanValue(
     required(descriptor, "searchable", `${context}.descriptor`),
     `${context}.descriptor.searchable`,
+  );
+  booleanValue(
+    required(descriptor, "embeddable", `${context}.descriptor`),
+    `${context}.descriptor.embeddable`,
   );
 
   const contractValue = declaration.fields;

@@ -5,8 +5,9 @@
  * and the stale marker on the source row is the durable record of what still
  * needs doing. This service reads those markers directly — never a job ledger
  * — so the counts are live truth, and "Settle now" republishes exactly what
- * the counts describe. The nightly cron only asserts these are zero; it never
- * repairs, so a lost wakeup is visible instead of quietly absorbed.
+ * the counts describe. The nightly cron asserts these are zero and repairs
+ * the embedding backlog it finds (see the cron's repair block); other backlogs
+ * still surface here rather than being silently absorbed.
  */
 
 import type {
@@ -26,17 +27,27 @@ import {
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/repo/search-document";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
+import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 
 import { cullPendingImageStorage } from "./image-storage.service";
 
 /** Uploads abandoned after presign; the same threshold the presign cull uses. */
 const PENDING_UPLOAD_HOURS = 24;
 
+// Mirrors the gate in `problems.service.ts` (`countMissingEmbeddings`): with
+// no AI_GATEWAY_API_KEY/Vectorize binding configured, every live row reads as
+// unembedded and nothing can ever clear it, so report zero rather than an
+// unfixable wall.
+const countUnembeddedEntities = async (db: Database) =>
+  semanticEmbeddingsConfigured()
+    ? countUnembeddedSearchDocuments(db, getSemanticEmbeddingConfig())
+    : 0;
+
 export async function countAwaitingWork(db: Database): Promise<AwaitingWork> {
   const [staleRecipeTotals, unembeddedEntities, pendingUploads] =
     await Promise.all([
       countStaleRecipeTotals(db),
-      countUnembeddedSearchDocuments(db, getSemanticEmbeddingConfig()),
+      countUnembeddedEntities(db),
       countCullablePendingImages(db, PENDING_UPLOAD_HOURS),
     ]);
   return {

@@ -20,6 +20,7 @@ import {
   getSemanticEmbeddingConfig,
   type SemanticEmbeddingConfig,
 } from "./config";
+import { productionVectorStore, type VectorStorePort } from "./vector-store";
 
 type SemanticEmbeddingAdapter = OpenAIEmbeddingAdapter<
   SemanticEmbeddingConfig["model"]
@@ -41,7 +42,9 @@ export interface EmbeddingPorts {
     config: SemanticEmbeddingConfig,
     metadata: GatewayMetadata,
   ) => SemanticEmbeddingAdapter;
+  /** Provider reachability only; `embedTexts` guards on this alone. */
   readonly configured: () => boolean;
+  readonly vectorStore: VectorStorePort;
   readonly recordAiUsage: typeof recordAiUsage;
   readonly config: typeof getSemanticEmbeddingConfig;
 }
@@ -58,6 +61,7 @@ export const productionEmbeddingPorts: EmbeddingPorts = {
       fetch: gatewayFetch("openai", cachedCall({ metadata })),
     }),
   configured: gatewayConfigured,
+  vectorStore: productionVectorStore,
   recordAiUsage,
   config: getSemanticEmbeddingConfig,
 };
@@ -67,10 +71,17 @@ const queryEmbeddingCache = new LRUCache<string, number[]>({
   ttl: 1000 * 60 * 60,
 });
 
+/**
+ * The one gate every semantic consumer asks. An embedding is only useful if
+ * there is somewhere to store and search it: on the vite Node dev server the
+ * gateway may be reachable via AI_GATEWAY_API_KEY while the Vectorize binding
+ * is absent, and reporting "configured" there would let the Problems detector
+ * flag the whole corpus as missing with no way to clear it.
+ */
 export function semanticEmbeddingsConfigured(
   ports: EmbeddingPorts = productionEmbeddingPorts,
 ): boolean {
-  return ports.configured();
+  return ports.configured() && ports.vectorStore.configured();
 }
 
 /**
