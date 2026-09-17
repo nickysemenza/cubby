@@ -11,6 +11,10 @@ import { safeConvertAmount } from "~/lib/recipe-costing";
 import { usdaNutrientBasis } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "../entity-media/entity-display-images";
 import { EntityInlineLink } from "../EntityInlineLink";
 
 /**
@@ -122,6 +126,9 @@ export function NutrientDensityStats({
    */
   canSeeStoredMappings?: boolean;
 }) {
+  const displayImages = useEntityDisplayImages([
+    { entityType: "product", entityId: mappingProduct.id },
+  ]);
   const {
     proteinDensity,
     costPerGramProtein,
@@ -146,7 +153,14 @@ export function NutrientDensityStats({
         <Description>
           Needs a {missingMappingKind} mapping on{" "}
           <EntityInlineLink
-            displayImage={undefined}
+            displayImage={
+              displayImages[
+                entityDisplayImageKey({
+                  entityType: "product",
+                  entityId: mappingProduct.id,
+                })
+              ] ?? null
+            }
             entity="product"
             data={mappingProduct}
             compact

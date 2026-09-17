@@ -73,7 +73,7 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
 
   return (
     <EntityInlineLink
-      displayImage={undefined}
+      displayImage={null}
       entity="usda-food"
       data={displayFood}
       compact
@@ -111,7 +111,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
 
   return (
     <EntityInlineLink
-      displayImage={undefined}
+      displayImage={product.displayImages[0] ?? null}
       entity="product"
       data={product}
       compact

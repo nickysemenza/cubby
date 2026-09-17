@@ -9,6 +9,10 @@ import { Button } from "~/components/ui/button";
 import { Table, TableBody, TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "../entity-media/entity-display-images";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { formatAmounts } from "../inventory/format-amount";
 import { CopyCorpusButton } from "./copy-corpus-button";
@@ -79,6 +83,19 @@ export function ParsedIngredientTable({
       return { ...row, rowKey: `${row.raw}\u0000${occurrence}` };
     });
   }, [lines, providedRows]);
+  const imageRefs = useMemo(
+    () =>
+      rows.flatMap((row) => {
+        const matched = row.parsed.name
+          ? matchMap.get(row.parsed.name.toLowerCase())
+          : null;
+        return matched
+          ? [{ entityType: "ingredient" as const, entityId: matched.id }]
+          : [];
+      }),
+    [matchMap, rows],
+  );
+  const displayImages = useEntityDisplayImages(imageRefs);
   if (rows.length === 0) return null;
   return (
     <Table className="table-auto">
@@ -102,7 +119,14 @@ export function ParsedIngredientTable({
                   <Row as="span" wrap align="center" gap="xs">
                     {match ? (
                       <EntityInlineLink
-                        displayImage={undefined}
+                        displayImage={
+                          displayImages[
+                            entityDisplayImageKey({
+                              entityType: "ingredient",
+                              entityId: match.id,
+                            })
+                          ] ?? null
+                        }
                         entity="ingredient"
                         data={match}
                       />

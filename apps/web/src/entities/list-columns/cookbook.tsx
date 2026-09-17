@@ -11,6 +11,10 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
+import {
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -20,6 +24,25 @@ import { cookbook } from "~/entities/cookbook.functions";
 import { defineListOverride } from "./types";
 
 const columnHelper = createCubbyColumnHelper<CookbookSummary>();
+
+function CookbookProductLink({
+  product,
+}: {
+  product: NonNullable<CookbookSummary["product"]>;
+}) {
+  const displayImage = useEntityDisplayImage({
+    entityType: "product",
+    entityId: product.id,
+  });
+  return (
+    <EntityInlineLink
+      displayImage={displayImage}
+      entity="product"
+      data={product}
+      compact
+    />
+  );
+}
 
 const overrides = createCubbyColumnCollection<CookbookSummary>((add) => {
   // The declared column is `name` (read key `book`); the name column keeps
@@ -81,12 +104,7 @@ const overrides = createCubbyColumnCollection<CookbookSummary>((add) => {
       cell: (info) => {
         const product = info.row.original.product;
         return product ? (
-          <EntityInlineLink
-            displayImage={undefined}
-            entity="product"
-            data={product}
-            compact
-          />
+          <CookbookProductLink product={product} />
         ) : (
           <NoneValue />
         );
@@ -120,7 +138,22 @@ export const cookbookListOverride = defineListOverride<CookbookSummary, object>(
         }),
         [query.data, query.isLoading, query.error],
       );
-      return { overrides, compose, client };
+      return {
+        overrides,
+        compose,
+        client,
+        wrap: (children, { data }) => (
+          <EntityDisplayImagesProvider
+            refs={data.flatMap((row) =>
+              row.product
+                ? [{ entityType: "product" as const, entityId: row.product.id }]
+                : [],
+            )}
+          >
+            {children}
+          </EntityDisplayImagesProvider>
+        ),
+      };
     },
   },
 );

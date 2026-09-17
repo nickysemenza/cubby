@@ -6,8 +6,14 @@ import type {
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { ListTodo } from "lucide-react";
+import { useMemo } from "react";
 import { match } from "ts-pattern";
 
+import {
+  entityDisplayImageKey,
+  type EntityDisplayImageMap,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/shared";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -38,6 +44,7 @@ import { task } from "./task.functions";
 /** A single chain node (task or project) as a linked breadcrumb chip. */
 function ChainNodeLink({
   node,
+  displayImages,
 }: {
   // A blocked-reason chain node names its entity by public id only — `id` IS
   // the shortcode, so it serves both the link target and the preview fetch.
@@ -46,11 +53,16 @@ function ChainNodeLink({
     name: string;
     type: "task" | "project";
   };
+  displayImages: EntityDisplayImageMap;
 }) {
+  const displayImage =
+    displayImages[
+      entityDisplayImageKey({ entityType: node.type, entityId: node.id })
+    ] ?? null;
   return match(node.type)
     .with("task", () => (
       <EntityInlineLink
-        displayImage={undefined}
+        displayImage={displayImage}
         entity="task"
         data={{ id: node.id, name: node.name }}
         compact
@@ -58,7 +70,7 @@ function ChainNodeLink({
     ))
     .with("project", () => (
       <EntityInlineLink
-        displayImage={undefined}
+        displayImage={displayImage}
         entity="project"
         data={{ id: node.id, name: node.name }}
         compact
@@ -70,8 +82,10 @@ function ChainNodeLink({
 /** One blocked reason: a "marked blocked" badge (manual) or a chain of breadcrumb chips. */
 function BlockedReasonChips({
   reason,
+  displayImages,
 }: {
   reason: BlockedTaskOut["reasons"][number];
+  displayImages: EntityDisplayImageMap;
 }) {
   if (reason.kind === "manual") {
     return <Badge variant="destructive">marked blocked</Badge>;
@@ -81,7 +95,7 @@ function BlockedReasonChips({
       {reason.chain.map((node, i) => (
         <Row key={`${node.type}:${node.id}`} gap="xs" align="center">
           {i > 0 && <span className="text-muted-foreground">→</span>}
-          <ChainNodeLink node={node} />
+          <ChainNodeLink node={node} displayImages={displayImages} />
         </Row>
       ))}
     </Row>
@@ -95,7 +109,13 @@ function BlockedReasonChips({
  * pre-sorted server-side (`task.listActionable`), so this renders them as-is
  * — no client sort.
  */
-function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
+function TaskRows({
+  rows,
+  displayImages,
+}: {
+  rows: ActionableTaskOut[];
+  displayImages: EntityDisplayImageMap;
+}) {
   return (
     <Table>
       <TableHeader>
@@ -112,7 +132,14 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
             <TableCell>
               <Row align="center" gap="xs" className="min-w-0">
                 <EntityInlineLink
-                  displayImage={undefined}
+                  displayImage={
+                    displayImages[
+                      entityDisplayImageKey({
+                        entityType: "task",
+                        entityId: t.id,
+                      })
+                    ] ?? null
+                  }
                   entity="task"
                   data={{ id: t.id, name: t.name }}
                   truncate
@@ -132,7 +159,14 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
             <TableCell>
               {t.projectId && t.projectName && t.projectId ? (
                 <EntityInlineLink
-                  displayImage={undefined}
+                  displayImage={
+                    displayImages[
+                      entityDisplayImageKey({
+                        entityType: "project",
+                        entityId: t.projectId,
+                      })
+                    ] ?? null
+                  }
                   entity="project"
                   data={{
                     id: t.projectId,
@@ -183,6 +217,42 @@ export function NextTasks({ filters }: { filters: TaskFilters }) {
 }
 
 function NextTasksBody({ data }: { data: ActionableTasksOut }) {
+  const imageRefs = useMemo(
+    () => [
+      ...data.next.map((task) => ({
+        entityType: "task" as const,
+        entityId: task.id,
+      })),
+      ...data.later.map((task) => ({
+        entityType: "task" as const,
+        entityId: task.id,
+      })),
+      ...data.next.flatMap((task) =>
+        task.projectId
+          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          : [],
+      ),
+      ...data.later.flatMap((task) =>
+        task.projectId
+          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          : [],
+      ),
+      ...data.blocked.flatMap((blocked) => [
+        { entityType: "task" as const, entityId: blocked.task.id },
+        ...blocked.reasons.flatMap((reason) =>
+          reason.kind !== "manual"
+            ? reason.chain.map((node) => ({
+                entityType: node.type,
+                entityId: node.id,
+              }))
+            : [],
+        ),
+      ]),
+    ],
+    [data],
+  );
+  const displayImages = useEntityDisplayImages(imageRefs);
+
   return (
     <Stack gap="lg">
       <p className="text-xs text-muted-foreground">
@@ -196,7 +266,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
             Nothing next right now — everything open is blocked or set aside.
           </p>
         ) : (
-          <TaskRows rows={data.next} />
+          <TaskRows rows={data.next} displayImages={displayImages} />
         )}
       </Section>
 
@@ -206,7 +276,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
             Someday ({data.later.length})
           </summary>
           <div className="mt-2">
-            <TaskRows rows={data.later} />
+            <TaskRows rows={data.later} displayImages={displayImages} />
           </div>
         </details>
       )}
@@ -223,7 +293,14 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
               <Stack key={bt.task.id} gap="xs">
                 <Row gap="sm" align="center">
                   <EntityInlineLink
-                    displayImage={undefined}
+                    displayImage={
+                      displayImages[
+                        entityDisplayImageKey({
+                          entityType: "task",
+                          entityId: bt.task.id,
+                        })
+                      ] ?? null
+                    }
                     entity="task"
                     data={{
                       id: bt.task.id,
@@ -244,6 +321,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                     <BlockedReasonChips
                       key={`${reason.kind}-${reason.chain[0]?.id ?? i}`}
                       reason={reason}
+                      displayImages={displayImages}
                     />
                   ))}
                 </Stack>

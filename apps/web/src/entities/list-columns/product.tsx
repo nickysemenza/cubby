@@ -180,7 +180,7 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
   const food = useHydratedProductFood(product);
   return food ? (
     <EntityInlineLink
-      displayImage={undefined}
+      displayImage={null}
       entity="usda-food"
       data={food}
       compact

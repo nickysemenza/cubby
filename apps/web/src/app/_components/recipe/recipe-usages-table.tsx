@@ -18,6 +18,10 @@ import {
 import { computeParseDrift, type ParseDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "../entity-media/entity-display-images";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { formatAmounts } from "../inventory/format-amount";
 import { DriftIndicator } from "../parse-drift-indicator";
@@ -79,6 +83,15 @@ export function RecipeUsagesTable({
           (a.sectionName ?? "").localeCompare(b.sectionName ?? ""),
       );
   }, [usages, ingredientName, aliases]);
+  const imageRefs = useMemo(
+    () =>
+      rows.map((row) => ({
+        entityType: "recipe" as const,
+        entityId: row.recipe.id,
+      })),
+    [rows],
+  );
+  const displayImages = useEntityDisplayImages(imageRefs);
 
   if (rows.length === 0) return null;
 
@@ -98,7 +111,14 @@ export function RecipeUsagesTable({
           <TableRow key={row.id}>
             <TableCell className="align-top">
               <EntityInlineLink
-                displayImage={undefined}
+                displayImage={
+                  displayImages[
+                    entityDisplayImageKey({
+                      entityType: "recipe",
+                      entityId: row.recipe.id,
+                    })
+                  ] ?? null
+                }
                 entity="recipe"
                 data={row.recipe}
               />

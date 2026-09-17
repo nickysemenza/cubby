@@ -1,5 +1,4 @@
 import type { EntityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
-import { imageOut, type ImageOut } from "@cubby/schemas/image";
 import { testShortcode } from "@cubby/schemas/testing";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,6 +7,7 @@ import { recommendations } from "~/lib/recommendations.functions";
 import { search } from "~/lib/search.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
+import { entityDisplayImageKey } from "../entity-media/entity-display-images";
 import {
   type RelatednessRailOperations,
   RelatednessRail,
@@ -71,27 +71,6 @@ function result(
     basisKey: `basis-${status}`,
     groups: [{ kind: "product-related", status, proposals }],
   };
-}
-
-function productImage(id: string, url: string): ImageOut {
-  return imageOut.parse({
-    id,
-    url,
-    key: "related-product.jpg",
-    filename: "related-product.jpg",
-    size: 100,
-    contentType: "image/jpeg",
-    status: "UPLOADED",
-    width: 800,
-    height: 600,
-    detectedContentType: null,
-    sha256: null,
-    renderStatus: null,
-    storageStatus: null,
-    verifiedAt: null,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
 }
 
 function renderRail(
@@ -203,13 +182,11 @@ describe("RelatednessRail", () => {
       <RelatednessRail
         product={{ id: testShortcode("product", "PRD-SOURCE"), tags: [] }}
         operations={adapter.operations}
-        imageSummaries={{
-          [pictured]: [
-            productImage(
-              testShortcode("image", "IMG-PICTURED"),
-              "https://images.example/cover.jpg",
-            ),
-          ],
+        seededDisplayImages={{
+          [entityDisplayImageKey({
+            entityType: "product",
+            entityId: pictured,
+          })]: { url: "https://images.example/cover.jpg" },
         }}
       />,
       { wrapper: harness.wrapper },

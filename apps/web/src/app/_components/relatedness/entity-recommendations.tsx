@@ -7,12 +7,19 @@ import type {
 import type { InventoryPlacementProposal } from "@cubby/schemas/entity-recommendations";
 import { useQuery } from "@tanstack/react-query";
 import { Lightbulb, RotateCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import {
+  entityDisplayImageKey,
+  type EntityDisplayImagesQueryOptions,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { RelatedProductRow } from "~/app/_components/relatedness/related-product-row";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { entityMedia } from "~/entities/entity-media.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { getErrorMessage } from "~/lib/error-utils";
 import { recommendations } from "~/lib/recommendations.functions";
@@ -28,10 +35,15 @@ type InventoryGroup = Extract<
 
 export interface EntityRecommendationOperations {
   forEntity: typeof recommendations.forEntity;
+  displayImages?: EntityDisplayImagesQueryOptions;
 }
+
+const productionDisplayImages: EntityDisplayImagesQueryOptions = (input) =>
+  entityMedia.displayImages.queryOptions(input);
 
 const productionOperations: EntityRecommendationOperations = {
   forEntity: recommendations.forEntity,
+  displayImages: productionDisplayImages,
 };
 
 interface EntityRecommendationsProps {
@@ -73,6 +85,72 @@ export function EntityRecommendations({
   const basisKey = query.data?.basisKey;
   const sourceKey = `${source.entityType}:${source.entityId}`;
   const loading = useHydratedLoading(query.isPending);
+  const data = query.data;
+  const dataIsCurrent =
+    data !== undefined &&
+    `${data.source.entityType}:${data.source.entityId}` === sourceKey;
+  const groups = useMemo(
+    () =>
+      dataIsCurrent
+        ? data.groups.filter(
+            (group) => group.proposals.length > 0 || group.status !== "ready",
+          )
+        : [],
+    [data, dataIsCurrent],
+  );
+  const imageRefs = useMemo<EntityRef[]>(() => {
+    const refs: EntityRef[] = [];
+    for (const group of groups) {
+      switch (group.kind) {
+        case "product-related":
+          refs.push(
+            ...group.proposals.map((proposal) => ({
+              entityType: "product" as const,
+              entityId: proposal.target.id,
+            })),
+          );
+          break;
+        case "expense-project":
+          refs.push(
+            ...(group.currentTarget
+              ? [
+                  {
+                    entityType: "project" as const,
+                    entityId: group.currentTarget.id,
+                  },
+                ]
+              : []),
+            ...group.proposals.map((proposal) => ({
+              entityType: "project" as const,
+              entityId: proposal.target.id,
+            })),
+          );
+          break;
+        case "inventory-placement":
+          refs.push(
+            ...(group.currentTarget
+              ? [
+                  {
+                    entityType: "location" as const,
+                    entityId: group.currentTarget.id,
+                  },
+                ]
+              : []),
+            ...group.proposals.map((proposal) => ({
+              entityType: "location" as const,
+              entityId: proposal.target.id,
+            })),
+          );
+          break;
+      }
+    }
+    return refs;
+  }, [groups]);
+  const displayImages = useEntityDisplayImages(
+    imageRefs,
+    {},
+    operations.displayImages ?? productionDisplayImages,
+  );
 
   useEffect(() => {
     setSelected(null);
@@ -104,7 +182,6 @@ export function EntityRecommendations({
     );
   }
 
-  const data = query.data;
   if (!data) {
     return (
       <output className="text-sm text-muted-foreground">
@@ -112,16 +189,13 @@ export function EntityRecommendations({
       </output>
     );
   }
-  if (`${data.source.entityType}:${data.source.entityId}` !== sourceKey) {
+  if (!dataIsCurrent) {
     return (
       <output className="text-sm text-muted-foreground">
         Refreshing suggestions…
       </output>
     );
   }
-  const groups = data.groups.filter(
-    (group) => group.proposals.length > 0 || group.status !== "ready",
-  );
   if (groups.length === 0) {
     return compact ? null : (
       <p className="text-sm text-muted-foreground">
@@ -150,6 +224,7 @@ export function EntityRecommendations({
           onSelect={setSelected}
           onAcceptExpenseProject={onAcceptExpenseProject}
           onAcceptInventoryPlacement={onAcceptInventoryPlacement}
+          displayImages={displayImages}
         />
       ))}
     </Stack>
@@ -166,6 +241,7 @@ function RecommendationGroup({
   onSelect,
   onAcceptExpenseProject,
   onAcceptInventoryPlacement,
+  displayImages,
 }: {
   group: EntityRecommendationGroup;
   data: EntityRecommendationsOut;
@@ -178,6 +254,7 @@ function RecommendationGroup({
   onAcceptInventoryPlacement?: (
     proposal: InventoryPlacementProposal,
   ) => Promise<void>;
+  displayImages: ReturnType<typeof useEntityDisplayImages>;
 }) {
   const availability =
     group.status === "ready" ? null : (
@@ -192,25 +269,25 @@ function RecommendationGroup({
         {!compact && <h3 className="text-sm font-medium">Similar products</h3>}
         {availability}
         {group.proposals.map((proposal) => (
-          <Row
+          <RelatedProductRow
             key={proposal.target.id}
-            align="center"
-            justify="between"
-            gap="sm"
-            className="border-b border-border pb-1 last:border-b-0"
-          >
-            <EntityInlineLink
-              entity="product"
-              data={proposal.target}
-              displayImage={undefined}
-              truncate
-            />
-            <span className="shrink-0 font-mono text-2xs text-slate">
-              {proposal.score > 0
-                ? `${Math.round(proposal.score * 100)}% similar`
-                : proposal.evidence.map((item) => item.signal).join(" · ")}
-            </span>
-          </Row>
+            product={proposal.target}
+            displayImage={
+              displayImages[
+                entityDisplayImageKey({
+                  entityType: "product",
+                  entityId: proposal.target.id,
+                })
+              ] ?? null
+            }
+            action={
+              <span className="font-mono text-2xs text-slate">
+                {proposal.score > 0
+                  ? `${Math.round(proposal.score * 100)}% similar`
+                  : proposal.evidence.map((item) => item.signal).join(" · ")}
+              </span>
+            }
+          />
         ))}
       </Stack>
     );
@@ -269,6 +346,7 @@ function RecommendationGroup({
             key={key}
             group={group}
             proposal={proposal}
+            displayImages={displayImages}
             pending={pending}
             onDismiss={() => onSelect(null)}
             onAccept={
@@ -292,12 +370,14 @@ function ProposalReview({
   pending,
   onAccept,
   onDismiss,
+  displayImages,
 }: {
   group: ExpenseGroup | InventoryGroup;
   proposal: ExpenseProjectProposal | InventoryPlacementProposal;
   pending: boolean;
   onAccept?: () => Promise<void>;
   onDismiss: () => void;
+  displayImages: ReturnType<typeof useEntityDisplayImages>;
 }) {
   const [error, setError] = useState<string>();
   const [showEvidence, setShowEvidence] = useState(false);
@@ -317,6 +397,7 @@ function ProposalReview({
             <ProposalTargetLink
               entity={targetEntity}
               target={group.currentTarget}
+              displayImages={displayImages}
             />
           ) : (
             currentLabel
@@ -325,7 +406,11 @@ function ProposalReview({
         <span aria-hidden="true">→</span>
         <span>
           <span className="text-muted-foreground">Proposed:</span>{" "}
-          <ProposalTargetLink entity={targetEntity} target={proposal.target} />
+          <ProposalTargetLink
+            entity={targetEntity}
+            target={proposal.target}
+            displayImages={displayImages}
+          />
         </span>
         <Badge variant="secondary">Derived</Badge>
       </Row>
@@ -383,17 +468,27 @@ function ProposalReview({
 function ProposalTargetLink({
   entity,
   target,
+  displayImages,
 }: {
   entity: "project" | "location";
   target: { id: string; name: string };
+  displayImages: ReturnType<typeof useEntityDisplayImages>;
 }) {
+  const displayImage =
+    displayImages[
+      entityDisplayImageKey({ entityType: entity, entityId: target.id })
+    ] ?? null;
   return entity === "project" ? (
-    <EntityInlineLink entity="project" data={target} displayImage={undefined} />
+    <EntityInlineLink
+      entity="project"
+      data={target}
+      displayImage={displayImage}
+    />
   ) : (
     <EntityInlineLink
       entity="location"
       data={target}
-      displayImage={undefined}
+      displayImage={displayImage}
     />
   );
 }

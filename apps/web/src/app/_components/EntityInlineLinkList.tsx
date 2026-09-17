@@ -1,6 +1,13 @@
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationType } from "@cubby/schemas/location";
 import React from "react";
+import { useMemo } from "react";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImageMap,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { Stack } from "~/components/layout";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
@@ -14,6 +21,9 @@ type BaseProps = {
   compact?: boolean;
   /** Maximum items to show before truncating with "+N more". undefined = show all */
   maxItems?: number;
+  /** Resolve missing images here. Table cells set this false because the table
+   * owner already batches every visible row into one canonical request. */
+  resolveImages?: boolean;
 };
 
 // Discriminated union for entity-specific list data
@@ -51,31 +61,36 @@ function renderInlineLink(
   entity: "ingredient" | "recipe",
   item: { name: string; id: string },
   compact: boolean | undefined,
+  displayImage: ImageUrlSummary | null,
 ): React.ReactElement;
 function renderInlineLink(
   entity: "product",
   item: { name: string; id: string; manufacturer: string },
   compact: boolean | undefined,
+  displayImage: ImageUrlSummary | null,
 ): React.ReactElement;
 function renderInlineLink(
   entity: "location",
   item: { name: string; id: string; type: LocationType | null },
   compact: boolean | undefined,
+  displayImage: ImageUrlSummary | null,
 ): React.ReactElement;
 function renderInlineLink(
   entity: "usda-food",
   item: { foodInfo: { description: string | null }; fdc_id: number },
   compact: boolean | undefined,
+  displayImage: null,
 ): React.ReactElement;
 function renderInlineLink(
   entity: EntityInlineLinkListProps["entity"],
   item: InlineLinkItem,
   compact: boolean | undefined,
+  displayImage: ImageUrlSummary | null,
 ) {
   if (entity === "usda-food" && "fdc_id" in item) {
     return (
       <EntityInlineLink
-        displayImage={undefined}
+        displayImage={null}
         entity={entity}
         data={item}
         compact={compact}
@@ -85,7 +100,7 @@ function renderInlineLink(
   if (entity === "location" && "type" in item) {
     return (
       <EntityInlineLink
-        displayImage={undefined}
+        displayImage={displayImage}
         entity={entity}
         data={item}
         compact={compact}
@@ -95,7 +110,7 @@ function renderInlineLink(
   if (entity === "product" && "manufacturer" in item) {
     return (
       <EntityInlineLink
-        displayImage={undefined}
+        displayImage={displayImage}
         entity={entity}
         data={item}
         compact={compact}
@@ -105,7 +120,7 @@ function renderInlineLink(
   if ((entity === "ingredient" || entity === "recipe") && "name" in item) {
     return (
       <EntityInlineLink
-        displayImage={undefined}
+        displayImage={displayImage}
         entity={entity}
         data={item}
         compact={compact}
@@ -118,7 +133,24 @@ function renderInlineLink(
 export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
   props,
 ) => {
-  const { items, compact, maxItems } = props;
+  const { items, compact, maxItems, resolveImages = true } = props;
+  const inheritedImages = useEntityDisplayImageMap();
+
+  const refs = useMemo(
+    () =>
+      props.entity === "usda-food"
+        ? []
+        : (items ?? []).flatMap((item) =>
+            "id" in item
+              ? [{ entityType: props.entity, entityId: item.id }]
+              : [],
+          ),
+    [items, props.entity],
+  );
+  const images = useEntityDisplayImages(
+    resolveImages ? refs : [],
+    inheritedImages,
+  );
 
   if (!items || items.length === 0) {
     if (compact) {
@@ -148,16 +180,37 @@ export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
   const renderItem = (item: (typeof items)[number], index: number) => {
     let link: React.ReactElement;
     if (props.entity === "usda-food" && "fdc_id" in item)
-      link = renderInlineLink("usda-food", item, compact);
+      link = renderInlineLink("usda-food", item, compact, null);
     else if (props.entity === "location" && "type" in item)
-      link = renderInlineLink("location", item, compact);
+      link = renderInlineLink(
+        "location",
+        item,
+        compact,
+        images[
+          entityDisplayImageKey({ entityType: "location", entityId: item.id })
+        ] ?? null,
+      );
     else if (props.entity === "product" && "manufacturer" in item)
-      link = renderInlineLink("product", item, compact);
+      link = renderInlineLink(
+        "product",
+        item,
+        compact,
+        images[
+          entityDisplayImageKey({ entityType: "product", entityId: item.id })
+        ] ?? null,
+      );
     else if (
       (props.entity === "ingredient" || props.entity === "recipe") &&
       "name" in item
     )
-      link = renderInlineLink(props.entity, item, compact);
+      link = renderInlineLink(
+        props.entity,
+        item,
+        compact,
+        images[
+          entityDisplayImageKey({ entityType: props.entity, entityId: item.id })
+        ] ?? null,
+      );
     else throw new Error(`Unexpected ${props.entity} inline-link item shape`);
     return React.cloneElement(link, { key: getKey(item, index) });
   };

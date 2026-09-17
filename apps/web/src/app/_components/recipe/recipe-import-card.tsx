@@ -20,6 +20,10 @@ import { StatusText } from "~/components/ui/status-text";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "../entity-media/entity-display-images";
 import { EntityInlineLink } from "../EntityInlineLink";
 import type { ImportResult, PhotoResult } from "./cookbook-import/types";
 import { CopyImportRecipeParseButton } from "./copy-corpus-button";
@@ -127,6 +131,14 @@ function RecipeImportCardImpl({
   parsedLines,
   externalUrl,
 }: RecipeImportCardProps) {
+  const existingRecipeRefs = useMemo(
+    () =>
+      existingId
+        ? [{ entityType: "recipe" as const, entityId: existingId }]
+        : [],
+    [existingId],
+  );
+  const existingRecipeImages = useEntityDisplayImages(existingRecipeRefs);
   // This recipe's ingredient names — used both to match against the DB and to
   // highlight ingredients in the instructions. When the caller supplied a parse
   // (the cookbook path), read the names off it rather than parsing again: a
@@ -197,7 +209,16 @@ function RecipeImportCardImpl({
             <Badge variant={badge.variant}>{badge.label}</Badge>
             {existingId && (
               <EntityInlineLink
-                displayImage={undefined}
+                displayImage={
+                  existingId
+                    ? (existingRecipeImages[
+                        entityDisplayImageKey({
+                          entityType: "recipe",
+                          entityId: existingId,
+                        })
+                      ] ?? null)
+                    : null
+                }
                 entity="recipe"
                 data={{
                   id: existingId,

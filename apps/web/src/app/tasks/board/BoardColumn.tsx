@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
+import { EntityDisplayImagesProvider } from "~/app/_components/entity-media/entity-display-images";
 import { getTradeColor } from "~/app/projects/charts/gantt/trade-colors";
 import { ProjectMarkById } from "~/app/projects/project-mark";
 import { Row, Stack } from "~/components/layout";
@@ -185,6 +186,15 @@ export function BoardCell({
     column.status === "done" &&
     totalCount > DONE_COLUMN_CAP;
   const canCollapse = hiddenDoneCount > 0 || isCappedDoneColumn;
+  const projectRefs = useMemo(
+    () =>
+      cards.flatMap((task) =>
+        task.projectId
+          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          : [],
+      ),
+    [cards],
+  );
   const dropTargetLabel = lane
     ? `${axisLabel(column)}, ${axisLabel(lane)} task drop target`
     : `${axisLabel(column)} task drop target`;
@@ -199,68 +209,70 @@ export function BoardCell({
         className,
       )}
     >
-      <Stack gap="snug">
-        {cards.length === 0 &&
-          (quickAddEligible ? (
+      <EntityDisplayImagesProvider refs={projectRefs}>
+        <Stack gap="snug">
+          {cards.length === 0 &&
+            (quickAddEligible ? (
+              <button
+                type="button"
+                onClick={() => onQuickAdd(taskCreatePreset(column, lane))}
+                className="flex min-h-16 w-full items-center justify-center border border-dashed border-muted-foreground/30 p-2 text-xs text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:text-foreground"
+              >
+                No tasks — click to add
+              </button>
+            ) : (
+              <p className="flex min-h-16 items-center justify-center border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground">
+                No tasks
+              </p>
+            ))}
+          {cards.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              column={column}
+              lane={lane}
+              taskById={cardProps.taskById}
+              showProject={cardProps.showProject}
+              showTrade={cardProps.showTrade}
+              showStatus={cardProps.showStatus}
+              onSetStatus={(status) => cardProps.onSetStatus(task.id, status)}
+              onRequestDelete={cardProps.onRequestDelete}
+              dropEdge={
+                cardProps.dropTarget?.taskId === task.id
+                  ? cardProps.dropTarget.edge
+                  : null
+              }
+            />
+          ))}
+          {!expanded && hiddenDoneCount > 0 && (
             <button
               type="button"
-              onClick={() => onQuickAdd(taskCreatePreset(column, lane))}
-              className="flex min-h-16 w-full items-center justify-center border border-dashed border-muted-foreground/30 p-2 text-xs text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:text-foreground"
+              onClick={() => setExpanded(true)}
+              className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
             >
-              No tasks — click to add
+              + {hiddenDoneCount} done
             </button>
-          ) : (
-            <p className="flex min-h-16 items-center justify-center border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground">
-              No tasks
-            </p>
-          ))}
-        {cards.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            column={column}
-            lane={lane}
-            taskById={cardProps.taskById}
-            showProject={cardProps.showProject}
-            showTrade={cardProps.showTrade}
-            showStatus={cardProps.showStatus}
-            onSetStatus={(status) => cardProps.onSetStatus(task.id, status)}
-            onRequestDelete={cardProps.onRequestDelete}
-            dropEdge={
-              cardProps.dropTarget?.taskId === task.id
-                ? cardProps.dropTarget.edge
-                : null
-            }
-          />
-        ))}
-        {!expanded && hiddenDoneCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
-          >
-            + {hiddenDoneCount} done
-          </button>
-        )}
-        {!expanded && totalCount - hiddenDoneCount > cards.length && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
-          >
-            Showing {cards.length} of {totalCount}
-          </button>
-        )}
-        {expanded && canCollapse && (
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
-          >
-            Show less
-          </button>
-        )}
-      </Stack>
+          )}
+          {!expanded && totalCount - hiddenDoneCount > cards.length && (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+            >
+              Showing {cards.length} of {totalCount}
+            </button>
+          )}
+          {expanded && canCollapse && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+            >
+              Show less
+            </button>
+          )}
+        </Stack>
+      </EntityDisplayImagesProvider>
     </fieldset>
   );
 }

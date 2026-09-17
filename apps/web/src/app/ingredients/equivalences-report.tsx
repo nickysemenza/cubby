@@ -4,6 +4,10 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { recipe } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -82,6 +86,23 @@ export function EquivalencesReport() {
     }
     return [...byIngredient.values()];
   }, [data]);
+  const imageRefs = useMemo(
+    () =>
+      groups.flatMap((group) => [
+        ...group.map((candidate) => ({
+          entityType: "ingredient" as const,
+          entityId: candidate.ingredientId,
+        })),
+        ...group.flatMap((candidate) =>
+          candidate.examples.map((example) => ({
+            entityType: "recipe" as const,
+            entityId: example.recipeId,
+          })),
+        ),
+      ]),
+    [groups],
+  );
+  const displayImages = useEntityDisplayImages(imageRefs);
 
   return (
     <Stack>
@@ -153,7 +174,14 @@ export function EquivalencesReport() {
                       className="border-b align-top"
                     >
                       <EntityInlineLink
-                        displayImage={undefined}
+                        displayImage={
+                          displayImages[
+                            entityDisplayImageKey({
+                              entityType: "ingredient",
+                              entityId: c.ingredientId,
+                            })
+                          ] ?? null
+                        }
                         entity="ingredient"
                         data={{
                           id: c.ingredientId,
@@ -197,7 +225,14 @@ export function EquivalencesReport() {
                           className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground"
                         >
                           <EntityInlineLink
-                            displayImage={undefined}
+                            displayImage={
+                              displayImages[
+                                entityDisplayImageKey({
+                                  entityType: "recipe",
+                                  entityId: ex.recipeId,
+                                })
+                              ] ?? null
+                            }
                             entity="recipe"
                             data={{
                               id: ex.recipeId,

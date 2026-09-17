@@ -3,6 +3,10 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useLocationTree } from "~/hooks/useLocationTree";
 
@@ -99,6 +103,15 @@ function TidyTree({ data }: TidyTreeProps) {
 
   const nodes = useMemo(() => root.descendants(), [root]);
   const links = useMemo(() => root.links(), [root]);
+  const imageRefs = useMemo(
+    () =>
+      nodes.map(({ data: node }) => ({
+        entityType: "location" as const,
+        entityId: node.id,
+      })),
+    [nodes],
+  );
+  const displayImages = useEntityDisplayImages(imageRefs);
 
   return (
     // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- The D3 viewport supports pointer pan and wheel zoom while its textual tree remains available elsewhere.
@@ -163,7 +176,14 @@ function TidyTree({ data }: TidyTreeProps) {
                     className={`flex ${!isRoot && hasChildren ? "justify-end" : "justify-start"}`}
                   >
                     <EntityInlineLink
-                      displayImage={undefined}
+                      displayImage={
+                        displayImages[
+                          entityDisplayImageKey({
+                            entityType: "location",
+                            entityId: node.data.id,
+                          })
+                        ] ?? null
+                      }
                       entity="location"
                       data={{
                         name: node.data.name,

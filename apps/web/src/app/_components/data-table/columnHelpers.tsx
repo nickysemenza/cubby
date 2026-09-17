@@ -1,6 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
-import type { Entity } from "@cubby/schemas/entity";
+import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import {
   type LocationShortcode,
   type ProductShortcode,
@@ -70,6 +70,7 @@ import {
   WithEntitySearch,
   type WithEntitySearchProps,
 } from "../combobox/with-search-hook";
+import { useEntityDisplayImage } from "../entity-media/entity-display-images";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { ImageThumbnail } from "../table/ImageThumbnail";
@@ -623,6 +624,25 @@ function renderEntityInlineItems<TValue>(
   return renderCollection(value, dedupe);
 }
 
+function entityInlineItemRefs(
+  entity: EntityColumnData["entity"],
+  value: unknown,
+): EntityRef[] {
+  const items = (() => {
+    switch (entity) {
+      case "ingredient":
+        return z.array(ingredientInlineSchema).parse(value);
+      case "product":
+        return z.array(productInlineSchema).parse(value);
+      case "recipe":
+        return z.array(recipeInlineSchema).parse(value);
+      case "location":
+        return z.array(locationInlineSchema).parse(value);
+    }
+  })();
+  return items.map((item) => ({ entityType: entity, entityId: item.id }));
+}
+
 export function createEntityInlineLinkColumn<
   TEntity extends EntityColumnData["entity"],
   T extends object,
@@ -644,13 +664,14 @@ export function createEntityInlineLinkColumn<
     id: String(accessor),
     header: options?.header ?? entityLabel(entity),
     enableSorting: options?.enableSorting ?? false,
-    meta: {
+    meta: attachCubbyColumnMeta<T>({
       className: options?.className
         ? `${options.className} overflow-hidden`
         : undefined,
       filterConfig: options?.filterConfig,
       mobile: options?.mobile,
-    },
+      entityRefs: (row) => entityInlineItemRefs(entity, row[accessor]),
+    }),
     cell: (info) =>
       renderEntityInlineItems(
         entity,
@@ -766,11 +787,16 @@ export function createInventoryEntriesColumn<
     header:
       options?.header ?? (entity === "location" ? "Locations" : "Products"),
     enableSorting: options?.enableSorting ?? false,
-    meta: {
+    meta: attachCubbyColumnMeta<T>({
       className: options?.className ?? "min-w-0 w-40 max-w-56",
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
-    },
+      entityRefs: (row) =>
+        row[accessor].flatMap((entry) => {
+          const related = getRelatedEntity(entry);
+          return related ? [{ entityType: entity, entityId: related.id }] : [];
+        }),
+    }),
     cell: (info) => (
       <InventoryEntriesCell<T, TEntry, TEntity>
         entries={info.getValue() ?? []}
@@ -1177,6 +1203,98 @@ type EditableSingleEntity = Exclude<
 type SingleEntityData<TEntity extends SingleEntityColumnData["entity"]> =
   Extract<SingleEntityColumnData, { entity: TEntity }>["data"];
 
+type CanonicalSingleEntityLinkProps =
+  | {
+      entity: "ingredient";
+      data: NonNullable<SingleEntityData<"ingredient">>;
+    }
+  | {
+      entity: "product";
+      data: NonNullable<SingleEntityData<"product">>;
+    }
+  | {
+      entity: "recipe";
+      data: NonNullable<SingleEntityData<"recipe">>;
+    }
+  | {
+      entity: "location";
+      data: NonNullable<SingleEntityData<"location">>;
+    }
+  | {
+      entity: "usda-food";
+      data: NonNullable<SingleEntityData<"usda-food">>;
+    };
+
+function CanonicalSingleEntityLink({
+  entity,
+  data,
+}: CanonicalSingleEntityLinkProps) {
+  const displayImage = useEntityDisplayImage({
+    entityType: entity,
+    entityId: "id" in data ? data.id : "",
+  });
+  if (entity === "usda-food") {
+    return (
+      <EntityInlineLink
+        displayImage={null}
+        entity="usda-food"
+        data={data}
+        truncate
+      />
+    );
+  }
+  return (
+    <EntityInlineLink
+      displayImage={displayImage}
+      entity={entity}
+      data={data}
+      truncate
+    />
+  );
+}
+
+type CanonicalEntityRefLinkProps =
+  | { entity: "task" | "project"; data: { id: string; name: string } }
+  | {
+      entity: "product";
+      data: { id: string; name: string; manufacturer?: string };
+    };
+
+function CanonicalEntityRefLink({ entity, data }: CanonicalEntityRefLinkProps) {
+  const displayImage = useEntityDisplayImage({
+    entityType: entity,
+    entityId: data.id,
+  });
+  if (entity === "task") {
+    return (
+      <EntityInlineLink
+        displayImage={displayImage}
+        entity="task"
+        data={data}
+        truncate
+      />
+    );
+  }
+  if (entity === "project") {
+    return (
+      <EntityInlineLink
+        displayImage={displayImage}
+        entity="project"
+        data={data}
+        truncate
+      />
+    );
+  }
+  return (
+    <EntityInlineLink
+      displayImage={displayImage}
+      entity="product"
+      data={data}
+      truncate
+    />
+  );
+}
+
 type SingleEntityAdapter = {
   /** Validates a row's relation summary once before constructing its UI data. */
   parse: (
@@ -1226,11 +1344,6 @@ function defineSingleEntityAdapter<TData>(
   };
 }
 
-const singleEntityLinkProps = {
-  displayImage: undefined,
-  truncate: true,
-} as const;
-
 /**
  * The complete relation-picker roster. Each entry owns the schema for its
  * projected value, the item converter used by editable cells, its real inline
@@ -1246,11 +1359,7 @@ const singleEntityAdapters = {
         id: parseShortcodeFor("ingredient", data.id),
       }),
     renderLink: (data) => (
-      <EntityInlineLink
-        {...singleEntityLinkProps}
-        entity="ingredient"
-        data={data}
-      />
+      <CanonicalSingleEntityLink entity="ingredient" data={data} />
     ),
     renderCollection: (items) => (
       <EntityInlineLinkList
@@ -1258,6 +1367,7 @@ const singleEntityAdapters = {
         items={items}
         maxItems={1}
         compact
+        resolveImages={false}
       />
     ),
     collectionId: (item) => item.id,
@@ -1272,11 +1382,7 @@ const singleEntityAdapters = {
         id: parseShortcodeFor("product", data.id),
       }),
     renderLink: (data) => (
-      <EntityInlineLink
-        {...singleEntityLinkProps}
-        entity="product"
-        data={data}
-      />
+      <CanonicalSingleEntityLink entity="product" data={data} />
     ),
     renderCollection: (items) => (
       <EntityInlineLinkList
@@ -1284,6 +1390,7 @@ const singleEntityAdapters = {
         items={items}
         maxItems={1}
         compact
+        resolveImages={false}
       />
     ),
     collectionId: (item) => item.id,
@@ -1296,11 +1403,7 @@ const singleEntityAdapters = {
         id: parseShortcodeFor("recipe", data.id),
       }),
     renderLink: (data) => (
-      <EntityInlineLink
-        {...singleEntityLinkProps}
-        entity="recipe"
-        data={data}
-      />
+      <CanonicalSingleEntityLink entity="recipe" data={data} />
     ),
     renderCollection: (items) => (
       <EntityInlineLinkList
@@ -1308,6 +1411,7 @@ const singleEntityAdapters = {
         items={items}
         maxItems={1}
         compact
+        resolveImages={false}
       />
     ),
     collectionId: (item) => item.id,
@@ -1320,11 +1424,7 @@ const singleEntityAdapters = {
         id: parseShortcodeFor("location", data.id),
       }),
     renderLink: (data) => (
-      <EntityInlineLink
-        {...singleEntityLinkProps}
-        entity="location"
-        data={data}
-      />
+      <CanonicalSingleEntityLink entity="location" data={data} />
     ),
     renderCollection: (items) => (
       <EntityInlineLinkList
@@ -1332,6 +1432,7 @@ const singleEntityAdapters = {
         items={items}
         maxItems={1}
         compact
+        resolveImages={false}
       />
     ),
     collectionId: (item) => item.id,
@@ -1341,11 +1442,7 @@ const singleEntityAdapters = {
   }),
   "usda-food": defineSingleEntityAdapter(usdaFoodInlineSchema, {
     renderLink: (data) => (
-      <EntityInlineLink
-        {...singleEntityLinkProps}
-        entity="usda-food"
-        data={data}
-      />
+      <CanonicalSingleEntityLink entity="usda-food" data={data} />
     ),
   }),
 } satisfies Record<SingleEntityColumnData["entity"], SingleEntityAdapter>;
@@ -1440,6 +1537,12 @@ export function createSingleEntityInlineLinkColumn<
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,
+      entityRefs: (row) => {
+        const item = valueFor(row);
+        return entity === "usda-food" || !item || !("id" in item)
+          ? []
+          : [{ entityType: entity, entityId: item.id }];
+      },
     }),
     cell: (info) => {
       const item = info.getValue();
@@ -2131,6 +2234,10 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,
+      entityRefs: (row) =>
+        row.projectId
+          ? [{ entityType: "project", entityId: row.projectId }]
+          : [],
     }),
     cell: (
       info: CellContext<T, { id: string | null; name: string | null }>,
@@ -2169,14 +2276,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
       }
 
       if (!id || !name) return <NoneValue />;
-      return (
-        <EntityInlineLink
-          displayImage={undefined}
-          entity="project"
-          data={{ id, name }}
-          truncate
-        />
-      );
+      return <CanonicalEntityRefLink entity="project" data={{ id, name }} />;
     },
   };
   // Client-side project-detail tables filter the object-valued accessor by id.
@@ -2242,6 +2342,10 @@ export function createProductLinkColumn<T extends ProductRefRow>(
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
         cellData,
+        entityRefs: (row) =>
+          row.productId
+            ? [{ entityType: "product", entityId: row.productId }]
+            : [],
       }),
       cell: (info) => {
         const { id, name } = info.getValue();
@@ -2263,11 +2367,9 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               )}
               renderValue={(v) =>
                 v ? (
-                  <EntityInlineLink
-                    displayImage={undefined}
+                  <CanonicalEntityRefLink
                     entity="product"
                     data={{ id: v.id, name: v.name }}
-                    truncate
                   />
                 ) : (
                   <NoneValue />
@@ -2278,14 +2380,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
         }
 
         if (!id || !name) return <NoneValue />;
-        return (
-          <EntityInlineLink
-            displayImage={undefined}
-            entity="product"
-            data={{ id, name }}
-            truncate
-          />
-        );
+        return <CanonicalEntityRefLink entity="product" data={{ id, name }} />;
       },
     },
   );
@@ -2331,6 +2426,10 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
         cellData,
+        entityRefs: (row) =>
+          row.subjectProductId
+            ? [{ entityType: "product", entityId: row.subjectProductId }]
+            : [],
       }),
       cell: (info) => {
         const { id, name } = info.getValue();
@@ -2352,11 +2451,9 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               )}
               renderValue={(v) =>
                 v ? (
-                  <EntityInlineLink
-                    displayImage={undefined}
+                  <CanonicalEntityRefLink
                     entity="product"
                     data={{ id: v.id, name: v.name }}
-                    truncate
                   />
                 ) : (
                   <NoneValue />
@@ -2367,14 +2464,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
         }
 
         if (!id || !name) return <NoneValue />;
-        return (
-          <EntityInlineLink
-            displayImage={undefined}
-            entity="product"
-            data={{ id, name }}
-            truncate
-          />
-        );
+        return <CanonicalEntityRefLink entity="product" data={{ id, name }} />;
       },
     },
   );
@@ -2410,11 +2500,15 @@ export function createParentLinkColumn<
       id: options?.id ?? defaultId,
       header: options?.header ?? defaultHeader,
       enableSorting: false,
-      meta: {
+      meta: attachCubbyColumnMeta<T>({
         className: options?.className ?? "w-40",
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
-      },
+        entityRefs: (row) => {
+          const id = row[idField];
+          return id ? [{ entityType: entity, entityId: id }] : [];
+        },
+      }),
       cell: (info) => {
         const { id, name } = info.getValue();
         if (!id || !name) return <NoneValue />;
@@ -2423,19 +2517,9 @@ export function createParentLinkColumn<
         // parameter (not a literal) blocks narrowing. Dispatching on the
         // literal here needs no assertion at all.
         return entity === "task" ? (
-          <EntityInlineLink
-            displayImage={undefined}
-            entity="task"
-            data={{ id, name }}
-            truncate
-          />
+          <CanonicalEntityRefLink entity="task" data={{ id, name }} />
         ) : (
-          <EntityInlineLink
-            displayImage={undefined}
-            entity="project"
-            data={{ id, name }}
-            truncate
-          />
+          <CanonicalEntityRefLink entity="project" data={{ id, name }} />
         );
       },
     },

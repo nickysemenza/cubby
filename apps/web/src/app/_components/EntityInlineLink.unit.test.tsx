@@ -1,10 +1,9 @@
-import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { displayImageFromData, EntityInlineLink } from "./EntityInlineLink";
+import { EntityInlineLink } from "./EntityInlineLink";
 
 const enrichedProduct = {
   id: "PRD-TEST",
@@ -26,62 +25,29 @@ function productLink() {
   return screen.getByRole("link", { name: "Test product" });
 }
 
-describe("displayImageFromData", () => {
-  it("derives the image from an established enriched read projection", () => {
-    expect(displayImageFromData(enrichedProduct)).toEqual({
-      url: enrichedProduct.images[0]?.url,
-    });
-  });
-
-  it("prefers a location's own photo over the cover of the SKU it is", () => {
-    expect(
-      displayImageFromData({
-        images: [{ url: "https://example.com/tote-in-place.jpg" }],
-        product: {
-          coverImage: { url: "https://example.com/sku.jpg" },
-        },
-      }),
-    ).toEqual({ url: "https://example.com/tote-in-place.jpg" });
-  });
-
-  it("falls back to the cover of the SKU a location is when it has no photo", () => {
-    expect(
-      displayImageFromData({
-        images: [],
-        product: {
-          coverImage: { url: "https://example.com/rack.jpg" },
-        },
-      }),
-    ).toEqual({ url: "https://example.com/rack.jpg" });
-  });
-
-  it("never draws an attached PDF manual as a thumbnail", () => {
-    // Documents share the images relation on purpose, so the sniffer has to
-    // skip them rather than trust position.
-    expect(
-      displayImageFromData({
-        images: [
-          {
-            url: "https://example.com/manual.pdf",
-            contentType: PDF_CONTENT_TYPE,
-          },
-          {
-            url: "https://example.com/bench.jpg",
-            contentType: "image/jpeg",
-          },
-        ],
-      }),
-    ).toEqual({ url: "https://example.com/bench.jpg" });
-  });
-});
-
 describe("EntityInlineLink display images", () => {
+  it("renders the explicitly supplied canonical image", () => {
+    render(
+      <EntityInlineLink
+        entity="product"
+        data={enrichedProduct}
+        displayImage={enrichedProduct.images[0] ?? null}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(productLink().querySelector("img")).toHaveAttribute(
+      "src",
+      enrichedProduct.images[0]?.url,
+    );
+  });
+
   it("suppresses its identity mark when adjacent media already supplies it", () => {
     render(
       <EntityInlineLink
         entity="product"
         data={enrichedProduct}
-        displayImage={enrichedProduct.images[0]}
+        displayImage={enrichedProduct.images[0] ?? null}
         showIdentityMark={false}
       />,
       { wrapper: harness.wrapper },
