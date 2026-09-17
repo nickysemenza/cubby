@@ -12,9 +12,10 @@ covers (`apps/web/project.json` — `postgres`, `build-cf`, `e2e`,
 `workers-tests`; `recipebridge/project.json` and `cubby-ffi/project.json` —
 `rust`; `apps/apple/project.json` — `apple-check`; the repo-wide `generate`, `types`,
 `lint`, `format`, `knip` gates stay on root `project.json`'s `cubby-checks`
-project), each with `inputs` that hash only the files it actually reads. A
-target whose inputs are unchanged since the last run replays its cached result
-instead of re-executing.
+project). Project relationships (`implicitDependencies` and `dependsOn`) decide
+which projects and prerequisite targets are selected and ordered. Target
+`inputs` and `dependentTasksOutputFiles` decide cache keys and whether a selected
+target can reuse a prior result; they are separate concerns.
 
 After committing, run `pnpm verify:local`
 (`nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`).
@@ -23,24 +24,33 @@ workers, Playwright workers, cargo, xcodebuild), and running tiers side by
 side on one host reproduces the contention the sequential `test:all` removed
 — measured 2026-09-16, the web unit tier took 196s instead of 24s under
 `run-many`'s default parallelism and tripped a 5s test timeout.
-It first rejects an uncommitted or untracked working tree, then runs every
-target across every project — most replay from cache on a small change, so an
-unaffected native/Postgres/E2E gate costs a cache lookup, not a rebuild. It
-deploys nothing. `pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true` first,
-forcing every target to actually execute regardless of cache state — use it
-for high-risk changes or before a release. Both print each step's elapsed
-seconds and a total (Nx's own `--outputStyle=stream` reporting).
+It first rejects an uncommitted or untracked working tree and checks it again
+after the run; this is an exact-`HEAD` merge gate and any generated churn must
+be resolved before handoff. It then runs every target across every project —
+most selected targets replay from cache on a small change, so an unaffected
+native or PostgreSQL gate costs a cache lookup, not a rebuild. E2E is explicitly
+uncached and always runs its browser tests; its `build-cf` prerequisite may
+reuse a cache entry, but the browser run itself never replays. The textual order
+of the `run-many -t` list is not an execution-order contract; Nx dependencies
+provide the ordering guarantees (including WASM before its consumers and the
+web build before E2E). It deploys nothing. `pnpm verify:local:full` sets
+`NX_SKIP_NX_CACHE=true` first, forcing every target to actually execute
+regardless of cache state — use it for high-risk changes or before a release.
+Both print static actionable diagnostics and step timings.
 
-**Pre-push.** `.husky/pre-push` runs `pnpm verify:push`
-(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple-check --parallel=1 && pnpm check`):
-a scoped fast gate that never escalates to the full suite. `nx affected` compares
-the working tree's content hashes against `nx.json`'s `defaultBase`
-(`origin/main`; override per-invocation with `nx affected --base=<ref>` or the
-`NX_BASE` env var) and runs each named target only on the projects whose
-inputs actually changed — a web-only change skips `rust`/`apple-check` entirely
-rather than a hand-written prefix classifier deciding to skip them. `pnpm
-check` (repository-wide `generate`/`types`/`lint`/`format`/`knip`) always runs
-afterward regardless of scope.
+**Pre-push.** `.husky/pre-push` runs `pnpm verify:push`, which requires a clean
+tree before and after one `nx affected` graph over
+`generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check`.
+It explicitly compares `origin/main` to `HEAD` with `--base=origin/main
+--head=HEAD`, runs sequentially with `--nxBail --outputStyle=static`, and never
+adds a separate trailing `pnpm check`. Refresh the local base first when
+needed (`git fetch origin main`); the local `origin/main` ref must represent
+the intended comparison point. A clean tree is required because generated
+outputs and untracked files would otherwise make the result ambiguous.
+`nx affected` selects projects from their declared relationships and target
+inputs: a web-only change can skip `rust`/`apple-check`, while a Rust change
+selects web through its explicit `recipebridge` relationship. This remains a
+scoped gate, not a full-suite escalation.
 
 Node 24, pnpm 12.3.4, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
@@ -49,6 +59,11 @@ single worker and no retries. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count.
 Browser verification always follows the current web build (the `e2e` target
 `dependsOn: ["build-cf"]`). Pre-commit still runs `pnpm check`.
+
+These cache and dependency changes reduce duplicate work and stale generated
+artifacts, but do not promise that two simultaneous full verifications are
+resource-safe on the same machine. Keep heavy local runs coordinated when the
+host is constrained.
 
 A change under `apps/apple/` or `cubby-ffi/` selects the `apple` Nx target
 (`scripts/apple-check.sh`, the former `ci-scope.ts` `runAppleCheck` body): `node
