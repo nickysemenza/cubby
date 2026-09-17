@@ -66,6 +66,10 @@ import {
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
+import {
+  lexicalEligibility,
+  lexicalRelevance,
+} from "~/server/repo/search-lexical";
 import { resolveFilterIds } from "~/server/repo/shortcode-resolver";
 
 // InventoryEntry has no incoming foreign keys. Keep the empty policy explicit
@@ -257,6 +261,7 @@ export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
   inventoryReader.getByShortcode(db, shortcode);
 
 interface InventoryFilters {
+  searchQuery?: string;
   createdFrom?: string;
   createdTo?: string;
   updatedFrom?: string;
@@ -292,8 +297,20 @@ const resolveInventorySort = (sort: SortParams) => {
   return null;
 };
 
-const inventoryListOrderBy = (sorts: SortParams[]) =>
-  buildOrderBy(
+const inventoryListOrderBy = (
+  sorts: SortParams[],
+  filters: InventoryFilters,
+) => {
+  if (filters.searchQuery?.trim() && sorts.length === 0) {
+    return [
+      asc(
+        lexicalRelevance("inventory", inventoryEntry.id, filters.searchQuery),
+      ),
+      desc(inventoryEntry.updatedAt),
+      asc(inventoryEntry.shortcode),
+    ];
+  }
+  return buildOrderBy(
     inventoryEntry,
     sorts,
     [...generatedEntitySort.inventory.fields],
@@ -302,6 +319,7 @@ const inventoryListOrderBy = (sorts: SortParams[]) =>
       tieBreaker: desc(inventoryEntry.createdAt),
     },
   );
+};
 
 /**
  * The complete WHERE for an inventory list. `getEntityCounts` calls it with
@@ -334,6 +352,7 @@ export const buildInventoryWhere = async (
     [
       ...auditDateWhereConditions(inventoryEntry, filters),
       ...relatedWhereConditions("inventory", filters, inventoryEntry.id),
+      lexicalEligibility("inventory", inventoryEntry.id, filters.searchQuery),
       eqAnyRequested(inventoryEntry.locationId, locationIds),
       eqAnyRequested(inventoryEntry.productId, productIds),
       eqAny(product.category, filters.categoryFilter),
@@ -417,7 +436,7 @@ export const inventoryentryList = async (
 
   const [results, [countResult]] = await Promise.all([
     baseQuery
-      .orderBy(...inventoryListOrderBy(sorts))
+      .orderBy(...inventoryListOrderBy(sorts, filters))
       .limit(take)
       .offset(skip),
     // Count + valuation aggregate share the joins/filters, so the footer's

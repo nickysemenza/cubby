@@ -335,6 +335,20 @@ export default defineEntity({
         stored: true,
       },
       {
+        columnId: "observedOn",
+        kind: "range",
+        placeholder: "Filter by observation date...",
+        deriveSchema: true,
+        stored: true,
+        range: {
+          kind: "date",
+          describe: {
+            lower: "Inclusive lower bound on observation date",
+            upper: "Inclusive upper bound on observation date",
+          },
+        },
+      },
+      {
         columnId: "locationId",
         kind: "idMulti",
         placeholder: "Filter by location...",

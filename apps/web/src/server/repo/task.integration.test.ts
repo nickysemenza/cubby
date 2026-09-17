@@ -2,7 +2,7 @@ import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import { taskCreateInput } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -10,12 +10,16 @@ import { auditLog, taskDependency } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getDb } from "~/server/repo/database-helpers";
-import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
+import {
+  getSearchDocumentEmbeddingText,
+  refreshSearchDocument,
+} from "~/server/repo/search-document";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createTask,
   getTaskByShortcode,
   setTasksStatus,
+  taskList,
   updateTask,
 } from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
@@ -79,6 +83,106 @@ describe("task reorder workflow", () => {
     ).rejects.toThrow(testShortcode("task", "missing-ranked-task"));
     expect((await getTaskByShortcode(ctx.db, first.output.id))?.sortOrder).toBe(
       20,
+    );
+  });
+});
+
+describe("task repository — scoped list search", () => {
+  const ctx = withTestDb();
+
+  it("intersects exact/text search with legacy and status filters before count and pagination", async () => {
+    const exact = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "scope exact search",
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const prefixCompetitor = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: `alpha ${exact.output.id} scope alternate`,
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const pageRows = await Promise.all(
+      ["one", "two", "three"].map((suffix) =>
+        createTask(
+          ctx.db,
+          taskCreateInput.parse({
+            trade: "other",
+            name: `scope page marker ${suffix}`,
+            status: "done",
+          }),
+          ctx.actor,
+        ),
+      ),
+    );
+    const excluded = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "scope page marker excluded",
+        status: "not_started",
+      }),
+      ctx.actor,
+    );
+    await Promise.all(
+      [exact, prefixCompetitor, ...pageRows, excluded].map(({ entityId }) =>
+        refreshSearchDocument(ctx.db, "task", entityId),
+      ),
+    );
+    // The document is intentionally left untouched: list relevance must use
+    // the source edit time, while exact shortcode eligibility still wins.
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Task"
+      SET "updatedAt" = now() + interval '1 day'
+      WHERE "id" = ${prefixCompetitor.entityId}
+    `);
+
+    const exactFilters = {
+      searchQuery: exact.output.id,
+      search: "scope",
+      status: "done" as const,
+    };
+    const relevance = await taskList(ctx.db, exactFilters, [], {
+      pageIndex: 0,
+      pageSize: 10,
+    });
+    expect(relevance.count).toBe(2);
+    expect(relevance.data.map((row) => row.id)).toEqual([
+      exact.output.id,
+      prefixCompetitor.output.id,
+    ]);
+
+    const explicitSort = await taskList(
+      ctx.db,
+      exactFilters,
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(explicitSort.data.map((row) => row.id)).toEqual([
+      prefixCompetitor.output.id,
+      exact.output.id,
+    ]);
+
+    const pageFilters = {
+      searchQuery: "scope page marker",
+      search: "scope page",
+      status: "done" as const,
+    };
+    const pageTwo = await taskList(ctx.db, pageFilters, [], {
+      pageIndex: 2,
+      pageSize: 1,
+    });
+    expect(pageTwo.count).toBe(3);
+    expect(pageTwo.data).toHaveLength(1);
+    expect(pageRows.map(({ output }) => output.id)).toContain(
+      pageTwo.data[0]?.id,
     );
   });
 });

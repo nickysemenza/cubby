@@ -2656,6 +2656,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -3163,6 +3174,17 @@
                 "has",
                 "none"
               ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true
@@ -3807,6 +3829,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -4238,6 +4271,28 @@
             "explode": true
           },
           {
+            "name": "observedOnFrom",
+            "in": "query",
+            "description": "Inclusive lower bound on observation date",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "observedOnTo",
+            "in": "query",
+            "description": "Inclusive upper bound on observation date",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "locationId",
             "in": "query",
             "schema": {
@@ -4272,6 +4327,17 @@
             "schema": {
               "type": "string",
               "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true
@@ -4599,6 +4665,28 @@
             "explode": true
           },
           {
+            "name": "observedOnFrom",
+            "in": "query",
+            "description": "Inclusive lower bound on observation date",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "observedOnTo",
+            "in": "query",
+            "description": "Inclusive upper bound on observation date",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "locationId",
             "in": "query",
             "schema": {
@@ -4633,6 +4721,17 @@
             "schema": {
               "type": "string",
               "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true
@@ -5875,6 +5974,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -6393,6 +6503,17 @@
             "schema": {
               "type": "string",
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true
@@ -8539,6 +8660,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -9976,6 +10108,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -10501,6 +10644,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -10876,6 +11030,17 @@
                 "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
                 "description": "product shortcode, e.g. PRD-4K7M"
               }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true
@@ -13509,6 +13674,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -14859,6 +15035,17 @@
                 "has",
                 "none"
               ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true
@@ -16263,6 +16450,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -17196,6 +17394,17 @@
                   }
                 ]
               }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true
@@ -18651,6 +18860,17 @@
             "schema": {
               "type": "number",
               "minimum": 0
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true
@@ -21156,6 +21376,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -21851,6 +22082,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "ids",
             "in": "query",
             "schema": {
@@ -22537,6 +22779,17 @@
             "explode": true
           },
           {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -22911,6 +23164,17 @@
                 "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
                 "description": "product shortcode, e.g. PRD-4K7M"
               }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "searchQuery",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             },
             "style": "form",
             "explode": true

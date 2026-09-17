@@ -15,6 +15,7 @@ import type { Database } from "~/server/db";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding-search";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
+import { buildPrefixTsQuery, searchTerms } from "~/server/repo/search-lexical";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
 import {
   embedQuery,
@@ -52,15 +53,7 @@ const productionRelatedSearchPort: RelatedSearchPort = {
   vectorStore: productionVectorStore,
 };
 
-export const searchTerms = (query: string): string[] =>
-  normalizeSearchText(query)
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
-
-export const buildPrefixTsQuery = (query: string): string =>
-  searchTerms(query)
-    .map((term) => `${term.replace(/[':&|!()]/g, "")} :*`.replace(" ", ""))
-    .join(" & ");
+export { buildPrefixTsQuery, searchTerms } from "~/server/repo/search-lexical";
 
 const scopes = (entityTypes?: SearchableEntity[]) =>
   entityTypes?.length ? entityTypes : [...searchableEntities];
@@ -142,6 +135,7 @@ export async function findLexicalSearchCandidates(
           lower(sd."shortcode") = ${normalized}
           OR lower(sd.title) = ${normalized}
           OR lower(sd.title) LIKE ${`${normalized}%`}
+          OR EXISTS (SELECT 1 FROM unnest(sd.aliases || sd.keywords) term WHERE lower(term) = ${normalized} OR lower(term) LIKE ${`${normalized}%`})
           OR sd."searchVector" @@ q.query
         )
       UNION

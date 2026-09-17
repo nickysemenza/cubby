@@ -204,6 +204,7 @@ const renderFieldDescriptorLiteral = (
   return (
     "FieldDescriptor(" +
     `key: ${swiftString(field.key)}, ` +
+    `columnId: ${swiftOptionalString(field.display.columnId)}, ` +
     `label: ${swiftString(field.label)}, ` +
     `kind: .${swiftCaseName(field.kind)}, ` +
     `nullable: ${swiftBool(field.nullable)}, ` +
@@ -360,6 +361,10 @@ const renderEntityDescriptorLiteral = (
   // field to Optional for a case that has never occurred.
   const plural = entity.inspector.plural ?? entity.inspector.singular;
   const searchable = entity.descriptor.searchable === true;
+  const primarySearch =
+    entity.contract !== null && searchable
+      ? `PrimarySearchDescriptor(key: "searchQuery", placeholder: ${swiftString(`Search ${plural.toLowerCase()} or shortcode`)})`
+      : "nil";
   const timeline = entity.timeline === null ? "nil" : `.${entity.timeline}`;
   return (
     `  EntityDescriptor(\n` +
@@ -372,6 +377,7 @@ const renderEntityDescriptorLiteral = (
     `    domain: ${entity.inspector.domain === null ? "nil" : `.${entity.inspector.domain}`},\n` +
     `    sfSymbol: ${swiftString(entity.inspector.icons.sfSymbol)},\n` +
     `    searchable: ${swiftBool(searchable)},\n` +
+    `    primarySearch: ${primarySearch},\n` +
     `    timeline: ${timeline},\n` +
     `    fields: ${fields.length === 0 ? "[]" : `[\n      ${fields}\n    ]`},\n` +
     `    filters: ${filters.length === 0 ? "[]" : `[\n      ${filters}\n    ]`},\n` +
@@ -463,6 +469,8 @@ export const renderSwiftEntityCatalog = (
     "}\n\n" +
     "public struct FieldDescriptor: Codable, Sendable {\n" +
     "  public let key: String\n" +
+    "  /// The list/relation column id this source field supplies, when renamed.\n" +
+    "  public let columnId: String?\n" +
     "  public let label: String\n" +
     "  public let kind: EntityFieldKind\n" +
     "  /// Whether the server accepts `null` for this field; only a nullable key may be cleared.\n" +
@@ -644,6 +652,11 @@ export const renderSwiftEntityCatalog = (
     "public enum EntityTimelineMode: String, Codable, Sendable, Hashable {\n" +
     "  case `default`, custom\n" +
     "}\n\n" +
+    "/// The one broad lexical search control a server-backed list exposes.\n" +
+    "public struct PrimarySearchDescriptor: Codable, Sendable, Hashable {\n" +
+    "  public let key: String\n" +
+    "  public let placeholder: String\n" +
+    "}\n\n" +
     "public struct EntityDescriptor: Codable, Sendable {\n" +
     "  public let key: EntityKey\n" +
     "  public let singular: String\n" +
@@ -657,6 +670,8 @@ export const renderSwiftEntityCatalog = (
     "  public let sfSymbol: String\n" +
     "  /// Indexed by `search.find`; the intent surface is `searchable` ∧ `httpActions.contains(.get)`.\n" +
     "  public let searchable: Bool\n" +
+    "  /// `searchQuery` transport metadata; nil for client-only/custom lists.\n" +
+    "  public let primarySearch: PrimarySearchDescriptor?\n" +
     "  /// Non-nil exactly when the HTTP document exposes `resources.<key>.timeline`.\n" +
     "  public let timeline: EntityTimelineMode?\n" +
     "  public let fields: [FieldDescriptor]\n" +

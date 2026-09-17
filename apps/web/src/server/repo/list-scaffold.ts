@@ -18,16 +18,32 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import type { AnyColumn, SQL } from "drizzle-orm";
+import {
+  searchableEntities,
+  type SearchableEntity,
+} from "@cubby/schemas/search";
+import { asc, desc, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import { buildOrderBy, buildSearchConditions } from "./database-helpers";
 import { declaredFilterPredicates } from "./declared-filter-predicates";
+import { lexicalEligibility, lexicalRelevance } from "./search-lexical";
 
 /** Entities with a declared sort roster — the only ones `orderBy` can serve. */
 type SortableEntity = keyof typeof generatedEntitySort;
 
 type OrderByOpts = Parameters<typeof buildOrderBy>[3];
+
+const searchableEntityNames = new Set<string>(searchableEntities);
+const isSearchableEntity = (entity: string): entity is SearchableEntity =>
+  searchableEntityNames.has(entity);
+const listSearchSchema = z
+  .object({ searchQuery: z.string().trim().min(1).max(100).optional() })
+  .passthrough();
+const searchQueryFromFilters = <Filters extends object>(
+  filters: Filters | undefined,
+) => listSearchSchema.parse(filters ?? {}).searchQuery;
 
 /**
  * `entity`/`table` scope the three helpers to one entity's list. Call once per
@@ -35,8 +51,14 @@ type OrderByOpts = Parameters<typeof buildOrderBy>[3];
  */
 export function listScaffold<
   E extends SortableEntity,
-  T extends PgTable & { id: AnyColumn; deletedAt: AnyColumn },
+  T extends PgTable & {
+    id: AnyColumn;
+    deletedAt: AnyColumn;
+    updatedAt: AnyColumn;
+    shortcode: AnyColumn;
+  },
 >(entity: E, table: T) {
+  const searchable = isSearchableEntity(entity);
   return {
     /**
      * `computed` is every condition that isn't a declared stored predicate —
@@ -49,16 +71,48 @@ export function listScaffold<
       return buildSearchConditions(
         table,
         [],
-        [...declaredFilterPredicates(entity, table, filters), ...computed],
+        [
+          ...declaredFilterPredicates(entity, table, filters),
+          ...(searchable
+            ? [
+                lexicalEligibility(
+                  entity,
+                  table.id,
+                  searchQueryFromFilters(filters),
+                ),
+              ]
+            : []),
+          ...computed,
+        ],
       );
     },
 
-    orderBy(sorts: SortParams[], opts?: OrderByOpts): SQL[] {
+    orderBy<Filters extends object>(
+      sorts: SortParams[],
+      opts?: OrderByOpts,
+      filters?: Filters,
+    ): SQL[] {
+      const searchQuery = searchQueryFromFilters(filters);
+      if (searchable && searchQuery !== undefined && sorts.length === 0) {
+        return [
+          asc(lexicalRelevance(entity, table.id, searchQuery)),
+          desc(table.updatedAt),
+          asc(table.shortcode),
+        ];
+      }
       return buildOrderBy(
         table,
         sorts,
         [...generatedEntitySort[entity].fields],
-        opts,
+        {
+          ...opts,
+          // Offset pagination must be deterministic. Repositories may keep a
+          // domain-specific tie-breaker, but every explicit list sort then
+          // lands on the public shortcode before the private primary key.
+          tieBreaker: opts?.tieBreaker
+            ? sql`${opts.tieBreaker}, ${table.shortcode} asc`
+            : sql`${table.shortcode} asc`,
+        },
       );
     },
 

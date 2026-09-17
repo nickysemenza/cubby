@@ -357,7 +357,9 @@ export const renderEntityArtifacts = (
       const filters =
         filterSchema === null
           ? "z.object({})"
-          : `z.object(${filterSchema.export})`;
+          : entity.descriptor.searchable === true
+            ? `z.object(${filterSchema.export}).extend({searchQuery:z.string().trim().min(1).max(100).optional()})`
+            : `z.object(${filterSchema.export})`;
       return `  ${JSON.stringify(entity.key)}: entitySchema(${JSON.stringify(entity.key)},{filters:${filters},createInput:${contract.create?.export ?? "null"},updateInput:${contract.update?.export ?? "null"},bulkUpdateInput:${bulkUpdateInput},output:${contract.output.export},detail:${contract.detail.export},list:${contract.list.export},mcpOutput:${contract.mcpOutput.export},mcpDetail:${contract.mcpDetail.export},mcpList:${contract.mcpList.export}}),`;
     })
     .join("\n");
@@ -770,6 +772,16 @@ export const renderEntityArtifacts = (
           ...entity.inspector,
           shortcodePrefix: entity.shortcode,
           searchable: entity.descriptor.searchable === true,
+          // Search is a list capability, not a synthetic model field. Keeping
+          // this descriptor beside the generated list metadata gives web and
+          // native one transport key without teaching either about `name`.
+          primarySearch:
+            entity.contract !== null && entity.descriptor.searchable === true
+              ? {
+                  key: "searchQuery",
+                  placeholder: `Search ${(entity.inspector.plural ?? entity.inspector.singular).toLowerCase()} or shortcode`,
+                }
+              : null,
           browserRouted: entity.descriptor.browserRoutes !== false,
           auditable: entity.descriptor.auditable === true,
           hasImages: entity.descriptor.hasImages === true,
@@ -1135,6 +1147,7 @@ export const renderEntityArtifacts = (
         "  plural: string | null;\n" +
         "  shortcodePrefix: string | null;\n" +
         "  searchable: boolean;\n" +
+        '  primarySearch: { key: "searchQuery"; placeholder: string } | null;\n' +
         "  browserRouted: boolean;\n" +
         "  auditable: boolean;\n" +
         "  hasImages: boolean;\n" +

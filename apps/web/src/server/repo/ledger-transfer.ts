@@ -525,7 +525,7 @@ export async function listLedgerTransfers(
       .select(columns)
       .from(ledgerTransfer)
       .where(where)
-      .orderBy(...ledgerTransferScaffold.orderBy(sorts))
+      .orderBy(...ledgerTransferScaffold.orderBy(sorts, undefined, filters))
       .limit(take)
       .offset(skip),
     countWhere(db, ledgerTransfer, where),

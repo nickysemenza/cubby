@@ -39,6 +39,8 @@ interface TableStateOptions {
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;
   filterSpecs?: readonly FilterSpecCore[];
+  /** Generated workbench search metadata, kept separate from field filters. */
+  primarySearch?: { key: string } | null;
   /**
    * Mirror sort + pagination to the URL search params (bookmarkable / shareable
    * / survives reload). The live URL is authoritative after mount; guarded
@@ -134,6 +136,10 @@ export interface TableStateReturn {
   getColumnFilterValues: (columnId: string) => string[] | undefined;
   getSortParams: () => SortParams;
   getSorts: () => SortParams[];
+  /** A URL sort is a user choice; the opening sort is not. */
+  hasExplicitSort: boolean;
+  /** Broad entity search is active; ordinary list filters do not set this. */
+  hasPrimarySearch: boolean;
 }
 
 export function useTableState(
@@ -145,6 +151,7 @@ export function useTableState(
     initialFilter = NO_INITIAL_FILTER,
     initialPagination = defaultPagination,
     filterSpecs = NO_SPECS,
+    primarySearch = null,
     urlSync = false,
     readUrlState = true,
     syncPaginationToUrl = true,
@@ -158,12 +165,28 @@ export function useTableState(
   // The codec compiles that split, the keys each side owns, and the
   // encode/decode over them from one walk, so this hook never re-derives a
   // URL key on its own.
-  const codec = useMemo(() => compileFilterCodec(filterSpecs), [filterSpecs]);
+  const codec = useMemo(
+    () =>
+      compileFilterCodec(
+        primarySearch
+          ? [
+              {
+                columnId: primarySearch.key,
+                field: primarySearch.key,
+                kind: "text" as const,
+              },
+              ...filterSpecs,
+            ]
+          : filterSpecs,
+      ),
+    [filterSpecs, primarySearch],
+  );
   const { urlOnlyKeys } = codec;
 
   const search = routerSearchSchema.parse(useSearch({ strict: false }));
   const navigate = useNavigate();
   const urlStateSource = urlSync || readUrlState ? search : NO_URL_STATE;
+  const hasExplicitSort = paramToSort(urlStateSource[SORT_KEY]) !== undefined;
 
   // Lazy initializers read the URL once (first render, incl. SSR) so a shared /
   // reloaded link restores sort + page before first paint. Reading defaults on
@@ -181,6 +204,9 @@ export function useTableState(
       const fromUrl = codec.decodeColumns(urlStateSource);
       return fromUrl.length ? fromUrl : initialFilter;
     },
+  );
+  const hasPrimarySearch = columnFilters.some(
+    (filter) => filter.id === primarySearch?.key && Boolean(filter.value),
   );
   // URL-only scopes are read from the LIVE url rather than seeded into state:
   // the only way to change one is to navigate (the ScopeChip's clear), and the
@@ -520,6 +546,8 @@ export function useTableState(
       getColumnFilterValues,
       getSortParams,
       getSorts,
+      hasExplicitSort,
+      hasPrimarySearch,
     }),
     [
       sorting,
@@ -533,6 +561,8 @@ export function useTableState(
       getColumnFilterValues,
       getSortParams,
       getSorts,
+      hasExplicitSort,
+      hasPrimarySearch,
     ],
   );
 }

@@ -283,7 +283,7 @@ function FilterChip({
 
 /**
  * Compact, manifest-backed expression of the table's active query: a search
- * input for the entity's title field, one chip per every other declared
+ * input for the entity's declared primary search, one chip per every other declared
  * field (capped, with the rest behind `More`), and a `Clear N` link.
  *
  * This intentionally supports only the three filter shapes emitted by
@@ -303,7 +303,7 @@ export function FilterBar({
   fields: FilterBarField[];
   onChange: (filters: Filter[]) => void;
   className?: string;
-  /** The field rendered as a search input instead of a chip (the entity's title field). */
+  /** The declared broad search field rendered as an input instead of a chip. */
   searchKey?: string;
   searchPlaceholder?: string;
 }) {

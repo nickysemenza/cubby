@@ -1,4 +1,7 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  entityInspectorMetadata,
+  type BrowserRoutedEntity,
+} from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ColumnVisibilityState } from "@tanstack/react-table";
@@ -93,6 +96,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
       initialSortDesc: defaultSortDesc,
       urlSync: true,
       filterSpecs: getEntityFilters(entity),
+      primarySearch: entityInspectorMetadata[entity].primarySearch,
       ...tableStateOptions,
     }),
     [defaultSort, defaultSortDesc, entity, tableStateOptions],

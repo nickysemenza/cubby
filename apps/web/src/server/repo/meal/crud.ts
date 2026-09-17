@@ -248,13 +248,17 @@ export const mealList = async (
         : sql`${rank} desc nulls last`,
     ];
   };
-  const orderByArray = mealScaffold.orderBy(sorts, {
-    resolve: resolveMealSort,
-    // An unnamed meal displays as its date, so a name sort would otherwise
-    // dump every one of them into an arbitrarily-ordered NULL block. This
-    // orders that block the way its visible label reads.
-    tieBreaker: sql`${meal.date} desc`,
-  });
+  const orderByArray = mealScaffold.orderBy(
+    sorts,
+    {
+      resolve: resolveMealSort,
+      // An unnamed meal displays as its date, so a name sort would otherwise
+      // dump every one of them into an arbitrarily-ordered NULL block. This
+      // orders that block the way its visible label reads.
+      tieBreaker: sql`${meal.date} desc`,
+    },
+    filters,
+  );
   const { take, skip } = mealScaffold.page(pagination);
 
   const whereCondition = buildMealWhere(db, filters);

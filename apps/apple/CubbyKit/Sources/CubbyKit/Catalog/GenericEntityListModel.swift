@@ -39,6 +39,13 @@ public final class GenericEntityListModel {
     public private(set) var timelineError: String?
     public private(set) var isLoadingTimeline = false
 
+    /// Optional rich search state supplied by the host when the entity's generated list route
+    /// supports `searchQuery`. Keeping it separate from the base list preserves loaded pages,
+    /// selection, and a shelf/timeline view while a query is active.
+    public let searchModel: EntityListSearchModel?
+
+    public var isSearching: Bool { !(searchModel?.query.isEmpty ?? true) }
+
     public var hasMore: Bool {
         guard let meta else { return false }
         return page * meta.pageSize < meta.totalCount
@@ -60,7 +67,8 @@ public final class GenericEntityListModel {
         pageSize: Int = 50,
         sort: String? = nil,
         filters: EntityFilterState = EntityFilterState(),
-        view: ListView? = nil
+        view: ListView? = nil,
+        searchLoader: EntityListSearchModel.PageLoader? = nil
     ) {
         self.descriptor = descriptor
         self.client = client
@@ -68,6 +76,13 @@ public final class GenericEntityListModel {
         self.sort = sort
         self.filters = filters
         self.view = view ?? descriptor.presentation.listViews.first ?? .table
+        self.searchModel =
+            searchLoader.map { EntityListSearchModel(loader: $0) }
+            ?? descriptor.primarySearch.map { _ in
+                EntityListSearchModel(
+                    loader: Self.searchLoader(
+                        descriptor: descriptor, client: client, filters: filters, pageSize: pageSize))
+            }
     }
 
     /// Loads the first page once. A failed initial request can be retried, while a successfully
@@ -89,7 +104,20 @@ public final class GenericEntityListModel {
     public func apply(filters newFilters: EntityFilterState) async {
         guard newFilters != filters else { return }
         filters = newFilters
+        searchModel?.setLoader(
+            Self.searchLoader(
+                descriptor: descriptor, client: client, filters: newFilters, pageSize: pageSize))
         await refresh()
+    }
+
+    /// Updates the optional rich-search adapter. The base list remains intact while searching;
+    /// views can render `searchModel.rows` and fall back to `rows` after `clearSearch()`.
+    public func setSearchQuery(_ query: String) {
+        searchModel?.setQuery(query)
+    }
+
+    public func clearSearch() {
+        searchModel?.clear()
     }
 
     /// Switches the declared view; the timeline loads on first selection and after filter changes.
@@ -227,6 +255,17 @@ public final class GenericEntityListModel {
         requestTask = nil
         requestGeneration += 1
         activity = .idle
+    }
+
+    private static func searchLoader(
+        descriptor: EntityDescriptor, client: CubbyClient, filters: EntityFilterState, pageSize: Int
+    ) -> EntityListSearchModel.PageLoader {
+        { query, page in
+            var scopedFilters = filters
+            scopedFilters.set(.single(query), for: "searchQuery")
+            return try await client.list(
+                descriptor, page: page, pageSize: pageSize, sort: nil, filters: scopedFilters)
+        }
     }
 
     static func describe(_ error: Error) -> String {

@@ -630,9 +630,13 @@ const ingredientListImpl = async (
       ];
     return null;
   };
-  const orderByClause = ingredientScaffold.orderBy(sorts, {
-    resolve: resolveIngredientSort,
-  });
+  const orderByClause = ingredientScaffold.orderBy(
+    sorts,
+    {
+      resolve: resolveIngredientSort,
+    },
+    filters,
+  );
 
   const { take, skip } = ingredientScaffold.page(pagination);
 

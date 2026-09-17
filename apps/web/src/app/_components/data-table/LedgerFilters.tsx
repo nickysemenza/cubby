@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
 
@@ -19,14 +20,6 @@ function isColumnLabel(value: unknown): value is string {
 }
 
 /**
- * The column carrying the record's own name — `useStandardColumns` always
- * mounts it under this literal id (see `createNameColumn(..., "name", ...)`),
- * regardless of the entity's `titleField`. The band renders it as a search
- * input rather than a declared-filter chip.
- */
-const SEARCH_FIELD_KEY = "name";
-
-/**
  * The table-backed manifest filter bar: fields come from the mounted columns'
  * `meta.filterConfig`, state from TanStack. Everything else lives in
  * `filter-bar-core` / `useFilterBarDraft`, shared with the URL-backed bar.
@@ -34,8 +27,9 @@ const SEARCH_FIELD_KEY = "name";
 function getLedgerFields<TData extends RowData>(
   table: Table<TData>,
   optionHints?: Readonly<Record<string, Readonly<Record<string, string>>>>,
+  primarySearch?: { key: string; placeholder: string } | null,
 ): FilterBarField[] {
-  return table.getAllLeafColumns().flatMap((column) => {
+  const fields = table.getAllLeafColumns().flatMap((column) => {
     const config = column.columnDef.meta?.filterConfig;
     if (!config) return [];
     const header = column.columnDef.header;
@@ -44,6 +38,17 @@ function getLedgerFields<TData extends RowData>(
       barFieldFromConfig(column.id, label, config, optionHints?.[column.id]),
     ];
   });
+  return primarySearch
+    ? [
+        {
+          key: primarySearch.key,
+          label: "Search",
+          type: "text",
+          placeholder: primarySearch.placeholder,
+        },
+        ...fields.filter((field) => field.key !== primarySearch.key),
+      ]
+    : fields;
 }
 
 export function LedgerFilters<TData extends RowData>({
@@ -74,10 +79,19 @@ export function LedgerFilters<TData extends RowData>({
     .filter((column) => column.columnDef.meta?.filterConfig)
     .map((column) => column.id)
     .join("|");
+  const primarySearch = entity
+    ? entityInspectorMetadata[entity].primarySearch
+    : null;
   const fields = useMemo(
-    () => getLedgerFields(table, optionHints),
+    () => getLedgerFields(table, optionHints, primarySearch),
     // oxlint-disable-next-line react/exhaustive-deps -- filterColumnsKey is the late-materializing TanStack v9 signal described above
-    [table, table.options.columns, optionHints, filterColumnsKey],
+    [
+      table,
+      table.options.columns,
+      optionHints,
+      filterColumnsKey,
+      primarySearch,
+    ],
   );
   const externalColumnFilters = table.state.columnFilters;
   const externalFilters = useMemo(
@@ -99,7 +113,9 @@ export function LedgerFilters<TData extends RowData>({
     entity && isBrowserRoutedEntity(entity)
       ? entities[entity].pluralLabel.toLowerCase()
       : undefined;
-  const searchPlaceholder = pluralLower ? `Search ${pluralLower}` : undefined;
+  const searchPlaceholder =
+    primarySearch?.placeholder ??
+    (pluralLower ? `Search ${pluralLower}` : undefined);
 
   // Sort lives inside the phone `Filter` sheet regardless of whether this
   // table declares any filterable fields — a sortable-only table must not
@@ -111,7 +127,7 @@ export function LedgerFilters<TData extends RowData>({
         filters={draftFilters}
         fields={fields}
         onChange={handleChange}
-        searchKey={SEARCH_FIELD_KEY}
+        searchKey={primarySearch?.key}
         searchPlaceholder={searchPlaceholder}
       />
     );
@@ -125,7 +141,7 @@ export function LedgerFilters<TData extends RowData>({
       fields={fields}
       onChange={handleChange}
       className="min-w-0"
-      searchKey={SEARCH_FIELD_KEY}
+      searchKey={primarySearch?.key}
       searchPlaceholder={searchPlaceholder}
     />
   );

@@ -81,25 +81,30 @@ export function useInfiniteTableList<
   TFilters,
   TData
 >): UseInfiniteTableListReturn<TData> {
-  const { filters, sortParams, pagination } = usePaginatedTableCore<
-    TFilters,
-    TData
-  >({
-    queryOptions,
-    buildFilters,
-    tableState,
-    groupBy,
-  });
+  const { filters, sortParams, pagination, queryParams } =
+    usePaginatedTableCore<TFilters, TData>({
+      queryOptions,
+      buildFilters,
+      tableState,
+      groupBy,
+    });
+
+  const pageInputFor = useCallback(
+    (pageIndex: number): Parameters<ListQueryOptionsFn<TFilters, TData>>[0] => {
+      const params: Parameters<ListQueryOptionsFn<TFilters, TData>>[0] = {
+        pagination: { pageIndex, pageSize: pagination.pageSize },
+        filters,
+      };
+      if (queryParams.sort !== undefined) params.sort = sortParams;
+      if (groupBy) params.groupBy = groupBy;
+      return params;
+    },
+    [filters, groupBy, pagination.pageSize, queryParams.sort, sortParams],
+  );
 
   const firstPageOptions = useMemo(
-    () =>
-      queryOptions({
-        sort: sortParams,
-        pagination: { pageIndex: 0, pageSize: pagination.pageSize },
-        filters,
-        ...(groupBy && { groupBy }),
-      }),
-    [queryOptions, sortParams, pagination.pageSize, filters, groupBy],
+    () => queryOptions(pageInputFor(0)),
+    [pageInputFor, queryOptions],
   );
 
   const infiniteQueryKey = useMemo(() => {
@@ -114,20 +119,8 @@ export function useInfiniteTableList<
     () => (pageParam: number) =>
       pageParam === 0
         ? firstPageOptions
-        : queryOptions({
-            sort: sortParams,
-            pagination: { pageIndex: pageParam, pageSize: pagination.pageSize },
-            filters,
-            ...(groupBy && { groupBy }),
-          }),
-    [
-      firstPageOptions,
-      queryOptions,
-      sortParams,
-      pagination.pageSize,
-      filters,
-      groupBy,
-    ],
+        : queryOptions(pageInputFor(pageParam)),
+    [firstPageOptions, pageInputFor, queryOptions],
   );
 
   // SAFETY: this adapter narrows TanStack's observer result to the exact

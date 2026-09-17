@@ -41,8 +41,31 @@ function LedgerFiltersHarness() {
 
   return (
     <>
-      <LedgerFilters table={table} />
+      <LedgerFilters entity="task" table={table} />
       <output data-testid="column-filters">
+        {JSON.stringify(table.state.columnFilters)}
+      </output>
+    </>
+  );
+}
+
+function PrimarySearchHarness() {
+  const table = useCubbyTable({
+    data: [],
+    // Regression: generic entity search is declared metadata, not an accident
+    // of a table mounting a literal `name` column.
+    columns: helper.columns([
+      helper.accessor("trade", {
+        header: "Trade",
+        meta: { filterConfig: { placeholder: "Filter by trade..." } },
+      }),
+    ]),
+    getRowId: (row) => row.id,
+  });
+  return (
+    <>
+      <LedgerFilters table={table} entity="task" />
+      <output data-testid="primary-column-filters">
         {JSON.stringify(table.state.columnFilters)}
       </output>
     </>
@@ -64,15 +87,24 @@ describe("LedgerFilters", () => {
     );
   });
 
-  it("renders the title field as a search input, not a chip, until it has a value", () => {
+  it("uses declared primary search while keeping the title field as a narrow chip", () => {
     render(<LedgerFiltersHarness />);
 
-    const search = screen.getByRole("textbox", { name: "Search Name" });
+    const search = screen.getByRole("textbox", {
+      name: "Search tasks or shortcode",
+    });
     expect(search).toHaveValue("");
-    expect(
-      screen.queryByRole("button", { name: /^Name:/ }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Name: any" })).toBeVisible();
     expect(screen.getByTestId("column-filters")).toHaveTextContent("[]");
+  });
+
+  it("renders the declared primary search even when no name column is mounted", () => {
+    render(<PrimarySearchHarness />);
+
+    const search = screen.getByRole("textbox", {
+      name: "Search tasks or shortcode",
+    });
+    expect(search).toHaveValue("");
   });
 });
 

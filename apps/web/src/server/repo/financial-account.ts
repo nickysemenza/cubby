@@ -227,12 +227,16 @@ export async function listFinancialAccounts(
       .from(financialAccount)
       .where(where)
       .orderBy(
-        ...financialAccountScaffold.orderBy(sorts, {
-          resolve: (sort) =>
-            sort.orderBy === "transactionCount"
-              ? [(sort.direction === "asc" ? asc : desc)(transactionCount)]
-              : null,
-        }),
+        ...financialAccountScaffold.orderBy(
+          sorts,
+          {
+            resolve: (sort) =>
+              sort.orderBy === "transactionCount"
+                ? [(sort.direction === "asc" ? asc : desc)(transactionCount)]
+                : null,
+          },
+          filters,
+        ),
       )
       .limit(take)
       .offset(skip),

@@ -1,5 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  entityInspectorMetadata,
+  type BrowserRoutedEntity,
+} from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -324,8 +327,8 @@ export function useEntityList<
   // SAFETY: the manifest builder and `scopeFilters` are both typed at this
   // hook boundary as the caller's TFilters contract.
   const manifestBuildFilters = useCallback(
-    (ts: TableStateReturn) =>
-      ({
+    (ts: TableStateReturn) => {
+      const resolvedFilters = {
         ...buildFiltersFromManifest(
           getEntityFilters(entity),
           // `allFilters`, not `columnFilters` — a URL-only scope (`?productId=`)
@@ -336,7 +339,20 @@ export function useEntityList<
           filterGetterFromColumnFilters(ts.allFilters),
         ),
         ...scopeFilters,
-      }) as TFilters,
+      };
+      const primarySearch = entityInspectorMetadata[entity].primarySearch;
+      if (primarySearch) {
+        const primaryValue = ts.getColumnFilter(primarySearch.key);
+        if (primaryValue !== undefined) {
+          Object.assign(resolvedFilters, {
+            [primarySearch.key]: primaryValue,
+          });
+        }
+      }
+      // SAFETY: generated field filters, generated primary search metadata, and
+      // caller-owned scope filters are the three declared pieces of TFilters.
+      return resolvedFilters as TFilters;
+    },
     [entity, scopeFilters],
   );
 

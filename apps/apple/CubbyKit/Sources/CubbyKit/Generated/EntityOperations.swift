@@ -122,6 +122,7 @@ extension EntityDescriptor {
                 case "projectScopeDateFrom": query.projectScopeDateFrom = try value.string(name)
                 case "projectScopeDateTo": query.projectScopeDateTo = try value.string(name)
                 case "projectScopeCompletionYear": query.projectScopeCompletionYear = try value.string(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.expense, name)
                 }
@@ -157,6 +158,7 @@ extension EntityDescriptor {
                 case "source": query.source = value.strings
                 case "externalAccountId": query.externalAccountId = value.strings
                 case "sourceAliasPresenceFilter": query.sourceAliasPresenceFilter = try value.enumCase(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.financialAccount, name)
                 }
@@ -200,6 +202,7 @@ extension EntityDescriptor {
                 case "allocationIntegrity": query.allocationIntegrity = try value.enumCase(name)
                 case "source": query.source = value.strings
                 case "externalId": query.externalId = value.strings
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.financialTransaction, name)
                 }
@@ -219,9 +222,12 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "kind": query.kind = try value.enumCases(name)
+                case "observedOnFrom": query.observedOnFrom = try value.string(name)
+                case "observedOnTo": query.observedOnTo = try value.string(name)
                 case "locationId": query.locationId = value.strings
                 case "plantingId": query.plantingId = value.strings
                 case "journalPlantingId": query.journalPlantingId = try value.string(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.gardenEntry, name)
                 }
@@ -251,6 +257,7 @@ extension EntityDescriptor {
                 case "eaterId": query.eaterId = value.strings
                 case "eaterPresenceFilter": query.eaterPresenceFilter = try value.enumCase(name)
                 case "eaterSearch": query.eaterSearch = try value.string(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.ingredient, name)
                 }
@@ -284,6 +291,7 @@ extension EntityDescriptor {
                 case "valuationStatus": query.valuationStatus = try value.enumCase(name)
                 case "verifiedFrom": query.verifiedFrom = try value.string(name)
                 case "verifiedTo": query.verifiedTo = try value.string(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.inventory, name)
                 }
@@ -368,6 +376,7 @@ extension EntityDescriptor {
                 case "directItemCountMax": query.directItemCountMax = try value.int(name)
                 case "valuationMin": query.valuationMin = try value.double(name)
                 case "valuationMax": query.valuationMax = try value.double(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.location, name)
                 }
@@ -404,6 +413,7 @@ extension EntityDescriptor {
                 case "eaterId": query.eaterId = value.strings
                 case "eaterPresenceFilter": query.eaterPresenceFilter = try value.enumCase(name)
                 case "eaterSearch": query.eaterSearch = try value.string(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.meal, name)
                 }
@@ -427,6 +437,7 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "taskId": query.taskId = value.strings
                 case "sourceProductId": query.sourceProductId = value.strings
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.planting, name)
                 }
@@ -526,6 +537,7 @@ extension EntityDescriptor {
                 case "imagePresenceFilter": query.imagePresenceFilter = try value.enumCase(name)
                 case "unitMappingPresenceFilter": query.unitMappingPresenceFilter = try value.enumCase(name)
                 case "componentPresenceFilter": query.componentPresenceFilter = try value.enumCase(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.product, name)
                 }
@@ -578,6 +590,7 @@ extension EntityDescriptor {
                 case "parentProjectId": query.parentProjectId = value.strings.map { .init(value1: $0) }
                 case "includeSubProjects": query.includeSubProjects = try value.bool(name)
                 case "attention": query.attention = try value.enumCase(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.project, name)
                 }
@@ -628,6 +641,7 @@ extension EntityDescriptor {
                         $0.value1 != nil || $0.value2 != nil
                     }
                 }
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.purchase, name)
                 }
@@ -667,6 +681,7 @@ extension EntityDescriptor {
                 case "costTotalMax": query.costTotalMax = try value.double(name)
                 case "caloriesTotalMin": query.caloriesTotalMin = try value.double(name)
                 case "caloriesTotalMax": query.caloriesTotalMax = try value.double(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.recipe, name)
                 }
@@ -712,6 +727,7 @@ extension EntityDescriptor {
                 case "projectScopeDateFrom": query.projectScopeDateFrom = try value.string(name)
                 case "projectScopeDateTo": query.projectScopeDateTo = try value.string(name)
                 case "projectScopeCompletionYear": query.projectScopeCompletionYear = try value.string(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.task, name)
                 }
@@ -754,6 +770,7 @@ extension EntityDescriptor {
                 case "latestPurchaseDateTo": query.latestPurchaseDateTo = try value.string(name)
                 case "latestPurchaseDatePresenceFilter": query.latestPurchaseDatePresenceFilter = try value.enumCase(name)
                 case "logoPresenceFilter": query.logoPresenceFilter = try value.enumCase(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.vendor, name)
                 }
@@ -778,6 +795,7 @@ extension EntityDescriptor {
                 case "search": query.search = try value.string(name)
                 case "acquired": query.acquired = try value.bool(name)
                 case "candidateProductId": query.candidateProductId = value.strings
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.wish, name)
                 }
@@ -1052,9 +1070,12 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "kind": query.kind = try value.enumCases(name)
+                case "observedOnFrom": query.observedOnFrom = try value.string(name)
+                case "observedOnTo": query.observedOnTo = try value.string(name)
                 case "locationId": query.locationId = value.strings
                 case "plantingId": query.plantingId = value.strings
                 case "journalPlantingId": query.journalPlantingId = try value.string(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "ids": query.ids = value.strings
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)
@@ -1077,6 +1098,7 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "taskId": query.taskId = value.strings
                 case "sourceProductId": query.sourceProductId = value.strings
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "ids": query.ids = value.strings
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)
@@ -1175,6 +1197,7 @@ extension EntityDescriptor {
                 case "imagePresenceFilter": query.imagePresenceFilter = try value.enumCase(name)
                 case "unitMappingPresenceFilter": query.unitMappingPresenceFilter = try value.enumCase(name)
                 case "componentPresenceFilter": query.componentPresenceFilter = try value.enumCase(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "ids": query.ids = value.strings
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)
@@ -1219,6 +1242,7 @@ extension EntityDescriptor {
                 case "projectScopeDateFrom": query.projectScopeDateFrom = try value.string(name)
                 case "projectScopeDateTo": query.projectScopeDateTo = try value.string(name)
                 case "projectScopeCompletionYear": query.projectScopeCompletionYear = try value.string(name)
+                case "searchQuery": query.searchQuery = try value.string(name)
                 case "ids": query.ids = value.strings
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)

@@ -526,10 +526,14 @@ export const recipeList = async (
       ];
     return null;
   };
-  const orderByClause = recipeScaffold.orderBy(sorts, {
-    resolve: resolveRecipeSort,
-    tieBreaker: sql`${recipe.name} asc`,
-  });
+  const orderByClause = recipeScaffold.orderBy(
+    sorts,
+    {
+      resolve: resolveRecipeSort,
+      tieBreaker: sql`${recipe.name} asc`,
+    },
+    filters,
+  );
 
   const { take, skip } = recipeScaffold.page(pagination);
 

@@ -251,7 +251,7 @@ struct RelationSectionView: View {
             }
             ForEach(list.rows) { row in
                 NavigationLink(value: Route.entityDetail(model.target.key, id: row.id)) {
-                    EntityRowView(key: model.target.key, row: row)
+                    EntityRowView(key: model.target.key, row: row, columns: model.spec.columns)
                 }
             }
             if list.hasMore {
