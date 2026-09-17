@@ -110,9 +110,13 @@
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   // Two Hyperdrive objects point at the same direct Neon origin. HYPERDRIVE is
   // authoritative (strong reads); HYPERDRIVE_CACHED is the bounded-stale read
-  // path. Keep the origin budget at 55 + 5 connections respectively. Desired
-  // timings live in src/lib/hyperdrive-cache-policy.ts because query-cache
-  // settings are not expressible in wrangler.jsonc.
+  // path. origin_connection_limit is 12 + 5 respectively (5 is the API
+  // minimum; set via `wrangler hyperdrive update --origin-connection-limit`,
+  // not expressible here). Each idle backend holds ~10 MB on the 0.25 CU Neon
+  // compute and Hyperdrive keeps a warm pool per PoP, so the cap is sized to
+  // RAM, not to max_connections; it still covers the per-request 5+1 ceiling
+  // in db-runtime-resolver.ts and queue max_concurrency. Desired timings live
+  // in src/lib/hyperdrive-cache-policy.ts for the same reason.
   // Creates via:
   //   wrangler hyperdrive create cubby-db --connection-string="postgres://..."
   //   wrangler hyperdrive create cubby-db-cached --connection-string="postgres://..."
