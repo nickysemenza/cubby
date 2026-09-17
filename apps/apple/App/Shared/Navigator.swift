@@ -11,7 +11,6 @@ final class Navigator {
     var section: AppSection = .today
     var paths: [AppSection: [Route]] = [:]
     var browseKey: EntityKey?
-    var browsingGarden = false
     var selectedRecords: [AppSection: RecordSelection] = [:]
     var graphWorkspace: GraphWorkspaceSession?
 
@@ -26,10 +25,7 @@ final class Navigator {
 
     var macDestination: SidebarDestination {
         get {
-            if section == .browse {
-                if browsingGarden { return .garden }
-                if let browseKey { return .entity(browseKey) }
-            }
+            if section == .browse, let browseKey { return .entity(browseKey) }
             return .section(section)
         }
         set {
@@ -39,20 +35,14 @@ final class Navigator {
                 self.section = section
                 if section == .browse {
                     browseKey = nil
-                    browsingGarden = false
                     selectedRecords[.browse] = nil
                     paths[.browse] = []
                 }
             case .entity(let key):
                 section = .browse
                 if browseKey != key { selectedRecords[.browse] = nil }
-                if browseKey != key || browsingGarden { paths[.browse] = [] }
+                if browseKey != key { paths[.browse] = [] }
                 browseKey = key
-                browsingGarden = false
-            case .garden:
-                section = .browse
-                browsingGarden = true
-                paths[.browse] = []
             }
         }
     }
@@ -64,7 +54,7 @@ final class Navigator {
 
     func openRecord(_ record: RecordSelection) {
         #if os(macOS)
-            if (section == .browse && !browsingGarden) || section == .search {
+            if section == .browse || section == .search {
                 if selectedRecords[section] == nil {
                     selectRecord(record, in: section)
                 } else {
@@ -82,7 +72,7 @@ final class Navigator {
     /// the deleted source. macOS can host the current detail in the split selection or a push.
     func replaceCurrentRecord(with record: RecordSelection) {
         #if os(macOS)
-            if ((section == .browse && !browsingGarden) || section == .search),
+            if (section == .browse || section == .search),
                 (paths[section] ?? []).isEmpty
             {
                 selectedRecords[section] = record
@@ -127,7 +117,6 @@ final class Navigator {
             section = .browse
             #if os(macOS)
                 browseKey = key
-                browsingGarden = false
                 selectRecord(RecordSelection(key: key, id: id), in: .browse)
             #else
                 paths[.browse] = [.entityDetail(key, id: id)]
@@ -208,5 +197,4 @@ struct RecordSelection: Hashable {
 enum SidebarDestination: Hashable {
     case section(AppSection)
     case entity(EntityKey)
-    case garden
 }

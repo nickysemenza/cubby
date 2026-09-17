@@ -100,84 +100,6 @@ public actor CubbyClient {
         return try await productPage(query).items
     }
 
-    // MARK: - Garden
-
-    public func gardenOverview() async throws -> GardenOverviewOut {
-        try await perform { try await api.garden_overview().ok.body.json }
-    }
-
-    /// `search` (≥2 chars) widens the garden-scoped options set with prefix matches, for an
-    /// "Add…" picker outside the household's existing garden associations.
-    public func gardenOptions(search: String? = nil) async throws -> GardenOptions {
-        try await perform {
-            GardenOptions(try await api.garden_options(query: .init(search: search)).ok.body.json)
-        }
-    }
-
-    public func gardenGuides() async throws -> GardenGuidesDocument {
-        try await perform { try await api.garden_guides().ok.body.json }
-    }
-
-    /// The photo import's batch entry; an editor-made entry goes through `create(_:body:)`.
-    public func recordGardenEntryReturningID(_ input: GardenRecordEntryInput) async throws -> String {
-        try await perform { try await api.garden_recordEntry(body: .json(input)).ok.body.json.id }
-    }
-
-    public func startGardenPlanting(
-        id: String,
-        locationID: String,
-        startedAt: Date,
-        method: GardenStartMethod
-    ) async throws {
-        try await perform {
-            _ = try await api.garden_startPlanting(
-                body: .json(
-                    .init(
-                        plantingId: id, locationId: LocationCode(locationID), startedOn: PlainDate(startedAt),
-                        startMethod: .init(rawValue: method.rawValue)!))
-            ).ok
-        }
-    }
-
-    public func moveGardenPlanting(_ input: GardenMovePlantingInput) async throws {
-        try await perform { _ = try await api.garden_movePlanting(body: .json(input)).ok }
-    }
-
-    public func splitGardenPlanting(_ input: GardenSplitPlantingInput) async throws {
-        try await perform { _ = try await api.garden_splitPlanting(body: .json(input)).ok }
-    }
-
-    public func finishGardenPlanting(id: String, finishedAt: Date, note: String? = nil) async throws {
-        try await perform {
-            _ = try await api.garden_finishPlanting(
-                body: .json(.init(plantingId: id, finishedOn: PlainDate(finishedAt), note: note))
-            ).ok
-        }
-    }
-
-    public func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriodOut] {
-        try await perform {
-            try await api.garden_locationHistory(query: .init(plantingId: plantingID)).ok.body.json.periods
-        }
-    }
-
-    public func correctGardenLocationDates(
-        plantingID: String, periods: [GardenLocationPeriodOut]
-    ) async throws -> [GardenLocationPeriodOut] {
-        try await perform {
-            try await api.garden_correctLocationDates(
-                body: .json(
-                    .init(
-                        plantingId: plantingID,
-                        periods: periods.map {
-                            .init(
-                                sequence: $0.sequence, inLocationSince: $0.inLocationSince,
-                                endedOn: $0.endedOn)
-                        }))
-            ).ok.body.json.periods
-        }
-    }
-
     // MARK: - Generic entity access
 
     /// One page of rows for any entity the HTTP document lists. `filters` are keyed by the list
@@ -608,5 +530,3 @@ public actor CubbyClient {
 }
 
 extension CubbyClient: EntityRelationshipsClient {}
-
-extension CubbyClient: GardenService {}

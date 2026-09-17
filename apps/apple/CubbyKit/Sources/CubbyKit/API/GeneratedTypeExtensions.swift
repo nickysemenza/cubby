@@ -260,13 +260,3 @@ extension ImageAssociation: Identifiable {
     /// The catalog key, when the association's entity is one the catalog knows.
     public var key: EntityKey? { EntityKey(rawValue: entityType.rawValue) }
 }
-
-extension GardenGuideWindow: Identifiable {
-    public var id: String {
-        "\(sourceId)|\(method.rawValue)|\(months.map(String.init).joined(separator: ","))"
-    }
-}
-
-extension GardenLocationPeriodOut: Identifiable {
-    public var id: Int { sequence }
-}

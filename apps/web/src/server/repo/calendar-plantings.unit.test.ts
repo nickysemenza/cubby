@@ -14,7 +14,6 @@ const row = (
   variety: "Brandywine",
   locationName: "Raised bed 2",
   plannedWindow: "Late spring",
-  plannedDate: null,
   sowedOn: null,
   transplantedOn: null,
   finishedOn: null,
@@ -56,7 +55,7 @@ describe("mapPlantingItems", () => {
 
   it("falls back to the ingredient name alone when there is no variety", () => {
     const [item] = mapPlantingItems(
-      [row({ variety: null, plannedDate: "2026-03-01" })],
+      [row({ variety: null, sowedOn: "2026-03-01" })],
       { startDate: "2026-01-01", endDateExclusive: "2027-01-01" },
     );
     expect(item?.title).toBe("Tomato");

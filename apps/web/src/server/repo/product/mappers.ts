@@ -4,7 +4,6 @@ import {
   externalIdKind,
   GTIN_SOURCE,
 } from "@cubby/schemas/external-id";
-import { gardenLocationKind } from "@cubby/schemas/garden-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InventoryListProductOut,
@@ -426,10 +425,7 @@ export const dbProductToAPI = (
         id: parseShortcodeFor("location", entry.location.shortcode),
         name: entry.location.name,
         aliases: entry.location.aliases,
-        gardenKind: entry.location.gardenKind
-          ? gardenLocationKind.parse(entry.location.gardenKind)
-          : null,
-        gardenConditions: entry.location.gardenConditions ?? null,
+        notes: entry.location.notes ?? null,
         // Null whenever the location IS a product; only a present value is
         // validated against the enum.
         type: parseLocationType(entry.location.type, {

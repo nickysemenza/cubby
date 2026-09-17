@@ -18,7 +18,7 @@ import { getDb } from "./database-helpers";
 import { getEntityGraph, readEntityGraph } from "./entity-graph";
 import { getEntityGraphExplore } from "./entity-graph-explore";
 import { createExpense } from "./expense";
-import { createPlanting, recordGardenEntry } from "./garden";
+import { createGardenEntry, createPlanting } from "./garden";
 import { createIngredient } from "./ingredient";
 import { createPurchase } from "./purchase";
 import { attachPurchaseProducts } from "./purchase-products";
@@ -545,27 +545,35 @@ describe("entity graph repository", () => {
     ).toBe("Graph label tomato");
   });
 
-  it("labels a gardenEntry root as '<Kind> · <date> · <location>', mapping observation to Note", async () => {
+  it("labels a gardenEntry root as '<Kind> · <date> · <location>'", async () => {
     const bed = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Graph label garden entry bed" }),
       ctx.actor,
     );
-    const observation = await recordGardenEntry(ctx.db, {
-      locationId: bed.id,
-      kind: "observation",
-      observedOn: "2026-10-06",
-      note: "Whole-bed overview",
-      pendingImageIds: [],
-    });
-    const harvest = await recordGardenEntry(ctx.db, {
-      locationId: bed.id,
-      kind: "harvest",
-      observedOn: "2026-10-07",
-      note: "First pick",
-      harvestAmount: "A handful",
-      pendingImageIds: [],
-    });
+    const observation = await createGardenEntry(
+      ctx.db,
+      {
+        locationId: bed.id,
+        kind: "note",
+        observedOn: "2026-10-06",
+        note: "Whole-bed overview",
+        pendingImageIds: [],
+      },
+      ctx.actor,
+    );
+    const harvest = await createGardenEntry(
+      ctx.db,
+      {
+        locationId: bed.id,
+        kind: "harvest",
+        observedOn: "2026-10-07",
+        note: "First pick",
+        harvestAmount: "A handful",
+        pendingImageIds: [],
+      },
+      ctx.actor,
+    );
     const graph = await getEntityGraph(ctx.db, {
       roots: [
         { entityType: "gardenEntry", entityId: observation.id },

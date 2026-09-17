@@ -34,19 +34,6 @@ struct EntityEditorDraftTests {
         #expect(entry.createBody()["observedOn"]?.stringValue == PlainDate(.now).rawValue)
     }
 
-    /// A planting's `status` is read-only on update, so its create prefill is the only way in.
-    @Test func plantingPrefillStatusTravelsOnCreateOnly() {
-        let planting = model(.planting, prefill: ["status": .string("growing")])
-        #expect(planting.createBody()["status"] == .string("growing"))
-        #expect(!planting.readOnly("status"))
-        let update = GenericEntityEditModel(
-            descriptor: EntityCatalog[.planting], mode: .update(id: "PLT-1"),
-            client: PreviewFixtures.signedInModel().client,
-            original: ["id": "PLT-1", "ingredientId": "ING-1", "status": "growing"])
-        #expect(update.readOnly("status"))
-        #expect(update.readOnly("locationId"))
-    }
-
     /// The sheet asks `DraftDismissalState` with `isDirty = draft != initialDraft`; an untouched
     /// create dismisses at once, a typed-into one needs Discard.
     @Test func dismissalFollowsTheDraftDiff() {

@@ -41,11 +41,6 @@ const unavailableCaller = {
     match: unavailableCallerMethod,
   },
   financialTransaction: { previewStatementImport: unavailableCallerMethod },
-  garden: {
-    startPlanting: unavailableCallerMethod,
-    movePlanting: unavailableCallerMethod,
-    finishPlanting: unavailableCallerMethod,
-  },
   householdContribution: {
     ledger: unavailableCallerMethod,
     project: unavailableCallerMethod,
@@ -142,7 +137,6 @@ function completeTestCaller(caller: McpTestCaller): McpWorkflowCaller {
       ...unavailableCaller.financialTransaction,
       ...caller.financialTransaction,
     },
-    garden: { ...unavailableCaller.garden, ...caller.garden },
     householdContribution: {
       ...unavailableCaller.householdContribution,
       ...caller.householdContribution,

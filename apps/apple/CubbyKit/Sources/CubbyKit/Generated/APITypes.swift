@@ -147,9 +147,6 @@ public typealias FinancialTransactionUpdateData = Components.Schemas.FinancialTr
 public typealias FoodInfo = Components.Schemas.FoodInfo
 public typealias FoodPortion = Components.Schemas.FoodPortion
 public typealias FoodSummary = Components.Schemas.FoodSummary
-public typealias GardenCorrectLocationDatesInput = Components.Schemas.GardenCorrectLocationDatesInput
-public typealias GardenCreatePlantingInput = Components.Schemas.GardenCreatePlantingInput
-public typealias GardenEntriesOut = Components.Schemas.GardenEntriesOut
 public typealias GardenEntryCreateInput = Components.Schemas.GardenEntryCreateInput
 public typealias GardenEntryDetail = Components.Schemas.GardenEntryDetail
 public typealias GardenEntryKind = Components.Schemas.GardenEntryKind
@@ -158,27 +155,6 @@ public typealias GardenEntryListPage = Components.Schemas.GardenEntryListPage
 public typealias GardenEntryOut = Components.Schemas.GardenEntryOut
 public typealias GardenEntryShortcode = Components.Schemas.GardenEntryShortcode
 public typealias GardenEntryUpdateData = Components.Schemas.GardenEntryUpdateData
-public typealias GardenFinishPlantingInput = Components.Schemas.GardenFinishPlantingInput
-public typealias GardenGuide = Components.Schemas.GardenGuide
-public typealias GardenGuideMethod = Components.Schemas.GardenGuideMethod
-public typealias GardenGuideMicroclimate = Components.Schemas.GardenGuideMicroclimate
-public typealias GardenGuideMonthPart = Components.Schemas.GardenGuideMonthPart
-public typealias GardenGuidesDocument = Components.Schemas.GardenGuidesDocument
-public typealias GardenGuideSource = Components.Schemas.GardenGuideSource
-public typealias GardenGuideWindow = Components.Schemas.GardenGuideWindow
-public typealias GardenJournalEntryOut = Components.Schemas.GardenJournalEntryOut
-public typealias GardenJournalOut = Components.Schemas.GardenJournalOut
-public typealias GardenLocationHistoryOut = Components.Schemas.GardenLocationHistoryOut
-public typealias GardenLocationKind = Components.Schemas.GardenLocationKind
-public typealias GardenLocationPeriodOut = Components.Schemas.GardenLocationPeriodOut
-public typealias GardenLocationSummaryOut = Components.Schemas.GardenLocationSummaryOut
-public typealias GardenMovePlantingInput = Components.Schemas.GardenMovePlantingInput
-public typealias GardenOptionsOut = Components.Schemas.GardenOptionsOut
-public typealias GardenOverviewOut = Components.Schemas.GardenOverviewOut
-public typealias GardenPlantingOut = Components.Schemas.GardenPlantingOut
-public typealias GardenRecordEntryInput = Components.Schemas.GardenRecordEntryInput
-public typealias GardenSplitPlantingInput = Components.Schemas.GardenSplitPlantingInput
-public typealias GardenStartPlantingInput = Components.Schemas.GardenStartPlantingInput
 public typealias GeneratedEntityMutationCreateResultExpense = Components.Schemas.GeneratedEntityMutationCreateResultExpense
 public typealias GeneratedEntityMutationCreateResultFinancialAccount = Components.Schemas.GeneratedEntityMutationCreateResultFinancialAccount
 public typealias GeneratedEntityMutationCreateResultFinancialTransaction = Components.Schemas.GeneratedEntityMutationCreateResultFinancialTransaction
@@ -375,7 +351,6 @@ public typealias PlantingCreateInput = Components.Schemas.PlantingCreateInput
 public typealias PlantingDetail = Components.Schemas.PlantingDetail
 public typealias PlantingListItem = Components.Schemas.PlantingListItem
 public typealias PlantingListPage = Components.Schemas.PlantingListPage
-public typealias PlantingLocationStartKind = Components.Schemas.PlantingLocationStartKind
 public typealias PlantingOut = Components.Schemas.PlantingOut
 public typealias PlantingShortcode = Components.Schemas.PlantingShortcode
 public typealias PlantingStatus = Components.Schemas.PlantingStatus
@@ -542,10 +517,6 @@ extension Components.Schemas.FinancialTransactionOut: Identifiable {}
 extension Components.Schemas.GardenEntryDetail: Identifiable {}
 extension Components.Schemas.GardenEntryListItem: Identifiable {}
 extension Components.Schemas.GardenEntryOut: Identifiable {}
-extension Components.Schemas.GardenGuideSource: Identifiable {}
-extension Components.Schemas.GardenJournalEntryOut: Identifiable {}
-extension Components.Schemas.GardenLocationSummaryOut: Identifiable {}
-extension Components.Schemas.GardenPlantingOut: Identifiable {}
 extension Components.Schemas.GetImageById: Identifiable {}
 extension Components.Schemas.ImageHashIndexItem: Identifiable {}
 extension Components.Schemas.ImageOut: Identifiable {}

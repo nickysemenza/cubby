@@ -1,7 +1,13 @@
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode } from "../identifier-fields.js";
 import { baseKind } from "../codec.js";
+import { gardenGuideKeys, plantingGuides } from "@cubby/schemas/garden-guides";
 import { z } from "zod";
+
+const gardenGuideKey = z.enum(gardenGuideKeys);
+const gardenGuideKeyLabel = (key: (typeof gardenGuideKeys)[number]): string =>
+  plantingGuides.guides.find((guide) => guide.key === key)?.name ?? key;
+
 export default defineEntity({
   key: "ingredient",
   names: { singular: "Ingredient", plural: "Ingredients" },
@@ -35,6 +41,9 @@ export default defineEntity({
             "name",
             "aliases",
             "usuallyOnHand",
+            "gardenGuideKey",
+            "guideSowWindow",
+            "guideTransplantWindow",
             "createdAt",
             "updatedAt",
           ],
@@ -48,7 +57,14 @@ export default defineEntity({
           filter: { descriptor: "ingredient" },
           columns: ["name", "manufacturer", "category", "onHandUnits"],
         },
-        { kind: "slot", id: "garden", placement: "supporting" },
+        {
+          kind: "relation",
+          id: "plantings",
+          title: "Plantings",
+          relation: "plantings",
+          filter: { descriptor: "ingredientId" },
+          hideWhenEmpty: true,
+        },
         {
           kind: "relation",
           id: "recipes",
@@ -143,11 +159,35 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         label: "Garden guide key",
-        validation: {
-          read: z.string().nullable(),
-          create: z.string().trim().min(1).nullable().optional(),
-          update: z.string().trim().min(1).nullable().optional(),
+        control: {
+          kind: "select",
+          options: gardenGuideKeys.map((key) => ({
+            value: key,
+            label: gardenGuideKeyLabel(key),
+          })),
         },
+        display: { detail: true },
+        validation: {
+          read: gardenGuideKey.nullable(),
+          create: gardenGuideKey.nullable().optional(),
+          update: gardenGuideKey.nullable().optional(),
+        },
+      },
+      {
+        // Derived on read from this ingredient's guide, for the household's
+        // microclimate — formatted month range (e.g. "Feb–Apr") or null.
+        key: "guideSowWindow",
+        kind: "text",
+        nullable: true,
+        display: { detail: true },
+        validation: { read: z.string().nullable(), create: null, update: null },
+      },
+      {
+        key: "guideTransplantWindow",
+        kind: "text",
+        nullable: true,
+        display: { detail: true },
+        validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "id",
@@ -241,6 +281,8 @@ export default defineEntity({
       "naKinds",
       "usuallyOnHand",
       "gardenGuideKey",
+      "guideSowWindow",
+      "guideTransplantWindow",
       "createdAt",
       "updatedAt",
     ],
@@ -382,6 +424,19 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Product.ingredientId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "plantings",
+      label: "Plantings",
+      target: "planting",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Planting.ingredientId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Planting.ingredientId", direction: "outgoing" }],
       },
     },
     {

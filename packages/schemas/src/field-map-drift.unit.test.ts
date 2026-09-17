@@ -372,6 +372,10 @@ const INTENTIONAL_RESPELLINGS = {
     "multi-value filter (oneOrMany(locationShortcode)) over the generated scalar locationId field",
   "planting::plantingFiltersSchema::ingredientId":
     "multi-value filter (oneOrMany(ingredientShortcode)) over the generated scalar ingredientId field",
+  "planting::plantingFiltersSchema::taskId":
+    "multi-value filter (oneOrMany(taskShortcode)) over the generated scalar taskId field",
+  "planting::plantingFiltersSchema::sourceProductId":
+    "multi-value filter (oneOrMany(productShortcode)) over the generated scalar sourceProductId field",
   "gardenEntry::gardenEntryFiltersSchema::locationId":
     "multi-value filter (oneOrMany(locationShortcode)) over the generated scalar locationId field",
   "gardenEntry::gardenEntryFiltersSchema::plantingId":
@@ -420,13 +424,12 @@ const INTENTIONAL_RESPELLINGS = {
     "picker row — hand-copied type field",
   "location::locationUpdateData::aliases": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::name": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::notes": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::parentId": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::pendingImageIds": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::productId": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::tags": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::type": DERIVE_UPDATE_REWRAP,
-  "location::locationUpdateData::gardenKind": DERIVE_UPDATE_REWRAP,
-  "location::locationUpdateData::gardenConditions": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::imageOrder":
     "deriveUpdateData's `extend` option supplies its own z.array(imageShortcode).optional().describe(...) for this update-only field — a fresh instance, not the generated one",
   "location::locationUpdateData::removeImageIds":

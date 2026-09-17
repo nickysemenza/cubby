@@ -597,7 +597,13 @@ export function useEntityActionCommands<E extends StandardEntity>(
     async (variables: EntityActionVariables<E, "bulkUpdate">) => {
       const ids = z.array(z.string()).parse(variables.ids);
       const data = parseEntityEditBulkUpdateInput(entity, variables.data);
-      const result = await commands.bulkUpdate(ids, data);
+      // SAFETY: `data` is parsed by `entity`'s own bulk-update schema from
+      // the editing intent catalog; `commands.bulkUpdate` types its `data`
+      // through the wire contract's bulk-update command instead. The entity
+      // compiler derives both from the same `capabilities.bulkUpdate.fields`
+      // declaration, so they carry the same fields for the same entity —
+      // two independently generated types over one runtime shape.
+      const result = await commands.bulkUpdate(ids, data as never);
       if (!result.ok) {
         throw new Error(result.issues[0]?.message ?? "Bulk update failed");
       }

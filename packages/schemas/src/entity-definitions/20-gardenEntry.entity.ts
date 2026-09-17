@@ -40,7 +40,6 @@ export default defineEntity({
             "plantingId",
             "note",
             "harvestAmount",
-            "anchorsPeriod",
           ],
         },
       ],
@@ -49,23 +48,6 @@ export default defineEntity({
       views: ["table", "timeline"],
       actions: ["delete"],
       timeline: { fields: ["observedOn"] },
-    },
-    // Anchor and `move` entries lock their location/planting/date fields —
-    // corrected only through location history, never the entry edit form.
-    // See `assertGardenEntryStructure` in `server/repo/garden/index.ts`.
-    edit: {
-      readOnlyWhen: [
-        {
-          field: "kind",
-          equals: "move",
-          fields: ["locationId", "plantingId", "kind", "observedOn"],
-        },
-        {
-          field: "anchorsPeriod",
-          equals: true,
-          fields: ["locationId", "plantingId", "kind", "observedOn"],
-        },
-      ],
     },
   },
   model: {
@@ -103,15 +85,14 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "observation", label: "Observation" },
+            { value: "note", label: "Note" },
             { value: "harvest", label: "Harvest" },
-            { value: "move", label: "Move" },
           ],
         },
         display: { list: true, detail: true, detailOrder: 0 },
         validation: {
           read: gardenEntryKind,
-          create: gardenEntryKind.default("observation"),
+          create: gardenEntryKind.default("note"),
           update: gardenEntryKind.optional(),
         },
       },
@@ -205,16 +186,6 @@ export default defineEntity({
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
-        // Anchor and `move` entries lock their location/planting/date fields —
-        // corrected only through location history, never the entry edit form.
-        // See `assertGardenEntryStructure` in `server/repo/garden/index.ts`.
-        key: "anchorsPeriod",
-        kind: "boolean",
-        label: "Anchors a location period",
-        display: { detail: true, detailOrder: 6 },
-        validation: { read: z.boolean(), create: null, update: null },
-      },
-      {
         // `"<Kind> · <YYYY-MM-DD> · <location name>"` — gardenEntry has no
         // name column and `note` is nullable, so this is the canonical
         // non-null title.
@@ -253,7 +224,7 @@ export default defineEntity({
         key: "kind",
         specialized: "enum:kind",
         default: "literal",
-        defaultValue: "observation",
+        defaultValue: "note",
       },
       "observedOn",
       "note",
@@ -325,27 +296,29 @@ export default defineEntity({
       "displayName",
       "locationName",
       "plantingName",
-      "anchorsPeriod",
       "createdAt",
       "updatedAt",
     ],
   },
   fields: {
     create: {
-      module: "@cubby/schemas/garden",
+      module: "@cubby/schemas/garden-entry",
       export: "gardenEntryCreateInput",
     },
     update: {
-      module: "@cubby/schemas/garden",
+      module: "@cubby/schemas/garden-entry",
       export: "gardenEntryUpdateData",
     },
-    output: { module: "@cubby/schemas/garden", export: "gardenEntryOut" },
-    list: { module: "@cubby/schemas/garden", export: "gardenEntryListItemOut" },
+    output: { module: "@cubby/schemas/garden-entry", export: "gardenEntryOut" },
+    list: {
+      module: "@cubby/schemas/garden-entry",
+      export: "gardenEntryListItemOut",
+    },
   },
   filters: {
     audit: true,
     schema: {
-      module: "@cubby/schemas/garden",
+      module: "@cubby/schemas/garden-entry",
       export: "gardenEntryFilterFields",
     },
     descriptors: [
@@ -354,9 +327,8 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         options: [
-          { value: "observation", label: "Observation" },
+          { value: "note", label: "Note" },
           { value: "harvest", label: "Harvest" },
-          { value: "move", label: "Move" },
         ],
         deriveSchema: true,
         stored: true,

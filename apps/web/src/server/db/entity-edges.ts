@@ -111,7 +111,6 @@ import {
   recipeSectionIngredient,
   planting,
   plantingImage,
-  plantingLocationPeriod,
   statementRow,
   task,
   taskDependency,
@@ -592,15 +591,8 @@ export const ENTITY_EDGES = {
       column: planting.locationId,
       role: "contents",
       label: "current plantings",
-      description: "A growing planting is currently in this garden location.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Planting.intendedLocationId": {
-      column: planting.intendedLocationId,
-      role: "reference",
-      label: "planned plantings",
       description:
-        "A planned planting can name the bed or tray it is intended for.",
+        "A growing planting is currently in this garden location; a planned planting names where it will go.",
       liveness: { kind: "must-target-live" },
     },
     "GardenEntry.locationId": {
@@ -609,13 +601,6 @@ export const ENTITY_EDGES = {
       label: "garden entries",
       description:
         "A garden entry retains the location where the observation happened.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PlantingLocationPeriod.locationId": {
-      column: plantingLocationPeriod.locationId,
-      role: "history",
-      label: "planting location history",
-      description: "A confirmed interval retains the location it records.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -706,6 +691,13 @@ export const ENTITY_EDGES = {
       label: "task photos",
       description:
         "A before/after or reference photo has no independent meaning once the task is removed.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Planting.taskId": {
+      column: planting.taskId,
+      role: "history",
+      label: "plantings",
+      description: "A planting retains the task whose completion produced it.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -826,27 +818,12 @@ export const ENTITY_EDGES = {
     },
   }),
   planting: edges({
-    "Planting.parentPlantingId": {
-      column: planting.parentPlantingId,
-      role: "history",
-      label: "split plantings",
-      description:
-        "A child planting retains the source planting that it was split from.",
-      liveness: { kind: "must-target-live" },
-    },
     "GardenEntry.plantingId": {
       column: gardenEntry.plantingId,
       role: "history",
       label: "garden entries",
       description:
         "Garden observations and harvests retain the planting they describe.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PlantingLocationPeriod.plantingId": {
-      column: plantingLocationPeriod.plantingId,
-      role: "history",
-      label: "location history",
-      description: "A confirmed interval belongs to its planting.",
       liveness: { kind: "must-target-live" },
     },
     "PlantingImage.plantingId": {
@@ -865,14 +842,6 @@ export const ENTITY_EDGES = {
       label: "entry photos",
       description:
         "Photos attached to this garden entry have no independent meaning once it is removed.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PlantingLocationPeriod.sourceGardenEntryId": {
-      column: plantingLocationPeriod.sourceGardenEntryId,
-      role: "history",
-      label: "location-history source entries",
-      description:
-        "A workflow-created period retains the entry that records its start.",
       liveness: { kind: "must-target-live" },
     },
   }),

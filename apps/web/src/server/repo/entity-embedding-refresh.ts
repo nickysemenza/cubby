@@ -58,9 +58,8 @@ import {
  * private to the garden module, and `kind` is a plain `text` column here, not
  * the branded enum, so the label is re-derived rather than imported. */
 const GARDEN_ENTRY_KIND_LABEL = {
-  observation: "Note",
+  note: "Note",
   harvest: "Harvest",
-  move: "Move",
 } satisfies Record<string, string>;
 
 function isGardenEntryKindLabel(

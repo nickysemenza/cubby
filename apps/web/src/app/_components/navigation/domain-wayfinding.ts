@@ -71,7 +71,6 @@ export const DOMAIN_WAYFINDING = {
       "/projects",
       "/tools",
       "/tasks",
-      "/garden",
       "/plantings",
       "/garden-entries",
     ],

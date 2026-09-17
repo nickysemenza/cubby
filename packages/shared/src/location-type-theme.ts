@@ -14,6 +14,8 @@ export const locationTypeValues = [
   "house",
   "room",
   "area",
+  "bed",
+  "planter",
   "bag",
   "box",
   "shelf",
@@ -36,10 +38,12 @@ export const locationTypeColors = {
   house: "var(--chart-1)",
   room: "var(--chart-1)",
   area: "var(--chart-2)",
+  bed: "var(--chart-2)",
 
   table: "var(--chart-3)",
   cart: "var(--chart-4)",
   shelf: "var(--chart-2)",
+  planter: "var(--chart-4)",
 
   cabinet: "var(--chart-5)",
   drawer: "var(--chart-6)",

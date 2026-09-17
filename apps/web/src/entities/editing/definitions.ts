@@ -1,3 +1,4 @@
+import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldSchemaMaps } from "@cubby/schemas/entity-field-schema-maps";
 import {
@@ -233,15 +234,23 @@ const genericCreateDefault = <E extends EditableEntity>(
 /**
  * The update-surface locks the declaration carries: `edit.readOnlyOnUpdate`
  * (unconditional) and `edit.readOnlyWhen` (a field's value locks a set of
- * fields — a garden entry that anchors a location period keeps its kind,
- * location, planting and date). The server enforces the same rule; this is
- * what turns the refusal into a disabled control instead of an error.
+ * fields, e.g. a record whose lifecycle state forbids editing certain fields
+ * once it reaches that state). No entity declares `readOnlyWhen` currently;
+ * the rule stays wired for the next one that needs it. The server enforces
+ * the same rule; this is what turns the refusal into a disabled control
+ * instead of an error.
  */
 const declaredAccess = (
   entity: EditableEntity,
   id: string,
 ): EditField<EditableEntity>["access"] => {
-  const { readOnlyOnUpdate, readOnlyWhen } = entitySummary[entity].edit;
+  // `entitySummary` is compiled `as const`; every entity's `edit.readOnlyWhen`
+  // is currently `[]`, so indexing by a non-literal `entity` narrows the
+  // union down to the literal `readonly []` instead of the schema's real
+  // element type. Read through the compiled presentation type so a future
+  // entity that declares a rule needs no change here.
+  const { readOnlyOnUpdate, readOnlyWhen }: CompiledEntityPresentation["edit"] =
+    entitySummary[entity].edit;
   const unconditional = readOnlyOnUpdate.some((key) => key === id);
   const rules = readOnlyWhen.filter((rule) =>
     rule.fields.some((key) => key === id),
@@ -684,8 +693,6 @@ export const entityEditRegistry: EntityEditRegistry = {
       full: { buildData: locationBuildData },
     },
   })),
-  // `status`/`locationId` lock on update through the declared
-  // `edit.readOnlyOnUpdate` (the Start/Move/Split/Finish actions own them).
   planting: buildDefinition("planting", (f) => ({
     fields: f.fieldsFrom(["capture", "full"]),
   })),

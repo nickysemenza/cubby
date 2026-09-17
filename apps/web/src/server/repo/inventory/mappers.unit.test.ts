@@ -62,8 +62,7 @@ const baseLocation = {
   parentId: null,
   type: "room",
   aiDescription: null,
-  gardenKind: null,
-  gardenConditions: null,
+  notes: null,
   valuation: null,
 };
 
@@ -199,8 +198,7 @@ describe("inventory mappers", () => {
         lastBulkInventory: null,
         product: null,
         aiDescription: null,
-        gardenKind: null,
-        gardenConditions: null,
+        notes: null,
         images: [],
         valuation: null,
         name: "Pantry",

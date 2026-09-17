@@ -32,13 +32,6 @@ const slot = <E extends GenericDetailEntity>(
  */
 export const detailSlots = {
   product: {
-    garden: slot(
-      () =>
-        import("~/app/garden/slots").then((m) => ({
-          default: m.ProductGarden,
-        })),
-      (product) => product.growsIngredientId !== null,
-    ),
     nutrition: slot(() =>
       import("~/app/products/slots").then((m) => ({
         default: m.ProductNutrition,
@@ -77,13 +70,6 @@ export const detailSlots = {
     ),
   },
   ingredient: {
-    garden: slot(
-      () =>
-        import("~/app/garden/slots").then((m) => ({
-          default: m.IngredientGarden,
-        })),
-      (ingredient) => ingredient.gardenGuideKey !== null,
-    ),
     "nutrition-product": slot(() =>
       import("~/app/ingredients/slots").then((m) => ({
         default: m.IngredientNutritionProduct,
@@ -103,13 +89,6 @@ export const detailSlots = {
     ),
   },
   location: {
-    garden: slot(
-      () =>
-        import("~/app/garden/slots").then((m) => ({
-          default: m.LocationGarden,
-        })),
-      (location) => location.gardenKind !== null,
-    ),
     "contents-valuation": slot(() =>
       import("~/app/locations/slots").then((m) => ({
         default: m.LocationContentsValuation,
@@ -176,18 +155,6 @@ export const detailSlots = {
     associations: slot(() =>
       import("~/app/images/slots").then((m) => ({
         default: m.ImageAssociations,
-      })),
-    ),
-  },
-  planting: {
-    "location-history": slot(() =>
-      import("~/app/garden/slots").then((m) => ({
-        default: m.PlantingLocationHistory,
-      })),
-    ),
-    "planting-guide": slot(() =>
-      import("~/app/garden/slots").then((m) => ({
-        default: m.PlantingGuide,
       })),
     ),
   },

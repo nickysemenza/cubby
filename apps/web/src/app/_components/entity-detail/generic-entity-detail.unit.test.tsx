@@ -142,10 +142,18 @@ describe("GenericEntityDetail", () => {
   // Table-driven over the manifest: every declared fields/relation/timeline
   // section renders under its declared id and title, so a declaration the
   // page silently drops fails here rather than in the browser. Slot sections
-  // are registry-dependent and covered by their own `applies` predicates.
+  // are registry-dependent and covered by their own `applies` predicates. A
+  // `hideWhenEmpty` relation section is deliberately excluded — the shared
+  // `operations.list` transport below always resolves empty, so it correctly
+  // renders nothing; its own behavior is covered by the dedicated
+  // "hideWhenEmpty relation sections" cases further down.
   const cases = genericDetailEntities.flatMap((entity) =>
     entitySummary[entity].detail.sections
-      .filter((section) => section.kind !== "slot")
+      .filter(
+        (section) =>
+          section.kind !== "slot" &&
+          !(section.kind === "relation" && section.hideWhenEmpty),
+      )
       .map((section) => ({ entity, section })),
   );
 
@@ -335,5 +343,27 @@ describe("GenericEntityDetail", () => {
     expect(
       within(stockedAt).getByRole("button", { name: /Open all/ }),
     ).toBeInTheDocument();
+  });
+
+  // `hideWhenEmpty` wiring end to end, through a real manifest declaration
+  // (product.plantings): the mechanism itself — hide the whole section, show
+  // it again once non-empty, leave a non-`hideWhenEmpty` section alone — is
+  // covered exhaustively and without a real entity's async fan-out (lazy
+  // slots, reference-link previews) in `SectionCard`'s own table-driven
+  // tests, `detail-page.unit.test.tsx`.
+  it("hides a real hideWhenEmpty relation section once its first page resolves empty", async () => {
+    const { container } = render(
+      <GenericEntityDetail
+        entity="product"
+        record={recordFor("product")}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    // Its header and "+Add" button only ever existed as descendants of this
+    // section, so an inaccessible section proves both are gone too.
+    await waitFor(() => {
+      expect(container.querySelector("section#plantings")).not.toBeVisible();
+    });
   });
 });

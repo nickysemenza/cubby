@@ -1,34 +1,21 @@
-import type { PlantingOut } from "@cubby/schemas/garden";
 import {
   inventoryShortcode,
   locationShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
-import { plantingOut } from "@cubby/schemas/planting";
 import { projectStatusSchema } from "@cubby/schemas/project";
-import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
-import { GardenDialogFooterSlot } from "~/app/garden/garden-fields";
-import {
-  PlantingActionForm,
-  type PlantingAction,
-  plantingActionLabels,
-} from "~/app/garden/planting-action-form";
 import { PROJECT_STATUS_OPTIONS } from "~/app/projects/project-options";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { expenseCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { ProductDiscardDialog } from "../products/product-discard-dialog";
 import { SetFieldDialog } from "../tracker/set-field-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
-import type { ActionVerbId } from "./action-verbs";
 import { defineEntityAction } from "./entity-action-definition";
 import type {
   EntityActionHandles,
@@ -249,89 +236,6 @@ function useMarkWishPurchasedAction(): EntityActionHandles {
   };
 }
 
-const PLANTING_VERBS = {
-  startPlanting: "start",
-  movePlanting: "move",
-  splitPlanting: "split",
-  finishPlanting: "finish",
-} as const satisfies Partial<Record<ActionVerbId, PlantingAction>>;
-
-/** Which lifecycle verbs a planting in a given status can take. */
-function plantingActionAvailable(
-  planting: PlantingOut,
-  action: PlantingAction,
-): boolean {
-  switch (action) {
-    case "start":
-      return planting.status === "planned";
-    case "move":
-    case "split":
-      return planting.status === "growing";
-    case "finish":
-      return planting.status !== "finished";
-  }
-}
-
-function usePlantingLifecycleAction(
-  verb: keyof typeof PLANTING_VERBS,
-): EntityActionHandles {
-  const action = PLANTING_VERBS[verb];
-  const queryClient = useQueryClient();
-  const [planting, setPlanting] = useState<PlantingOut | null>(null);
-  const parse = (row: EntityActionRow) => {
-    const parsed = plantingOut.safeParse(row);
-    return parsed.success && plantingActionAvailable(parsed.data, action)
-      ? parsed.data
-      : null;
-  };
-  return {
-    run: async (rows) => {
-      const row = singleRow(rows);
-      const parsed = row ? parse(row) : null;
-      if (parsed) setPlanting(parsed);
-      return { success: parsed !== null };
-    },
-    availability: ({ rows }: EntityActionResolutionContext) => {
-      const row = singleRow(rows);
-      return row && parse(row) ? { status: "available" } : { status: "hidden" };
-    },
-    rowMenuItem: (row) => {
-      const parsed = parse(row);
-      if (!parsed) return null;
-      return (
-        <VerbMenuItem
-          verb={verb}
-          onSelect={(event) => {
-            event.stopPropagation();
-            setPlanting(parsed);
-          }}
-        />
-      );
-    },
-    dialog: planting !== null && (
-      <ResponsiveDialog
-        open
-        onOpenChange={(open) => {
-          if (!open) setPlanting(null);
-        }}
-        title={plantingActionLabels[action]}
-        size="lg"
-        footer={<GardenDialogFooterSlot />}
-      >
-        <PlantingActionForm
-          planting={planting}
-          action={action}
-          onSaved={() => {
-            setPlanting(null);
-            void invalidateOperationTags(queryClient, ripple.planting);
-          }}
-          onCancel={() => setPlanting(null)}
-        />
-      </ResponsiveDialog>
-    ),
-  };
-}
-
 export const declaredEntityActionDefinitions = [
   defineEntityAction({
     verb: "recordSale",
@@ -370,18 +274,4 @@ export const declaredEntityActionDefinitions = [
     priority: 50,
     use: useMarkWishPurchasedAction,
   }),
-  // SAFETY: `PLANTING_VERBS` is a closed `as const` map; its keys are its
-  // own verb ids.
-  ...(Object.keys(PLANTING_VERBS) as Array<keyof typeof PLANTING_VERBS>).map(
-    (verb, index) =>
-      defineEntityAction({
-        verb,
-        entities: ["planting"],
-        arity: "single",
-        surfaces: ["row", "inspector", "detail"],
-        group: "lifecycle",
-        priority: 100 + index,
-        use: () => usePlantingLifecycleAction(verb),
-      }),
-  ),
 ] as const;

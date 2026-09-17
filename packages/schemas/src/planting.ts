@@ -6,6 +6,8 @@ import {
   ingredientShortcode,
   locationShortcode,
   plantingShortcode,
+  productShortcode,
+  taskShortcode,
 } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import {
@@ -28,18 +30,13 @@ export const plantingFilterFields = {
   ...generatedPlantingFilterFields,
   locationId: oneOrMany(locationShortcode).optional(),
   ingredientId: oneOrMany(ingredientShortcode).optional(),
+  taskId: oneOrMany(taskShortcode).optional(),
+  sourceProductId: oneOrMany(productShortcode).optional(),
 };
 export const plantingFiltersSchema = z.object(plantingFilterFields);
 export type PlantingFilters = z.infer<typeof plantingFiltersSchema>;
 export const plantingOut = z.object(generatedPlantingFieldSchemas.read);
 export type PlantingOut = z.infer<typeof plantingOut>;
-/**
- * `gardenOverview` (`repo/garden/index.ts`) parses a raw joined select with no
- * `PlantingImage` relation loaded — `images` is omitted here rather than
- * inherited from `plantingOut` so that query's output keeps validating.
- */
-export const gardenPlantingOut = plantingOut.omit({ images: true });
-export type GardenPlantingOut = z.infer<typeof gardenPlantingOut>;
 /** List-row projection: `plantingOut` plus the server-resolved gallery cover(s). */
 export const plantingListItemOut = plantingOut.extend({
   displayImages: displayImagesField,

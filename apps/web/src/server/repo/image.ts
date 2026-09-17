@@ -369,11 +369,10 @@ type ImageWithRelations = typeof image.$inferSelect & {
 };
 
 // Mirrors `GARDEN_ENTRY_KIND_LABELS` in `~/server/repo/garden` (private
-// there): the "observation" kind reads as "Note" everywhere it's shown.
+// there).
 const GARDEN_ENTRY_ASSOCIATION_KIND_LABELS = {
-  observation: "Note",
+  note: "Note",
   harvest: "Harvest",
-  move: "Move",
 } satisfies Record<string, string>;
 
 function isGardenEntryAssociationKindLabel(

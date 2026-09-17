@@ -18,19 +18,6 @@ struct BrowseRootView: View {
                         .frame(minHeight: PorcelainTokens.touchTarget)
                 }
                 .listRowInsets(browseRowInsets)
-                gardenLink {
-                    HStack(spacing: PorcelainTokens.Space.md) {
-                        Image(systemName: "leaf")
-                            .foregroundStyle(PorcelainTokens.cobalt)
-                            .frame(width: 20)
-                        Text("Garden")
-                            .font(.porcelainBody)
-                        Spacer()
-                    }
-                    .frame(minHeight: PorcelainTokens.touchTarget)
-                }
-                .listRowInsets(browseRowInsets)
-                .porcelainListRow()
             } header: {
                 headerTitle("Explore")
             }
@@ -106,18 +93,6 @@ struct BrowseRootView: View {
                     count: model.browseCounts.count(for: descriptor.key)
                 )
             }
-        #endif
-    }
-
-    @ViewBuilder private func gardenLink<Content: View>(@ViewBuilder label: () -> Content) -> some View {
-        #if os(macOS)
-            Button {
-                model.navigator.macDestination = .garden
-            } label: {
-                label()
-            }.buttonStyle(.plain)
-        #else
-            NavigationLink(value: Route.garden) { label() }
         #endif
     }
 

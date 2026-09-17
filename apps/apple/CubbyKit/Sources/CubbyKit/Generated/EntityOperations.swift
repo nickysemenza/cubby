@@ -353,9 +353,6 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "ingredientPresenceFilter": query.ingredientPresenceFilter = try value.enumCase(name)
                 case "ingredientSearch": query.ingredientSearch = try value.string(name)
-                case "plantingId": query.plantingId = value.strings
-                case "plantingPresenceFilter": query.plantingPresenceFilter = try value.enumCase(name)
-                case "plantingSearch": query.plantingSearch = try value.string(name)
                 case "aiDescriptionPresenceFilter": query.aiDescriptionPresenceFilter = try value.enumCase(name)
                 case "nameFilter": query.nameFilter = try value.string(name)
                 case "itemTypeFilter": query.itemTypeFilter = try value.enumCases(name)
@@ -428,6 +425,8 @@ extension EntityDescriptor {
                 case "status": query.status = try value.enumCases(name)
                 case "locationId": query.locationId = value.strings
                 case "ingredientId": query.ingredientId = value.strings
+                case "taskId": query.taskId = value.strings
+                case "sourceProductId": query.sourceProductId = value.strings
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.planting, name)
                 }
@@ -840,7 +839,7 @@ extension EntityDescriptor {
             }
         case .gardenEntry:
             switch wireKey {
-                case "kind": ["observation", "harvest", "move"]
+                case "kind": ["note", "harvest"]
                 case "groupBy": ["observedOn", "createdAt", "updatedAt", "kind"]
                 default: nil
             }
@@ -881,9 +880,8 @@ extension EntityDescriptor {
         case .location:
             switch wireKey {
                 case "ingredientPresenceFilter": ["has", "none"]
-                case "plantingPresenceFilter": ["has", "none"]
                 case "aiDescriptionPresenceFilter": ["has", "none"]
-                case "itemTypeFilter": ["house", "room", "area", "bag", "box", "shelf", "table", "drawer", "cart", "cabinet"]
+                case "itemTypeFilter": ["house", "room", "area", "bed", "planter", "bag", "box", "shelf", "table", "drawer", "cart", "cabinet"]
                 case "productPresenceFilter": ["has", "none"]
                 case "parentPresenceFilter": ["has", "none"]
                 case "inventoryPresenceFilter": ["has", "none"]
@@ -1076,6 +1074,8 @@ extension EntityDescriptor {
                 case "status": query.status = try value.enumCases(name)
                 case "locationId": query.locationId = value.strings
                 case "ingredientId": query.ingredientId = value.strings
+                case "taskId": query.taskId = value.strings
+                case "sourceProductId": query.sourceProductId = value.strings
                 case "ids": query.ids = value.strings
                 case "from": query.from = try value.string(name)
                 case "to": query.to = try value.string(name)

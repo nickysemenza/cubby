@@ -1,9 +1,10 @@
 import { financialAccountOut } from "@cubby/schemas/financial-account";
 import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
-import { gardenEntryOut, plantingOut } from "@cubby/schemas/garden";
+import { gardenEntryOut } from "@cubby/schemas/garden-entry";
 import { imageOut, imageWithEntitySchema } from "@cubby/schemas/image";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { infLocation } from "@cubby/schemas/location";
+import { plantingOut } from "@cubby/schemas/planting";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { wishOut } from "@cubby/schemas/wish";
@@ -406,11 +407,11 @@ describe("first-wave compact cards", () => {
     ]);
   });
 
-  it("titles a gardenEntry card from displayName and maps observation to Note", () => {
+  it("titles a gardenEntry card from displayName and maps note to Note", () => {
     const bedOverview = mock(gardenEntryOut, {
       seed: 9,
       overrides: {
-        kind: "observation",
+        kind: "note",
         observedOn: "2026-10-06",
         locationName: "Garden test bed",
         displayName: "Note · 2026-10-06 · Garden test bed",

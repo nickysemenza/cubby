@@ -31,6 +31,7 @@ apps/web/src/routes/_authenticated/locations.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/meals.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/meals.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/plantings.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/plantings.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/products.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/products.index.tsx linguist-generated
 apps/web/src/routes/_authenticated/projects.index.tsx linguist-generated

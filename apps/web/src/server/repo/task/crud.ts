@@ -32,7 +32,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { product, task, taskDependency } from "~/server/db/schema";
+import { planting, product, task, taskDependency } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -98,6 +98,11 @@ export const TASK_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Image associations are soft-deleted with the task, and each file is\n      deleted too unless something else still references it.",
+  },
+  "Planting.taskId": {
+    code: "clear-live-fk-with-audit",
+    effect: "detach",
+    description: "A planting outlives the task that produced it.",
   },
 } as const satisfies IncomingEdgePolicy<"task", OperationDisposition>;
 
@@ -815,6 +820,32 @@ export const deleteTasks = async (
       (subtask) => !explicitlyDeletedIds.has(subtask.id),
     );
     const allIds = [...ids, ...cascadedSubtasks.map((subtask) => subtask.id)];
+
+    // TASK_DELETE_EDGE_POLICY declares `Planting.taskId` `detach`: a planting
+    // outlives the task that produced it. `removeEntity`'s cascade has no
+    // detach arm, so this is hand-written — mirrors `purchase.ts`'s
+    // expense-detach pattern. Over `allIds` so a cascaded subtask's plantings
+    // detach too.
+    const detachingPlantings = await tx
+      .select({ id: planting.id, taskId: planting.taskId })
+      .from(planting)
+      .where(and(inArray(planting.taskId, allIds), notDeleted(planting)));
+    if (detachingPlantings.length > 0) {
+      await tx
+        .update(planting)
+        .set({ taskId: null })
+        .where(and(inArray(planting.taskId, allIds), notDeleted(planting)));
+      await logAuditEntries(
+        tx,
+        actor,
+        detachingPlantings.map((row) => ({
+          entityType: "planting" as const,
+          entityId: row.id,
+          action: "update" as const,
+          changes: { taskId: { from: row.taskId, to: null } },
+        })),
+      );
+    }
 
     // Over `allIds`, not `ids`: the cascaded subtasks are removals too — this
     // also makes the image cascade below reap a subtask's own photos, not just

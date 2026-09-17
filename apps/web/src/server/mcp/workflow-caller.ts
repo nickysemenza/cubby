@@ -27,11 +27,6 @@ import {
   expenseMatchWorkflow,
 } from "~/server/workflows/expense.server";
 import {
-  gardenFinishPlantingWorkflow,
-  gardenMovePlantingWorkflow,
-  gardenStartPlantingWorkflow,
-} from "~/server/workflows/garden.server";
-import {
   householdContributionLedgerWorkflow,
   projectContributionWorkflow,
   suggestFinancialTransferPairsWorkflow,
@@ -159,20 +154,6 @@ const callerDomains = {
       (context: CallerContext) =>
       (input: Parameters<typeof previewFinancialStatementImport>[1]) =>
         previewFinancialStatementImport(context.readDb, input),
-  },
-  garden: {
-    startPlanting:
-      (context: CallerContext) =>
-      (input: Parameters<typeof gardenStartPlantingWorkflow>[1]) =>
-        gardenStartPlantingWorkflow(context, input),
-    movePlanting:
-      (context: CallerContext) =>
-      (input: Parameters<typeof gardenMovePlantingWorkflow>[1]) =>
-        gardenMovePlantingWorkflow(context, input),
-    finishPlanting:
-      (context: CallerContext) =>
-      (input: Parameters<typeof gardenFinishPlantingWorkflow>[1]) =>
-        gardenFinishPlantingWorkflow(context, input),
   },
   householdContribution: {
     ledger:

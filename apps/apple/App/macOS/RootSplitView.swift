@@ -8,8 +8,7 @@ struct RootSplitView: View {
     @State private var browsing: NativeBrowserSession?
 
     private var isBrowser: Bool {
-        model.navigator.section == .search
-            || (model.navigator.section == .browse && !model.navigator.browsingGarden)
+        model.navigator.section == .search || model.navigator.section == .browse
     }
 
     var body: some View {
@@ -28,16 +27,7 @@ struct RootSplitView: View {
                     sidebar
                 } detail: {
                     NavigationStack(path: model.navigator.path(for: model.navigator.section)) {
-                        Group {
-                            if model.navigator.browsingGarden && model.navigator.section == .browse {
-                                GardenRootView()
-                                    .navigationDestination(for: Route.self) {
-                                        RouteDestinationView(route: $0)
-                                    }
-                            } else {
-                                SectionView(section: model.navigator.section)
-                            }
-                        }
+                        SectionView(section: model.navigator.section)
                     }
                 }
             }
@@ -72,7 +62,6 @@ struct RootSplitView: View {
                     Label(section.title, systemImage: section.symbol)
                         .tag(SidebarDestination.section(section))
                 }
-                Label("Garden", systemImage: "leaf").tag(SidebarDestination.garden)
             }
             ForEach(AppDomain.allCases) { domain in
                 Section(domain.title) {

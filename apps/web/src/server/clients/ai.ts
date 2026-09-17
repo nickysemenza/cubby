@@ -89,6 +89,9 @@ const LOCATION_TYPE_DESCRIPTIONS = {
   bag: "Fabric or plastic bags: tool bag, shopping bag, parts bag",
   table: "Work surfaces: workbench, desk, countertop, craft table",
   cart: "Mobile storage with wheels: tool cart, utility cart, rolling cart",
+  bed: "Outdoor in-ground or raised garden beds: raised bed 1, front garden bed",
+  planter:
+    "Outdoor pots and containers for growing: patio planter, hanging planter",
 } satisfies Record<LocationType, string>;
 
 function buildLocationTypeSystemPrompt(): string {

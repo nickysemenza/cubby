@@ -11,7 +11,6 @@ import {
   inventoryShortcode,
   ledgerPartyShortcode,
   mealShortcode,
-  plantingShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -203,14 +202,6 @@ const relatedViewPresentationRegistry = [
     relationship: "ingredients",
     defaultVisible: false,
     order: "alphabetical",
-  },
-  {
-    key: "location.plantingHistory",
-    source: "location",
-    relationship: "planting-history",
-    defaultVisible: false,
-    order: "newest",
-    filterPrefix: "planting",
   },
   {
     key: "inventory.ingredient",
@@ -459,7 +450,6 @@ const relatedViewRelationshipKeys = {
   "meal.foodIngredients": "food-ingredients",
   "meal.eaters": "eaters",
   "location.ingredients": "ingredients",
-  "location.plantingHistory": "planting-history",
   "inventory.ingredient": "ingredient",
   "project.blockedBy": "blocked-by",
   "project.tasks": "tasks",
@@ -537,7 +527,7 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   // The one entity with no shortcode, no detail route, and no list table.
   image: "no detail route or list table to hang a preview column on",
   planting:
-    "garden overview is a bespoke timeline, not a list table; location-history relations surface via the entity graph",
+    "its cross-entity relationships (ingredient, location, source product, task) are already reachable from those entities' own declared relation sections",
   gardenEntry: "garden timelines render entries directly",
   // Not a local entity — remote USDA search results, no local edges.
   "usda-food": "remote USDA records have no local relationships",
@@ -784,7 +774,6 @@ export const mealRelatedFilterFields = {
 };
 export const locationRelatedFilterFields = {
   ...trio("ingredient", ingredientShortcode),
-  ...trio("planting", plantingShortcode),
 };
 export const inventoryRelatedFilterFields = trio(
   "ingredient",

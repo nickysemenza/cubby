@@ -19,7 +19,7 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb } from "./database-helpers";
-import { createPlanting, recordGardenEntry } from "./garden";
+import { createGardenEntry, createPlanting } from "./garden";
 import { createIngredient } from "./ingredient";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import {
@@ -281,7 +281,7 @@ describe("deleteLocations hierarchy", () => {
     );
     const bed = await createLocation(
       ctx.db,
-      makeLocationInput({ name: "Planted bed", type: null, gardenKind: "bed" }),
+      makeLocationInput({ name: "Planted bed", type: "bed" }),
       ctx.actor,
     );
     const bedId = parseEntityId(
@@ -302,7 +302,7 @@ describe("deleteLocations hierarchy", () => {
     });
   });
 
-  it("rejects a bed named by a planned planting's intendedLocationId (LOCATION_HAS_PLANTINGS)", async () => {
+  it("rejects a bed named by a planned planting's locationId (LOCATION_HAS_PLANTINGS)", async () => {
     const crop = await createIngredient(
       ctx.db,
       { name: "Location intended crop" },
@@ -312,8 +312,7 @@ describe("deleteLocations hierarchy", () => {
       ctx.db,
       makeLocationInput({
         name: "Intended bed",
-        type: null,
-        gardenKind: "bed",
+        type: "bed",
       }),
       ctx.actor,
     );
@@ -323,7 +322,7 @@ describe("deleteLocations hierarchy", () => {
     );
     await createPlanting(
       ctx.db,
-      { ingredientId: crop.id, intendedLocationId: bed.id, status: "planned" },
+      { ingredientId: crop.id, locationId: bed.id, status: "planned" },
       ctx.actor,
     );
 
@@ -335,13 +334,12 @@ describe("deleteLocations hierarchy", () => {
     });
   });
 
-  it("rejects a bed that only carries a garden observation (LOCATION_HAS_GARDEN_HISTORY)", async () => {
+  it("rejects a bed that only carries a garden note (LOCATION_HAS_GARDEN_HISTORY)", async () => {
     const bed = await createLocation(
       ctx.db,
       makeLocationInput({
         name: "Observed bed",
-        type: null,
-        gardenKind: "bed",
+        type: "bed",
       }),
       ctx.actor,
     );
@@ -349,11 +347,11 @@ describe("deleteLocations hierarchy", () => {
       "location",
       (await resolveLiveShortcode(ctx.db, bed.id, "location"))!,
     );
-    await recordGardenEntry(
+    await createGardenEntry(
       ctx.db,
       {
         locationId: bed.id,
-        kind: "observation",
+        kind: "note",
         observedOn: "2026-09-01",
         note: "Soil turned",
         pendingImageIds: [],

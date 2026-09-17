@@ -128,6 +128,8 @@ export const ingredientWith = (
   naKinds: [],
   usuallyOnHand: false,
   gardenGuideKey: null,
+  guideSowWindow: null,
+  guideTransplantWindow: null,
   ...dates,
   product,
 });

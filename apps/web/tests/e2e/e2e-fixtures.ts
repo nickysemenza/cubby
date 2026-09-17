@@ -10,6 +10,7 @@ import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { saveMealFoodInput } from "@cubby/schemas/meal";
+import { plantingCreateInput } from "@cubby/schemas/planting";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
@@ -147,6 +148,20 @@ export const seedLocationPrerequisite = (
       tags: [],
       type: "room",
       parentId: opts.parentId ?? null,
+    }),
+  );
+
+export const seedPlantingPrerequisite = (
+  page: Page,
+  opts: { ingredientId: string; locationId?: string; status?: string },
+) =>
+  createFixture(
+    page,
+    "planting",
+    plantingCreateInput.parse({
+      ingredientId: opts.ingredientId,
+      locationId: opts.locationId ?? null,
+      status: opts.status,
     }),
   );
 

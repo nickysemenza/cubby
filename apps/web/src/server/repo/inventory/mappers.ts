@@ -1,4 +1,3 @@
-import { gardenLocationKind } from "@cubby/schemas/garden-fields";
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   inventoryDisplayName,
@@ -81,10 +80,7 @@ export const dbInventoryEntryToAPI: (
       valuation: null,
       name: location.name,
       aliases: location.aliases ?? [],
-      gardenKind: location.gardenKind
-        ? gardenLocationKind.parse(location.gardenKind)
-        : null,
-      gardenConditions: location.gardenConditions ?? null,
+      notes: location.notes ?? null,
       type: parseLocationType(location.type, {
         id: location.id,
         name: location.name,
@@ -129,10 +125,6 @@ export const dbInventoryEntryToListAPI: (
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       name: location.name,
-      gardenKind: location.gardenKind
-        ? gardenLocationKind.parse(location.gardenKind)
-        : null,
-      gardenConditions: location.gardenConditions ?? null,
       type: parseLocationType(location.type, {
         id: location.id,
         name: location.name,

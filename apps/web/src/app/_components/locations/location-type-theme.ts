@@ -3,6 +3,7 @@ import { getLocationTypeColor, type LocationType } from "@cubby/shared";
 import {
   Box,
   FileBox,
+  Flower2,
   Home,
   Layers,
   LayoutGrid,
@@ -10,6 +11,7 @@ import {
   Package,
   ShoppingBag,
   ShoppingCart,
+  Sprout,
   Table2,
 } from "lucide-react";
 
@@ -52,12 +54,14 @@ const typeToGroup = {
   table: "surfaces",
   cart: "surfaces",
   shelf: "surfaces",
+  bed: "surfaces",
   // Storage - enclosed/built-in (rose/pink family)
   cabinet: "storage",
   drawer: "storage",
   // Containers - portable (cyan family)
   box: "containers",
   bag: "containers",
+  planter: "containers",
 } satisfies Record<LocationType, LocationTypeGroup>;
 
 /**
@@ -80,6 +84,8 @@ const locationIcons = {
   cart: ShoppingCart,
   cabinet: Box,
   box: Box,
+  bed: Sprout,
+  planter: Flower2,
 } satisfies Record<LocationType, LucideIcon>;
 
 /**
