@@ -166,6 +166,7 @@ describe("default entity timeline", () => {
       id: dated,
       name: "Lifecycle task",
       imageUrl: null,
+      link: { entity: "task", id: dated },
       intervals: [{ start: today, end: "2026-03-09", confident: true }],
       markers: expect.arrayContaining([
         expect.objectContaining({ date: today, kind: "field:createdAt" }),

@@ -581,6 +581,19 @@ describe("shared entity Relations", () => {
   });
 
   it("restores a selected record hidden inside a counted branch", async () => {
+    const hiddenRecipe = {
+      entityType: "recipe",
+      entityId: testShortcode("recipe", "hidden-counted-branch"),
+    } as const;
+    const hiddenEdge: EntityGraphOutput["edges"][number] = {
+      id: "hidden-test-edge",
+      source: hiddenRecipe,
+      target: root,
+      relationshipKey: "cookbook",
+      sourceKey: "direct",
+      label: "Cookbook",
+      provenance: [],
+    };
     const grouped = {
       ...initial,
       branches: initial.branches.map((branch) => ({
@@ -596,9 +609,12 @@ describe("shared entity Relations", () => {
       graphPaths: entityGraph.graphPaths.withTransport(async () => {
         pathReads++;
         return {
-          nodes: initial.nodes,
-          edges: initial.edges,
-          paths: [{ nodeRefs: [root, recipe], edgeIds: ["test-edge"] }],
+          nodes: [
+            initial.nodes[0]!,
+            { ...hiddenRecipe, label: "Hidden recipe", metadata: {} },
+          ],
+          edges: [hiddenEdge],
+          paths: [{ nodeRefs: [root, hiddenRecipe], edgeIds: [hiddenEdge.id] }],
           completion: "exhausted",
           shortestPathCertain: true,
         };
@@ -613,7 +629,10 @@ describe("shared entity Relations", () => {
         entity="cookbook"
         sourceId={root.entityId}
         operations={operations}
-        state={{ view: "graph", selected: "recipe:RCP-4K7M" }}
+        state={{
+          view: "graph",
+          selected: `recipe:${hiddenRecipe.entityId}`,
+        }}
       />,
       { wrapper: harness.wrapper },
     );
