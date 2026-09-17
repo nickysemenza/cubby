@@ -104,6 +104,13 @@ interface SubtitlePart {
  * Subtitle-slot value first, then every meta-slot value in priority order —
  * the canvas has one truncated identity line, not a stacked spec grid.
  */
+/**
+ * The trailing column holds one mono value (plus any Badge-shaped extras a
+ * column renders); further trailing-slot values would stack the row taller
+ * than its 64px, so they join the subtitle line after the meta parts.
+ */
+const TRAILING_STACK_LIMIT = 2;
+
 function buildSubtitleParts<TItem extends RowData>(
   model: MobileListRowModel<TItem>,
 ): SubtitlePart[] {
@@ -115,6 +122,12 @@ function buildSubtitleParts<TItem extends RowData>(
       id,
       value,
       interactive,
+    })),
+    ...model.rightValues.slice(TRAILING_STACK_LIMIT).map((value, index) => ({
+      id: `trailing-overflow-${index}`,
+      value,
+      interactive:
+        model.rightValueInteractive[index + TRAILING_STACK_LIMIT] ?? false,
     })),
   ];
 }
@@ -136,12 +149,14 @@ interface TrailingValueEntry {
 function trailingValueEntries<TItem extends RowData>(
   model: MobileListRowModel<TItem>,
 ): TrailingValueEntry[] {
-  return model.rightValues.map((value, index) => ({
-    key: `${model.row.id}:trailing:${index}`,
-    value,
-    interactive: model.rightValueInteractive[index] ?? false,
-    isPrimary: index === 0,
-  }));
+  return model.rightValues
+    .slice(0, TRAILING_STACK_LIMIT)
+    .map((value, index) => ({
+      key: `${model.row.id}:trailing:${index}`,
+      value,
+      interactive: model.rightValueInteractive[index] ?? false,
+      isPrimary: index === 0,
+    }));
 }
 
 /** Whether the row reserves the 44px gutter, and what fills it when it does. */

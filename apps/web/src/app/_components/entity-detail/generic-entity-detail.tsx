@@ -585,7 +585,10 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
             ? (overflow: "inline" | "menu") => (
                 <EntityActionButtons
                   entity={entity}
-                  record={{ id: bag.id }}
+                  // The whole record, not just its id: a verb's availability
+                  // reads the fields it gates on (a planting's status hides
+                  // "Start planting" once it has started).
+                  record={{ ...record, id: bag.id }}
                   verbs={declaredVerbs}
                   overflow={overflow}
                 />
