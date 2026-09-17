@@ -118,19 +118,19 @@ export const derivedProblemQueries = [
     executionLane: "fast",
     continuation: {
       kind: "none",
-      reason: "The exact result is a union across searchable entity types.",
+      reason: "The exact result is a union across embeddable entity types.",
     },
     freshness: { kind: "live" },
     title: "Entities missing embeddings",
     description:
       "Records that search can't find yet, because they haven't been indexed under the current model.",
-    emptyMessage: "Every searchable entity is embedded.",
+    emptyMessage: "Every embeddable entity is embedded.",
     source: {
       kind: "derived",
       diagnostic: "entities-missing-embeddings",
       grain: "polymorphic",
       operations: [
-        { label: "Union all searchable live entity types" },
+        { label: "Union all embeddable live entity types" },
         { label: "Exclude entities with a current embedding" },
       ],
     },

@@ -372,9 +372,8 @@ describe("cookbook repository", () => {
     });
     expect(ingredientsBefore.length).toBeGreaterThan(0);
 
-    // Seed a live search-embedding row for both the cookbook and its recipe —
-    // a minimal 3-dim vector inserts fine (the HNSW index is partial on
-    // dimensions=1536).
+    // Seed a live search-embedding bookkeeping row for both the cookbook and
+    // its recipe (the vector itself lives in Vectorize, not Postgres).
     const seedEmbedding = (
       entityType: "cookbook" | "recipe",
       entityId: string,
@@ -389,7 +388,6 @@ describe("cookbook repository", () => {
           provider: "test",
           model: "test",
           dimensions: 3,
-          embedding: [0, 0, 0],
         });
     await seedEmbedding("cookbook", cookbookId);
     await seedEmbedding("recipe", recipeId);

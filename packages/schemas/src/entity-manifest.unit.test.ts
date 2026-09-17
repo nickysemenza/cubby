@@ -10,6 +10,7 @@ import {
   browserRoutedEntities,
   coverEntities,
   countableEntities,
+  embeddableEntities,
   entityDescriptor,
   entityInspectorMetadata,
   type EntityDescriptor,
@@ -228,6 +229,24 @@ describe("entity manifest", () => {
       "financialTransaction",
       "wish",
       "expense",
+      "planting",
+      "gardenEntry",
+    ]);
+    // The three financial entities stay lexically searchable but opt out of
+    // embedding (search: { enabled: true, embedding: false }).
+    expect(embeddableEntities).toEqual([
+      "product",
+      "recipe",
+      "ingredient",
+      "cookbook",
+      "location",
+      "inventory",
+      "meal",
+      "project",
+      "task",
+      "vendor",
+      "financialAccount",
+      "wish",
       "planting",
       "gardenEntry",
     ]);

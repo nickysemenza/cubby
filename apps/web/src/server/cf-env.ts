@@ -8,6 +8,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { BackgroundQueueProducer } from "./background-queue-types";
+import type { VectorizeIndexBinding } from "./semantic/vector-store";
 import type { TelemetryQueueProducer } from "./telemetry-queue-types";
 
 interface WaitUntilContext {
@@ -97,6 +98,17 @@ export const CF_AIG_GATEWAY_ID = "cubby";
  * AI_GATEWAY_API_KEY in dev.
  */
 export const getAiGateway = () => cfEnv?.AI?.gateway(CF_AIG_GATEWAY_ID);
+
+/**
+ * The entity-vector index (`env.VECTORIZE`) on CF Workers, or undefined on the
+ * dev Node server. Narrowed to Cubby's owned surface because `wrangler types`
+ * emits the legacy `VectorizeIndex` class, which omits `queryById`.
+ */
+export const getVectorIndex = (): VectorizeIndexBinding | undefined => {
+  // SAFETY: the generated binding is the v2 Vectorize index at runtime; this
+  // adapter narrows it to the methods Cubby calls.
+  return cfEnv?.VECTORIZE as VectorizeIndexBinding | undefined;
+};
 
 type ServiceBindingName = "USDA_API" | "UPC_LOOKUP";
 

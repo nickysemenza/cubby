@@ -309,6 +309,49 @@ history is the archive. Permanent product constraints live in the
 
 ### Needs a decision or investigation
 
+- **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
+  Vectorize's per-vector cost is model-agnostic, so a cheaper/faster
+  Workers AI embedding model is worth comparing against the OpenAI adapter
+  for recall quality before committing to it as the default. Use these
+  query/expected-top-result pairs as the eval set (moved here from the
+  deleted `server/semantic/search-evals.ts`):
+  `"plastic tarp"` → `blue plastic tarp` (product); `"drop cloth"` →
+  `plastic drop cloth` (product); `"where are tarps"` →
+  `tarps cloths blankets` (location); `"packout"` → `packout organizer`
+  (product); `"parchment"` → `parchment paper` (product); `"tarpaulin"` →
+  `blue plastic tarp` (product); `"cling film"` → `plastic wrap` (product);
+  `"adjustable spanner"` → `adjustable wrench` (product); `"wet dry vac"` →
+  `shop vacuum` (product); `"painters cover"` → `painters drop cloth`
+  (product). Trap: `bge-base-en-v1.5` embeds at a different dimension than
+  OpenAI's model, and `EntityEmbedding`/Vectorize rows are keyed on
+  `(provider, model, dimensions)` — `findRelatedSearchCandidates`
+  (`server/services/search.service.ts`) must resolve the active
+  `SemanticEmbeddingConfig` before embedding the query text, not embed with
+  a stale/hardcoded dimension and silently miss every stored vector.
+
+- **Dev Vectorize REST client, if semantic search in plain-Node dev is ever
+  wanted.** The vite Node dev server has no `VECTORIZE` binding, so
+  `semanticEmbeddingsConfigured()` (`server/semantic/embeddings.ts`)
+  degrades to unavailable there today — that's a deliberate simplification,
+  not a bug. If local semantic search becomes worth the cost, add a
+  `VectorStorePort` implementation over Cloudflare's Vectorize REST API
+  (account id + API token) instead of loosening the gate.
+
+- **Batch a queue batch's messages into one Vectorize upsert, if async
+  indexing lag ever matters.** Background embedding refresh currently
+  upserts per message; a 10-message queue batch could collect its vectors
+  and call `productionVectorStore.upsert` once. Not worth it until indexing
+  lag or Vectorize's per-call overhead is actually observed to matter.
+
+- **Cloudflare AI Search (managed RAG over R2 files) for a future
+  document-Q&A feature.** Evaluated and rejected for entity similarity
+  search (this pass's problem): it ingests files from R2 rather than rows,
+  re-indexes on a schedule rather than per-write, and returns chunk results
+  rather than entity refs — none of which fit "find the Product/Location/…
+  this query means." Worth a second look only if Cubby ever wants
+  free-text Q&A over uploaded documents (receipts, manuals) as its own
+  feature, which is a different problem than entity search.
+
 - **List-route SSR payloads are large.** Unauthenticated probes measured
   `/projects` at 826 KB, `/locations` 655 KB, `/recipes` 579 KB of HTML.
   Find what the generic list loader and the slot views dehydrate (a full

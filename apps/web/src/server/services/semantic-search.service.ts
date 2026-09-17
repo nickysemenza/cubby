@@ -9,6 +9,7 @@ import {
   embedQuery,
   semanticEmbeddingsConfigured,
 } from "~/server/semantic/embeddings";
+import { productionVectorStore } from "~/server/semantic/vector-store";
 import { hydrateSearchHitRefs } from "~/server/services/search.service";
 import { TraceNames, withTrace } from "~/server/tracing";
 
@@ -37,7 +38,7 @@ async function semanticSearchCandidates(
   const refs = await withTrace(
     TraceNames.service("semanticSearch", "vectorLookup"),
     () =>
-      findSemanticEntityCandidates(db, embedding, config, {
+      findSemanticEntityCandidates(productionVectorStore, embedding, {
         entityTypes,
         limit,
       }),

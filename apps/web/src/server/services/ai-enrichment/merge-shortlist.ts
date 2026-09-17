@@ -18,11 +18,11 @@ import {
   getIngredientMergeCandidatesByIds,
   searchIngredientsForMerge,
 } from "~/server/repo/ingredient";
-import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import {
   embedQuery,
   semanticEmbeddingsConfigured,
 } from "~/server/semantic/embeddings";
+import { productionVectorStore } from "~/server/semantic/vector-store";
 
 export interface MergeShortlistEntry {
   id: IngredientId;
@@ -53,11 +53,11 @@ async function productionSemanticLeg(
   const embedding = await embedQuery(name, { db });
   if (!embedding) return [];
 
-  const config = getSemanticEmbeddingConfig();
-  const candidates = await findSemanticEntityCandidates(db, embedding, config, {
-    entityTypes: ["ingredient"],
-    limit,
-  });
+  const candidates = await findSemanticEntityCandidates(
+    productionVectorStore,
+    embedding,
+    { entityTypes: ["ingredient"], limit },
+  );
   const ids = candidates
     .map((candidate) => parseEntityId("ingredient", candidate.entityId))
     .filter((id) => id !== excludeId);

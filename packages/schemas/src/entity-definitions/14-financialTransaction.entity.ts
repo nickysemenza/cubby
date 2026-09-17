@@ -987,7 +987,7 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: { enabled: true, embedding: false },
   capabilities: {
     auditable: true,
     images: false,

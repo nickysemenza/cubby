@@ -35,6 +35,7 @@ import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
+import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
 import { classifyHttpWorkload } from "./server/workload";
@@ -393,11 +394,11 @@ const handler = {
           // through both the errored child span and Sentry.
           Sentry.captureException(error);
         }
-        // The clock is a legitimate input for the calendar above. For derived
-        // data it is not: nothing here repairs. This tick only reads the
-        // markers that "Settle now" acts on and reports when they are non-zero,
-        // which is the evidence that a wakeup was lost — the cue to look, not a
-        // sweep that would hide it.
+        // The clock is a legitimate input for the calendar above. This job is
+        // not a repair: it only reads the markers that "Settle now" acts on
+        // and reports when they are non-zero, which is the evidence that a
+        // wakeup was lost — the cue to look, not a sweep that would hide it.
+        // (The vector-reconcile job below IS a repair — see its comment.)
         await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
           const [{ db }, { countAwaitingWork }] = await Promise.all([
             import("./server/db"),
@@ -434,6 +435,62 @@ const handler = {
             { "cubby.scheduled.job": "awaiting-work-assertion" },
           );
         });
+        // This job IS a repair, unlike the assert-only sibling above:
+        // Vectorize cannot join the Postgres transaction that soft-deletes
+        // `SearchDocument`/`EntityEmbedding` (`softDeleteEntitySearchArtifactsTx`),
+        // so a removed entity's vector otherwise lingers in Vectorize forever.
+        // `deleteByIds` is idempotent, so re-running or overlapping passes
+        // over the same refs are safe.
+        try {
+          await withTrace(
+            "cf.scheduled.job",
+            async (span) => {
+              const { semanticEmbeddingsConfigured } =
+                await import("./server/semantic/embeddings");
+              if (!semanticEmbeddingsConfigured()) {
+                span.setAttribute("cubby.vectorReconcile.skipped", true);
+                return;
+              }
+              await withRequestDbClient(
+                env.HYPERDRIVE.connectionString,
+                async () => {
+                  const [
+                    { db },
+                    { selectRecentlySoftDeletedSearchRefs },
+                    { productionVectorStore },
+                  ] = await Promise.all([
+                    import("./server/db"),
+                    import("./server/repo/entity-embedding-cleanup"),
+                    import("./server/semantic/vector-store"),
+                  ]);
+                  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                  let cursor: SearchDocumentCursor | undefined;
+                  let deletedCount = 0;
+                  do {
+                    const page = await selectRecentlySoftDeletedSearchRefs(db, {
+                      since,
+                      cursor,
+                    });
+                    if (page.refs.length > 0) {
+                      await productionVectorStore.deleteByIds(page.refs);
+                      deletedCount += page.refs.length;
+                    }
+                    cursor = page.nextCursor ?? undefined;
+                  } while (cursor);
+                  span.setAttribute(
+                    "cubby.vectorReconcile.deletedCount",
+                    deletedCount,
+                  );
+                },
+              );
+            },
+            { "cubby.scheduled.job": "vector-reconcile" },
+          );
+        } catch (error) {
+          // Mirror the calendar job above: report and move on rather than
+          // failing the whole scheduled invocation over one job.
+          Sentry.captureException(error);
+        }
       },
       {
         "cubby.workload": "scheduled",

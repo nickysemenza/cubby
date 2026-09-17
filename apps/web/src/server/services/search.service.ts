@@ -13,14 +13,18 @@ import { z } from "zod";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding-search";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
-import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
 import {
   embedQuery,
   semanticEmbeddingsConfigured,
 } from "~/server/semantic/embeddings";
 import { normalizeSearchText } from "~/server/semantic/text";
+import {
+  productionVectorStore,
+  type VectorStorePort,
+} from "~/server/semantic/vector-store";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 const candidateSchema = searchHitSchema.omit({ imageUrl: true }).extend({
@@ -35,7 +39,7 @@ type ServiceSearchQueryInput = Omit<SearchQueryInput, "limit"> & {
 export interface RelatedSearchPort {
   readonly configured: () => boolean;
   readonly embed: typeof embedQuery;
-  readonly config: typeof getSemanticEmbeddingConfig;
+  readonly vectorStore: VectorStorePort;
 }
 
 export type InternalRelatedSearchCandidates =
@@ -45,7 +49,7 @@ export type InternalRelatedSearchCandidates =
 const productionRelatedSearchPort: RelatedSearchPort = {
   configured: semanticEmbeddingsConfigured,
   embed: embedQuery,
-  config: getSemanticEmbeddingConfig,
+  vectorStore: productionVectorStore,
 };
 
 export const searchTerms = (query: string): string[] =>
@@ -227,37 +231,36 @@ export async function findRelatedSearchCandidates(
   try {
     const embedding = await port.embed(input.query, { db });
     if (!embedding) return { status: "unavailable", results: [] };
-    const config = port.config();
     const limit = Math.min(Math.max(input.limit ?? 5, 1), maxLimit);
     const entityTypes = scopes(input.entityTypes);
-    const matchTerms = textArray(searchTerms(input.query));
-    // One bound parameter, not ~30 KB of inlined literal re-parsed per search.
-    // The HNSW index scan is preserved (verified by EXPLAIN on production).
-    const vector = sql`${`[${embedding.join(",")}]`}::vector`;
-    const cast = sql.raw(`ee."embedding"::vector(${config.dimensions})`);
-    // Keep this literal in lockstep with EntityEmbedding's partial HNSW index;
-    // a bound parameter prevents PostgreSQL proving that index predicate.
-    const dimensionsFilter = sql.raw(`ee."dimensions" = ${config.dimensions}`);
-    const rows = await executeSearchDocumentSql(
-      db,
-      candidateSchema,
-      sql`
-      SELECT sd."entityId"::text AS "entityId", sd."shortcode" AS id, sd."entityType", sd.title, sd.subtitle, sd."typeHint",
-        'semantic' AS "matchKind", 'embedding' AS "matchField",
-        'Related meaning match' AS "matchReason", ${matchTerms} AS "matchTerms"
-      FROM "EntityEmbedding" ee
-      JOIN "SearchDocument" sd ON sd."entityType" = ee."entityType" AND sd."entityId" = ee."entityId" AND sd."deletedAt" IS NULL
-      WHERE ee."deletedAt" IS NULL AND ee.provider = ${config.provider} AND ee.model = ${config.model}
-        AND ${dimensionsFilter}
-        AND sd."entityType" IN (${sql.join(
-          entityTypes.map((type) => sql`${type}`),
-          sql`, `,
-        )})
-      ORDER BY ${cast} <=> ${vector}
-      LIMIT ${limit}
-    `,
+    const matchTerms = searchTerms(input.query);
+    const refs = await findSemanticEntityCandidates(
+      port.vectorStore,
+      embedding,
+      { entityTypes, limit },
     );
-    return { status: "ready", results: rows };
+    // Ghosts (a stale vector for a deleted/never-indexed entity) drop out
+    // here: hydration only returns rows with a live SearchDocument, so the
+    // result can legitimately be shorter than `refs`/`limit`.
+    const hits = await hydrateSearchHitRefs(db, refs);
+    const hitByRef = new Map(
+      hits.map((hit) => [`${hit.entityType}:${hit.entityId}`, hit] as const),
+    );
+    const results: InternalSearchCandidate[] = refs.flatMap((ref) => {
+      const hit = hitByRef.get(`${ref.entityType}:${ref.entityId}`);
+      if (!hit) return [];
+      const { imageUrl: _imageUrl, ...candidate } = hit;
+      return [
+        {
+          ...candidate,
+          matchKind: "semantic",
+          matchField: "embedding",
+          matchReason: "Related meaning match",
+          matchTerms,
+        },
+      ];
+    });
+    return { status: "ready", results };
   } catch (error) {
     console.warn("search.related.failed", { message: getErrorMessage(error) });
     return { status: "unavailable", results: [] };

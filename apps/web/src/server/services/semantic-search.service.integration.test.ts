@@ -1,12 +1,16 @@
+import { expenseCreateInput } from "@cubby/schemas/project";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { EmbeddingRefreshPort } from "~/server/background-tasks/embedding";
 import { refreshEntityEmbedding } from "~/server/background-tasks/embedding";
-import { setCfEnv } from "~/server/cf-env";
+import { type getAiGateway, setCfEnv } from "~/server/cf-env";
+import { getStoredEmbeddingHash } from "~/server/repo/entity-embedding-refresh";
+import { createExpense } from "~/server/repo/expense";
 import {
   createProductFixture as createProduct,
+  makeExpenseInput,
   makeProductInput,
   seedSearchDocumentsFixtureRaw,
   updateProductNameFixtureRaw,
@@ -19,6 +23,12 @@ import {
 } from "~/server/repo/search-document";
 import { getActiveSuggestionDismissalKeys } from "~/server/repo/suggestion-dismissal";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
+import {
+  createInMemoryVectorizeIndex,
+  productionVectorStore,
+  type VectorStorePort,
+  vectorId,
+} from "~/server/semantic/vector-store";
 import { executeWorkflow } from "~/server/workflow-runtime";
 import {
   getDuplicateProductRecommendationWorkflow,
@@ -33,10 +43,40 @@ import {
 
 import { countAwaitingWork, settleAwaitingWork } from "./awaiting-work.service";
 
+/** Stand in for `env.AI.gateway("cubby")` (see `ai-gateway.unit.test.ts`). */
+type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
+
+/** A vector store fake that records writes without needing a cf-env binding. */
+const fakeVectorStore = (): VectorStorePort & {
+  readonly vectors: Map<string, number[]>;
+} => {
+  const vectors = new Map<string, number[]>();
+  return {
+    vectors,
+    configured: () => true,
+    async upsert(items) {
+      for (const item of items) vectors.set(vectorId(item), item.values);
+    },
+    async deleteByIds(refs) {
+      for (const ref of refs) vectors.delete(vectorId(ref));
+    },
+    async query() {
+      return [];
+    },
+    async queryById() {
+      return [];
+    },
+  };
+};
+
 /** The provider is the one external seam: a deterministic fake vector per call. */
-const fakeEmbeddingPort = (calls: string[][]): EmbeddingRefreshPort => ({
+const fakeEmbeddingPort = (
+  calls: string[][],
+  vectorStore: VectorStorePort = fakeVectorStore(),
+): EmbeddingRefreshPort => ({
   configured: () => true,
   config: getSemanticEmbeddingConfig,
+  vectorStore,
   embed: async (texts) => {
     calls.push(texts);
     const { dimensions } = getSemanticEmbeddingConfig();
@@ -237,26 +277,65 @@ describe("semantic search background tasks", () => {
       ctx.actor,
     );
     const ref = { entityType: "product" as const, entityId: product.entityId };
-    const racingPort: EmbeddingRefreshPort = {
+    const config = getSemanticEmbeddingConfig();
+    const vectorFor = (marker: number) =>
+      Array.from({ length: config.dimensions }, () => marker);
+
+    // Two writers share one vector store, the way production shares one
+    // Vectorize index — this is what lets writer A's stale upsert actually
+    // clobber writer B's fresher one below. `productionVectorStore` reads the
+    // binding through cf-env, so both ports below resolve to this same index.
+    const index = createInMemoryVectorizeIndex();
+    setCfEnv(fromPartial<Env>({ VECTORIZE: index }));
+    const sharedVectorStore = productionVectorStore;
+
+    // Writer B: a second, independent refresh call that runs to completion
+    // (new text, new vector, new row) while writer A's provider call for the
+    // OLD text is still in flight — see `writerAPort.embed` below.
+    const writerBPort: EmbeddingRefreshPort = {
       configured: () => true,
       config: getSemanticEmbeddingConfig,
-      // The provider call is where the race lives: the source moves on while
-      // the vector for the old text is in flight.
+      vectorStore: sharedVectorStore,
+      embed: async (texts) => texts.map(() => vectorFor(0.9)),
+    };
+
+    let racedOnce = false;
+    const writerAPort: EmbeddingRefreshPort = {
+      configured: () => true,
+      config: getSemanticEmbeddingConfig,
+      vectorStore: sharedVectorStore,
+      // The provider call is where the race lives: writer B fully completes
+      // its own refresh — text, vector, AND row — while writer A's slow call
+      // for the pre-change text is still in flight. A's own vector (0.1,
+      // below) would clobber B's (0.9) in the shared store if A did not
+      // retry after its "obsolete" write.
       embed: async (texts) => {
-        await updateProductNameFixtureRaw(
-          ctx.db,
-          product.entityId,
-          "Embedding after concurrent change",
-        );
-        await refreshSearchDocument(ctx.db, "product", product.entityId);
-        const { dimensions } = getSemanticEmbeddingConfig();
-        return texts.map(() => Array.from({ length: dimensions }, () => 0.5));
+        if (!racedOnce) {
+          racedOnce = true;
+          await updateProductNameFixtureRaw(
+            ctx.db,
+            product.entityId,
+            "Embedding after concurrent change",
+          );
+          await refreshSearchDocument(ctx.db, "product", product.entityId);
+          await refreshEntityEmbedding(ctx.db, ref, writerBPort);
+          return texts.map(() => vectorFor(0.1));
+        }
+        // A's retry, now embedding the current (v2) text B already wrote.
+        return texts.map(() => vectorFor(0.9));
       },
     };
 
-    await expect(refreshEntityEmbedding(ctx.db, ref, racingPort)).resolves.toBe(
-      "obsolete",
-    );
+    // A's own call self-heals: its first (pre-change) attempt is clobbered
+    // onto an "obsolete" PG write (the guard rejects it, since the live
+    // SearchDocument text moved on under it), but the bounded retry re-embeds
+    // the now-current text and lands both the vector and the row — repairing
+    // A's own clobber of B's vector rather than leaving the store behind
+    // Postgres.
+    await expect(
+      refreshEntityEmbedding(ctx.db, ref, writerAPort),
+    ).resolves.toBe("written");
+
     const currentText = await getSearchDocumentEmbeddingText(
       ctx.db,
       "product",
@@ -265,18 +344,49 @@ describe("semantic search background tasks", () => {
     expect(currentText?.embeddingText).toContain(
       "Embedding after concurrent change",
     );
-    // Still awaiting: the next refresh embeds the current text.
-    expect(
-      await countUnembeddedSearchDocuments(
-        ctx.db,
-        getSemanticEmbeddingConfig(),
-      ),
-    ).toBe(1);
-    const calls: string[][] = [];
-    await expect(
-      refreshEntityEmbedding(ctx.db, ref, fakeEmbeddingPort(calls)),
-    ).resolves.toBe("written");
-    expect(calls[0]?.[0]).toContain("Embedding after concurrent change");
+    expect(await countUnembeddedSearchDocuments(ctx.db, config)).toBe(0);
+    // The store holds a vector for v2, never A's stale v1 clobber.
+    expect(index.vectors.get(vectorId(ref))?.values).toEqual(vectorFor(0.9));
+  });
+
+  it("vector upsert throws: no EntityEmbedding hash row is written, and the error propagates", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Vector store outage" }),
+      ctx.actor,
+    );
+    const ref = { entityType: "product" as const, entityId: product.entityId };
+    const config = getSemanticEmbeddingConfig();
+    const throwingVectorStore: VectorStorePort = {
+      configured: () => true,
+      upsert: async () => {
+        throw new Error("vectorize outage");
+      },
+      deleteByIds: async () => {},
+      query: async () => [],
+      queryById: async () => [],
+    };
+    const port: EmbeddingRefreshPort = {
+      configured: () => true,
+      config: getSemanticEmbeddingConfig,
+      vectorStore: throwingVectorStore,
+      embed: async (texts) =>
+        texts.map(() => Array(config.dimensions).fill(0.5)),
+    };
+
+    // No try/catch in `refreshEntityEmbedding`: a vector-store failure must
+    // propagate so the queue consumer retries and reports once, rather than
+    // recording a "written" row for a vector that was never stored.
+    await expect(refreshEntityEmbedding(ctx.db, ref, port)).rejects.toThrow(
+      "vectorize outage",
+    );
+
+    const stored = await getStoredEmbeddingHash(ctx.db, {
+      entityType: "product",
+      entityId: product.entityId,
+      config,
+    });
+    expect(stored).toBeNull();
   });
 
   it("pages the unembedded selection with a keyset cursor", async () => {
@@ -302,6 +412,17 @@ describe("semantic search background tasks", () => {
 
   it("settle now republishes exactly what the awaiting counts describe", async () => {
     await seedSearchDocumentsFixtureRaw(ctx.db, "product", 3);
+    // A financial entity with no EntityEmbedding row: searchable but not
+    // embeddable, so `countAwaitingWork`/`settleAwaitingWork` must never
+    // count or publish a refresh for it (see `unembeddedDocumentsSql`'s
+    // `embeddableEntityTypesSql` filter).
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "Example unembeddable expense" }),
+      ),
+      ctx.actor,
+    );
     const published: Array<{ task: { kind: string } }> = [];
     setCfEnv(
       fromPartial<Env>({
@@ -312,6 +433,13 @@ describe("semantic search background tasks", () => {
             published.push(...[...messages].map((m) => m.body));
           },
         },
+        // countAwaitingWork now gates the count on semanticEmbeddingsConfigured(),
+        // which needs both a reachable gateway (the AI binding stands in for
+        // AI_GATEWAY_API_KEY, unset under vitest) and a configured vector store.
+        AI: {
+          gateway: () => fromPartial<AiGatewayBinding>({ run: () => {} }),
+        },
+        VECTORIZE: createInMemoryVectorizeIndex(),
       }),
     );
     const before = await countAwaitingWork(ctx.db);
@@ -323,8 +451,18 @@ describe("semantic search background tasks", () => {
       publishedRecipeTasks: 0,
       transport: "queue",
     });
-    expect(
-      published.filter((m) => m.task.kind === "entity-embedding.refresh"),
-    ).toHaveLength(3);
+    const embeddingTasks = published.filter(
+      (m) => m.task.kind === "entity-embedding.refresh",
+    );
+    expect(embeddingTasks).toHaveLength(3);
+  });
+
+  it("unembeddedEntities is 0 when semantic embeddings are unconfigured", async () => {
+    await seedSearchDocumentsFixtureRaw(ctx.db, "product", 2);
+    // No setCfEnv call: no VECTORIZE binding, so semanticEmbeddingsConfigured()
+    // is false and the count must degrade to 0 rather than report an
+    // unfixable backlog (mirrors problems.service.ts countMissingEmbeddings).
+    const result = await countAwaitingWork(ctx.db);
+    expect(result.unembeddedEntities).toBe(0);
   });
 });

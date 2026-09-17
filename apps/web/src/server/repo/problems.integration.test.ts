@@ -188,6 +188,37 @@ describe("problems — missing embeddings", () => {
       parseShortcodeFor("ingredient", proxy.shortcode),
     );
   });
+
+  // Expense is searchable (lexical search must still find it) but not
+  // embeddable (`entity-manifest.ts` `embeddableEntities` — see
+  // `16-expense.entity.ts` `search: { enabled: true, embedding: false }`),
+  // so it must never appear here even though it has no `EntityEmbedding` row
+  // at all. The other two financial entities (purchase,
+  // financialTransaction) share the same declaration shape and the same
+  // `embeddingSources` roster in `detectors-embedding.ts`, so this exercises
+  // the shared mechanism rather than a per-entity special case.
+  it("never reports a financial (searchable-but-not-embeddable) entity as missing", async () => {
+    const { output: expense } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "Example financial-only expense" }),
+      ),
+      ctx.actor,
+    );
+
+    const missing = await findEntitiesMissingEmbeddings(
+      ctx.db,
+      {
+        provider: "openai",
+        model: "text-embedding-3-small",
+        dimensions: 1536,
+      },
+      { limit: 1_000 },
+    );
+
+    expect(missing.some((row) => row.entityType === "expense")).toBe(false);
+    expect(missing.some((row) => row.entityId === expense.id)).toBe(false);
+  });
 });
 
 describe("problems — understated meal cost", () => {

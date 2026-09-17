@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { amount } from "./codec";
-import { searchableEntities, type ShortcodeEntity } from "./entity-manifest";
+import {
+  embeddableEntities,
+  type EmbeddableEntity,
+  searchableEntities,
+  type ShortcodeEntity,
+} from "./entity-manifest";
 import {
   anyShortcodeSchema,
   inventoryShortcode,
@@ -14,10 +19,17 @@ import {
   relatednessPairRegistry,
 } from "./relatedness";
 
-export { searchableEntities } from "./entity-manifest";
+export { embeddableEntities, searchableEntities } from "./entity-manifest";
+export type { EmbeddableEntity } from "./entity-manifest";
 
 export const searchableEntitySchema = z.enum(searchableEntities);
 export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
+
+export const embeddableEntitySchema = z.enum(embeddableEntities);
+export const isEmbeddableEntity = (
+  entityType: SearchableEntity,
+): entityType is EmbeddableEntity =>
+  embeddableEntitySchema.safeParse(entityType).success;
 
 const searchableEntityTypes =
   nonEmptyTuple<ShortcodeEntity>(searchableEntities);

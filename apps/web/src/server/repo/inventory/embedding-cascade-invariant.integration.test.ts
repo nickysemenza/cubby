@@ -82,8 +82,6 @@ const embeddingProbes = (ctx: TestDbContext) => {
   return {
     resolveId,
 
-    // Minimal 3-dim vector: the HNSW index is partial on dimensions=1536, so
-    // small test vectors insert fine.
     seedEmbedding: (entityType: SearchableEntity, entityId: string) =>
       getDb(ctx.db)
         .insert(entityEmbedding)
@@ -95,7 +93,6 @@ const embeddingProbes = (ctx: TestDbContext) => {
           provider: "test",
           model: "test",
           dimensions: 3,
-          embedding: [0, 0, 0],
         }),
 
     embeddingDeletedAt: async (

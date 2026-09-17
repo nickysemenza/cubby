@@ -1,8 +1,9 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import type { EntityId, EntityRef } from "@cubby/schemas/identifiers";
-import type {
-  SearchableEntity,
-  SearchableEntityRef,
+import {
+  isEmbeddableEntity,
+  type SearchableEntity,
+  type SearchableEntityRef,
 } from "@cubby/schemas/search";
 import { uniqBy } from "es-toolkit";
 
@@ -203,7 +204,16 @@ async function publishEmbeddingRefreshes(
   event: MutationSideEffectEvent,
   ports: MutationSideEffectPorts,
 ): Promise<void> {
-  const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
+  // Purchase/financialTransaction/expense are searchable but not embeddable
+  // (see `entity-manifest.ts` `embeddableEntities`): never queue a vector
+  // refresh for them, even though they can appear in a collected ref set.
+  const embeddableRefs = refs.filter((ref) =>
+    isEmbeddableEntity(ref.entityType),
+  );
+  const uniqueRefs = uniqBy(
+    embeddableRefs,
+    (ref) => `${ref.entityType}:${ref.entityId}`,
+  );
   if (uniqueRefs.length === 0) return;
   const requestedAt = new Date().toISOString();
   await ports.publishTasks(

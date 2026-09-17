@@ -18,8 +18,8 @@
 
 import type { EntityMissingEmbedding } from "@cubby/schemas/problems";
 import {
-  searchableEntities,
-  type SearchableEntity,
+  embeddableEntities,
+  type EmbeddableEntity,
 } from "@cubby/schemas/search";
 import type { SQL } from "drizzle-orm";
 import { and, eq, exists, isNull, notExists, sql } from "drizzle-orm";
@@ -29,9 +29,7 @@ import type { Database } from "~/server/db";
 import {
   cookbook,
   entityEmbedding,
-  expense,
   financialAccount,
-  financialTransaction,
   gardenEntry,
   ingredient,
   inventoryEntry,
@@ -40,7 +38,6 @@ import {
   planting,
   product,
   project,
-  purchase,
   recipe,
   task,
   vendor,
@@ -75,9 +72,12 @@ type EmbeddingSource = {
   liveness?: (client: DbClient) => SQL | undefined;
 };
 
-// One entry per SearchableEntity, `satisfies`-checked so adding a searchable
+// One entry per EmbeddableEntity, `satisfies`-checked so adding an embeddable
 // entity is a compile error here until its table is wired up (same guarantee
-// `liveIdLoaders` in entity-embedding-cleanup gives the orphan detector).
+// `liveIdLoaders` in entity-embedding-cleanup gives the orphan detector). The
+// three searchable-but-not-embeddable financial entities (purchase,
+// financialTransaction, expense) never get an `EntityEmbedding` row, so they
+// are excluded here rather than reported as permanently "missing".
 const embeddingSources = {
   product: {
     table: product,
@@ -170,48 +170,11 @@ const embeddingSources = {
     shortcodeColumn: vendor.shortcode,
     deletedAtColumn: vendor.deletedAt,
   },
-  purchase: {
-    table: purchase,
-    idColumn: purchase.id,
-    shortcodeColumn: purchase.shortcode,
-    deletedAtColumn: purchase.deletedAt,
-    liveness: (client) =>
-      exists(
-        client
-          .select({ one: sql`1` })
-          .from(vendor)
-          .where(and(eq(vendor.id, purchase.vendorId), notDeleted(vendor))),
-      ),
-  },
   financialAccount: {
     table: financialAccount,
     idColumn: financialAccount.id,
     shortcodeColumn: financialAccount.shortcode,
     deletedAtColumn: financialAccount.deletedAt,
-  },
-  financialTransaction: {
-    table: financialTransaction,
-    idColumn: financialTransaction.id,
-    shortcodeColumn: financialTransaction.shortcode,
-    deletedAtColumn: financialTransaction.deletedAt,
-    liveness: (client) =>
-      exists(
-        client
-          .select({ one: sql`1` })
-          .from(financialAccount)
-          .where(
-            and(
-              eq(financialAccount.id, financialTransaction.accountId),
-              notDeleted(financialAccount),
-            ),
-          ),
-      ),
-  },
-  expense: {
-    table: expense,
-    idColumn: expense.id,
-    shortcodeColumn: expense.shortcode,
-    deletedAtColumn: expense.deletedAt,
   },
   wish: {
     table: wish,
@@ -231,10 +194,10 @@ const embeddingSources = {
     shortcodeColumn: gardenEntry.shortcode,
     deletedAtColumn: gardenEntry.deletedAt,
   },
-} satisfies Record<SearchableEntity, EmbeddingSource>;
+} satisfies Record<EmbeddableEntity, EmbeddingSource>;
 
-const sourceEntries = searchableEntities.map(
-  (entity): [SearchableEntity, EmbeddingSource] => [
+const sourceEntries = embeddableEntities.map(
+  (entity): [EmbeddableEntity, EmbeddingSource] => [
     entity,
     embeddingSources[entity],
   ],
@@ -250,7 +213,7 @@ const sourceEntries = searchableEntities.map(
  */
 const missingEmbeddingWhere = (
   client: DbClient,
-  entityType: SearchableEntity,
+  entityType: EmbeddableEntity,
   source: EmbeddingSource,
   config: SemanticEmbeddingConfig,
 ) =>
@@ -295,7 +258,7 @@ export const findEntitiesMissingEmbeddingsPage = async (
     sql` UNION ALL `,
   );
   const result = await client.execute<{
-    entityType: SearchableEntity;
+    entityType: EmbeddableEntity;
     entityId: string;
     totalCount: number;
   }>(sql`

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { shouldUseSemanticComboboxFallback } from "./combobox-fallback";
 import { embeddingTextHash } from "./hash";
-import { SEMANTIC_SEARCH_EVALS } from "./search-evals";
 import {
   buildExpenseEmbeddingText,
   buildLocationEmbeddingText,
@@ -109,22 +108,6 @@ describe("semantic hash", () => {
     const other = await embeddingTextHash({ ...base, provider: "workers-ai" });
 
     expect(openai).not.toBe(other);
-  });
-});
-
-describe("semantic search evaluations", () => {
-  it("includes the planned semantic eval examples", () => {
-    expect(SEMANTIC_SEARCH_EVALS.map((fixture) => fixture.query)).toEqual(
-      expect.arrayContaining([
-        "plastic tarp",
-        "drop cloth",
-        "where are tarps",
-        "packout",
-        "parchment",
-        "tarpaulin",
-        "wet dry vac",
-      ]),
-    );
   });
 });
 

@@ -584,8 +584,6 @@ describe("ingredient", () => {
     const keeper = await findOrCreateIngredient(ctx.db, "embed cascade keeper");
     const alias = await findOrCreateIngredient(ctx.db, "embed cascade alias");
 
-    // Minimal 3-dim vector — the HNSW index is partial on dimensions=1536, so
-    // small test vectors insert fine (same trick as the inventory test).
     await getDb(ctx.db)
       .insert(entityEmbedding)
       .values({
@@ -596,7 +594,6 @@ describe("ingredient", () => {
         provider: "test",
         model: "test",
         dimensions: 3,
-        embedding: [0, 0, 0],
       });
 
     await mergeIngredients(

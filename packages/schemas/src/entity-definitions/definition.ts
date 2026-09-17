@@ -869,7 +869,16 @@ const metadataSchemas = () => {
         .strict(),
       relations: z.array(entityRelationMetadataSchema),
       search: z
-        .object({ enabled: z.boolean({ error: "must be a boolean" }) })
+        .object({
+          enabled: z.boolean({ error: "must be a boolean" }),
+          /**
+           * Whether this searchable entity also gets an `EntityEmbedding`
+           * vector. Defaults to `true` when `enabled`; the three financial
+           * entities set `false` to stay lexically searchable without a
+           * vector (see `entity-manifest.ts` `embeddableEntities`).
+           */
+          embedding: z.boolean({ error: "must be a boolean" }).optional(),
+        })
         .strict(),
       capabilities: entityCapabilitiesMetadataSchema,
       extensions: entityExtensionsMetadataSchema,
