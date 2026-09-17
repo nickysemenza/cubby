@@ -19,7 +19,6 @@ import {
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
-  plantingImage,
   productComponent,
   productConversionCoverage,
   productExternalId,
@@ -443,14 +442,6 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "PlantingImage.imageId": async (db, targetId) => {
-    const p = await mkPlanting(db);
-    return insertAndReturn(db, plantingImage, {
-      plantingId: parseEntityId("planting", p.id),
-      imageId: targetId,
-    });
-  },
-
   "RecipeSection.recipeId": (db, targetId) =>
     insertAndReturn(db, recipeSection, {
       recipeId: parseEntityId("recipe", targetId),
@@ -825,14 +816,6 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "PlantingImage.plantingId": async (db, targetId) => {
-    const photo = await mkImage(db);
-    return insertAndReturn(db, plantingImage, {
-      plantingId: parseEntityId("planting", targetId),
-      imageId: photo.id,
-    });
-  },
-
   "TaskDependency.taskId": async (db, targetId) => {
     const other = await mkTask(db);
     return insertAndReturn(db, taskDependency, {
@@ -1060,11 +1043,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 80 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 78 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(80);
+    expect(derivedMustTargetLiveEdges).toHaveLength(78);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

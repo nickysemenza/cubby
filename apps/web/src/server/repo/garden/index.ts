@@ -40,7 +40,6 @@ import {
   mapImages,
   type MappableImageRecord,
   notDeleted,
-  plantingImagesRelation,
   syncEntityImages,
   unwrapDb,
   updateLiveAndReturn,
@@ -50,7 +49,6 @@ import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   resolveAllOrThrow,
-  resolveAllPresent,
   resolveFilterIds,
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
@@ -101,7 +99,6 @@ const plantingReferences = {
   sourceProduct: { columns: { shortcode: true, name: true } },
   location: { columns: { shortcode: true, name: true } },
   task: { columns: { shortcode: true, name: true } },
-  images: plantingImagesRelation,
 } as const;
 
 const plantingRow = async (db: GardenDb, id: PlantingId) => {
@@ -143,7 +140,6 @@ const mapPlanting = (row: PlantingWithReferences) => {
       ingredientName: row.ingredient.name,
       variety: row.variety,
     }),
-    images: mapImages(row.images),
   });
 };
 
@@ -264,19 +260,6 @@ export const createPlanting = async (
       transplantedOn: data.transplantedOn ?? null,
       finishedOn: data.finishedOn ?? null,
     });
-    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      const resolvedImageIds = await resolveAllPresent(
-        tx,
-        "image",
-        data.pendingImageIds,
-      );
-      await associatePendingImages(
-        tx,
-        imageJoinBindings.planting,
-        parseEntityId("planting", row.id),
-        resolvedImageIds,
-      );
-    }
     await logAuditEntry(tx, actor, {
       entityType: "planting",
       entityId: row.id,
@@ -327,12 +310,6 @@ export const createGardenEntry = async (
     return getGardenEntry(tx, parseEntityId("gardenEntry", row.id));
   });
 
-type PlantingUpdateInput = PlantingUpdateData & {
-  pendingImageIds?: readonly string[];
-  removeImageIds?: readonly string[];
-  imageOrder?: readonly string[];
-};
-
 /** Every field in the update roster is an ordinary patchable field — no
  * lifecycle guard. `status`/`locationId`/`finishedOn` change like any other
  * column, and the diff on the `model.audit` fields becomes the audit entry
@@ -340,10 +317,9 @@ type PlantingUpdateInput = PlantingUpdateData & {
 export const updatePlanting = async (
   db: Database,
   id: PlantingId,
-  data: PlantingUpdateInput,
+  data: PlantingUpdateData,
   actor: ActorContext,
 ) => {
-  let detachedImageKeys: string[] = [];
   const result = await withTransaction(db, async (tx) => {
     const before = await unwrapDb(tx).query.planting.findFirst({
       where: and(eq(planting.id, id), notDeleted(planting)),
@@ -391,13 +367,6 @@ export const updatePlanting = async (
       finishedOn: data.finishedOn,
     });
     const updated = await updateLiveAndReturn(tx, planting, values, id);
-    ({ detachedImageKeys } = await syncEntityImages(
-      tx,
-      "planting",
-      imageJoinBindings.planting,
-      id,
-      data,
-    ));
     const changes = computeChanges(before, updated, [
       ...entityFieldModels.planting.audit,
     ]);
@@ -411,6 +380,9 @@ export const updatePlanting = async (
     }
     return getPlanting(tx, id);
   });
+  // No own images to sync (journal entries carry the photos); the entity
+  // kernel's update shape still expects `detachedImageKeys`.
+  const detachedImageKeys: string[] = [];
   return { planting: result, detachedImageKeys };
 };
 

@@ -15,7 +15,6 @@ import type {
   MealFoodEntryId,
   MealRecipeId,
   MealRecipePortionId,
-  PlantingId,
   ProductId,
   ProjectId,
   PurchaseId,
@@ -684,10 +683,6 @@ export const location = pgTable(
     index("Location_type_active_idx")
       .on(table.type)
       .where(sql`${table.deletedAt} IS NULL`),
-    check(
-      "Location_productId_type_check",
-      sql`${table.productId} IS NULL OR ${table.type} IS NULL`,
-    ),
   ],
 );
 
@@ -1015,30 +1010,6 @@ export const taskImage = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("TaskImage_taskId_idx").on(table.taskId),
     index("TaskImage_imageId_idx").on(table.imageId),
-  ],
-);
-
-export const plantingImage = pgTable(
-  "PlantingImage",
-  {
-    id: pkUuid(),
-    plantingId: uuid("plantingId")
-      .notNull()
-      .$type<PlantingId>()
-      .references(() => planting.id),
-    imageId: uuid("imageId")
-      .notNull()
-      .references(() => image.id),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("PlantingImage_plantingId_imageId_key")
-      .on(table.plantingId, table.imageId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("PlantingImage_plantingId_idx").on(table.plantingId),
-    index("PlantingImage_imageId_idx").on(table.imageId),
   ],
 );
 
@@ -2061,7 +2032,6 @@ export const plantingRelations = relations(planting, ({ one, many }) => ({
     references: [task.id],
   }),
   entries: many(gardenEntry),
-  images: many(plantingImage),
 }));
 
 export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
@@ -2096,7 +2066,6 @@ export const imageRelations = relations(image, ({ many }) => ({
   gardenEntryImages: many(gardenEntryImage),
   mealImages: many(mealImage),
   taskImages: many(taskImage),
-  plantingImages: many(plantingImage),
   cookbookCovers: many(cookbook),
   vendorLogos: many(vendor),
 }));
@@ -2449,17 +2418,6 @@ export const taskImageRelations = relations(taskImage, ({ one }) => ({
   }),
   image: one(image, {
     fields: [taskImage.imageId],
-    references: [image.id],
-  }),
-}));
-
-export const plantingImageRelations = relations(plantingImage, ({ one }) => ({
-  planting: one(planting, {
-    fields: [plantingImage.plantingId],
-    references: [planting.id],
-  }),
-  image: one(image, {
-    fields: [plantingImage.imageId],
     references: [image.id],
   }),
 }));

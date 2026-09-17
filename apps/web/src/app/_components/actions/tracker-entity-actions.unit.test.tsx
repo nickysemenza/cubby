@@ -1,4 +1,4 @@
-import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
+import { expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
@@ -14,17 +14,10 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   useCreateProjectFromTasksAction,
   useMarkExpensePurchasedAction,
-  useMoveToProjectEntityAction,
 } from "./tracker-entity-actions";
 
-const expenseRow = {
-  id: testShortcode("expense", "EXP-2345"),
-  name: "Paint",
-  projectId: null,
-} satisfies Pick<ExpenseOut, "id" | "name" | "projectId">;
-
 const plannedExpense = expenseOut.parse({
-  id: expenseRow.id,
+  id: testShortcode("expense", "EXP-2345"),
   name: "Paint",
   cost: 42,
   date: "2026-08-18",
@@ -65,27 +58,6 @@ afterEach(() => {
   harness.dispose();
 });
 
-function MoveToProjectActionHarness({
-  onResolved,
-}: {
-  onResolved: (success: boolean) => void;
-}) {
-  const action = useMoveToProjectEntityAction("expense");
-  const stageExpense = () => {
-    const pending = action.run?.([expenseRow]);
-    if (pending) void pending.then((result) => onResolved(result.success));
-  };
-
-  return (
-    <>
-      <button type="button" onClick={stageExpense}>
-        Stage expense move
-      </button>
-      {action.dialog}
-    </>
-  );
-}
-
 function CreateProjectActionHarness({
   onResolved,
 }: {
@@ -111,30 +83,6 @@ function CreateProjectActionHarness({
 }
 
 describe("tracker entity actions", () => {
-  it("keeps a staged move selected until its real dialog is cancelled", async () => {
-    const resolved: boolean[] = [];
-    render(
-      <MoveToProjectActionHarness
-        onResolved={(success) => resolved.push(success)}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Stage expense move" }),
-    );
-    expect(
-      await screen.findByRole("heading", { name: "Move 1 Expense?" }),
-    ).toBeVisible();
-    expect(screen.getByText("Paint")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Clear project" })).toBeVisible();
-    expect(harness.queryClient.getMutationCache().getAll()).toHaveLength(0);
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(resolved).toEqual([false]));
-    expect(harness.queryClient.getMutationCache().getAll()).toHaveLength(0);
-  });
-
   it("keeps Mark purchased refused for already-purchased or adjustment records", async () => {
     const { result } = renderHook(() => useMarkExpensePurchasedAction(), {
       wrapper: harness.wrapper,
@@ -190,14 +138,4 @@ describe("tracker entity actions", () => {
     await waitFor(() => expect(resolved).toEqual([true]));
     expect(harness.queryClient.getMutationCache().getAll()).toHaveLength(0);
   });
-});
-
-it("keeps tracker actions registered when their dialogs load the action catalog", async () => {
-  const { entityActionCatalogDescriptors } = await import("./entity-actions");
-  for (const verb of ["moveToProject", "setTrade"]) {
-    expect(
-      entityActionCatalogDescriptors.find((action) => action.verb === verb)
-        ?.entities,
-    ).toEqual(["expense", "task"]);
-  }
 });

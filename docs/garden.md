@@ -9,11 +9,19 @@ A **Planting** lives in exactly one `Location` (`locationId`, nullable) and
 carries dates (`sowedOn`, `transplantedOn`, `finishedOn`), `status`
 (`planned | growing | finished`), `variety`, `quantity` (text),
 `plannedWindow` (text), an optional `sourceProductId`, an optional `taskId`,
-`notes`, and images. There are no lifecycle verbs — Edit is the only hero
-action. A move is editing `locationId`; the audit log and timeline record
-the from/to location as the location history. Sowing in a tray and
-transplanting to a bed is `sowedOn` + `transplantedOn` on the same planting —
-a tray is never a `Location`.
+and `notes`. There are no lifecycle verbs — Edit is the only hero action. A
+move is editing `locationId`; the audit log and timeline record the from/to
+location as the location history. Sowing in a tray and transplanting to a
+bed is `sowedOn` + `transplantedOn` on the same planting — a tray is never a
+`Location`. A planting has no photo gallery of its own (`capabilities.images:
+false`) — see "Photos" below.
+
+A nursery-bought seedling never gets a `sowedOn`: it carries `transplantedOn`
+only. The timeline's `lifecycle.start` is a generic ordered fallback
+(`["sowedOn", "transplantedOn"]` for planting) — the interval starts at the
+first non-null field, so a bought seedling's interval starts at
+`transplantedOn` and renders marked "Inferred" (the row's `confident: false`)
+rather than needing an origin enum.
 
 A **GardenEntry** is a dated `note | harvest` against a `Location`,
 optionally against one Planting, with photos. A planting's journal is its
@@ -21,9 +29,21 @@ own direct entries plus whole-area entries at its current location whose
 `observedOn` falls in `[coalesce(sowedOn, transplantedOn, createdAt),
 finishedOn]`.
 
+## Photos
+
+Journal entries are the only photo surface in the garden model — a planting
+carries no gallery, `pendingImageIds`, or image fields of its own. The
+plantings list still shows a thumbnail: the display-image policy borrows the
+latest journal entry's first photo (newest `observedOn` first) for that
+planting, falling back to the linked seed Product's cover image when no
+entry has one, and to nothing when neither exists.
+
 `Location.type` includes `bed` and `planter` (plus `area` for open ground),
-and a generic `notes` textarea. Growing-area-ness is derived: a location
-with plantings shows Plantings/Garden-entries relation sections;
+and a generic `notes` textarea. A product-linked Location (a bought raised
+bed) still carries a `type` — the product supplies identity and price, and
+`type` separately states the form factor (`bed`, in that case); the two are
+independent, not mutually exclusive. Growing-area-ness is derived: a
+location with plantings shows Plantings/Garden-entries relation sections;
 `hideWhenEmpty` sections skip themselves when their first page is empty, so
 a non-growing location shows neither.
 
@@ -49,12 +69,13 @@ shopping lines; `Task.subjectProductId` when a Product exists) plus planned
 Turning an AI-written seasonal plan document into these records is the
 `garden-plan-import` skill (`.claude/skills/garden-plan-import/`).
 
-## Photo import and calendar
+## Native photo import and calendar
 
 Native Photos offers a generic "New ‹entity›" destination for any gallery
-entity with a create contract, garden entry included: photos become
-`pendingImageIds`, and any create field with `control.initial: "today"`
-prefills from the earliest capture date. No day-grouping.
+entity with a create contract — garden entry, not planting, since planting
+has no gallery — photos become `pendingImageIds`, and any create field with
+`control.initial: "today"` prefills from the earliest capture date. No
+day-grouping.
 
 The `planting` calendar lane emits one item per milestone (`sowed`,
 `transplanted`, `finished`) as the `garden` ICS feed (also folded into

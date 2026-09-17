@@ -512,9 +512,17 @@ export const buildProductWhere = async (
   const requestedIngredientCodes = filters.ingredientIdFilter
     ? [filters.ingredientIdFilter].flat()
     : [];
-  const [selectedLocationIds, selectedIngredientIds] = await Promise.all([
+  const requestedGrowsIngredientCodes = filters.growsIngredientIdFilter
+    ? [filters.growsIngredientIdFilter].flat()
+    : [];
+  const [
+    selectedLocationIds,
+    selectedIngredientIds,
+    selectedGrowsIngredientIds,
+  ] = await Promise.all([
     resolveAllPresent(db, "location", requestedLocationCodes),
     resolveAllPresent(db, "ingredient", requestedIngredientCodes),
+    resolveAllPresent(db, "ingredient", requestedGrowsIngredientCodes),
   ]);
 
   // Cross-entity filters must stay uncorrelated id-set subqueries shared by all product list query paths.
@@ -706,6 +714,12 @@ export const buildProductWhere = async (
             filters.ingredientPresenceFilter,
           ),
         ),
+    requestedGrowsIngredientCodes.length > 0 &&
+    selectedGrowsIngredientIds.length === 0
+      ? sql`false`
+      : selectedGrowsIngredientIds.length > 0
+        ? inArray(product.growsIngredientId, selectedGrowsIngredientIds)
+        : undefined,
     requestedLocationCodes.length > 0 && selectedLocationIds.length === 0
       ? sql`false`
       : or(

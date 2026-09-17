@@ -77,9 +77,6 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     recipes: "writes MealRecipe rows",
     pendingImageIds: "writes MealImage rows",
   },
-  planting: {
-    pendingImageIds: "writes PlantingImage rows",
-  },
   product: {
     upc: "barcode write slot; lands in ProductExternalId, not on Product",
     isbn: "book identifier; lands in ProductExternalId, not on Product",

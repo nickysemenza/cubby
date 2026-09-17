@@ -40,11 +40,14 @@ type TimelineRecord = z.output<typeof timelineRowSchema>;
 type TimelineWindow =
   ParsedEntityTimelineInputByEntity[TimelineEntity]["window"];
 type DatedEvent = { date: string; event: EntityTimelineEvent };
-type Lifecycle = NonNullable<
-  NonNullable<
-    (typeof entitySummary)[TimelineEntity]["list"]["timeline"]
-  >["lifecycle"]
->;
+/** The compiled `list.timeline.lifecycle` shape: `start` is an ordered
+ * fallback list (first non-null key starts the interval). Structural so a
+ * test can hand in a synthetic lifecycle. */
+type Lifecycle = {
+  readonly start: readonly string[];
+  readonly milestones: readonly string[];
+  readonly end: string | null;
+};
 
 const AUDIT_ACTION_LABEL = {
   create: "Created",
@@ -228,19 +231,36 @@ const groupByDate = (
 };
 
 const lifecycleKeysOf = (lifecycle: Lifecycle): string[] => [
-  lifecycle.start,
+  ...lifecycle.start,
   ...lifecycle.milestones,
   ...(lifecycle.end ? [lifecycle.end] : []),
 ];
 
-const lifecycleRows = (
+/**
+ * `lifecycle.start` is an ordered fallback: the first key with a value wins.
+ * `confident` is false once a fallback key (not the first) supplied it, so
+ * the UI can mark an inferred interval start (e.g. a nursery-bought planting
+ * whose interval starts at `transplantedOn` instead of `sowedOn`).
+ */
+const lifecycleStartOf = (
+  record: TimelineRecord,
+  lifecycle: Lifecycle,
+): { date: string; confident: boolean } | null => {
+  for (const [index, key] of lifecycle.start.entries()) {
+    const date = plainDateOf(record[key]);
+    if (date !== null) return { date, confident: index === 0 };
+  }
+  return null;
+};
+
+export const lifecycleRows = (
   entity: TimelineEntity,
   records: readonly TimelineRecord[],
   lifecycle: Lifecycle,
   window: TimelineWindow,
 ): EntityTimelineRow[] =>
   records.flatMap((record) => {
-    const start = plainDateOf(record[lifecycle.start]);
+    const start = lifecycleStartOf(record, lifecycle);
     const end = lifecycle.end ? plainDateOf(record[lifecycle.end]) : null;
     const markers = lifecycleKeysOf(lifecycle).flatMap((key) => {
       const date = plainDateOf(record[key]);
@@ -254,7 +274,10 @@ const lifecycleRows = (
         id: record.id,
         name: recordTitle(entity, record),
         imageUrl: record.displayImages[0]?.url ?? null,
-        intervals: start === null ? [] : [{ start, end, confident: true }],
+        intervals:
+          start === null
+            ? []
+            : [{ start: start.date, end, confident: start.confident }],
         markers,
       },
     ];

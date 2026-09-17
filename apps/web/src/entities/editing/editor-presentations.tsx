@@ -291,20 +291,20 @@ function InventoryFullFields() {
 /**
  * Location's rich fields beyond what `EntityIntentFields` renders generically:
  * `type` is declared with no editor control (like meal's `pendingImageIds`)
- * because it needs the AI-suggest widget and to disappear entirely once a
- * product link supplies the form factor instead — behavior with no generic
+ * because it needs the AI-suggest widget — behavior with no generic
  * equivalent, so it stays a hand-rendered field bound to the same `"type"`
- * RHF path the kernel already resolves. `collections` is a pure editor-only
- * pseudo field (folded into the stored `tags` at submit by
- * `locationBuildData` in `definitions.ts`) shown only once a location
- * exists — the create dialog stays a quick add; aliases/collections/photos
- * are filled in afterward from the edit dialog.
+ * RHF path the kernel already resolves. A product-linked location can still
+ * carry a form-factor `type` (the product link is identity, not form factor —
+ * `Location_productId_type_check` is gone), so the control stays visible
+ * regardless of `productId`. `collections` is a pure editor-only pseudo field
+ * (folded into the stored `tags` at submit by `locationBuildData` in
+ * `definitions.ts`) shown only once a location exists — the create dialog
+ * stays a quick add; aliases/collections/photos are filled in afterward from
+ * the edit dialog.
  */
 function LocationFields({ form, record }: EntityEditorFieldsProps) {
   const editing = record !== undefined;
   const nameValue = z.string().catch("").parse(form.watch("name"));
-  const productIdValue = z.string().catch("").parse(form.watch("productId"));
-  const linked = productIdValue.length > 0;
   return (
     <>
       <EntityIntentFields
@@ -312,9 +312,7 @@ function LocationFields({ form, record }: EntityEditorFieldsProps) {
         intent={editing ? "full" : "capture"}
         mode={editing ? "edit" : "create"}
       />
-      {!linked && (
-        <TypeFieldWithAI form={form} name="type" locationName={nameValue} />
-      )}
+      <TypeFieldWithAI form={form} name="type" locationName={nameValue} />
       {editing && (
         <AliasesField
           form={form}

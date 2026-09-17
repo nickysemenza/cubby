@@ -94,6 +94,7 @@ describe("useListBulkActions", () => {
       "add-to-inventory",
       "merge",
       "print-labels",
+      "bulk-edit",
       "set-stock-tracking",
     ]);
   });
@@ -166,6 +167,7 @@ describe("useListBulkActions", () => {
       "copy-shortcodes",
       "print-location-labels",
       "move-location-under",
+      "bulk-edit",
       "move",
       "delete",
     ]);
@@ -188,6 +190,7 @@ describe("useListBulkActions", () => {
       "add-to-inventory",
       "merge",
       "print-labels",
+      "bulk-edit",
       "set-stock-tracking",
     ]);
     expect(

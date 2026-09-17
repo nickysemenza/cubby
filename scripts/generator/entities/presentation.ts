@@ -228,7 +228,8 @@ const checkListTimeline = (
   for (const key of timeline.fields) dateKey(key, "list.timeline.fields");
   const lifecycle = timeline.lifecycle;
   if (lifecycle === null) return;
-  dateKey(lifecycle.start, "list.timeline.lifecycle.start");
+  for (const key of lifecycle.start)
+    dateKey(key, "list.timeline.lifecycle.start");
   for (const key of lifecycle.milestones)
     dateKey(key, "list.timeline.lifecycle.milestones");
   if (lifecycle.end !== null)
@@ -305,6 +306,19 @@ export const compilePresentation = (
         images: detail.hero.images ?? capabilities.images === "gallery",
         actions: detail.hero.actions ?? (facts.hasUpdate ? ["edit"] : []),
       },
+    },
+    list: {
+      ...list,
+      timeline:
+        list.timeline === null
+          ? null
+          : {
+              ...list.timeline,
+              lifecycle:
+                list.timeline.lifecycle === null
+                  ? null
+                  : list.timeline.lifecycle,
+            },
     },
   };
 };

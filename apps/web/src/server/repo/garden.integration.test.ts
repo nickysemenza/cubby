@@ -18,7 +18,11 @@ import {
 import { plantingEntityAdapter } from "~/server/repo/garden/entity-adapters";
 import { createIngredient } from "~/server/repo/ingredient";
 import { createLocation } from "~/server/repo/location";
-import { makeLocationInput } from "~/server/repo/repo.fixtures";
+import {
+  createProductFixture,
+  makeLocationInput,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTask } from "~/server/repo/task/crud";
 import { taskEntityAdapter } from "~/server/repo/task/entity-adapter";
@@ -414,5 +418,114 @@ describe("garden workflows", () => {
     expect(updateEntry?.changes).toMatchObject({
       locationId: { from: bedA.id, to: bedB.id },
     });
+  });
+
+  it("plantingList taskId filter narrows to plantings linked to that task", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Task filter crop" },
+      TEST_ACTOR,
+    );
+    const task = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "Task filter task" }),
+      TEST_ACTOR,
+    );
+    const linked = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned", taskId: task.output.id },
+      TEST_ACTOR,
+    );
+    const unlinked = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned" },
+      TEST_ACTOR,
+    );
+
+    const { data } = await plantingList(
+      ctx.db,
+      { taskId: task.output.id },
+      { pageIndex: 0, pageSize: 50 },
+      [],
+    );
+    const ids = new Set(data.map((row) => row.id));
+    expect(ids.has(linked.id)).toBe(true);
+    expect(ids.has(unlinked.id)).toBe(false);
+  });
+
+  it("plantingList sourceProductId filter narrows to plantings sourced from that product", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Source product filter crop" },
+      TEST_ACTOR,
+    );
+    const seedPacket = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Source product filter seed packet" }),
+      TEST_ACTOR,
+    );
+    const fromSeed = await createPlanting(
+      ctx.db,
+      {
+        ingredientId: crop.id,
+        status: "planned",
+        sourceProductId: seedPacket.id,
+      },
+      TEST_ACTOR,
+    );
+    const fromElsewhere = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned" },
+      TEST_ACTOR,
+    );
+
+    const { data } = await plantingList(
+      ctx.db,
+      { sourceProductId: seedPacket.id },
+      { pageIndex: 0, pageSize: 50 },
+      [],
+    );
+    const ids = new Set(data.map((row) => row.id));
+    expect(ids.has(fromSeed.id)).toBe(true);
+    expect(ids.has(fromElsewhere.id)).toBe(false);
+  });
+
+  it("plantingEntityAdapter.repository.bulkUpdate patches status and finishedOn together and clears locationId with an explicit null", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Bulk update crop" },
+      TEST_ACTOR,
+    );
+    const location = await bed("Bulk update bed");
+    const first = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    const second = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      TEST_ACTOR,
+    );
+
+    await plantingEntityAdapter.repository.bulkUpdate(
+      kernelContext(ctx.db),
+      [first.id, second.id],
+      { status: "finished", finishedOn: "2026-08-01", locationId: null },
+    );
+
+    for (const id of [first.id, second.id]) {
+      const resolved = await resolveLiveShortcode(ctx.db, id, "planting");
+      expect(resolved).not.toBeNull();
+      const row = await getDb(ctx.db).query.planting.findFirst({
+        where: eq(planting.id, resolved!),
+        columns: { status: true, finishedOn: true, locationId: true },
+      });
+      expect(row).toMatchObject({
+        status: "finished",
+        finishedOn: "2026-08-01",
+        locationId: null,
+      });
+    }
   });
 });

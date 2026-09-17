@@ -145,7 +145,7 @@ describe("entity edit definitions", () => {
   });
 
   it("defaults pendingImageIds to an empty array off the field roster, not a per-entity literal (G5)", () => {
-    for (const entity of ["gardenEntry", "meal", "task", "planting"] as const) {
+    for (const entity of ["gardenEntry", "meal", "task"] as const) {
       const request = {
         entity,
         operation: "create" as const,

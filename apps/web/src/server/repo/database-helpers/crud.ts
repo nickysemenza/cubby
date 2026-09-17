@@ -30,7 +30,6 @@ import {
   locationImage,
   gardenEntryImage,
   mealImage,
-  plantingImage,
   productImage,
   projectImage,
   purchaseImage,
@@ -376,16 +375,6 @@ export const imageJoinBindings = {
     parentIdColumn: taskImage.taskId,
     insertRow: (taskId, imageId, sortOrder) => ({
       taskId,
-      imageId,
-      sortOrder,
-    }),
-    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
-  }),
-  planting: defineImageJoinBinding({
-    table: plantingImage,
-    parentIdColumn: plantingImage.plantingId,
-    insertRow: (plantingId, imageId, sortOrder) => ({
-      plantingId,
       imageId,
       sortOrder,
     }),

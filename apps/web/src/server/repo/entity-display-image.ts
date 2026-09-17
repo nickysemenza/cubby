@@ -220,8 +220,9 @@ async function resolveUniversalEntityDisplayImageLists(
         WHERE refs."entityType" = 'meal' AND mr."mealId" = refs."entityId"
           AND mr."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
         UNION ALL
-        -- A planting's own photos win; its garden entries' are fallback, newest
-        -- entry first — the negated epoch makes ascending sort read as "newest".
+        -- A planting has no photos of its own: its garden entries' photos are
+        -- the primary source, newest entry first — the negated epoch makes
+        -- ascending sort read as "newest" — falling back to the seed product below.
         SELECT i.key, i.shortcode, 1 AS priority, to_timestamp(-EXTRACT(EPOCH FROM ge."observedOn"::timestamptz)) AS "groupCreatedAt", ge.id AS "groupId", gi."sortOrder", gi."createdAt", i.id AS "imageId"
         FROM "GardenEntry" ge
         JOIN "GardenEntryImage" gi ON gi."gardenEntryId" = ge.id

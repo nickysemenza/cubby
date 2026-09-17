@@ -8217,6 +8217,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "growsIngredientIdFilter",
+                    value: input.query.growsIngredientIdFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "taskStatusFilter",
                     value: input.query.taskStatusFilter
                 )
@@ -9162,6 +9169,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "ingredientIdFilter",
                     value: input.query.ingredientIdFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "growsIngredientIdFilter",
+                    value: input.query.growsIngredientIdFilter
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

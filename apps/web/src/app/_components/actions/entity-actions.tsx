@@ -25,6 +25,10 @@ import {
   verbBulkAction,
 } from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
+import {
+  bulkEditEntities,
+  useBulkEditEntityAction,
+} from "./bulk-edit-entity-action";
 import { declaredEntityActionDefinitions } from "./declared-entity-actions";
 import { deleteEntityActionDefinition } from "./delete-entity-action";
 import {
@@ -41,15 +45,9 @@ import { mergeEntityActionDefinitions } from "./merge-entity-actions";
 import { productRosterEntityActionDefinitions } from "./product-roster-entity-actions";
 import { recipeEntityActionDefinitions } from "./recipe-entity-actions";
 import { specialistLifecycleEntityActionDefinitions } from "./specialist-lifecycle-entity-actions";
-import { trackerEntities } from "./tracker-entities";
 import {
   useCreateProjectFromTasksAction,
   useMarkExpensePurchasedAction,
-  useMoveToProjectEntityAction,
-  useSetExpenseCostTypeAction,
-  useSetTaskDueDateAction,
-  useSetTaskStatusAction,
-  useSetTradeEntityAction,
 } from "./tracker-entity-actions";
 import { useAddToInventoryAction } from "./use-add-to-inventory-action";
 import { useDiscardInventoryAction } from "./use-discard-inventory-action";
@@ -353,45 +351,12 @@ const entityActions: readonly EntityActionDefinition[] = [
     use: useMarkExpensePurchasedAction,
   }),
   defineEntityAction({
-    id: "move",
-    verb: "moveToProject",
-    entities: trackerEntities,
-    arity: "both",
-    group: "organize",
-    priority: 100,
-    use: useMoveToProjectEntityAction,
-  }),
-  defineEntityAction({
-    verb: "setStatus",
-    entities: ["task"],
+    verb: "bulkEdit",
+    entities: bulkEditEntities,
     arity: "both",
     group: "organize",
     priority: 200,
-    use: useSetTaskStatusAction,
-  }),
-  defineEntityAction({
-    verb: "setTrade",
-    entities: trackerEntities,
-    arity: "both",
-    group: "organize",
-    priority: 300,
-    use: useSetTradeEntityAction,
-  }),
-  defineEntityAction({
-    verb: "setCostType",
-    entities: ["expense"],
-    arity: "both",
-    group: "organize",
-    priority: 400,
-    use: useSetExpenseCostTypeAction,
-  }),
-  defineEntityAction({
-    verb: "setDueDate",
-    entities: ["task"],
-    arity: "both",
-    group: "organize",
-    priority: 400,
-    use: useSetTaskDueDateAction,
+    use: useBulkEditEntityAction,
   }),
   defineEntityAction({
     id: "create-project",

@@ -27,6 +27,18 @@ describe("entity kernel bulkUpdate", () => {
         data: { stockTracked: true },
       }).success,
     ).toBe(true);
+    expect(
+      parseCommand({
+        action: "bulkUpdate",
+        entity: "planting",
+        ids: [idFor("planting")],
+        data: {
+          status: "finished",
+          finishedOn: "2026-08-01",
+          locationId: null,
+        },
+      }).success,
+    ).toBe(true);
   });
 
   it("refuses a field the entity never declared as bulk-updatable", () => {
@@ -46,6 +58,16 @@ describe("entity kernel bulkUpdate", () => {
         entity: "product",
         ids: [idFor("product")],
         data: { stockTracked: true, name: "Renamed in bulk" },
+      }).success,
+    ).toBe(false);
+    // `variety` is a real planting update field; only status/finishedOn/
+    // locationId are declared bulk-updatable.
+    expect(
+      parseCommand({
+        action: "bulkUpdate",
+        entity: "planting",
+        ids: [idFor("planting")],
+        data: { status: "finished", variety: "Renamed in bulk" },
       }).success,
     ).toBe(false);
   });

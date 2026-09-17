@@ -58,7 +58,7 @@ export default defineEntity({
         label: "Location",
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, detailOrder: 2 },
+        display: { list: true, detail: true },
         validation: {
           read: locationShortcode,
           create: locationShortcode,
@@ -72,7 +72,7 @@ export default defineEntity({
         label: "Planting",
         reference: { entity: "planting" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, detailOrder: 3 },
+        display: { list: true, detail: true },
         validation: {
           read: plantingShortcode.nullable(),
           create: plantingShortcode.nullable().default(null),
@@ -89,7 +89,7 @@ export default defineEntity({
             { value: "harvest", label: "Harvest" },
           ],
         },
-        display: { list: true, detail: true, detailOrder: 0 },
+        display: { list: true, detail: true },
         validation: {
           read: gardenEntryKind,
           create: gardenEntryKind.default("note"),
@@ -99,11 +99,11 @@ export default defineEntity({
       {
         key: "observedOn",
         kind: "date",
+        label: "Observed",
         control: { kind: "date", initial: "today" },
         display: {
           list: true,
           detail: true,
-          detailOrder: 1,
           format: "plainDate",
         },
         validation: {
@@ -117,7 +117,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true, detailOrder: 4 },
+        display: { list: true, detail: true },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -128,8 +128,9 @@ export default defineEntity({
         key: "harvestAmount",
         kind: "text",
         nullable: true,
+        label: "Harvest amount",
         control: { kind: "text" },
-        display: { list: true, detail: true, detailOrder: 5 },
+        display: { list: true, detail: true },
         validation: {
           read: optionalText,
           create: optionalText.default(null),

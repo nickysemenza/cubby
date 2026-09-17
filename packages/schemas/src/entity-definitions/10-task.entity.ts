@@ -29,7 +29,7 @@ export default defineEntity({
     detail: {
       hero: {
         chip: "status",
-        actions: ["edit", "setStatus", "setDueDate", "moveToProject", "delete"],
+        actions: ["edit", "bulkEdit", "delete"],
       },
       sections: [
         {
@@ -77,13 +77,7 @@ export default defineEntity({
         },
         "timeline",
       ],
-      actions: [
-        "setStatus",
-        "setTrade",
-        "setDueDate",
-        "moveToProject",
-        "delete",
-      ],
+      actions: ["bulkEdit", "delete"],
       timeline: {
         fields: ["dueDate", "dueEndDate"],
         lifecycle: {

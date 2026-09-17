@@ -52,15 +52,12 @@ describe("VerbMenuItem", () => {
 
   it("folds the reason into the accessible name", async () => {
     renderInMenu(
-      <VerbMenuItem
-        verb="moveToProject"
-        disabledReason="Already in this project"
-      />,
+      <VerbMenuItem verb="bulkEdit" disabledReason="Nothing selected" />,
     );
 
     expect(
       await screen.findByRole("menuitem", {
-        name: "Move to project..., Already in this project",
+        name: "Bulk edit..., Nothing selected",
       }),
     ).toBeInTheDocument();
   });

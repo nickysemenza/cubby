@@ -23,6 +23,7 @@ import {
   toPlantingCard,
   toWishCard,
 } from "./EntityPreviewContent";
+import type { BodyBlock } from "./preview/manifest-card";
 import { PreviewQuery } from "./preview/preview-query";
 
 const withMedia = <T,>(value: T, url?: string) => ({
@@ -32,6 +33,15 @@ const withMedia = <T,>(value: T, url?: string) => ({
     : [],
   attachments: [],
 });
+
+/** The planting card's first body block is its stats row; anything else is a test failure. */
+function locationStatOf(body: readonly BodyBlock[] | undefined) {
+  const block = body?.[0];
+  if (block?.kind !== "stats") throw new Error("expected a stats block");
+  const stat = block.stats[1];
+  if (!stat) throw new Error("expected a Location stat");
+  return stat;
+}
 
 describe("PreviewQuery", () => {
   it("distinguishes loading, failure, deletion, and success states", () => {
@@ -387,9 +397,9 @@ describe("first-wave compact cards", () => {
       seed: 8,
       overrides: {
         locationId: testShortcode("location", "LOC-4K7M"),
+        locationName: "Raised bed 2",
         status: "growing",
         displayName: "Tomato · Cherokee Purple",
-        images: [],
       },
     });
 
@@ -405,6 +415,28 @@ describe("first-wave compact cards", () => {
         ],
       },
     ]);
+
+    // The Location stat renders the resolved name, not the raw shortcode.
+    const locationStat = locationStatOf(card.body);
+    render(<>{locationStat.value}</>);
+    expect(screen.getByText("Raised bed 2")).toBeInTheDocument();
+  });
+
+  it("falls back to the location shortcode when a planting has no locationName", () => {
+    const namelessBed = mock(plantingOut, {
+      seed: 8,
+      overrides: {
+        locationId: testShortcode("location", "LOC-4K7M"),
+        locationName: null,
+        status: "growing",
+        displayName: "Tomato · Cherokee Purple",
+      },
+    });
+
+    const card = toPlantingCard(withMedia(namelessBed));
+    const locationStat = locationStatOf(card.body);
+    render(<>{locationStat.value}</>);
+    expect(screen.getByText("LOC-4K7M")).toBeInTheDocument();
   });
 
   it("titles a gardenEntry card from displayName and maps note to Note", () => {

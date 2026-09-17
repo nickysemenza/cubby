@@ -167,6 +167,18 @@ export function useSectionVisible(visible: boolean) {
   }, [setVisible, visible]);
 }
 
+/**
+ * Mirrors each `SectionCard`'s own (per-card) visibility up to `DetailSections`,
+ * keyed by section id, so the jump index (`DetailAnchorIndex`) can drop a
+ * `hideWhenEmpty` section that is currently hidden instead of always listing
+ * every declared section regardless of the `hidden` attribute `SectionCard`
+ * sets on itself. A section absent from the map hasn't reported yet and is
+ * treated as visible.
+ */
+const SectionVisibilityRegistryContext = createContext<
+  ((id: string, visible: boolean) => void) | null
+>(null);
+
 function SectionCard({
   section,
   className,
@@ -180,6 +192,15 @@ function SectionCard({
   const [open, setOpen] = useState(!section.collapsed);
   const [count, setCount] = useState<number | undefined>(undefined);
   const [visible, setVisible] = useState(true);
+  const registerVisibility = useContext(SectionVisibilityRegistryContext);
+  const sectionId = section.id;
+  const reportVisible = useCallback(
+    (next: boolean) => {
+      setVisible(next);
+      registerVisibility?.(sectionId, next);
+    },
+    [registerVisibility, sectionId],
+  );
 
   if (section.surface === "plain") {
     return (
@@ -214,7 +235,7 @@ function SectionCard({
   );
 
   return (
-    <SectionVisibilityContext.Provider value={setVisible}>
+    <SectionVisibilityContext.Provider value={reportVisible}>
       <section
         id={section.id}
         tabIndex={-1}
@@ -678,6 +699,17 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const locationHash = useLocation({ select: (location) => location.hash });
   const navigate = useNavigate();
   const sourceId = contextSourceId(pageDetail, detailRecord);
+  // Per-`SectionCard` `hideWhenEmpty` visibility, mirrored up here by id so
+  // the jump index can drop a hidden section instead of always listing every
+  // declared one (`SectionVisibilityRegistryContext`/`reportVisible` above).
+  const [sectionVisibility, setSectionVisibility] = useState<
+    Map<string, boolean>
+  >(new Map());
+  const registerSectionVisibility = useCallback((id: string, next: boolean) => {
+    setSectionVisibility((prev) =>
+      prev.get(id) === next ? prev : new Map(prev).set(id, next),
+    );
+  }, []);
   const visibleSections = useMemo(
     () =>
       sections.filter(
@@ -786,8 +818,15 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     setHash(sectionId, true);
   };
 
+  // A `hideWhenEmpty` section currently hidden (per `sectionVisibility`, kept
+  // live by `SectionCard`/`reportVisible`) drops out of the jump index even
+  // though it stays mounted in the overview layout below — a section absent
+  // from the map hasn't reported yet and counts as visible.
+  const indexEligibleSections = overviewSections.filter(
+    (section) => sectionVisibility.get(section.id) !== false,
+  );
   const hasOverviewTools =
-    overviewSections.filter((section) => section.includeInIndex !== false)
+    indexEligibleSections.filter((section) => section.includeInIndex !== false)
       .length >= 2;
   const visual = heroVisual({
     heroImages,
@@ -795,59 +834,63 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   });
 
   return (
-    <Tabs value={activeMode} onValueChange={selectMode} className="gap-4">
-      <DetailCommandStrip
-        activeMode={activeMode}
-        hasRelations={hasRelations}
-        hasActivity={hasActivity}
-        hasOverviewTools={hasOverviewTools}
-        overviewSections={overviewSections}
-        onSelectOverviewSection={selectOverviewSection}
-      />
+    <SectionVisibilityRegistryContext.Provider
+      value={registerSectionVisibility}
+    >
+      <Tabs value={activeMode} onValueChange={selectMode} className="gap-4">
+        <DetailCommandStrip
+          activeMode={activeMode}
+          hasRelations={hasRelations}
+          hasActivity={hasActivity}
+          hasOverviewTools={hasOverviewTools}
+          overviewSections={indexEligibleSections}
+          onSelectOverviewSection={selectOverviewSection}
+        />
 
-      {activeMode === "overview" ? (
-        <TabsContent value="overview" className="text-sm/5">
-          <div className="space-y-4">
+        {activeMode === "overview" ? (
+          <TabsContent value="overview" className="text-sm/5">
+            <div className="space-y-4">
+              <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
+                {renderResponsiveLayout({
+                  sections: overviewSections,
+                  visual,
+                })}
+              </div>
+
+              {isDebugEnabled && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle as="h2">Raw Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <JsonRenderer input={rawData} pretty />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+        ) : null}
+
+        {activeMode === "relations" && relationshipSection ? (
+          <TabsContent value="relations" className="text-sm/5">
             <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
               {renderResponsiveLayout({
-                sections: overviewSections,
-                visual,
+                sections: [{ ...relationshipSection, placement: "full" }],
               })}
             </div>
+          </TabsContent>
+        ) : null}
 
-            {isDebugEnabled && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle as="h2">Raw Details</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <JsonRenderer input={rawData} pretty />
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-      ) : null}
-
-      {activeMode === "relations" && relationshipSection ? (
-        <TabsContent value="relations" className="text-sm/5">
-          <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
-            {renderResponsiveLayout({
-              sections: [{ ...relationshipSection, placement: "full" }],
-            })}
-          </div>
-        </TabsContent>
-      ) : null}
-
-      {activeMode === "activity" && resolvedActivitySection ? (
-        <TabsContent value="activity" className="text-sm/5">
-          <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
-            {renderResponsiveLayout({
-              sections: [{ ...resolvedActivitySection, placement: "full" }],
-            })}
-          </div>
-        </TabsContent>
-      ) : null}
-    </Tabs>
+        {activeMode === "activity" && resolvedActivitySection ? (
+          <TabsContent value="activity" className="text-sm/5">
+            <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
+              {renderResponsiveLayout({
+                sections: [{ ...resolvedActivitySection, placement: "full" }],
+              })}
+            </div>
+          </TabsContent>
+        ) : null}
+      </Tabs>
+    </SectionVisibilityRegistryContext.Provider>
   );
 };

@@ -27,7 +27,6 @@ import {
   locationImage,
   mealImage,
   mealRecipe,
-  plantingImage,
   product,
   productExternalId,
   productImage,
@@ -640,21 +639,5 @@ export const relations = {
         },
       },
     },
-  },
-} as const;
-
-/**
- * Not a `relations.<entity>` preset: `plantingRow`/`plantingList`
- * (`repo/garden/index.ts`) each already hand-assemble their own full `with`
- * set (ingredient/sourceProduct/location/task) —
- * neither has a single canonical "full" preset to extend. This is just the
- * shared images-relation fragment both splice in, kept beside its
- * product/location/recipe/meal/task counterparts above.
- */
-export const plantingImagesRelation = {
-  where: notDeleted(plantingImage),
-  orderBy: imageOrder,
-  with: {
-    image: true,
   },
 } as const;

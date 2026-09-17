@@ -22,6 +22,10 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import {
+  getSearchDocumentEmbeddingText,
+  refreshSearchDocument,
+} from "~/server/repo/search-document";
 import { createTask } from "~/server/repo/task";
 
 import { getSemanticEmbeddingConfig } from "../semantic/config";
@@ -232,12 +236,16 @@ describe("mutation side effects integration", () => {
       ctx.actor,
     );
     const config = getSemanticEmbeddingConfig();
-    await seedEntityEmbedding(ctx.db, {
-      entityType: "product",
-      entityId: product.entityId,
-      embeddingText: "product: Manifest deleted embedding",
-      config,
-    });
+    // `seedEntityEmbedding` writes only against a live `SearchDocument` whose
+    // `semanticText` matches, so project the document first and seed from it.
+    await refreshSearchDocument(ctx.db, "product", product.entityId);
+    const text = await getSearchDocumentEmbeddingText(
+      ctx.db,
+      "product",
+      product.entityId,
+    );
+    if (!text) throw new Error("product search document must exist");
+    await seedEntityEmbedding(ctx.db, { ...text, config });
 
     // Embedding cleanup lives in the repo delete cascade (not the mutation
     // side-effect), so it covers EVERY delete caller — including direct repo

@@ -283,6 +283,7 @@ export const productFilterFields = {
   locationIdFilter: entityFilterList(locationShortcode).optional(),
   ingredientPresenceFilter: presenceFilter,
   ingredientIdFilter: entityFilterList(ingredientShortcode).optional(),
+  growsIngredientIdFilter: entityFilterList(ingredientShortcode).optional(),
   taskStatusFilter: oneOrMany(taskStatusSchema).optional(),
   taskOpenOnly: z.boolean().optional(),
   ...dateRangeFields("taskDue"),

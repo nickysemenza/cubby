@@ -32,10 +32,11 @@ interface SetFieldDialogProps<T extends SetFieldItem> {
 }
 
 /**
- * Generic bulk "set <field>" dialog — the same shell as
- * {@link SetTaskStatusDialog}/{@link MoveToProjectDialog}, parameterized by an
- * enum option set. Used for bulk trade (tasks + expenses) and bulk cost-type
- * (expenses). A required enum, so an empty selection is a no-op submit.
+ * Generic bulk "set <field>" dialog, parameterized by an enum option set.
+ * Used where a single-field bulk verb still earns its own dialog rather than
+ * the generic `bulkEdit` action (`bulk-edit-entity-action.tsx`) — project
+ * status, product stock tracking, ingredient usually-on-hand. A required
+ * enum, so an empty selection is a no-op submit.
  */
 export function SetFieldDialog<T extends SetFieldItem>({
   open,

@@ -70,10 +70,11 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   // per entry only created a way for `meal` to claim it was a task.
   //
   // Optional: a kind with no calendar-originated creation flow (`planting`,
-  // whose records only ever start from the Garden surface) omits it entirely
-  // rather than supplying a throwing stub. `ALL_KINDS` in unified-calendar.tsx
-  // is the day-sheet's own creatable-kind list and never includes such a kind,
-  // so `calendarItemCreateRequest` is never called with one in practice.
+  // whose records only ever start from the generic plantings pages, not the
+  // calendar) omits it entirely rather than supplying a throwing stub.
+  // `ALL_KINDS` in unified-calendar.tsx is the day-sheet's own creatable-kind
+  // list and never includes such a kind, so `calendarItemCreateRequest` is
+  // never called with one in practice.
   create?: (date?: string) => EntityEditDialogRequest;
   icon: (item: ItemOf<K>) => LucideIcon;
   cover: (

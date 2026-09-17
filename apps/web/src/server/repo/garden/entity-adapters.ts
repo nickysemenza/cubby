@@ -60,12 +60,6 @@ const PLANTING_DELETE_EDGE_POLICY = {
     description:
       "A garden entry outlives the planting it described — it keeps its own dated history.",
   },
-  "PlantingImage.plantingId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Image associations are soft-deleted with the planting, and each file is\n      deleted too unless something else still references it.",
-  },
 } as const satisfies IncomingEdgePolicy<"planting", OperationDisposition>;
 
 const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
@@ -243,7 +237,6 @@ export const plantingEntityAdapter = defineEntityAdapter({
             ids,
             removal: "soft",
             actor: ctx.actorContext,
-            children: [imageCascadeChild(imageJoinBindings.planting)],
           });
         });
       return {
