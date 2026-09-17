@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { CellSelectionState, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
-import { LayoutList, List } from "lucide-react";
+import { Check, LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 
@@ -13,6 +13,7 @@ import {
   usePageWorkbenchTarget,
 } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -43,7 +44,6 @@ import {
   isNarrowed,
 } from "./entity-empty-states";
 import { MobileListScreen } from "./MobileListScreen";
-import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import TableHeaderLayout from "./TableHeaderLayout";
@@ -276,7 +276,6 @@ function DesktopTableToolbar<TItem extends RowData>({
   groupConfig,
   grouped,
   onGroupedChange,
-  infiniteScroll,
   actions,
   bulkActionBar,
   externalToolbar,
@@ -293,7 +292,6 @@ function DesktopTableToolbar<TItem extends RowData>({
   | "groupConfig"
   | "grouped"
   | "onGroupedChange"
-  | "infiniteScroll"
   | "actions"
   | "bulkActionBar"
   | "embedded"
@@ -302,25 +300,47 @@ function DesktopTableToolbar<TItem extends RowData>({
   externalToolbar: boolean;
   isTransitioning: boolean;
 }) {
+  // `additionalToolbarContent` is a live status readout (a ledger's running
+  // total, cell-selection stats) — it stays visible inline in the query tier
+  // at both densities, never folded into a menu a caller would have to open
+  // to read it. Only the interactive `inspectorToggle`/grouped-list toggle
+  // move into the page-mode `Actions ▾` menu; embedded keeps them inline too.
+  const groupToggle = embedded ? (
+    <GroupToggle
+      groupConfig={groupConfig}
+      grouped={grouped}
+      onGroupedChange={onGroupedChange}
+    />
+  ) : null;
+  const inlineExtras = (
+    <div className="flex flex-wrap items-center gap-2">
+      {embedded && inspectorToggle}
+      {additionalToolbarContent}
+      {groupToggle}
+    </div>
+  );
+  const actionsMenuExtra = !embedded && (
+    <>
+      {inspectorToggle && (
+        <div className="flex flex-wrap items-center gap-1 px-1 py-1">
+          {inspectorToggle}
+        </div>
+      )}
+      <GroupToggleMenuItem
+        groupConfig={groupConfig}
+        grouped={grouped}
+        onGroupedChange={onGroupedChange}
+      />
+    </>
+  );
+
   return (
     <DataTableToolbar
       table={table}
       entity={entity}
       filterOptionHints={filterOptionHints}
-      additionalContent={
-        <div className="flex flex-wrap items-center gap-2">
-          {inspectorToggle}
-          {additionalToolbarContent}
-          <GroupToggle
-            groupConfig={groupConfig}
-            grouped={grouped}
-            onGroupedChange={onGroupedChange}
-          />
-          {!embedded && !infiniteScroll && (
-            <RowsPerPageSelect table={table} className="h-7 w-16" />
-          )}
-        </div>
-      }
+      additionalContent={inlineExtras}
+      actionsMenuExtra={actionsMenuExtra || undefined}
       actions={actions}
       bulkActionBar={bulkActionBar}
       showViewOptions={!embedded || showColumnMenu}
@@ -353,6 +373,21 @@ function GroupToggle<TItem extends RowData>({
         <LayoutList className="size-4" />
       )}
     </Button>
+  );
+}
+
+/** The page-mode `Actions ▾` menu's equivalent of {@link GroupToggle}. */
+function GroupToggleMenuItem<TItem extends RowData>({
+  groupConfig,
+  grouped,
+  onGroupedChange,
+}: Pick<RTableProps<TItem>, "groupConfig" | "grouped" | "onGroupedChange">) {
+  if (!groupConfig || !onGroupedChange) return null;
+  return (
+    <DropdownMenuItem onClick={() => onGroupedChange(!grouped)}>
+      <Check className={grouped ? "opacity-100" : "opacity-0"} />
+      Grouped
+    </DropdownMenuItem>
   );
 }
 
@@ -977,7 +1012,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       groupConfig={groupConfig}
       grouped={grouped}
       onGroupedChange={onGroupedChange}
-      infiniteScroll={infiniteScroll}
       actions={actions}
       bulkActionBar={bulkActionBar}
       externalToolbar={externalToolbar}

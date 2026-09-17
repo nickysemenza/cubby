@@ -22,11 +22,19 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
+        // `default`/`lg` are the only sizes with spatial press feedback
+        // (DESIGN.md: "Motion is immediate for high-frequency table
+        // operations") — the scale+opacity transition here supersedes the
+        // variant strings' plain `active:opacity-90` (twMerge keeps the
+        // later, more specific declaration); reduced motion falls back to
+        // that same opacity dim with no transform. `ease-cozy` already is
+        // `cubic-bezier(0.2, 0, 0, 1)`. Compact table controls (`sm`, `xs`,
+        // `icon-*`) keep the immediate opacity-only feedback untouched.
         default:
-          "h-8 gap-1.5 px-2.5 text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
+          "h-8 gap-1.5 px-2.5 text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5 transition-[color,background-color,border-color,transform,opacity] duration-[160ms] ease-cozy active:scale-[0.96] active:opacity-100 motion-reduce:active:scale-100 motion-reduce:active:opacity-90",
         xs: "h-6 gap-1 px-1.5 text-2xs has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg:not([class*='size-'])]:size-2.5",
         sm: "h-7 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        lg: "h-10 gap-2 px-3.5 text-sm [&_svg:not([class*='size-'])]:size-4",
+        lg: "h-10 gap-2 px-3.5 text-sm [&_svg:not([class*='size-'])]:size-4 transition-[color,background-color,border-color,transform,opacity] duration-[160ms] ease-cozy active:scale-[0.96] active:opacity-100 motion-reduce:active:scale-100 motion-reduce:active:opacity-90",
         icon: "size-8 [&_svg:not([class*='size-'])]:size-3.5",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-2.5",
         "icon-sm": "size-7 [&_svg:not([class*='size-'])]:size-3",

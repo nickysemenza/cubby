@@ -1,10 +1,9 @@
 import {
-  fireEvent,
   render as renderWithTestingLibrary,
   screen,
 } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -93,7 +92,7 @@ describe("Page workbench", () => {
     );
 
     const identity = screen.getByRole("heading", { name: "Products" });
-    expect(await screen.findByText("7")).toBeInTheDocument();
+    expect(await screen.findByText("7 products")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Table" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     expect(
@@ -119,15 +118,18 @@ describe("Page workbench", () => {
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
   });
 
-  it("authors one visible detail action and collapsible secondary actions", () => {
-    const { container } = render(
+  it("renders secondary detail actions once per width with that width's overflow", () => {
+    const secondary = vi.fn((overflow: "inline" | "menu") => (
+      <button type="button">{`Delete (${overflow})`}</button>
+    ));
+    render(
       <Page
         variant="detail"
         entity="product"
         title="Blue mug"
         heroActions={{
           primary: <button type="button">Edit</button>,
-          secondary: <button type="button">Delete</button>,
+          secondary,
         }}
       >
         <p>Detail body</p>
@@ -135,22 +137,17 @@ describe("Page workbench", () => {
     );
 
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    const menuTrigger = screen.getByRole("button", {
-      name: "Open detail actions",
-    });
-    expect(menuTrigger.parentElement).toHaveClass("md:hidden");
+    // The plate never wraps the verbs in a second popover: the `md+` copy is
+    // told to spell verbs out inline, the phone copy to fold them behind its
+    // own "More actions" menu.
+    expect(secondary).toHaveBeenCalledWith("inline");
+    expect(secondary).toHaveBeenCalledWith("menu");
     expect(
-      container.querySelector(".hidden.flex-wrap.items-center.gap-2.md\\:flex"),
-    ).toBeInTheDocument();
-
-    fireEvent.click(menuTrigger);
+      screen.getByRole("button", { name: "Delete (inline)" }).parentElement,
+    ).toHaveClass("md:flex");
     expect(
-      screen.getByRole("heading", { name: "Record actions" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("group", { name: "Record actions" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Delete (menu)" }).parentElement,
+    ).toHaveClass("md:hidden");
   });
 
   it("uses a viewport-aligned, overflow-safe wrapper for phone detail media", () => {

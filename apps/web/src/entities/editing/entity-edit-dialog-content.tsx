@@ -85,7 +85,8 @@ export function EntityEditDialogContent<E extends EditableEntity>({
       }}
       title={presentation.title({ context, record })}
       description={presentation.description({ context, record })}
-      size={presentation.size}
+      size={presentation.size ?? "md"}
+      bodyMode="form"
     >
       <FormWrapper
         form={session.form}
@@ -106,6 +107,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         error={error}
         onCancel={close}
         submitButtonText={presentation.submitLabel ?? "Create"}
+        footerMode="dialog"
       >
         <presentation.Fields
           form={session.form}

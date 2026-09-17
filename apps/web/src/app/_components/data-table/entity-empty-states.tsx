@@ -8,6 +8,7 @@ import type { RowData } from "@tanstack/react-table";
 
 import { createActionFor } from "~/app/_components/actions/action-items";
 import { IconPattern } from "~/components/common/icon-pattern";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   Empty,
@@ -16,7 +17,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
-import { InkStamp } from "~/components/ui/ink-stamp";
 import { EntityIcon, entities } from "~/entities/entities";
 
 import type { CubbyTable as Table } from "./table-features";
@@ -66,7 +66,9 @@ export function EntityEmptyState({
   return (
     <Empty variant="warm" className="relative isolate overflow-hidden py-6">
       <IconPattern className="-z-10" />
-      <InkStamp className="mb-1">Nothing on file</InkStamp>
+      <Badge variant="secondary" className="mb-1">
+        Nothing on file
+      </Badge>
       <EmptyMedia variant="icon">
         <EntityIcon entity={entity} colored className="size-5" />
       </EmptyMedia>

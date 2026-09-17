@@ -50,29 +50,28 @@ function LedgerFiltersHarness() {
 }
 
 describe("LedgerFilters", () => {
-  it("writes a selected multiselect filter through the real table and filter bar", async () => {
+  it("writes a selected multiselect filter through the checklist's Apply", async () => {
     render(<LedgerFiltersHarness />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
-    fireEvent.click(screen.getByRole("button", { name: "Trade" }));
-    fireEvent.click(screen.getByRole("button", { name: "Trade: Choose…" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open Filter Trade" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trade: any" }));
     fireEvent.click(
-      await screen.findByRole("option", { name: "Electrical & Lighting" }),
+      await screen.findByRole("button", { name: "Electrical & Lighting" }),
     );
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(screen.getByTestId("column-filters")).toHaveTextContent(
       '[{"id":"trade","value":["electrical"]}]',
     );
   });
 
-  it("keeps an empty text chip until the user supplies a value", () => {
+  it("renders the title field as a search input, not a chip, until it has a value", () => {
     render(<LedgerFiltersHarness />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
-    fireEvent.click(screen.getByRole("button", { name: "Name" }));
-
-    expect(screen.getByRole("button", { name: "Name: Choose…" })).toBeVisible();
+    const search = screen.getByRole("textbox", { name: "Search Name" });
+    expect(search).toHaveValue("");
+    expect(
+      screen.queryByRole("button", { name: /^Name:/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("column-filters")).toHaveTextContent("[]");
   });
 });

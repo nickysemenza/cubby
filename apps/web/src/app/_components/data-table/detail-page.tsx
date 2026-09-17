@@ -3,16 +3,17 @@ import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight, Clock } from "lucide-react";
 import {
+  createContext,
   type FC,
   type ReactNode,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import { z } from "zod";
 
-import { Row } from "~/components/layout";
 import { usePageDetailContext } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -24,13 +25,8 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDebug } from "~/hooks/useDebug";
-import { cn } from "~/lib/utils";
+import { cn, formatCount } from "~/lib/utils";
 
-import type { ActionVerbId } from "../actions/action-verbs";
-import {
-  EntityActionButtons,
-  type EntityActionRow,
-} from "../actions/entity-actions";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
@@ -71,14 +67,6 @@ function detailSourceId(
   return entity === "usda-food" && record.fdc_id != null
     ? String(record.fdc_id)
     : undefined;
-}
-
-function detailActionRecord(
-  record: DetailRecord | undefined,
-  sourceId: string | undefined,
-): EntityActionRow | undefined {
-  if (!record || !sourceId) return undefined;
-  return { ...record, id: sourceId };
 }
 
 function modeForHash({
@@ -136,28 +124,23 @@ export interface DetailSection {
   collapsed?: boolean;
 }
 
-function CollapsedSectionBody({
-  section,
-}: {
-  section: Pick<DetailSection, "title" | "content">;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <ChevronRight
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-        />
-        {open ? "Hide" : "Show"} {section.title.toLocaleLowerCase()}
-      </Button>
-      {open ? <div className="mt-2">{section.content}</div> : null}
-    </div>
-  );
+/**
+ * A relation/list section reports its true row count up through here so the
+ * section's own `<h2>` can carry it (mono, secondary) without the section
+ * body reaching back into the header it doesn't render. Mirrors
+ * `usePageCount`: an effect-based report, `undefined` cleans it back up on
+ * unmount, and a call outside a `SectionCard` body is a safe no-op.
+ */
+const SectionCountContext = createContext<
+  ((count: number | undefined) => void) | null
+>(null);
+
+export function useSectionCount(count: number | undefined) {
+  const setCount = useContext(SectionCountContext);
+  useEffect(() => {
+    setCount?.(count);
+    return () => setCount?.(undefined);
+  }, [setCount, count]);
 }
 
 function SectionCard({
@@ -167,6 +150,12 @@ function SectionCard({
   section: DetailSection;
   className?: string;
 }) {
+  // Starts open unless the declaration folds it; the body only ever mounts
+  // (and so can only ever report a count) once it's open — a collapsed
+  // section shows no count.
+  const [open, setOpen] = useState(!section.collapsed);
+  const [count, setCount] = useState<number | undefined>(undefined);
+
   if (section.surface === "plain") {
     return (
       <section
@@ -182,6 +171,23 @@ function SectionCard({
     );
   }
 
+  const heading = (
+    <>
+      <section.icon
+        className={cn(
+          "size-3.5 shrink-0",
+          section.collapsed && !open ? "text-muted-foreground" : "text-slate",
+        )}
+      />
+      {section.title}
+      {open && count !== undefined ? (
+        <span className="font-mono text-2xs font-normal text-muted-foreground">
+          {formatCount(count)}
+        </span>
+      ) : null}
+    </>
+  );
+
   return (
     <section
       id={section.id}
@@ -192,20 +198,38 @@ function SectionCard({
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      {/* Phone header actions are 44px targets, so the row centres there;
+          desktop's 28px ghosts sit flush with the title's first line. */}
+      <div className="flex items-start justify-between gap-3 max-md:items-center">
         <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight">
-          <section.icon className="size-3.5 shrink-0 text-slate" />
-          {section.title}
+          {section.collapsed ? (
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpen((current) => !current)}
+              className="flex min-w-0 items-center gap-2 font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronRight
+                className={cn(
+                  "size-3.5 shrink-0 transition-transform",
+                  open && "rotate-90",
+                )}
+              />
+              {heading}
+            </button>
+          ) : (
+            heading
+          )}
         </h2>
-        {section.headerAction ? (
+        {section.headerAction && (!section.collapsed || open) ? (
           <div className="shrink-0">{section.headerAction}</div>
         ) : null}
       </div>
-      {section.collapsed ? (
-        <CollapsedSectionBody section={section} />
-      ) : (
-        <div className="mt-2">{section.content}</div>
-      )}
+      {open ? (
+        <SectionCountContext.Provider value={setCount}>
+          <div className="mt-2">{section.content}</div>
+        </SectionCountContext.Provider>
+      ) : null}
     </section>
   );
 }
@@ -327,26 +351,26 @@ function DetailAnchorIndex({
     setActiveId(id);
   };
 
+  const activeTitle =
+    indexed.find((section) => section.id === activeId)?.title ??
+    indexed[0]?.title;
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground"
-          />
-        }
+    <>
+      {/* md+: an inline anchor list, hairline-left, same IntersectionObserver. */}
+      <nav
+        aria-label="Section index"
+        className="hidden min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-l border-border pl-2 text-xs text-muted-foreground md:flex"
       >
-        Jump to section
-        <ChevronDown className="size-3" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
         {indexed.map((section) => (
-          <DropdownMenuItem
+          <a
             key={section.id}
-            render={<a href={`#${section.id}`} aria-label={section.title} />}
+            href={`#${section.id}`}
             aria-current={activeId === section.id ? "location" : undefined}
+            className={cn(
+              "transition-colors hover:text-foreground",
+              activeId === section.id && "font-medium text-foreground",
+            )}
             onClick={(event) => {
               event.preventDefault();
               onSelect(section.id);
@@ -354,10 +378,43 @@ function DetailAnchorIndex({
             }}
           >
             {section.title}
-          </DropdownMenuItem>
+          </a>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </nav>
+      {/* Below md: a 44px "Jump to: <active>" bar opening the same list. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              className="min-h-11 w-full min-w-0 justify-between px-0 text-muted-foreground hover:text-foreground md:hidden"
+            />
+          }
+        >
+          <span className="min-w-0 truncate">
+            Jump to:{" "}
+            <span className="font-medium text-foreground">{activeTitle}</span>
+          </span>
+          <ChevronDown className="size-3.5 shrink-0" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-52">
+          {indexed.map((section) => (
+            <DropdownMenuItem
+              key={section.id}
+              render={<a href={`#${section.id}`} aria-label={section.title} />}
+              aria-current={activeId === section.id ? "location" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                onSelect(section.id);
+                jump(section.id);
+              }}
+            >
+              {section.title}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 
@@ -367,7 +424,6 @@ function DetailCommandStrip({
   hasActivity,
   hasOverviewTools,
   overviewSections,
-  entityActions,
   onSelectOverviewSection,
 }: {
   activeMode: DetailMode;
@@ -375,7 +431,6 @@ function DetailCommandStrip({
   hasActivity: boolean;
   hasOverviewTools: boolean;
   overviewSections: DetailSection[];
-  entityActions: ReactNode;
   onSelectOverviewSection: (sectionId: string) => void;
 }) {
   const showOverviewTools = activeMode === "overview" && hasOverviewTools;
@@ -395,22 +450,19 @@ function DetailCommandStrip({
             <TabsTrigger value="activity">Activity</TabsTrigger>
           ) : null}
         </TabsList>
+        {/* Verbs live on the plate now — this strip's right side carries only
+            the overview section index. */}
         {showOverviewTools ? (
           <div
             data-testid="detail-overview-tools"
-            className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border px-2 md:min-h-0 md:min-w-0 md:flex-1 md:border-t-0 md:px-0 md:pl-2"
+            className="flex min-h-11 w-full min-w-0 items-center gap-2 border-t border-border px-2 md:min-h-0 md:flex-1 md:border-t-0 md:px-0 md:pl-2"
           >
             <DetailAnchorIndex
               sections={overviewSections}
               onSelect={onSelectOverviewSection}
             />
-            {entityActions ? <Row gap="sm">{entityActions}</Row> : null}
           </div>
-        ) : (
-          <div className="hidden min-w-0 flex-1 items-center justify-end gap-2 md:flex">
-            {entityActions ? <Row gap="sm">{entityActions}</Row> : null}
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -491,10 +543,6 @@ interface DetailSectionsProps {
   rawData: unknown;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
   heroMedia?: ReactNode;
-  /** Page-owned action hosts (such as Image's hero) suppress this generic one. */
-  showEntityActions?: boolean;
-  /** Restrict the command strip's verbs to the manifest's declared ones. */
-  actionVerbs?: readonly ActionVerbId[];
 }
 
 function resolveRelationshipDetail(
@@ -585,21 +633,11 @@ function contextSourceId(
   return pageDetail ? detailSourceId(pageDetail.entity, record) : undefined;
 }
 
-function contextActionRecord(
-  pageDetail: ReturnType<typeof usePageDetailContext>,
-  record: DetailRecord | undefined,
-  sourceId: string | undefined,
-) {
-  return pageDetail ? detailActionRecord(record, sourceId) : undefined;
-}
-
 export const DetailSections: FC<DetailSectionsProps> = ({
   sections,
   rawData,
   heroImages,
   heroMedia,
-  showEntityActions = true,
-  actionVerbs,
 }) => {
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
@@ -720,18 +758,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     setHash(sectionId, true);
   };
 
-  const actionRecord = contextActionRecord(pageDetail, detailRecord, sourceId);
-  const entityActions =
-    showEntityActions && pageDetail && actionRecord ? (
-      <EntityActionButtons
-        entity={pageDetail.entity}
-        record={actionRecord}
-        verbs={actionVerbs}
-      />
-    ) : null;
   const hasOverviewTools =
     overviewSections.filter((section) => section.includeInIndex !== false)
-      .length >= 2 || entityActions !== null;
+      .length >= 2;
   const visual = heroVisual({
     heroImages,
     heroMedia: heroMedia ?? pageDetail?.heroMedia,
@@ -745,7 +774,6 @@ export const DetailSections: FC<DetailSectionsProps> = ({
         hasActivity={hasActivity}
         hasOverviewTools={hasOverviewTools}
         overviewSections={overviewSections}
-        entityActions={entityActions}
         onSelectOverviewSection={selectOverviewSection}
       />
 

@@ -20,8 +20,8 @@ test("phone nutrition focuses a nutrient with legible contributions and repair n
   const bounds = await contributions.boundingBox();
   expect(bounds).not.toBeNull();
   expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(402);
-  await page.getByRole("button", { name: /^Display/ }).click();
-  const settings = page.getByRole("dialog", { name: "Display settings" });
+  await page.getByRole("button", { name: /^Columns/ }).click();
+  const settings = page.getByRole("dialog", { name: "Columns" });
   await expect(settings).toBeVisible();
   await settings
     .getByRole("button", { name: "Actions for Zinc (mg)", exact: true })

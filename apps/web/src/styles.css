@@ -572,10 +572,6 @@
   display: none;
 }
 
-body:has([data-bulk-action-bar]) [data-mobile-sort-trigger] {
-  display: none;
-}
-
 @media (pointer: coarse) {
   :where(
     [data-slot="button"],

@@ -9,7 +9,7 @@ import {
 } from "react-hook-form";
 
 import { Row, Stack } from "~/components/layout";
-import { InkStamp } from "~/components/ui/ink-stamp";
+import { Badge } from "~/components/ui/badge";
 import { Input } from "~/components/ui/input";
 import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 
@@ -87,7 +87,7 @@ export const EditorTally: FC<{ control: Control<RecipeFormValues> }> = ({
       <span className="truncate tabular-nums">
         {ingredients} ingredients · {steps} steps
       </span>
-      {isDirty && <InkStamp tone="red">Unsaved</InkStamp>}
+      {isDirty && <Badge variant="destructive">Unsaved</Badge>}
     </Row>
   );
 };

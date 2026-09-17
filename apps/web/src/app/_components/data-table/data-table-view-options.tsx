@@ -64,7 +64,7 @@ export function DataTableViewOptions<TData extends RowData>({
   const triggerContent = (
     <>
       <Settings2 className="size-3.5" />
-      Display
+      Columns
       {isCustomized && (
         <span className="font-mono text-2xs tracking-normal text-muted-foreground normal-case">
           Custom
@@ -89,7 +89,7 @@ export function DataTableViewOptions<TData extends RowData>({
         <ResponsiveSheet
           open={mobileOpen}
           onOpenChange={setMobileOpen}
-          title="Display settings"
+          title="Columns"
           description="Choose the column order, visibility, and pinned columns."
         >
           <div className="space-y-4">

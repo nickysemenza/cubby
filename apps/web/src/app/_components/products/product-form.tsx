@@ -29,7 +29,7 @@ import { getOptionalIngredientId } from "~/app/_components/form-fields";
 import { InfoRow } from "~/components/common/info-row";
 import { filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
-import { InkStamp } from "~/components/ui/ink-stamp";
+import { Badge } from "~/components/ui/badge";
 import { useEntityFormController } from "~/entities/editing/use-entity-form-controller";
 import { useImageState } from "~/hooks/useImageState";
 import {
@@ -220,7 +220,7 @@ const ProductTally: FC<{ control: Control<ProductFormValues> }> = ({
         {mappings?.length ?? 0} conversions · {externalIds?.length ?? 0}{" "}
         external IDs
       </span>
-      {isDirty && <InkStamp tone="red">Unsaved</InkStamp>}
+      {isDirty && <Badge variant="destructive">Unsaved</Badge>}
     </Row>
   );
 };

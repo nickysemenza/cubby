@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Check, ClipboardCopy, MoreHorizontal } from "lucide-react";
+import { Check, ClipboardCopy } from "lucide-react";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { z } from "zod";
 
@@ -11,16 +11,9 @@ import {
 } from "~/app/_components/navigation/domain-wayfinding";
 import { getEntityNavGroup } from "~/app/_components/navigation/nav-items";
 import { ImageGallery } from "~/components/media/image-gallery";
-import { Button } from "~/components/ui/button";
+import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
 import { Eyebrow } from "~/components/ui/eyebrow";
-import { InkStamp } from "~/components/ui/ink-stamp";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTitle,
-  PopoverTrigger,
-} from "~/components/ui/popover";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { copyShortcodes } from "~/lib/clipboard";
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
@@ -65,9 +58,22 @@ export interface DetailHeroStat {
 export interface DetailHeroActions {
   /** The single action that should remain visible on every viewport. */
   primary?: ReactNode;
-  /** Supporting and destructive actions; collapsed behind Actions on phone. */
-  secondary?: ReactNode;
+  /**
+   * Supporting and destructive actions, rendered once per width with the
+   * overflow treatment that applies there — "inline" at `md+` (every verb
+   * spelled out on the plate), "menu" below it (the content renders its own
+   * "More actions" popover, see `EntityActionButtons`). The plate never
+   * nests a second popover around it.
+   */
+  secondary?: (overflow: "inline" | "menu") => ReactNode;
 }
+
+/** `heroStamp`'s tone, as a `Badge` variant. */
+const heroStampVariant = {
+  ink: "secondary",
+  red: "destructive",
+  green: "positive",
+} as const satisfies Record<"ink" | "red" | "green", BadgeVariant>;
 
 /** One eyebrow path segment. `to` is set only for the leading nav-group
  * segment, and only when {@link getEntityNavGroup} resolves a group with an
@@ -161,10 +167,14 @@ export function getOnFileSince(
 }
 
 /**
- * Breadcrumb trail for a detail header, e.g. `Pantry / Products / SKU1`.
- * The entity's plural label is always a real `<Link>` back to its list; an optional reference code is
- * appended as the (unlinked) current leaf. When there's no `heroNo`, the linked
- * plural label is itself the last segment (the big title below is the record).
+ * Breadcrumb trail for a detail header, e.g. `Pantry / Products / SKU1` — the
+ * mono eyebrow (a data-register label, per DESIGN.md's Label rule, since it
+ * ends in the record's code). The leading segment is the entity's domain
+ * (falling back to its nav group for an entity with no domain); the plural
+ * label is always a real `<Link>` back to its list; an optional reference
+ * code is appended as the (unlinked, copyable) current leaf. Shown at every
+ * width — the code itself is hidden below `md` since it repeats in the meta
+ * row instead.
  */
 function DetailBreadcrumb({
   entity,
@@ -175,18 +185,20 @@ function DetailBreadcrumb({
 }) {
   if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
-  const group = getEntityNavGroup(entity);
+  const domain = domainForEntity(entity);
+  const leadingLabel = domain
+    ? domainWayfinding(domain).label
+    : getEntityNavGroup(entity)?.label;
 
   return (
-    <nav
+    <Eyebrow
+      as="nav"
       aria-label="Breadcrumb"
-      className={cn(
-        "hidden flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground md:flex",
-      )}
+      className="flex flex-wrap items-center gap-x-2 gap-y-1"
     >
-      {group && (
+      {leadingLabel && (
         <>
-          <span className="text-muted-foreground">{group.label}</span>
+          <span>{leadingLabel}</span>
           <EyebrowSeparator />
         </>
       )}
@@ -202,12 +214,12 @@ function DetailBreadcrumb({
         {def.pluralLabel}
       </Link>
       {heroNo && (
-        <>
+        <span className="inline-flex items-center gap-x-2 max-md:hidden">
           <EyebrowSeparator />
           <CopyableHeroNo heroNo={heroNo} />
-        </>
+        </span>
       )}
-    </nav>
+    </Eyebrow>
   );
 }
 
@@ -468,7 +480,9 @@ function DetailPlate({
                 </span>
               )}
               {heroStamp && (
-                <InkStamp tone={heroStamp.tone}>{heroStamp.label}</InkStamp>
+                <Badge variant={heroStampVariant[heroStamp.tone ?? "ink"]}>
+                  {heroStamp.label}
+                </Badge>
               )}
               {onFileSince && <span>Added {onFileSince}</span>}
             </div>
@@ -501,40 +515,19 @@ function DetailPlate({
 }
 
 function DetailPlateActions({ actions }: { actions?: DetailHeroActions }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   if (!actions?.primary && !actions?.secondary) return null;
+  const secondary = actions.secondary;
 
   return (
     <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 print:hidden">
       {actions.primary}
-      {actions.secondary && (
+      {secondary && (
         <>
           <div className="hidden flex-wrap items-center gap-2 md:flex">
-            {actions.secondary}
+            {secondary("inline")}
           </div>
-          <div className="md:hidden">
-            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-              <PopoverTrigger
-                render={
-                  <Button variant="outline" aria-label="Open detail actions" />
-                }
-              >
-                <MoreHorizontal />
-                Actions
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-56">
-                <PopoverTitle className="font-mono text-2xs tracking-wider text-slate uppercase">
-                  Record actions
-                </PopoverTitle>
-                <fieldset
-                  className="flex flex-col gap-1 [&_[data-slot=button]]:w-full [&_[data-slot=button]]:justify-start"
-                  onClickCapture={() => setMenuOpen(false)}
-                >
-                  <legend className="sr-only">Record actions</legend>
-                  {actions.secondary}
-                </fieldset>
-              </PopoverContent>
-            </Popover>
+          <div className="flex flex-wrap items-center gap-2 md:hidden">
+            {secondary("menu")}
           </div>
         </>
       )}
@@ -612,10 +605,18 @@ export function PageHeader({
   }
 
   if (listChrome === "workbench") {
+    // Same derivation as the hero's own `countLabel` below: only a plain-string
+    // title reads sensibly next to the count, lowercased here to match the
+    // band's "N products" register.
+    const bandCountLabel =
+      count !== undefined
+        ? `${formatCount(count)}${isStringTitle(title) ? ` ${title.toLocaleLowerCase()}` : ""}`
+        : undefined;
     return (
       <WorkbenchBand
         title={title}
         count={count}
+        countLabel={bandCountLabel}
         controls={workbenchControls}
         actions={actions}
       />

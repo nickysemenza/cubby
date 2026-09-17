@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
-import { type ReactNode, useRef } from "react";
+import type { ReactNode } from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
@@ -13,7 +13,6 @@ import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
-import { MobileSortSheet } from "./MobileSortSheet";
 import type { CubbyRow as Row, CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 import { mobileListLayout } from "./useMobileListModel";
@@ -76,7 +75,6 @@ export function MobileListScreen<TItem extends RowData>({
   showViewOptions = false,
   toolbarVariant = "page",
 }: MobileListScreenProps<TItem>) {
-  const listRef = useRef<HTMLDivElement>(null);
   // `useIsMobile` reports false until hydration (its server snapshot has to, to
   // keep SSR markup stable), so before that the only mobile-correct thing this
   // component can render is the shape of the list to come — see the `md:hidden`
@@ -112,7 +110,6 @@ export function MobileListScreen<TItem extends RowData>({
 
   return (
     <div
-      ref={listRef}
       className={cn(
         "overflow-x-hidden lg:hidden",
         // Pre-hydration this renders on EVERY viewport (the desktop path is
@@ -124,6 +121,7 @@ export function MobileListScreen<TItem extends RowData>({
       {showToolbar && (
         <DataTableToolbar
           table={table}
+          entity={entity}
           additionalContent={toolbarContent}
           actions={actions}
           bulkActionBar={bulkActionBar}
@@ -172,14 +170,6 @@ export function MobileListScreen<TItem extends RowData>({
           );
         })()
       )}
-
-      {/* After the list, so the trigger is the last thing in tab order rather
-          than something a keyboard user crosses on the way into the rows. */}
-      <MobileSortSheet
-        table={table}
-        listRef={listRef}
-        disabled={isLoading || !hydrated || Boolean(error) || isTransitioning}
-      />
     </div>
   );
 }

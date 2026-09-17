@@ -7,12 +7,12 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { Link } from "@tanstack/react-router";
+import { flexRender, type RowData } from "@tanstack/react-table";
 import { ArrowUpRight, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
-import { Row } from "~/components/layout";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
-import { NoneValue } from "~/components/ui/none-value";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import type { EditableEntity } from "~/entities/editing/types";
 import {
@@ -27,8 +27,12 @@ import {
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
 
+import { useSectionCount } from "../data-table/detail-page";
 import { ListWorkbench } from "../data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "../data-table/table-features";
+import {
+  createCubbyColumnHelper,
+  type CubbyTable,
+} from "../data-table/table-features";
 import { type BaseListRow, useEntityList } from "../hooks/useEntityList";
 import type { ListQueryOptionsFn } from "../hooks/usePaginatedTableCore";
 
@@ -127,13 +131,6 @@ export function planRelationSection(
 
 const DEFAULT_RELATION_PAGE_SIZE = 50;
 
-/**
- * A relation section's body: the target entity's own list, scoped to this
- * record through the declared descriptor, over the shared list workbench so
- * the rows carry the target's registered row actions. Headed by "+ create"
- * (the target's create dialog prefilled from the filter) and "Open all" (the
- * target's list route with the same filter in the URL).
- */
 export interface EntityRelationTableOperations {
   list: typeof entityList.list;
 }
@@ -142,36 +139,193 @@ const productionOperations: EntityRelationTableOperations = {
   list: entityList.list,
 };
 
-export function EntityRelationTable({
-  entity,
-  section,
+/**
+ * Shared create-dialog state for a relation section's "+ Add"/"New <thing>"
+ * triggers — the header action and the empty state each mount their own
+ * instance (only one is ever visible at a time), so neither has to reach
+ * into the other's state.
+ */
+function useRelationCreateDialog(plan: RelationSectionPlan, recordId: string) {
+  const [creating, setCreating] = useState(false);
+  const dialog =
+    plan.seed !== null ? (
+      <EntityEditDialog
+        open={creating}
+        onOpenChange={setCreating}
+        // SAFETY: `seed.intent` is the target's own first create intent and
+        // `seed.field` one of that intent's declared fields; the generic
+        // dialog resolves both at runtime through the registry.
+        request={
+          {
+            entity: plan.target as EditableEntity,
+            operation: "create",
+            intent: plan.seed.intent,
+            seed: { [plan.seed.field]: recordId },
+          } as never
+        }
+      />
+    ) : null;
+  return { creating, setCreating, dialog };
+}
+
+/**
+ * A relation section's header-row actions: "+ Add" (or a declared
+ * `createLabel`, e.g. the journal's "Log entry") plus "Open all", rendered as
+ * the `SectionCard`'s `headerAction` — physically in the header row, not the
+ * body, so both persist even while the section is collapsed... except they
+ * don't: `SectionCard` hides `headerAction` while collapsed-and-closed.
+ */
+export function RelationSectionActions({
+  plan,
   recordId,
+  title,
   createLabel,
-  emptyLabel,
-  operations = productionOperations,
 }: {
-  entity: BrowserRoutedEntity;
-  section: RelationSection;
+  plan: RelationSectionPlan;
   recordId: string;
-  /** Overrides "New <singular>" (the journal variant says "Log entry"). */
+  title: string;
   createLabel?: string;
-  emptyLabel?: string;
-  /** Injectable transport seam for tests; production keeps the real one. */
-  operations?: EntityRelationTableOperations;
 }) {
-  const plan = useMemo(
-    () => planRelationSection(entity, section),
-    [entity, section],
-  );
+  const { singular } = entitySummary[plan.target];
+  const { setCreating, dialog } = useRelationCreateDialog(plan, recordId);
+
   return (
-    <RelationList
-      plan={plan}
-      recordId={recordId}
-      title={section.title}
-      createLabel={createLabel}
-      emptyLabel={emptyLabel}
-      operations={operations}
-    />
+    <div className="flex items-center gap-1">
+      {plan.seed !== null ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={createLabel ?? `New ${singular.toLocaleLowerCase()}`}
+          onClick={() => setCreating(true)}
+        >
+          <Plus />
+          {createLabel ?? "Add"}
+        </Button>
+      ) : null}
+      <Button
+        variant="ghost"
+        size="sm"
+        nativeButton={false}
+        render={
+          <Link
+            to={entities[plan.target].routes.list}
+            search={{ [plan.urlKey]: recordId }}
+            aria-label={`Open all ${title.toLocaleLowerCase()}`}
+          />
+        }
+      >
+        Open all
+        <ArrowUpRight />
+      </Button>
+      {dialog}
+    </div>
+  );
+}
+
+/** No data yet, no error: the SectionStates empty vocabulary — a sentence of
+ * state, a sentence of consequence, one action. The journal variant keeps its
+ * own single-line `emptyLabel` instead (it already leads with "Log entry"). */
+function RelationEmptyState({
+  plan,
+  recordId,
+  pluralLabel,
+  singular,
+  emptyLabel,
+}: {
+  plan: RelationSectionPlan;
+  recordId: string;
+  pluralLabel: string;
+  singular: string;
+  emptyLabel: string | undefined;
+}) {
+  const { setCreating, dialog } = useRelationCreateDialog(plan, recordId);
+  if (emptyLabel) {
+    return <p className="text-xs text-muted-foreground">{emptyLabel}</p>;
+  }
+  const lowerPlural = pluralLabel.toLocaleLowerCase();
+  return (
+    <div className="flex flex-col items-start gap-1.5 py-2">
+      <p className="text-sm text-foreground">No {lowerPlural} yet.</p>
+      <p className="max-w-[40ch] text-xs text-muted-foreground">
+        Add one and it appears here and on the {lowerPlural} list.
+      </p>
+      {plan.seed !== null ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-1"
+          onClick={() => setCreating(true)}
+        >
+          <Plus />
+          New {singular.toLocaleLowerCase()}
+        </Button>
+      ) : null}
+      {dialog}
+    </div>
+  );
+}
+
+/**
+ * The declaration renders its header and columns immediately; only cells are
+ * skeletons, sized like the data they'll hold, no shimmer — `RTable`'s own
+ * `isLoading` state replaces the whole table with a spinner, which loses the
+ * header, so this reuses the real (data-independent) header row instead.
+ */
+function RelationLoadingSkeleton<TItem extends RowData>({
+  table,
+  rows,
+}: {
+  table: CubbyTable<TItem>;
+  rows: number;
+}) {
+  const headerGroups = table.getHeaderGroups();
+  const leafHeaders = headerGroups[headerGroups.length - 1]?.headers ?? [];
+  return (
+    <table
+      className="w-full border-collapse text-xs"
+      aria-busy
+      aria-label="Loading"
+    >
+      <thead>
+        {headerGroups.map((headerGroup) => (
+          <tr key={headerGroup.id}>
+            {headerGroup.headers.map((header) => (
+              <th
+                key={header.id}
+                className="h-8 border-b border-border px-2 text-left font-mono text-2xs font-medium tracking-wider text-muted-foreground uppercase"
+              >
+                {header.isPlaceholder
+                  ? null
+                  : flexRender(
+                      header.column.columnDef.header,
+                      header.getContext(),
+                    )}
+              </th>
+            ))}
+          </tr>
+        ))}
+      </thead>
+      <tbody>
+        {Array.from({ length: rows }, (_, rowIndex) => (
+          <tr key={rowIndex} className="h-7 border-b border-border/60">
+            {leafHeaders.map((header, cellIndex) => (
+              <td key={header.id} className="px-2">
+                {cellIndex === 0 && rowIndex === 0 ? (
+                  <span className="sr-only">Loading</span>
+                ) : null}
+                <div
+                  aria-hidden
+                  className="h-3 rounded-sm bg-muted"
+                  style={{
+                    width: `${40 + ((cellIndex * 17 + rowIndex * 11) % 40)}%`,
+                  }}
+                />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -185,20 +339,28 @@ const EMBEDDED_TABLE_STATE = {
   syncPaginationToUrl: false,
 } as const;
 
-function RelationList({
+/**
+ * A relation section's body: the target entity's own list, scoped to this
+ * record through the declared descriptor, over the shared list workbench so
+ * the rows carry the target's registered row actions. No checkbox column or
+ * toolbar (`selectable: false`, `toolbarMode="none"`) — a scoped ledger row
+ * still gets its own `…` menu.
+ */
+export function EntityRelationTable({
   plan,
   recordId,
   title,
-  createLabel,
   emptyLabel,
-  operations,
+  operations = productionOperations,
 }: {
   plan: RelationSectionPlan;
   recordId: string;
   title: string;
-  createLabel: string | undefined;
-  emptyLabel: string | undefined;
-  operations: EntityRelationTableOperations;
+  /** The journal variant's single-line empty copy, in place of the generic
+   * "No <plural> yet" sentence. */
+  emptyLabel?: string;
+  /** Injectable transport seam for tests; production keeps the real one. */
+  operations?: EntityRelationTableOperations;
 }) {
   const { target } = plan;
   const listQueryOptions: ListQueryOptionsFn<RelationFilters, RelationRow> =
@@ -241,63 +403,68 @@ function RelationList({
     columns,
     tableStateOptions,
     hiddenFilterColumns: [plan.descriptorId],
+    // H2: never `includeCatalogActions: false` here — that would empty the
+    // row `…` menu too. This only drops the checkbox column and bulk bar.
+    selectable: false,
   });
-  const [creating, setCreating] = useState(false);
+  useSectionCount(list.totalCount);
   const { singular } = entitySummary[target];
+  const { pluralLabel } = entities[target];
+
+  if (list.workbench.error) {
+    return (
+      <ErrorDisplay
+        title={title.toLocaleLowerCase()}
+        error={list.workbench.error}
+        onRetry={() => void list.workbench.refreshControls.onRefresh()}
+      />
+    );
+  }
+
+  if (list.workbench.isLoading) {
+    return (
+      <RelationLoadingSkeleton
+        table={list.workbench.table}
+        rows={plan.limit != null ? Math.min(plan.limit, 3) : 3}
+      />
+    );
+  }
+
+  if (list.totalCount === 0) {
+    return (
+      <RelationEmptyState
+        plan={plan}
+        recordId={recordId}
+        pluralLabel={pluralLabel}
+        singular={singular}
+        emptyLabel={emptyLabel}
+      />
+    );
+  }
+
+  const truncated =
+    plan.limit != null &&
+    list.totalCount !== undefined &&
+    list.totalCount > plan.limit;
 
   return (
     <div className="space-y-2">
-      <Row gap="sm" justify="end" wrap>
-        {plan.seed !== null ? (
-          <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
-            <Plus />
-            {createLabel ?? `New ${singular.toLocaleLowerCase()}`}
-          </Button>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={
-            <Link
-              to={entities[target].routes.list}
-              search={{ [plan.urlKey]: recordId }}
-              aria-label={`Open all ${title.toLocaleLowerCase()}`}
-            />
-          }
-        >
-          Open all
-          <ArrowUpRight />
-        </Button>
-      </Row>
       <ListWorkbench
         model={list.workbench}
         mode="embedded"
+        toolbarMode="none"
         ariaLabel={title}
-        emptyState={
-          emptyLabel ? (
-            <p className="text-xs text-muted-foreground">{emptyLabel}</p>
-          ) : (
-            <NoneValue />
-          )
-        }
       />
-      {plan.seed !== null ? (
-        <EntityEditDialog
-          open={creating}
-          onOpenChange={setCreating}
-          // SAFETY: `seed.intent` is the target's own first create intent
-          // and `seed.field` one of that intent's declared fields; the
-          // generic dialog resolves both at runtime through the registry.
-          request={
-            {
-              entity: target as EditableEntity,
-              operation: "create",
-              intent: plan.seed.intent,
-              seed: { [plan.seed.field]: recordId },
-            } as never
-          }
-        />
+      {truncated ? (
+        <p className="text-xs text-muted-foreground">
+          Showing {plan.limit} of {list.totalCount} ·{" "}
+          <Link
+            to={entities[target].routes.list}
+            search={{ [plan.urlKey]: recordId }}
+          >
+            Open all
+          </Link>
+        </p>
       ) : null}
     </div>
   );

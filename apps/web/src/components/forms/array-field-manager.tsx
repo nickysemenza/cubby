@@ -84,7 +84,12 @@ export const ArrayFieldManager = <
   return (
     <div className={cn("space-y-2", className)}>
       <div className="flex items-center justify-between">
-        <h3 className={cn("my-0 eyebrow font-medium", titleClassName)}>
+        <h3
+          className={cn(
+            "my-0 text-xs font-medium text-muted-foreground",
+            titleClassName,
+          )}
+        >
           {title}
         </h3>
         <Button

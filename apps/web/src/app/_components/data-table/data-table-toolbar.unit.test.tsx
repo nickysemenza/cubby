@@ -9,9 +9,11 @@ import { useCubbyTable } from "./table-features";
 function ToolbarHarness({
   entity,
   variant = "page",
+  portalWorkbenchUtilities = false,
 }: {
   entity?: "product";
   variant?: "page" | "embedded";
+  portalWorkbenchUtilities?: boolean;
 }) {
   const table = useCubbyTable({
     data: [],
@@ -24,6 +26,7 @@ function ToolbarHarness({
       entity={entity}
       isTransitioning
       variant={variant}
+      portalWorkbenchUtilities={portalWorkbenchUtilities}
       actions={<button type="button">Create</button>}
       bulkActionBar={
         <div data-bulk-action-bar>
@@ -72,14 +75,33 @@ describe("DataTableToolbar query tier", () => {
       wrapper: browser.routerWrapper,
     });
 
-    expect(screen.getByRole("button", { name: "Display" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Columns" })).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Saved views" }),
     ).not.toBeInTheDocument();
     expect(
       screen
-        .getByRole("button", { name: "Display" })
+        .getByRole("button", { name: "Columns" })
         .closest("[data-toolbar-variant]"),
     ).toHaveAttribute("data-toolbar-variant", "embedded");
+  });
+
+  it("renders no second toolbar row once the page workbench band is found", async () => {
+    const { container } = render(
+      <>
+        <div data-workbench-utilities />
+        <ToolbarHarness portalWorkbenchUtilities />
+      </>,
+    );
+    // `usePageWorkbenchTarget` locates the band in an effect, so the portal
+    // lands one tick after mount.
+    await screen.findByRole("button", { name: "Create" });
+
+    expect(container.querySelector("[data-toolbar-variant]")).toBeNull();
+    expect(
+      container
+        .querySelector("[data-workbench-utilities]")
+        ?.querySelector("[data-query-rest]"),
+    ).toBeInTheDocument();
   });
 });

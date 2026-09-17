@@ -81,6 +81,7 @@ type CallerOwnedProps<TItem extends RowData> = Pick<
   | "showCellSelectionStats"
   | "showColumnMenu"
   | "verticalAlign"
+  | "toolbarMode"
 >;
 
 export interface ListWorkbenchProps<

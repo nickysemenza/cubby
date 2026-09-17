@@ -220,7 +220,8 @@ not a technical costume.
   comparison values, with tabular numerals.
 - **Label** (500, `10/14px`): compact metadata. Sentence case is the default;
   uppercase tracking is reserved for true codes or established data-register
-  labels, never generic hierarchy.
+  labels, never generic hierarchy. The detail breadcrumb (domain / plural /
+  code) is a data-register label and keeps the eyebrow.
 
 ### Named Rules
 
@@ -319,6 +320,7 @@ than route-local visual systems.
   carries real meaning.
 - **Internal Padding:** generally 12–16px; repeated records prefer rows over
   nested cards.
+- Fact-grid labels are sentence-case secondary text, not eyebrows.
 
 ### Inputs / Fields
 
@@ -327,6 +329,7 @@ than route-local visual systems.
 - **Focus:** cobalt border plus crisp 2px ring.
 - **Error / Disabled:** destructive border/ring for invalid state; disabled
   state visibly blocks interaction without becoming unreadable.
+- Labels are sentence case at every width.
 
 ### Navigation
 
@@ -339,6 +342,9 @@ a Resume destination across launches; resumable domain workflows such as an
 inventory recount own their separate progress contracts.
 
 ### Tables and inspectors
+
+A list's workbench is one 44px band: identity, declared views, search, one
+chip per declared filter, More, Clear, Actions, create.
 
 RTable owns dense record work: virtualization, pinned/resizable/reorderable
 columns, saved layouts, selection, clipboard, grouping, editing, and aggregate

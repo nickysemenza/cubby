@@ -61,6 +61,8 @@ describe("USDAFoodList", () => {
       "href",
       "/usda/12345",
     );
-    expect(screen.getByText("Type")).toBeVisible();
+    // The declared `Type` filter now also renders as a band chip, so the
+    // column is found by role rather than by text.
+    expect(screen.getByRole("columnheader", { name: /Type/ })).toBeVisible();
   });
 });

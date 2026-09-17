@@ -1,6 +1,8 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
 
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { humanize } from "~/entities/filters";
 
 import {
@@ -8,13 +10,21 @@ import {
   type FilterBarField,
   filterStateToBarFilters,
 } from "./filter-bar-core";
-import { FilterBar } from "./FilterBar";
+import { FilterBar, MobileFilterTier } from "./FilterBar";
 import type { CubbyTable as Table } from "./table-features";
 import { useFilterBarDraft } from "./useFilterBarDraft";
 
 function isColumnLabel(value: unknown): value is string {
   return typeof value === "string";
 }
+
+/**
+ * The column carrying the record's own name — `useStandardColumns` always
+ * mounts it under this literal id (see `createNameColumn(..., "name", ...)`),
+ * regardless of the entity's `titleField`. The band renders it as a search
+ * input rather than a declared-filter chip.
+ */
+const SEARCH_FIELD_KEY = "name";
 
 /**
  * The table-backed manifest filter bar: fields come from the mounted columns'
@@ -38,11 +48,21 @@ function getLedgerFields<TData extends RowData>(
 
 export function LedgerFilters<TData extends RowData>({
   table,
+  entity,
   optionHints,
+  variant = "desktop",
 }: {
   table: Table<TData>;
+  /** Drives the search placeholder ("Search products"); omitted tables get no plural. */
+  entity?: Entity;
   /** Server facet counts by mounted column id then option value. */
   optionHints?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /**
+   * `mobile` renders the phone band's tier (search + `Filter` sheet with a
+   * count badge, active-chip strip) instead of the desktop chip row — same
+   * fields, same draft state, different presentation.
+   */
+  variant?: "desktop" | "mobile";
 }) {
   // TanStack v9 materializes leaf columns after the first table render. The
   // table/options references stay stable across that boundary, so they cannot
@@ -75,6 +95,28 @@ export function LedgerFilters<TData extends RowData>({
     commit,
   });
 
+  const pluralLower =
+    entity && isBrowserRoutedEntity(entity)
+      ? entities[entity].pluralLabel.toLowerCase()
+      : undefined;
+  const searchPlaceholder = pluralLower ? `Search ${pluralLower}` : undefined;
+
+  // Sort lives inside the phone `Filter` sheet regardless of whether this
+  // table declares any filterable fields — a sortable-only table must not
+  // lose its only phone sort affordance just because it has no filters.
+  if (variant === "mobile") {
+    return (
+      <MobileFilterTier
+        table={table}
+        filters={draftFilters}
+        fields={fields}
+        onChange={handleChange}
+        searchKey={SEARCH_FIELD_KEY}
+        searchPlaceholder={searchPlaceholder}
+      />
+    );
+  }
+
   if (fields.length === 0) return null;
 
   return (
@@ -83,6 +125,8 @@ export function LedgerFilters<TData extends RowData>({
       fields={fields}
       onChange={handleChange}
       className="min-w-0"
+      searchKey={SEARCH_FIELD_KEY}
+      searchPlaceholder={searchPlaceholder}
     />
   );
 }
