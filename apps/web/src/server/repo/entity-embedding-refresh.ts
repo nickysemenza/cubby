@@ -1,6 +1,9 @@
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { SearchableEntity } from "@cubby/schemas/search";
+import type {
+  SearchableEntity,
+  SearchableEntityRef,
+} from "@cubby/schemas/search";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -121,6 +124,50 @@ export async function getStoredEmbeddingHash(
     columns: { embeddingHash: true },
   });
   return existing?.embeddingHash ?? null;
+}
+
+/**
+ * Batch form of {@link getStoredEmbeddingHash}: one query for a whole refresh
+ * wave instead of one per ref, keyed `${entityType}:${entityId}` so a caller
+ * can compare against a locally computed hash without a second lookup. Refs
+ * with no live row under the config's (provider, model, dimensions) are
+ * simply absent from the map, same as `null` from the single-ref form.
+ */
+export async function getStoredEmbeddingHashes(
+  db: Database | DrizzleTransaction,
+  refs: ReadonlyArray<SearchableEntityRef>,
+  config: SemanticEmbeddingConfig,
+): Promise<Map<string, string>> {
+  if (refs.length === 0) return new Map();
+  // A JS array interpolates as a row constructor, not a Postgres list — build
+  // the VALUES rows with `sql.join`, mirroring `getSearchDocumentEmbeddingTexts`.
+  const values = sql.join(
+    refs.map((ref) => sql`(${ref.entityType}::text, ${ref.entityId}::uuid)`),
+    sql`, `,
+  );
+  const result = await unwrapDb(db).execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+    embeddingHash: string;
+  }>(sql`
+    WITH refs("entityType", "entityId") AS (VALUES ${values})
+    SELECT ee."entityType", ee."entityId"::text AS "entityId",
+      ee."embeddingHash"
+    FROM refs
+    JOIN "EntityEmbedding" ee
+      ON ee."entityType" = refs."entityType"
+      AND ee."entityId" = refs."entityId"
+      AND ee.provider = ${config.provider}::text
+      AND ee.model = ${config.model}::text
+      AND ee.dimensions = ${config.dimensions}::integer
+      AND ee."deletedAt" IS NULL
+  `);
+  return new Map(
+    result.rows.map((row) => [
+      `${row.entityType}:${row.entityId}`,
+      row.embeddingHash,
+    ]),
+  );
 }
 
 export interface EntityEmbeddingUpsert extends SearchableEntityText {

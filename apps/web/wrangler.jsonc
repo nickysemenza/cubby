@@ -159,8 +159,11 @@
         "max_batch_size": 10,
         "max_batch_timeout": 0,
         // Serial delivery is not what makes this safe — freshness gates are.
-        // Held low because each concurrent invocation holds its own Hyperdrive
-        // client, and Neon's connection ceiling is the real limit here.
+        // Bounded by the Vectorize per-index mutation limit and the AI
+        // Gateway rate limit, not Hyperdrive connections: each batch's
+        // entity-embedding.refresh messages now share one provider embed call
+        // and one Vectorize upsert, so concurrency multiplies those two calls
+        // rather than per-message connections.
         "max_concurrency": 10,
         "max_retries": 3
       },
