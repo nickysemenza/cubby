@@ -8,6 +8,7 @@ import {
   allEntities,
   auditableEntities,
   browserRoutedEntities,
+  coverEntities,
   countableEntities,
   entityDescriptor,
   entityInspectorMetadata,
@@ -15,6 +16,8 @@ import {
   entityManifest,
   entityReferences,
   imageEntities,
+  galleryEntities,
+  logoEntities,
   searchableEntities,
   shortcodeEntities,
 } from "./entity-manifest";
@@ -179,6 +182,33 @@ describe("entity manifest", () => {
     expect(sorted(imageEntities.map((e) => IMAGE_KEY[e] ?? e))).toEqual(
       sorted(entityImage.options),
     );
+  });
+
+  it("derives every direct-image storage roster from the manifest", () => {
+    expect(galleryEntities).toEqual([
+      "product",
+      "recipe",
+      "location",
+      "meal",
+      "project",
+      "task",
+      "purchase",
+      "planting",
+      "gardenEntry",
+    ]);
+    expect(coverEntities).toEqual(["cookbook"]);
+    expect(logoEntities).toEqual(["vendor"]);
+
+    const directImageEntities = new Set<Entity>([
+      ...galleryEntities,
+      ...coverEntities,
+      ...logoEntities,
+    ]);
+    for (const entity of allEntities) {
+      expect(directImageEntities.has(entity)).toBe(
+        entityManifest[entity].imageStorage !== false,
+      );
+    }
   });
 
   it("derives the searchable contract", () => {

@@ -506,6 +506,32 @@ export async function seedRecordListDisplayPrerequisite(
   return { vendor, product, location, child, purchase, expense, orderId };
 }
 
+export async function seedPurchaseHeicAttachment(page: Page, name: string) {
+  const vendor = await seedVendorDisplayPrerequisite(page, `${name} vendor`);
+  const purchase = await createFixture(page, "purchase", {
+    vendorId: vendor.id,
+    orderId: `${name} order`,
+    date: "2026-09-16",
+  });
+  const db = getDb(getFixtureDb());
+  const owner = await db.query.purchase.findFirst({
+    where: eq(schema.purchase.shortcode, purchase.id),
+    columns: { id: true },
+  });
+  if (!owner) throw new Error("Seeded purchase did not resolve");
+  const attached = await createUploadedImageRecord(getFixtureDb(), {
+    key: `e2e-${name}-${crypto.randomUUID()}.heic`,
+    filename: `${name}.heic`,
+    contentType: "image/heic",
+    size: 100,
+  });
+  await db.insert(schema.purchaseImage).values({
+    purchaseId: owner.id,
+    imageId: attached.id,
+  });
+  return { purchase, filename: attached.filename };
+}
+
 export async function seedRelationshipReviewPrerequisite(
   page: Page,
   name: string,

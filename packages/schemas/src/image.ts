@@ -14,8 +14,10 @@ import { purchaseDocumentKind } from "./purchase";
 import {
   coverEntities,
   galleryEntities,
+  logoEntities,
   type CoverEntity,
   type GalleryEntity,
+  type LogoEntity,
   type ShortcodeEntity,
 } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
@@ -431,15 +433,14 @@ export type SetPerceptualHashesOutput = z.infer<
   typeof setPerceptualHashesOutputSchema
 >;
 
-// Every gallery entity plus every cover entity, derived from the manifest for
-// the same reason `attachableImageEntity` is. `vendor` is hand-added: its logo
-// is a legacy single `logoImageId` column that predates `capabilities.images`
-// and isn't modeled there.
+// Every direct-image entity, derived from the manifest for the same reason
+// `attachableImageEntity` is. Gallery, cover, and logo storage modes are all
+// authoritative association targets.
 export const imageAssociationEntity = z.enum(
-  nonEmptyTuple<GalleryEntity | CoverEntity | "vendor">([
+  nonEmptyTuple<GalleryEntity | CoverEntity | LogoEntity>([
     ...galleryEntities,
     ...coverEntities,
-    "vendor",
+    ...logoEntities,
   ]),
 );
 export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);

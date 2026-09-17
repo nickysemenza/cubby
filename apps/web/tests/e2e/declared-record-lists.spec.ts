@@ -1,4 +1,7 @@
-import { seedRecordListDisplayPrerequisite } from "./e2e-fixtures";
+import {
+  seedPurchaseHeicAttachment,
+  seedRecordListDisplayPrerequisite,
+} from "./e2e-fixtures";
 import { waitForAppHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -73,4 +76,18 @@ test("declared record lists retain identities, relationships and amounts on desk
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(1281);
+});
+
+test("purchase detail renders an attached HEIC instead of the empty image state", async ({
+  page,
+}) => {
+  const fixture = await seedPurchaseHeicAttachment(
+    page,
+    `Purchase HEIC ${Date.now()}`,
+  );
+  await page.goto(`/purchases/${fixture.purchase.id}`);
+  await expect(page.getByText("No images", { exact: true })).toHaveCount(0);
+  await expect(
+    page.locator("#images").getByRole("img", { name: fixture.filename }),
+  ).toHaveCount(1);
 });

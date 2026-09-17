@@ -5,22 +5,32 @@ import { describe, expect, it } from "vitest";
 
 import {
   gardenEntryImage,
+  image,
   locationImage,
   productImage,
+  projectImage,
+  purchaseImage,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import {
+  entityKernelContextSchema,
+  executeEntity,
+} from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense/crud";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { createVendor } from "~/server/repo/vendor";
 import { createWish, updateWish, wishList } from "~/server/repo/wish";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { setCookbookProduct, upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import {
   resolveEntityDisplayImages,
+  resolveEntityAttachments,
   withDisplayImages,
+  withUniversalEntityMedia,
 } from "./entity-display-image";
 import {
   createIngredientFixture,
@@ -185,6 +195,11 @@ describe("entity display image resolver", () => {
       expect(rows[0]?.displayImages).toEqual([
         { id: logo.shortcode, url: getR2PublicUrl(logo.key) },
       ]);
+      expect(
+        (
+          await resolveEntityAttachments(ctx.db, "vendor", [created.entityId])
+        ).get(created.entityId),
+      ).toMatchObject([{ id: logo.shortcode, role: "logo", position: 0 }]);
     });
   });
 
@@ -212,6 +227,11 @@ describe("entity display image resolver", () => {
       expect(rows[0]?.displayImages).toEqual([
         { id: cover.shortcode, url: getR2PublicUrl(cover.key) },
       ]);
+      expect(
+        (await resolveEntityAttachments(ctx.db, "cookbook", [cb.entityId])).get(
+          cb.entityId,
+        ),
+      ).toMatchObject([{ id: cover.shortcode, role: "cover", position: 0 }]);
     });
 
     it("falls back to the linked product's photo when it has no cover", async () => {
@@ -304,6 +324,186 @@ describe("entity display image resolver", () => {
       expect(rows[0]?.displayImages).toEqual([
         { id: olderImg.shortcode, url: getR2PublicUrl(olderImg.key) },
         { id: newerImg.shortcode, url: getR2PublicUrl(newerImg.key) },
+      ]);
+      const [detail] = await withUniversalEntityMedia(
+        ctx.db,
+        "ingredient",
+        [{ id: ingredient.id }],
+        true,
+      );
+      expect(detail?.attachments).toEqual([]);
+    });
+  });
+
+  describe("direct attachments", () => {
+    it("preserves file/status metadata and deterministic order while excluding tombstones", async () => {
+      const owner = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Attachment policy product" }),
+        ctx.actor,
+      );
+      const associationTime = new Date("2026-09-16T12:00:00.000Z");
+      const records = await Promise.all([
+        insertWithShortcode(ctx.db, "image", {
+          id: "00000000-0000-4000-8000-000000000001",
+          key: `images/${crypto.randomUUID()}.heic`,
+          filename: "pending.heic",
+          contentType: "image/heic",
+          size: 101,
+          status: "PENDING",
+        }),
+        insertWithShortcode(ctx.db, "image", {
+          id: "00000000-0000-4000-8000-000000000002",
+          key: `images/${crypto.randomUUID()}.bin`,
+          filename: "legacy.bin",
+          contentType: "application/octet-stream",
+          size: 102,
+          status: "UPLOADED",
+          renderStatus: "failed",
+          storageStatus: "missing",
+        }),
+        insertWithShortcode(ctx.db, "image", {
+          id: "00000000-0000-4000-8000-000000000003",
+          key: `images/${crypto.randomUUID()}.pdf`,
+          filename: "receipt.pdf",
+          contentType: "application/pdf",
+          size: 103,
+          status: "UPLOADED",
+          renderStatus: "verified",
+          storageStatus: "metadata_mismatch",
+        }),
+        insertWithShortcode(ctx.db, "image", {
+          id: "00000000-0000-4000-8000-000000000004",
+          key: `images/${crypto.randomUUID()}.jpg`,
+          filename: "verified.jpg",
+          contentType: "image/jpeg",
+          size: 104,
+          status: "UPLOADED",
+          width: 640,
+          height: 480,
+          detectedContentType: "image/jpeg",
+          sha256: "a".repeat(64),
+          renderStatus: "unverified",
+          storageStatus: "available",
+          verifiedAt: associationTime,
+        }),
+      ]);
+      const deletedImage = await makeImage();
+      const deletedAssociationImage = await makeImage();
+      await getDb(ctx.db)
+        .update(image)
+        .set({ deletedAt: associationTime })
+        .where(eq(image.id, deletedImage.id));
+      await getDb(ctx.db)
+        .insert(productImage)
+        .values([
+          ...records.map((record, index) => ({
+            productId: owner.entityId,
+            imageId: record.id,
+            sortOrder: index === 0 ? 0 : index < 3 ? 1 : 2,
+            createdAt: associationTime,
+          })),
+          {
+            productId: owner.entityId,
+            imageId: deletedImage.id,
+            sortOrder: 3,
+          },
+          {
+            productId: owner.entityId,
+            imageId: deletedAssociationImage.id,
+            sortOrder: 4,
+            deletedAt: associationTime,
+          },
+        ]);
+
+      const attachments = (
+        await resolveEntityAttachments(ctx.db, "product", [owner.entityId])
+      ).get(owner.entityId);
+      expect(
+        attachments?.map(({ id, position }) => ({ id, position })),
+      ).toEqual(
+        records.map((record, position) => ({ id: record.shortcode, position })),
+      );
+      expect(attachments).toMatchObject([
+        {
+          contentType: "image/heic",
+          status: "PENDING",
+          width: null,
+          renderStatus: null,
+          storageStatus: null,
+        },
+        {
+          contentType: "application/octet-stream",
+          renderStatus: "failed",
+          storageStatus: "missing",
+        },
+        {
+          contentType: "application/pdf",
+          renderStatus: "verified",
+          storageStatus: "metadata_mismatch",
+        },
+        {
+          contentType: "image/jpeg",
+          width: 640,
+          height: 480,
+          detectedContentType: "image/jpeg",
+          sha256: "a".repeat(64),
+          storageStatus: "available",
+        },
+      ]);
+    });
+
+    it("kernel get hydrates purchase and project from their real repository shapes", async () => {
+      const vendor = await insertWithShortcode(ctx.db, "vendor", {
+        name: `Attachment vendor ${crypto.randomUUID()}`,
+      });
+      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-09-16",
+      });
+      const project = await insertWithShortcode(ctx.db, "project", {
+        name: `Attachment project ${crypto.randomUUID()}`,
+      });
+      const purchasePhoto = await makeImage({
+        filename: "purchase.heic",
+        contentType: "image/heic",
+      });
+      const projectPhoto = await makeImage();
+      await getDb(ctx.db).insert(purchaseImage).values({
+        purchaseId: purchase.id,
+        imageId: purchasePhoto.id,
+      });
+      await getDb(ctx.db).insert(projectImage).values({
+        projectId: project.id,
+        imageId: projectPhoto.id,
+      });
+      const context = entityKernelContextSchema.parse(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      );
+
+      const purchaseRead = await executeEntity(context, {
+        action: "get",
+        entity: "purchase",
+        id: purchase.shortcode,
+        missing: "error",
+      });
+      const projectRead = await executeEntity(context, {
+        action: "get",
+        entity: "project",
+        id: project.shortcode,
+        missing: "error",
+      });
+      if (purchaseRead.action !== "get" || projectRead.action !== "get")
+        throw new Error("expected get results");
+      if (!purchaseRead.item || !projectRead.item)
+        throw new Error("expected live items");
+      expect(purchaseRead.item.attachments).toMatchObject([
+        { id: purchasePhoto.shortcode, contentType: "image/heic" },
+      ]);
+      expect(projectRead.item.attachments).toMatchObject([
+        { id: projectPhoto.shortcode },
       ]);
     });
   });

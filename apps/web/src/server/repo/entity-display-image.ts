@@ -1,19 +1,34 @@
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { type Entity, entityRefKey, entitySchema } from "@cubby/schemas/entity";
 import {
+  entityManifest,
   galleryEntities,
+  isGalleryEntity,
+  type CoverEntity,
   type GalleryEntity,
+  type LogoEntity,
 } from "@cubby/schemas/entity-manifest";
 import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { imageShortcode, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { imageOut } from "@cubby/schemas/image";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
-import { and, eq, getTableColumns, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  getTableColumns,
+  inArray,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { cookbook, image } from "~/server/db/schema";
-import { imageJoinBindings, unwrapDb } from "~/server/repo/database-helpers";
+import { cookbook, image, vendor } from "~/server/db/schema";
+import {
+  imageJoinBindings,
+  notDeleted,
+  unwrapDb,
+} from "~/server/repo/database-helpers";
 import { mapImages } from "~/server/repo/database-helpers/transform";
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
@@ -480,39 +495,119 @@ async function resolveEntityDisplayImageLists(
 const publicEntityRowSchema = z.looseObject({ id: z.string() });
 type PublicEntityRow = z.output<typeof publicEntityRowSchema>;
 
-const directAttachments = (row: PublicEntityRow): EntityAttachmentRead[] => {
-  const images = z.array(imageOut).safeParse(row.images);
-  if (images.success)
-    return images.data.map((image, position) => ({
-      ...image,
-      role: "attachment" as const,
-      position,
-    }));
-  const logo = imageOut.safeParse(row.logo);
-  return logo.success ? [{ ...logo.data, role: "logo", position: 0 }] : [];
+type SingleImageEntity = CoverEntity | LogoEntity;
+type SingleImageBinding = {
+  table: typeof cookbook | typeof vendor;
+  imageIdColumn: typeof cookbook.coverImageId | typeof vendor.logoImageId;
+  role: "cover" | "logo";
 };
 
-const cookbookAttachments = async (
+/** Exhaustive registry for direct images stored on the owning row. */
+const singleImageBindings = {
+  cookbook: {
+    table: cookbook,
+    imageIdColumn: cookbook.coverImageId,
+    role: "cover",
+  },
+  vendor: {
+    table: vendor,
+    imageIdColumn: vendor.logoImageId,
+    role: "logo",
+  },
+} as const satisfies Record<SingleImageEntity, SingleImageBinding>;
+
+const isSingleImageEntity = (entity: Entity): entity is SingleImageEntity => {
+  const storage = entityManifest[entity].imageStorage;
+  return storage === "cover" || storage === "logo";
+};
+
+const galleryAttachments = async (
   db: Database | DrizzleTransaction,
-  entityId: string,
-): Promise<EntityAttachmentRead[]> => {
+  entityType: GalleryEntity,
+  entityIds: readonly string[],
+): Promise<Map<string, EntityAttachmentRead[]>> => {
+  if (entityIds.length === 0) return new Map();
+  const binding = imageJoinBindings[entityType];
+  const joinTable = binding.table;
   const rows = await unwrapDb(db)
-    .select(getTableColumns(image))
-    .from(cookbook)
-    .innerJoin(image, eq(image.id, cookbook.coverImageId))
+    .select({
+      entityId: binding.parentIdColumn,
+      ...getTableColumns(image),
+    })
+    .from(joinTable)
+    .innerJoin(image, eq(image.id, joinTable.imageId))
     .where(
       and(
-        sql`${cookbook.id} = ${entityId}::uuid`,
-        sql`${cookbook.deletedAt} IS NULL`,
-        sql`${image.deletedAt} IS NULL`,
+        inArray(binding.parentIdColumn, [...entityIds]),
+        notDeleted(joinTable),
+        notDeleted(image),
       ),
     )
-    .limit(1);
-  return mapImages(rows).map((item) => ({
-    ...item,
-    role: "cover" as const,
-    position: 0,
-  }));
+    .orderBy(
+      asc(binding.parentIdColumn),
+      asc(joinTable.sortOrder),
+      asc(joinTable.createdAt),
+      asc(image.id),
+    );
+  const attachments = new Map<string, EntityAttachmentRead[]>();
+  mapImages(rows).forEach((item, index) => {
+    const row = rows[index];
+    if (!row) return;
+    const entityId = String(row.entityId);
+    const list = attachments.get(entityId) ?? [];
+    list.push({ ...item, role: "attachment", position: list.length });
+    attachments.set(entityId, list);
+  });
+  return attachments;
+};
+
+const singleImageAttachments = async (
+  db: Database | DrizzleTransaction,
+  entityType: SingleImageEntity,
+  entityIds: readonly string[],
+): Promise<Map<string, EntityAttachmentRead[]>> => {
+  if (entityIds.length === 0) return new Map();
+  const binding: SingleImageBinding = singleImageBindings[entityType];
+  const rows = await unwrapDb(db)
+    .select({ entityId: binding.table.id, ...getTableColumns(image) })
+    .from(binding.table)
+    .innerJoin(image, eq(image.id, binding.imageIdColumn))
+    .where(
+      and(
+        sql`${binding.table.id} IN (${sql.join(
+          entityIds.map((entityId) => sql`${entityId}::uuid`),
+          sql`, `,
+        )})`,
+        notDeleted(binding.table),
+        notDeleted(image),
+      ),
+    );
+  const attachments = new Map<string, EntityAttachmentRead[]>();
+  mapImages(rows).forEach((item, index) => {
+    const row = rows[index];
+    if (!row) return;
+    attachments.set(String(row.entityId), [
+      { ...item, role: binding.role, position: 0 },
+    ]);
+  });
+  return attachments;
+};
+
+/** Resolve directly owned files from the storage declared by the manifest. */
+export const resolveEntityAttachments = async (
+  db: Database | DrizzleTransaction,
+  entityType: Entity,
+  entityIds: readonly string[],
+): Promise<Map<string, EntityAttachmentRead[]>> => {
+  const storage = entityManifest[entityType].imageStorage;
+  if (storage === false) return new Map();
+  if (isGalleryEntity(entityType))
+    return galleryAttachments(db, entityType, entityIds);
+  if (isSingleImageEntity(entityType))
+    return singleImageAttachments(db, entityType, entityIds);
+  throw new Error(
+    `No direct-attachment binding for ${entityType} (${storage})`,
+  );
 };
 
 /** Universal public read projection. One shortcode lookup and one image query per batch. */
@@ -541,11 +636,16 @@ export async function withUniversalEntityMedia<
     const entityId = resolved.get(row.id);
     return entityId === undefined ? [] : [{ entityType, entityId }];
   });
-  const lists = await resolveEntityDisplayImageLists(db, refs);
-  const cookbookDirect =
-    detail && entityType === "cookbook" && refs[0]
-      ? await cookbookAttachments(db, refs[0].entityId)
-      : [];
+  const [lists, attachments] = await Promise.all([
+    resolveEntityDisplayImageLists(db, refs),
+    detail
+      ? resolveEntityAttachments(
+          db,
+          entityType,
+          refs.map((ref) => ref.entityId),
+        )
+      : Promise.resolve(new Map<string, EntityAttachmentRead[]>()),
+  ]);
   return publicRows.map((row) => {
     const entityId = resolved.get(row.id);
     const displayImages = entityId
@@ -555,8 +655,7 @@ export async function withUniversalEntityMedia<
       ? {
           ...row,
           displayImages,
-          attachments:
-            entityType === "cookbook" ? cookbookDirect : directAttachments(row),
+          attachments: entityId ? (attachments.get(entityId) ?? []) : [],
         }
       : { ...row, displayImages };
   });
