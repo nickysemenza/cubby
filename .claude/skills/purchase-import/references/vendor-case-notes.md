@@ -675,3 +675,43 @@ source.
   attach the hand row to that Purchase with `link_expenses_to_purchase`, copy
   the placeholder's provenance onto `Purchase.notes`, and delete the placeholder.
   A statement charge is tax-inclusive, so no tax row is owed.
+
+## shop.app (Shop Pay order-tracking aggregator)
+
+- It is an aggregator, not a vendor: every underlying merchant is its own
+  Vendor, the same way a SIDIO sibling storefront is (see above). Never create
+  a "Shop" or "shop.app" Vendor.
+- A row is real checkout evidence only when its order page has an expandable
+  **Receipt** panel with Subtotal/Shipping/Tax/Total and a payment method. That
+  panel means the merchant's own Shopify store processed the order (small
+  independent Shopify sellers, in-store Shop Pay taps) and its numbers are
+  trustworthy. A row with no Receipt panel — Amazon, eBay, Home Depot, and any
+  other non-Shopify retailer — is shop.app merely parsing a shipping/tracking
+  notification for its own UI; the price and quantity shown can be wildly
+  wrong (a real case: a $108 Harrods candle rendered as `x10 $12,000.00`).
+  **Never book from a receipt-less row.** Cross-check its order id against
+  existing Purchases first (Amazon/eBay/Home Depot usually already have their
+  own import pipeline and the row is a duplicate you'd otherwise re-book), and
+  if it is genuinely new, enrich from the retailer's own order-history page
+  instead — Home Depot's Purchase History, the eBay order page, etc.
+- Per-line prices already reflect any order discount: the receipt also prints
+  an informational `Order discount` amount, but it is not subtracted again —
+  `Subtotal + Shipping + Tax` (using the shown per-line prices) equals `Total`.
+  Do not re-derive a discount Expense from that line.
+- Deposits/rentals (seen on a keg-rental order) can render as `$0.00` per line
+  while the receipt's `Subtotal` still includes their real value — the
+  difference between the sum of visible line prices and `Subtotal` is the
+  hidden deposit total. Cross-check against a later partial refund: if the
+  order's current net total (shown struck-through against the original on the
+  order-history list) drops by exactly that amount, the deposits were returned
+  in full, and it is safe to book the original charge plus a matching refund.
+- The order-history list infinite-scrolls, but a single scroll-to-bottom only
+  fires one page fetch (`POST /web/api/order-history`, cursor-paginated,
+  10/page) — further scrolls at the same position do not retrigger it. Scroll
+  up a few ticks and back down in several small increments to force the
+  intersection observer to re-fire; repeat per page. A fresh navigation resets
+  to page one and forgets everything already scrolled.
+- Clicking an order row's "Receipt" toggle is unreliable via ref click when
+  the panel was just rendered; take a screenshot and click its coordinates
+  (or `find` again after a wait) rather than trusting one click to have
+  registered.

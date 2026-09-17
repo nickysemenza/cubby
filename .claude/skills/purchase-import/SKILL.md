@@ -104,7 +104,14 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
 1. Inspect the source's coverage before making absence-based claims. Record date
    range, record count, vendor, source type, whether prices are unit or extended,
    and whether it is vendor paperwork or settlement evidence.
-2. Resolve the Vendor, then start the completeness audit with
+2. **When a Vendor is new** (created because an aggregator or statement surfaced
+   one order from it), do not stop at that one order. Find that vendor's own
+   customer-account order-history page and check it for every other order —
+   an aggregator only shows what it happened to observe (an email it parsed,
+   a card charge it tracked), never a guarantee of completeness for that
+   vendor. Treat the one triggering order as a sample, not the whole picture,
+   until the vendor's own history has been checked.
+3. Resolve the Vendor, then start the completeness audit with
    `entity {action:"list", entity:"purchase", filters:{dataStatus:"needs_data",
    vendorId, dateFrom, dateTo}}`. Narrow with `dataGap` to the checks this
    source can actually close — `needs_data` is dominated by `primary_document`,
@@ -113,16 +120,16 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
    `entity list financialTransaction` to the same vendor/evidence window. For
    "does a Product for this line already exist?", call `resolve_products` with
    every line name at once — it never creates.
-3. Run `match_expenses` before proposing new Expense rows. It ranks candidates;
+4. Run `match_expenses` before proposing new Expense rows. It ranks candidates;
    it never verifies or writes. Read candidate descriptions, vendor, order ID,
    date, and amount rather than accepting a score.
-4. Present a decision table separating confirmed writes, automatic
+5. Present a decision table separating confirmed writes, automatic
    high-confidence Product promotions, ambiguous Product candidates, ambiguous
    matches, conflicts, and unsupported rows. An explicit ingest request
    approves confirmed writes and automatic promotions across technical batch
    boundaries. Obtain a separate decision for every other category; never
    silently omit an eligible Product candidate.
-5. Execute writes through the entity kernel: `entity {action:"create"|"update",
+6. Execute writes through the entity kernel: `entity {action:"create"|"update",
    entity:"purchase"|"expense"|"product"|"financialTransaction", …}` for one
    row, or `entity_batch {items:[…]}` for up to 50 create/update commands in
    one call. A batch is best-effort and sequential: inspect each ordered result,
@@ -130,11 +137,22 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
    Serialize dependent Purchase/Expense mutations (create the Purchase, then
    batch its Expenses) and re-read their rows after each structural or
    destructive write.
-6. Re-read touched Purchases and reconcile evidence. Never alter Expenses merely
+7. Re-read touched Purchases and reconcile evidence. Never alter Expenses merely
    to make a reconciliation label look clean.
-7. Report source-row coverage (matched, created, updated, skipped, conflicted,
+8. **Non-negotiable:** run the `product-enrichment` skill on every Product
+   created or promoted in step 6, in the same pass — not as an optional
+   follow-up, and not deferred unless the user explicitly says to skip it.
+   Hand it the exact `PRD-` worklist from this import. A source visited during
+   import (a vendor order page, a manufacturer confirmation email) very often
+   already shows the exact product photo; capture and attach it there rather
+   than re-researching from scratch. An import is not finished until every
+   created Product has been run through enrichment and its outcome — enriched,
+   or a specific skip/failure reason per that skill's report table — is known.
+9. Report source-row coverage (matched, created, updated, skipped, conflicted,
    unresolved), stage/denominator progress, and counts for touched Purchases,
-   Expenses, Financial Transactions, documents, Products, and receiving actions.
+   Expenses, Financial Transactions, documents, Products, and receiving actions,
+   plus the enrichment outcome for each Product from step 8, and confirmation
+   that step 2's vendor-history check ran (and what, if anything, it found).
 
 ## Purchase and Expense rules
 
@@ -340,6 +358,10 @@ as notes/evidence; do not infer a Financial Account from them.
   an evidenced correction is reported.
 - Every eligible Product candidate was promoted, explicitly skipped,
   conflicted, or left pending with a direct user question.
+- Every promoted Product ran through `product-enrichment` in this same pass —
+  no created Product is left with the import's report showing enrichment as
+  "later" or "separate." A cover image and identifiers are either attached, or
+  the skill's own skip/failure reason is recorded.
 - Product creation, document filing, and inventory receiving were reported as
   distinct actions. Report coverage separately for the Purchase, acknowledgment,
   final invoice/receipt, credit memo, charge, and refund — for the kinds the
