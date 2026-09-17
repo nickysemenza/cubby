@@ -69,10 +69,14 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const [draft, setDraft] = useState(query);
   const relatedHeadingId = useId();
   const initialQuery = useRef(query);
+  const didAttachInput = useRef(false);
   const inputRef = useCallback((node: HTMLInputElement | null) => {
-    // Focus a fresh search surface for immediate typing, but preserve the
-    // keyboard state when returning to an existing query or clearing it.
-    if (node && initialQuery.current.trim().length === 0) node.focus();
+    if (!node || didAttachInput.current) return;
+    didAttachInput.current = true;
+    // Focus only the first attachment of a fresh search surface. The router
+    // can reattach this node when returning from detail without remounting the
+    // component, and that return must not reopen the keyboard.
+    if (initialQuery.current.trim().length === 0) node.focus();
   }, []);
   const [debouncedDraft] = useDebouncedValue(draft, { wait: 150 });
   const [relatedDraft] = useDebouncedValue(draft, { wait: 450 });
