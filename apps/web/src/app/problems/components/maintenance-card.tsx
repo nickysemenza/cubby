@@ -279,7 +279,7 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
       {
         label: "Repair index",
         description:
-          "Compare the search index with every live record: retire documents whose record is gone, rebuild missing or stale ones, and refresh their embeddings in the background.",
+          "Compare the search index with every live record: retire documents whose record is gone, rebuild missing or stale ones, and refresh their embeddings in the background. The repair continues if you leave this page.",
         action: <RepairIndexAction />,
       },
     ],

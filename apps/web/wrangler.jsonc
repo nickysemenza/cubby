@@ -4,7 +4,7 @@
   // Bumped to 2026-06-16 for the cloudflare:workers `tracing.enterSpan` custom-spans
   // API (shipped 2026-06-16) — see src/server/tracing.ts prod backend.
   "compatibility_date": "2026-06-16",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   // Runaway-request guardrail above the 30s default. The original 120s stopgap
   // was for the Problems WASM parse-sweeps, which have since moved off the hot
   // path into Settings → Maintenance manual actions (the per-detector lazy split
@@ -128,6 +128,15 @@
     {
       "binding": "HYPERDRIVE_CACHED",
       "id": "427dd7a2876c4dccbe056d37fa7374ff"
+    }
+  ],
+  // Durable, page-oriented search-index repair. The request that starts the
+  // instance may disconnect; progress is replayed from retained Workflow events.
+  "workflows": [
+    {
+      "binding": "SEARCH_INDEX_REPAIR",
+      "name": "cubby-search-index-repair",
+      "class_name": "SearchIndexRepairWorkflow"
     }
   ],
   // Background tasks offloaded off the request path. A message is the whole

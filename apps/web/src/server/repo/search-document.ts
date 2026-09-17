@@ -405,8 +405,30 @@ export async function getSearchDocumentOrphanPage(
   const page = await getSearchDocumentPage(db, options);
   if (page.refs.length === 0)
     return { ...page, scannedCount: 0, orphanedCount: 0 };
+  const refs = await getOrphanedSearchDocumentRefs(db, page.refs);
+  return {
+    ...page,
+    refs,
+    scannedCount: page.refs.length,
+    orphanedCount: refs.length,
+  };
+}
+
+/**
+ * Recheck selected document refs against the authoritative source projection.
+ *
+ * Repair persists a page's candidates before applying them in a later
+ * Workflow step. Keeping this recheck in the repository means the caller can
+ * perform it inside the same transaction as the artifact retirement, rather
+ * than treating an earlier keyset scan as a delete authorization.
+ */
+export async function getOrphanedSearchDocumentRefs(
+  db: Database | DrizzleTransaction,
+  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+): Promise<Array<{ entityType: SearchableEntity; entityId: string }>> {
+  if (refs.length === 0) return [];
   const idsByType = new Map<SearchableEntity, string[]>();
-  for (const ref of page.refs)
+  for (const ref of refs)
     idsByType.set(ref.entityType, [
       ...(idsByType.get(ref.entityType) ?? []),
       ref.entityId,
@@ -415,7 +437,7 @@ export async function getSearchDocumentOrphanPage(
     getSearchDocumentSources(
       db,
       [...idsByType.keys()],
-      page.refs.map((ref) => ref.entityId),
+      refs.map((ref) => ref.entityId),
     ),
     getEmbeddingTextsForRefs(db, idsByType),
   ]);
@@ -425,16 +447,10 @@ export async function getSearchDocumentOrphanPage(
   const textRefs = new Set(
     texts.map((text) => entityRefKey(text.entityType, text.entityId)),
   );
-  const refs = page.refs.filter((ref) => {
+  return refs.filter((ref) => {
     const key = entityRefKey(ref.entityType, ref.entityId);
     return !sourceRefs.has(key) || !textRefs.has(key);
   });
-  return {
-    ...page,
-    refs,
-    scannedCount: page.refs.length,
-    orphanedCount: refs.length,
-  };
 }
 
 export async function refreshSearchDocument(
