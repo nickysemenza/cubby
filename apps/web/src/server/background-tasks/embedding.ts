@@ -1,21 +1,18 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   isEmbeddableEntity,
-  type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { z } from "zod";
 
+import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
-  getStoredEmbeddingHash,
   getStoredEmbeddingHashes,
   type SearchableEntityText,
-  upsertEntityEmbeddingIfCurrent,
+  upsertEntityEmbeddingsIfCurrent,
 } from "~/server/repo/entity-embedding-refresh";
 import {
-  getSearchDocumentEmbeddingText,
   getSearchDocumentEmbeddingTexts,
-  refreshSearchDocument,
   refreshSearchDocuments,
 } from "~/server/repo/search-document";
 import {
@@ -51,7 +48,7 @@ export const productionEmbeddingRefreshPort: EmbeddingRefreshPort = {
   vectorStore: productionVectorStore,
 };
 
-export type EmbeddingRefreshOutcome =
+type EmbeddingRefreshOutcome =
   /** A vector for the current projection was stored. */
   | "written"
   /** The stored vector already matches the current projection. */
@@ -67,157 +64,26 @@ export type EmbeddingRefreshOutcome =
 
 /**
  * Bounds the obsolete-projection repair loop below. One extra attempt beyond
- * the first covers the ordinary race (this refresh's own vector upsert
- * clobbering a concurrent writer's fresher one, see below); it is not meant
- * to converge an entity under continuous rewrite.
+ * the first covers the ordinary race (this batch's own vector upsert
+ * clobbering a concurrent writer's fresher one, see `rehashForRepair`); it is
+ * not meant to converge an entity under continuous rewrite.
  */
 const MAX_EMBED_ATTEMPTS = 3;
 
-/**
- * Bring one entity's vector up to date with its current search document.
- *
- * Idempotent by construction: the projection is refreshed first, the stored
- * hash is compared before the provider is paid, and the write is conditional
- * on the projection still being current. Duplicate or out-of-order deliveries
- * therefore cost at most one cheap read.
- */
-export async function refreshEntityEmbedding(
-  db: Database,
-  ref: { entityType: SearchableEntity; entityId: string },
-  port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
-): Promise<EmbeddingRefreshOutcome> {
-  const refreshed = await refreshSearchDocument(
-    db,
-    ref.entityType,
-    ref.entityId,
-  );
-  if (refreshed.status !== "upserted") return "missing";
-
-  // The lexical SearchDocument projection above runs for every searchable
-  // type, financial entities included (see `search-document.ts`
-  // `getSearchDocumentSources`); only `isEmbeddableEntity` types get a
-  // vector, so this check comes after the projection refresh, not before it.
-  if (!isEmbeddableEntity(ref.entityType)) return "notEmbeddable";
-
-  const config = port.config();
-  let text = await getSearchDocumentEmbeddingText(
-    db,
-    ref.entityType,
-    ref.entityId,
-  );
-  if (!text) return "missing";
-
-  const embeddingHash = await embeddingTextHash({
-    entityType: text.entityType,
-    provider: config.provider,
-    model: config.model,
-    dimensions: config.dimensions,
-    text: normalizeSearchText(text.embeddingText),
-  });
-  const stored = await getStoredEmbeddingHash(db, {
-    entityType: text.entityType,
-    entityId: text.entityId,
-    config,
-  });
-  if (stored === embeddingHash) return "fresh";
-  if (!port.configured()) return "unconfigured";
-
-  // Only the first attempt reuses the hash/text pair the gate above already
-  // checked; every retry below re-derives both from the CURRENT projection —
-  // no freshness short-circuit — because the point of retrying is to land a
-  // vector for whatever text is live now, not to discover it already matches
-  // and skip repairing the vector store (see the "obsolete" branch comment).
-  let currentHash = embeddingHash;
-  for (let attempt = 0; attempt < MAX_EMBED_ATTEMPTS; attempt += 1) {
-    const [embedding] = await port.embed([text.embeddingText], {
-      operation: "entityEmbeddingRefresh",
-      db,
-      feature: "entity-embedding",
-      entity: { entityType: text.entityType, entityId: text.entityId },
-    });
-    if (!embedding) return "obsolete";
-
-    // The vector store is written BEFORE the Postgres bookkeeping row: a
-    // crash between the two calls leaves the entity "missing" (no
-    // EntityEmbedding row at all), which a later refresh repairs, rather than
-    // "ready" with a hash row pointing at a vector that was never stored.
-    await port.vectorStore.upsert([
-      {
-        entityType: text.entityType,
-        entityId: text.entityId,
-        values: embedding,
-      },
-    ]);
-    const outcome = await upsertEntityEmbeddingIfCurrent(db, {
-      ...text,
-      embeddingHash: currentHash,
-      config,
-    });
-    if (outcome === "written") return "written";
-
-    // "obsolete": the projection changed between embedding and persistence,
-    // so the row above was not written for the text we just embedded. Our
-    // vector-store upsert already landed, though, and may have clobbered a
-    // concurrent writer's fresher vector with our now-stale one. Re-reading
-    // the CURRENT text, re-embedding it, and looping repairs that clobber
-    // ourselves (bounded by `MAX_EMBED_ATTEMPTS`) instead of leaving the
-    // vector store permanently behind Postgres until some unrelated write
-    // happens to touch this entity again.
-    const current = await getSearchDocumentEmbeddingText(
-      db,
-      ref.entityType,
-      ref.entityId,
-    );
-    if (!current) {
-      await port.vectorStore.deleteByIds([
-        { entityType: ref.entityType, entityId: ref.entityId },
-      ]);
-      return "obsolete";
-    }
-    text = current;
-    currentHash = await embeddingTextHash({
-      entityType: text.entityType,
-      provider: config.provider,
-      model: config.model,
-      dimensions: config.dimensions,
-      text: normalizeSearchText(text.embeddingText),
-    });
-  }
-  return "obsolete";
-}
-
 export type EmbeddingRefreshResult =
   | { outcome: EmbeddingRefreshOutcome }
-  | { error: unknown };
-
-/** The map key a batch refresh uses to report one result per input ref. */
-export const embeddingRefreshKey = (ref: SearchableEntityRef): string =>
-  `${ref.entityType}:${ref.entityId}`;
+  | { error: unknown; throttled: boolean };
 
 /**
- * Extracts a message from either a real `Error` or a message-bearing value
- * thrown across a non-JS boundary (a Workers binding rejection, an RPC
- * error), defaulting to "" for anything else — a boundary parse rather than
- * an `instanceof`/`typeof` narrowing chain over the caught value.
+ * Vectorize's mutation rate limit (`VECTOR_UPSERT_ERROR 40041`), a generic
+ * HTTP 429, and the AI Gateway's own throttle (`429 … 2018 Wholesale Rate
+ * limited`) all surface as a throttle that should be retried in place, not
+ * treated the same as a malformed request or a genuine outage. One
+ * classifier covers both the embed call and the vector upsert.
  */
-const errorMessageSchema = z
-  .union([
-    z.instanceof(Error).transform((error) => error.message),
-    z.object({ message: z.string() }).transform(({ message }) => message),
-  ])
-  .catch("");
-
-/**
- * Vectorize's mutation rate limit (`VECTOR_UPSERT_ERROR 40041`) and a generic
- * HTTP 429 both surface as a throttle that should be retried in place, not
- * treated the same as a malformed request or a genuine outage.
- */
-function isRetryableVectorUpsertError(error: unknown): boolean {
-  const message = errorMessageSchema.parse(error);
-  return (
-    message.includes("40041") ||
-    message.includes("Too Many Requests") ||
-    message.includes("429")
+export function isThrottleError<TError>(error: TError): boolean {
+  return /\b(40041|429)\b|Too Many Requests|Rate limited/.test(
+    getErrorMessage(error),
   );
 }
 
@@ -239,25 +105,33 @@ async function upsertVectorsWithRetry(
   port: EmbeddingRefreshPort,
   vectors: ReadonlyArray<SearchableEntityRef & { values: number[] }>,
 ): Promise<{ ok: true } | { ok: false; error: unknown }> {
-  for (
-    let attempt = 0;
-    attempt <= VECTOR_UPSERT_RETRY_DELAYS_MS.length;
-    attempt += 1
-  ) {
+  for (let attempt = 0; ; attempt += 1) {
     try {
       await port.vectorStore.upsert(vectors);
       return { ok: true };
     } catch (error) {
       const delayMs = VECTOR_UPSERT_RETRY_DELAYS_MS[attempt];
-      if (!isRetryableVectorUpsertError(error) || delayMs === undefined) {
+      if (delayMs === undefined || !isThrottleError(error)) {
         return { ok: false, error };
       }
       await sleep(delayMs + Math.random() * 250);
     }
   }
-  // Unreachable: the loop above always returns before the delay list is
-  // exhausted (the last iteration's `delayMs` is `undefined`).
-  return { ok: false, error: new Error("Vectorize upsert retries exhausted") };
+}
+
+/** Set the same `{ error, throttled }` result for every ref in a failed batch. */
+function setErrorForRefs<TError>(
+  results: Map<string, EmbeddingRefreshResult>,
+  refs: ReadonlyArray<SearchableEntityRef>,
+  error: TError,
+): void {
+  const throttled = isThrottleError(error);
+  for (const ref of refs) {
+    results.set(entityRefKey(ref.entityType, ref.entityId), {
+      error,
+      throttled,
+    });
+  }
 }
 
 interface PendingEmbedding {
@@ -277,7 +151,7 @@ const dedupeRefs = (
   const uniqueRefs: SearchableEntityRef[] = [];
   const seenRefs = new Set<string>();
   for (const ref of refs) {
-    const key = embeddingRefreshKey(ref);
+    const key = entityRefKey(ref.entityType, ref.entityId);
     if (seenRefs.has(key)) continue;
     seenRefs.add(key);
     uniqueRefs.push(ref);
@@ -286,11 +160,10 @@ const dedupeRefs = (
 };
 
 /**
- * Projection first, for every ref, exactly like the single-entity path.
- * Lexical projection runs for every searchable type, financial entities
- * included; only `isEmbeddableEntity` types get a vector, so that check
- * comes after the projection refresh, not before it (see
- * `refreshEntityEmbedding` above).
+ * Projection first, for every ref. Lexical projection runs for every
+ * searchable type, financial entities included (see `search-document.ts`
+ * `getSearchDocumentSources`); only `isEmbeddableEntity` types get a vector,
+ * so that check comes after the projection refresh, not before it.
  */
 async function projectEmbeddableRefs(
   db: Database,
@@ -300,13 +173,13 @@ async function projectEmbeddableRefs(
   const projections = await refreshSearchDocuments(db, refs);
   const projectionByKey = new Map(
     projections.map((projection) => [
-      embeddingRefreshKey(projection),
+      entityRefKey(projection.entityType, projection.entityId),
       projection,
     ]),
   );
   const embeddable: SearchableEntityRef[] = [];
   for (const ref of refs) {
-    const key = embeddingRefreshKey(ref);
+    const key = entityRefKey(ref.entityType, ref.entityId);
     const projection = projectionByKey.get(key);
     if (!projection || projection.status !== "upserted") {
       results.set(key, { outcome: "missing" });
@@ -331,11 +204,11 @@ async function hashPendingTexts(
 ): Promise<PendingEmbedding[]> {
   const texts = await getSearchDocumentEmbeddingTexts(db, refs);
   const textByKey = new Map(
-    texts.map((text) => [embeddingRefreshKey(text), text]),
+    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
   );
   const hashed: PendingEmbedding[] = [];
   for (const ref of refs) {
-    const key = embeddingRefreshKey(ref);
+    const key = entityRefKey(ref.entityType, ref.entityId);
     const text = textByKey.get(key);
     if (!text) {
       results.set(key, { outcome: "missing" });
@@ -368,7 +241,7 @@ async function filterFreshEmbeddings(
   );
   const pending: PendingEmbedding[] = [];
   for (const entry of hashed) {
-    const key = embeddingRefreshKey(entry.ref);
+    const key = entityRefKey(entry.ref.entityType, entry.ref.entityId);
     if (storedHashes.get(key) === entry.embeddingHash) {
       results.set(key, { outcome: "fresh" });
       continue;
@@ -398,42 +271,39 @@ async function embedPending(
       { operation: "entityEmbeddingRefresh", db, feature: "entity-embedding" },
     );
   } catch (error) {
-    for (const entry of pending) {
-      results.set(embeddingRefreshKey(entry.ref), { error });
-    }
+    setErrorForRefs(
+      results,
+      pending.map((entry) => entry.ref),
+      error,
+    );
     return [];
   }
 
-  const embedded: EmbeddedPending[] = [];
-  for (const [index, entry] of pending.entries()) {
+  return pending.map((entry, index) => {
     const embedding = embeddings[index];
     if (!embedding) {
-      // Guards the type only: `embedTexts` already validated the response
-      // count against `pending.length`, so this is unreachable in practice.
-      results.set(embeddingRefreshKey(entry.ref), {
-        error: new Error(`Missing embedding at index ${index}`),
-      });
-      continue;
+      // embedTexts validates the response count against pending.length.
+      throw new Error(`Missing embedding at index ${index}`);
     }
-    embedded.push({ entry, embedding });
-  }
-  return embedded;
+    return { entry, embedding };
+  });
 }
 
 /**
  * One Vectorize upsert for the whole batch, retried in place on a throttle
- * (see `upsertVectorsWithRetry`), then the per-ref Postgres bookkeeping
- * write, conditional on the projection still being current exactly like the
- * single-entity path. An "obsolete" write delegates to
- * `refreshEntityEmbedding` rather than duplicating its repair loop.
+ * (see `upsertVectorsWithRetry`), then one Postgres bookkeeping statement for
+ * the whole batch, conditional on each projection still being current
+ * exactly like the single-ref path used to be. Refs whose write lost that
+ * race are returned for the repair pass in `refreshEntityEmbeddings`, not
+ * retried here.
  */
-async function writeEmbeddings(
+async function writeEmbeddingsBatch(
   db: Database,
   port: EmbeddingRefreshPort,
   config: SemanticEmbeddingConfig,
   embedded: ReadonlyArray<EmbeddedPending>,
   results: Map<string, EmbeddingRefreshResult>,
-): Promise<void> {
+): Promise<EmbeddedPending[]> {
   const vectors = embedded.map(({ entry, embedding }) => ({
     entityType: entry.ref.entityType,
     entityId: entry.ref.entityId,
@@ -441,43 +311,111 @@ async function writeEmbeddings(
   }));
   const upserted = await upsertVectorsWithRetry(port, vectors);
   if (!upserted.ok) {
-    for (const { entry } of embedded) {
-      results.set(embeddingRefreshKey(entry.ref), { error: upserted.error });
-    }
-    return;
+    setErrorForRefs(
+      results,
+      embedded.map(({ entry }) => entry.ref),
+      upserted.error,
+    );
+    return [];
   }
 
-  for (const { entry } of embedded) {
-    const key = embeddingRefreshKey(entry.ref);
-    try {
-      const outcome = await upsertEntityEmbeddingIfCurrent(db, {
-        ...entry.text,
+  let written: Set<string>;
+  try {
+    written = await upsertEntityEmbeddingsIfCurrent(
+      db,
+      embedded.map(({ entry }) => ({
+        entityType: entry.ref.entityType,
+        entityId: entry.ref.entityId,
+        embeddingText: entry.text.embeddingText,
         embeddingHash: entry.embeddingHash,
         config,
-      });
-      if (outcome === "written") {
-        results.set(key, { outcome: "written" });
-        continue;
-      }
-      const repaired = await refreshEntityEmbedding(db, entry.ref, port);
-      results.set(key, { outcome: repaired });
-    } catch (error) {
-      results.set(key, { error });
+      })),
+    );
+  } catch (error) {
+    setErrorForRefs(
+      results,
+      embedded.map(({ entry }) => entry.ref),
+      error,
+    );
+    return [];
+  }
+
+  const obsolete: EmbeddedPending[] = [];
+  for (const item of embedded) {
+    const key = entityRefKey(
+      item.entry.ref.entityType,
+      item.entry.ref.entityId,
+    );
+    if (written.has(key)) {
+      results.set(key, { outcome: "written" });
+    } else {
+      obsolete.push(item);
     }
   }
+  return obsolete;
 }
 
 /**
- * Batch form of {@link refreshEntityEmbedding}: one provider embed call and
- * one Vectorize upsert for a whole queue batch, instead of one pair of calls
- * per entity. Both the AI Gateway and Vectorize rate-limit per call, not per
- * vector, so a multi-consumer backfill issuing one call per entity trips
- * both (`VECTOR_UPSERT_ERROR 40041 Too Many Requests`, gateway `429`/2018).
+ * Repair pass for refs whose row write lost the race to a newer projection.
+ * No freshness gate here: our vector upsert above may have just clobbered a
+ * peer's fresher vector while Postgres already holds the peer's hash, so
+ * "hash matches" must not short-circuit the vector repair. Refs whose text
+ * is gone entirely have their vector deleted and are reported "obsolete"
+ * directly; refs whose text survived are re-hashed for another embed
+ * attempt.
+ */
+async function rehashForRepair(
+  db: Database,
+  port: EmbeddingRefreshPort,
+  obsolete: ReadonlyArray<EmbeddedPending>,
+  config: SemanticEmbeddingConfig,
+  results: Map<string, EmbeddingRefreshResult>,
+): Promise<PendingEmbedding[]> {
+  const refs = obsolete.map(({ entry }) => entry.ref);
+  const texts = await getSearchDocumentEmbeddingTexts(db, refs);
+  const textByKey = new Map(
+    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
+  );
+
+  const gone: SearchableEntityRef[] = [];
+  const rehashed: PendingEmbedding[] = [];
+  for (const { entry } of obsolete) {
+    const key = entityRefKey(entry.ref.entityType, entry.ref.entityId);
+    const text = textByKey.get(key);
+    if (!text) {
+      gone.push(entry.ref);
+      results.set(key, { outcome: "obsolete" });
+      continue;
+    }
+    const embeddingHash = await embeddingTextHash({
+      entityType: text.entityType,
+      provider: config.provider,
+      model: config.model,
+      dimensions: config.dimensions,
+      text: normalizeSearchText(text.embeddingText),
+    });
+    rehashed.push({ ref: entry.ref, text, embeddingHash });
+  }
+  if (gone.length > 0) await port.vectorStore.deleteByIds(gone);
+  return rehashed;
+}
+
+/**
+ * Bring a wave of entities' vectors up to date with their current search
+ * documents: one provider embed call and one Vectorize upsert per attempt,
+ * instead of one pair of calls per entity. Both the AI Gateway and Vectorize
+ * rate-limit per call, not per vector, so a multi-consumer backfill issuing
+ * one call per entity trips both (`VECTOR_UPSERT_ERROR 40041 Too Many
+ * Requests`, gateway `429`/2018).
  *
- * At batch size 1 this is equivalent to the single-entity path: same
- * projection refresh, same freshness gate, same pay-then-write ordering.
- * Every input ref, deduped by `embeddingRefreshKey`, gets exactly one entry
- * in the returned map.
+ * Idempotent by construction: the projection is refreshed first, the stored
+ * hash is compared before the provider is paid, and the row write is
+ * conditional on the projection still being current. A ref whose write loses
+ * that race is retried — re-read, re-hash, re-embed, re-write — up to
+ * `MAX_EMBED_ATTEMPTS` total attempts (see `rehashForRepair`).
+ *
+ * Every input ref, deduped by `entityRefKey`, gets exactly one entry in the
+ * returned map.
  */
 export async function refreshEntityEmbeddings(
   db: Database,
@@ -496,19 +434,42 @@ export async function refreshEntityEmbeddings(
   const hashed = await hashPendingTexts(db, embeddable, config, results);
   if (hashed.length === 0) return results;
 
-  const pending = await filterFreshEmbeddings(db, hashed, config, results);
+  let pending = await filterFreshEmbeddings(db, hashed, config, results);
   if (pending.length === 0) return results;
 
   if (!port.configured()) {
     for (const entry of pending) {
-      results.set(embeddingRefreshKey(entry.ref), { outcome: "unconfigured" });
+      results.set(entityRefKey(entry.ref.entityType, entry.ref.entityId), {
+        outcome: "unconfigured",
+      });
     }
     return results;
   }
 
-  const embedded = await embedPending(db, port, pending, results);
-  if (embedded.length === 0) return results;
+  for (let attempt = 1; attempt <= MAX_EMBED_ATTEMPTS; attempt += 1) {
+    const embedded = await embedPending(db, port, pending, results);
+    if (embedded.length === 0) return results;
 
-  await writeEmbeddings(db, port, config, embedded, results);
+    const obsolete = await writeEmbeddingsBatch(
+      db,
+      port,
+      config,
+      embedded,
+      results,
+    );
+    if (obsolete.length === 0) return results;
+
+    const rehashed = await rehashForRepair(db, port, obsolete, config, results);
+    if (rehashed.length === 0 || attempt === MAX_EMBED_ATTEMPTS) {
+      for (const entry of rehashed) {
+        results.set(entityRefKey(entry.ref.entityType, entry.ref.entityId), {
+          outcome: "obsolete",
+        });
+      }
+      return results;
+    }
+    pending = rehashed;
+  }
+
   return results;
 }

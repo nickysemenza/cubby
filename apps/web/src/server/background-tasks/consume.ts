@@ -1,4 +1,5 @@
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
+import { entityRefKey } from "@cubby/schemas/entity";
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 
@@ -10,6 +11,10 @@ import type {
   BackgroundQueueBatch,
   BackgroundQueueDeliveredMessage,
 } from "../background-queue-types";
+import {
+  type EmbeddingRefreshResult,
+  refreshEntityEmbeddings,
+} from "./embedding";
 import {
   type BackgroundTaskOutcome,
   type BackgroundTaskPorts,
@@ -29,6 +34,12 @@ export interface BackgroundQueueConsumerPorts {
   readonly tasks?: BackgroundTaskPorts;
   /** The task executor; tests substitute a faithful fake to exercise transport outcomes. */
   readonly handleTask?: typeof handleBackgroundTask;
+  /**
+   * The batched embedding refresh; tests substitute a faithful fake to
+   * exercise per-ref written/error/throttled outcomes without touching the
+   * provider or the vector store. Mirrors `handleTask` above.
+   */
+  readonly refreshEmbeddings?: typeof refreshEntityEmbeddings;
 }
 
 export type BackgroundQueueMessageOutcome =
@@ -110,11 +121,14 @@ async function runBackgroundTask(
  * back into its message's ack/retry — the batching is an implementation
  * detail of the call, not a merge of per-message transport isolation.
  *
- * `refreshEntityEmbeddings` throwing (the provider or the vector store is
- * down) fails the whole group identically: every message retries and the
- * exception is captured once, the same shape as a single handler throwing in
- * {@link runBackgroundTask}. A per-ref `{ error }` inside a successful batch
- * call (one bad ref does not have to fail its siblings) is captured once per
+ * Only the batched call itself is guarded by `try`/`catch`: it is the one
+ * failure mode shared by the whole group (the provider or the vector store is
+ * down), so every message retries and the exception is captured once — the
+ * same shape as a single handler throwing in {@link runBackgroundTask}. The
+ * per-message disposition loop below runs unguarded, after that `try` returns
+ * normally, so a message can never be acked and then retried by a later throw
+ * in the same invocation. A per-ref `{ error }` inside a successful batch call
+ * (one bad ref does not have to fail its siblings) is captured once per
  * distinct error object, since one provider/store failure is commonly shared
  * by many refs in the same batch.
  */
@@ -123,73 +137,102 @@ async function runEmbeddingRefreshGroup(
   messages: readonly BackgroundQueueDeliveredMessage[],
   indices: readonly number[],
   refs: readonly SearchableEntityRef[],
+  requestedAts: readonly string[],
   ports: BackgroundQueueConsumerPorts,
-  outcomes: BackgroundQueueMessageOutcome[],
+  outcomes: (BackgroundQueueMessageOutcome | undefined)[],
 ): Promise<void> {
   const kind = "entity-embedding.refresh";
   const t0 = performance.now();
-  const { refreshEntityEmbeddings, embeddingRefreshKey } =
-    await import("./embedding");
-  try {
-    const results = await withTrace(
-      TraceNames.job(kind),
-      () => refreshEntityEmbeddings(db, refs),
-      { "cubby.job.kind": kind, "cubby.job.batch_size": indices.length },
-    );
-    console.log(
-      `[background-tasks] handled kind=${kind} batch_size=${indices.length} duration_ms=${Math.round(performance.now() - t0)}`,
-    );
+  // Mirrors `runBackgroundTask`'s single-task `cubby.job.requested_at`, but
+  // for a group of tasks: the earliest `requestedAt` is the one that has been
+  // waiting longest, so it is the more useful lag signal for a batch.
+  const requestedAt = requestedAts.reduce((min, current) =>
+    current < min ? current : min,
+  );
 
-    const capturedErrors = new Set<unknown>();
-    for (const [position, index] of indices.entries()) {
-      const message = messages[index];
-      const ref = refs[position];
-      if (!message || !ref) continue;
-      const key = embeddingRefreshKey(ref);
-      const result = results.get(key);
-      if (!result) {
-        // Every input ref is contracted to get exactly one entry; a missing
-        // key means the batched call itself is broken, not a per-ref failure.
-        const error = new Error(
-          `[background-tasks] missing embedding refresh result for ${key}`,
+  await withTrace(
+    TraceNames.job(kind),
+    async () => {
+      let results: Map<string, EmbeddingRefreshResult>;
+      try {
+        results = await (ports.refreshEmbeddings ?? refreshEntityEmbeddings)(
+          db,
+          refs,
+          (ports.tasks ?? productionBackgroundTaskPorts).embedding,
         );
-        console.error(error);
-        ports.captureException(error);
-        message.retry();
-        outcomes[index] = "failed";
-        continue;
-      }
-      if ("error" in result) {
+      } catch (error) {
         console.error(
-          `[background-tasks] failed kind=${kind} entity=${key}`,
-          result.error,
+          `[background-tasks] failed kind=${kind} batch_size=${indices.length} duration_ms=${Math.round(performance.now() - t0)}`,
+          error,
         );
-        if (!capturedErrors.has(result.error)) {
-          capturedErrors.add(result.error);
-          ports.captureException(result.error);
+        ports.captureException(error);
+        for (const index of indices) {
+          messages[index]?.retry();
+          outcomes[index] = "failed";
         }
-        message.retry();
-        outcomes[index] = "failed";
-        continue;
+        return;
       }
-      const { outcome } = result;
-      if (outcome === "obsolete" || outcome === "unconfigured") {
-        console.warn(`[background-tasks] embedding ${outcome} ${key}`);
+
+      console.log(
+        `[background-tasks] handled kind=${kind} batch_size=${indices.length} duration_ms=${Math.round(performance.now() - t0)}`,
+      );
+
+      const capturedErrors = new Set<unknown>();
+      for (const [position, index] of indices.entries()) {
+        const message = messages[index];
+        const ref = refs[position];
+        if (!message || !ref) continue;
+        const key = entityRefKey(ref.entityType, ref.entityId);
+        const result = results.get(key);
+        if (!result) {
+          // Every input ref is contracted to get exactly one entry; a missing
+          // key means the batched call itself is broken, not a per-ref failure.
+          const error = new Error(
+            `[background-tasks] missing embedding refresh result for ${key}`,
+          );
+          console.error(error);
+          ports.captureException(error);
+          message.retry();
+          outcomes[index] = "failed";
+          continue;
+        }
+        if ("error" in result) {
+          console.error(
+            `[background-tasks] failed kind=${kind} entity=${key}`,
+            result.error,
+          );
+          if (!capturedErrors.has(result.error)) {
+            capturedErrors.add(result.error);
+            ports.captureException(result.error);
+          }
+          // An immediate redelivery after a 429 re-pays the embed call (the
+          // provider was already charged for it) and burns through
+          // `max_retries` in seconds; a delayed retry gives the rate limiter
+          // time to recover before the next attempt.
+          if (result.throttled) {
+            message.retry({
+              delaySeconds: 30 + Math.floor(Math.random() * 30),
+            });
+          } else {
+            message.retry();
+          }
+          outcomes[index] = "failed";
+          continue;
+        }
+        const { outcome } = result;
+        if (outcome === "obsolete" || outcome === "unconfigured") {
+          console.warn(`[background-tasks] embedding ${outcome} ${key}`);
+        }
+        message.ack();
+        outcomes[index] = outcome === "written" ? "succeeded" : "skipped";
       }
-      message.ack();
-      outcomes[index] = outcome === "written" ? "succeeded" : "skipped";
-    }
-  } catch (error) {
-    console.error(
-      `[background-tasks] failed kind=${kind} batch_size=${indices.length} duration_ms=${Math.round(performance.now() - t0)}`,
-      error,
-    );
-    ports.captureException(error);
-    for (const index of indices) {
-      messages[index]?.retry();
-      outcomes[index] = "failed";
-    }
-  }
+    },
+    {
+      "cubby.job.kind": kind,
+      "cubby.job.batch_size": indices.length,
+      "cubby.job.requested_at": requestedAt,
+    },
+  );
 }
 
 /**
@@ -208,11 +251,12 @@ export async function handleBackgroundQueueBatch(
   batch: BackgroundQueueBatch,
   ports: BackgroundQueueConsumerPorts,
 ): Promise<BackgroundQueueMessageOutcome[]> {
-  const outcomes: BackgroundQueueMessageOutcome[] = Array.from({
+  const outcomes: (BackgroundQueueMessageOutcome | undefined)[] = Array.from({
     length: batch.messages.length,
   });
   const embeddingIndices: number[] = [];
   const embeddingRefs: SearchableEntityRef[] = [];
+  const embeddingRequestedAts: string[] = [];
 
   for (const [index, message] of batch.messages.entries()) {
     const parsed = parseBackgroundQueueMessage(message.body);
@@ -230,6 +274,7 @@ export async function handleBackgroundQueueBatch(
         entityType: task.entityType,
         entityId: task.entityId,
       });
+      embeddingRequestedAts.push(task.requestedAt);
       continue;
     }
     outcomes[index] = await runBackgroundTask(db, message, task, ports);
@@ -241,6 +286,7 @@ export async function handleBackgroundQueueBatch(
       batch.messages,
       embeddingIndices,
       embeddingRefs,
+      embeddingRequestedAts,
       ports,
       outcomes,
     );
@@ -249,5 +295,18 @@ export async function handleBackgroundQueueBatch(
   if (ports.afterSuccess && outcomes.includes("succeeded")) {
     await ports.afterSuccess();
   }
-  return outcomes;
+
+  // Every branch above sets exactly one outcome per message index; a hole
+  // means some path was added that forgot to. Assert it here, once, instead
+  // of typing `outcomes` as `BackgroundQueueMessageOutcome[]` up front and
+  // lying to the type system about what `Array.from({ length })` actually
+  // produces.
+  return outcomes.map((outcome, index) => {
+    if (outcome === undefined) {
+      throw new Error(
+        `[background-tasks] no disposition recorded for message index ${index}`,
+      );
+    }
+    return outcome;
+  });
 }

@@ -1,12 +1,18 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import { expenseCreateInput } from "@cubby/schemas/project";
+import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { EmbeddingRefreshPort } from "~/server/background-tasks/embedding";
-import { refreshEntityEmbedding } from "~/server/background-tasks/embedding";
+import type {
+  EmbeddingRefreshPort,
+  EmbeddingRefreshResult,
+} from "~/server/background-tasks/embedding";
+import { refreshEntityEmbeddings } from "~/server/background-tasks/embedding";
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
-import { getStoredEmbeddingHash } from "~/server/repo/entity-embedding-refresh";
+import type { Database } from "~/server/db";
+import { getStoredEmbeddingHashes } from "~/server/repo/entity-embedding-refresh";
 import { createExpense } from "~/server/repo/expense";
 import {
   createProductFixture as createProduct,
@@ -85,6 +91,21 @@ const fakeEmbeddingPort = (
     );
   },
 });
+
+/**
+ * Single-ref adapter over the batch API: calls `refreshEntityEmbeddings`
+ * with a one-element batch and reads that ref's entry back by
+ * `entityRefKey`, the same way a real caller (e.g. `handle.ts`) reads its
+ * own refs out of the returned map.
+ */
+const refreshOne = (
+  db: Database,
+  ref: SearchableEntityRef,
+  port: EmbeddingRefreshPort,
+): Promise<EmbeddingRefreshResult | undefined> =>
+  refreshEntityEmbeddings(db, [ref], port).then((results) =>
+    results.get(entityRefKey(ref.entityType, ref.entityId)),
+  );
 
 describe("semantic search background tasks", () => {
   const ctx = withTestDb();
@@ -254,13 +275,13 @@ describe("semantic search background tasks", () => {
     const port = fakeEmbeddingPort(calls);
     const ref = { entityType: "product" as const, entityId: product.entityId };
 
-    await expect(refreshEntityEmbedding(ctx.db, ref, port)).resolves.toBe(
-      "written",
-    );
+    await expect(refreshOne(ctx.db, ref, port)).resolves.toEqual({
+      outcome: "written",
+    });
     // Duplicate or out-of-order delivery: the stored hash gates the provider.
-    await expect(refreshEntityEmbedding(ctx.db, ref, port)).resolves.toBe(
-      "fresh",
-    );
+    await expect(refreshOne(ctx.db, ref, port)).resolves.toEqual({
+      outcome: "fresh",
+    });
     expect(calls).toHaveLength(1);
     expect(
       await countUnembeddedSearchDocuments(
@@ -318,7 +339,7 @@ describe("semantic search background tasks", () => {
             "Embedding after concurrent change",
           );
           await refreshSearchDocument(ctx.db, "product", product.entityId);
-          await refreshEntityEmbedding(ctx.db, ref, writerBPort);
+          await refreshEntityEmbeddings(ctx.db, [ref], writerBPort);
           return texts.map(() => vectorFor(0.1));
         }
         // A's retry, now embedding the current (v2) text B already wrote.
@@ -332,9 +353,9 @@ describe("semantic search background tasks", () => {
     // the now-current text and lands both the vector and the row — repairing
     // A's own clobber of B's vector rather than leaving the store behind
     // Postgres.
-    await expect(
-      refreshEntityEmbedding(ctx.db, ref, writerAPort),
-    ).resolves.toBe("written");
+    await expect(refreshOne(ctx.db, ref, writerAPort)).resolves.toEqual({
+      outcome: "written",
+    });
 
     const currentText = await getSearchDocumentEmbeddingText(
       ctx.db,
@@ -374,19 +395,75 @@ describe("semantic search background tasks", () => {
         texts.map(() => Array(config.dimensions).fill(0.5)),
     };
 
-    // No try/catch in `refreshEntityEmbedding`: a vector-store failure must
-    // propagate so the queue consumer retries and reports once, rather than
-    // recording a "written" row for a vector that was never stored.
-    await expect(refreshEntityEmbedding(ctx.db, ref, port)).rejects.toThrow(
-      "vectorize outage",
-    );
+    // A vector-store failure is reported per ref rather than thrown out of
+    // `refreshEntityEmbeddings` — the queue consumer (`consume.ts`) reads
+    // `{ error, throttled }` off the returned map and retries from there,
+    // rather than recording a "written" row for a vector that was never
+    // stored.
+    const result = await refreshOne(ctx.db, ref, port);
+    expect(result).toEqual({
+      error: expect.objectContaining({ message: "vectorize outage" }),
+      throttled: false,
+    });
 
-    const stored = await getStoredEmbeddingHash(ctx.db, {
+    const stored = await getStoredEmbeddingHashes(ctx.db, [ref], config);
+    expect(
+      stored.get(entityRefKey(ref.entityType, ref.entityId)),
+    ).toBeUndefined();
+  });
+
+  // Regression: batching is the point of partitioning the queue by wave —
+  // one embed call and one Vectorize upsert per refresh, not one pair per
+  // ref, and a duplicate ref within the wave (queue redelivery, or two
+  // requests racing for the same entity) must not double that cost.
+  it("batches a whole refresh wave into one embed call and one vector upsert", async () => {
+    const products = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        createProduct(
+          ctx.db,
+          makeProductInput({ name: `Batch product ${index}` }),
+          ctx.actor,
+        ),
+      ),
+    );
+    const refs: SearchableEntityRef[] = products.map((product) => ({
       entityType: "product",
       entityId: product.entityId,
-      config,
-    });
-    expect(stored).toBeNull();
+    }));
+    const [duplicateRef] = refs;
+    expect(duplicateRef).toBeDefined();
+    const refsWithDuplicate = duplicateRef ? [...refs, duplicateRef] : refs;
+    expect(refsWithDuplicate).toHaveLength(11);
+
+    const calls: string[][] = [];
+    const upsertCalls: unknown[][] = [];
+    const vectorStore: VectorStorePort = {
+      configured: () => true,
+      upsert: async (items) => {
+        upsertCalls.push([...items]);
+      },
+      deleteByIds: async () => {},
+      query: async () => [],
+      queryById: async () => [],
+    };
+    const port = fakeEmbeddingPort(calls, vectorStore);
+
+    const results = await refreshEntityEmbeddings(
+      ctx.db,
+      refsWithDuplicate,
+      port,
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toHaveLength(10);
+    expect(upsertCalls).toHaveLength(1);
+    expect(upsertCalls[0]).toHaveLength(10);
+    expect(results.size).toBe(10);
+    for (const ref of refs) {
+      expect(results.get(entityRefKey(ref.entityType, ref.entityId))).toEqual({
+        outcome: "written",
+      });
+    }
   });
 
   it("pages the unembedded selection with a keyset cursor", async () => {

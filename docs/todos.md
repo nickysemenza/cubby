@@ -328,6 +328,9 @@ history is the archive. Permanent product constraints live in the
   (`server/services/search.service.ts`) must resolve the active
   `SemanticEmbeddingConfig` before embedding the query text, not embed with
   a stale/hardcoded dimension and silently miss every stored vector.
+  `refreshEntityEmbeddings` (`server/background-tasks/embedding.ts`) now
+  embeds a whole queue batch in one call, so this eval set can be run
+  against production-shaped 10-text batches instead of one query at a time.
 
 - **Dev Vectorize REST client, if semantic search in plain-Node dev is ever
   wanted.** The vite Node dev server has no `VECTORIZE` binding, so
@@ -337,11 +340,11 @@ history is the archive. Permanent product constraints live in the
   `VectorStorePort` implementation over Cloudflare's Vectorize REST API
   (account id + API token) instead of loosening the gate.
 
-- **Batch a queue batch's messages into one Vectorize upsert, if async
-  indexing lag ever matters.** Background embedding refresh currently
-  upserts per message; a 10-message queue batch could collect its vectors
-  and call `productionVectorStore.upsert` once. Not worth it until indexing
-  lag or Vectorize's per-call overhead is actually observed to matter.
+- **`AiUsage` rows for `entityEmbeddingRefresh` are now per batch, not per
+  entity.** Since `refreshEntityEmbeddings` embeds a whole queue batch in one
+  provider call, the recorded row carries `inputCount` for the batch but no
+  `entityId` — attributing gateway spend back to a single entity needs a
+  different aggregation if that's ever wanted.
 
 - **Cloudflare AI Search (managed RAG over R2 files) for a future
   document-Q&A feature.** Evaluated and rejected for entity similarity

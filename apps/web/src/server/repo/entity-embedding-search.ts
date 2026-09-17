@@ -1,13 +1,12 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { EmbeddingReadiness } from "@cubby/schemas/relatedness";
 import type {
   SearchableEntity,
   SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { entityEmbedding } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getStoredEmbeddingHashes } from "~/server/repo/entity-embedding-refresh";
 import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { embeddingTextHash } from "~/server/semantic/hash";
@@ -26,21 +25,14 @@ export async function getEntityEmbeddingReadiness(
   ref: SearchableEntityRef,
   config: SemanticEmbeddingConfig,
 ): Promise<Exclude<EmbeddingReadiness, "unavailable">> {
-  const [document, embedding] = await Promise.all([
+  const [document, storedHashes] = await Promise.all([
     getSearchDocumentEmbeddingText(db, ref.entityType, ref.entityId),
-    getDb(db).query.entityEmbedding.findFirst({
-      where: and(
-        eq(entityEmbedding.entityType, ref.entityType),
-        eq(entityEmbedding.entityId, ref.entityId),
-        eq(entityEmbedding.provider, config.provider),
-        eq(entityEmbedding.model, config.model),
-        eq(entityEmbedding.dimensions, config.dimensions),
-        notDeleted(entityEmbedding),
-      ),
-      columns: { embeddingHash: true },
-    }),
+    getStoredEmbeddingHashes(db, [ref], config),
   ]);
-  if (!document || !embedding) return "uncomputed";
+  const storedHash = storedHashes.get(
+    entityRefKey(ref.entityType, ref.entityId),
+  );
+  if (!document || !storedHash) return "uncomputed";
   const expectedHash = await embeddingTextHash({
     entityType: ref.entityType,
     provider: config.provider,
@@ -48,7 +40,7 @@ export async function getEntityEmbeddingReadiness(
     dimensions: config.dimensions,
     text: normalizeSearchText(document.embeddingText),
   });
-  return embedding.embeddingHash === expectedHash ? "ready" : "stale";
+  return storedHash === expectedHash ? "ready" : "stale";
 }
 
 /** Ranked nearest neighbours for an arbitrary query vector. */
