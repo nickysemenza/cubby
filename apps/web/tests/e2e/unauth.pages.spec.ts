@@ -16,6 +16,10 @@ test("footer metadata is server rendered and reused across client navigation", a
   const metadataRequests: string[] = [];
   const documentRequests: string[] = [];
   const pageErrors: string[] = [];
+  // Caught-and-logged failures never reach `pageerror`: router-ssr-query-core
+  // 1.169.1 swallowed a hydrate crash into `console.error` on every page load
+  // and no gate saw it. Console errors fail here too.
+  const consoleErrors: string[] = [];
   page.on("request", (request) => {
     if (
       request.url().includes("/_serverFn/") &&
@@ -26,6 +30,9 @@ test("footer metadata is server rendered and reused across client navigation", a
       documentRequests.push(request.url());
   });
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
 
   const response = await page.goto("/auth/sign-in");
   expect(response).not.toBeNull();
@@ -52,4 +59,5 @@ test("footer metadata is server rendered and reused across client navigation", a
   expect(documentRequests).toHaveLength(1);
   expect(metadataRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
 });
