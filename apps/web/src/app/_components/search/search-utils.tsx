@@ -52,6 +52,11 @@ export function getSearchResultRoute(item: SearchDestination) {
   };
 }
 
+/** String href for the same route as `getSearchResultRoute`, for `MobileCard`'s `detailsHref`. */
+export function getSearchResultHref(item: SearchDestination): string {
+  return `/${entities[getSearchResultEntity(item)].basePath}/${item.id}`;
+}
+
 /**
  * `typeHint` is whatever string the `SearchDocument` row was written with, NOT
  * a validated enum member — a row keeps its hint until it is reindexed, so

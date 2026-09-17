@@ -10,5 +10,9 @@ export function resolveE2EWorkers(
     }
     return workers;
   }
-  return !env.CI && platform === "darwin" ? 3 : 1;
+  // Two, not three: at three the iPhone WebKit project flaked across four
+  // unrelated specs whenever other sessions' gates loaded the host (2026-09-17),
+  // and every run at two was clean. Each worker owns a browser, a Worker
+  // harness, and a database, so they contend for the same finite CPU.
+  return !env.CI && platform === "darwin" ? 2 : 1;
 }

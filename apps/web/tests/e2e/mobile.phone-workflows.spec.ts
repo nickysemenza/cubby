@@ -30,13 +30,23 @@ test("search detail Back retains query and does not reopen the input", async ({
   const input = page.getByRole("searchbox", { name: "Search Cubby" });
   await input.fill(name);
   await expect(page).toHaveURL(/q=Phone/);
-  const results = page.getByRole("button", { name: new RegExp(name) });
+  const results = page.getByRole("link", { name: new RegExp(name) });
   await expect(results).toHaveCount(14);
   await results.last().scrollIntoViewIfNeeded();
   const scrollBefore = await page.evaluate(() => window.scrollY);
   expect(scrollBefore).toBeGreaterThan(0);
   await results.last().click();
   await expect(page).toHaveURL(/\/products\/PRD-/);
+  // Back must wait for the detail route to resolve. @tanstack/router-core snapshots
+  // the outgoing page's scroll at the NEXT `onBeforeLoad`, keyed by
+  // `resolvedLocation`; tapping Back while the pending skeleton is presented
+  // records the collapsed skeleton (scrollY 0) over the list offset and the
+  // restore below lands at 0. Known upstream limitation, deliberately not patched;
+  // Playwright `click()` sends mouse events, so the touchstart intent preload
+  // that avoids the skeleton on a real phone does not fire here.
+  await expect(
+    page.getByRole("heading", { name: new RegExp(name) }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(input).toHaveValue(name);
   await expect(input).not.toBeFocused();

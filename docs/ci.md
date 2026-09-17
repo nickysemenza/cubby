@@ -336,6 +336,12 @@ the lead). Re-run `pnpm test:all` ×3–5 on a host with nothing else running at
 all (not just "idle-ish") to confirm the sequencing fix's flake rate in
 isolation from these four.
 
+*Superseded 2026-09-17:* the local macOS E2E worker default moved from 3 to
+2. At three workers the iPhone WebKit project flaked across four unrelated
+specs whenever other sessions' gates loaded the host; every run at
+`CUBBY_E2E_WORKERS=2` was clean. `CUBBY_E2E_WORKERS=3|4` remain available for
+an idle-host comparison.
+
 A warm targeted PostgreSQL family passed 24 tests in 12.38s including service
 startup and cleanup. An earlier Docker sample took 18.07s, but was not a matched
 warm comparison, so it is not evidence of a runtime speedup. Two independent

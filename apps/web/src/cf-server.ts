@@ -509,6 +509,9 @@ export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
 export default Sentry.withSentry(
   (env: Env) => ({
     dsn: SENTRY_DSN,
+    // The e2e harness identity (see `tests/e2e/e2e-worker-runtime.ts`) must
+    // never ship envelopes to the real DSN.
+    enabled: env.E2E_AUTH_TEST_MODE !== "true",
     sendDefaultPii: false,
     release: `cubby@${__GIT_COMMIT__}`,
     // Covers queue/cron events without request URLs. Deployed previews retain
