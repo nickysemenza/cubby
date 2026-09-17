@@ -77,9 +77,9 @@ export const DEFAULT_EMBEDDING_MODEL =
 
 /**
  * Registered chat ids the crate catalog does not price. Every other chat row
- * must exist there and be `enabled` (`models.unit.test.ts` asserts it), so a
- * model added here without a catalog entry fails loudly instead of silently
- * recording null-cost usage.
+ * must exist there (`models.unit.test.ts` asserts it), so a model added here
+ * without a catalog entry fails loudly instead of silently recording
+ * null-cost usage.
  */
 const UNCATALOGED_CHAT_MODELS =
   [] as const satisfies readonly SupportedChatModel[];
@@ -147,12 +147,9 @@ export type SupportedAiModelRef = {
 const catalogRatesSchema = z.object({
   input: z.number().nonnegative(),
   output: z.number().nonnegative(),
-  cache_read: z.number().nonnegative(),
-  cache_write: z.number().nonnegative(),
 });
 const catalogEntrySchema = z.object({
   id: z.string().min(1),
-  enabled: z.boolean(),
   /** USD per million tokens, or absent for a model the crate cannot price. */
   rates: catalogRatesSchema.nullish(),
 });
@@ -262,11 +259,15 @@ export function estimateAiUsageCostUsd(
 
   const rates = getAiModelCatalog().get(model)?.rates;
   if (!rates) return null;
+  // The catalog carries no cache tiers, so cache reads and writes are priced
+  // as input; an Anthropic cache read really costs a tenth of that.
+  const allInput =
+    inputTokens +
+    finiteTokenCount(usage.cacheReadTokens) +
+    finiteTokenCount(usage.cacheWriteTokens);
   return (
-    (inputTokens / 1_000_000) * rates.input +
-    (outputTokens / 1_000_000) * rates.output +
-    (finiteTokenCount(usage.cacheReadTokens) / 1_000_000) * rates.cache_read +
-    (finiteTokenCount(usage.cacheWriteTokens) / 1_000_000) * rates.cache_write
+    (allInput / 1_000_000) * rates.input +
+    (outputTokens / 1_000_000) * rates.output
   );
 }
 

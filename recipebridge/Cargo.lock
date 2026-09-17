@@ -75,6 +75,7 @@ dependencies = [
  "ingredient",
  "jiff",
  "js-sys",
+ "llm_models_spider",
  "mime_guess",
  "petgraph",
  "recipe-types",
@@ -663,6 +664,11 @@ name = "litemap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
+
+[[package]]
+name = "llm_models_spider"
+version = "0.1.228"
+source = "git+https://github.com/spider-rs/llm_models?branch=main#40a144ce1fafcda70cdb2400beb937f02e8bed6c"
 
 [[package]]
 name = "lock_api"

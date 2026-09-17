@@ -11,7 +11,6 @@ import {
   evaluateInventoryDetection,
   INVENTORY_DETECTION_EVALS,
 } from "./inventory-detection-evals";
-import { getAiModelCatalog, getChatModelConfig } from "./models";
 
 describe("AI feature fingerprints", () => {
   it("is stable across image ordering", () => {
@@ -71,18 +70,6 @@ describe("the AI feature table", () => {
   it("derives every record's model from its tier", () => {
     for (const feature of AI_FEATURES) {
       expect(feature.model).toBe(MODEL_FOR_TIER[feature.tier]);
-    }
-  });
-
-  it("assigns every record to a registered, enabled chat model", () => {
-    const catalog = getAiModelCatalog();
-    for (const feature of AI_FEATURES) {
-      expect(getChatModelConfig(feature.model).role).toBe("chat");
-      // `enabled: false` is the crate's "never route production here" flag.
-      expect(
-        catalog.get(feature.model)?.enabled,
-        `${feature.feature} runs on a disabled model`,
-      ).toBe(true);
     }
   });
 

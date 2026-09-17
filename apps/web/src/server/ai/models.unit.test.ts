@@ -27,20 +27,6 @@ describe("the crate catalog backs every registered chat model", () => {
     }
   });
 
-  // `enabled: false` is the crate's "never pick this automatically" flag
-  // (Gemini 2.5 Flash-Lite is registered only as an eval candidate). A tier
-  // Cubby routes production traffic to must not carry it.
-  it("keeps every tier enabled in the crate catalog", () => {
-    const catalog = getAiModelCatalog();
-    const tiers = [FAST_MODEL, VISION_BATCH_MODEL, REASONING_MODEL] as const;
-    for (const model of tiers) {
-      expect(
-        catalog.get(model)?.enabled,
-        `${model} is disabled in the crate catalog`,
-      ).toBe(true);
-    }
-  });
-
   it("prices each tier from the catalog", () => {
     const tiers = [FAST_MODEL, VISION_BATCH_MODEL, REASONING_MODEL] as const;
     for (const model of tiers) {

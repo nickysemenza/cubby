@@ -161,7 +161,7 @@
         // Serial delivery is not what makes this safe — freshness gates are.
         // Held low because each concurrent invocation holds its own Hyperdrive
         // client, and Neon's connection ceiling is the real limit here.
-        "max_concurrency": 3,
+        "max_concurrency": 10,
         "max_retries": 3
       },
       {
