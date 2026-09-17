@@ -5,46 +5,47 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedServer = SettingsServer.production
     @State private var draftURL = ""
     #if os(macOS)
         @AppStorage(DockBadge.showInDockDefaultsKey) private var showProblemsInDock = true
     #endif
 
-    private var isCurrentHost: Bool {
-        URL(string: draftURL) == nil || draftURL == model.baseURL.absoluteString
-    }
-
     var body: some View {
         @Bindable var model = model
         Form {
             Section {
-                TextField("Base URL", text: $draftURL)
-                    .keyboardDismissBar()
-                    .font(.porcelainCode)
-                    .autocorrectionDisabled()
-                    #if os(iOS)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                    #endif
-                    .onSubmit(apply)
-                    .frame(minHeight: PorcelainTokens.touchTarget - 12)
-                Button(action: apply) {
-                    Text(isCurrentHost ? "Already in use" : "Use this server")
-                        .font(.porcelainBody)
+                Picker("Server", selection: serverSelection) {
+                    ForEach(SettingsServer.allCases) { server in
+                        Text(server.title).tag(server)
+                    }
+                }
+                .accessibilityIdentifier("settings.serverPicker")
+
+                if selectedServer == .custom {
+                    TextField("Custom server URL", text: $draftURL)
+                        .keyboardDismissBar()
+                        .font(.porcelainCode)
+                        .autocorrectionDisabled()
+                        #if os(iOS)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                        #endif
+                        .onSubmit(applyCustomServer)
+                        .accessibilityIdentifier("settings.customServerURL")
                         .frame(minHeight: PorcelainTokens.touchTarget - 12)
-                }
-                .disabled(isCurrentHost)
-                Button {
-                    draftURL = AppModel.productionBaseURL.absoluteString
-                    apply()
-                } label: {
-                    serverChoice("Production", host: CubbyBaseURL.host(of: AppModel.productionBaseURL))
-                }
-                Button {
-                    draftURL = AppModel.localBaseURL.absoluteString
-                    apply()
-                } label: {
-                    serverChoice("Local dev server", host: CubbyBaseURL.host(of: AppModel.localBaseURL))
+
+                    if let customURLValidationMessage {
+                        Text(customURLValidationMessage)
+                            .font(.porcelainLabel)
+                            .foregroundStyle(PorcelainTokens.destructive)
+                    }
+
+                    if customServerURL != model.baseURL {
+                        Button("Use custom server", action: applyCustomServer)
+                            .disabled(customServerURL == nil)
+                            .accessibilityIdentifier("settings.useCustomServer")
+                    }
                 }
             } header: {
                 Eyebrow("Server")
@@ -58,8 +59,9 @@ struct SettingsView: View {
 
             Section {
                 LabeledContent("Host") {
-                    Text(model.host).font(.porcelainCode)
+                    Text(CubbyBaseURL.host(of: model.baseURL)).font(.porcelainCode)
                 }
+                .id(model.baseURL)
                 .frame(minHeight: PorcelainTokens.touchTarget - 12)
                 LabeledContent("Credential") {
                     Text(model.credentialSummary).font(.porcelainData)
@@ -101,7 +103,8 @@ struct SettingsView: View {
         .font(.porcelainBody)
         .porcelainScreen()
         .navigationTitle("Settings")
-        .onAppear { draftURL = model.baseURL.absoluteString }
+        .onAppear(perform: synchronizeServerSelection)
+        .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
         #if os(iOS)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         #endif
@@ -112,25 +115,108 @@ struct SettingsView: View {
         #endif
     }
 
-    private func serverChoice(_ title: String, host: String) -> some View {
-        HStack(spacing: PorcelainTokens.Space.md) {
-            Text(title).font(.porcelainBody)
-            Spacer(minLength: PorcelainTokens.Space.sm)
-            Text(host)
-                .font(.porcelainCode)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
-            if host == model.host {
-                Image(systemName: "checkmark")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(PorcelainTokens.cobalt)
-            }
-        }
-        .frame(minHeight: PorcelainTokens.touchTarget - 12)
+    private var customServerURL: URL? {
+        SettingsServer.customURL(from: draftURL)
     }
 
-    private func apply() {
-        guard let url = URL(string: draftURL) else { return }
+    private var serverSelection: Binding<SettingsServer> {
+        Binding(
+            get: { selectedServer },
+            set: { server in
+                selectedServer = server
+                guard let url = server.presetURL else { return }
+                draftURL = ""
+                model.baseURL = url
+            })
+    }
+
+    private var customURLValidationMessage: String? {
+        SettingsServer.customURLValidationMessage(for: draftURL)
+    }
+
+    private func applyCustomServer() {
+        guard let url = customServerURL else { return }
         model.baseURL = url
+    }
+
+    private func synchronizeServerSelection() {
+        let server = SettingsServer(baseURL: model.baseURL)
+        selectedServer = server
+        if server == .custom { draftURL = model.baseURL.absoluteString }
+    }
+}
+
+enum SettingsServer: String, CaseIterable, Identifiable {
+    case production
+    case local
+    case custom
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .production: "Production"
+        case .local: "Local dev server"
+        case .custom: "Custom"
+        }
+    }
+
+    var presetURL: URL? {
+        switch self {
+        case .production: AppModel.productionBaseURL
+        case .local: AppModel.localBaseURL
+        case .custom: nil
+        }
+    }
+
+    init(baseURL: URL) {
+        if Self.sameServer(baseURL, AppModel.productionBaseURL) {
+            self = .production
+        } else if Self.sameServer(baseURL, AppModel.localBaseURL) {
+            self = .local
+        } else {
+            self = .custom
+        }
+    }
+
+    static func customURL(from value: String) -> URL? {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: value),
+            let scheme = components.scheme?.lowercased(),
+            scheme == "http" || scheme == "https",
+            components.host?.isEmpty == false
+        else {
+            return nil
+        }
+        return components.url
+    }
+
+    static func customURLValidationMessage(for value: String) -> String? {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        guard let components = URLComponents(string: value), let scheme = components.scheme else {
+            return "Enter a full http:// or https:// URL."
+        }
+        guard scheme.lowercased() == "http" || scheme.lowercased() == "https" else {
+            return "Use an http:// or https:// URL."
+        }
+        guard components.host?.isEmpty == false else { return "Enter a URL with a host." }
+        return nil
+    }
+
+    private static func sameServer(_ lhs: URL, _ rhs: URL) -> Bool {
+        guard let left = URLComponents(url: lhs, resolvingAgainstBaseURL: false),
+            let right = URLComponents(url: rhs, resolvingAgainstBaseURL: false)
+        else {
+            return lhs == rhs
+        }
+        let leftPath = left.path == "/" ? "" : left.path
+        let rightPath = right.path == "/" ? "" : right.path
+        return left.scheme?.lowercased() == right.scheme?.lowercased()
+            && left.host?.lowercased() == right.host?.lowercased()
+            && left.port == right.port
+            && leftPath == rightPath
+            && left.query == right.query
     }
 }
 

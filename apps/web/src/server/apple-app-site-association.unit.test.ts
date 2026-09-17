@@ -15,6 +15,12 @@ describe("buildAppleAppSiteAssociation", () => {
     expect(detail?.appIDs).toEqual(["Y9A97FXT63.com.nickysemenza.cubby"]);
   });
 
+  it("allows the native app to use the site's credentials", () => {
+    expect(doc.webcredentials.apps).toEqual([
+      "Y9A97FXT63.com.nickysemenza.cubby",
+    ]);
+  });
+
   it("emits one bare component per canonical shortcode prefix", () => {
     for (const prefix of Object.values(SHORTCODE_PREFIX)) {
       expect(paths).toContain(`/${prefix}????`);

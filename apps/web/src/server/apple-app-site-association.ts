@@ -8,8 +8,8 @@ import {
 import { generatedBrowserRoutes } from "~/entities/generated/entity-routes.gen";
 
 /**
- * Apple's universal-link team/bundle pair. Kept as one named constant because
- * it appears once here and nowhere else server-side — see
+ * Apple's team/bundle pair for universal links and shared web credentials. Kept as one named
+ * constant so the two AASA services cannot drift — see
  * `apps/apple/project.yml` (`DEVELOPMENT_TEAM: Y9A97FXT63`,
  * `PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby`) for the source of truth.
  */
@@ -82,6 +82,9 @@ export function buildAppleAppSiteAssociation() {
           components: [...shortcodeComponents(), ...detailRouteComponents()],
         },
       ],
+    },
+    webcredentials: {
+      apps: [APPLE_APP_ID],
     },
   };
 }

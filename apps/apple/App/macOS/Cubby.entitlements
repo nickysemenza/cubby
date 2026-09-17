@@ -16,6 +16,7 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:cubby.nickysemenza.com</string>
+		<string>webcredentials:cubby.nickysemenza.com</string>
 	</array>
 </dict>
 </plist>
