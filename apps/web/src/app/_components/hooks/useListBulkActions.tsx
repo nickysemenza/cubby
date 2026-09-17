@@ -43,6 +43,7 @@ export function useListBulkActions<TData extends { id: string }>({
   additionalActions,
   onInspectRow,
   includeCatalogActions = true,
+  selectable = true,
 }: {
   entity: Entity;
   bulkActions?: BulkActionsConfig<TData>;
@@ -53,6 +54,12 @@ export function useListBulkActions<TData extends { id: string }>({
   onInspectRow?: (row: Row<TData>) => void;
   /** Embedded specialist tables may keep their contextual action vocabulary. */
   includeCatalogActions?: boolean;
+  /**
+   * False removes checkbox selection and the bulk bar while keeping the row
+   * `…` menu. `includeCatalogActions: false` is not this: it empties the
+   * registry, so the row menu loses Edit/Copy/Delete with it.
+   */
+  selectable?: boolean;
 }) {
   const inspectAction = useMemo<BulkAction<TData> | null>(
     () =>
@@ -80,6 +87,7 @@ export function useListBulkActions<TData extends { id: string }>({
     : emptyBulkActions<TData>();
 
   const config = useMemo((): BulkActionsConfig<TData> | undefined => {
+    if (!selectable) return undefined;
     if (
       !deleteBulkAction &&
       !bulkActions &&
@@ -101,7 +109,13 @@ export function useListBulkActions<TData extends { id: string }>({
         ...(deleteBulkAction ? [deleteBulkAction] : []),
       ],
     };
-  }, [bulkActions, deleteBulkAction, inspectAction, registeredActions]);
+  }, [
+    bulkActions,
+    deleteBulkAction,
+    inspectAction,
+    registeredActions,
+    selectable,
+  ]);
   const emptyConfig = useMemo<BulkActionsConfig<TData>>(
     () => ({ actions: [] }),
     [],

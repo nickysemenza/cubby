@@ -198,9 +198,11 @@ export interface RTableProps<TItem extends RowData> {
   showColumnMenu?: boolean;
   /**
    * A page workbench owns its query tier outside the bordered table pane.
-   * Embedded/detail tables keep compact internal chrome.
+   * Embedded/detail tables keep compact internal chrome. `none` renders no
+   * toolbar at all: the caller's section header owns the create/open-all
+   * verbs and the table is a plain scoped grid (detail relation sections).
    */
-  toolbarMode?: "auto" | "external" | "internal";
+  toolbarMode?: "auto" | "external" | "internal" | "none";
   /**
    * Replaces the entity empty state when there are no rows.
    *
@@ -836,7 +838,9 @@ function tableChrome<TItem extends RowData>({
     hasFilterConfig,
   );
   return {
-    showToolbar: !embedded || showColumnMenu || hasToolbarContent,
+    showToolbar:
+      toolbarMode !== "none" &&
+      (!embedded || showColumnMenu || hasToolbarContent),
     showPagination: !embedded || table.getPageCount() > 1,
     topLevelInspectorToggle: embedded ? null : inspectorToggle,
     externalToolbar:

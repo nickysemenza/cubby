@@ -26,6 +26,8 @@ import { copyShortcodes } from "~/lib/clipboard";
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { cn, formatCount } from "~/lib/utils";
 
+import { WorkbenchBand } from "./workbench-band";
+
 const heroVariants = cva(
   "flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
   {
@@ -256,52 +258,6 @@ interface PageHeroProps extends VariantProps<typeof heroVariants> {
    */
   count?: number;
   mobileTitleVisible?: boolean;
-}
-
-interface ListWorkbenchProps {
-  title: ReactNode;
-  count?: number;
-  controls?: ReactNode;
-  actions?: ReactNode;
-}
-
-/**
- * Stable first tier for operational lists. The table owns the query/selection
- * tier directly below this; alternate renderers keep this identity tier in the
- * exact same place.
- */
-function ListWorkbench({
-  title,
-  count,
-  controls,
-  actions,
-}: ListWorkbenchProps) {
-  return (
-    <div className="flex min-h-11 items-center gap-1 border-b border-border bg-card px-2 py-1 sm:gap-2">
-      <div className="flex min-w-0 shrink-0 items-baseline gap-2">
-        <h1 className="truncate font-heading text-base font-bold tracking-tight max-md:sr-only sm:text-lg">
-          {title}
-        </h1>
-        {count !== undefined && (
-          <span className="shrink-0 font-mono text-2xs tracking-wider text-slate uppercase tabular-nums">
-            {formatCount(count)}
-          </span>
-        )}
-      </div>
-      <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden">
-        {controls}
-        <div
-          className="flex shrink-0 items-center gap-1"
-          data-workbench-utilities
-        />
-      </div>
-      {actions && (
-        <div className="flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden">
-          {actions}
-        </div>
-      )}
-    </div>
-  );
 }
 
 /**
@@ -657,7 +613,7 @@ export function PageHeader({
 
   if (listChrome === "workbench") {
     return (
-      <ListWorkbench
+      <WorkbenchBand
         title={title}
         count={count}
         controls={workbenchControls}

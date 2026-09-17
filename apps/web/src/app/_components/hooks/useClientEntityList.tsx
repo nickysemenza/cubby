@@ -59,6 +59,7 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "onInspectRow"
   | "preview"
   | "includeCatalogActions"
+  | "selectable"
 >;
 
 interface UseClientEntityListOptions<
@@ -130,6 +131,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   onInspectRow,
   preview,
   includeCatalogActions,
+  selectable,
   deleteEmptyLabel,
   subject,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
@@ -159,6 +161,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     bulkActions,
     onInspectRow: effectiveOnInspectRow,
     includeCatalogActions,
+    selectable,
     deleteEmptyLabel,
     selectionScope: (state) => state.allFilters,
   });

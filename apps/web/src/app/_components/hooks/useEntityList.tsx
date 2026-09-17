@@ -144,6 +144,8 @@ export interface UseEntityListOptions<
   preview?: EntityListPreviewOptions;
   /** False for embedded specialist tables with their own contextual actions. */
   includeCatalogActions?: boolean;
+  /** False for a scoped relation grid: no checkbox column or bulk bar, row menu kept. */
+  selectable?: boolean;
   extraActions?: (row: TData) => ReactNode;
   /**
    * What each row is *about*, when that is a different record — an inventory
@@ -282,6 +284,7 @@ export function useEntityList<
   onInspectRow,
   preview: previewOptions,
   includeCatalogActions,
+  selectable,
   extraActions,
   deletable,
   deleteEmptyLabel,
@@ -351,6 +354,7 @@ export function useEntityList<
     bulkActions,
     onInspectRow: effectiveOnInspectRow,
     includeCatalogActions,
+    selectable,
     deleteEmptyLabel,
     selectionScope: effectiveBuildFilters,
   });
