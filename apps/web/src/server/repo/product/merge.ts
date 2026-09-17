@@ -618,6 +618,7 @@ type ProductAssociationRow = {
 
 type ProductImageAssociationRow = ProductAssociationRow & {
   imageId: string;
+  sha256: string | null;
   sortOrder: number;
   createdAt: Date;
 };
@@ -814,11 +815,13 @@ async function buildProductMergePlan(
         sortOrder: true,
         createdAt: true,
       },
+      with: { image: { columns: { sha256: true } } },
       orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
     })
   ).map((row): ProductImageAssociationRow => ({
     ...row,
     productId: parseEntityId("product", row.productId),
+    sha256: row.image.sha256,
   }));
   const projectUseRows = (
     await db.query.projectToolUsage.findMany({
@@ -1001,7 +1004,13 @@ async function buildProductMergePlan(
     images: planAssociation({
       rows: imageRows,
       keepId: input.keepId,
-      slotKey: (row) => row.imageId,
+      // A repeated attachment row is not the only duplicate: separate Image
+      // records can contain the same bytes when an upload was retried or
+      // imported through two paths. Exact verified bytes share a slot; an
+      // unverified image keeps the old UUID-based behavior rather than making
+      // a guess from filename or perceptual similarity.
+      slotKey: (row) =>
+        row.sha256 ? `sha256\u0000${row.sha256}` : `image\u0000${row.imageId}`,
     }),
     projectUses: planAssociation({
       rows: projectUseRows,

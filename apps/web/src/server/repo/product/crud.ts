@@ -172,7 +172,7 @@ import {
   onHandUnitsSql,
   quantityVarianceSql,
 } from "./quantity-ledger";
-import type { ProductDeepDB } from "./types";
+import type { ProductDeepDB, ProductListDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
   ensureSlotPrimaries,
@@ -949,7 +949,7 @@ export const productList = async (
             orderBy: orderByArray,
             limit: take,
             offset: skip,
-            ...relations.product.list,
+            ...relations.product.listBase,
           }),
         count: () => countWhere(db, product, whereClause),
       }),
@@ -992,11 +992,19 @@ export const productList = async (
             ),
     ]);
 
-  const qualities = await loadProductDataQualities(
+  const listRelations = await loadProductListRelations(
     db,
     results.map((row) => row.id),
   );
-  const pricedResults = await enrichProductRowsWithPricing(db, results);
+  const hydratedResults = results.map((row) => ({
+    ...row,
+    ...(listRelations.get(row.id) ?? emptyProductListRelations()),
+  }));
+  const qualities = await loadProductDataQualities(
+    db,
+    hydratedResults.map((row) => row.id),
+  );
+  const pricedResults = await enrichProductRowsWithPricing(db, hydratedResults);
   const ledgeredResults = await enrichProductRowsWithQuantityLedger(
     db,
     pricedResults,
@@ -1023,6 +1031,83 @@ export const productList = async (
       expenseTotal: Number.isNaN(expenseTotalSum) ? 0 : expenseTotalSum,
     },
   };
+};
+
+type ProductListRelations = Pick<
+  ProductListDB,
+  "images" | "externalIds" | "unitMappings" | "inventoryEntry"
+>;
+
+const emptyProductListRelations = (): ProductListRelations => ({
+  images: [],
+  externalIds: [],
+  unitMappings: [],
+  inventoryEntry: [],
+});
+
+/**
+ * Hydrate Product-list to-many fields in independent batch reads. Drizzle's
+ * relational list query is excellent for a single detail graph, but combining
+ * four fan-outs with scalar aggregates for 100 products creates a large nested
+ * JSON plan that can exceed the small production compute's memory before the
+ * rows reach TypeScript.
+ */
+const loadProductListRelations = async (
+  db: Database,
+  ids: readonly ProductId[],
+): Promise<Map<ProductId, ProductListRelations>> => {
+  const uniqueIds = uniq([...ids]);
+  const result = new Map<ProductId, ProductListRelations>(
+    uniqueIds.map((id) => [id, emptyProductListRelations()]),
+  );
+  if (uniqueIds.length === 0) return result;
+
+  const [images, externalIds, unitMappings, inventoryEntries] =
+    await Promise.all([
+      getDb(db).query.productImage.findMany({
+        where: and(
+          inArray(productImage.productId, uniqueIds),
+          notDeleted(productImage),
+        ),
+        orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+        with: { image: true },
+      }),
+      getDb(db).query.productExternalId.findMany({
+        where: and(
+          inArray(productExternalId.productId, uniqueIds),
+          notDeleted(productExternalId),
+        ),
+      }),
+      getDb(db).query.productUnitMappings.findMany({
+        where: and(
+          inArray(productUnitMappings.productId, uniqueIds),
+          notDeleted(productUnitMappings),
+        ),
+      }),
+      getDb(db).query.inventoryEntry.findMany({
+        where: and(
+          inArray(inventoryEntry.productId, uniqueIds),
+          notDeleted(inventoryEntry),
+        ),
+        orderBy: inventoryEntry.createdAt,
+        with: { location: true },
+      }),
+    ]);
+
+  for (const row of images) {
+    result.get(row.productId)?.images.push(row);
+  }
+  for (const row of externalIds) {
+    result.get(row.productId)?.externalIds.push(row);
+  }
+  for (const row of unitMappings) {
+    result.get(row.productId)?.unitMappings.push(row);
+  }
+  for (const row of inventoryEntries) {
+    result.get(row.productId)?.inventoryEntry.push(row);
+  }
+
+  return result;
 };
 
 /**

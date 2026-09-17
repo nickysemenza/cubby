@@ -56,6 +56,9 @@ describe("MCP protocol smoke", () => {
       }
     }
     expect(names).toContain("move_inventory_entries");
+    expect(names).toContain("start_planting");
+    expect(names).toContain("move_planting");
+    expect(names).toContain("finish_planting");
     expect(names).not.toContain("delete_entity");
     expect(names).not.toContain("attach_entity");
     expect(names).not.toContain("detach_entity");

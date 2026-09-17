@@ -15,7 +15,7 @@ import type {
   LocationValuation,
   LocationValuationSummaryOut,
 } from "@cubby/schemas/location";
-import { and, desc, eq, gt, type SQL, sql } from "drizzle-orm";
+import { eq, type SQL, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
@@ -85,38 +85,51 @@ const directValuationSubquery = (
  */
 export const directValuationSql = directValuationSubquery(location.id);
 
-/**
- * The plain-select variant, for `getLocationValuationSummary` below: that
- * query addresses `location` by its real, unaliased name throughout — EXCEPT
- * in a `.select({...})` projection's value position, where a typed
- * `${location.id}` reference silently compiles bare (no table qualifier at
- * all), which is ambiguous inside this subquery's own `ie`/`p` scope (both
- * have an `id` column). A hardcoded, always-qualified literal sidesteps that
- * qualification quirk entirely.
- */
-const directValuationSqlOnLocationTable = directValuationSubquery(
-  sql.raw(`"Location"."id"`),
-);
-
 /** One compact SQL read for Home; no tree or relation hydration. */
 export const getLocationValuationSummary = async (
   db: Database,
 ): Promise<LocationValuationSummaryOut> => {
-  const rows = await getDb(db)
-    .select({
-      id: location.shortcode,
-      name: location.name,
-      value: directValuationSqlOnLocationTable,
-      total: sql<number>`SUM(${directValuationSqlOnLocationTable}) OVER ()`,
-    })
-    .from(location)
-    .where(and(notDeleted(location), gt(directValuationSqlOnLocationTable, 0)))
-    .orderBy(desc(directValuationSqlOnLocationTable), location.name)
-    .limit(5);
+  // Aggregate each location once. The previous shape embedded the same
+  // correlated InventoryEntry subquery in SELECT, a window expression, WHERE,
+  // and ORDER BY; Postgres could retain several copies of that plan at once on
+  // the small production compute, turning Home into an avoidable OOM trigger.
+  const rows = await getDb(db).execute<{
+    id: string;
+    name: string;
+    value: number;
+    total: number;
+  }>(sql`
+    WITH direct AS (
+      SELECT ie."locationId" AS "locationId",
+             COALESCE(SUM(ie.valuation), 0)::double precision AS value
+      FROM "InventoryEntry" ie
+      INNER JOIN "Product" p ON p.id = ie."productId"
+      WHERE ie."deletedAt" IS NULL
+        AND ie.placement = 'stock'
+        AND ie.valuation > 0
+      GROUP BY ie."locationId"
+    ), values_by_location AS (
+      SELECT l.shortcode AS id,
+             l.name AS name,
+             COALESCE(direct.value, 0)::double precision AS value
+      FROM "Location" l
+      LEFT JOIN direct ON direct."locationId" = l.id
+      WHERE l."deletedAt" IS NULL
+    ), ranked AS (
+      SELECT id, name, value,
+             SUM(value) OVER ()::double precision AS total
+      FROM values_by_location
+      WHERE value > 0
+      ORDER BY value DESC, name
+    )
+    SELECT id, name, value, total
+    FROM ranked
+    LIMIT 5
+  `);
 
   return {
-    total: Number(rows[0]?.total ?? 0),
-    locations: rows.map((row) => ({
+    total: Number(rows.rows[0]?.total ?? 0),
+    locations: rows.rows.map((row) => ({
       id: parseShortcodeFor("location", row.id),
       name: row.name,
       value: Number(row.value),

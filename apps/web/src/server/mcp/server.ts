@@ -11,6 +11,7 @@ import { registerDataQualityTools } from "./tools/data-quality.tools";
 import { registerEntityIntegrityTools } from "./tools/entity-integrity.tools";
 import { registerEntityTools } from "./tools/entity.tools";
 import { registerFinancialTools } from "./tools/financial.tools";
+import { registerGardenTools } from "./tools/garden.tools";
 import { registerImageTools } from "./tools/image.tools";
 import { registerIngredientTools } from "./tools/ingredient.tools";
 import { registerInventoryTools } from "./tools/inventory.tools";
@@ -100,6 +101,7 @@ function registerTools(server: McpServer) {
   registerProjectTools(server);
   registerPurchaseTools(server);
   registerFinancialTools(server);
+  registerGardenTools(server);
   registerMealTools(server);
   registerUsdaTools(server);
   registerImageTools(server);

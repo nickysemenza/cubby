@@ -376,6 +376,21 @@ export const relations = {
         purchaseDate: productAcquisitionDateSql().as("purchaseDate"),
       },
     },
+    // Product list rows are hydrated from bounded batch reads in product/crud.
+    // Keeping only the scalar/to-one projection here avoids Drizzle building
+    // one nested JSON graph for every page row.
+    listBase: {
+      with: {
+        ingredient: true,
+        growsIngredient: { columns: { shortcode: true } },
+      },
+      extras: {
+        expenseCount: productExpenseCountSql().as("expenseCount"),
+        componentCount: productComponentCount.as("componentCount"),
+        expenseTotal: productExpenseTotalSql().as("expenseTotal"),
+        purchaseDate: productAcquisitionDateSql().as("purchaseDate"),
+      },
+    },
   },
   recipe: {
     full: {
