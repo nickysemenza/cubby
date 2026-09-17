@@ -451,6 +451,17 @@ history is the archive. Permanent product constraints live in the
 
 ### Waiting for a trigger
 
+- **Make hosted Actions the authoritative PR gate if the repository becomes
+  public again.** Turn the existing manual CI workflow into required exact-head
+  PR checks and keep its Linux lanes parallel: repository validation, auxiliary
+  packages, Rust, web tests/build, PostgreSQL, and Chromium/WebKit E2E. Add the
+  Apple gate on a standard macOS runner after the shared Rust/FFI artifact is
+  available; it should run alongside the web lanes, not after them. Target a
+  4–7 minute warm critical path and no more than 10 minutes cold. Once hosted
+  checks are trustworthy, reduce routine local pre-push work to the clean-tree
+  guard plus affected static/fast tests, while retaining `verify:local:full` as
+  an explicit escape hatch. Do not make the repository public for CI alone.
+
 - **`PurchaseLine` SKU annotation** — Promote when store SKU, quantity, or unit-price
   detail is genuinely wanted. It is annotation only; `Expense` remains financial
   truth.
@@ -820,11 +831,6 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
   Until then the FFI surface stays `parse_ingredient`, `size_unit_aliases`,
   `normalize_isbn`, `scan_code_gtin14`. Owners: `cubby-ffi/src/lib.rs`,
   `apps/apple/CubbyKit/Sources/CubbyKit/FFI`.
-
-- **Hosted macOS runner for the Apple gate.** `scripts/apple-check.sh` runs
-  only from the local pre-push gate when `apps/apple/` or `cubby-ffi/` changed;
-  a `workflow_dispatch` macOS job that caches the OpenAPI generator build and
-  the Nx `apple-ffi` output would make it hosted.
 
 ## Deferred: deploy surface
 

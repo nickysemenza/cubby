@@ -91,35 +91,47 @@ Durable Object tests (`workers-tests`). Dependency deduplication
 workspace file, patch, or lockfile change, or let hosted `pnpm run check:all`
 catch it.
 
-Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm verify:push`
-(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple-check --parallel=1 && pnpm
-check`): Nx computes which projects are affected from each target's declared
-`inputs` against `nx.json`'s `defaultBase` (`origin/main`), so a web-only
-push naturally skips `rust`/`apple-check` rather than a hand-written path classifier
-deciding to skip them, and it never escalates to the full suite. Hooks are
-mandatory: agents never use `--no-verify` to bypass a failure. Pre-commit
-checks the **whole working tree**, not the index, so a commit fails while any
-concurrent agent's files are mid-edit — stage early and commit between agent
-waves. Regenerated files (`routeTree.gen.ts` and friends) are fine to commit;
-do not revert generated churn. Pre-commit does not `cargo fmt` recipebridge;
-the pre-push gate's `rust` target does, so check Rust formatting before
-pushing.
+Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm verify:push`: it
+requires a clean tree before and after one sequential `nx affected` graph over
+`generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check`,
+explicitly comparing `--base=origin/main --head=HEAD`, with `--nxBail` and
+static output. Refresh the local `origin/main` ref before pushing when needed;
+it must be the intended comparison point. Nx project relationships determine
+affected selection and prerequisite ordering, while target `inputs` and
+`dependentTasksOutputFiles` determine cache reuse. A web-only push can therefore
+skip the `rust` and `apple-check` targets, while Rust changes select web through
+its declared `recipebridge` relationship. The target-list order is not an
+execution-order guarantee. There is no separate trailing `pnpm check`, and the push gate does
+not escalate to the full suite. Hooks are mandatory: agents never use
+`--no-verify` to bypass a failure. Pre-commit checks the **whole working tree**,
+not the index, so a commit fails while any concurrent agent's files are mid-edit
+— stage early and commit between agent waves. Regenerated files (`routeTree.gen.ts`
+and friends) are fine to commit; do not revert generated churn. Pre-commit does
+not `cargo fmt` recipebridge; the pre-push gate's `rust` target does, so check
+Rust formatting before pushing.
 
 Local verification gates merging: run `pnpm verify:local` on the clean final
 commit (`nx run-many -t
-generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`, after
-rejecting an uncommitted or untracked tree). This is the merge gate. Unlike
-the deleted `ci-scope.ts`, there is no separate "high-risk" classification
-that escalates it — `verify:local` always runs the full target list, and an
-unaffected native/Postgres/E2E gate replays from Nx's cache instead of
-re-executing; `pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true` to force
-every target to actually run, which is what a high-risk or pre-release change
-should use. E2E always follows a fresh web build (`e2e`'s `dependsOn:
-["build-cf"]`). Hosted full verification and coverage are explicitly
-dispatched when needed (see [CI](../ci.md)). Main builds and deploys affected
-Workers automatically without repeating tests. If hosted verification is
-requested, observe its exact final commit result before merge. `claude-review`
-remains an opt-in PR label; previews are manually dispatched.
+generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`).
+The reusable clean-tree check rejects staged, unstaged, and untracked files
+before the graph and confirms the tree remains clean afterward. This is the
+merge gate. Unlike the deleted `ci-scope.ts`, there is no separate "high-risk"
+classification that escalates it — `verify:local` always runs the full target
+list. Selected cached targets may replay, but E2E is uncached and always runs;
+its `build-cf` dependency ensures the served bundle is current and may itself
+reuse a cache entry. The textual target-list order is not a dependency guarantee;
+Nx's graph supplies WASM-before-consumer and build-before-E2E ordering.
+`pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true` to force every target to
+actually run, which is what a high-risk or pre-release change should use.
+Hosted full verification and coverage are explicitly dispatched when needed
+(see [CI](../ci.md)). Main builds and deploys affected Workers automatically
+without repeating tests. If hosted verification is requested, observe its exact
+final commit result before merge. `claude-review` remains an opt-in PR label;
+previews are manually dispatched.
+
+These changes reduce duplicate work and stale generated-artifact cache paths,
+but do not promise that two simultaneous full verifications are resource-safe
+on one machine.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. Subagents run `pnpm

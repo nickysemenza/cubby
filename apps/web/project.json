@@ -1,13 +1,20 @@
 {
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "name": "@cubby/web",
+  "implicitDependencies": ["recipebridge"],
   "targets": {
     // Package.json infers a "test" target for the fast Vitest projects
     // (unit/mcp-contract/ui); it spans multiple projects and isn't
     // scoped narrowly enough for the repo-wide `{projectRoot}` cache default
     // (targetDefaults in nx.json) to be safe here, so opt back out.
     "test": {
-      "cache": false
+      "cache": false,
+      "dependsOn": [
+        {
+          "projects": ["cubby-checks"],
+          "target": "wasm"
+        }
+      ]
     },
     "postgres": {
       "command": "pnpm run test:postgres",
@@ -15,6 +22,12 @@
         "cwd": "apps/web"
       },
       "cache": true,
+      "dependsOn": [
+        {
+          "projects": ["cubby-checks"],
+          "target": "wasm"
+        }
+      ],
       "inputs": [
         "{projectRoot}/src/server/**",
         "{projectRoot}/drizzle/**",
@@ -24,6 +37,9 @@
         "{workspaceRoot}/scripts/test-services.ts",
         {
           "env": "CUBBY_TEST_SHUFFLE_SEED"
+        },
+        {
+          "dependentTasksOutputFiles": "packages/wasm/**/*"
         }
       ]
     },
@@ -33,7 +49,19 @@
         "cwd": "apps/web"
       },
       "cache": true,
-      "inputs": ["default", "^default"],
+      "dependsOn": [
+        {
+          "projects": ["cubby-checks"],
+          "target": "wasm"
+        }
+      ],
+      "inputs": [
+        "default",
+        "^default",
+        {
+          "dependentTasksOutputFiles": "packages/wasm/**/*"
+        }
+      ],
       "outputs": ["{projectRoot}/dist"]
     },
     "e2e": {

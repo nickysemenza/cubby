@@ -10,10 +10,11 @@
     "types": {
       "command": "pnpm typecheck",
       "cache": true,
+      "dependsOn": ["wasm"],
       "inputs": [
         "repo",
         {
-          "runtime": "git hash-object packages/wasm/package.json packages/wasm/*.d.ts"
+          "dependentTasksOutputFiles": "packages/wasm/**/*"
         }
       ]
     },
@@ -68,13 +69,14 @@
       // with the (uncached, heavier) web Vitest run for CPU.
       "command": "nx run-many -t test --exclude=cubby-checks --output-style=stream && touch apps/web/.vitest-failures.txt",
       "cache": true,
+      "dependsOn": ["wasm"],
       "inputs": [
-        "default",
+        "repo",
         {
-          "runtime": "git ls-files --others --ignored --exclude-standard -- packages/wasm ':(glob)**/.env*'"
+          "runtime": "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths"
         },
         {
-          "runtime": "git ls-files --others --ignored --exclude-standard -- packages/wasm ':(glob)**/.env*' | git hash-object --stdin-paths"
+          "dependentTasksOutputFiles": "packages/wasm/**/*"
         },
         {
           "env": "NODE_ENV"

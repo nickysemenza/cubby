@@ -13,14 +13,15 @@
     "generate": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts",
     "generate:check": "tsx --tsconfig apps/web/tsconfig.json scripts/generator/main.ts --check",
     "dedupe:check": "pnpm dedupe --check",
+    "check:clean": "sh -c 'if ! git diff --quiet HEAD || test -n \"$(git ls-files --others --exclude-standard)\"; then echo \"Working tree must be clean before and after verification. Commit or remove staged, unstaged, and untracked files:\" >&2; git status --short >&2; exit 1; fi'",
     "audit:security": "node scripts/check-security-audit.ts",
     "lint": "NX_DAEMON=false nx run cubby-checks:lint --outputStyle=stream",
     "lint:fix": "oxlint --fix .",
     "format:check": "NX_DAEMON=false nx run cubby-checks:format --outputStyle=stream",
     "format": "oxfmt .",
-    "verify:local": "sh -c 'git diff --quiet HEAD && test -z \"$(git ls-files --others --exclude-standard)\"' && nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --outputStyle=stream",
-    "verify:local:full": "sh -c 'git diff --quiet HEAD && test -z \"$(git ls-files --others --exclude-standard)\"' && NX_SKIP_NX_CACHE=true nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --outputStyle=stream",
-    "verify:push": "nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple-check --parallel=1 --outputStyle=stream && pnpm check",
+    "verify:local": "pnpm check:clean && nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --nxBail --outputStyle=static && pnpm check:clean",
+    "verify:local:full": "pnpm check:clean && NX_SKIP_NX_CACHE=true nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --nxBail --outputStyle=static && pnpm check:clean",
+    "verify:push": "pnpm check:clean && nx affected --base=origin/main --head=HEAD -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --nxBail --outputStyle=static && pnpm check:clean",
     "test": "NX_DAEMON=false nx run cubby-checks:fast-tests --outputStyle=stream",
     "test:unit": "pnpm --filter @cubby/web test:unit",
     "test:ui": "pnpm --filter @cubby/web test:ui",
@@ -55,5 +56,8 @@
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "zod": "^4.4.3"
+  },
+  "nx": {
+    "includedScripts": []
   }
 }
