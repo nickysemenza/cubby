@@ -6,6 +6,7 @@ import {
 import { LRUCache } from "lru-cache";
 
 import { recordAiUsage } from "~/server/ai-usage";
+import { cachedCall } from "~/server/clients/ai-adapters";
 import {
   gatewayBaseURL,
   gatewayConfigured,
@@ -50,9 +51,11 @@ export const productionEmbeddingPorts: EmbeddingPorts = {
   adapter: (config, metadata) =>
     createOpenaiEmbedding(config.model, UNIFIED_BILLING_PLACEHOLDER_KEY, {
       baseURL: gatewayBaseURL("openai"),
-      // Response caching would hand back a vector for text we just changed;
-      // the whole refresh path exists because the text moved.
-      fetch: gatewayFetch("openai", { metadata, skipCache: true }),
+      // The gateway keys its cache on the request body, so changed text
+      // always misses; caching only ever short-circuits an identical
+      // (model, input) pair, which is deterministic. Repeat search queries
+      // were paying the full provider round-trip (p50 ~940ms) without this.
+      fetch: gatewayFetch("openai", cachedCall({ metadata })),
     }),
   configured: gatewayConfigured,
   recordAiUsage,
