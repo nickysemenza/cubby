@@ -27,7 +27,7 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   first one.
 - Hand-written Swift names generated types only through the aliases in
   `CubbyKit/Sources/CubbyKit/Generated/APITypes.swift` (`Product`, `ProductListItem`,
-  `GardenPlantingOut`, `ScanAtLocationOut`, …), never as `Components.Schemas.*`, and never a
+  `PlantingOut`, `ScanAtLocationOut`, …), never as `Components.Schemas.*`, and never a
   positional `…Payload`/`InputSchemaNN`/`OutputSchemaNN` name — those are swift-openapi-generator's
   names for a 1,000+-schema doc and are not stable across regeneration (reach a positional
   value by property and let inference carry the type). The generator's output is its own SPM

@@ -1,4 +1,5 @@
 import { entityRefKey } from "@cubby/schemas/entity";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -17,7 +18,9 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense/crud";
+import { createGardenEntry, createPlanting } from "~/server/repo/garden";
 import { createUploadedImageRecord } from "~/server/repo/image";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { createVendor } from "~/server/repo/vendor";
 import { createWish, updateWish, wishList } from "~/server/repo/wish";
@@ -669,6 +672,155 @@ describe("entity display image resolver", () => {
         { id: first.shortcode, url: getR2PublicUrl(first.key) },
         { id: second.shortcode, url: getR2PublicUrl(second.key) },
       ]);
+    });
+  });
+
+  describe("planting", () => {
+    // `createPlanting` returns the public shortcode as `id`; `withDisplayImages`
+    // needs the private uuid, resolved the same way `garden.integration.test.ts`
+    // does for repo-level assertions.
+    const plantingEntityId = async (shortcode: string) =>
+      parseEntityId(
+        "planting",
+        (await resolveLiveShortcode(ctx.db, shortcode, "planting"))!,
+      );
+
+    // Planting carries no gallery of its own (decision: journal entries are
+    // the only photo surface) — its cover borrows the latest journal entry's
+    // first photo, falling back to the seed/source product's.
+    it("prefers the newest journal entry's first photo over an older entry's and over the seed product", async () => {
+      const seedPacket = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Planting fallback seed packet" }),
+        ctx.actor,
+      );
+      const productImg = await makeImage();
+      await getDb(ctx.db).insert(productImage).values({
+        productId: seedPacket.entityId,
+        imageId: productImg.id,
+        sortOrder: 0,
+      });
+
+      const crop = await createIngredientFixture(
+        ctx.db,
+        { name: "Planting fallback crop" },
+        ctx.actor,
+      );
+      const location = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: "Planting fallback bed", type: "bed" }),
+        ctx.actor,
+      );
+      const planted = await createPlanting(
+        ctx.db,
+        {
+          ingredientId: crop.id,
+          locationId: location.id,
+          sourceProductId: seedPacket.id,
+          status: "growing",
+        },
+        ctx.actor,
+      );
+
+      const olderImg = await makeImage();
+      await createGardenEntry(
+        ctx.db,
+        {
+          locationId: location.id,
+          plantingId: planted.id,
+          kind: "note",
+          observedOn: "2026-01-01",
+          pendingImageIds: [olderImg.shortcode],
+        },
+        ctx.actor,
+      );
+      const newerImg = await makeImage();
+      await createGardenEntry(
+        ctx.db,
+        {
+          locationId: location.id,
+          plantingId: planted.id,
+          kind: "note",
+          observedOn: "2026-02-01",
+          pendingImageIds: [newerImg.shortcode],
+        },
+        ctx.actor,
+      );
+
+      const rows = await withDisplayImages(
+        ctx.db,
+        "planting",
+        [{ id: await plantingEntityId(planted.id) }],
+        (row) => ({ id: row.id }),
+      );
+
+      expect(rows[0]?.displayImages).toEqual([
+        { id: newerImg.shortcode, url: getR2PublicUrl(newerImg.key) },
+        { id: olderImg.shortcode, url: getR2PublicUrl(olderImg.key) },
+        { id: productImg.shortcode, url: getR2PublicUrl(productImg.key) },
+      ]);
+    });
+
+    it("falls back to the seed product's photo when there are no journal entries", async () => {
+      const seedPacket = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "No-entry seed packet" }),
+        ctx.actor,
+      );
+      const productImg = await makeImage();
+      await getDb(ctx.db).insert(productImage).values({
+        productId: seedPacket.entityId,
+        imageId: productImg.id,
+        sortOrder: 0,
+      });
+
+      const crop = await createIngredientFixture(
+        ctx.db,
+        { name: "No-entry crop" },
+        ctx.actor,
+      );
+      const planted = await createPlanting(
+        ctx.db,
+        {
+          ingredientId: crop.id,
+          sourceProductId: seedPacket.id,
+          status: "planned",
+        },
+        ctx.actor,
+      );
+
+      const rows = await withDisplayImages(
+        ctx.db,
+        "planting",
+        [{ id: await plantingEntityId(planted.id) }],
+        (row) => ({ id: row.id }),
+      );
+
+      expect(rows[0]?.displayImages).toEqual([
+        { id: productImg.shortcode, url: getR2PublicUrl(productImg.key) },
+      ]);
+    });
+
+    it("is empty with neither journal entries nor a seed product", async () => {
+      const crop = await createIngredientFixture(
+        ctx.db,
+        { name: "Empty fallback crop" },
+        ctx.actor,
+      );
+      const planted = await createPlanting(
+        ctx.db,
+        { ingredientId: crop.id, status: "planned" },
+        ctx.actor,
+      );
+
+      const rows = await withDisplayImages(
+        ctx.db,
+        "planting",
+        [{ id: await plantingEntityId(planted.id) }],
+        (row) => ({ id: row.id }),
+      );
+
+      expect(rows[0]?.displayImages).toEqual([]);
     });
   });
 

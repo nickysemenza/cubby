@@ -15253,6 +15253,65 @@ public enum Operations {
                 public typealias IngredientIdFilterPayload = [Operations.Resources_product_list.Input.Query.IngredientIdFilterPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/ingredientIdFilter`.
                 public var ingredientIdFilter: Operations.Resources_product_list.Input.Query.IngredientIdFilterPayload?
+                /// ingredient shortcode, e.g. ING-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/GrowsIngredientIdFilterPayload`.
+                public struct GrowsIngredientIdFilterPayloadPayload: Codable, Hashable, Sendable {
+                    /// ingredient shortcode, e.g. ING-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/products/GET/query/GrowsIngredientIdFilterPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/products/GET/query/GrowsIngredientIdFilterPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/products/GET/query/GrowsIngredientIdFilterPayload/value2`.
+                    public var value2: Operations.Resources_product_list.Input.Query.GrowsIngredientIdFilterPayloadPayload.Value2Payload?
+                    /// Creates a new `GrowsIngredientIdFilterPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: ingredient shortcode, e.g. ING-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_product_list.Input.Query.GrowsIngredientIdFilterPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/growsIngredientIdFilter`.
+                public typealias GrowsIngredientIdFilterPayload = [Operations.Resources_product_list.Input.Query.GrowsIngredientIdFilterPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/growsIngredientIdFilter`.
+                public var growsIngredientIdFilter: Operations.Resources_product_list.Input.Query.GrowsIngredientIdFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/TaskStatusFilterPayload`.
                 @frozen public enum TaskStatusFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case notStarted = "not_started"
@@ -15470,6 +15529,7 @@ public enum Operations {
                 ///   - locationIdFilter:
                 ///   - ingredientPresenceFilter:
                 ///   - ingredientIdFilter:
+                ///   - growsIngredientIdFilter:
                 ///   - taskStatusFilter:
                 ///   - taskOpenOnly:
                 ///   - taskDueFrom: Calendar day as "YYYY-MM-DD"
@@ -15559,6 +15619,7 @@ public enum Operations {
                     locationIdFilter: Operations.Resources_product_list.Input.Query.LocationIdFilterPayload? = nil,
                     ingredientPresenceFilter: Operations.Resources_product_list.Input.Query.IngredientPresenceFilterPayload? = nil,
                     ingredientIdFilter: Operations.Resources_product_list.Input.Query.IngredientIdFilterPayload? = nil,
+                    growsIngredientIdFilter: Operations.Resources_product_list.Input.Query.GrowsIngredientIdFilterPayload? = nil,
                     taskStatusFilter: Operations.Resources_product_list.Input.Query.TaskStatusFilterPayload? = nil,
                     taskOpenOnly: Swift.Bool? = nil,
                     taskDueFrom: Swift.String? = nil,
@@ -15648,6 +15709,7 @@ public enum Operations {
                     self.locationIdFilter = locationIdFilter
                     self.ingredientPresenceFilter = ingredientPresenceFilter
                     self.ingredientIdFilter = ingredientIdFilter
+                    self.growsIngredientIdFilter = growsIngredientIdFilter
                     self.taskStatusFilter = taskStatusFilter
                     self.taskOpenOnly = taskOpenOnly
                     self.taskDueFrom = taskDueFrom
@@ -16806,6 +16868,65 @@ public enum Operations {
                 public typealias IngredientIdFilterPayload = [Operations.Resources_product_timeline.Input.Query.IngredientIdFilterPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/ingredientIdFilter`.
                 public var ingredientIdFilter: Operations.Resources_product_timeline.Input.Query.IngredientIdFilterPayload?
+                /// ingredient shortcode, e.g. ING-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/GrowsIngredientIdFilterPayload`.
+                public struct GrowsIngredientIdFilterPayloadPayload: Codable, Hashable, Sendable {
+                    /// ingredient shortcode, e.g. ING-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/GrowsIngredientIdFilterPayload/value1`.
+                    public var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/GrowsIngredientIdFilterPayload/value2`.
+                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/GrowsIngredientIdFilterPayload/value2`.
+                    public var value2: Operations.Resources_product_timeline.Input.Query.GrowsIngredientIdFilterPayloadPayload.Value2Payload?
+                    /// Creates a new `GrowsIngredientIdFilterPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: ingredient shortcode, e.g. ING-4K7M
+                    ///   - value2:
+                    public init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_product_timeline.Input.Query.GrowsIngredientIdFilterPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/growsIngredientIdFilter`.
+                public typealias GrowsIngredientIdFilterPayload = [Operations.Resources_product_timeline.Input.Query.GrowsIngredientIdFilterPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/growsIngredientIdFilter`.
+                public var growsIngredientIdFilter: Operations.Resources_product_timeline.Input.Query.GrowsIngredientIdFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/TaskStatusFilterPayload`.
                 @frozen public enum TaskStatusFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case notStarted = "not_started"
@@ -17020,6 +17141,7 @@ public enum Operations {
                 ///   - locationIdFilter:
                 ///   - ingredientPresenceFilter:
                 ///   - ingredientIdFilter:
+                ///   - growsIngredientIdFilter:
                 ///   - taskStatusFilter:
                 ///   - taskOpenOnly:
                 ///   - taskDueFrom: Calendar day as "YYYY-MM-DD"
@@ -17109,6 +17231,7 @@ public enum Operations {
                     locationIdFilter: Operations.Resources_product_timeline.Input.Query.LocationIdFilterPayload? = nil,
                     ingredientPresenceFilter: Operations.Resources_product_timeline.Input.Query.IngredientPresenceFilterPayload? = nil,
                     ingredientIdFilter: Operations.Resources_product_timeline.Input.Query.IngredientIdFilterPayload? = nil,
+                    growsIngredientIdFilter: Operations.Resources_product_timeline.Input.Query.GrowsIngredientIdFilterPayload? = nil,
                     taskStatusFilter: Operations.Resources_product_timeline.Input.Query.TaskStatusFilterPayload? = nil,
                     taskOpenOnly: Swift.Bool? = nil,
                     taskDueFrom: Swift.String? = nil,
@@ -17198,6 +17321,7 @@ public enum Operations {
                     self.locationIdFilter = locationIdFilter
                     self.ingredientPresenceFilter = ingredientPresenceFilter
                     self.ingredientIdFilter = ingredientIdFilter
+                    self.growsIngredientIdFilter = growsIngredientIdFilter
                     self.taskStatusFilter = taskStatusFilter
                     self.taskOpenOnly = taskOpenOnly
                     self.taskDueFrom = taskDueFrom

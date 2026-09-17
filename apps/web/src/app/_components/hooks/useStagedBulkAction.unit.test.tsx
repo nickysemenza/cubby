@@ -52,7 +52,7 @@ const setup = () =>
         TradeValues,
         MutationContext
       >({
-        verb: "setTrade",
+        verb: "bulkEdit",
         mutationFn: mutationOptions,
       }),
     { wrapper: harness.wrapper },
@@ -70,8 +70,8 @@ describe("useStagedBulkAction", () => {
 
   it("takes its label and icon from the verb registry", () => {
     const { result } = setup();
-    expect(result.current.action.label).toBe("Set trade...");
-    expect(result.current.action.id).toBe("set-trade");
+    expect(result.current.action.label).toBe("Bulk edit...");
+    expect(result.current.action.id).toBe("bulk-edit");
   });
 
   it("stages the selection instead of writing", async () => {

@@ -68,17 +68,38 @@ export type FilterKind = (typeof FILTER_KINDS)[number];
 export type EntityPresentation = z.output<
   ReturnType<typeof metadataSchemas>["presentation"]
 >;
+type EntityListTimeline = NonNullable<EntityPresentation["list"]["timeline"]>;
+type EntityTimelineLifecycle = NonNullable<EntityListTimeline["lifecycle"]>;
+
 /**
  * `presentation` as the compiler emits it: the two hero defaults that depend
  * on other declaration facts (`images` on the gallery capability, `actions`
  * on the update contract) are resolved, so both renderers read one shape.
+ * `list.timeline.lifecycle.start` is normalised to an ordered array — a
+ * declared single key becomes a one-element array — so every consumer reads
+ * one shape regardless of how the declaration spelled it.
  */
-export type CompiledEntityPresentation = Omit<EntityPresentation, "detail"> & {
+export type CompiledEntityPresentation = Omit<
+  EntityPresentation,
+  "detail" | "list"
+> & {
   detail: Omit<EntityPresentation["detail"], "hero"> & {
     hero: Omit<EntityPresentation["detail"]["hero"], "images" | "actions"> & {
       images: boolean;
       actions: readonly string[];
     };
+  };
+  list: Omit<EntityPresentation["list"], "timeline"> & {
+    timeline:
+      | (Omit<EntityListTimeline, "lifecycle"> & {
+          lifecycle:
+            | (Omit<EntityTimelineLifecycle, "start"> & {
+                /** Ordered fallback: the first key with a non-null value starts the interval. */
+                start: readonly string[];
+              })
+            | null;
+        })
+      | null;
   };
 };
 export type EntityDetailSection =
@@ -535,7 +556,15 @@ const metadataSchemas = () => {
               fields: z.array(fieldKey).optional().default([]),
               lifecycle: z
                 .object({
-                  start: fieldKey,
+                  /**
+                   * An ordered fallback: the first key with a non-null value
+                   * on a record starts its interval (e.g. a nursery-bought
+                   * planting starts at `transplantedOn`, not `sowedOn`).
+                   */
+                  start: z.union([
+                    fieldKey.transform((key) => [key]),
+                    z.array(fieldKey).min(1),
+                  ]),
                   milestones: z.array(fieldKey).optional().default([]),
                   end: fieldKey.nullable().optional().default(null),
                 })

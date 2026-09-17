@@ -194,12 +194,29 @@ the renderers (`table`, `shelf`, `timeline`, or a `slot` view with its
 route-only `searchKeys`); the first is the default and the generated search
 schema carries `view` when there is more than one. `list.actions`/`links` are
 the header verbs and links; `list.timeline` names the date fields and
-lifecycle keys the default timeline emits. `edit.readOnlyOnUpdate` and
+lifecycle keys the default timeline emits. `lifecycle.start` accepts either a
+single field key or an ordered array of them — an interval's start is the
+first field in that order with a non-null value, so a fallback field can
+supply the start when the primary one was never set (e.g. planting's
+`["sowedOn", "transplantedOn"]`: a nursery-bought seedling has no `sowedOn`,
+so its interval starts at `transplantedOn`). The default timeline marks such
+a row as inferred (`confident: false`) whenever a fallback key, not the
+first one, supplied the start. `edit.readOnlyOnUpdate` and
 `edit.readOnlyWhen` lock fields in the update editor. `capabilities.timeline`
 (`"default"`: audit log plus the declared date fields; `"custom"`: the
 `extensions.ports.timeline` implementation) publishes
 `resources.<entity>.timeline`. The compiler checks every named field,
 relation, descriptor, view and section id.
+
+`capabilities.bulkUpdate` (`{ fields: [...] } | null`) is the only thing an
+entity declares for bulk editing — there is no per-entity bulk-edit verb to
+write. The web list registers one generic `bulkEdit` action
+(`apps/web/src/app/_components/actions/bulk-edit-entity-action.tsx`) for every
+entity whose manifest declares it, and its dialog renders exactly those
+fields through the same reference/select/date rendering `EntityIntentFields`
+uses. The mutation payload is the form's dirty-field subset: an untouched
+field is omitted, and a cleared nullable field sends `null`. Native has no
+`bulkUpdate` route on its wire and keeps multi-select delete only.
 
 `capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
 table, bound in `apps/web/src/server/repo/database-helpers/crud.ts`

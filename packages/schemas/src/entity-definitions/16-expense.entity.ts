@@ -96,7 +96,7 @@ export default defineEntity({
           ],
         },
       ],
-      actions: ["setCostType", "setTrade", "moveToProject", "delete"],
+      actions: ["bulkEdit", "delete"],
     },
   },
   model: {

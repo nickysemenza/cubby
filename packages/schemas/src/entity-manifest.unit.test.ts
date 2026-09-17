@@ -177,7 +177,6 @@ describe("entity manifest", () => {
       "project",
       "task",
       "purchase",
-      "planting",
       "gardenEntry",
     ]);
     expect(sorted(imageEntities.map((e) => IMAGE_KEY[e] ?? e))).toEqual(
@@ -194,7 +193,6 @@ describe("entity manifest", () => {
       "project",
       "task",
       "purchase",
-      "planting",
       "gardenEntry",
     ]);
     expect(coverEntities).toEqual(["cookbook"]);

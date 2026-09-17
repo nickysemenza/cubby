@@ -67,6 +67,16 @@ export default defineEntity({
         },
         {
           kind: "relation",
+          id: "grown-by",
+          title: "Grown by",
+          relation: "grown-by",
+          filter: { descriptor: "growsIngredient" },
+          columns: ["name", "manufacturer", "category", "onHandUnits"],
+          hideWhenEmpty: true,
+          placement: "supporting",
+        },
+        {
+          kind: "relation",
           id: "recipes",
           title: "Appears in recipes",
           relation: "recipes",
@@ -437,6 +447,19 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Planting.ingredientId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "grown-by",
+      label: "Grown by",
+      target: "product",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Product.growsIngredientId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Product.growsIngredientId", direction: "outgoing" }],
       },
     },
     {

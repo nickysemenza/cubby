@@ -504,6 +504,7 @@ extension EntityDescriptor {
                 case "locationIdFilter": query.locationIdFilter = value.strings.map { .init(value1: $0) }
                 case "ingredientPresenceFilter": query.ingredientPresenceFilter = try value.enumCase(name)
                 case "ingredientIdFilter": query.ingredientIdFilter = value.strings.map { .init(value1: $0) }
+                case "growsIngredientIdFilter": query.growsIngredientIdFilter = value.strings.map { .init(value1: $0) }
                 case "taskStatusFilter": query.taskStatusFilter = try value.enumCases(name)
                 case "taskOpenOnly": query.taskOpenOnly = try value.bool(name)
                 case "taskDueFrom": query.taskDueFrom = try value.string(name)
@@ -1152,6 +1153,7 @@ extension EntityDescriptor {
                 case "locationIdFilter": query.locationIdFilter = value.strings.map { .init(value1: $0) }
                 case "ingredientPresenceFilter": query.ingredientPresenceFilter = try value.enumCase(name)
                 case "ingredientIdFilter": query.ingredientIdFilter = value.strings.map { .init(value1: $0) }
+                case "growsIngredientIdFilter": query.growsIngredientIdFilter = value.strings.map { .init(value1: $0) }
                 case "taskStatusFilter": query.taskStatusFilter = try value.enumCases(name)
                 case "taskOpenOnly": query.taskOpenOnly = try value.bool(name)
                 case "taskDueFrom": query.taskDueFrom = try value.string(name)
@@ -1402,10 +1404,6 @@ extension EntityDescriptor {
             _ = try await client.resources_meal_update(
                 path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
             ).ok
-        case .planting:
-            _ = try await client.resources_planting_update(
-                path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
-            ).ok
         case .product:
             _ = try await client.resources_product_update(
                 path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
@@ -1439,10 +1437,6 @@ extension EntityDescriptor {
             ).ok
         case .meal:
             _ = try await client.resources_meal_update(
-                path: .init(id: id), body: .json(.init(imageOrder: imageIds))
-            ).ok
-        case .planting:
-            _ = try await client.resources_planting_update(
                 path: .init(id: id), body: .json(.init(imageOrder: imageIds))
             ).ok
         case .product:

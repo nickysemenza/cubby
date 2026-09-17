@@ -56,7 +56,11 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
-import { actionVerbs, type ActionVerbId } from "../actions/action-verbs";
+import {
+  actionVerbs,
+  type ActionVerbId,
+  verbDef,
+} from "../actions/action-verbs";
 import { EntityActionButtons } from "../actions/entity-actions";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { DocumentViewerList } from "../DocumentViewerList";
@@ -396,7 +400,7 @@ function declaredSections<E extends GenericDetailEntity>(
       case "relation": {
         const plan = planRelationSection(entity, section);
         const createLabel =
-          detail.variant === "journal" ? "Log entry" : undefined;
+          detail.variant === "journal" ? verbDef("logEntry").label : undefined;
         return [
           {
             ...base,

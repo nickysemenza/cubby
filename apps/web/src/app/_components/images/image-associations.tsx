@@ -93,14 +93,6 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
-    .with({ entityType: "planting" }, ({ entityId, entityName }) => (
-      <EntityInlineLink
-        displayImage={undefined}
-        entity="planting"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
     .with({ entityType: "gardenEntry" }, ({ entityId, entityName }) => (
       <EntityInlineLink
         displayImage={undefined}

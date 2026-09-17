@@ -63,10 +63,11 @@ Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGui
 3. Resolve Locations. Search existing Locations by name before creating any
    (`entity {action:"list", entity:"location", filters:{search:"..."}}` or
    `global_search`). Create only what's missing: beds `type: "bed"`, pots/
-   containers `type: "planter"`, open ground `type: "area"`. A Location that
-   links a Product (a bought raised bed) keeps `type` null — the Product is
-   its form factor and the database rejects both at once. Soil/condition
-   notes from the plan go on `Location.notes`.
+   containers `type: "planter"`, open ground `type: "area"`. Set `type`
+   whether or not the Location links a Product (a bought raised bed still
+   carries `type: "bed"`) — the Product supplies identity and price, `type`
+   states the form factor; the two are independent. Soil/condition notes
+   from the plan go on `Location.notes`.
 4. Create one `Project` per season named for the plan (`kind: "garden"`).
    Put watering schedules, lessons, and skip-lists in `notes`.
 5. Create a `Task` per calendar row and per shopping-list line, all under
@@ -80,7 +81,10 @@ Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGui
 7. Create the planned Plantings: `status: "planned"`, `locationId`,
    `variety`, `quantity` (text, as the plan states it — count or weight),
    `plannedWindow` (text, as the plan states timing), `taskId` pointing at
-   the Task from step 5 that will plant it.
+   the Task from step 5 that will plant it. Leave `sowedOn`/`transplantedOn`
+   unset at import time (see [references/mapping.md](references/mapping.md)
+   for the later, normal shape of nursery-bought stock). No planned
+   Planting carries photos — planting has no photo gallery.
 8. Verify: `entity list planting {filters:{taskId}}` per Task reads back
    what was planned; `entity list task {filters:{projectId}}` accounts for
    every calendar row and shopping line; the season's Tasks show up on the
@@ -96,3 +100,6 @@ Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGui
   [README.md](../../../README.md#tenets)).
 - Seed packets for lines not yet purchased — those are Task shopping lines,
   never speculative Products.
+- Photos on a planned Planting — planting has no photo gallery
+  (`capabilities.images: false`); garden photos live only on GardenEntry,
+  added later once the household logs entries.

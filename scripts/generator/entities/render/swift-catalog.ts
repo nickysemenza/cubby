@@ -288,7 +288,7 @@ const renderPresentationLiteral = (
   const lifecycle =
     list.timeline?.lifecycle == null
       ? "nil"
-      : `TimelineLifecycle(start: ${swiftString(list.timeline.lifecycle.start)}, milestones: ${swiftStringArray(list.timeline.lifecycle.milestones)}, end: ${swiftOptionalString(list.timeline.lifecycle.end)})`;
+      : `TimelineLifecycle(start: ${swiftStringArray(list.timeline.lifecycle.start)}, milestones: ${swiftStringArray(list.timeline.lifecycle.milestones)}, end: ${swiftOptionalString(list.timeline.lifecycle.end)})`;
   const editSections =
     edit.sections === null
       ? "nil"
@@ -585,9 +585,10 @@ export const renderSwiftEntityCatalog = (
     "  }\n" +
     "}\n\n" +
     "/// The date keys the lifecycle timeline reads: one interval per record from `start` to `end`,\n" +
-    "/// with `milestones` as markers.\n" +
+    "/// with `milestones` as markers. `start` is an ordered fallback — the first key with a\n" +
+    "/// non-null value on a record starts its interval.\n" +
     "public struct TimelineLifecycle: Codable, Sendable, Hashable {\n" +
-    "  public let start: String\n" +
+    "  public let start: [String]\n" +
     "  public let milestones: [String]\n" +
     "  public let end: String?\n" +
     "}\n\n" +

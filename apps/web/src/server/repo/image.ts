@@ -57,8 +57,6 @@ import {
   locationImage,
   meal,
   mealImage,
-  planting,
-  plantingImage,
   product,
   productImage,
   project,
@@ -347,15 +345,6 @@ type ImageWithRelations = typeof image.$inferSelect & {
     taskId: string;
     task: { name: string; shortcode: string; deletedAt: Date | null };
   }>;
-  plantingImages: Array<{
-    plantingId: string;
-    planting: {
-      variety: string | null;
-      shortcode: string;
-      deletedAt: Date | null;
-      ingredient: { name: string };
-    };
-  }>;
   cookbookCovers: Array<{
     name: string;
     shortcode: string;
@@ -470,19 +459,6 @@ const imageWithRelationsToAPI = (
         entityName: task.name,
         role: "attachment" as const,
       })),
-    ...imageData.plantingImages
-      .filter(({ planting }) => isNotDeleted(planting))
-      .map(({ planting }) => ({
-        entityType: "planting" as const,
-        entityId: planting.shortcode,
-        // `displayName`'s rule ("<ingredient> · <variety>"): ingredient name
-        // first, variety appended only when present — NOT variety alone,
-        // which silently dropped the ingredient name whenever one was set.
-        entityName: planting.variety?.trim()
-          ? `${planting.ingredient.name} · ${planting.variety.trim()}`
-          : planting.ingredient.name,
-        role: "attachment" as const,
-      })),
     ...imageData.cookbookCovers.filter(isNotDeleted).map((book) => ({
       entityType: "cookbook" as const,
       entityId: book.shortcode,
@@ -509,7 +485,6 @@ const imageWithRelationsToAPI = (
         .with("gardenEntry", () => "GARDENENTRY" as const)
         .with("meal", () => "MEAL" as const)
         .with("task", () => "TASK" as const)
-        .with("planting", () => "PLANTING" as const)
         .with("cookbook", "vendor", () => null)
         .exhaustive()
     : null;
@@ -627,18 +602,6 @@ const imageEntityRelations = {
     },
     columns: { taskId: true },
   },
-  plantingImages: {
-    where: notDeleted(plantingImage),
-    with: {
-      planting: {
-        columns: { variety: true, shortcode: true, deletedAt: true },
-        with: {
-          ingredient: { columns: { name: true } },
-        },
-      },
-    },
-    columns: { plantingId: true },
-  },
   cookbookCovers: {
     where: notDeleted(cookbook),
     columns: { name: true, shortcode: true, deletedAt: true },
@@ -750,14 +713,6 @@ const imageReferenceCondition = (
         .select({ one: sql`1` })
         .from(taskImage)
         .where(joinReferenceWhere(taskImage.imageId, notDeleted(taskImage))),
-    ),
-    "PlantingImage.imageId": exists(
-      dbc
-        .select({ one: sql`1` })
-        .from(plantingImage)
-        .where(
-          joinReferenceWhere(plantingImage.imageId, notDeleted(plantingImage)),
-        ),
     ),
   } satisfies Record<IncomingEdgeKey<"image">, SQL>;
 
@@ -1097,12 +1052,6 @@ export const IMAGE_HARD_DELETE = {
     description:
       "The task's image association is removed along with the image.",
   },
-  "PlantingImage.imageId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description:
-      "The planting's image association is removed along with the image.",
-  },
 } satisfies IncomingEdgePolicy<"image", OperationDisposition>;
 
 type ImageEdgeOperation = {
@@ -1321,27 +1270,6 @@ const IMAGE_EDGE_OPERATIONS = {
     },
     joinColumn: taskImage.imageId,
   },
-  "PlantingImage.imageId": {
-    clear: async (tx, imageIds) => {
-      await tx
-        .delete(plantingImage)
-        .where(inArray(plantingImage.imageId, imageIds));
-    },
-    findReferenced: async (dbc, imageIds) => {
-      const rows = await dbc
-        .select({ imageId: plantingImage.imageId })
-        .from(plantingImage)
-        .where(
-          and(
-            isNotNull(plantingImage.imageId),
-            imageIds ? inArray(plantingImage.imageId, imageIds) : undefined,
-            notDeleted(plantingImage),
-          ),
-        );
-      return rows.map(({ imageId }) => imageId);
-    },
-    joinColumn: plantingImage.imageId,
-  },
 } satisfies Record<IncomingEdgeKey<"image">, ImageEdgeOperation>;
 
 /**
@@ -1534,16 +1462,6 @@ export const detachImagesFromEntity = async (
           and(eq(taskImage.taskId, id), inArray(taskImage.imageId, imageIds)),
         ),
     )
-    .with({ entity: "planting" }, ({ id }) =>
-      tx
-        .delete(plantingImage)
-        .where(
-          and(
-            eq(plantingImage.plantingId, id),
-            inArray(plantingImage.imageId, imageIds),
-          ),
-        ),
-    )
     .exhaustive();
 
   return await reapUnreferencedImages(tx, imageIds);
@@ -1702,9 +1620,6 @@ export const assertAttachableEntityExists = async (
     .with({ entity: "task" }, ({ id }) =>
       countWhere(db, task, and(eq(task.id, id), notDeleted(task))),
     )
-    .with({ entity: "planting" }, ({ id }) =>
-      countWhere(db, planting, and(eq(planting.id, id), notDeleted(planting))),
-    )
     .exhaustive();
   if (count === 0) {
     throw createAppError(
@@ -1820,19 +1735,6 @@ const hasLiveAttachment = async (
             eq(taskImage.taskId, id),
             eq(taskImage.imageId, imageId),
             notDeleted(taskImage),
-          ),
-        )
-        .limit(1),
-    )
-    .with({ entity: "planting" }, ({ id }) =>
-      dbc
-        .select({ id: plantingImage.id })
-        .from(plantingImage)
-        .where(
-          and(
-            eq(plantingImage.plantingId, id),
-            eq(plantingImage.imageId, imageId),
-            notDeleted(plantingImage),
           ),
         )
         .limit(1),
@@ -1994,20 +1896,6 @@ export const getImagesAttachedToEntity = async (
         )
         .then((rows) => rows.map((row) => row.image)),
     )
-    .with({ entity: "planting" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(plantingImage)
-        .innerJoin(image, eq(plantingImage.imageId, image.id))
-        .where(
-          and(
-            eq(plantingImage.plantingId, id),
-            notDeleted(plantingImage),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
     .exhaustive();
 };
 
@@ -2136,13 +2024,6 @@ const lockAttachableEntity = async (
         .where(and(eq(task.id, id), notDeleted(task)))
         .for("update"),
     )
-    .with({ entity: "planting" }, ({ id }) =>
-      tx
-        .select({ id: planting.id })
-        .from(planting)
-        .where(and(eq(planting.id, id), notDeleted(planting)))
-        .for("update"),
-    )
     .exhaustive();
   if (rows.length === 0) {
     throw createAppError(
@@ -2254,19 +2135,6 @@ const countDisplayableAttachedImages = async (
           and(eq(taskImage.taskId, id), notDeleted(taskImage), whereImage),
         ),
     )
-    .with({ entity: "planting" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(plantingImage)
-        .innerJoin(image, eq(plantingImage.imageId, image.id))
-        .where(
-          and(
-            eq(plantingImage.plantingId, id),
-            notDeleted(plantingImage),
-            whereImage,
-          ),
-        ),
-    )
     .exhaustive();
   return Number(totals[0]?.total ?? 0);
 };
@@ -2322,9 +2190,6 @@ const associateImageWithEntity = async (
     )
     .with({ entity: "task" }, ({ id }) =>
       associatePendingImages(dbc, imageJoinBindings.task, id, [imageId]),
-    )
-    .with({ entity: "planting" }, ({ id }) =>
-      associatePendingImages(dbc, imageJoinBindings.planting, id, [imageId]),
     )
     .exhaustive();
 };

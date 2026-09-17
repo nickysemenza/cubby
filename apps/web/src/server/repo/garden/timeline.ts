@@ -1,6 +1,6 @@
 import type { EntityTimelineRow } from "@cubby/schemas/entity-timeline";
 import { parseShortcodeFor, type PlantingId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import type { ParsedEntityTimelineInputByEntity } from "~/entities/generated/entity-timelines.gen";
 import { householdLocalDate } from "~/lib/household-date";
@@ -77,7 +77,15 @@ const guideRows = async (
     })
     .from(planting)
     .innerJoin(ingredient, eq(planting.ingredientId, ingredient.id))
-    .where(and(inArray(planting.id, plantingIds), notDeleted(planting)));
+    .where(
+      and(
+        inArray(planting.id, plantingIds),
+        notDeleted(planting),
+        // A finished planting is done; recommending a future sow/transplant
+        // window for it would be misleading.
+        ne(planting.status, "finished"),
+      ),
+    );
 
   const year = Number(householdLocalDate().slice(0, 4));
   const out: EntityTimelineRow[] = [];

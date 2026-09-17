@@ -263,9 +263,10 @@ const createLocationTx = async (
       name: data.name,
       aliases: data.aliases,
       tags: data.tags ?? [],
-      // Form factor is a fact about the SKU, so a linked location stores no
-      // type of its own.
-      type: productId ? null : (data.type ?? null),
+      // `type` is the physical form factor; `productId` is identity. A
+      // product-linked location can still carry a type (e.g. a raised bed
+      // that is also a specific product).
+      type: data.type ?? null,
       notes: data.notes ?? null,
       productId,
       parentId,
@@ -421,23 +422,15 @@ export const updateLocation = async (
       where: and(eq(location.id, id), notDeleted(location)),
     });
     const parentId = await resolveUpdatedParentId(tx);
-    const requestedProductId = await resolveUpdatedProductId(tx);
-    // The fields are alternatives. Linking a product clears type; explicitly
-    // choosing a type on an existing product-backed Location switches it back
-    // to a productless typed Location. Null remains meaningful on either side,
-    // so callers can deliberately store the valid both-null state.
-    const productId =
-      requestedProductId === undefined && data.type != null
-        ? null
-        : requestedProductId;
+    // `type` (form factor) and `productId` (identity) are independent facts
+    // now — neither write clears the other.
+    const productId = await resolveUpdatedProductId(tx);
 
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       aliases: data.aliases,
       tags: data.tags,
-      // Linking a product clears the now-redundant type; the two are
-      // alternatives, never companions.
-      type: productId ? null : data.type,
+      type: data.type,
       notes: data.notes,
       productId,
       parentId,

@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRightLeft,
-  CalendarClock,
   Camera,
   CheckCircle2,
   ClipboardCopy,
@@ -24,7 +23,6 @@ import {
   Sparkles,
   Split,
   SquarePen,
-  Tag,
   Trash,
   Wrench,
   X,
@@ -81,7 +79,6 @@ export const actionVerbs = {
   printLabel: { label: "Print label", icon: Printer },
   printLabels: { label: "Print labels", icon: Printer },
   addToInventory: { label: "Add to inventory", icon: Package },
-  bulkEdit: { label: "Bulk edit", icon: SquarePen },
   compare: { label: "Compare", icon: Scale },
   inspect: { label: "Inspect", icon: PanelRight },
 
@@ -89,12 +86,9 @@ export const actionVerbs = {
   editLocations: { label: "Edit locations", icon: Pencil },
   discard: { label: "Discard...", icon: PackageMinus },
   moveTo: { label: "Move to...", icon: ArrowRightLeft },
-  moveToProject: { label: "Move to project...", icon: ArrowRightLeft },
   moveUnder: { label: "Move under...", icon: FolderInput },
   setStatus: { label: "Set status...", icon: ListChecks },
-  setTrade: { label: "Set trade...", icon: Wrench },
-  setDueDate: { label: "Set due date...", icon: CalendarClock },
-  setCostType: { label: "Set cost type...", icon: Tag },
+  bulkEdit: { label: "Bulk edit...", icon: SquarePen },
   setStockTracking: { label: "Set stock tracking...", icon: PackageCheck },
   setUsuallyOnHand: { label: "Set usually on hand...", icon: PackageCheck },
   createProjectFrom: {

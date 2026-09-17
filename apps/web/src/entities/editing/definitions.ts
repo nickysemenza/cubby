@@ -632,7 +632,6 @@ const locationBuildData = (patch: EntityEditValueBag): EntityEditValueBag => {
     data.tags = foldCollectionsIntoTags(data.collections);
     delete data.collections;
   }
-  if (data.productId) data.type = null;
   return data;
 };
 

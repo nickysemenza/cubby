@@ -178,13 +178,6 @@ export function translateDatabaseError(
           error,
         );
       }
-      if (pg.constraint === "Location_productId_type_check") {
-        return createAppError(
-          "CONSTRAINT_VIOLATION",
-          "A location can have either a product identity or a type, not both.",
-          error,
-        );
-      }
       return createAppError(
         "CONSTRAINT_VIOLATION",
         `This ${entity} fails a validation rule${

@@ -145,7 +145,13 @@ House  →  Room  →  Shelf  →  Bin
   reads "Planned", "Growing", or "Finished" (`status`). Sowing in a tray and
   transplanting to a bed is `sowedOn` + `transplantedOn` on the same
   planting; a tray is never a `Location`. A move is editing `locationId` —
-  the audit log/timeline is the location history, not a separate model.
+  the audit log/timeline is the location history, not a separate model. A
+  planting has no photos of its own — see the entry below.
+- Nursery stock (bought as a seedling, never sown by the household) carries
+  `transplantedOn` only, with `sowedOn` left null. The timeline infers the
+  planting's start from `transplantedOn` in that case (`lifecycle.start`'s
+  ordered fallback) and marks the interval "Inferred" rather than needing a
+  separate origin field.
 - An **entry** (`GardenEntry`) is a dated Note or Harvest against a
   `Location`, optionally against one planting. The stored `kind` enum is
   `note` / `harvest`, matching its UI label exactly — no "observation" or
@@ -153,16 +159,22 @@ House  →  Room  →  Shelf  →  Bin
   name>"`. The action is "Log entry" (both the trigger and the dialog
   title); editing is "Edit entry". Every entry field, including its date,
   Location, and optional Planting, is freely editable — nothing is
-  structural or locked.
-- Garden dates read, by context: "Date" (entry), "Harvest date", "Sowed on",
-  "Transplanted on", and "Planned window".
+  structural or locked. Entries are the only garden photo surface: a
+  planting's list thumbnail borrows its latest entry's photo (falling back
+  to its seed Product's image, then nothing).
+- Garden dates and amounts read, by context: "Sowed", "Transplanted",
+  "Finished", "Planned window" (planting); "Observed" and "Harvest amount"
+  (entry).
 - A planting's journal is plain "Journal": its own direct entries plus
   whole-area entries at its current location whose date falls within its
   active window (sowed/transplanted through finished).
 - `Location.type` includes `bed` and `planter` (plus `area` for open
-  ground). There is no separate "growing area" concept in code — whether a
-  location shows Plantings/Garden-entries sections is derived from whether
-  it has any, not from a stored kind.
+  ground), independent of whether the Location links a Product — a
+  product-linked raised bed still carries `type: "bed"`; the product supplies
+  identity and price, `type` states the form factor. There is no separate
+  "growing area" concept in code — whether a location shows
+  Plantings/Garden-entries sections is derived from whether it has any, not
+  from a stored kind.
 - No garden-specific strings module exists on either platform; labels come
   straight from the manifest declaration like every other entity.
 

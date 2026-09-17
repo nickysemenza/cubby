@@ -4,7 +4,7 @@
 
 | Plan concept | Field | Notes |
 |---|---|---|
-| Bed name ("Bed 3", "the north bed") | `name`, `type: "bed"` | Search before creating — beds are usually already in Cubby from a prior season. Leave `type` null when the Location links a Product. |
+| Bed name ("Bed 3", "the north bed") | `name`, `type: "bed"` | Search before creating — beds are usually already in Cubby from a prior season. Set `type` even when the Location links a Product (a bought raised bed) — the Product supplies identity and price, `type` states the form factor; the two are independent. |
 | Pot / container | `type: "planter"` | |
 | Open ground / yard / tree perimeter | `type: "area"` | |
 | Soil condition, sun exposure, drainage notes | `notes` | Generic textarea; this is the only garden-specific text field left on Location. |
@@ -53,7 +53,13 @@ no planting attached, just the purchase itself as the action.
 | Seed source, if already owned as a Product | `sourceProductId` — only when a Product already exists; otherwise leave null until purchase-import creates one |
 
 `sowedOn`, `transplantedOn`, and `finishedOn` stay unset — those record what
-actually happened, which this skill never claims on the plan's behalf.
+actually happened, which this skill never claims on the plan's behalf. When
+the household later sows or transplants, a nursery-bought seedling normally
+gets `transplantedOn` alone, with no `sowedOn` — that's the ordinary shape
+for bought stock, not a special case; the planting timeline infers the
+interval's start from `transplantedOn` when `sowedOn` is null. A planned
+Planting also never carries photos (planting has no photo gallery) — photos
+belong on the GardenEntry the household logs later.
 
 ## `gardenGuideKey`
 

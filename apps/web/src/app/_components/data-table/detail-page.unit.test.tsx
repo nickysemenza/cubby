@@ -317,4 +317,54 @@ describe("hideWhenEmpty relation sections", () => {
     expect(await screen.findByText("No relations yet.")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Summary" })).toBeVisible();
   });
+
+  it("drops a hidden hideWhenEmpty section from the jump index, and restores it once its content reports visible again", async () => {
+    // Regression: `DetailAnchorIndex` used to list every declared section
+    // regardless of the `hidden` attribute `SectionCard` sets on itself
+    // (`SectionVisibilityContext` was per-card only), so a `hideWhenEmpty`
+    // section still hidden from view kept its own jump-index entry.
+    // `SectionVisibilityRegistryContext` mirrors each card's visibility up to
+    // `DetailSections` by id so the index can filter on it too.
+    const [summary, story] = sections;
+    if (!summary || !story) throw new Error("Expected two fixture sections");
+    const pageProps = {
+      variant: "detail" as const,
+      title: "Fixture detail",
+      entity: "image" as const,
+      rawData: { id: "IMG-EXAMPLE", filename: "fixture.jpg" },
+    };
+    const { rerender } = render(
+      <Page {...pageProps}>
+        <DetailSections
+          sections={[summary, story, hideableSection(true)]}
+          rawData={pageProps.rawData}
+        />
+      </Page>,
+      { wrapper: harness.wrapper },
+    );
+    await screen.findByText("Story content");
+    await waitFor(() => {
+      expect(document.getElementById("relation")).not.toBeVisible();
+    });
+    // Two eligible sections (Summary, Story) still meet the index's own >= 2
+    // threshold, so the index renders — but without the hidden one.
+    expect(screen.getByRole("link", { name: "Summary" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Story" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Relation" })).toBeNull();
+    // Hidden via `[hidden]`, not unmounted — the section and its content stay
+    // in the tree (`entity-relation-table.tsx`'s data hook keeps its cache).
+    expect(document.getElementById("relation")).not.toBeNull();
+
+    rerender(
+      <Page {...pageProps}>
+        <DetailSections
+          sections={[summary, story, hideableSection(false)]}
+          rawData={pageProps.rawData}
+        />
+      </Page>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Relation" })).toBeVisible();
+    });
+  });
 });

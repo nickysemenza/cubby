@@ -884,6 +884,7 @@ export default defineEntity({
           "model",
           "category",
           "ingredientId",
+          "growsIngredientId",
           "upc",
           "fdc_id",
           "price",
@@ -1061,6 +1062,14 @@ export default defineEntity({
         optionsKey: "productIngredients",
         brandRef: { entity: "ingredient", kind: "id" },
         nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
+      },
+      {
+        columnId: "growsIngredient",
+        field: "growsIngredientIdFilter",
+        kind: "idMulti",
+        placeholder: "Filter by crop grown...",
+        optionsKey: "productIngredients",
+        brandRef: { entity: "ingredient", kind: "id" },
       },
       {
         columnId: "expenses",

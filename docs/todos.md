@@ -48,8 +48,6 @@ history is the archive. Permanent product constraints live in the
   - The phone band still carries the grouped toggle beside the view seg;
     the artboard's band has only seg · search · Filter — fold it into the
     Filter sheet with sort and columns.
-  - Planting field labels come from the manifest in Title Case (`Sowed On`,
-    `Planned Window`); every other entity's are sentence case.
   - The canvas's NEXT SESSION note still describes this pass; retire it on
     the next canvas edit.
 

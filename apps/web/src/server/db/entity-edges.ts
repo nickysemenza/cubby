@@ -110,7 +110,6 @@ import {
   recipeSection,
   recipeSectionIngredient,
   planting,
-  plantingImage,
   statementRow,
   task,
   taskDependency,
@@ -252,13 +251,6 @@ export const ENTITY_EDGES = {
       role: "media",
       label: "task photos",
       description: "A before/after or reference photo attached to a task.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PlantingImage.imageId": {
-      column: plantingImage.imageId,
-      role: "media",
-      label: "planting photos",
-      description: "A photo of a crop as a whole, attached to a planting.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -824,14 +816,6 @@ export const ENTITY_EDGES = {
       label: "garden entries",
       description:
         "Garden observations and harvests retain the planting they describe.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PlantingImage.plantingId": {
-      column: plantingImage.plantingId,
-      role: "media",
-      label: "planting photos",
-      description:
-        "A photo of the crop as a whole has no independent meaning once the planting is removed.",
       liveness: { kind: "must-target-live" },
     },
   }),

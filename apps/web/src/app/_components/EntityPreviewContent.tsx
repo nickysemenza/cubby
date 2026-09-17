@@ -1011,13 +1011,10 @@ export function toPlantingCard(
           { label: "Status", value: capitalize(data.status) },
           {
             label: "Location",
-            // `plantingOut` carries no location name (only the id) — this
-            // falls back to the shortcode, the same last-resort the entity
-            // graph and image-association labels use elsewhere.
             value: data.locationId ? (
               <Row align="center" gap="xs">
                 <EntityIcon entity="location" size={12} colored />
-                {data.locationId}
+                {data.locationName ?? data.locationId}
               </Row>
             ) : (
               "—"

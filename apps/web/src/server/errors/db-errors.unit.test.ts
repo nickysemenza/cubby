@@ -91,9 +91,7 @@ describe("translateDatabaseError", () => {
       cause: Object.assign(new Error("check violation"), {
         code: "23514",
         constraint,
-        table: constraint.startsWith("Location")
-          ? "Location"
-          : "TaskDependency",
+        table: "TaskDependency",
       }),
     });
 
@@ -101,15 +99,5 @@ describe("translateDatabaseError", () => {
     expect(
       translateDatabaseError(checkViolation("TaskDependency_no_self_check")),
     ).toMatchObject({ reason: "SELF_DEPENDENCY" });
-  });
-
-  it("gives the Location identity check a stable explanation", () => {
-    expect(
-      translateDatabaseError(checkViolation("Location_productId_type_check")),
-    ).toMatchObject({
-      reason: "CONSTRAINT_VIOLATION",
-      message:
-        "A location can have either a product identity or a type, not both.",
-    });
   });
 });
