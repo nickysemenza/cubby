@@ -1,4 +1,5 @@
 import { fromPartial } from "@total-typescript/shoehorn";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -14,7 +15,11 @@ import {
   refreshSearchDocument,
 } from "~/server/repo/search-document";
 
-import { repairSearchIndex } from "./search-index-repair.service";
+import {
+  applySearchIndexRepairOrphanPage,
+  repairSearchIndex,
+  selectSearchIndexRepairOrphanPage,
+} from "./search-index-repair.service";
 
 describe("search index repair stream", () => {
   const ctx = withTestDb();
@@ -107,5 +112,46 @@ describe("search index repair stream", () => {
     await stream.next();
     controller.abort();
     await expect(stream.next()).rejects.toThrow(/cancelled/i);
+  });
+
+  it("does not retire an orphan candidate that became live before its page applies", async () => {
+    const restored = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Restored source" }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", restored.entityId);
+
+    // Model a source disappearing outside the normal deletion cascade, which
+    // makes its still-live SearchDocument a repair candidate.
+    await ctx.db.withClientConnection((client) =>
+      client.execute(sql`
+        UPDATE "Product" SET "deletedAt" = now()
+        WHERE id = ${restored.entityId}::uuid
+      `),
+    );
+    const page = await selectSearchIndexRepairOrphanPage(ctx.db);
+    expect(page.refs).toContainEqual({
+      entityType: "product",
+      entityId: restored.entityId,
+    });
+
+    // The Workflow may apply this persisted page much later. Its transaction
+    // must recheck liveness rather than retiring the selection blindly.
+    await ctx.db.withClientConnection((client) =>
+      client.execute(sql`
+        UPDATE "Product" SET "deletedAt" = NULL
+        WHERE id = ${restored.entityId}::uuid
+      `),
+    );
+    const applied = await applySearchIndexRepairOrphanPage(ctx.db, page.refs);
+    expect(applied.retired).toBe(0);
+    expect(
+      await getSearchDocumentEmbeddingText(
+        ctx.db,
+        "product",
+        restored.entityId,
+      ),
+    ).not.toBeNull();
   });
 });

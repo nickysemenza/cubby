@@ -2,9 +2,15 @@ import {
   searchContract,
   searchStreamsContract,
 } from "~/contracts/search.contract";
+import {
+  getSearchIndexRepairWorkflow,
+  isCloudflareRuntime,
+} from "~/server/cf-env";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { streamSearchIndexRepairWorkflow } from "~/server/search-index-repair-workflow-adapter";
 import { repairSearchIndex } from "~/server/services/search-index-repair.service";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
+import { getRequestId } from "~/server/tracing";
 import {
   findGroupedSearchHitsWorkflow,
   findRelatedSearchGroupsWorkflow,
@@ -34,7 +40,30 @@ export const searchHandlers = implementOperationDomain(searchContract, {
 export const searchStreamHandlers = implementSubscriptionDomain(
   searchStreamsContract,
   {
-    repairIndex: (context, _input, signal) =>
-      repairSearchIndex(context.db, signal),
+    repairIndex: async function* (context, _input, signal) {
+      const workflow = getSearchIndexRepairWorkflow();
+      if (!workflow) {
+        if (isCloudflareRuntime()) {
+          throw new Error("SEARCH_INDEX_REPAIR Workflow binding is missing");
+        }
+        yield* repairSearchIndex(context.db, signal);
+        return;
+      }
+
+      const requestedAt = new Date().toISOString();
+      const instance = await workflow.create({
+        id: crypto.randomUUID(),
+        params: { requestedAt },
+        retention: {
+          successRetention: "1 day",
+          errorRetention: "7 days",
+        },
+      });
+      console.log("[search-index-repair] Workflow started", {
+        instanceId: instance.id,
+        requestId: getRequestId(context.headers),
+      });
+      yield* streamSearchIndexRepairWorkflow(instance, signal);
+    },
   },
 );

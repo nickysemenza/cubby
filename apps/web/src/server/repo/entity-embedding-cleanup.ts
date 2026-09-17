@@ -41,7 +41,10 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import type { SearchDocumentCursor } from "~/server/repo/search-document";
+import {
+  getOrphanedSearchDocumentRefs,
+  type SearchDocumentCursor,
+} from "~/server/repo/search-document";
 
 async function softDeleteEntityEmbeddingsTx(
   tx: DrizzleTransaction,
@@ -61,27 +64,25 @@ async function softDeleteEntityEmbeddingsTx(
     );
 }
 
-/**
- * Retire the search artifacts of records that no longer exist, atomically for
- * the whole page. The index-repair stream hands over the refs it found; the
- * transaction is owned here, not in the service.
- */
-export async function retireOrphanedSearchArtifacts(
+/** Revalidate persisted candidates and retire both artifacts atomically. */
+export async function retireStillOrphanedSearchArtifacts(
   db: Database,
   refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
-): Promise<void> {
-  if (refs.length === 0) return;
-  const byType = new Map<SearchableEntity, string[]>();
-  for (const ref of refs) {
-    byType.set(ref.entityType, [
-      ...(byType.get(ref.entityType) ?? []),
-      ref.entityId,
-    ]);
-  }
-  await withTransaction(db, async (tx) => {
+): Promise<number> {
+  if (refs.length === 0) return 0;
+  return withTransaction(db, async (tx) => {
+    const stillOrphaned = await getOrphanedSearchDocumentRefs(tx, refs);
+    const byType = new Map<SearchableEntity, string[]>();
+    for (const ref of stillOrphaned) {
+      byType.set(ref.entityType, [
+        ...(byType.get(ref.entityType) ?? []),
+        ref.entityId,
+      ]);
+    }
     for (const [entityType, ids] of byType) {
       await softDeleteEntitySearchArtifactsTx(tx, entityType, ids);
     }
+    return stillOrphaned.length;
   });
 }
 

@@ -63,7 +63,7 @@ overrides:
   undici@7.28.0: 7.29.0
   vite: ^8.0.0
   webpack: ^5.104.1
-  wrangler: 4.120.0
+  wrangler: 4.134.0
 
 # The global store cannot rely on project-local hoisting. The maintained type
 # fixer handles published devDependencies; these packages omit that metadata
@@ -411,17 +411,6 @@ packageExtensions:
   "@hookform/resolvers":
     peerDependencies:
       zod: ^4.0.0
-
-# `DevEnv.handleErrorEvent` tolerates exactly two transient ProxyController
-# reasons; everything else — including a ProxyWorker reporting a client that
-# hung up mid-request ("Network connection lost.") — is re-emitted as fatal and
-# exits `wrangler dev`. Playwright aborts requests routinely, so this killed the
-# server mid-run and wiped whole E2E shards with ECONNREFUSED. The patch adds
-# that one cause to the existing allowlist; genuine ProxyWorker failures stay
-# fatal. Still present on workers-sdk main as of 4.123.0, so a bump won't drop
-# this — re-check `handleErrorEvent` when the pin moves.
-patchedDependencies:
-  wrangler@4.120.0: patches/wrangler@4.120.0.patch
 
 # Upstream peer ranges lag the versions Cubby validates in both TypeScript
 # engines. Keep these exceptions narrow and remove them when Triplit and Sentry

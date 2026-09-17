@@ -49,6 +49,14 @@ export const setCfEnv = (env?: Env): void => {
   cfEnv = env;
 };
 
+/** True after the request has entered the Cloudflare Worker adapter. */
+export const isCloudflareRuntime = (): boolean => cfEnv !== undefined;
+
+/** Durable search-index repair binding; absent in plain Node/Vite development. */
+export const getSearchIndexRepairWorkflow = ():
+  | Env["SEARCH_INDEX_REPAIR"]
+  | undefined => cfEnv?.SEARCH_INDEX_REPAIR;
+
 /**
  * The background queue producer (`env.BACKGROUND_QUEUE`) on CF Workers, or
  * undefined on the dev Node server (where setCfEnv is never called). The binding

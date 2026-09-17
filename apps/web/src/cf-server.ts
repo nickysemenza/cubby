@@ -507,6 +507,7 @@ const handler = {
 };
 
 export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
+export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
 
 export default Sentry.withSentry(
   (env: Env) => ({

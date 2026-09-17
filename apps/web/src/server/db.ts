@@ -74,8 +74,10 @@ export const withRequestDb = async <T>(
 };
 
 /**
- * Queue-only scope. One connected client is shared by the whole invocation;
- * Hyperdrive and the Worker runtime retain responsibility for socket cleanup.
+ * Background-invocation scope. One connected client is shared by one Queue
+ * invocation or one Workflow step; Hyperdrive and the Worker runtime retain
+ * responsibility for socket cleanup. Never carry this scope across Workflow
+ * steps.
  */
 export const withRequestDbClient = async <T>(
   connectionString: string,
