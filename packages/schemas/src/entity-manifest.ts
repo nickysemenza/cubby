@@ -154,7 +154,7 @@ export const imageEntities = entitiesWithTrait("hasImages");
 /** Entities whose public read rows carry server-resolved `displayImages`. */
 export const displayImageEntities = entitiesWithTrait("displayImages");
 
-type EntityWithImageStorage<S extends "gallery" | "cover"> = {
+type EntityWithImageStorage<S extends "gallery" | "cover" | "logo"> = {
   [E in Entity]: EntityManifest[E] extends { imageStorage: S } ? E : never;
 }[Entity];
 /** Entities whose images live in an ordered `<Entity>Image` join table. */
@@ -171,6 +171,14 @@ export const coverEntities: readonly CoverEntity[] = Object.freeze(
   allEntities.filter(
     (entity): entity is CoverEntity =>
       descriptorFor(entity).imageStorage === "cover",
+  ),
+);
+/** Entities whose single logo lives in one `logoImageId` column. */
+export type LogoEntity = EntityWithImageStorage<"logo">;
+export const logoEntities: readonly LogoEntity[] = Object.freeze(
+  allEntities.filter(
+    (entity): entity is LogoEntity =>
+      descriptorFor(entity).imageStorage === "logo",
   ),
 );
 export const searchableEntities = entitiesWithTrait("searchable");
