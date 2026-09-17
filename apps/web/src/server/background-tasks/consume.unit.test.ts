@@ -1,4 +1,5 @@
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { BackgroundTaskMessageInput } from "@cubby/schemas/queue-messages";
 import { testEntityId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +8,7 @@ import { Database } from "~/server/db";
 
 import type { BackgroundQueueDeliveredMessage } from "../background-queue-types";
 import { handleBackgroundQueueBatch } from "./consume";
+import type { refreshEntityEmbeddings } from "./embedding";
 import type { handleBackgroundTask } from "./handle";
 
 /** A faithful executor stand-in: the consumer's contract is its outcome/throw. */
@@ -44,6 +46,17 @@ const task = (seed: string): BackgroundTaskMessageInput => ({
     kind: "recipe-totals.recompute",
     requestedAt,
     recipeIds: [testEntityId("recipe", seed)],
+  },
+});
+
+const embedTask = (seed: string): BackgroundTaskMessageInput => ({
+  version: 2,
+  queueType: "background",
+  task: {
+    kind: "entity-embedding.refresh",
+    requestedAt,
+    entityType: "recipe",
+    entityId: testEntityId("recipe", seed),
   },
 });
 
@@ -120,5 +133,126 @@ describe("handleBackgroundQueueBatch", () => {
       { captureException: vi.fn(), afterSuccess, handleTask: handle },
     );
     expect(afterSuccess).not.toHaveBeenCalled();
+  });
+
+  describe("entity-embedding.refresh batching", () => {
+    it("isolates a per-ref error from its siblings and from a same-batch recipe task", async () => {
+      handle.mockResolvedValue("succeeded");
+      const boomError = new Error("boom");
+      const refreshEmbeddings = vi.fn<typeof refreshEntityEmbeddings>(
+        async (_db, refs) =>
+          new Map(
+            refs.map((ref) => [
+              entityRefKey(ref.entityType, ref.entityId),
+              ref.entityId === testEntityId("recipe", "boom")
+                ? { error: boomError, throttled: false }
+                : { outcome: "written" as const },
+            ]),
+          ),
+      );
+      const capture = vi.fn();
+      const afterSuccess = vi.fn(async () => {});
+      const messages = [
+        delivered(task("r")),
+        delivered(embedTask("a")),
+        delivered(embedTask("b")),
+        delivered(embedTask("boom")),
+      ];
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const outcomes = await handleBackgroundQueueBatch(
+        db,
+        { queue: "cubby-background", messages },
+        {
+          captureException: capture,
+          afterSuccess,
+          handleTask: handle,
+          refreshEmbeddings,
+        },
+      );
+
+      expect(outcomes).toEqual([
+        "succeeded",
+        "succeeded",
+        "succeeded",
+        "failed",
+      ]);
+      expect(messages[0]?.ack).toHaveBeenCalledOnce();
+      expect(messages[1]?.ack).toHaveBeenCalledOnce();
+      expect(messages[2]?.ack).toHaveBeenCalledOnce();
+      expect(messages[3]?.retry).toHaveBeenCalledOnce();
+      expect(messages[3]?.ack).not.toHaveBeenCalled();
+      expect(handle).toHaveBeenCalledOnce();
+      expect(capture).toHaveBeenCalledOnce();
+      expect(capture).toHaveBeenCalledWith(boomError);
+      expect(afterSuccess).toHaveBeenCalledOnce();
+    });
+
+    it("retries every embedding message and leaves the recipe task untouched when the batched call throws", async () => {
+      handle.mockResolvedValue("succeeded");
+      const providerDown = new Error("provider down");
+      const refreshEmbeddings = vi.fn<typeof refreshEntityEmbeddings>(
+        async () => {
+          throw providerDown;
+        },
+      );
+      const capture = vi.fn();
+      const messages = [
+        delivered(task("r")),
+        delivered(embedTask("a")),
+        delivered(embedTask("b")),
+      ];
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const outcomes = await handleBackgroundQueueBatch(
+        db,
+        { queue: "cubby-background", messages },
+        { captureException: capture, handleTask: handle, refreshEmbeddings },
+      );
+
+      expect(outcomes).toEqual(["succeeded", "failed", "failed"]);
+      expect(messages[0]?.ack).toHaveBeenCalledOnce();
+      expect(messages[0]?.retry).not.toHaveBeenCalled();
+      expect(messages[1]?.retry).toHaveBeenCalledOnce();
+      expect(messages[1]?.ack).not.toHaveBeenCalled();
+      expect(messages[2]?.retry).toHaveBeenCalledOnce();
+      expect(messages[2]?.ack).not.toHaveBeenCalled();
+      expect(capture).toHaveBeenCalledOnce();
+      expect(capture).toHaveBeenCalledWith(providerDown);
+    });
+
+    it("delays a throttled per-ref retry instead of redelivering immediately", async () => {
+      const throttledError = new Error("429");
+      const refreshEmbeddings = vi.fn<typeof refreshEntityEmbeddings>(
+        async (_db, refs) =>
+          new Map(
+            refs.map((ref) => [
+              entityRefKey(ref.entityType, ref.entityId),
+              { error: throttledError, throttled: true },
+            ]),
+          ),
+      );
+      const messages = [delivered(embedTask("a"))];
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await handleBackgroundQueueBatch(
+        db,
+        { queue: "cubby-background", messages },
+        {
+          captureException: vi.fn(),
+          handleTask: handle,
+          refreshEmbeddings,
+        },
+      );
+
+      expect(messages[0]?.retry).toHaveBeenCalledWith(
+        expect.objectContaining({ delaySeconds: expect.any(Number) }),
+      );
+      const call = messages[0]?.retry.mock.calls[0];
+      expect(call).toBeDefined();
+      const [delayOptions] = call ?? [];
+      expect(delayOptions?.delaySeconds).toBeGreaterThanOrEqual(30);
+      expect(delayOptions?.delaySeconds).toBeLessThan(60);
+    });
   });
 });

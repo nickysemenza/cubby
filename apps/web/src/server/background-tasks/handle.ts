@@ -1,10 +1,12 @@
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
+import { entityRefKey } from "@cubby/schemas/entity";
 
 import type { Database } from "~/server/db";
 
 import {
   type EmbeddingRefreshPort,
   productionEmbeddingRefreshPort,
+  refreshEntityEmbeddings,
 } from "./embedding";
 
 export type BackgroundTaskOutcome = "succeeded" | "skipped";
@@ -42,12 +44,17 @@ export async function handleBackgroundTask(
       return recomputed > 0 ? "succeeded" : "skipped";
     }
     case "entity-embedding.refresh": {
-      const { refreshEntityEmbedding } = await import("./embedding");
-      const outcome = await refreshEntityEmbedding(
-        db,
-        { entityType: task.entityType, entityId: task.entityId },
-        ports.embedding,
-      );
+      const ref = { entityType: task.entityType, entityId: task.entityId };
+      const result = (
+        await refreshEntityEmbeddings(db, [ref], ports.embedding)
+      ).get(entityRefKey(ref.entityType, ref.entityId));
+      if (!result) {
+        throw new Error(
+          `[background-tasks] missing embedding refresh result for ${task.entityType}:${task.entityId}`,
+        );
+      }
+      if ("error" in result) throw result.error;
+      const { outcome } = result;
       if (outcome === "obsolete" || outcome === "unconfigured") {
         console.warn(
           `[background-tasks] embedding ${outcome} ${task.entityType}:${task.entityId}`,

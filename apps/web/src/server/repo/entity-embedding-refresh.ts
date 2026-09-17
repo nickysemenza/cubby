@@ -1,12 +1,15 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { SearchableEntity } from "@cubby/schemas/search";
+import type {
+  SearchableEntity,
+  SearchableEntityRef,
+} from "@cubby/schemas/search";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
-  entityEmbedding,
   expense,
   financialAccount,
   financialTransaction,
@@ -90,37 +93,57 @@ const withOptionalLimit = <const TConfig extends object>(
 ) => (limit === undefined ? config : { ...config, limit });
 
 /**
- * The stored hash for an entity under the current model, or null when there is
- * no live row.
+ * One query for a whole refresh wave (or a single ref, from
+ * {@link getEntityEmbeddingReadiness}) instead of one per ref, keyed
+ * `${entityType}:${entityId}` so a caller can compare against a locally
+ * computed hash without a second lookup.
  *
  * Exposed so callers can decide BEFORE paying for an embedding.
- * `upsertEntityEmbeddingIfCurrent` is the live write path and runs the same
+ * `upsertEntityEmbeddingsIfCurrent` is the live write path and runs the same
  * comparison implicitly (via `embeddingHash`), but only after the provider
- * has already been called and billed — that check saves the HNSW write, not the
- * request. Mutation-sourced refreshes carry no expected hash and fan out on
- * every edit, so without a pre-call gate an entity is re-embedded whenever any
- * of its projected text is rewritten, identical or not.
+ * has already been called and billed — that check saves the HNSW write, not
+ * the request. Mutation-sourced refreshes carry no expected hash and fan out
+ * on every edit, so without a pre-call gate an entity is re-embedded
+ * whenever any of its projected text is rewritten, identical or not.
+ *
+ * Refs with no live row under the config's (provider, model, dimensions) are
+ * simply absent from the map.
  */
-export async function getStoredEmbeddingHash(
+export async function getStoredEmbeddingHashes(
   db: Database | DrizzleTransaction,
-  input: {
+  refs: ReadonlyArray<SearchableEntityRef>,
+  config: SemanticEmbeddingConfig,
+): Promise<Map<string, string>> {
+  if (refs.length === 0) return new Map();
+  // A JS array interpolates as a row constructor, not a Postgres list — build
+  // the VALUES rows with `sql.join`, mirroring `getSearchDocumentEmbeddingTexts`.
+  const values = sql.join(
+    refs.map((ref) => sql`(${ref.entityType}::text, ${ref.entityId}::uuid)`),
+    sql`, `,
+  );
+  const result = await unwrapDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
-    config: SemanticEmbeddingConfig;
-  },
-): Promise<string | null> {
-  const existing = await unwrapDb(db).query.entityEmbedding.findFirst({
-    where: and(
-      eq(entityEmbedding.entityType, input.entityType),
-      eq(entityEmbedding.entityId, input.entityId),
-      eq(entityEmbedding.provider, input.config.provider),
-      eq(entityEmbedding.model, input.config.model),
-      eq(entityEmbedding.dimensions, input.config.dimensions),
-      notDeleted(entityEmbedding),
-    ),
-    columns: { embeddingHash: true },
-  });
-  return existing?.embeddingHash ?? null;
+    embeddingHash: string;
+  }>(sql`
+    WITH refs("entityType", "entityId") AS (VALUES ${values})
+    SELECT ee."entityType", ee."entityId"::text AS "entityId",
+      ee."embeddingHash"
+    FROM refs
+    JOIN "EntityEmbedding" ee
+      ON ee."entityType" = refs."entityType"
+      AND ee."entityId" = refs."entityId"
+      AND ee.provider = ${config.provider}::text
+      AND ee.model = ${config.model}::text
+      AND ee.dimensions = ${config.dimensions}::integer
+      AND ee."deletedAt" IS NULL
+  `);
+  return new Map(
+    result.rows.map((row) => [
+      `${row.entityType}:${row.entityId}`,
+      row.embeddingHash,
+    ]),
+  );
 }
 
 export interface EntityEmbeddingUpsert extends SearchableEntityText {
@@ -134,56 +157,74 @@ export interface EntityEmbeddingUpsert extends SearchableEntityText {
 }
 
 /**
- * Write one vector only if the projection it was computed for is still the
- * live projection.
+ * Write vectors' bookkeeping rows only where the projection each was
+ * computed for is still the live projection — one statement for a whole
+ * refresh wave instead of one round trip per ref.
  *
- * The provider call happened outside any transaction, so by the time the
- * vector arrives the entity may have been edited again or deleted. Joining
+ * Each provider call happened outside any transaction, so by the time a
+ * vector arrives its entity may have been edited again or deleted. Joining
  * the write to `SearchDocument` on the exact text that was embedded makes the
  * check and the write one statement: a newer projection never receives an
  * older vector, and a soft-deleted document never gets a vector resurrected.
- * `"obsolete"` means exactly that — the caller should not retry with the same
- * vector; the next refresh task (or "Settle now") will embed the current text.
+ * A ref absent from the returned set means exactly that — the caller should
+ * not retry with the same vector; the next refresh task (or "Settle now")
+ * will embed the current text.
  */
-export async function upsertEntityEmbeddingIfCurrent(
+export async function upsertEntityEmbeddingsIfCurrent(
   db: Database | DrizzleTransaction,
-  input: EntityEmbeddingUpsert,
-): Promise<"written" | "obsolete"> {
-  const result = await unwrapDb(db).execute<{ entityId: string }>(sql`
+  inputs: ReadonlyArray<EntityEmbeddingUpsert>,
+): Promise<Set<string>> {
+  if (inputs.length === 0) return new Set();
+  // A JS array interpolates as a row constructor, not a Postgres list — build
+  // the VALUES rows with `sql.join`, mirroring `getStoredEmbeddingHashes`.
+  const values = sql.join(
+    inputs.map(
+      (input) =>
+        sql`(${input.entityType}::text, ${input.entityId}::uuid, ${input.embeddingText}::text, ${input.embeddingHash}::text, ${input.config.provider}::text, ${input.config.model}::text, ${input.config.dimensions}::int)`,
+    ),
+    sql`, `,
+  );
+  const result = await unwrapDb(db).execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+  }>(sql`
     INSERT INTO "EntityEmbedding" (
       "entityType", "entityId", "embeddingText", "embeddingHash",
       provider, model, dimensions, "updatedAt"
     )
     SELECT sd."entityType", sd."entityId", sd."semanticText",
-      ${input.embeddingHash}::text, ${input.config.provider}::text,
-      ${input.config.model}::text, ${input.config.dimensions}::integer, now()
-    FROM "SearchDocument" sd
-    WHERE sd."entityType" = ${input.entityType}
-      AND sd."entityId" = ${input.entityId}::uuid
+      v."embeddingHash", v.provider, v.model, v.dimensions, now()
+    FROM (VALUES ${values}) AS v(
+      "entityType", "entityId", "embeddingText", "embeddingHash",
+      provider, model, dimensions
+    )
+    JOIN "SearchDocument" sd
+      ON sd."entityType" = v."entityType"
+      AND sd."entityId" = v."entityId"
       AND sd."deletedAt" IS NULL
-      AND sd."semanticText" = ${input.embeddingText}::text
+      AND sd."semanticText" = v."embeddingText"
     ON CONFLICT ("entityType", "entityId", provider, model, dimensions)
       WHERE "deletedAt" IS NULL
     DO UPDATE SET
       "embeddingText" = EXCLUDED."embeddingText",
       "embeddingHash" = EXCLUDED."embeddingHash",
       "updatedAt" = now()
-    RETURNING "entityId"::text AS "entityId"
+    RETURNING "entityType", "entityId"::text AS "entityId"
   `);
-  return result.rows.length > 0 ? "written" : "obsolete";
+  return new Set(
+    result.rows.map((row) => entityRefKey(row.entityType, row.entityId)),
+  );
 }
 
 /**
- * Test-only seed for an `EntityEmbedding` row, upserted by content hash.
- *
- * This is NOT the production write path — that is
- * `upsertEntityEmbeddingIfCurrent`, which requires a matching
- * `SearchDocument.semanticText` row and only writes when the projection it
- * was computed for is still current. Integration tests that need a row
- * present without seeding a `SearchDocument` too (e.g. to assert removal
- * cascades soft-delete it) use this instead. Lives here rather than inline in
- * the calling test because services code cannot import DB schema/helpers
- * directly (`no-restricted-imports` on `apps/web/src/server/services/**`).
+ * Test-only seed for an `EntityEmbedding` row: computes the hash and delegates
+ * to the production write path, {@link upsertEntityEmbeddingsIfCurrent}, with
+ * a one-element batch. That path requires a matching
+ * `SearchDocument.semanticText` row, so callers must seed (or otherwise
+ * produce) one with the same `embeddingText` first. Lives here rather than
+ * inline in the calling test because services code cannot import DB
+ * schema/helpers directly (`no-restricted-imports` on
+ * `apps/web/src/server/services/**`).
  */
 export async function seedEntityEmbedding(
   db: Database | DrizzleTransaction,
@@ -199,40 +240,15 @@ export async function seedEntityEmbedding(
     text: normalizeSearchText(input.embeddingText),
   });
 
-  const existing = await unwrapDb(db).query.entityEmbedding.findFirst({
-    where: and(
-      eq(entityEmbedding.entityType, input.entityType),
-      eq(entityEmbedding.entityId, input.entityId),
-      eq(entityEmbedding.provider, input.config.provider),
-      eq(entityEmbedding.model, input.config.model),
-      eq(entityEmbedding.dimensions, input.config.dimensions),
-      notDeleted(entityEmbedding),
-    ),
-    columns: { id: true, embeddingHash: true },
-  });
-
-  if (existing?.embeddingHash === embeddingHash) return;
-
-  const values = {
-    entityType: input.entityType,
-    entityId: input.entityId,
-    embeddingText: input.embeddingText,
-    embeddingHash,
-    provider: input.config.provider,
-    model: input.config.model,
-    dimensions: input.config.dimensions,
-    deletedAt: null,
-  };
-
-  if (existing) {
-    await unwrapDb(db)
-      .update(entityEmbedding)
-      .set(values)
-      .where(eq(entityEmbedding.id, existing.id));
-    return;
-  }
-
-  await unwrapDb(db).insert(entityEmbedding).values(values);
+  await upsertEntityEmbeddingsIfCurrent(db, [
+    {
+      entityType: input.entityType,
+      entityId: input.entityId,
+      embeddingText: input.embeddingText,
+      embeddingHash,
+      config: input.config,
+    },
+  ]);
 }
 
 async function getProductEmbeddingTexts(
