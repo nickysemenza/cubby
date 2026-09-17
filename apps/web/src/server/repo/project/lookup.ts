@@ -280,10 +280,14 @@ export const buildProjectListQuery = async (
         `WHERE pu."projectId" = "project"."id" AND pu."deletedAt" IS NULL))) ` +
         `${direction === "asc" ? "asc" : "desc"} nulls last`,
     );
-  const orderByArray = projectScaffold.orderBy(sorts, {
-    resolve: (s) =>
-      s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,
-  });
+  const orderByArray = projectScaffold.orderBy(
+    sorts,
+    {
+      resolve: (s) =>
+        s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,
+    },
+    filters,
+  );
 
   return { tree: loadedTree, whereClause, orderByArray };
 };

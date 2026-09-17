@@ -87,16 +87,17 @@ export function USDAFoodList({
   >(
     (params) => {
       const searching = Boolean(params.filters.nameFilter);
+      const requestedSorts = params.sort ?? [];
       const listParams = {
         filters: params.filters,
         pagination: params.pagination,
-        sort: params.sort,
+        sort: requestedSorts,
       };
       const input = operations.list.definition.input.parse({
         ...listParams,
         sort: searching
           ? [{ orderBy: "relevance", direction: "asc" }]
-          : params.sort.map((sort) => ({
+          : requestedSorts.map((sort) => ({
               ...sort,
               orderBy: USDA_SORT_FIELDS.get(sort.orderBy) ?? "fdc_id",
             })),

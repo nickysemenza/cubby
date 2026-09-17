@@ -836,43 +836,47 @@ export const locationList = async (
 ) => {
   const whereClause = await buildLocationWhere(db, filters);
 
-  const orderByClause = locationScaffold.orderBy(sorts, {
-    groupBy,
-    // `valuation` is computed on read, not a stored column; sort by direct
-    // value because that is what the list cell renders in compact mode.
-    resolve: (s) => {
-      const dirSql =
-        s.direction === "asc" ? "asc nulls last" : "desc nulls last";
-      if (s.orderBy === "valuation")
-        return [
-          s.direction === "asc"
-            ? sql`${directValuationSql} asc nulls last`
-            : sql`${directValuationSql} desc nulls last`,
-        ];
-      if (s.orderBy === "inventoryEntries")
-        return [
-          // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
-          // stockOnly() filter — otherwise sort and filter disagree on
-          // whether an installed fixture counts.
-          sql.raw(
-            `(SELECT count(*) FROM "InventoryEntry" ie ` +
-              `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
-              `WHERE ie."locationId" = "location"."id" AND ie."deletedAt" IS NULL ` +
-              `AND ie."placement" = 'stock') ${dirSql}`,
-          ),
-        ];
-      // Joined parent name — a correlated subquery keeps this a relational
-      // findMany. Soft-delete guarded, like the read path.
-      if (s.orderBy === "parent")
-        return [
-          sql.raw(
-            `(SELECT l."name" FROM "Location" l ` +
-              `WHERE l."id" = "location"."parentId" AND l."deletedAt" IS NULL) ${dirSql}`,
-          ),
-        ];
-      return null;
+  const orderByClause = locationScaffold.orderBy(
+    sorts,
+    {
+      groupBy,
+      // `valuation` is computed on read, not a stored column; sort by direct
+      // value because that is what the list cell renders in compact mode.
+      resolve: (s) => {
+        const dirSql =
+          s.direction === "asc" ? "asc nulls last" : "desc nulls last";
+        if (s.orderBy === "valuation")
+          return [
+            s.direction === "asc"
+              ? sql`${directValuationSql} asc nulls last`
+              : sql`${directValuationSql} desc nulls last`,
+          ];
+        if (s.orderBy === "inventoryEntries")
+          return [
+            // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
+            // stockOnly() filter — otherwise sort and filter disagree on
+            // whether an installed fixture counts.
+            sql.raw(
+              `(SELECT count(*) FROM "InventoryEntry" ie ` +
+                `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
+                `WHERE ie."locationId" = "location"."id" AND ie."deletedAt" IS NULL ` +
+                `AND ie."placement" = 'stock') ${dirSql}`,
+            ),
+          ];
+        // Joined parent name — a correlated subquery keeps this a relational
+        // findMany. Soft-delete guarded, like the read path.
+        if (s.orderBy === "parent")
+          return [
+            sql.raw(
+              `(SELECT l."name" FROM "Location" l ` +
+                `WHERE l."id" = "location"."parentId" AND l."deletedAt" IS NULL) ${dirSql}`,
+            ),
+          ];
+        return null;
+      },
     },
-  });
+    filters,
+  );
 
   const { take, skip } = locationScaffold.page(pagination);
 

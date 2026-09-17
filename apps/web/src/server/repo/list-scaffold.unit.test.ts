@@ -27,6 +27,18 @@ describe("listScaffold", () => {
       expect(sql).toContain('"status"');
       expect(sql).toContain('"name"');
     });
+
+    it("intersects the uncapped SearchDocument eligibility predicate with the scoped list", () => {
+      const sql = renderWhereSql(
+        scaffold.where({ searchQuery: "short task" }, [isNotNull(task.name)]),
+      );
+      expect(sql).toContain('"SearchDocument"');
+      expect(sql).toContain('"entityType"');
+      expect(sql).toContain('"name"');
+      // Counts and later offset pages must see every lexical hit, unlike the
+      // intentionally capped global-command candidate query.
+      expect(sql).not.toContain("LIMIT");
+    });
   });
 
   describe("orderBy", () => {
@@ -41,6 +53,25 @@ describe("listScaffold", () => {
       expect(clauses.some((c) => renderWhereSql(c)?.includes('"name"'))).toBe(
         true,
       );
+    });
+
+    it("uses relevance, source edit time, and shortcode only when search has no explicit sort", () => {
+      const clauses = scaffold.orderBy([], undefined, {
+        searchQuery: "short task",
+      });
+      expect(renderWhereSql(clauses[0])).toContain('"SearchDocument"');
+      expect(renderWhereSql(clauses[1])).toContain('"updatedAt"');
+      expect(renderWhereSql(clauses[2])).toContain('"shortcode"');
+    });
+
+    it("keeps an explicit sort authoritative and uses shortcode before the private id", () => {
+      const clauses = scaffold.orderBy(
+        [{ orderBy: "name", direction: "asc" }],
+        undefined,
+        { searchQuery: "short task" },
+      );
+      expect(renderWhereSql(clauses.at(-2))).toContain('"shortcode"');
+      expect(renderWhereSql(clauses.at(-1))).toContain('"id"');
     });
   });
 

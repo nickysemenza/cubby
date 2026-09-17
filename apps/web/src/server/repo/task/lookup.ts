@@ -273,9 +273,13 @@ export const taskList = async (
   const dbClient = getDb(db);
   const whereClause = await buildTaskWhere(db, filters);
 
-  const orderByArray = taskScaffold.orderBy(sorts, {
-    resolve: resolveTaskSort,
-  });
+  const orderByArray = taskScaffold.orderBy(
+    sorts,
+    {
+      resolve: resolveTaskSort,
+    },
+    filters,
+  );
   const { take, skip } = taskScaffold.page(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount({

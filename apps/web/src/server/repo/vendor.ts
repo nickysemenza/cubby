@@ -328,7 +328,13 @@ export const vendorList = async (
         ),
       )
       .where(whereClause)
-      .orderBy(...vendorScaffold.orderBy(sorts, { resolve: resolveVendorSort }))
+      .orderBy(
+        ...vendorScaffold.orderBy(
+          sorts,
+          { resolve: resolveVendorSort },
+          filters,
+        ),
+      )
       .limit(take)
       .offset(skip),
     countWhere(db, vendor, whereClause),

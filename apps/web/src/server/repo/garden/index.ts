@@ -477,7 +477,7 @@ export const plantingList = async (
     eqAnyRequested(planting.taskId, taskIds),
     eqAnyRequested(planting.sourceProductId, sourceProductIds),
   ]);
-  const orderByArray = plantingScaffold.orderBy(sorts);
+  const orderByArray = plantingScaffold.orderBy(sorts, undefined, filters);
   const { take, skip } = plantingScaffold.page(pagination);
   const { data: rows, count } = await executeListQueryWithCount({
     kind: "page",
@@ -564,9 +564,13 @@ export const gardenEntryList = async (
   // second `orderBy` entry alongside whichever field the caller picked) — a
   // `tieBreaker`, not a `resolve` special-case, so it can't swallow a second
   // user-requested sort (see `buildOrderBy`'s doc comment).
-  const orderByArray = gardenEntryScaffold.orderBy(sorts, {
-    tieBreaker: desc(gardenEntry.createdAt),
-  });
+  const orderByArray = gardenEntryScaffold.orderBy(
+    sorts,
+    {
+      tieBreaker: desc(gardenEntry.createdAt),
+    },
+    filters,
+  );
   const { take, skip } = gardenEntryScaffold.page(pagination);
   const { data: rows, count } = await executeListQueryWithCount({
     kind: "page",

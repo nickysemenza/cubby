@@ -694,6 +694,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "page",
                     value: input.query.page
                 )
@@ -1200,6 +1207,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "sourceAliasPresenceFilter",
                     value: input.query.sourceAliasPresenceFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -1772,6 +1786,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "page",
                     value: input.query.page
                 )
@@ -2171,6 +2192,20 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "observedOnFrom",
+                    value: input.query.observedOnFrom
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "observedOnTo",
+                    value: input.query.observedOnTo
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "locationId",
                     value: input.query.locationId
                 )
@@ -2187,6 +2222,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "journalPlantingId",
                     value: input.query.journalPlantingId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -2589,6 +2631,20 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "observedOnFrom",
+                    value: input.query.observedOnFrom
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "observedOnTo",
+                    value: input.query.observedOnTo
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "locationId",
                     value: input.query.locationId
                 )
@@ -2605,6 +2661,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "journalPlantingId",
                     value: input.query.journalPlantingId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -3323,6 +3386,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "page",
                     value: input.query.page
                 )
@@ -3815,6 +3885,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "verifiedTo",
                     value: input.query.verifiedTo
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -5968,6 +6045,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "page",
                     value: input.query.page
                 )
@@ -6572,6 +6656,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "page",
                     value: input.query.page
                 )
@@ -6999,6 +7090,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "page",
                     value: input.query.page
                 )
@@ -7419,6 +7517,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "sourceProductId",
                     value: input.query.sourceProductId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -8366,6 +8471,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "componentPresenceFilter",
                     value: input.query.componentPresenceFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -9328,6 +9440,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "ids",
                     value: input.query.ids
                 )
@@ -9694,6 +9813,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "attention",
                     value: input.query.attention
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -10287,6 +10413,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "page",
                     value: input.query.page
                 )
@@ -10821,6 +10954,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "caloriesTotalMax",
                     value: input.query.caloriesTotalMax
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -11667,6 +11807,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "page",
                     value: input.query.page
                 )
@@ -12246,6 +12393,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "ids",
                     value: input.query.ids
                 )
@@ -12624,6 +12778,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "logoPresenceFilter",
                     value: input.query.logoPresenceFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -13058,6 +13219,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "candidateProductId",
                     value: input.query.candidateProductId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "searchQuery",
+                    value: input.query.searchQuery
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

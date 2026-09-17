@@ -1135,6 +1135,8 @@ public enum Operations {
                 public var projectScopeDateTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeCompletionYear`.
                 public var projectScopeCompletionYear: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/page`.
@@ -1201,6 +1203,7 @@ public enum Operations {
                 ///   - projectScopeDateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - projectScopeDateTo: Calendar day as "YYYY-MM-DD"
                 ///   - projectScopeCompletionYear:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt. Default: -date
@@ -1249,6 +1252,7 @@ public enum Operations {
                     projectScopeDateFrom: Swift.String? = nil,
                     projectScopeDateTo: Swift.String? = nil,
                     projectScopeCompletionYear: Swift.String? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -1297,6 +1301,7 @@ public enum Operations {
                     self.projectScopeDateFrom = projectScopeDateFrom
                     self.projectScopeDateTo = projectScopeDateTo
                     self.projectScopeCompletionYear = projectScopeCompletionYear
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -2094,6 +2099,8 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/sourceAliasPresenceFilter`.
                 public var sourceAliasPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.SourceAliasPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/page`.
@@ -2142,6 +2149,7 @@ public enum Operations {
                 ///   - source:
                 ///   - externalAccountId:
                 ///   - sourceAliasPresenceFilter:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, provisional, transactionCount, createdAt, updatedAt. Default: -name
@@ -2168,6 +2176,7 @@ public enum Operations {
                     source: [Swift.String]? = nil,
                     externalAccountId: [Swift.String]? = nil,
                     sourceAliasPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.SourceAliasPresenceFilterPayload? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -2194,6 +2203,7 @@ public enum Operations {
                     self.source = source
                     self.externalAccountId = externalAccountId
                     self.sourceAliasPresenceFilter = sourceAliasPresenceFilter
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -3148,6 +3158,8 @@ public enum Operations {
                 public var source: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/externalId`.
                 public var externalId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/page`.
@@ -3207,6 +3219,7 @@ public enum Operations {
                 ///   - allocationIntegrity:
                 ///   - source:
                 ///   - externalId:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt. Default: -transactionDate
@@ -3241,6 +3254,7 @@ public enum Operations {
                     allocationIntegrity: Operations.Resources_financialTransaction_list.Input.Query.AllocationIntegrityPayload? = nil,
                     source: [Swift.String]? = nil,
                     externalId: [Swift.String]? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -3275,6 +3289,7 @@ public enum Operations {
                     self.allocationIntegrity = allocationIntegrity
                     self.source = source
                     self.externalId = externalId
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -4017,6 +4032,14 @@ public enum Operations {
                 public typealias KindPayload = [Operations.Resources_gardenEntry_list.Input.Query.KindPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/kind`.
                 public var kind: Operations.Resources_gardenEntry_list.Input.Query.KindPayload?
+                /// Inclusive lower bound on observation date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/observedOnFrom`.
+                public var observedOnFrom: Swift.String?
+                /// Inclusive upper bound on observation date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/observedOnTo`.
+                public var observedOnTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/locationId`.
                 public var locationId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/plantingId`.
@@ -4025,6 +4048,8 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/journalPlantingId`.
                 public var journalPlantingId: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/page`.
@@ -4056,9 +4081,12 @@ public enum Operations {
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - kind:
+                ///   - observedOnFrom: Inclusive lower bound on observation date
+                ///   - observedOnTo: Inclusive upper bound on observation date
                 ///   - locationId:
                 ///   - plantingId:
                 ///   - journalPlantingId: planting shortcode, e.g. PLT-4K7M
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedOn, createdAt, updatedAt, kind. Default: -observedOn
@@ -4069,9 +4097,12 @@ public enum Operations {
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
                     kind: Operations.Resources_gardenEntry_list.Input.Query.KindPayload? = nil,
+                    observedOnFrom: Swift.String? = nil,
+                    observedOnTo: Swift.String? = nil,
                     locationId: [Swift.String]? = nil,
                     plantingId: [Swift.String]? = nil,
                     journalPlantingId: Swift.String? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -4082,9 +4113,12 @@ public enum Operations {
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
                     self.kind = kind
+                    self.observedOnFrom = observedOnFrom
+                    self.observedOnTo = observedOnTo
                     self.locationId = locationId
                     self.plantingId = plantingId
                     self.journalPlantingId = journalPlantingId
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -4825,6 +4859,14 @@ public enum Operations {
                 public typealias KindPayload = [Operations.Resources_gardenEntry_timeline.Input.Query.KindPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/kind`.
                 public var kind: Operations.Resources_gardenEntry_timeline.Input.Query.KindPayload?
+                /// Inclusive lower bound on observation date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/observedOnFrom`.
+                public var observedOnFrom: Swift.String?
+                /// Inclusive upper bound on observation date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/observedOnTo`.
+                public var observedOnTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/locationId`.
                 public var locationId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/plantingId`.
@@ -4833,6 +4875,8 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/journalPlantingId`.
                 public var journalPlantingId: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/timeline/GET/query/ids`.
                 public var ids: [Swift.String]?
                 /// Calendar day as "YYYY-MM-DD"
@@ -4858,9 +4902,12 @@ public enum Operations {
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
                 ///   - kind:
+                ///   - observedOnFrom: Inclusive lower bound on observation date
+                ///   - observedOnTo: Inclusive upper bound on observation date
                 ///   - locationId:
                 ///   - plantingId:
                 ///   - journalPlantingId: planting shortcode, e.g. PLT-4K7M
+                ///   - searchQuery:
                 ///   - ids:
                 ///   - from: Calendar day as "YYYY-MM-DD"
                 ///   - to: Calendar day as "YYYY-MM-DD"
@@ -4871,9 +4918,12 @@ public enum Operations {
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
                     kind: Operations.Resources_gardenEntry_timeline.Input.Query.KindPayload? = nil,
+                    observedOnFrom: Swift.String? = nil,
+                    observedOnTo: Swift.String? = nil,
                     locationId: [Swift.String]? = nil,
                     plantingId: [Swift.String]? = nil,
                     journalPlantingId: Swift.String? = nil,
+                    searchQuery: Swift.String? = nil,
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
                     to: Swift.String? = nil,
@@ -4884,9 +4934,12 @@ public enum Operations {
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
                     self.kind = kind
+                    self.observedOnFrom = observedOnFrom
+                    self.observedOnTo = observedOnTo
                     self.locationId = locationId
                     self.plantingId = plantingId
                     self.journalPlantingId = journalPlantingId
+                    self.searchQuery = searchQuery
                     self.ids = ids
                     self.from = from
                     self.to = to
@@ -6139,6 +6192,8 @@ public enum Operations {
                 public var eaterPresenceFilter: Operations.Resources_ingredient_list.Input.Query.EaterPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/eaterSearch`.
                 public var eaterSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/page`.
@@ -6181,6 +6236,7 @@ public enum Operations {
                 ///   - eaterId:
                 ///   - eaterPresenceFilter:
                 ///   - eaterSearch:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, appearsInRecipes, product. Default: -createdAt
@@ -6201,6 +6257,7 @@ public enum Operations {
                     eaterId: [Swift.String]? = nil,
                     eaterPresenceFilter: Operations.Resources_ingredient_list.Input.Query.EaterPresenceFilterPayload? = nil,
                     eaterSearch: Swift.String? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -6221,6 +6278,7 @@ public enum Operations {
                     self.eaterId = eaterId
                     self.eaterPresenceFilter = eaterPresenceFilter
                     self.eaterSearch = eaterSearch
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -7155,6 +7213,8 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedTo`.
                 public var verifiedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/page`.
@@ -7204,6 +7264,7 @@ public enum Operations {
                 ///   - valuationStatus:
                 ///   - verifiedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - verifiedTo: Calendar day as "YYYY-MM-DD"
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt. Default: -createdAt
@@ -7228,6 +7289,7 @@ public enum Operations {
                     valuationStatus: Operations.Resources_inventory_list.Input.Query.ValuationStatusPayload? = nil,
                     verifiedFrom: Swift.String? = nil,
                     verifiedTo: Swift.String? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -7252,6 +7314,7 @@ public enum Operations {
                     self.valuationStatus = valuationStatus
                     self.verifiedFrom = verifiedFrom
                     self.verifiedTo = verifiedTo
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -11359,6 +11422,8 @@ public enum Operations {
                 public var valuationMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/valuationMax`.
                 public var valuationMax: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/page`.
@@ -11404,6 +11469,7 @@ public enum Operations {
                 ///   - directItemCountMax:
                 ///   - valuationMin:
                 ///   - valuationMax:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, type, parent, lastBulkInventory, valuation, inventoryEntries. Default: -createdAt
@@ -11431,6 +11497,7 @@ public enum Operations {
                     directItemCountMax: Swift.Int? = nil,
                     valuationMin: Swift.Double? = nil,
                     valuationMax: Swift.Double? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -11458,6 +11525,7 @@ public enum Operations {
                     self.directItemCountMax = directItemCountMax
                     self.valuationMin = valuationMin
                     self.valuationMax = valuationMax
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -12449,6 +12517,8 @@ public enum Operations {
                 public var eaterPresenceFilter: Operations.Resources_meal_list.Input.Query.EaterPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/eaterSearch`.
                 public var eaterSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/page`.
@@ -12498,6 +12568,7 @@ public enum Operations {
                 ///   - eaterId:
                 ///   - eaterPresenceFilter:
                 ///   - eaterSearch:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, mealType, createdAt, updatedAt. Default: -date
@@ -12525,6 +12596,7 @@ public enum Operations {
                     eaterId: [Swift.String]? = nil,
                     eaterPresenceFilter: Operations.Resources_meal_list.Input.Query.EaterPresenceFilterPayload? = nil,
                     eaterSearch: Swift.String? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -12552,6 +12624,7 @@ public enum Operations {
                     self.eaterId = eaterId
                     self.eaterPresenceFilter = eaterPresenceFilter
                     self.eaterSearch = eaterSearch
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -13303,6 +13376,8 @@ public enum Operations {
                 public var taskId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/sourceProductId`.
                 public var sourceProductId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/page`.
@@ -13339,6 +13414,7 @@ public enum Operations {
                 ///   - ingredientId:
                 ///   - taskId:
                 ///   - sourceProductId:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, status, sowedOn, finishedOn. Default: -createdAt
@@ -13353,6 +13429,7 @@ public enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     taskId: [Swift.String]? = nil,
                     sourceProductId: [Swift.String]? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -13367,6 +13444,7 @@ public enum Operations {
                     self.ingredientId = ingredientId
                     self.taskId = taskId
                     self.sourceProductId = sourceProductId
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -14116,6 +14194,8 @@ public enum Operations {
                 public var taskId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/sourceProductId`.
                 public var sourceProductId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/ids`.
                 public var ids: [Swift.String]?
                 /// Calendar day as "YYYY-MM-DD"
@@ -14145,6 +14225,7 @@ public enum Operations {
                 ///   - ingredientId:
                 ///   - taskId:
                 ///   - sourceProductId:
+                ///   - searchQuery:
                 ///   - ids:
                 ///   - from: Calendar day as "YYYY-MM-DD"
                 ///   - to: Calendar day as "YYYY-MM-DD"
@@ -14159,6 +14240,7 @@ public enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     taskId: [Swift.String]? = nil,
                     sourceProductId: [Swift.String]? = nil,
+                    searchQuery: Swift.String? = nil,
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
                     to: Swift.String? = nil,
@@ -14173,6 +14255,7 @@ public enum Operations {
                     self.ingredientId = ingredientId
                     self.taskId = taskId
                     self.sourceProductId = sourceProductId
+                    self.searchQuery = searchQuery
                     self.ids = ids
                     self.from = from
                     self.to = to
@@ -15443,6 +15526,8 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/componentPresenceFilter`.
                 public var componentPresenceFilter: Operations.Resources_product_list.Input.Query.ComponentPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/page`.
@@ -15551,6 +15636,7 @@ public enum Operations {
                 ///   - imagePresenceFilter: Filter to products that do / don't have at least one image (PDF manuals don't count).
                 ///   - unitMappingPresenceFilter: Filter to products that do / don't have at least one unit mapping (conversion edge).
                 ///   - componentPresenceFilter: Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product.
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, identity_strength. Default: -createdAt
@@ -15641,6 +15727,7 @@ public enum Operations {
                     imagePresenceFilter: Operations.Resources_product_list.Input.Query.ImagePresenceFilterPayload? = nil,
                     unitMappingPresenceFilter: Operations.Resources_product_list.Input.Query.UnitMappingPresenceFilterPayload? = nil,
                     componentPresenceFilter: Operations.Resources_product_list.Input.Query.ComponentPresenceFilterPayload? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -15731,6 +15818,7 @@ public enum Operations {
                     self.imagePresenceFilter = imagePresenceFilter
                     self.unitMappingPresenceFilter = unitMappingPresenceFilter
                     self.componentPresenceFilter = componentPresenceFilter
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -17058,6 +17146,8 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/componentPresenceFilter`.
                 public var componentPresenceFilter: Operations.Resources_product_timeline.Input.Query.ComponentPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/ids`.
                 public var ids: [Swift.String]?
                 /// Calendar day as "YYYY-MM-DD"
@@ -17163,6 +17253,7 @@ public enum Operations {
                 ///   - imagePresenceFilter: Filter to products that do / don't have at least one image (PDF manuals don't count).
                 ///   - unitMappingPresenceFilter: Filter to products that do / don't have at least one unit mapping (conversion edge).
                 ///   - componentPresenceFilter: Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product.
+                ///   - searchQuery:
                 ///   - ids:
                 ///   - from: Calendar day as "YYYY-MM-DD"
                 ///   - to: Calendar day as "YYYY-MM-DD"
@@ -17253,6 +17344,7 @@ public enum Operations {
                     imagePresenceFilter: Operations.Resources_product_timeline.Input.Query.ImagePresenceFilterPayload? = nil,
                     unitMappingPresenceFilter: Operations.Resources_product_timeline.Input.Query.UnitMappingPresenceFilterPayload? = nil,
                     componentPresenceFilter: Operations.Resources_product_timeline.Input.Query.ComponentPresenceFilterPayload? = nil,
+                    searchQuery: Swift.String? = nil,
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
                     to: Swift.String? = nil,
@@ -17343,6 +17435,7 @@ public enum Operations {
                     self.imagePresenceFilter = imagePresenceFilter
                     self.unitMappingPresenceFilter = unitMappingPresenceFilter
                     self.componentPresenceFilter = componentPresenceFilter
+                    self.searchQuery = searchQuery
                     self.ids = ids
                     self.from = from
                     self.to = to
@@ -17734,6 +17827,8 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/attention`.
                 public var attention: Operations.Resources_project_list.Input.Query.AttentionPayload?
+                /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/projects/GET/query/page`.
@@ -17801,6 +17896,7 @@ public enum Operations {
                 ///   - parentProjectId:
                 ///   - includeSubProjects:
                 ///   - attention:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt. Default: -createdAt
@@ -17844,6 +17940,7 @@ public enum Operations {
                     parentProjectId: Operations.Resources_project_list.Input.Query.ParentProjectIdPayload? = nil,
                     includeSubProjects: Swift.Bool? = nil,
                     attention: Operations.Resources_project_list.Input.Query.AttentionPayload? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -17887,6 +17984,7 @@ public enum Operations {
                     self.parentProjectId = parentProjectId
                     self.includeSubProjects = includeSubProjects
                     self.attention = attention
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -18873,6 +18971,8 @@ public enum Operations {
                 public typealias DataGapPayload = [Operations.Resources_purchase_list.Input.Query.DataGapPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataGap`.
                 public var dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload?
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/page`.
@@ -18938,6 +19038,7 @@ public enum Operations {
                 ///   - documentPresenceFilter:
                 ///   - dataStatus:
                 ///   - dataGap:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt. Default: -date
@@ -18975,6 +19076,7 @@ public enum Operations {
                     documentPresenceFilter: Operations.Resources_purchase_list.Input.Query.DocumentPresenceFilterPayload? = nil,
                     dataStatus: Operations.Resources_purchase_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -19012,6 +19114,7 @@ public enum Operations {
                     self.documentPresenceFilter = documentPresenceFilter
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -19894,6 +19997,8 @@ public enum Operations {
                 public var caloriesTotalMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/caloriesTotalMax`.
                 public var caloriesTotalMax: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/page`.
@@ -19942,6 +20047,7 @@ public enum Operations {
                 ///   - costTotalMax:
                 ///   - caloriesTotalMin:
                 ///   - caloriesTotalMax:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes. Default: -createdAt
@@ -19972,6 +20078,7 @@ public enum Operations {
                     costTotalMax: Swift.Double? = nil,
                     caloriesTotalMin: Swift.Double? = nil,
                     caloriesTotalMax: Swift.Double? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -20002,6 +20109,7 @@ public enum Operations {
                     self.costTotalMax = costTotalMax
                     self.caloriesTotalMin = caloriesTotalMin
                     self.caloriesTotalMax = caloriesTotalMax
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -21628,6 +21736,8 @@ public enum Operations {
                 public var projectScopeDateTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeCompletionYear`.
                 public var projectScopeCompletionYear: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/page`.
@@ -21682,6 +21792,7 @@ public enum Operations {
                 ///   - projectScopeDateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - projectScopeDateTo: Calendar day as "YYYY-MM-DD"
                 ///   - projectScopeCompletionYear:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt. Default: -createdAt
@@ -21718,6 +21829,7 @@ public enum Operations {
                     projectScopeDateFrom: Swift.String? = nil,
                     projectScopeDateTo: Swift.String? = nil,
                     projectScopeCompletionYear: Swift.String? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -21754,6 +21866,7 @@ public enum Operations {
                     self.projectScopeDateFrom = projectScopeDateFrom
                     self.projectScopeDateTo = projectScopeDateTo
                     self.projectScopeCompletionYear = projectScopeCompletionYear
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -22810,6 +22923,8 @@ public enum Operations {
                 public var projectScopeDateTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/projectScopeCompletionYear`.
                 public var projectScopeCompletionYear: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/tasks/timeline/GET/query/ids`.
                 public var ids: [Swift.String]?
                 /// Calendar day as "YYYY-MM-DD"
@@ -22861,6 +22976,7 @@ public enum Operations {
                 ///   - projectScopeDateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - projectScopeDateTo: Calendar day as "YYYY-MM-DD"
                 ///   - projectScopeCompletionYear:
+                ///   - searchQuery:
                 ///   - ids:
                 ///   - from: Calendar day as "YYYY-MM-DD"
                 ///   - to: Calendar day as "YYYY-MM-DD"
@@ -22897,6 +23013,7 @@ public enum Operations {
                     projectScopeDateFrom: Swift.String? = nil,
                     projectScopeDateTo: Swift.String? = nil,
                     projectScopeCompletionYear: Swift.String? = nil,
+                    searchQuery: Swift.String? = nil,
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
                     to: Swift.String? = nil,
@@ -22933,6 +23050,7 @@ public enum Operations {
                     self.projectScopeDateFrom = projectScopeDateFrom
                     self.projectScopeDateTo = projectScopeDateTo
                     self.projectScopeCompletionYear = projectScopeCompletionYear
+                    self.searchQuery = searchQuery
                     self.ids = ids
                     self.from = from
                     self.to = to
@@ -23382,6 +23500,8 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoPresenceFilter`.
                 public var logoPresenceFilter: Operations.Resources_vendor_list.Input.Query.LogoPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/page`.
@@ -23438,6 +23558,7 @@ public enum Operations {
                 ///   - latestPurchaseDateTo: Calendar day as "YYYY-MM-DD"
                 ///   - latestPurchaseDatePresenceFilter:
                 ///   - logoPresenceFilter:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt. Default: -spend
@@ -23471,6 +23592,7 @@ public enum Operations {
                     latestPurchaseDateTo: Swift.String? = nil,
                     latestPurchaseDatePresenceFilter: Operations.Resources_vendor_list.Input.Query.LatestPurchaseDatePresenceFilterPayload? = nil,
                     logoPresenceFilter: Operations.Resources_vendor_list.Input.Query.LogoPresenceFilterPayload? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -23504,6 +23626,7 @@ public enum Operations {
                     self.latestPurchaseDateTo = latestPurchaseDateTo
                     self.latestPurchaseDatePresenceFilter = latestPurchaseDatePresenceFilter
                     self.logoPresenceFilter = logoPresenceFilter
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -24254,6 +24377,8 @@ public enum Operations {
                 public var acquired: Swift.Bool?
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/candidateProductId`.
                 public var candidateProductId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/searchQuery`.
+                public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/wishes/GET/query/page`.
@@ -24291,6 +24416,7 @@ public enum Operations {
                 ///   - search:
                 ///   - acquired:
                 ///   - candidateProductId:
+                ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt. Default: -createdAt
@@ -24306,6 +24432,7 @@ public enum Operations {
                     search: Swift.String? = nil,
                     acquired: Swift.Bool? = nil,
                     candidateProductId: [Swift.String]? = nil,
+                    searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -24321,6 +24448,7 @@ public enum Operations {
                     self.search = search
                     self.acquired = acquired
                     self.candidateProductId = candidateProductId
+                    self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort

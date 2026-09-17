@@ -408,9 +408,13 @@ export const expenseList = async (
 ): Promise<{ data: ExpenseListItemOut[]; count: number }> => {
   const whereClause = await buildExpenseWhereClause(db, filters);
 
-  const orderByArray = expenseScaffold.orderBy(sorts, {
-    resolve: resolveExpenseSort,
-  });
+  const orderByArray = expenseScaffold.orderBy(
+    sorts,
+    {
+      resolve: resolveExpenseSort,
+    },
+    filters,
+  );
   const { take, skip } = expenseScaffold.page(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount({

@@ -194,6 +194,12 @@ function ServerListBody({
     ...referenceFilterOptions,
     ...parts.list?.filterOptions,
   });
+  // Shelf/timeline are alternate presentations of the same roster. Keep the
+  // selected view in the URL, but borrow the rich table projection while a
+  // primary entity search is active; clearing restores the prior view without
+  // reconstructing its navigation state.
+  const searching = Boolean(context.search.searchQuery);
+  const renderedView = searching ? "table" : view;
   const columns = useListColumns(entity, parts);
   const queryOptions = useMemo((): ListQueryOptionsFn<object, BaseListRow> => {
     if (operations?.list) return operations.list;
@@ -253,14 +259,14 @@ function ServerListBody({
     <>
       {parts.above?.(list)}
       <Stack gap="sm">
-        {view !== "table" && (
+        {renderedView !== "table" && (
           <DataTableToolbar
             table={list.workbench.table}
             entity={entity}
             portalWorkbenchUtilities
           />
         )}
-        {view === "table" && (
+        {renderedView === "table" && (
           <ListWorkbench
             model={list.workbench}
             ariaLabel={`${entities[entity].pluralLabel} table`}
@@ -274,7 +280,7 @@ function ServerListBody({
             contextualStatus={contextualStatus}
           />
         )}
-        {view === "shelf" && (
+        {renderedView === "shelf" && (
           <EntityShelf
             entity={entity}
             // The shelf has no nesting: a tree's child rows (a kit's
@@ -288,7 +294,7 @@ function ServerListBody({
             infiniteScroll={list.workbench.infiniteScroll}
           />
         )}
-        {view === "timeline" && isTimelineEntity(entity) && (
+        {renderedView === "timeline" && isTimelineEntity(entity) && (
           <ListTimeline
             entity={entity}
             filters={list.currentFilters}
@@ -297,7 +303,7 @@ function ServerListBody({
         )}
       </Stack>
       <PreviewSheet />
-      {view !== "table" && list.workbench.deleteDialog}
+      {renderedView !== "table" && list.workbench.deleteDialog}
       {parts.below?.(list)}
     </>
   );

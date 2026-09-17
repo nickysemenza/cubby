@@ -78,7 +78,9 @@ struct PhotoDestinationSheet: View {
         switch route {
         case .entityPicker(let rawKey):
             if let key = EntityKey(rawValue: rawKey) {
-                PhotoEntityChooser(key: key) { flow.chooseEntity(key, id: $0) }
+                PhotoEntityChooser(key: key, captureDates: flow.items.map(\.capturedAt)) {
+                    flow.chooseEntity(key, id: $0)
+                }
             } else {
                 ContentUnavailableView("Destination unavailable", systemImage: "exclamationmark.triangle")
             }
@@ -190,27 +192,50 @@ final class PhotoImportFlowModel {
 private struct PhotoEntityChooser: View {
     @Environment(AppModel.self) private var appModel
     let key: EntityKey
+    let captureDates: [Date?]
     let onSelect: (String) -> Void
-    @State private var model: GenericEntityListModel?
+    @State private var model: PhotoEntityChooserModel?
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
     var body: some View {
         Group {
             if let model {
-                if model.rows.isEmpty {
-                    emptyState(model)
-                } else {
+                if model.isSearching {
+                    searchContent(model)
+                } else if !model.dateMatches.isEmpty || !model.recentRows.isEmpty {
                     destinationList(model)
+                } else {
+                    emptyState(model)
                 }
             } else {
                 LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
             }
         }
         .navigationTitle(descriptor.plural)
+        .modifier(
+            PhotoEntitySearchModifier(
+                enabled: descriptor.primarySearch != nil,
+                text: Binding(
+                    get: { model?.search?.query ?? "" },
+                    set: { model?.setSearchQuery($0) }
+                ),
+                prompt: descriptor.primarySearch?.placeholder
+                    ?? "Search \(descriptor.plural.lowercased()) or shortcode"
+            )
+        )
         .task(id: key) {
             if model == nil {
-                model = GenericEntityListModel(descriptor: descriptor, client: appModel.client)
+                model = PhotoEntityChooserModel(
+                    descriptor: descriptor, captureDates: captureDates,
+                    loader: { filters, query, page, sort in
+                        var requestFilters = filters
+                        if let query, !query.isEmpty {
+                            requestFilters.set(.single(query), for: "searchQuery")
+                        }
+                        return try await appModel.client.list(
+                            descriptor, page: page, pageSize: 25, sort: sort, filters: requestFilters)
+                    })
             }
             await model?.loadInitial()
         }
@@ -218,55 +243,137 @@ private struct PhotoEntityChooser: View {
     }
 
     @ViewBuilder
-    private func emptyState(_ model: GenericEntityListModel) -> some View {
-        switch model.phase {
-        case .idle, .loading:
+    private func emptyState(_ model: PhotoEntityChooserModel) -> some View {
+        if model.isLoading {
             LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
-        case .failed(let message), .unavailable(let message):
+        } else if let message = model.dateError ?? model.recentError {
             ContentUnavailableView {
                 Label("Couldn't load \(descriptor.plural)", systemImage: "exclamationmark.triangle")
             } description: {
                 Text(message)
             } actions: {
-                Button("Retry") { Task { await model.loadInitial() } }
+                Button("Retry") { Task { await model.refresh() } }
                     .accessibilityIdentifier("photos.destination.retry")
             }
-        case .loaded:
+        } else {
             ContentUnavailableView("No \(descriptor.plural) yet", systemImage: entitySymbol(for: key))
         }
     }
 
-    private func destinationList(_ model: GenericEntityListModel) -> some View {
+    private func destinationList(_ model: PhotoEntityChooserModel) -> some View {
         List {
-            if let error = model.refreshError {
+            if model.hasDateMatches {
                 Section {
+                    if let error = model.dateError {
+                        Text(error).foregroundStyle(.secondary)
+                        Button("Retry date matches") { Task { await model.refresh() } }
+                    }
+                    ForEach(model.dateMatches) { row in destinationRow(row, model: model) }
+                    if model.hasMoreDateMatches {
+                        Button {
+                            Task { await model.loadMoreDateMatches() }
+                        } label: {
+                            if model.isLoadingDateNextPage {
+                                LoadingIndicator(label: "Loading more matches")
+                            } else {
+                                Text("Load more matches")
+                            }
+                        }
+                        .disabled(model.isLoadingDateNextPage)
+                    }
+                } header: {
+                    Text(
+                        "Matches \(model.captureDate?.formatted(date: .abbreviated, time: .omitted) ?? "photo date")"
+                    )
+                }
+            }
+            Section {
+                if let error = model.recentError {
                     Text(error).foregroundStyle(.secondary)
-                    Button("Retry refresh") { Task { await model.refresh() } }
+                    Button("Retry recent records") { Task { await model.refresh() } }
                 }
-            }
-            ForEach(model.rows) { row in
-                Button {
-                    onSelect(row.id)
-                } label: {
-                    EntityRowView(key: key, row: row)
+                ForEach(model.recentRows) { row in destinationRow(row, model: model) }
+                if model.hasMoreRecents {
+                    Button {
+                        Task { await model.loadMoreRecents() }
+                    } label: {
+                        if model.isLoadingRecentNextPage {
+                            LoadingIndicator(label: "Loading more recent records")
+                        } else {
+                            Text("Load more recent records")
+                        }
+                    }
+                    .disabled(model.isLoadingRecentNextPage)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("photos.destination.row.\(row.id)")
+            } header: {
+                Text("Recently edited")
             }
-            if model.hasMore {
-                if let error = model.nextPageError { Text(error).foregroundStyle(.secondary) }
-                Button {
-                    Task { await model.loadNextPage() }
-                } label: {
-                    if model.activity == .loadingNextPage {
-                        LoadingIndicator(label: "Loading more \(descriptor.plural)")
-                    } else {
-                        Text(model.nextPageError == nil ? "Load more" : "Retry loading more")
+        }
+    }
+
+    @ViewBuilder
+    private func searchContent(_ model: PhotoEntityChooserModel) -> some View {
+        if let search = model.search {
+            if search.rows.isEmpty {
+                switch search.phase {
+                case .idle, .debouncing, .loading:
+                    LoadingIndicator.screen(label: "Searching \(descriptor.plural)")
+                case .failed(let message):
+                    ContentUnavailableView {
+                        Label("Couldn't search \(descriptor.plural)", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("Retry") { search.retry() }
+                    }
+                case .loaded:
+                    ContentUnavailableView("No matching \(descriptor.plural)", systemImage: "magnifyingglass")
+                }
+            } else {
+                List {
+                    ForEach(search.rows) { row in destinationRow(row, model: model) }
+                    if search.hasMore {
+                        Button {
+                            Task { await search.loadNextPage() }
+                        } label: {
+                            if search.phase == .loading {
+                                LoadingIndicator(label: "Loading more \(descriptor.plural)")
+                            } else {
+                                Text("Load more")
+                            }
+                        }
+                        .disabled(search.phase != .loaded)
                     }
                 }
-                .disabled(model.activity != .idle)
-                .accessibilityIdentifier("photos.destination.loadMore")
             }
+        } else {
+            ContentUnavailableView("Search unavailable", systemImage: "magnifyingglass")
+        }
+    }
+
+    @ViewBuilder
+    private func destinationRow(_ row: EntityRow, model: PhotoEntityChooserModel) -> some View {
+        Button {
+            onSelect(row.id)
+        } label: {
+            EntityRowView(key: key, row: row, photoMode: true)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("photos.destination.row.\(row.id)")
+    }
+}
+
+private struct PhotoEntitySearchModifier: ViewModifier {
+    let enabled: Bool
+    @Binding var text: String
+    let prompt: String
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(text: $text, prompt: prompt)
+        } else {
+            content
         }
     }
 }

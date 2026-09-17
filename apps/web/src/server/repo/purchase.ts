@@ -566,7 +566,11 @@ export const purchaseList = async (
         .from(purchase)
         .where(whereClause)
         .orderBy(
-          ...purchaseScaffold.orderBy(sorts, { resolve: resolvePurchaseSort }),
+          ...purchaseScaffold.orderBy(
+            sorts,
+            { resolve: resolvePurchaseSort },
+            filters,
+          ),
         )
         .limit(take)
         .offset(skip),

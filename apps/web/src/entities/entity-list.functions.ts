@@ -66,20 +66,28 @@ export function compileEntityListInput<E extends ListEntity>(
     orderBy: term.id,
     direction: term.desc ? ("desc" as const) : ("asc" as const),
   }));
+  const searching = Boolean(validatedSearch.searchQuery);
   const input: EntityListParseInput = {
     entity,
     filters: buildFiltersFromManifest(
       getEntityFilters(entity),
       filterGetterFromSearch(getEntityFilters(entity), validatedSearch),
     ),
-    sort: parsedSort ?? [
-      options.defaultSort ?? { orderBy: "createdAt", direction: "desc" },
-    ],
     pagination: {
       pageIndex: 0,
       pageSize: options.pageSize ?? defaultPagination.pageSize,
     },
   };
+  // Omitted rather than an empty array: server list search recognizes the
+  // absence of a user sort and opens in lexical relevance order. A URL sort
+  // remains authoritative, including the entity's ordinary default when a
+  // person selected it deliberately.
+  if (parsedSort) input.sort = parsedSort;
+  else if (!searching) {
+    input.sort = [
+      options.defaultSort ?? { orderBy: "createdAt", direction: "desc" },
+    ];
+  }
   if (options.groupBy) input.groupBy = options.groupBy;
   return entityListParamsFromParsed(
     entity,

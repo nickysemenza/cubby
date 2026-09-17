@@ -97,6 +97,10 @@ const listRestrictedToIds = async <
 
 const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
 
+const entityListSearchSchema = z
+  .object({ searchQuery: z.string().trim().min(1).max(100).optional() })
+  .passthrough();
+
 const parseSchema = <S extends z.ZodType, TInput>(
   schema: S,
   input: TInput,
@@ -121,8 +125,13 @@ const parseSorts = <
     | { orderBy: string; direction: "asc" | "desc" }
     | { orderBy: string; direction: "asc" | "desc" }[]
     | undefined,
+  allowEmpty = false,
 ) => {
   const field = z.enum(binding.sort.fields);
+  // A list search owns its opening relevance order. Preserve a caller's
+  // deliberate sort, but do not synthesize the entity's ordinary opening sort
+  // when the transport omitted one — otherwise relevance is unreachable.
+  if (allowEmpty && value === undefined) return [];
   const normalized = normalizeSorts(
     value ?? { orderBy: binding.sort.default, direction: "desc" },
   );
@@ -302,14 +311,16 @@ export const defineEntityOperations = <
           .passthrough()
           .parse(input.filters);
         for (const id of ids ?? []) binding.schemas.id.parse(id);
+        const filters = parseSchema<S["filters"], unknown>(
+          binding.schemas.filters,
+          repositoryFilters,
+        );
+        const searchQuery = entityListSearchSchema.parse(filters).searchQuery;
         return {
-          filters: parseSchema<S["filters"], unknown>(
-            binding.schemas.filters,
-            repositoryFilters,
-          ),
+          filters,
           ids,
           pagination: input.pagination ?? DEFAULT_PAGINATION,
-          sorts: parseSorts(binding, input.sort),
+          sorts: parseSorts(binding, input.sort, Boolean(searchQuery)),
           groupBy: parseGroupBy(binding, input.groupBy),
         };
       })

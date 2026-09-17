@@ -292,12 +292,20 @@ const resolveProductSort = (sort: SortParams) => {
 
 const productScaffold = listScaffold("product", product);
 
-const productListOrderBy = (sorts: SortParams[], groupBy?: string) =>
-  productScaffold.orderBy(sorts, {
-    groupBy,
-    resolve: resolveProductSort,
-    tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
-  });
+const productListOrderBy = (
+  sorts: SortParams[],
+  groupBy?: string,
+  filters?: ProductFilters,
+) =>
+  productScaffold.orderBy(
+    sorts,
+    {
+      groupBy,
+      resolve: resolveProductSort,
+      tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
+    },
+    filters,
+  );
 
 const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
 
@@ -948,7 +956,7 @@ export const productList = async (
     };
   }
 
-  const orderByArray = productListOrderBy(sorts, groupBy);
+  const orderByArray = productListOrderBy(sorts, groupBy, filters);
 
   const { take, skip } = productScaffold.page(pagination);
   const skipAggregates = readIntent === "sample";

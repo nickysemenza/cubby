@@ -293,7 +293,9 @@ export const wishList = async (
         .select()
         .from(wish)
         .where(where)
-        .orderBy(...wishScaffold.orderBy(sorts, { resolve: resolveWishSort }))
+        .orderBy(
+          ...wishScaffold.orderBy(sorts, { resolve: resolveWishSort }, filters),
+        )
         .limit(take)
         .offset(skip),
       countWhere(db, wish, where),

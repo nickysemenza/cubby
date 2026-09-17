@@ -39,7 +39,7 @@ export type ListQueryOptionsFn<
   TData extends { id: string } = { id: string },
 > = (params: {
   /** Sort stack (multi-sort); the schema also accepts the legacy single object. */
-  sort: Array<{ orderBy: string; direction: "asc" | "desc" }>;
+  sort?: Array<{ orderBy: string; direction: "asc" | "desc" }>;
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
   groupBy?: string;
@@ -64,17 +64,27 @@ export function usePaginatedTableCore<TFilters, TData extends { id: string }>({
   );
 
   const sortParams = useMemo(() => tableState.getSorts(), [tableState]);
+  const searching = tableState.hasPrimarySearch;
   const { pagination } = tableState;
 
-  const queryParams = useMemo(
-    () => ({
-      sort: sortParams,
+  const queryParams = useMemo((): Parameters<
+    ListQueryOptionsFn<TFilters, TData>
+  >[0] => {
+    const params: Parameters<ListQueryOptionsFn<TFilters, TData>>[0] = {
       pagination,
       filters,
-      ...(groupBy && { groupBy }),
-    }),
-    [sortParams, pagination, filters, groupBy],
-  );
+    };
+    if (!searching || tableState.hasExplicitSort) params.sort = sortParams;
+    if (groupBy) params.groupBy = groupBy;
+    return params;
+  }, [
+    sortParams,
+    pagination,
+    filters,
+    groupBy,
+    searching,
+    tableState.hasExplicitSort,
+  ]);
 
   const memoizedQueryOptions = useMemo(
     () => queryOptions(queryParams),

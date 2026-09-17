@@ -316,16 +316,20 @@ export async function listFinancialTransactions(
         .from(financialTransaction)
         .where(where)
         .orderBy(
-          ...financialTransactionScaffold.orderBy(sorts, {
-            resolve: (sort) =>
-              sort.orderBy === "merchant"
-                ? [
-                    (sort.direction === "asc" ? asc : desc)(
-                      financialTransaction.merchant,
-                    ),
-                  ]
-                : null,
-          }),
+          ...financialTransactionScaffold.orderBy(
+            sorts,
+            {
+              resolve: (sort) =>
+                sort.orderBy === "merchant"
+                  ? [
+                      (sort.direction === "asc" ? asc : desc)(
+                        financialTransaction.merchant,
+                      ),
+                    ]
+                  : null,
+            },
+            filters,
+          ),
         )
         .limit(take)
         .offset(skip),

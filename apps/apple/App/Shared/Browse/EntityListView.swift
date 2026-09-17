@@ -1,6 +1,21 @@
 import CubbyKit
 import SwiftUI
 
+private struct EntityListSearchModifier: ViewModifier {
+    let enabled: Bool
+    @Binding var text: String
+    let prompt: String
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.searchable(text: $text, prompt: prompt)
+        } else {
+            content
+        }
+    }
+}
+
 /// The generic Browse list for one entity: the catalog's declared views (table, shelf, timeline),
 /// its filters as a sheet, and `+` when the generated client can create the entity. A declared
 /// slot view has no native fill, so the picker offers only the views this file renders.
@@ -12,6 +27,7 @@ struct EntityListView: View {
     @State private var creating = false
     @State private var selecting = false
     @State private var selectedIDs: Set<String> = []
+    @State private var searchText = ""
     @State private var confirmingDelete = false
     @State private var deleteError: String?
     private let initialFilters: EntityFilterState
@@ -48,6 +64,15 @@ struct EntityListView: View {
         .porcelainScreen()
         .navigationTitle(descriptor.plural)
         .accessibilityIdentifier("browse.\(key.rawValue).list")
+        .modifier(
+            EntityListSearchModifier(
+                enabled: descriptor.primarySearch != nil,
+                text: $searchText,
+                prompt: descriptor.primarySearch?.placeholder
+                    ?? "Search \(descriptor.plural.lowercased()) or shortcode"
+            )
+        )
+        .onChange(of: searchText) { _, value in model?.setSearchQuery(value) }
         .toolbar { toolbarContent }
         #if os(iOS)
             .environment(\.editMode, .constant(selecting ? .active : .inactive))
@@ -56,7 +81,8 @@ struct EntityListView: View {
             if model == nil {
                 model = GenericEntityListModel(
                     descriptor: descriptor, client: appModel.client, filters: initialFilters,
-                    view: renderableViews.first ?? .table)
+                    view: renderableViews.first ?? .table,
+                    searchLoader: searchLoader(for: initialFilters))
             }
             await model?.loadInitial()
         }
@@ -156,6 +182,20 @@ struct EntityListView: View {
         return count == 0 ? "Filter" : "Filter, \(count) active"
     }
 
+    /// Binds the initial relation/date scope to the generic search state. The list model rebuilds
+    /// this loader when filters change; passing it here also makes the first query work before a
+    /// filter-sheet round trip can occur.
+    private func searchLoader(for filters: EntityFilterState) -> EntityListSearchModel.PageLoader? {
+        guard descriptor.primarySearch != nil else { return nil }
+        let client = appModel.client
+        return { query, page in
+            var scopedFilters = filters
+            scopedFilters.set(.single(query), for: "searchQuery")
+            return try await client.list(
+                descriptor, page: page, pageSize: 50, sort: nil, filters: scopedFilters)
+        }
+    }
+
     private static func symbol(for view: ListView) -> String {
         switch view {
         case .table: "list.bullet"
@@ -167,7 +207,9 @@ struct EntityListView: View {
 
     @ViewBuilder
     private func content(_ model: GenericEntityListModel) -> some View {
-        if model.view == .timeline {
+        if model.isSearching {
+            searchContent(model)
+        } else if model.view == .timeline {
             timeline(model)
         } else if model.rows.isEmpty {
             switch model.phase {
@@ -203,6 +245,32 @@ struct EntityListView: View {
             }
         } else {
             rowList(model)
+        }
+    }
+
+    @ViewBuilder
+    private func searchContent(_ model: GenericEntityListModel) -> some View {
+        if let search = model.searchModel {
+            if search.rows.isEmpty {
+                switch search.phase {
+                case .idle, .debouncing, .loading:
+                    LoadingIndicator.screen(label: "Searching \(descriptor.plural)")
+                case .failed(let message):
+                    ContentUnavailableView {
+                        Label("Couldn't search \(descriptor.plural)", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("Retry") { search.retry() }
+                    }
+                case .loaded:
+                    ContentUnavailableView("No matching \(descriptor.plural)", systemImage: "magnifyingglass")
+                }
+            } else {
+                rowList(model)
+            }
+        } else {
+            ContentUnavailableView("Search unavailable", systemImage: "magnifyingglass")
         }
     }
 
@@ -262,11 +330,13 @@ struct EntityListView: View {
     @ViewBuilder
     private func rows(_ model: GenericEntityListModel) -> some View {
         if hasBanner(model) { Section { banner(model) } }
-        if let meta = model.meta {
-            Text("\(meta.totalCount.formatted()) total · \(model.rows.count.formatted()) shown")
+        let visibleRows = model.isSearching ? (model.searchModel?.rows ?? []) : model.rows
+        let visibleMeta = model.isSearching ? model.searchModel?.meta : model.meta
+        if let meta = visibleMeta {
+            Text("\(meta.totalCount.formatted()) total · \(visibleRows.count.formatted()) shown")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        ForEach(model.rows) { row in
+        ForEach(visibleRows) { row in
             rowContent(row)
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {
@@ -277,29 +347,48 @@ struct EntityListView: View {
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
         }
-        if model.hasMore { loadMore(model) }
+        if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore { loadMore(model) }
     }
 
     @ViewBuilder
     private func loadMore(_ model: GenericEntityListModel) -> some View {
-        if model.hasMore {
-            if let error = model.nextPageError { Text(error).foregroundStyle(.secondary) }
+        let hasMore = model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore
+        if hasMore {
+            let nextPageError = model.isSearching ? model.searchModel?.nextPageError : model.nextPageError
+            if let error = nextPageError { Text(error).foregroundStyle(.secondary) }
             Button {
-                Task { await model.loadNextPage() }
+                Task {
+                    if model.isSearching {
+                        await model.searchModel?.loadNextPage()
+                    } else {
+                        await model.loadNextPage()
+                    }
+                }
             } label: {
-                if model.activity == .loadingNextPage {
+                if model.isSearching
+                    ? model.searchModel?.phase == .loading : model.activity == .loadingNextPage
+                {
                     LoadingIndicator(label: "Loading more \(descriptor.plural)")
                 } else {
-                    Text(model.nextPageError == nil ? "Load more" : "Retry loading more")
+                    Text(nextPageError == nil ? "Load more" : "Retry loading more")
                 }
             }
-            .disabled(model.activity != .idle)
+            .disabled(model.isSearching ? model.searchModel?.phase != .loaded : model.activity != .idle)
             .accessibilityIdentifier("browse.\(key.rawValue).loadMore")
             // Scrolling to the row loads the next page; the button stays for retry after an error
             // (a failed page never auto-retries) and for VoiceOver.
             .onScrollVisibilityChange(threshold: 0.5) { visible in
-                guard visible, model.activity == .idle, model.nextPageError == nil else { return }
-                Task { await model.loadNextPage() }
+                let idle = model.isSearching ? model.searchModel?.phase == .loaded : model.activity == .idle
+                let noError =
+                    model.isSearching ? model.searchModel?.nextPageError == nil : model.nextPageError == nil
+                guard visible, idle, noError else { return }
+                Task {
+                    if model.isSearching {
+                        await model.searchModel?.loadNextPage()
+                    } else {
+                        await model.loadNextPage()
+                    }
+                }
             }
         }
     }
@@ -350,35 +439,72 @@ struct EntityListView: View {
 struct EntityRowView: View {
     let key: EntityKey
     let row: EntityRow
+    var columns: [String]? = nil
+    var photoMode = false
+    /// Preview-only image injection keeps the production row on the shared URL-backed Thumb
+    /// while allowing previews to exercise the real image geometry and clipping.
+    var previewImage: Image? = nil
+
+    private var presentation: EntityRowPresentation {
+        EntityRowPresentation.resolve(
+            descriptor: EntityCatalog[key], row: row, columns: columns, photoMode: photoMode)
+    }
+
+    private var thumbnailSize: CGFloat {
+        #if os(iOS)
+            48
+        #else
+            44
+        #endif
+    }
 
     var body: some View {
         HStack(spacing: PorcelainTokens.Space.md) {
-            Thumb(url: row.imageURL, size: 56, symbol: entitySymbol(for: key))
+            if let previewImage {
+                previewImage
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: thumbnailSize, height: thumbnailSize)
+                    .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl))
+                    .accessibilityHidden(true)
+            } else {
+                Thumb(url: presentation.imageURL, size: thumbnailSize, symbol: entitySymbol(for: key))
+            }
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.title)
+                Text(presentation.title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(PorcelainTokens.graphite)
                     .lineLimit(2)
-                if let subtitle = row.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.porcelainBody)
+                if let factLine = presentation.factLine {
+                    Text(factLine)
+                        .font(.caption)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
                         .lineLimit(1)
                 }
+                Text(presentation.shortcode)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .lineLimit(1)
             }
             Spacer(minLength: PorcelainTokens.Space.sm)
-            if let fact = EntityFieldValue.trailing(descriptor: EntityCatalog[key], raw: row.raw) {
-                Text(fact)
-                    .font(.porcelainData)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                    .multilineTextAlignment(.trailing)
-                    .lineLimit(2)
-                    .layoutPriority(1)
-            }
         }
         .padding(.vertical, PorcelainTokens.Space.xs)
-        .frame(minHeight: 64)
+        .frame(minHeight: 56, alignment: .center)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.accessibilityText)
     }
+}
+
+#Preview("Compact rows · image") {
+    List {
+        EntityRowView(
+            key: .product,
+            row: PreviewFixtures.sampleRows[0],
+            previewImage: Image(decorative: PreviewFixtures.sampleProbeImage, scale: 1))
+    }
+    .listStyle(.plain)
+    .porcelainScreen()
 }
 
 #Preview("Rows") {
@@ -394,5 +520,28 @@ struct EntityRowView: View {
         .listStyle(.plain)
         .porcelainScreen()
         .navigationTitle("Products")
+    }
+}
+
+#Preview("Compact rows · accessibility") {
+    NavigationStack {
+        List {
+            EntityRowView(
+                key: .product,
+                row: EntityRow(
+                    id: "PRD-9999",
+                    title: "A very long product title that should expand without clipping",
+                    subtitle: nil,
+                    imageURL: nil,
+                    raw: [
+                        "id": "PRD-9999",
+                        "name": "A very long product title that should expand without clipping",
+                        "manufacturer": "Sample Manufacturer", "updatedAt": "2026-09-12T10:00:00.000Z",
+                    ]))
+        }
+        .listStyle(.plain)
+        .porcelainScreen()
+        .preferredColorScheme(.dark)
+        .environment(\.dynamicTypeSize, .accessibility3)
     }
 }

@@ -81,10 +81,15 @@ export const renderSearchArtifacts = (
   ];
   const entries = filterEntities
     .map((entity) => {
-      const fields = entity.filterDescriptors.map(
-        (descriptor) =>
-          `${JSON.stringify(descriptor.urlKey)}:${searchCodec(descriptor, alias)},`,
-      );
+      const primarySearch =
+        entity.contract !== null && entity.descriptor.searchable === true;
+      const fields = [
+        ...(primarySearch ? ['"searchQuery":urlStringParam,'] : []),
+        ...entity.filterDescriptors.map(
+          (descriptor) =>
+            `${JSON.stringify(descriptor.urlKey)}:${searchCodec(descriptor, alias)},`,
+        ),
+      ];
       const dialog = entity.route?.create === "dialog";
       // Declared list views: `view` is an enum over their ids when there is
       // more than one (the first is the default, so it is never written);
@@ -118,6 +123,7 @@ export const renderSearchArtifacts = (
         ? 'timelineFrom:urlPlainDateParam,\ntimelineTo:urlPlainDateParam,\ntimelineOrder:z.enum(["asc","desc"]).optional().catch(undefined),\ntimelineMode:z.enum(["events","lifecycles"]).optional().catch(undefined),\n'
         : "";
       const keys = [
+        ...(primarySearch ? ["searchQuery"] : []),
         ...entity.filterDescriptors.map(({ urlKey }) => urlKey),
         ...tableKeys,
         ...(dialog ? ["create"] : []),
@@ -150,10 +156,14 @@ export const renderSearchArtifacts = (
         renderRecord({
           name: "entityFilterUrlKeyRoster",
           entries: Object.fromEntries(
-            filterEntities.map(({ key, filterUrlKeys }) => [
-              key,
-              filterUrlKeys,
-            ]),
+            filterEntities.map(
+              ({ key, filterUrlKeys, contract, descriptor }) => [
+                key,
+                contract !== null && descriptor.searchable === true
+                  ? ["searchQuery", ...filterUrlKeys]
+                  : filterUrlKeys,
+              ],
+            ),
           ),
           satisfies: "Record<Entity, readonly string[]>",
           comment: "// Generated data stays one entity per line.",
