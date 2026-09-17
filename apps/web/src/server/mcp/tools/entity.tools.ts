@@ -303,7 +303,7 @@ export function registerEntityTools(
     {
       name: "entity",
       description:
-        "Read or mutate one supported household entity through { command }. Read entities://catalog first: it publishes the supported entity list and exact action union. This replaces per-entity CRUD tools; workflow-shaped tools remain separate. For many creates/updates in one call use entity_batch.",
+        'Read or mutate one supported household entity through { command }. Read entities://catalog first: it publishes the supported entity list and exact action union. This replaces per-entity CRUD tools; workflow-shaped tools remain separate. For many creates/updates in one call use entity_batch. Merge example: {command:{action:"merge",entity:"product",keepId:"PRD-2ABC",mergeIds:["PRD-3DEF"]}}.',
       inputSchema: entityToolInput,
       outputSchema: entityToolOutput,
       annotations: WRITE_DESTRUCTIVE_CLOSED,

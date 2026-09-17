@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   inventoryEntry,
+  productImage,
   planting,
   product,
   productExternalId,
@@ -15,6 +16,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { createPlanting } from "~/server/repo/garden";
+import { createUploadedImageRecord } from "~/server/repo/image";
 import { createIngredient } from "~/server/repo/ingredient";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
@@ -252,6 +254,47 @@ describe("mergeProducts", () => {
     expect(survivorGtins).toEqual([
       { externalId: "00012345678905", isPrimary: true },
     ]);
+  });
+
+  it("dedupes separately stored product images with the same verified hash", async () => {
+    const keeper = await seedProduct("Image keeper");
+    const loser = await seedProduct("Image duplicate");
+    const sha256 = "a".repeat(64);
+    const keeperImage = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}-keeper.jpg`,
+      filename: "keeper.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+      sha256,
+    });
+    const loserImage = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}-loser.jpg`,
+      filename: "loser.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+      sha256,
+    });
+    await getDb(ctx.db)
+      .insert(productImage)
+      .values([
+        { productId: keeper.id, imageId: keeperImage.id },
+        { productId: loser.id, imageId: loserImage.id },
+      ]);
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+
+    const liveImages = await getDb(ctx.db).query.productImage.findMany({
+      where: and(
+        eq(productImage.productId, keeper.id),
+        notDeleted(productImage),
+      ),
+      columns: { imageId: true },
+    });
+    expect(liveImages).toEqual([{ imageId: keeperImage.id }]);
   });
 
   it("demotes rather than destroys a colliding external-id slot", async () => {

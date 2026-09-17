@@ -1160,7 +1160,7 @@ export const splitExpense = async (
         if (lineKind !== "principal" && productId !== null) {
           throw createAppError(
             "CONSTRAINT_VIOLATION",
-            "Only principal Expenses may link a Product.",
+            "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
           );
         }
         if (part.productQuantity !== null && productId === null) {

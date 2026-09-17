@@ -818,6 +818,14 @@ history is the archive. Permanent product constraints live in the
 
 Deferred from the 2026-09 manifest-rendering PRs; unordered.
 
+- **Unify the garden lifecycle action surface.** Planting's Start/Move/Split/Finish
+  workflows are declared as manifest hero actions and generated native
+  operations, while MCP currently needs explicit hand-registered tools to
+  reach the same workflows because generic `entity update` correctly rejects
+  lifecycle fields. Rework the garden action contract and MCP generation
+  together so web, native, and MCP share one declared action vocabulary and
+  lifecycle/history semantics; keep the current MCP bridge until then.
+
 - **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
   only alongside the first native screen that scales a recipe or prices a meal.
   Until then the FFI surface stays `parse_ingredient`, `size_unit_aliases`,

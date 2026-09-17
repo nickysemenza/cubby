@@ -5,7 +5,7 @@ import {
   type GalleryEntity,
 } from "@cubby/schemas/entity-manifest";
 import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
-import { imageShortcode } from "@cubby/schemas/identifiers";
+import { imageShortcode, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { imageOut } from "@cubby/schemas/image";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { and, eq, getTableColumns, sql, type SQL } from "drizzle-orm";
@@ -69,7 +69,7 @@ const displayImageRowSchema = z.object({
  * finite. Callers keep UUIDs private, map the returned summaries onto public
  * DTOs, and use a semantic entity mark when a ref resolves to nothing.
  */
-async function resolveEntityDisplayImageLists(
+async function resolveUniversalEntityDisplayImageLists(
   db: Database | DrizzleTransaction,
   refs: readonly EntityDisplayImageRef[],
 ): Promise<Map<string, DisplayImageSummary[]>> {
@@ -326,6 +326,155 @@ async function resolveEntityDisplayImageLists(
         row.images.map((img) => ({ id: img.id, url: getR2PublicUrl(img.key) })),
       ]),
   );
+}
+
+/** Product rows have no fallback policy: their own gallery is authoritative. */
+async function resolveProductDisplayImageLists(
+  db: Database | DrizzleTransaction,
+  refs: readonly EntityDisplayImageRef[],
+): Promise<Map<string, DisplayImageSummary[]>> {
+  if (refs.length === 0) return new Map();
+  const values = sql.join(
+    refs.map((ref) => sql`(${ref.entityId}::uuid)`),
+    sql`, `,
+  );
+  const result = await unwrapDb(db).execute<{
+    entityId: string;
+    images: Array<{ id: string; key: string }>;
+  }>(sql`
+    WITH refs("entityId") AS (VALUES ${values})
+    SELECT refs."entityId"::text AS "entityId",
+      COALESCE(
+        json_agg(
+          json_build_object('id', i.shortcode, 'key', i.key)
+          ORDER BY pi."sortOrder", pi."createdAt", i.id
+        ) FILTER (WHERE i.id IS NOT NULL),
+        '[]'::json
+      ) AS images
+    FROM refs
+    LEFT JOIN "ProductImage" pi
+      ON pi."productId" = refs."entityId"
+     AND pi."deletedAt" IS NULL
+    LEFT JOIN "Image" i
+      ON i.id = pi."imageId"
+     AND i."deletedAt" IS NULL
+     AND ${displayableImageSql("i")}
+    GROUP BY refs."entityId"
+  `);
+  return new Map(
+    result.rows.map((row) => [
+      entityRefKey("product", row.entityId),
+      row.images.map((img) => ({
+        id: parseShortcodeFor("image", img.id),
+        url: getR2PublicUrl(img.key),
+      })),
+    ]),
+  );
+}
+
+/** Location rows need only their own gallery and represented-product fallback. */
+async function resolveLocationDisplayImageLists(
+  db: Database | DrizzleTransaction,
+  refs: readonly EntityDisplayImageRef[],
+): Promise<Map<string, DisplayImageSummary[]>> {
+  if (refs.length === 0) return new Map();
+  const values = sql.join(
+    refs.map((ref) => sql`(${ref.entityId}::uuid)`),
+    sql`, `,
+  );
+  const result = await unwrapDb(db).execute<{
+    entityId: string;
+    images: Array<{ id: string; key: string }>;
+  }>(sql`
+    WITH refs("entityId") AS (VALUES ${values}), candidates AS (
+      SELECT refs."entityId", i.shortcode, i.key, 0 AS priority,
+             li."sortOrder", li."createdAt", i.id AS "imageId"
+      FROM refs
+      INNER JOIN "LocationImage" li
+        ON li."locationId" = refs."entityId"
+       AND li."deletedAt" IS NULL
+      INNER JOIN "Image" i
+        ON i.id = li."imageId"
+       AND i."deletedAt" IS NULL
+       AND ${displayableImageSql("i")}
+      UNION ALL
+      SELECT refs."entityId", i.shortcode, i.key, 1 AS priority,
+             pi."sortOrder", pi."createdAt", i.id AS "imageId"
+      FROM refs
+      INNER JOIN "Location" l
+        ON l.id = refs."entityId"
+       AND l."deletedAt" IS NULL
+       AND l."productId" IS NOT NULL
+      INNER JOIN "ProductImage" pi
+        ON pi."productId" = l."productId"
+       AND pi."deletedAt" IS NULL
+      INNER JOIN "Image" i
+        ON i.id = pi."imageId"
+       AND i."deletedAt" IS NULL
+       AND ${displayableImageSql("i")}
+    )
+    SELECT refs."entityId"::text AS "entityId",
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object('id', selected.shortcode, 'key', selected.key)
+            ORDER BY selected.priority, selected."sortOrder",
+                     selected."createdAt", selected."imageId"
+          )
+          FROM (
+            SELECT DISTINCT ON (candidates."imageId") candidates.*
+            FROM candidates
+            WHERE candidates."entityId" = refs."entityId"
+            ORDER BY candidates."imageId", candidates.priority,
+                     candidates."sortOrder", candidates."createdAt"
+          ) selected
+        ),
+        '[]'::json
+      ) AS images
+    FROM refs
+  `);
+  return new Map(
+    result.rows.map((row) => [
+      entityRefKey("location", row.entityId),
+      row.images.map((img) => ({
+        id: parseShortcodeFor("image", img.id),
+        url: getR2PublicUrl(img.key),
+      })),
+    ]),
+  );
+}
+
+/**
+ * Dispatch homogeneous Product batches to the narrow gallery query. Mixed
+ * entity batches retain the universal fallback policy for their non-product
+ * refs, while avoiding the all-entity UNION for the product portion.
+ */
+async function resolveEntityDisplayImageLists(
+  db: Database | DrizzleTransaction,
+  refs: readonly EntityDisplayImageRef[],
+): Promise<Map<string, DisplayImageSummary[]>> {
+  const supported = refs.filter((ref) =>
+    DISPLAY_IMAGE_ENTITIES.has(ref.entityType),
+  );
+  const entityTypes = new Set(supported.map((ref) => ref.entityType));
+  // Graph reads commonly hydrate a product alongside its relationship rows.
+  // Keep those mixed batches on one query so image hydration does not add a
+  // query per entity family; the narrow paths are for homogeneous reads where
+  // they can remove the expensive cross-entity UNION safely.
+  if (entityTypes.size > 1) {
+    return resolveUniversalEntityDisplayImageLists(db, supported);
+  }
+  const productRefs = supported.filter((ref) => ref.entityType === "product");
+  const locationRefs = supported.filter((ref) => ref.entityType === "location");
+  const otherRefs = supported.filter(
+    (ref) => ref.entityType !== "product" && ref.entityType !== "location",
+  );
+  const [productLists, locationLists, otherLists] = await Promise.all([
+    resolveProductDisplayImageLists(db, productRefs),
+    resolveLocationDisplayImageLists(db, locationRefs),
+    resolveUniversalEntityDisplayImageLists(db, otherRefs),
+  ]);
+  return new Map([...productLists, ...locationLists, ...otherLists]);
 }
 
 const publicEntityRowSchema = z.looseObject({ id: z.string() });

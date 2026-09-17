@@ -954,35 +954,40 @@ export const loadProductDataQualities = async (
   const activeExternalIdOwners =
     externalIdPairs.length === 0
       ? []
-      : await unwrapDb(db)
-          .select({
-            productId: productExternalId.productId,
-            source: productExternalId.source,
-            kind: productExternalId.kind,
-            externalId: productExternalId.externalId,
-          })
-          .from(productExternalId)
-          .innerJoin(
-            product,
-            and(
-              eq(product.id, productExternalId.productId),
-              notDeleted(product),
+      : await (async () => {
+          // Keep the collision key as data instead of expanding one OR arm per
+          // identifier. A product page can legitimately carry many external
+          // ids, and the old shape made the prepared statement grow linearly
+          // in both SQL text and bind parameters before Postgres ran it.
+          const values = sql.join(
+            externalIdPairs.map(
+              (row) =>
+                sql`(${row.source}::text, ${row.kind}::text, ${row.externalId}::text)`,
             ),
-          )
-          .where(
-            and(
-              notDeleted(productExternalId),
-              or(
-                ...externalIdPairs.map((row) =>
-                  and(
-                    eq(productExternalId.source, row.source),
-                    eq(productExternalId.kind, row.kind),
-                    eq(productExternalId.externalId, row.externalId),
-                  ),
-                ),
-              ),
-            ),
+            sql`, `,
           );
+          const result = await unwrapDb(db).execute<{
+            productId: ProductId;
+            source: string;
+            kind: string;
+            externalId: string;
+          }>(sql`
+            WITH identifiers("source", "kind", "externalId") AS (
+              VALUES ${values}
+            )
+            SELECT pei."productId", pei.source, pei.kind, pei."externalId"
+            FROM "ProductExternalId" pei
+            INNER JOIN identifiers input
+              ON input.source = pei.source
+             AND input.kind = pei.kind
+             AND input."externalId" = pei."externalId"
+            INNER JOIN "Product" p
+              ON p.id = pei."productId"
+             AND p."deletedAt" IS NULL
+            WHERE pei."deletedAt" IS NULL
+          `);
+          return result.rows;
+        })();
 
   const expenseLinked = new Set(
     linkedExpenses.flatMap((row) => (row.productId ? [row.productId] : [])),

@@ -113,7 +113,7 @@ export function registerProductTools(server: McpServer) {
   registerBatchTool(server, {
     name: "verify_products_images",
     description:
-      "Run verify_product_images across up to 20 products in request order. Capped lower than other batches because every item makes one R2 round trip per attached file, not a single database write.",
+      'Run verify_product_images across up to 20 products in request order. Input is {items:[{id:"PRD-2ABC"}]}; this is a batch envelope, not {ids:[…]}. Capped lower than other batches because every item makes one R2 round trip per attached file, not a single database write.',
     itemInputSchema: z.object({ id: idParam("product") }),
     itemOutputSchema: productMcpDetailOut,
     projectReference: (item) => item.id,
