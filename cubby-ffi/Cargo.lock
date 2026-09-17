@@ -221,6 +221,7 @@ checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 [[package]]
 name = "cookbook"
 version = "0.1.0"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=d67793b2e264388984bfef35267949a16ffd2b3c#d67793b2e264388984bfef35267949a16ffd2b3c"
 dependencies = [
  "ego-tree",
  "futures",
@@ -773,6 +774,7 @@ dependencies = [
 [[package]]
 name = "ingredient"
 version = "0.4.0"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=d67793b2e264388984bfef35267949a16ffd2b3c#d67793b2e264388984bfef35267949a16ffd2b3c"
 dependencies = [
  "nom 8.0.0",
  "nom-language",
@@ -1158,6 +1160,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 [[package]]
 name = "recipe-parsing"
 version = "0.1.0"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=d67793b2e264388984bfef35267949a16ffd2b3c#d67793b2e264388984bfef35267949a16ffd2b3c"
 dependencies = [
  "ingredient",
  "recipe-types",
@@ -1167,6 +1170,7 @@ dependencies = [
 [[package]]
 name = "recipe-scraper"
 version = "0.1.0"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=d67793b2e264388984bfef35267949a16ffd2b3c#d67793b2e264388984bfef35267949a16ffd2b3c"
 dependencies = [
  "html-escape",
  "ingredient",
@@ -1183,6 +1187,7 @@ dependencies = [
 [[package]]
 name = "recipe-types"
 version = "0.1.0"
+source = "git+https://github.com/nickysemenza/ingredient-parser?rev=d67793b2e264388984bfef35267949a16ffd2b3c#d67793b2e264388984bfef35267949a16ffd2b3c"
 dependencies = [
  "serde",
  "tsify-next",
