@@ -93,11 +93,19 @@ function guideMonthsFor(
   );
 }
 
-/** The sow-window months only — the shape the planting timeline's
- * recommended-sow band needs. */
-export const guideSowMonthsFor = (
+/** The resolved months per guide method — a named contract for the planting
+ * timeline's recommended bands (one band per method that has a window). */
+export type GuideBandMonths = {
+  sow: number[] | null;
+  transplant: number[] | null;
+};
+
+export const guideBandMonthsFor = (
   key: GardenGuideKey | null,
-): number[] | null => guideMonthsFor(key, SOW_METHODS);
+): GuideBandMonths => ({
+  sow: guideMonthsFor(key, SOW_METHODS),
+  transplant: guideMonthsFor(key, TRANSPLANT_METHODS),
+});
 
 /** `[2, 3, 4]` -> `"Feb–Apr"`; non-contiguous runs join with `", "`
  * (`[8, 9, 10, 1]` -> `"Aug–Oct, Jan"`). Assumes months are 1–12 and does not

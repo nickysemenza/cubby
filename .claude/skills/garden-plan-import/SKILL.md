@@ -63,7 +63,9 @@ Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGui
 3. Resolve Locations. Search existing Locations by name before creating any
    (`entity {action:"list", entity:"location", filters:{search:"..."}}` or
    `global_search`). Create only what's missing: beds `type: "bed"`, pots/
-   containers `type: "planter"`, open ground `type: "area"`. Soil/condition
+   containers `type: "planter"`, open ground `type: "area"`. A Location that
+   links a Product (a bought raised bed) keeps `type` null — the Product is
+   its form factor and the database rejects both at once. Soil/condition
    notes from the plan go on `Location.notes`.
 4. Create one `Project` per season named for the plan (`kind: "garden"`).
    Put watering schedules, lessons, and skip-lists in `notes`.
