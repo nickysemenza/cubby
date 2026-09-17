@@ -30,6 +30,16 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
   storageState: async ({ e2eRuntime }, provide) => {
     await provide(e2eRuntime.storageState);
   },
+  context: async ({ context }, provide) => {
+    // The prod-built client bundle initialises Sentry with the real DSN; e2e must
+    // never ship error or tracing envelopes there. Fulfil rather than abort: an
+    // aborted request logs `net::ERR_FAILED` to the console, which the specs
+    // asserting a clean console would then report.
+    await context.route("**/*.sentry.io/**", (route) =>
+      route.fulfill({ status: 200, body: "" }),
+    );
+    await provide(context);
+  },
   e2eFailureDiagnostics: [
     async ({ e2eRuntime }, provide, testInfo) => {
       await provide();

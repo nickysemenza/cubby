@@ -38,6 +38,7 @@ import {
 import {
   entityTypeMap,
   getSearchMatchText,
+  getSearchResultHref,
   getSearchResultRoute,
   SearchResultMedia,
 } from "./search-utils";
@@ -683,6 +684,14 @@ function MobileSearchResults({
                       />
                     }
                     rightValues={[group.primary.id, "Product"]}
+                    // A real `<Link>` href gives TanStack's touchstart intent
+                    // preload (`defaultPreload: "intent"` in `src/router.tsx`)
+                    // a chance to resolve the detail loader before the tap
+                    // releases, so a phone tap usually skips the pending
+                    // skeleton. `onClick` stays for the whole-row body tap
+                    // (`handleBodyClick` skips clicks that land on the title
+                    // `<a>` itself).
+                    detailsHref={getSearchResultHref(group.primary)}
                     onClick={() =>
                       navigate(getSearchResultRoute(group.primary))
                     }
@@ -817,6 +826,7 @@ function MobileSearchResults({
               item.id,
               entities[entityTypeMap[item.entityType]].label,
             ]}
+            detailsHref={getSearchResultHref(item)}
             onClick={() => navigate(getSearchResultRoute(item))}
           />
         );
