@@ -4,7 +4,6 @@ import SwiftUI
 /// The typed navigation spine shared by the iOS tab stacks and the macOS split view.
 enum Route: Hashable {
     case graph(EntityRef?)
-    case garden
     case nutrition(day: String)
     /// A generic list, optionally opened with filters already applied (keyed by wire name).
     case entityList(EntityKey, filters: EntityFilterState = EntityFilterState())

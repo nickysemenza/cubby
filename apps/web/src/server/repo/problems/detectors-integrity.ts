@@ -91,14 +91,13 @@ interface EdgeAuditSpec {
 
 /** Source tables with no `deletedAt` column — hard-delete-only, so no `s."deletedAt" IS NULL` guard applies. */
 const EXPECTED_HARD_DELETE_ONLY_TABLES = new Set([
-  "PlantingLocationPeriod",
   "ProjectDependency",
   "ProductConversionCoverage",
   "TaskDependency",
 ]);
 
 /** The must-target-live edges this audit checks, derived (not hand-maintained) should equal this. */
-const EXPECTED_EDGE_COUNT = 84;
+const EXPECTED_EDGE_COUNT = 80;
 
 /**
  * Derive one {@link EdgeAuditSpec} per `must-target-live` edge in

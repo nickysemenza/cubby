@@ -1,5 +1,6 @@
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   entityInspectorMetadata,
   entityManifest,
@@ -27,7 +28,7 @@ import {
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
 
-import { useSectionCount } from "../data-table/detail-page";
+import { useSectionCount, useSectionVisible } from "../data-table/detail-page";
 import { ListWorkbench } from "../data-table/ListWorkbench";
 import {
   createCubbyColumnHelper,
@@ -55,6 +56,8 @@ export interface RelationSectionPlan {
   columns: readonly string[] | null;
   sort: { field: string; direction: "asc" | "desc" };
   limit: number | null;
+  /** Skip the whole section, on both platforms, when its first page is empty. */
+  hideWhenEmpty: boolean;
 }
 
 const isListEntity = (value: string): value is ListEntity =>
@@ -75,6 +78,18 @@ const editIntentsFor = (entity: ListEntity): DeclaredEditIntents | undefined =>
     >
   )[entity];
 
+/** The first declared create intent of `target` that can be seeded through `field`. */
+function createSeedThrough(
+  target: ListEntity,
+  field: string,
+): { intent: string; field: string } | null {
+  const intents = editIntentsFor(target);
+  const intent = intents?.create.find((candidate) =>
+    intents.fields[candidate]?.includes(field),
+  );
+  return intent === undefined ? null : { intent, field };
+}
+
 /**
  * Resolve a declared relation section against the manifest: the relation's
  * target, the target's descriptor (checked by the entity compiler to be an
@@ -85,7 +100,7 @@ export function planRelationSection(
   entity: BrowserRoutedEntity,
   section: Pick<
     RelationSection,
-    "relation" | "filter" | "columns" | "sort" | "limit"
+    "relation" | "filter" | "columns" | "sort" | "limit" | "hideWhenEmpty"
   >,
 ): RelationSectionPlan {
   const relation = entityManifest[entity].relationships.find(
@@ -109,11 +124,19 @@ export function planRelationSection(
   // A create intent can only be prefilled through a real field key, which
   // is what a `<key>Filter` list-filter alias names once the suffix goes.
   const seedField = filterKey.replace(/Filter$/u, "");
-  const intents = editIntentsFor(target);
-  const intent = intents?.create.find((candidate) =>
-    intents.fields[candidate]?.includes(seedField),
-  );
-  const seed = intent === undefined ? null : { intent, field: seedField };
+  let seed = createSeedThrough(target, seedField);
+  // The descriptor's own key names no create field — a derived/urlOnly
+  // descriptor like `journalPlantingId` reads a computed column, not a
+  // storage field. Fall back to the target's own reference field pointing at
+  // the same entity the descriptor scopes by (`journalPlantingId` →
+  // `plantingId`), so its create button still seeds a real, writable field.
+  if (seed === null && descriptor.brandRef !== null) {
+    const referenceField = entityFieldModels[target].fields.find(
+      (field) => field.reference?.entity === descriptor.brandRef?.entity,
+    );
+    if (referenceField !== undefined)
+      seed = createSeedThrough(target, referenceField.key);
+  }
   return {
     target,
     descriptorId: descriptor.columnId,
@@ -126,6 +149,7 @@ export function planRelationSection(
       direction: defaultSortDirectionFor(target),
     },
     limit: section.limit,
+    hideWhenEmpty: section.hideWhenEmpty,
   };
 }
 
@@ -408,6 +432,13 @@ export function EntityRelationTable({
     selectable: false,
   });
   useSectionCount(list.totalCount);
+  // `list.totalCount` stays `undefined` until the first response lands (see
+  // `useEntityList`), so this only fires once the read genuinely resolves
+  // empty — never mid-fetch, and never on an error (which leaves it
+  // `undefined` too since the query never completes with data).
+  useSectionVisible(
+    !(plan.hideWhenEmpty && !list.workbench.error && list.totalCount === 0),
+  );
   const { singular } = entitySummary[target];
   const { pluralLabel } = entities[target];
 

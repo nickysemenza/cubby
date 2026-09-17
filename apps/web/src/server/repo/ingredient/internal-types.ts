@@ -29,6 +29,10 @@ import {
   type recipeSection,
   type recipeSectionIngredient,
 } from "~/server/db/schema";
+import {
+  guideWindowsFor,
+  resolveGardenGuideKey,
+} from "~/server/garden-guides/windows";
 import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import {
   buildSearchConditions,
@@ -120,16 +124,22 @@ type IngredientLeanDB = typeof ingredient.$inferSelect & {
 
 export const dbIngredientToTopLevel = (
   ingredientData: IngredientSelect,
-): IngredientOut => ({
-  id: parseShortcodeFor("ingredient", ingredientData.shortcode),
-  name: ingredientData.name,
-  aliases: ingredientData.aliases,
-  naKinds: ingredientData.naKinds,
-  usuallyOnHand: ingredientData.usuallyOnHand,
-  gardenGuideKey: ingredientData.gardenGuideKey,
-  createdAt: ingredientData.createdAt,
-  updatedAt: ingredientData.updatedAt,
-});
+): IngredientOut => {
+  const gardenGuideKey = resolveGardenGuideKey(ingredientData.gardenGuideKey);
+  const { sow, transplant } = guideWindowsFor(gardenGuideKey);
+  return {
+    id: parseShortcodeFor("ingredient", ingredientData.shortcode),
+    name: ingredientData.name,
+    aliases: ingredientData.aliases,
+    naKinds: ingredientData.naKinds,
+    usuallyOnHand: ingredientData.usuallyOnHand,
+    gardenGuideKey,
+    guideSowWindow: sow,
+    guideTransplantWindow: transplant,
+    createdAt: ingredientData.createdAt,
+    updatedAt: ingredientData.updatedAt,
+  };
+};
 
 type IngredientListDB = IngredientSelect & {
   product: Array<Qualified<IngredientDeepDB["product"][number]>>;

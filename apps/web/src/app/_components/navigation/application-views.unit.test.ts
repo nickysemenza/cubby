@@ -24,7 +24,6 @@ describe("application view manifest", () => {
     expect(new Set(activityRoutes)).toEqual(
       new Set([
         "/ingredients/workbench",
-        "/garden",
         "/ingredients/equivalences",
         "/recipes/compare",
         "/recipes/import",
@@ -47,6 +46,7 @@ describe("application view manifest", () => {
         "/tools",
         "/projects",
         "/tasks",
+        "/plantings",
         "/projects/tools",
         "/household-contribution",
         "/statement-rows",

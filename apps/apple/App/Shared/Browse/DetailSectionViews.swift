@@ -205,18 +205,31 @@ struct RelationSectionView: View {
     let model: RelationSectionModel
     let onCreate: (() -> Void)?
 
+    /// `spec.hideWhenEmpty` skips the whole section — header, create button, and all — once the
+    /// first page has loaded with no rows and no error; a still-loading or failed section always
+    /// renders so its own loading/retry state stays visible.
+    private var isHiddenEmpty: Bool {
+        model.spec.hideWhenEmpty && model.list.phase == .loaded && model.list.rows.isEmpty
+    }
+
     var body: some View {
-        Section {
-            content
-        } header: {
-            HStack {
-                Text(model.section.title ?? model.target.plural)
-                Spacer()
-                if let onCreate, model.target.key.nativeActions.contains(.create) {
-                    Button("New \(model.target.singular)", systemImage: "plus", action: onCreate)
-                        .labelStyle(.iconOnly)
-                        .font(.body)
-                        .frame(minWidth: PorcelainTokens.touchTarget, minHeight: PorcelainTokens.touchTarget)
+        Group {
+            if !isHiddenEmpty {
+                Section {
+                    content
+                } header: {
+                    HStack {
+                        Text(model.section.title ?? model.target.plural)
+                        Spacer()
+                        if let onCreate, model.target.key.nativeActions.contains(.create) {
+                            Button("New \(model.target.singular)", systemImage: "plus", action: onCreate)
+                                .labelStyle(.iconOnly)
+                                .font(.body)
+                                .frame(
+                                    minWidth: PorcelainTokens.touchTarget,
+                                    minHeight: PorcelainTokens.touchTarget)
+                        }
+                    }
                 }
             }
         }

@@ -145,6 +145,8 @@ public struct RelationSectionSpec: Codable, Sendable, Hashable {
   public let columns: [String]?
   public let sort: SectionSort?
   public let limit: Int?
+  /// Skip the whole section, on both platforms, when its first page is empty.
+  public let hideWhenEmpty: Bool
 }
 
 public enum TimelineSectionMode: String, Codable, Sendable, Hashable {
@@ -328,7 +330,7 @@ public enum EntityCatalog {
       FieldDescriptor(key: "expectedQuantity", label: "Expected Quantity", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "category", label: "Category", kind: .`enum`, nullable: true, reference: nil, controlKind: .select, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: "subtitle", mobilePriority: 30),
       FieldDescriptor(key: "ingredientId", label: "Ingredient", kind: .identifier, nullable: true, reference: FieldReference(entity: .ingredient, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 8, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "growsIngredientId", label: "Grows", kind: .identifier, nullable: true, reference: FieldReference(entity: .ingredient, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "growsIngredientId", label: "Grows", kind: .identifier, nullable: true, reference: FieldReference(entity: .ingredient, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "price", label: "Valuation price", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 4, format: "currency", mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "unitMappings", label: "Unit Mappings", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "labelNutrition", label: "Label nutrition", kind: .json, nullable: true, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
@@ -421,6 +423,7 @@ public enum EntityCatalog {
     relations: [
       RelationDescriptor(key: "ingredient", label: "Ingredient", target: .ingredient, cardinality: .one),
       RelationDescriptor(key: "grows-ingredient", label: "Grows ingredient", target: .ingredient, cardinality: .one),
+      RelationDescriptor(key: "plantings", label: "Plantings", target: .planting, cardinality: .many),
       RelationDescriptor(key: "project-uses", label: "Used on projects", target: .project, cardinality: .many),
       RelationDescriptor(key: "vendors", label: "Vendors", target: .vendor, cardinality: .many),
       RelationDescriptor(key: "purchased-projects", label: "Projects", target: .project, cardinality: .many),
@@ -445,15 +448,15 @@ public enum EntityCatalog {
       heroImages: true,
       heroActions: ["edit", "addToInventory", "recordSale", "discard"],
       detailSections: [
-        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["name", "id", "manufacturer", "model", "price", "category", "primaryGtin", "fdc_id", "ingredientId", "externalIds", "tags", "notes"])),
-        DetailSection(id: "garden", title: nil, placement: .supporting, collapsed: false, kind: .slot),
-        DetailSection(id: "stocked-at", title: "Stocked at", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "productId", columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil))),
-        DetailSection(id: "expense-history", title: "Expense history", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "productId", columns: ["name", "cost", "date", "lineKind", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
-        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "productId", columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
-        DetailSection(id: "kit-components", title: "Kit components", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "components", filterDescriptor: "kitId", columns: ["name", "manufacturer", "onHandUnits"], sort: nil, limit: nil))),
-        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "productId", columns: ["name", "purchaseCount", "spend", "latestPurchaseDate"], sort: nil, limit: nil))),
-        DetailSection(id: "project-uses", title: "Used on projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "project-uses", filterDescriptor: "usedToolId", columns: ["name", "status", "kind", "startDate"], sort: nil, limit: nil))),
-        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "subjectProduct", columns: ["name", "status", "dueDate", "trade"], sort: SectionSort(field: "dueDate", direction: .desc), limit: nil))),
+        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["name", "id", "manufacturer", "model", "price", "category", "primaryGtin", "fdc_id", "ingredientId", "growsIngredientId", "externalIds", "tags", "notes"])),
+        DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "sourceProductId", columns: nil, sort: nil, limit: nil, hideWhenEmpty: true))),
+        DetailSection(id: "stocked-at", title: "Stocked at", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "productId", columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "expense-history", title: "Expense history", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "productId", columns: ["name", "cost", "date", "lineKind", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "productId", columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "kit-components", title: "Kit components", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "components", filterDescriptor: "kitId", columns: ["name", "manufacturer", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "productId", columns: ["name", "purchaseCount", "spend", "latestPurchaseDate"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "project-uses", title: "Used on projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "project-uses", filterDescriptor: "usedToolId", columns: ["name", "status", "kind", "startDate"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "subjectProduct", columns: ["name", "status", "dueDate", "trade"], sort: SectionSort(field: "dueDate", direction: .desc), limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "movements", title: "Movements", placement: .full, collapsed: false, kind: .timeline(mode: .events)),
         DetailSection(id: "nutrition", title: "Nutrition", placement: .primary, collapsed: false, kind: .slot),
         DetailSection(id: "unit-mappings", title: "Unit mappings", placement: .primary, collapsed: false, kind: .slot),
@@ -552,7 +555,7 @@ public enum EntityCatalog {
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "servings", "yield", "meta", "tags", "source", "forkedFromRecipeId", "notes", "createdAt", "updatedAt"])),
         DetailSection(id: "contents", title: "Recipe", placement: .primary, collapsed: false, kind: .fields(["sections", "totals"])),
         DetailSection(id: "workflow", title: nil, placement: .full, collapsed: false, kind: .slot),
-        DetailSection(id: "meals", title: "Meals", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "recipeId", columns: ["date", "name", "mealType"], sort: SectionSort(field: "date", direction: .desc), limit: nil)))
+        DetailSection(id: "meals", title: "Meals", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "meals", filterDescriptor: "recipeId", columns: ["date", "name", "mealType"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false)))
       ],
       listViews: [.table],
       shelfSubtitle: [],
@@ -582,7 +585,9 @@ public enum EntityCatalog {
       FieldDescriptor(key: "aliases", label: "Aliases", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "naKinds", label: "Enrichment exclusions", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "usuallyOnHand", label: "Usually on hand", kind: .boolean, nullable: false, reference: nil, controlKind: .checkbox, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "gardenGuideKey", label: "Garden guide key", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "gardenGuideKey", label: "Garden guide key", kind: .text, nullable: true, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "artichoke", label: "Artichoke"), LabeledOption(value: "basil", label: "Basil"), LabeledOption(value: "bean-fava", label: "Fava bean"), LabeledOption(value: "bean-runner", label: "Runner bean"), LabeledOption(value: "bean-snap", label: "Snap bean"), LabeledOption(value: "beet", label: "Beet"), LabeledOption(value: "broccoli", label: "Broccoli"), LabeledOption(value: "brussels-sprout", label: "Brussels sprout"), LabeledOption(value: "cabbage", label: "Cabbage"), LabeledOption(value: "carrot", label: "Carrot"), LabeledOption(value: "cauliflower", label: "Cauliflower"), LabeledOption(value: "celery", label: "Celery"), LabeledOption(value: "chard", label: "Swiss chard"), LabeledOption(value: "collard", label: "Collard"), LabeledOption(value: "corn", label: "Early corn"), LabeledOption(value: "cucumber", label: "Cucumber"), LabeledOption(value: "eggplant", label: "Eggplant"), LabeledOption(value: "garlic", label: "Garlic"), LabeledOption(value: "kale", label: "Kale"), LabeledOption(value: "kohlrabi", label: "Kohlrabi"), LabeledOption(value: "leek", label: "Leek"), LabeledOption(value: "lettuce", label: "Lettuce"), LabeledOption(value: "mustard", label: "Mustard greens"), LabeledOption(value: "onion", label: "Onion"), LabeledOption(value: "parsnip", label: "Parsnip"), LabeledOption(value: "pea", label: "Pea"), LabeledOption(value: "pepper", label: "Pepper"), LabeledOption(value: "potato", label: "Potato"), LabeledOption(value: "radish", label: "Radish"), LabeledOption(value: "rhubarb", label: "Rhubarb"), LabeledOption(value: "shallot", label: "Shallot"), LabeledOption(value: "spinach", label: "Spinach"), LabeledOption(value: "squash-summer", label: "Summer squash"), LabeledOption(value: "squash-winter", label: "Winter squash"), LabeledOption(value: "sunflower", label: "Sunflower"), LabeledOption(value: "tomato", label: "Tomato"), LabeledOption(value: "turnip", label: "Turnip"), LabeledOption(value: "melon", label: "Melon"), LabeledOption(value: "pumpkin", label: "Pumpkin"), LabeledOption(value: "rutabaga", label: "Rutabaga"), LabeledOption(value: "watermelon", label: "Watermelon")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "guideSowWindow", label: "Guide Sow Window", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "guideTransplantWindow", label: "Guide Transplant Window", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
@@ -607,6 +612,7 @@ public enum EntityCatalog {
     ],
     relations: [
       RelationDescriptor(key: "products", label: "Products", target: .product, cardinality: .many),
+      RelationDescriptor(key: "plantings", label: "Plantings", target: .planting, cardinality: .many),
       RelationDescriptor(key: "recipes", label: "Recipes", target: .recipe, cardinality: .many),
       RelationDescriptor(key: "recipe", label: "Recipe", target: .recipe, cardinality: .one),
       RelationDescriptor(key: "meals", label: "Eaten at meals", target: .meal, cardinality: .many),
@@ -620,11 +626,11 @@ public enum EntityCatalog {
       heroImages: false,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["name", "aliases", "usuallyOnHand", "createdAt", "updatedAt"])),
+        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["name", "aliases", "usuallyOnHand", "gardenGuideKey", "guideSowWindow", "guideTransplantWindow", "createdAt", "updatedAt"])),
         DetailSection(id: "nutrition-product", title: "Nutrition", placement: .primary, collapsed: false, kind: .slot),
-        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "ingredient", columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil))),
-        DetailSection(id: "garden", title: nil, placement: .supporting, collapsed: false, kind: .slot),
-        DetailSection(id: "recipes", title: "Appears in recipes", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "related:recipe.ingredients", columns: ["name", "tags", "meals"], sort: nil, limit: nil)))
+        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "ingredient", columns: ["name", "manufacturer", "category", "onHandUnits"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "plantings", title: "Plantings", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "ingredientId", columns: nil, sort: nil, limit: nil, hideWhenEmpty: true))),
+        DetailSection(id: "recipes", title: "Appears in recipes", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "related:recipe.ingredients", columns: ["name", "tags", "meals"], sort: nil, limit: nil, hideWhenEmpty: false)))
       ],
       listViews: [.table],
       shelfSubtitle: [],
@@ -687,7 +693,7 @@ public enum EntityCatalog {
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "author", "subjects", "recipeCount", "sourceRecipeCount", "needsReextract", "coverUrl"])),
         DetailSection(id: "physical-copy", title: "Physical copy", placement: .supporting, collapsed: false, kind: .fields(["product"])),
         DetailSection(id: "toc", title: "Contents", placement: .primary, collapsed: false, kind: .slot),
-        DetailSection(id: "recipes", title: "Recipes", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "source", columns: ["name", "tags", "costTotal"], sort: nil, limit: nil))),
+        DetailSection(id: "recipes", title: "Recipes", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "recipes", filterDescriptor: "source", columns: ["name", "tags", "costTotal"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "import-progress", title: "Import", placement: .primary, collapsed: false, kind: .slot)
       ],
       listViews: [.table],
@@ -718,8 +724,7 @@ public enum EntityCatalog {
       FieldDescriptor(key: "aliases", label: "Aliases", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "tags", label: "Tags", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "type", label: "Type", kind: .`enum`, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "gardenKind", label: "Garden kind", kind: .`enum`, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "gardenConditions", label: "Growing conditions", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "productId", label: "Is a", kind: .identifier, nullable: true, reference: FieldReference(entity: .product, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "parentId", label: "Parent Location", kind: .identifier, nullable: true, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "pendingImageIds", label: "Pending Image IDs", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
@@ -750,9 +755,6 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "related:location.ingredients", urlKey: "related-ingredient", kind: .text, placeholder: "Search related ingredients...", label: nil, options: nil, wire: .param(name: "ingredientSearch"), targetEntity: nil),
       FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by related ingredients id...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: nil),
       FilterDescriptor(columnId: "ingredientPresenceFilter", urlKey: "ingredientPresenceFilter", kind: .presence, placeholder: "Filter related ingredients presence...", label: nil, options: nil, wire: .param(name: "ingredientPresenceFilter"), targetEntity: nil),
-      FilterDescriptor(columnId: "related:location.plantingHistory", urlKey: "related-planting", kind: .text, placeholder: "Search related plantings...", label: nil, options: nil, wire: .param(name: "plantingSearch"), targetEntity: nil),
-      FilterDescriptor(columnId: "plantingId", urlKey: "plantingId", kind: .idMulti, placeholder: "Filter by related plantings id...", label: nil, options: nil, wire: .param(name: "plantingId"), targetEntity: nil),
-      FilterDescriptor(columnId: "plantingPresenceFilter", urlKey: "plantingPresenceFilter", kind: .presence, placeholder: "Filter related plantings presence...", label: nil, options: nil, wire: .param(name: "plantingPresenceFilter"), targetEntity: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
       FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
@@ -763,7 +765,8 @@ public enum EntityCatalog {
       RelationDescriptor(key: "product", label: "Product", target: .product, cardinality: .one),
       RelationDescriptor(key: "ingredients", label: "Ingredients", target: .ingredient, cardinality: .many),
       RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
-      RelationDescriptor(key: "planting-history", label: "Planting history", target: .planting, cardinality: .many)
+      RelationDescriptor(key: "plantings", label: "Plantings", target: .planting, cardinality: .many),
+      RelationDescriptor(key: "garden-entries", label: "Garden entries", target: .gardenEntry, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .standard,
@@ -773,12 +776,13 @@ public enum EntityCatalog {
       heroImages: true,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "inventory", title: "Contents", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "locationId", columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil))),
-        DetailSection(id: "children", title: "Sub-locations", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parent", columns: ["name", "type", "valuation"], sort: nil, limit: nil))),
-        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["id", "type", "productId", "parentId", "lastBulkInventory", "aliases", "tags", "createdAt", "updatedAt"])),
-        DetailSection(id: "garden", title: nil, placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "inventory", title: "Contents", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "inventory", filterDescriptor: "locationId", columns: ["amount", "placement", "verifiedAt"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "children", title: "Sub-locations", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "children", filterDescriptor: "parent", columns: ["name", "type", "valuation"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "basic-information", title: "Basic information", placement: .supporting, collapsed: false, kind: .fields(["id", "type", "productId", "parentId", "lastBulkInventory", "notes", "aliases", "tags", "createdAt", "updatedAt"])),
         DetailSection(id: "contents-valuation", title: "Valuation", placement: .supporting, collapsed: false, kind: .slot),
-        DetailSection(id: "ai-description", title: "AI description", placement: .supporting, collapsed: false, kind: .slot)
+        DetailSection(id: "ai-description", title: "AI description", placement: .supporting, collapsed: false, kind: .slot),
+        DetailSection(id: "plantings", title: "Plantings", placement: .supporting, collapsed: false, kind: .relation(RelationSectionSpec(relation: "plantings", filterDescriptor: "locationId", columns: nil, sort: nil, limit: nil, hideWhenEmpty: true))),
+        DetailSection(id: "garden-entries", title: "Garden entries", placement: .supporting, collapsed: false, kind: .relation(RelationSectionSpec(relation: "garden-entries", filterDescriptor: "locationId", columns: nil, sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: true)))
       ],
       listViews: [.slot(id: "gallery", label: "Gallery", searchKeys: []), .table, .slot(id: "visualizations", label: "Visualizations", searchKeys: [])],
       shelfSubtitle: [],
@@ -991,9 +995,9 @@ public enum EntityCatalog {
       heroActions: ["edit"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "kind", "notes", "createdAt", "updatedAt"])),
-        DetailSection(id: "financial-accounts", title: "Financial accounts", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "financial-accounts", filterDescriptor: "ledgerPartyId", columns: ["name", "identity", "transactionCount"], sort: nil, limit: nil))),
-        DetailSection(id: "outgoing-transfers", title: "Outgoing transfers", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "outgoing-transfers", filterDescriptor: "fromPartyId", columns: ["toPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
-        DetailSection(id: "incoming-transfers", title: "Incoming transfers", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "incoming-transfers", filterDescriptor: "toPartyId", columns: ["fromPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil)))
+        DetailSection(id: "financial-accounts", title: "Financial accounts", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "financial-accounts", filterDescriptor: "ledgerPartyId", columns: ["name", "identity", "transactionCount"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "outgoing-transfers", title: "Outgoing transfers", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "outgoing-transfers", filterDescriptor: "fromPartyId", columns: ["toPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "incoming-transfers", title: "Incoming transfers", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "incoming-transfers", filterDescriptor: "toPartyId", columns: ["fromPartyId", "amount", "date"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false)))
       ],
       listViews: [.table],
       shelfSubtitle: [],
@@ -1164,16 +1168,16 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "budget", title: "Budget", placement: .primary, collapsed: false, kind: .slot),
         DetailSection(id: "contribution", title: "Contribution", placement: .supporting, collapsed: false, kind: .slot),
-        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "project", columns: ["name", "status", "dueDate", "trade"], sort: nil, limit: nil))),
+        DetailSection(id: "tasks", title: "Tasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "tasks", filterDescriptor: "project", columns: ["name", "status", "dueDate", "trade"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "icon", "status", "kind", "startDate", "endDate", "costEstimate", "parentProjectId", "locations", "updatedAt"])),
-        DetailSection(id: "reusable-resources", title: "Reusable resources", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "resources", filterDescriptor: "usedOnProjectId", columns: ["name", "manufacturer", "category"], sort: nil, limit: nil))),
+        DetailSection(id: "reusable-resources", title: "Reusable resources", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "resources", filterDescriptor: "usedOnProjectId", columns: ["name", "manufacturer", "category"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "resources", title: "Resources", placement: .supporting, collapsed: false, kind: .fields(["googleDriveFolderUrl", "notionPageUrl"])),
         DetailSection(id: "dependencies", title: "Dependencies", placement: .supporting, collapsed: false, kind: .fields(["blockedByIds", "blockingIds"])),
-        DetailSection(id: "sub-projects", title: "Sub-projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "sub-projects", filterDescriptor: "parent", columns: ["name", "status", "kind", "costEstimate"], sort: nil, limit: nil))),
-        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "project", columns: ["name", "cost", "date", "costType", "trade", "product"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
-        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "related:purchase.projects", columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
-        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchased-products", filterDescriptor: "related:product.projects", columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil))),
-        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "projectId", columns: ["name", "purchaseCount", "spend"], sort: nil, limit: nil))),
+        DetailSection(id: "sub-projects", title: "Sub-projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "sub-projects", filterDescriptor: "parent", columns: ["name", "status", "kind", "costEstimate"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "project", columns: ["name", "cost", "date", "costType", "trade", "product"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "related:purchase.projects", columns: ["vendor", "displayLabel", "date", "statedTotal"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchased-products", filterDescriptor: "related:product.projects", columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "vendors", title: "Vendors", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "vendors", filterDescriptor: "projectId", columns: ["name", "purchaseCount", "spend"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "notes", title: "Notes", placement: .supporting, collapsed: false, kind: .fields(["notes"])),
         DetailSection(id: "analytics", title: "Analytics", placement: .full, collapsed: true, kind: .slot)
       ],
@@ -1266,7 +1270,7 @@ public enum EntityCatalog {
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "status", "trade", "dueDate", "dueEndDate", "projectId", "subjectProductId", "parentTaskId"])),
         DetailSection(id: "dependencies", title: "Dependencies", placement: .supporting, collapsed: false, kind: .fields(["blockedByIds", "blockingIds"])),
-        DetailSection(id: "subtasks", title: "Subtasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "subtasks", filterDescriptor: "parentTask", columns: ["name", "status", "dueDate"], sort: nil, limit: nil)))
+        DetailSection(id: "subtasks", title: "Subtasks", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "subtasks", filterDescriptor: "parentTask", columns: ["name", "status", "dueDate"], sort: nil, limit: nil, hideWhenEmpty: false)))
       ],
       listViews: [.table, .slot(id: "agenda", label: "Next", searchKeys: []), .slot(id: "board", label: "Board", searchKeys: ["cols", "lane", "q"]), .timeline],
       shelfSubtitle: [],
@@ -1348,10 +1352,10 @@ public enum EntityCatalog {
       heroActions: ["edit"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "website", "orderUrlTemplate", "notes", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"])),
-        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendor", columns: ["displayLabel", "orderId", "date", "statedTotal", "expenseCount"], sort: SectionSort(field: "date", direction: .desc), limit: nil))),
-        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.vendors", columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil))),
-        DetailSection(id: "projects", title: "Projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "projects", filterDescriptor: "vendorId", columns: ["name", "status", "kind"], sort: nil, limit: nil))),
-        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "vendor", columns: ["name", "cost", "date", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil)))
+        DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendor", columns: ["displayLabel", "orderId", "date", "statedTotal", "expenseCount"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.vendors", columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "projects", title: "Projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "projects", filterDescriptor: "vendorId", columns: ["name", "status", "kind"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "vendor", columns: ["name", "cost", "date", "project"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false)))
       ],
       listViews: [.table],
       shelfSubtitle: [],
@@ -1453,8 +1457,8 @@ public enum EntityCatalog {
       heroImages: true,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "purchaseId", columns: ["name", "cost", "date", "lineKind", "product", "project"], sort: nil, limit: nil))),
-        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.purchases", columns: ["name", "manufacturer", "category", "price"], sort: nil, limit: nil))),
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "purchaseId", columns: ["name", "cost", "date", "lineKind", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.purchases", columns: ["name", "manufacturer", "category", "price"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "project-allocation", title: "Project allocation", placement: .primary, collapsed: false, kind: .slot),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["vendorId", "orderId", "displayLabel", "date", "statedTotal", "notes"])),
         DetailSection(id: "reconciliation", title: "Reconciliation", placement: .supporting, collapsed: false, kind: .slot),
@@ -1534,7 +1538,7 @@ public enum EntityCatalog {
       heroActions: ["edit"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "identity", "provisional", "sourceAliases", "ledgerPartyId", "notes", "transactionCount", "createdAt", "updatedAt"])),
-        DetailSection(id: "transactions", title: "Transactions", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "transactions", filterDescriptor: "accountId", columns: ["merchant", "amount", "kind", "status", "postedDate"], sort: SectionSort(field: "postedDate", direction: .desc), limit: nil)))
+        DetailSection(id: "transactions", title: "Transactions", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "transactions", filterDescriptor: "accountId", columns: ["merchant", "amount", "kind", "status", "postedDate"], sort: SectionSort(field: "postedDate", direction: .desc), limit: nil, hideWhenEmpty: false)))
       ],
       listViews: [.table],
       shelfSubtitle: [],
@@ -1632,7 +1636,7 @@ public enum EntityCatalog {
       heroActions: ["edit"],
       detailSections: [
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["merchant", "vendorInference", "amount", "kind", "status", "accountId", "allocations", "postedDate", "sourceRefs"])),
-        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "financialTransactionId", columns: ["name", "cost", "date", "product", "project"], sort: nil, limit: nil)))
+        DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "financialTransactionId", columns: ["name", "cost", "date", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false)))
       ],
       listViews: [.table],
       shelfSubtitle: [],
@@ -1938,29 +1942,26 @@ public enum EntityCatalog {
     domain: .house,
     sfSymbol: "leaf",
     searchable: true,
-    timeline: .default,
+    timeline: .custom,
     fields: [
       FieldDescriptor(key: "ingredientId", label: "Crop", kind: .identifier, nullable: false, reference: FieldReference(entity: .ingredient, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "sourceProductId", label: "Seed source", kind: .identifier, nullable: true, reference: FieldReference(entity: .product, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "locationId", label: "Location", kind: .identifier, nullable: true, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "intendedLocationId", label: "Intended location", kind: .identifier, nullable: true, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "parentPlantingId", label: "Split from", kind: .identifier, nullable: true, reference: FieldReference(entity: .planting, multiple: false), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 6, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "taskId", label: "Task", kind: .identifier, nullable: true, reference: FieldReference(entity: .task, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 14, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "status", label: "Status", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "planned", label: "Planned"), LabeledOption(value: "growing", label: "Growing"), LabeledOption(value: "finished", label: "Finished")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "variety", label: "Variety", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "quantity", label: "Quantity", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 7, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "notes", label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 13, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "plannedWindow", label: "Planned Window", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 8, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "plannedDate", label: "Planned Date", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 9, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "sowedOn", label: "Sowed On", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 10, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "transplantedOn", label: "Transplanted On", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: 11, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "finishedOn", label: "Finished On", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 12, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "inLocationSince", label: "In location since", kind: .date, nullable: true, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "inLocationSinceKind", label: "Location start", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "actual", label: "Actual date"), LabeledOption(value: "recorded", label: "Recorded date")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "ingredientName", label: "Ingredient Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "sourceProductName", label: "Source Product Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "locationName", label: "Location Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "intendedLocationName", label: "Intended Location Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "gardenGuideKey", label: "Garden Guide Key", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "taskName", label: "Task Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "guideSowWindow", label: "Guide Sow Window", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 15, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "guideTransplantWindow", label: "Guide Transplant Window", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 16, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "pendingImageIds", label: "Pending Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "removeImageIds", label: "Remove Image Ids", kind: .identifier, nullable: false, reference: FieldReference(entity: .image, multiple: true), controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "imageOrder", label: "Image Order", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
@@ -1976,6 +1977,8 @@ public enum EntityCatalog {
       FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "planned", label: "Planned"), LabeledOption(value: "growing", label: "Growing"), LabeledOption(value: "finished", label: "Finished")], wire: .param(name: "status"), targetEntity: nil),
       FilterDescriptor(columnId: "locationId", urlKey: "locationId", kind: .idMulti, placeholder: "Filter by location...", label: nil, options: nil, wire: .param(name: "locationId"), targetEntity: .location),
       FilterDescriptor(columnId: "ingredientId", urlKey: "ingredientId", kind: .idMulti, placeholder: "Filter by crop...", label: nil, options: nil, wire: .param(name: "ingredientId"), targetEntity: .ingredient),
+      FilterDescriptor(columnId: "taskId", urlKey: "taskId", kind: .idMulti, placeholder: "Filter by task...", label: nil, options: nil, wire: .param(name: "taskId"), targetEntity: .task),
+      FilterDescriptor(columnId: "sourceProductId", urlKey: "sourceProductId", kind: .idMulti, placeholder: "Filter by seed source...", label: nil, options: nil, wire: .param(name: "sourceProductId"), targetEntity: .product),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
       FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
     ],
@@ -1983,12 +1986,9 @@ public enum EntityCatalog {
       RelationDescriptor(key: "ingredient", label: "Ingredient", target: .ingredient, cardinality: .one),
       RelationDescriptor(key: "source-product", label: "Source product", target: .product, cardinality: .one),
       RelationDescriptor(key: "location", label: "Current location", target: .location, cardinality: .one),
-      RelationDescriptor(key: "intended-location", label: "Intended location", target: .location, cardinality: .one),
-      RelationDescriptor(key: "parent-planting", label: "Parent planting", target: .planting, cardinality: .one),
+      RelationDescriptor(key: "task", label: "Task", target: .task, cardinality: .one),
       RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
-      RelationDescriptor(key: "location-history", label: "Location history", target: .location, cardinality: .many),
-      RelationDescriptor(key: "entries", label: "Journal entries", target: .gardenEntry, cardinality: .many),
-      RelationDescriptor(key: "location-history-entries", label: "Location history entries", target: .gardenEntry, cardinality: .many)
+      RelationDescriptor(key: "entries", label: "Journal entries", target: .gardenEntry, cardinality: .many)
     ],
     presentation: EntityPresentation(
       detailVariant: .journal,
@@ -1996,20 +1996,18 @@ public enum EntityCatalog {
       heroStats: [],
       heroBreadcrumb: nil,
       heroImages: false,
-      heroActions: ["edit", "startPlanting", "movePlanting", "splitPlanting", "finishPlanting"],
+      heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "garden-history", title: "Journal", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "entries", filterDescriptor: "plantingId", columns: ["kind", "observedOn", "locationId", "note", "harvestAmount"], sort: SectionSort(field: "observedOn", direction: .desc), limit: nil))),
-        DetailSection(id: "overview", title: "Planting details", placement: .supporting, collapsed: false, kind: .fields(["ingredientId", "variety", "status", "locationId", "intendedLocationId", "sourceProductId", "parentPlantingId", "quantity", "plannedWindow", "plannedDate", "sowedOn", "transplantedOn", "finishedOn", "notes"])),
-        DetailSection(id: "location-history", title: "Location history", placement: .supporting, collapsed: false, kind: .slot),
-        DetailSection(id: "planting-guide", title: "Local planting guide", placement: .supporting, collapsed: false, kind: .slot)
+        DetailSection(id: "garden-history", title: "Journal", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "entries", filterDescriptor: "journalPlantingId", columns: ["kind", "observedOn", "locationId", "note", "harvestAmount"], sort: SectionSort(field: "observedOn", direction: .desc), limit: nil, hideWhenEmpty: false))),
+        DetailSection(id: "overview", title: "Planting details", placement: .supporting, collapsed: false, kind: .fields(["ingredientId", "variety", "status", "locationId", "sourceProductId", "quantity", "plannedWindow", "sowedOn", "transplantedOn", "finishedOn", "notes", "taskId", "guideSowWindow", "guideTransplantWindow"]))
       ],
       listViews: [.table, .timeline],
       shelfSubtitle: [],
       listActions: ["delete"],
-      timelineFields: ["plannedDate", "sowedOn", "transplantedOn", "finishedOn"],
-      lifecycle: TimelineLifecycle(start: "sowedOn", milestones: ["plannedDate", "transplantedOn"], end: "finishedOn"),
+      timelineFields: ["sowedOn", "transplantedOn", "finishedOn"],
+      lifecycle: TimelineLifecycle(start: "sowedOn", milestones: ["transplantedOn"], end: "finishedOn"),
       editSections: nil,
-      readOnlyOnUpdate: ["status", "locationId"],
+      readOnlyOnUpdate: [],
       readOnlyWhen: []
     )
   )
@@ -2029,7 +2027,7 @@ public enum EntityCatalog {
     fields: [
       FieldDescriptor(key: "locationId", label: "Location", kind: .identifier, nullable: false, reference: FieldReference(entity: .location, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "plantingId", label: "Planting", kind: .identifier, nullable: true, reference: FieldReference(entity: .planting, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 3, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "observation", label: "Observation"), LabeledOption(value: "harvest", label: "Harvest"), LabeledOption(value: "move", label: "Move")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "kind", label: "Kind", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "note", label: "Note"), LabeledOption(value: "harvest", label: "Harvest")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "observedOn", label: "Observed On", kind: .date, nullable: false, reference: nil, controlKind: .date, controlSection: "main", controlOptions: nil, placeholder: nil, initial: "today", inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: "plainDate", mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "note", label: "Note", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 4, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "harvestAmount", label: "Harvest Amount", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 5, format: nil, mobileSlot: nil, mobilePriority: nil),
@@ -2039,7 +2037,6 @@ public enum EntityCatalog {
       FieldDescriptor(key: "images", label: "Images", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "locationName", label: "Location Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "plantingName", label: "Planting Name", kind: .text, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "anchorsPeriod", label: "Anchors a location period", kind: .boolean, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: 6, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "displayName", label: "Display Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "id", label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
@@ -2048,7 +2045,7 @@ public enum EntityCatalog {
       FieldDescriptor(key: "deletedAt", label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
     ],
     filters: [
-      FilterDescriptor(columnId: "kind", urlKey: "kind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [LabeledOption(value: "observation", label: "Observation"), LabeledOption(value: "harvest", label: "Harvest"), LabeledOption(value: "move", label: "Move")], wire: .param(name: "kind"), targetEntity: nil),
+      FilterDescriptor(columnId: "kind", urlKey: "kind", kind: .multiselect, placeholder: "Filter by kind...", label: nil, options: [LabeledOption(value: "note", label: "Note"), LabeledOption(value: "harvest", label: "Harvest")], wire: .param(name: "kind"), targetEntity: nil),
       FilterDescriptor(columnId: "locationId", urlKey: "locationId", kind: .idMulti, placeholder: "Filter by location...", label: nil, options: nil, wire: .param(name: "locationId"), targetEntity: .location),
       FilterDescriptor(columnId: "plantingId", urlKey: "plantingId", kind: .idMulti, placeholder: "Filter by planting...", label: nil, options: nil, wire: .param(name: "plantingId"), targetEntity: .planting),
       FilterDescriptor(columnId: "journalPlantingId", urlKey: "journalPlantingId", kind: .id, placeholder: "Journal for planting...", label: nil, options: nil, wire: .param(name: "journalPlantingId"), targetEntity: .planting),
@@ -2068,7 +2065,7 @@ public enum EntityCatalog {
       heroImages: true,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "entry", title: "Entry", placement: .primary, collapsed: false, kind: .fields(["kind", "observedOn", "locationId", "plantingId", "note", "harvestAmount", "anchorsPeriod"]))
+        DetailSection(id: "entry", title: "Entry", placement: .primary, collapsed: false, kind: .fields(["kind", "observedOn", "locationId", "plantingId", "note", "harvestAmount"]))
       ],
       listViews: [.table, .timeline],
       shelfSubtitle: [],
@@ -2077,7 +2074,7 @@ public enum EntityCatalog {
       lifecycle: nil,
       editSections: nil,
       readOnlyOnUpdate: [],
-      readOnlyWhen: [ReadOnlyRule(field: "kind", equals: .string("move"), fields: ["locationId", "plantingId", "kind", "observedOn"]), ReadOnlyRule(field: "anchorsPeriod", equals: .bool(true), fields: ["locationId", "plantingId", "kind", "observedOn"])]
+      readOnlyWhen: []
     )
   )
 

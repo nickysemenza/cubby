@@ -3,8 +3,10 @@ import Observation
 import SwiftUI
 
 /// Chooses where a selected batch belongs, then hands the same ordered values to match review and
-/// upload. Garden entries have their own destination because their pending images finalize with
-/// the entry attachment mutation.
+/// upload. "New ‹entity›" skips picking an existing record: the batch uploads as unattached
+/// pending images, then opens the generic create editor prefilled with them (`photoCreatePrefill`)
+/// for any gallery entity the catalog exposes create for — the entity list is read off
+/// `EntityCatalog`, never hard-coded, so a new gallery entity picks this up automatically.
 struct PhotoDestinationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onDone: () -> Void
@@ -15,16 +17,28 @@ struct PhotoDestinationSheet: View {
         _flow = State(initialValue: PhotoImportFlowModel(items: items))
     }
 
+    /// Every gallery entity the generic create editor can open, sorted for a stable menu.
+    private var creatableGalleryEntities: [EntityDescriptor] {
+        EntityCatalog.all
+            .filter { $0.key.nativeActions.contains(.create) && $0.acceptsImages }
+            .sorted { $0.plural < $1.plural }
+    }
+
     var body: some View {
         NavigationStack(path: $flow.path) {
             List {
-                Section("Garden") {
-                    Button {
-                        flow.chooseGarden()
-                    } label: {
-                        Label("New garden entries", systemImage: "leaf")
+                Section("Create a new record") {
+                    ForEach(creatableGalleryEntities, id: \.key) { descriptor in
+                        Button {
+                            flow.chooseCreate(descriptor.key)
+                        } label: {
+                            Label(
+                                "New \(descriptor.singular)",
+                                systemImage: entitySymbol(for: descriptor.key)
+                            )
+                        }
+                        .accessibilityIdentifier("photos.destination.create.\(descriptor.key.rawValue)")
                     }
-                    .accessibilityIdentifier("photos.destination.garden")
                 }
                 Section("Add to a Cubby record") {
                     ForEach(EntityCatalog.all.filter(\.acceptsImages), id: \.key) { descriptor in
@@ -66,8 +80,12 @@ struct PhotoDestinationSheet: View {
             } else {
                 ContentUnavailableView("Destination unavailable", systemImage: "exclamationmark.triangle")
             }
-        case .gardenImport:
-            GardenPhotoImportSheet(items: flow.reviewItems, onDone: finish)
+        case .entityCreate(let rawKey):
+            if let key = EntityKey(rawValue: rawKey) {
+                PhotoEntityCreateUpload(items: flow.reviewItems, key: key, onDone: finish)
+            } else {
+                ContentUnavailableView("Destination unavailable", systemImage: "exclamationmark.triangle")
+            }
         }
     }
 
@@ -78,15 +96,15 @@ struct PhotoDestinationSheet: View {
 }
 
 enum PhotoImportDestination: Equatable {
-    case garden
     case entity(EntityKey, id: String)
+    case create(EntityKey)
 }
 
 enum PhotoImportRoute: Hashable {
     case entityPicker(String)
     case review
     case entityUpload(String, String)
-    case gardenImport
+    case entityCreate(String)
 }
 
 @MainActor
@@ -105,8 +123,8 @@ final class PhotoImportFlowModel {
 
     var reviewItems: [PhotoSelectionItem] { reviewedItems ?? items }
 
-    func chooseGarden() {
-        destination = .garden
+    func chooseCreate(_ key: EntityKey) {
+        destination = .create(key)
         path.append(.review)
     }
 
@@ -118,8 +136,8 @@ final class PhotoImportFlowModel {
     func completeReview(_ items: [PhotoSelectionItem]) {
         reviewedItems = items
         switch destination {
-        case .garden:
-            path.append(.gardenImport)
+        case .create(let key):
+            path.append(.entityCreate(key.rawValue))
         case .entity(let key, let id):
             path.append(.entityUpload(key.rawValue, id))
         case nil:
@@ -315,64 +333,27 @@ private final class PhotoBatchUploadModel {
         error = nil
         do {
             var attached: [ImageCode] = []
-            if key == .gardenEntry {
-                let existingImages = try await client.imageIDs(EntityCatalog[.gardenEntry], id: id)
-                var represented = Set(existingImages.map(\.rawValue))
-                var selectedReferences: [String: String] = [:]
-                for item in items {
-                    let reference: String
-                    if let existing = item.existingImageID {
-                        if existing.rawValue.hasPrefix("draft:") {
-                            let source = String(existing.rawValue.dropFirst("draft:".count))
-                            guard let prior = selectedReferences[source] else {
-                                throw GardenPhotoSelectionResolver.Failure.unavailableSource(source)
-                            }
-                            reference = prior
-                        } else {
-                            reference = existing.rawValue
-                        }
-                    } else {
-                        reference = "selection:\(item.id)"
-                    }
-                    selectedReferences[item.id] = reference
-                    represented.insert(reference)
+            let photoUploader = PhotoUploader(service: client)
+            for item in items {
+                try checkCancelled()
+                currentSelectionID = item.id
+                if let uploaded = uploadedBySelection[item.id] {
+                    attached.append(uploaded)
+                    continue
                 }
-                guard represented.count <= 20 else {
-                    error =
-                        "A garden entry can contain at most 20 photos. Close this review and choose fewer photos."
-                    return
+                if let existing = try resolve(item.existingImageID, for: item.id) {
+                    try await client.attachImages([existing], to: key, id: id)
+                    uploadedBySelection[item.id] = existing
+                    attached.append(existing)
+                    continue
                 }
-                let gardenUploader = PendingImageUploader(entity: .gardenEntry, service: client)
-                for item in items {
-                    try checkCancelled()
-                    currentSelectionID = item.id
-                    let imageID = try await resolveOrUpload(item, gardenUploader: gardenUploader)
-                    attached.append(imageID)
-                }
-                try await client.attachImages(attached, to: key, id: id)
-            } else {
-                let photoUploader = PhotoUploader(service: client)
-                for item in items {
-                    try checkCancelled()
-                    currentSelectionID = item.id
-                    if let uploaded = uploadedBySelection[item.id] {
-                        attached.append(uploaded)
-                        continue
-                    }
-                    if let existing = try resolve(item.existingImageID, for: item.id) {
-                        try await client.attachImages([existing], to: key, id: id)
-                        uploadedBySelection[item.id] = existing
-                        attached.append(existing)
-                        continue
-                    }
-                    let file = try await materialize(item)
-                    status = "Uploading photo…"
-                    let outcome = try await photoUploader.upload(
-                        PhotoUploader.Request(file: file, entity: key, entityID: id),
-                        resuming: checkpoints[item.id])
-                    uploadedBySelection[item.id] = outcome.imageID
-                    attached.append(outcome.imageID)
-                }
+                let file = try await materialize(item)
+                status = "Uploading photo…"
+                let outcome = try await photoUploader.upload(
+                    PhotoUploader.Request(file: file, entity: key, entityID: id),
+                    resuming: checkpoints[item.id])
+                uploadedBySelection[item.id] = outcome.imageID
+                attached.append(outcome.imageID)
             }
             if makeCover {
                 status = "Updating photo order…"
@@ -426,23 +407,136 @@ private final class PhotoBatchUploadModel {
         return resolved
     }
 
-    private func resolveOrUpload(
-        _ item: PhotoSelectionItem, gardenUploader: PendingImageUploader
-    ) async throws -> ImageCode {
-        if let uploaded = uploadedBySelection[item.id] { return uploaded }
-        if let existing = try resolve(item.existingImageID, for: item.id) { return existing }
-        let file = try await materialize(item)
-        status = "Uploading garden photo…"
-        let ids = try await gardenUploader.upload([file])
-        guard let id = ids.first else { throw CocoaError(.fileWriteUnknown) }
-        uploadedBySelection[item.id] = id
-        return id
-    }
-
     private func appModelRefresh() async {
         if let model = AppModel.active, model.client === client {
             await model.photoMatches.refresh(client: client)
         }
+    }
+}
+
+// MARK: - Create with prefill
+
+/// The "New ‹entity›" destination: uploads the reviewed selection as unattached pending images,
+/// then opens the generic create editor prefilled with them and (for the entities that have one) a
+/// date field defaulted to the selection's earliest capture date rather than today.
+private struct PhotoEntityCreateUpload: View {
+    let items: [PhotoSelectionItem]
+    let key: EntityKey
+    let onDone: () -> Void
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var uploader: PhotoCreateUploadModel?
+
+    private var descriptor: EntityDescriptor { EntityCatalog[key] }
+
+    var body: some View {
+        Group {
+            if let uploader {
+                VStack(spacing: PorcelainTokens.Space.lg) {
+                    if let error = uploader.error {
+                        Text(error).foregroundStyle(PorcelainTokens.destructive)
+                        Button("Retry") { Task { await uploader.run() } }
+                    } else {
+                        ProgressView(uploader.status)
+                    }
+                }
+                .padding(PorcelainTokens.Space.lg)
+            } else {
+                LoadingIndicator(label: "Preparing upload")
+            }
+        }
+        .navigationTitle("New \(descriptor.singular)")
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .interactiveDismissDisabled()
+        .task {
+            if uploader == nil {
+                let model = PhotoCreateUploadModel(client: appModel.client, items: items, key: key)
+                uploader = model
+                await model.run()
+            }
+        }
+        .sheet(isPresented: editorPresented) {
+            EntityEditorSheet(key: key, mode: .create(prefill: prefill)) { _ in
+                onDone()
+                dismiss()
+            }
+            .environment(appModel)
+        }
+    }
+
+    /// Shown once the upload has produced ids; dismissing it without saving backs out of the
+    /// whole "Add to…" flow rather than leaving the upload screen stranded behind it.
+    private var editorPresented: Binding<Bool> {
+        Binding(
+            get: { uploader?.imageIDs != nil },
+            set: { presented in if !presented { dismiss() } }
+        )
+    }
+
+    private var prefill: [String: JSONValue] {
+        photoCreatePrefill(
+            for: descriptor, imageIDs: uploader?.imageIDs ?? [],
+            earliestCapturedAt: items.compactMap(\.capturedAt).min())
+    }
+}
+
+@MainActor
+@Observable
+private final class PhotoCreateUploadModel {
+    let client: CubbyClient
+    let items: [PhotoSelectionItem]
+    let key: EntityKey
+    private var uploadedBySelection: [String: ImageCode] = [:]
+    private(set) var status = "Uploading photos…"
+    private(set) var error: String?
+    private(set) var imageIDs: [ImageCode]?
+
+    init(client: CubbyClient, items: [PhotoSelectionItem], key: EntityKey) {
+        self.client = client
+        self.items = items
+        self.key = key
+    }
+
+    func run() async {
+        guard imageIDs == nil else { return }
+        error = nil
+        do {
+            let uploader = PendingImageUploader(entity: key, service: client)
+            var ids: [ImageCode] = []
+            for (offset, item) in items.enumerated() {
+                if let uploaded = uploadedBySelection[item.id] {
+                    ids.append(uploaded)
+                    continue
+                }
+                if let existing = try resolve(item.existingImageID, for: item.id) {
+                    uploadedBySelection[item.id] = existing
+                    ids.append(existing)
+                    continue
+                }
+                status = "Uploading photo \(offset + 1) of \(items.count)…"
+                let file = try await item.materialize()
+                guard let uploaded = try await uploader.upload([file]).first else { continue }
+                uploadedBySelection[item.id] = uploaded
+                ids.append(uploaded)
+            }
+            imageIDs = ids
+        } catch {
+            self.error = error.localizedDescription
+            Diagnostics.report(error, context: "photos.destination.create")
+        }
+    }
+
+    /// Resolves a same-batch "draft:" placeholder (a duplicate the review matched to a sibling
+    /// item not yet uploaded) to the id that sibling's upload produced.
+    private func resolve(_ imageID: ImageCode?, for selectionID: String) throws -> ImageCode? {
+        guard let imageID else { return nil }
+        guard imageID.rawValue.hasPrefix("draft:") else { return imageID }
+        let sourceID = String(imageID.rawValue.dropFirst("draft:".count))
+        guard let resolved = uploadedBySelection[sourceID] ?? uploadedBySelection[selectionID]
+        else { throw CocoaError(.fileNoSuchFile) }
+        return resolved
     }
 }
 

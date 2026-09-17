@@ -111,7 +111,6 @@ export const calendarProjectItem = z.object({
  * milestone date becomes its own read-only calendar item — see
  * `loadCalendarPlantings`/`mapPlantingItems` in repo/calendar-plantings.ts. */
 export const calendarPlantingMilestone = z.enum([
-  "planned",
   "sowed",
   "transplanted",
   "finished",
@@ -123,7 +122,6 @@ export type CalendarPlantingMilestone = z.infer<
 /** Shared between the calendar UI's metadata line and the garden ICS feed's
  * event summary, so the two never name a milestone differently. */
 export const CALENDAR_PLANTING_MILESTONE_LABELS = {
-  planned: "Planned",
   sowed: "Sowed",
   transplanted: "Transplanted",
   finished: "Finished",

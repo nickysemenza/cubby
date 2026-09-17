@@ -1032,9 +1032,8 @@ export function toPlantingCard(
 // ── Garden entry ────────────────────────────────────────────────────────────
 
 const GARDEN_ENTRY_PREVIEW_KIND_LABELS = {
-  observation: "Note",
+  note: "Note",
   harvest: "Harvest",
-  move: "Move",
 } satisfies Record<GardenEntryKind, string>;
 
 export function toGardenEntryCard(

@@ -252,7 +252,8 @@ const renderDetailSectionLiteral = (section: DetailSection): string => {
         `filterDescriptor: ${swiftString(section.filter.descriptor)}, ` +
         `columns: ${swiftOptionalStringArray(section.columns)}, ` +
         `sort: ${sort}, ` +
-        `limit: ${swiftOptionalInt(section.limit)})))`
+        `limit: ${swiftOptionalInt(section.limit)}, ` +
+        `hideWhenEmpty: ${swiftBool(section.hideWhenEmpty)})))`
       );
     }
     case "timeline":
@@ -532,6 +533,8 @@ export const renderSwiftEntityCatalog = (
     "  public let columns: [String]?\n" +
     "  public let sort: SectionSort?\n" +
     "  public let limit: Int?\n" +
+    "  /// Skip the whole section, on both platforms, when its first page is empty.\n" +
+    "  public let hideWhenEmpty: Bool\n" +
     "}\n\n" +
     "public enum TimelineSectionMode: String, Codable, Sendable, Hashable {\n" +
     "  case events, lifecycles\n" +

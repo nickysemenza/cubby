@@ -26,18 +26,18 @@ struct PhotoImportFlowTests {
         #expect(flow.destination == .entity(.product, id: "PRD-2345"))
     }
 
-    @Test func gardenFlowUsesTheSameOrderedSelectionAfterBackNavigation() throws {
+    @Test func createFlowUsesTheSameOrderedSelectionAfterBackNavigation() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
         let flow = PhotoImportFlowModel(items: [first, second])
 
-        flow.chooseGarden()
+        flow.chooseCreate(.gardenEntry)
         flow.completeReview([first, second])
-        #expect(flow.path == [.review, .gardenImport])
+        #expect(flow.path == [.review, .entityCreate("gardenEntry")])
 
         flow.path.removeLast()
         #expect(flow.reviewItems.map(\.id) == [first.id, second.id])
-        #expect(flow.destination == .garden)
+        #expect(flow.destination == .create(.gardenEntry))
     }
 
     @Test func unfinishedMatchChoiceSurvivesBackAndForwardNavigation() throws {
@@ -45,10 +45,10 @@ struct PhotoImportFlowTests {
         let flow = PhotoImportFlowModel(items: [selected])
         let match = ImageCode("IMG-2345")
 
-        flow.chooseGarden()
+        flow.chooseCreate(.gardenEntry)
         flow.reviewDraft.chooseExisting(match, for: selected.id)
         flow.path.removeLast()
-        flow.chooseGarden()
+        flow.chooseCreate(.gardenEntry)
 
         #expect(flow.path == [.review])
         #expect(flow.reviewDraft.decisions[selected.id] == match)

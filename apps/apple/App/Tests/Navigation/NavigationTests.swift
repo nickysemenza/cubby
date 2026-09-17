@@ -16,7 +16,6 @@ struct NavigationTests {
 
         #expect(navigator.section == .browse)
         #expect(navigator.browseKey == .product)
-        #expect(!navigator.browsingGarden)
         #expect(navigator.selectedRecords[.browse] == nil)
         #expect(navigator.paths[.browse] == [])
         #expect(navigator.macDestination == .entity(.product))
@@ -35,34 +34,9 @@ struct NavigationTests {
         #expect(navigator.paths[.browse] == [.entityDetail(.location, id: "LOC-RELATED")])
     }
 
-    @Test func returningFromGardenToEntityClearsGardenHistory() {
-        let navigator = Navigator()
-        let selection = record(.product, "PRD-1")
-        navigator.macDestination = .entity(.product)
-        navigator.selectRecord(selection, in: .browse)
-        navigator.macDestination = .garden
-
-        #expect(navigator.macDestination == .garden)
-        #expect(navigator.paths[.browse] == [])
-
-        navigator.macDestination = .entity(.product)
-
-        #expect(navigator.macDestination == .entity(.product))
-        #expect(navigator.selectedRecords[.browse] == selection)
-        #expect(navigator.paths[.browse] == [])
-    }
-
-    @Test func gardenRelatedRecordUsesWorkspaceHistory() {
-        let navigator = Navigator()
-        navigator.macDestination = .garden
-        navigator.openRecord(record(.location, "LOC-1"))
-        #expect(navigator.paths[.browse] == [.entityDetail(.location, id: "LOC-1")])
-        #expect(navigator.selectedRecords[.browse] == nil)
-    }
-
     @Test func selectingBrowseRootClearsSpecializedBrowseDestination() {
         let navigator = Navigator()
-        navigator.macDestination = .garden
+        navigator.macDestination = .entity(.location)
         navigator.selectedRecords[.browse] = record(.product, "PRD-1")
         navigator.paths[.browse] = [.entityDetail(.location, id: "LOC-1")]
 
@@ -70,7 +44,6 @@ struct NavigationTests {
 
         #expect(navigator.section == .browse)
         #expect(navigator.browseKey == nil)
-        #expect(!navigator.browsingGarden)
         #expect(navigator.macDestination == .section(.browse))
         #expect(navigator.selectedRecords[.browse] == nil)
         #expect(navigator.paths[.browse] == [])
@@ -141,7 +114,6 @@ struct NavigationTests {
         #expect(navigator.section == .browse)
         #if os(macOS)
             #expect(navigator.browseKey == .product)
-            #expect(!navigator.browsingGarden)
             #expect(navigator.selectedRecords[.browse] == record(.product, "PRD-NEW"))
             #expect(navigator.paths[.browse] == [])
         #else

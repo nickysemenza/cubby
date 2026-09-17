@@ -29,9 +29,8 @@ private struct RefreshControl: ViewModifier {
             #endif
     }
 
-    /// Same re-entrancy guard idea as `GardenJournalModel.refresh()`: a trigger that lands while
-    /// one is already in flight — the button tapped twice, or tapped mid pull-to-refresh — is
-    /// dropped instead of starting a second, overlapping load.
+    /// A trigger that lands while one is already in flight — the button tapped twice, or tapped
+    /// mid pull-to-refresh — is dropped instead of starting a second, overlapping load.
     private func runIfNeeded() async {
         guard !refreshing else { return }
         refreshing = true

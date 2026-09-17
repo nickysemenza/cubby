@@ -646,7 +646,7 @@ describe("entity display image resolver", () => {
       );
       const entry = await insertWithShortcode(ctx.db, "gardenEntry", {
         locationId: location.entityId,
-        kind: "observation",
+        kind: "note",
         observedOn: "2024-01-01",
       });
       const first = await makeImage(); // sortOrder 0
@@ -859,7 +859,7 @@ describe("entity display image resolver", () => {
       );
       const gardenEntryRow = await insertWithShortcode(ctx.db, "gardenEntry", {
         locationId: gardenLocation.entityId,
-        kind: "observation",
+        kind: "note",
         observedOn: "2024-01-01",
       });
       const gardenImg = await makeImage();

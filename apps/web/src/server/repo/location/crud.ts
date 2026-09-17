@@ -50,7 +50,6 @@ import {
   location,
   locationImage,
   planting,
-  plantingLocationPeriod,
   product,
   productImage,
 } from "~/server/db/schema";
@@ -138,23 +137,13 @@ export const LOCATION_DELETE_EDGE_POLICY = {
   "Planting.locationId": {
     code: "block-live-planting",
     effect: "block",
-    description: "A location with current plantings cannot be deleted.",
-  },
-  "Planting.intendedLocationId": {
-    code: "block-planned-planting",
-    effect: "block",
-    description: "A location named by a planned planting cannot be deleted.",
+    description:
+      "A location named by a current or planned planting cannot be deleted.",
   },
   "GardenEntry.locationId": {
     code: "block-garden-history",
     effect: "block",
     description: "A location with dated garden observations cannot be deleted.",
-  },
-  "PlantingLocationPeriod.locationId": {
-    code: "block-location-history",
-    effect: "block",
-    description:
-      "A location with confirmed planting history cannot be deleted.",
   },
 } as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
 
@@ -277,8 +266,7 @@ const createLocationTx = async (
       // Form factor is a fact about the SKU, so a linked location stores no
       // type of its own.
       type: productId ? null : (data.type ?? null),
-      gardenKind: data.gardenKind ?? null,
-      gardenConditions: data.gardenConditions ?? null,
+      notes: data.notes ?? null,
       productId,
       parentId,
     });
@@ -450,8 +438,7 @@ export const updateLocation = async (
       // Linking a product clears the now-redundant type; the two are
       // alternatives, never companions.
       type: productId ? null : data.type,
-      gardenKind: data.gardenKind,
-      gardenConditions: data.gardenConditions,
+      notes: data.notes,
       productId,
       parentId,
     });
@@ -636,37 +623,28 @@ export const deleteLocations = async (
         `Cannot delete ${count} location(s): ${names} have inventory entries. Move or remove them first.`,
     });
 
-    // LOCATION_DELETE_EDGE_POLICY declares these four garden edges `block`;
+    // LOCATION_DELETE_EDGE_POLICY declares these two garden edges `block`;
     // nothing generic enforces `block`, so the repository must (the same call
     // the preview makes, so the two cannot disagree). `countByTarget` skips
-    // soft-deleted Planting/GardenEntry rows on its own; PlantingLocationPeriod
-    // is hard-delete-only, so every row counts. Any live planting blocks,
-    // finished or not — that is the declared policy.
-    const [byLocation, byIntended, byEntry, byPeriod] = await Promise.all([
+    // soft-deleted Planting/GardenEntry rows on its own. Any live planting
+    // blocks, finished or not — that is the declared policy.
+    const [byLocation, byEntry] = await Promise.all([
       countByTarget(tx, planting, planting.locationId, ids),
-      countByTarget(tx, planting, planting.intendedLocationId, ids),
       countByTarget(tx, gardenEntry, gardenEntry.locationId, ids),
-      countByTarget(
-        tx,
-        plantingLocationPeriod,
-        plantingLocationPeriod.locationId,
-        ids,
-        { includeDeleted: true },
-      ),
     ]);
     await assertNoDependents({
-      offendingParentIds: ids.filter((id) => byLocation[id] || byIntended[id]),
+      offendingParentIds: ids.filter((id) => byLocation[id]),
       fetchNames: fetchLocationNames,
       reason: "LOCATION_HAS_PLANTINGS",
       message: (count, names) =>
         `Cannot delete ${count} location(s): ${names} still have plantings (current or planned). Move or delete the plantings first.`,
     });
     await assertNoDependents({
-      offendingParentIds: ids.filter((id) => byEntry[id] || byPeriod[id]),
+      offendingParentIds: ids.filter((id) => byEntry[id]),
       fetchNames: fetchLocationNames,
       reason: "LOCATION_HAS_GARDEN_HISTORY",
       message: (count, names) =>
-        `Cannot delete ${count} location(s): ${names} carry garden history (entries or confirmed location periods).`,
+        `Cannot delete ${count} location(s): ${names} carry garden history (dated observations or harvests).`,
     });
 
     // Promote each surviving child to the nearest ancestor that is not also

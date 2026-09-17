@@ -11,17 +11,17 @@ import { and, eq, gte, isNotNull, lte, or } from "drizzle-orm";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
 import { ingredient, location, planting } from "~/server/db/schema";
+import { plantingDisplayName } from "~/server/repo/garden";
 
 import { getDb, notDeleted } from "./database-helpers";
 
 const shiftPlainDate = (value: string, amount: number) =>
   formatPlainDate(addDays(parsePlainDate(value), amount));
 
-/** The planting lifecycle's four milestone date columns, in the order they
- * occur. Shared by the "any milestone falls in range" read predicate and by
+/** The planting lifecycle's milestone date columns, in the order they occur.
+ * Shared by the "any milestone falls in range" read predicate and by
  * `mapPlantingItems`'s per-milestone emission. */
 const MILESTONE_COLUMNS = {
-  planned: planting.plannedDate,
   sowed: planting.sowedOn,
   transplanted: planting.transplantedOn,
   finished: planting.finishedOn,
@@ -34,20 +34,10 @@ const MILESTONES = Object.keys(
   MILESTONE_COLUMNS,
 ) as CalendarPlantingMilestone[];
 
-/** `"<ingredient name>[ · <variety>]"` — mirrors `plantingDisplayName` in
- * `repo/garden/index.ts`. That helper isn't exported (garden repo files are
- * out of scope here), so the one-line rule is replicated; keep both in sync
- * if the display-name rule ever changes. */
-const plantingTitle = (row: {
-  ingredientName: string;
-  variety: string | null;
-}) =>
-  row.variety ? `${row.ingredientName} · ${row.variety}` : row.ingredientName;
-
 /**
  * One bounded read of every planting with at least one lifecycle milestone
- * (`plannedDate`/`sowedOn`/`transplantedOn`/`finishedOn`) inside the queried
- * range. A row can carry more than one in-range milestone (e.g. sowed AND
+ * (`sowedOn`/`transplantedOn`/`finishedOn`) inside the queried range. A row
+ * can carry more than one in-range milestone (e.g. sowed AND
  * transplanted this month) — `mapPlantingItems` is what turns each populated,
  * in-range date into its own item.
  */
@@ -66,7 +56,6 @@ export const loadCalendarPlantings = (
       variety: planting.variety,
       locationName: location.name,
       plannedWindow: planting.plannedWindow,
-      plannedDate: planting.plannedDate,
       sowedOn: planting.sowedOn,
       transplantedOn: planting.transplantedOn,
       finishedOn: planting.finishedOn,
@@ -99,14 +88,12 @@ export interface CalendarPlantingRow {
   variety: string | null;
   locationName: string | null;
   plannedWindow: string | null;
-  plannedDate: string | null;
   sowedOn: string | null;
   transplantedOn: string | null;
   finishedOn: string | null;
 }
 
 const MILESTONE_DATE = {
-  planned: "plannedDate",
   sowed: "sowedOn",
   transplanted: "transplantedOn",
   finished: "finishedOn",
@@ -134,7 +121,7 @@ export const mapPlantingItems = (
           kind: "planting" as const,
           id: parseShortcodeFor("planting", row.shortcode),
           milestone,
-          title: plantingTitle(row),
+          title: plantingDisplayName(row),
           locationName: row.locationName,
           plannedWindow: row.plannedWindow,
           startDate: date,

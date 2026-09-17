@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Circle } from "lucide-react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -7,7 +7,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Page } from "~/components/page/Page";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { type DetailSection, DetailSections } from "./detail-page";
+import {
+  type DetailSection,
+  DetailSections,
+  useSectionVisible,
+} from "./detail-page";
 
 const sections: DetailSection[] = [
   {
@@ -257,5 +261,60 @@ describe("DetailSections ledger", () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Analytics content")).toBeVisible();
+  });
+});
+
+// A relation section's content reports its own visibility through
+// `useSectionVisible` (a real one reports `false` once its declared
+// `hideWhenEmpty` and its first page resolves empty — see
+// `entity-relation-table.tsx`). This fixture stands in for that content so
+// the mechanism is exercised without a real entity's list query.
+function HideableContent({ hidden }: { hidden: boolean }) {
+  useSectionVisible(!hidden);
+  return <p>Rows content</p>;
+}
+
+const hideableSection = (hidden: boolean): DetailSection => ({
+  id: "relation",
+  title: "Relation",
+  icon: Circle,
+  placement: "primary",
+  headerAction: <button type="button">Add</button>,
+  content: <HideableContent hidden={hidden} />,
+});
+
+describe("hideWhenEmpty relation sections", () => {
+  it("keeps the section — header, create button, and body — once its content reports non-empty", async () => {
+    renderDetail({ detailSections: [hideableSection(false)] });
+    await screen.findByText("Rows content");
+    expect(screen.getByRole("heading", { name: "Relation" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add" })).toBeVisible();
+  });
+
+  it("hides the whole section — header, create button, and body — once its content reports empty", async () => {
+    const { container } = renderDetail({
+      detailSections: [hideableSection(true)],
+    });
+    await waitFor(() => {
+      expect(container.querySelector("#relation")).not.toBeVisible();
+    });
+    // `hidden` drops the subtree from accessible queries, not just from view.
+    expect(screen.queryByRole("heading", { name: "Relation" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
+  });
+
+  it("leaves a section without hideWhenEmpty showing its own empty state", async () => {
+    // A section whose content never calls `useSectionVisible` — the ordinary
+    // case for a relation section with no `hideWhenEmpty` — keeps its header
+    // and renders whatever its content chooses, empty state included. Unlike
+    // "omits empty sections" above, this content is non-null (an empty-state
+    // sentence), so nothing here drops it from the index or the DOM.
+    const [summary] = sections;
+    if (!summary) throw new Error("Expected a fixture section");
+    renderDetail({
+      detailSections: [{ ...summary, content: <p>No relations yet.</p> }],
+    });
+    expect(await screen.findByText("No relations yet.")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeVisible();
   });
 });

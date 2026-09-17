@@ -11,27 +11,20 @@ enum DetailSlotRegistry {
         switch (key, slot) {
         case (.meal, "nutrition"):
             AnyView(MealNutritionSlot(mealID: row.id))
-        case (.planting, "location-history"):
-            AnyView(GardenLocationHistorySlot(row: row))
-        case (.planting, "planting-guide"):
-            AnyView(GardenGuideSlot(row: row))
         default:
             nil
         }
     }
 
     /// The hero action row for the verbs `declared` on `key`'s presentation, minus `edit`
-    /// (the toolbar's); nil when none of the declared verbs has a native handler.
+    /// (the toolbar's); nil when none of the declared verbs has a native handler. No entity
+    /// currently declares a hero verb beyond the default `edit`, so this always returns nil —
+    /// kept as the registration point for the next one that does.
     @MainActor
     static func heroActions(
         for key: EntityKey, declared: [String], row: EntityRow, onChanged: @escaping () -> Void
     ) -> AnyView? {
-        switch key {
-        case .planting where declared.contains { GardenPlantingAction(rawValue: $0) != nil }:
-            AnyView(GardenPlantingActionsRow(row: row, declared: declared, onChanged: onChanged))
-        default:
-            nil
-        }
+        nil
     }
 }
 

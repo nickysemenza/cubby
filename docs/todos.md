@@ -96,16 +96,6 @@ history is the archive. Permanent product constraints live in the
   values (`filterValues(for:)` in `EntityOperations.swift`); declaring the
   options on the control removes the heuristic on both platforms.
 
-- **Drop the stale `native:` flags on `garden.journal`, `garden.entries`,
-  and `garden.createPlanting`.** Nothing on native calls them since the
-  garden forms moved onto the generic editor, but the flags keep dead
-  aliases in `APITypes.swift` and dead operations in the Swift client.
-
-- **Declare `importPhotos` as a planting hero action.** The native hero row
-  (`GardenPlantingActionsRow`) adds the Import photos verb by hand because
-  `19-planting.entity.ts` does not list it; declare it so both platforms
-  render it from the manifest.
-
 - **`pnpm deploy` is shadowed by pnpm's built-in.** `pnpm --filter
   @cubby/web deploy` errors with `ERR_PNPM_INVALID_DEPLOY_TARGET`; only
   `pnpm run deploy` reaches the script. Rename it `deploy:web` (and update
@@ -119,15 +109,6 @@ history is the archive. Permanent product constraints live in the
 ---
 
 ## Ready projects
-
-- (P3) **`/locations/arrange` and `/locations/photo-pass` ignore growing
-  areas.** Neither existing bulk-location tool is garden-aware.
-
-- **Native "Add growing area" prefills `type: area` invisibly.** Location's
-  `type` and `gardenKind` fields have no `control`, so the generic native
-  editor cannot render them; the create flow hard-codes `type: area` instead
-  of letting a user pick or later edit it. Give both fields a `control` so
-  native can render and edit them like any other field.
 
 - **Product edit still opens `ProductForm` in a dialog** instead of the
   generic editor's `structured-field` renderers, because `unitMappings` and
@@ -161,15 +142,6 @@ history is the archive. Permanent product constraints live in the
   surface, allow adding shortfalls to the shopping list, and add an entry
   point from inventory.
 
-- (P3) **Apple day-grouped photo import is reachable only from Photos › Add
-  to….** The generic "attach to Plantings / Garden Entries" chooser bypasses
-  journal semantics (anchor locking, area journal placement) since it doesn't
-  route through the garden entry form.
-
-- (P3) **Bulk "Finish selected" on Apple.** Web has no equivalent gap; the
-  native client lacks a multi-select finish action for plantings, so
-  finishing several plantings at once still means one Finish per planting.
-
 - **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
   facet. Partial-import repair stays on the existing Problems worklist.
 
@@ -194,18 +166,6 @@ history is the archive. Permanent product constraints live in the
 - **Fix actions for financial duplicate findings.** Give duplicate transaction
   source-ref and account-alias Problems findings a safe targeted action, without
   widening the general entity-merge system to money entities.
-
-- (P2) **Growing-area Location page still trails its design canvas**
-  (https://claude.ai/artifact/Y7fvFetWNAndGYjJe2AeDu, "Location detail —
-  growing-area variant"). The manifest-declared hero (chip/breadcrumb),
-  collapsed sections, and the `garden` slot now cover the demotion and
-  identity work; residue:
-  1. Planting rows in `LocationGarden`'s `GardenPlantingRow`
-     (`apps/web/src/app/garden/slots.tsx`) lack the per-row Actions ▾ (Start
-     for planned) and the amber "location dates unconfirmed" state — the
-     "here since <date>" wording already renders.
-  2. Planting detail's guide slot (`PlantingGuide`, same file) still folds
-     behind a plain `<details>` instead of a collapsed section row.
 
 - **Guided placement pass for unlocated products.** Walk a value- or
   category-bounded worklist one product at a time with three answers: not tracked,
@@ -377,10 +337,6 @@ history is the archive. Permanent product constraints live in the
   default the project, the shelf worklists filter, and the convention stop
   needing rediscovery per importer.
 
-- (idea) **Guide planting windows as a calendar overlay.** Render the
-  Planting guide's reference windows on top of the garden calendar lane
-  instead of as a separate lookup.
-
 - **Inferred-zero nutrients for label data.** USDA `branded_food` records and
   household `labelNutrition` carry only what the label prints (11 nutrients
   for chicken, panko, parm, chilies), so macro coverage read 11/12 with the
@@ -417,11 +373,7 @@ history is the archive. Permanent product constraints live in the
 - **Meal templates.** Save reusable meal compositions without coupling them to
   recurrence.
 
-- (P3) **Planting/entry delete is API/MCP-only.** No web or Apple UI
-  affordance calls delete for `planting` or `gardenEntry` today; decide
-  whether one is wanted before adding it.
-
-- (lead) **React #418 hydration error on `/garden` and `/garden-entries`.**
+- (lead) **React #418 hydration error on `/garden-entries`.**
   Logged in production on both route loads; reproduce in dev before deciding
   on a fix. Two related, reproducible-in-dev leads seen 2026-09-16 on `main`:
   every sortable list header hydrates with a different dnd-kit
@@ -535,12 +487,6 @@ history is the archive. Permanent product constraints live in the
   wrong id form — that is how shortcode-vs-uuid image deletion shipped to review.
   Every entity going through `createEntityCrudRouter` is safe today because that
   config requires an `idSchema`; a hand-rolled call site can still omit one.
-
-- **iOS parity for the garden-flow audit findings** — Promote when the web
-  garden audit PR (2026-09-14, worktree `tanstack-best-practices`) merges. That
-  audit fixed web only by decision; what iOS does differently was recorded as
-  findings, not changed. Pull the iOS batch from that PR's report rather than
-  re-auditing.
 
 - **Let the negative-expected-quantity worklist converge** — Promote when the
   `negativeExpectedQuantity` view is next worked. It reads the kit-projected quantity
@@ -807,12 +753,13 @@ history is the archive. Permanent product constraints live in the
   clarification, and baker's-percentage comparison without replacing Product-owned
   density mappings with a global reference table.
 
-- **Seasonal garden planning and photo comparison.** Build on the existing
-  [journals and planting guides](garden.md) to propose revisable seasonal plans
-  for seeds and starts, compare dated bed/tree photos with AI, and explain
-  forecast changes and keep-versus-replace recommendations. Keep the workflow
-  occasional and lightweight; planting windows alone do not establish maturity
-  or harvest forecasts.
+- **Seasonal garden planning and photo comparison.** The `garden-plan-import`
+  skill already turns a written seasonal plan into Locations/Project/Tasks/
+  planned Plantings; build past one-time ingest toward *revising* a standing
+  plan season over season, comparing dated bed/tree photos with AI, and
+  explaining forecast changes and keep-versus-replace recommendations. Keep
+  the workflow occasional and lightweight; planting windows alone do not
+  establish maturity or harvest forecasts.
 
 - **Standing household agents.** A registrar for records, quartermaster for
   consumable shortfalls, and foreman for stale or blocked projects, with approval
@@ -823,14 +770,6 @@ history is the archive. Permanent product constraints live in the
 ## Next pass
 
 Deferred from the 2026-09 manifest-rendering PRs; unordered.
-
-- **Unify the garden lifecycle action surface.** Planting's Start/Move/Split/Finish
-  workflows are declared as manifest hero actions and generated native
-  operations, while MCP currently needs explicit hand-registered tools to
-  reach the same workflows because generic `entity update` correctly rejects
-  lifecycle fields. Rework the garden action contract and MCP generation
-  together so web, native, and MCP share one declared action vocabulary and
-  lifecycle/history semantics; keep the current MCP bridge until then.
 
 - **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
   only alongside the first native screen that scales a recipe or prices a meal.
@@ -872,3 +811,7 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
   existing Purchases before booking new ones (`match_expenses`,
   `suggest_financial_transfer_pairs`). The 147 lump-line orders are a lower
   tier: itemize only where a receipt is on hand.
+
+- **Ingest the Duboce Beds 2026–27 plan with `garden-plan-import`.** Turn the
+  household's written seasonal plan into Locations, one season Project,
+  due-dated Tasks, and planned Plantings by following the skill's playbook.

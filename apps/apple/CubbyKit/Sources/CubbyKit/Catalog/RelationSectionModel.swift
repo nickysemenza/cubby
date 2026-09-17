@@ -34,9 +34,16 @@ public final class RelationSectionModel: Identifiable {
         self.source = source
         self.recordID = recordID
         self.target = target
+        // The generic seed rule: when the filter's own column is a real create field on the
+        // target (a direct filter like `locationId`), seed that; otherwise (a derived/urlOnly
+        // filter like `journalPlantingId`) fall back to the target's single reference field whose
+        // `reference.entity` matches the filter's brandRef entity — planting's Journal section
+        // resolves `journalPlantingId` to `plantingId` this way.
         self.referenceField =
             target.field(filter.columnId)
-            ?? target.fields.first { $0.reference?.entity == source.key && $0.reference?.multiple == false }
+            ?? filter.targetEntity.flatMap { brandEntity in
+                target.fields.first { $0.reference?.entity == brandEntity && $0.reference?.multiple == false }
+            }
         let sort = spec.sort.map { $0.direction == .desc ? "-\($0.field)" : $0.field }
         self.list = GenericEntityListModel(
             descriptor: target,

@@ -138,40 +138,33 @@ House  →  Room  →  Shelf  →  Bin
 
 ## Garden
 
-- A **growing area** is a `Location` carrying a `gardenKind` (`bed` | `tray` |
-  `other`). UI kind labels are "Raised bed / Seed tray / Other"; the create
-  and edit forms are titled "Add growing area" / "Edit growing area". Inside
-  an entry form, the location field is labeled "Location"; an entry about the
-  whole area (no specific sub-location) is a "Whole area" entry, and a
-  planting carrying no location shows under "No location yet".
-- A **planting** (`Planting`) is one crop instance. Its display name is
-  `"<crop name>[ · <variety>]"`. Lifecycle verbs are exactly "Start planting",
-  "Move everything", "Move some seedlings", and "Finish planting" — each verb
-  is simultaneously the triggering action, the dialog title, and the submit
-  label. Creating one is "Add planting"; its state reads "Growing now" or
-  "Planned".
-- An **entry** (`GardenEntry`) is a dated Note or Harvest against a growing
-  area, optionally against one planting. The stored `kind` enum stays
-  `observation` / `harvest` / `move` — "observation" never appears in UI
-  copy, where it reads "Note". Display name is
-  `"<Note|Harvest|Move> · <date> · <area name>"`. The action is "Log entry"
-  (both the trigger and the dialog title); editing is "Edit entry"; the
-  submit label is "Save". A `move` entry, and the **anchor** entry that
-  `startPlanting` writes when a planting first enters a location, are
-  structural: their location, planting, and date are corrected only through
-  location history, never through the entry form, and they carry
-  `anchorsPeriod: true` in output so clients lock those fields.
-- Garden dates read, by context: "Date" (entry, move, split, finish),
-  "Harvest date", "Sowed on", "Transplanted on", "Planned date", and "In this
-  location since". The location-history call to action reads "Confirm
-  location dates" until a planting has its first period, then "Correct
-  location dates".
-- Garden journals: "Garden journal" for the whole garden, "<Area> journal" for
-  one growing area, and plain "Journal" on a planting. Reference windows are
-  the "Planting guide".
-- Web garden strings live in `apps/web/src/app/garden/garden-strings.ts`;
-  Apple's live in `apps/apple/App/Shared/Garden/GardenStrings.swift`. Both
-  clients read from these instead of inlining copy.
+- A **planting** (`Planting`) is one crop instance in at most one `Location`
+  (`locationId`, nullable). Its display name is `"<crop name>[ · <variety>]"`.
+  There are no lifecycle verbs — Edit is the only hero action, and
+  `status`/`locationId`/`finishedOn` are ordinary editable fields. Its state
+  reads "Planned", "Growing", or "Finished" (`status`). Sowing in a tray and
+  transplanting to a bed is `sowedOn` + `transplantedOn` on the same
+  planting; a tray is never a `Location`. A move is editing `locationId` —
+  the audit log/timeline is the location history, not a separate model.
+- An **entry** (`GardenEntry`) is a dated Note or Harvest against a
+  `Location`, optionally against one planting. The stored `kind` enum is
+  `note` / `harvest`, matching its UI label exactly — no "observation" or
+  "move" spelling survives. Display name is `"<Note|Harvest> · <date> · <area
+  name>"`. The action is "Log entry" (both the trigger and the dialog
+  title); editing is "Edit entry". Every entry field, including its date,
+  Location, and optional Planting, is freely editable — nothing is
+  structural or locked.
+- Garden dates read, by context: "Date" (entry), "Harvest date", "Sowed on",
+  "Transplanted on", and "Planned window".
+- A planting's journal is plain "Journal": its own direct entries plus
+  whole-area entries at its current location whose date falls within its
+  active window (sowed/transplanted through finished).
+- `Location.type` includes `bed` and `planter` (plus `area` for open
+  ground). There is no separate "growing area" concept in code — whether a
+  location shows Plantings/Garden-entries sections is derived from whether
+  it has any, not from a stored kind.
+- No garden-specific strings module exists on either platform; labels come
+  straight from the manifest declaration like every other entity.
 
 ---
 

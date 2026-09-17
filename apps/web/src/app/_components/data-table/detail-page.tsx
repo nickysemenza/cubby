@@ -143,6 +143,30 @@ export function useSectionCount(count: number | undefined) {
   }, [setCount, count]);
 }
 
+/**
+ * A `hideWhenEmpty` relation section reports here once its first page
+ * resolves — `false` hides the whole `SectionCard` (header, "+Add", body),
+ * not just the body, so a section nobody asked to see leaves no trace it was
+ * ever declared. Hidden through the `hidden` attribute rather than an
+ * unmount: the section's own data hook (`useEntityList`) stays mounted, so a
+ * later create doesn't force it to refetch from scratch, and `[hidden]`
+ * already drops the subtree from the accessibility tree and from
+ * `getByRole` queries. Mirrors `useSectionCount`: an effect-based report, a
+ * call outside a `SectionCard` body is a safe no-op, and unmounting restores
+ * visibility.
+ */
+const SectionVisibilityContext = createContext<
+  ((visible: boolean) => void) | null
+>(null);
+
+export function useSectionVisible(visible: boolean) {
+  const setVisible = useContext(SectionVisibilityContext);
+  useEffect(() => {
+    setVisible?.(visible);
+    return () => setVisible?.(true);
+  }, [setVisible, visible]);
+}
+
 function SectionCard({
   section,
   className,
@@ -155,6 +179,7 @@ function SectionCard({
   // section shows no count.
   const [open, setOpen] = useState(!section.collapsed);
   const [count, setCount] = useState<number | undefined>(undefined);
+  const [visible, setVisible] = useState(true);
 
   if (section.surface === "plain") {
     return (
@@ -189,48 +214,51 @@ function SectionCard({
   );
 
   return (
-    <section
-      id={section.id}
-      tabIndex={-1}
-      className={cn(
-        "scroll-mt-[calc(var(--app-chrome-top)+3rem)] px-3 py-3 focus:outline-none md:px-4",
-        section.overflowVisible && "overflow-visible",
-        className,
-      )}
-    >
-      {/* Phone header actions are 44px targets, so the row centres there;
-          desktop's 28px ghosts sit flush with the title's first line. */}
-      <div className="flex items-start justify-between gap-3 max-md:items-center">
-        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight">
-          {section.collapsed ? (
-            <button
-              type="button"
-              aria-expanded={open}
-              onClick={() => setOpen((current) => !current)}
-              className="flex min-w-0 items-center gap-2 font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ChevronRight
-                className={cn(
-                  "size-3.5 shrink-0 transition-transform",
-                  open && "rotate-90",
-                )}
-              />
-              {heading}
-            </button>
-          ) : (
-            heading
-          )}
-        </h2>
-        {section.headerAction && (!section.collapsed || open) ? (
-          <div className="shrink-0">{section.headerAction}</div>
+    <SectionVisibilityContext.Provider value={setVisible}>
+      <section
+        id={section.id}
+        tabIndex={-1}
+        hidden={!visible}
+        className={cn(
+          "scroll-mt-[calc(var(--app-chrome-top)+3rem)] px-3 py-3 focus:outline-none md:px-4",
+          section.overflowVisible && "overflow-visible",
+          className,
+        )}
+      >
+        {/* Phone header actions are 44px targets, so the row centres there;
+            desktop's 28px ghosts sit flush with the title's first line. */}
+        <div className="flex items-start justify-between gap-3 max-md:items-center">
+          <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight">
+            {section.collapsed ? (
+              <button
+                type="button"
+                aria-expanded={open}
+                onClick={() => setOpen((current) => !current)}
+                className="flex min-w-0 items-center gap-2 font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ChevronRight
+                  className={cn(
+                    "size-3.5 shrink-0 transition-transform",
+                    open && "rotate-90",
+                  )}
+                />
+                {heading}
+              </button>
+            ) : (
+              heading
+            )}
+          </h2>
+          {section.headerAction && (!section.collapsed || open) ? (
+            <div className="shrink-0">{section.headerAction}</div>
+          ) : null}
+        </div>
+        {open ? (
+          <SectionCountContext.Provider value={setCount}>
+            <div className="mt-2">{section.content}</div>
+          </SectionCountContext.Provider>
         ) : null}
-      </div>
-      {open ? (
-        <SectionCountContext.Provider value={setCount}>
-          <div className="mt-2">{section.content}</div>
-        </SectionCountContext.Provider>
-      ) : null}
-    </section>
+      </section>
+    </SectionVisibilityContext.Provider>
   );
 }
 

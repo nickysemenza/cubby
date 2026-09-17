@@ -178,7 +178,17 @@ id/idMulti descriptor on the target whose `brandRef` points back here, with
 optional `columns`/`sort`/`limit`), `timeline` (the entity's timeline
 capability) and `slot` (the one per-platform hand-written fill, rendered
 only where a registry provides it — `DetailSlotId<E>` / `ListSlotId<E>` in
-`entity-manifest.ts` type those registries). `history`, `relationships` and
+`entity-manifest.ts` type those registries). A relation section may also
+declare `hideWhenEmpty: true` to skip itself entirely when its first page
+reads empty (web `GenericEntityDetail`/`entity-relation-table.tsx` and native
+`EntityDetailView` both honor it; the generator emits it onto the Swift
+`RelationSectionSpec`) — used where the section's presence is itself the
+signal, e.g. a Location only reads as a growing area once it has Plantings.
+A relation section's create button seeds the descriptor's field on the new
+record: the descriptor key itself when it is a create field there, otherwise
+the one reference field on the target whose `reference.entity` equals the
+descriptor's `brandRef.entity` — one generic rule instead of a per-entity
+seed hack. `history`, `relationships` and
 `images` are derived from capabilities and never declared. `list.views` names
 the renderers (`table`, `shelf`, `timeline`, or a `slot` view with its
 route-only `searchKeys`); the first is the default and the generated search

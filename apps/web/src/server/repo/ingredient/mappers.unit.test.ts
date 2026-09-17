@@ -153,6 +153,8 @@ describe("ingredient product mappers", () => {
       naKinds: [],
       usuallyOnHand: false,
       gardenGuideKey: null,
+      guideSowWindow: null,
+      guideTransplantWindow: null,
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
     });

@@ -41,7 +41,6 @@ struct RouteDestinationView: View {
     var body: some View {
         switch route {
         case .graph(let root): GraphWorkspaceView(initialRoot: root)
-        case .garden: GardenRootView()
         case .nutrition(let day): DailyNutritionView(day: day)
         case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))
         case .entityDetail(let key, let id): EntityDetailView(key: key, id: id)

@@ -117,7 +117,7 @@ struct EntityDetailView: View {
             }
             .sheet(item: $creatingRelation) { section in
                 EntityEditorSheet(
-                    key: section.target.key, mode: .create(prefill: relationPrefill(section))
+                    key: section.target.key, mode: .create(prefill: section.createPrefill)
                 ) { _ in
                     Task { await section.list.refresh() }
                 }
@@ -170,18 +170,6 @@ struct EntityDetailView: View {
         } else {
             LoadingIndicator.screen(label: "Loading \(descriptor.singular)")
         }
-    }
-
-    /// A relation section's create button prefills the section's reference; a journal entry from
-    /// a planting also lands in the planting's current location.
-    private func relationPrefill(_ section: RelationSectionModel) -> [String: JSONValue] {
-        var prefill = section.createPrefill
-        if section.target.key == .gardenEntry, prefill["locationId"] == nil,
-            let locationID = model?.row?.raw["locationId"]?.stringValue
-        {
-            prefill["locationId"] = .string(locationID)
-        }
-        return prefill
     }
 
     private func setup() async {
@@ -479,16 +467,4 @@ struct EntityDetailContent: View {
         .navigationTitle(row.title)
     }
     .environment(appModel)
-}
-
-/// A planting as the journal variant renders it: status chip, hero verbs, and the declared
-/// supporting fields with projected names for the reference fields.
-#Preview("Planting (journal variant)") {
-    NavigationStack {
-        EntityDetailContent(
-            descriptor: EntityCatalog[.planting], row: GardenPreviewFixtures.growingPlantingRow
-        )
-        .navigationTitle(GardenPreviewFixtures.growingPlantingRow.title)
-    }
-    .environment(PreviewFixtures.signedInModel())
 }

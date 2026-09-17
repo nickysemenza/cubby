@@ -407,6 +407,11 @@ const metadataSchemas = () => {
           .optional()
           .default(null),
         limit: z.number().int().positive().nullable().optional().default(null),
+        /** Skip the whole section, on both platforms, when its first page is empty. */
+        hideWhenEmpty: z
+          .boolean({ error: "must be a boolean" })
+          .optional()
+          .default(false),
       })
       .strict(),
     z

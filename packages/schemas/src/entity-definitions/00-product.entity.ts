@@ -64,12 +64,20 @@ export default defineEntity({
             "primaryGtin",
             "fdc_id",
             "ingredientId",
+            "growsIngredientId",
             "externalIds",
             "tags",
             "notes",
           ],
         },
-        { kind: "slot", id: "garden", placement: "supporting" },
+        {
+          kind: "relation",
+          id: "plantings",
+          title: "Plantings",
+          relation: "plantings",
+          filter: { descriptor: "sourceProductId" },
+          hideWhenEmpty: true,
+        },
         {
           kind: "relation",
           id: "stocked-at",
@@ -379,6 +387,8 @@ export default defineEntity({
         nullable: true,
         label: "Grows",
         reference: { entity: "ingredient" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { detail: true },
         validation: {
           read: ingredientShortcode.nullable(),
           create: ingredientShortcode.nullable().optional(),
@@ -1543,6 +1553,19 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Product.growsIngredientId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "plantings",
+      label: "Plantings",
+      target: "planting",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Planting.sourceProductId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Planting.sourceProductId", direction: "outgoing" }],
       },
     },
     {

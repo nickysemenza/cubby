@@ -131,9 +131,7 @@ describe("entity kernel search projections", () => {
       ctx.db,
       makeLocationInput({
         name: "Projected basil bed",
-        type: null,
-        gardenKind: "bed",
-        gardenConditions: null,
+        type: "bed",
       }),
       TEST_ACTOR,
     );
@@ -146,17 +144,14 @@ describe("entity kernel search projections", () => {
         locationId: bed.id,
         status: "growing",
         sourceProductId: null,
-        intendedLocationId: null,
+        taskId: null,
         variety: null,
         quantity: null,
         notes: null,
         plannedWindow: null,
-        plannedDate: null,
         sowedOn: null,
         transplantedOn: null,
         finishedOn: null,
-        inLocationSince: null,
-        inLocationSinceKind: "actual",
       },
     });
     if (created.action !== "create") throw new Error("expected create");
@@ -188,9 +183,7 @@ describe("entity kernel search projections", () => {
       ctx.db,
       makeLocationInput({
         name: "Projected garden entry bed",
-        type: null,
-        gardenKind: "bed",
-        gardenConditions: null,
+        type: "bed",
       }),
       TEST_ACTOR,
     );
@@ -201,7 +194,7 @@ describe("entity kernel search projections", () => {
       data: {
         locationId: bed.id,
         plantingId: null,
-        kind: "observation",
+        kind: "note",
         observedOn: "2026-05-01",
         note: "Projected garden entry note",
         harvestAmount: null,

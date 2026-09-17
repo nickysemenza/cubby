@@ -2338,7 +2338,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'observation'"
+          "default": "'note'"
         },
         "observedOn": {
           "name": "observedOn",
@@ -3868,14 +3868,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "gardenKind": {
-          "name": "gardenKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gardenConditions": {
-          "name": "gardenConditions",
+        "notes": {
+          "name": "notes",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -6174,14 +6168,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "intendedLocationId": {
-          "name": "intendedLocationId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "parentPlantingId": {
-          "name": "parentPlantingId",
+        "taskId": {
+          "name": "taskId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -6214,12 +6202,6 @@
         "plannedWindow": {
           "name": "plannedWindow",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "plannedDate": {
-          "name": "plannedDate",
-          "type": "date",
           "primaryKey": false,
           "notNull": false
         },
@@ -6323,26 +6305,11 @@
           "method": "btree",
           "with": {}
         },
-        "Planting_intendedLocationId_idx": {
-          "name": "Planting_intendedLocationId_idx",
+        "Planting_taskId_idx": {
+          "name": "Planting_taskId_idx",
           "columns": [
             {
-              "expression": "intendedLocationId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Planting_parentPlantingId_idx": {
-          "name": "Planting_parentPlantingId_idx",
-          "columns": [
-            {
-              "expression": "parentPlantingId",
+              "expression": "taskId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6409,25 +6376,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "Planting_intendedLocationId_Location_id_fk": {
-          "name": "Planting_intendedLocationId_Location_id_fk",
+        "Planting_taskId_Task_id_fk": {
+          "name": "Planting_taskId_Task_id_fk",
           "tableFrom": "Planting",
-          "tableTo": "Location",
+          "tableTo": "Task",
           "columnsFrom": [
-            "intendedLocationId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "Planting_parentPlantingId_Planting_id_fk": {
-          "name": "Planting_parentPlantingId_Planting_id_fk",
-          "tableFrom": "Planting",
-          "tableTo": "Planting",
-          "columnsFrom": [
-            "parentPlantingId"
+            "taskId"
           ],
           "columnsTo": [
             "id"
@@ -6579,223 +6533,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.PlantingLocationPeriod": {
-      "name": "PlantingLocationPeriod",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "plantingId": {
-          "name": "plantingId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "locationId": {
-          "name": "locationId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sourceGardenEntryId": {
-          "name": "sourceGardenEntryId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sequence": {
-          "name": "sequence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "inLocationSince": {
-          "name": "inLocationSince",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "endedOn": {
-          "name": "endedOn",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "startKind": {
-          "name": "startKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'actual'"
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "PlantingLocationPeriod_plantingId_sequence_key": {
-          "name": "PlantingLocationPeriod_plantingId_sequence_key",
-          "columns": [
-            {
-              "expression": "plantingId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "sequence",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "PlantingLocationPeriod_open_planting_key": {
-          "name": "PlantingLocationPeriod_open_planting_key",
-          "columns": [
-            {
-              "expression": "plantingId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"PlantingLocationPeriod\".\"endedOn\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "PlantingLocationPeriod_plantingId_idx": {
-          "name": "PlantingLocationPeriod_plantingId_idx",
-          "columns": [
-            {
-              "expression": "plantingId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "PlantingLocationPeriod_locationId_dates_idx": {
-          "name": "PlantingLocationPeriod_locationId_dates_idx",
-          "columns": [
-            {
-              "expression": "locationId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "inLocationSince",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "endedOn",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "PlantingLocationPeriod_sourceGardenEntryId_idx": {
-          "name": "PlantingLocationPeriod_sourceGardenEntryId_idx",
-          "columns": [
-            {
-              "expression": "sourceGardenEntryId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "PlantingLocationPeriod_plantingId_Planting_id_fk": {
-          "name": "PlantingLocationPeriod_plantingId_Planting_id_fk",
-          "tableFrom": "PlantingLocationPeriod",
-          "tableTo": "Planting",
-          "columnsFrom": [
-            "plantingId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "PlantingLocationPeriod_locationId_Location_id_fk": {
-          "name": "PlantingLocationPeriod_locationId_Location_id_fk",
-          "tableFrom": "PlantingLocationPeriod",
-          "tableTo": "Location",
-          "columnsFrom": [
-            "locationId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "PlantingLocationPeriod_sourceGardenEntryId_GardenEntry_id_fk": {
-          "name": "PlantingLocationPeriod_sourceGardenEntryId_GardenEntry_id_fk",
-          "tableFrom": "PlantingLocationPeriod",
-          "tableTo": "GardenEntry",
-          "columnsFrom": [
-            "sourceGardenEntryId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "PlantingLocationPeriod_startKind_check": {
-          "name": "PlantingLocationPeriod_startKind_check",
-          "value": "\"PlantingLocationPeriod\".\"startKind\" in ('actual', 'recorded')"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.Product": {

@@ -23,7 +23,6 @@ import {
   ScanBarcode,
   Sparkles,
   Split,
-  Sprout,
   SquarePen,
   Tag,
   Trash,
@@ -109,12 +108,6 @@ export const actionVerbs = {
   importPhotos: { label: "Import photos...", icon: Images },
   setProjectUses: { label: "Set project uses...", icon: Wrench },
   setTradeCost: { label: "Set trade cost...", icon: HandCoins },
-
-  // — garden lifecycle ————————————————————————————————————————————————
-  startPlanting: { label: "Start planting...", icon: Sprout },
-  movePlanting: { label: "Move everything...", icon: ArrowRightLeft },
-  splitPlanting: { label: "Move some seedlings...", icon: Split },
-  finishPlanting: { label: "Finish planting...", icon: CheckCircle2 },
 
   // — AI ——————————————————————————————————————————————————————————————
   //

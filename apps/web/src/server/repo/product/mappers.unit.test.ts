@@ -173,8 +173,7 @@ const activeLocation = {
   productId: null,
   parentId: null,
   type: "room",
-  gardenKind: null,
-  gardenConditions: null,
+  notes: null,
   aiDescription: null,
   valuation: null,
 };

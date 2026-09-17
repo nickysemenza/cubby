@@ -80,10 +80,7 @@ struct GenericEntityEditModelTests {
         #"{"action":"update","entity":"product","item":{"id":"PRD-2345","name":"Sample","aliases":[],"tags":[],"manufacturer":"x","model":null,"notes":null,"expectedQuantity":null,"images":[],"externalIds":[],"pricing":{"source":"explicit","knownExpenseCount":0,"unknownExpenseCount":0,"knownUnitCount":0,"partial":false},"usdaUnavailable":null,"stockTracked":null,"dataQuality":{"status":"complete","facets":[],"gaps":[],"exceptions":[],"relatedGaps":[],"relatedExceptions":[]},"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","coverImageUrl":null},"sideEffects":{"backgroundBatches":[]}}"#
             .utf8)
     nonisolated private static let locationCreated = Data(
-        #"{"action":"create","entity":"location","item":{"id":"LOC-9ABC","name":"Bin 9","aliases":[],"gardenConditions":null,"lastBulkInventory":null,"aiDescription":null,"images":[],"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"},"sideEffects":{"backgroundBatches":[]}}"#
-            .utf8)
-    nonisolated private static let plantingUpdated = Data(
-        #"{"action":"update","entity":"planting","item":{"id":"PLT-2345","ingredientId":"ING-2345","status":"growing","variety":null,"quantity":null,"notes":null,"plannedWindow":null,"images":[],"displayName":"Roma","ingredientName":"Tomato","sourceProductName":null,"locationName":null,"intendedLocationName":null,"gardenGuideKey":null,"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"},"sideEffects":{"backgroundBatches":[]}}"#
+        #"{"action":"create","entity":"location","item":{"id":"LOC-9ABC","name":"Bin 9","aliases":[],"notes":null,"lastBulkInventory":null,"aiDescription":null,"images":[],"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"},"sideEffects":{"backgroundBatches":[]}}"#
             .utf8)
 
     private static let productOriginal: JSONValue = [
@@ -152,45 +149,55 @@ struct GenericEntityEditModelTests {
         #expect(model.savedID == nil)
     }
 
-    /// `planting.status` is `readOnlyOnUpdate`; a draft value for it is dropped from the patch,
-    /// and an update that changes only a locked key has nothing to send.
-    @Test func lockedKeysNeverEnterTheBody() async throws {
-        defer { EditStub.handler.withLock { $0 = nil } }
-        let seen = capture { _ in (200, Self.plantingUpdated) }
-        let original: JSONValue = [
-            "id": "PLT-2345", "status": "growing", "variety": "Roma", "locationId": "LOC-2345",
-            "ingredientId": "ING-2345",
-        ]
+    /// No entity declares `readOnlyOnUpdate` today; exercise the generic locking engine against
+    /// a synthetic descriptor so the rule doesn't silently rot: a draft value for a locked key is
+    /// dropped from the patch, and an update that changes only a locked key has nothing to send.
+    @Test func lockedKeysNeverEnterTheBody() throws {
+        let descriptor = Self.syntheticDescriptor(readOnlyOnUpdate: ["status"])
+        let original: JSONValue = ["id": "X-1", "status": "growing", "note": "x"]
         let model = GenericEntityEditModel(
-            descriptor: EntityCatalog[.planting], mode: .update(id: "PLT-2345"), client: try makeClient(),
-            original: original)
+            descriptor: descriptor, mode: .update(id: "X-1"), client: try makeClient(), original: original)
         #expect(model.readOnly("status"))
-        #expect(model.readOnly("locationId"))
-        #expect(!model.readOnly("variety"))
+        #expect(!model.readOnly("note"))
         model.draft["status"] = "finished"
-        #expect(!model.canSave)
-        model.draft["variety"] = "San Marzano"
-        #expect(await model.save())
-        #expect(seen.requests.first?.body == ["variety": "San Marzano"])
+        #expect(try model.patch().isEmpty)
+        model.draft["note"] = "y"
+        #expect(try model.patch().values == ["note": "y"])
     }
 
-    /// The anchor lock: a `move` entry keeps its structural keys read-only through `readOnlyWhen`.
+    /// No entity declares `readOnlyWhen` today; exercise the generic engine against a
+    /// synthetic descriptor so the rule doesn't silently rot.
     @Test func readOnlyWhenLocksOnTheOriginalValue() throws {
-        let move: JSONValue = ["id": "GDE-2345", "kind": "move", "anchorsPeriod": false, "note": "x"]
-        let observation: JSONValue = ["id": "GDE-3456", "kind": "observation", "anchorsPeriod": true]
+        let rule = ReadOnlyRule(field: "kind", equals: .string("locked"), fields: ["note"])
+        let descriptor = Self.syntheticDescriptor(readOnlyWhen: [rule])
         let client = try makeClient()
         let locked = GenericEntityEditModel(
-            descriptor: EntityCatalog[.gardenEntry], mode: .update(id: "GDE-2345"), client: client,
-            original: move)
-        #expect(locked.readOnly("observedOn"))
-        #expect(!locked.readOnly("note"))
-        let anchored = GenericEntityEditModel(
-            descriptor: EntityCatalog[.gardenEntry], mode: .update(id: "GDE-3456"), client: client,
-            original: observation)
-        #expect(anchored.readOnly("locationId"))
+            descriptor: descriptor, mode: .update(id: "X-1"), client: client,
+            original: ["id": "X-1", "kind": "locked", "note": "x"])
+        #expect(locked.readOnly("note"))
+        let unlocked = GenericEntityEditModel(
+            descriptor: descriptor, mode: .update(id: "X-2"), client: client,
+            original: ["id": "X-2", "kind": "open", "note": "x"])
+        #expect(!unlocked.readOnly("note"))
         let free = GenericEntityEditModel(
-            descriptor: EntityCatalog[.gardenEntry], mode: .create(prefill: [:]), client: client)
-        #expect(!free.readOnly("kind"))
+            descriptor: descriptor, mode: .create(prefill: [:]), client: client)
+        #expect(!free.readOnly("note"))
+    }
+
+    /// A minimal `EntityDescriptor` for exercising `GenericEntityEditModel`'s field-independent
+    /// engine (locking, patch diffing) without depending on any real catalog entity's shape.
+    private static func syntheticDescriptor(
+        readOnlyOnUpdate: [String] = [], readOnlyWhen: [ReadOnlyRule] = []
+    ) -> EntityDescriptor {
+        EntityDescriptor(
+            key: .gardenEntry, singular: "record", plural: "records", basePath: "records",
+            shortcodePrefix: nil, titleField: "id", domain: nil, sfSymbol: "circle", searchable: false,
+            timeline: nil, fields: [], filters: [], relations: [],
+            presentation: EntityPresentation(
+                detailVariant: .standard, heroChip: nil, heroStats: [], heroBreadcrumb: nil,
+                heroImages: false, heroActions: [], detailSections: [], listViews: [], shelfSubtitle: [],
+                listActions: [], timelineFields: [], lifecycle: nil, editSections: nil,
+                readOnlyOnUpdate: readOnlyOnUpdate, readOnlyWhen: readOnlyWhen))
     }
 
     @Test func imageOrderTravelsOnlyWhenReordered() async throws {

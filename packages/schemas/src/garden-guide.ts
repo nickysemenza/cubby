@@ -110,3 +110,5 @@ export const gardenGuidesDocument = z
     }
   });
 export type GardenGuidesDocument = z.infer<typeof gardenGuidesDocument>;
+/** The unparsed input shape — checked with `satisfies` by `garden-guides.ts` at compile time. */
+export type GardenGuidesDocumentInput = z.input<typeof gardenGuidesDocument>;

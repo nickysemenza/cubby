@@ -1,7 +1,7 @@
-import { gardenGuidesDocument } from "@cubby/schemas/garden-guide";
+import { gardenGuidesDocument } from "./garden-guide";
 import { describe, expect, it } from "vitest";
 
-import plantingGuides from "./planting-guides.json";
+import { plantingGuides } from "./garden-guides";
 
 describe("planting guides", () => {
   it("validates the checked-in source-specific calendar data", () => {

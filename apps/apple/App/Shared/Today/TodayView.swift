@@ -215,7 +215,6 @@ struct TodayContent: View {
                     } label: {
                         Label("Identify a photo", systemImage: "camera.metering.center.weighted")
                     }
-                    NavigationLink(value: Route.garden) { Label("Garden", systemImage: "leaf") }
                     NavigationLink {
                         SettingsView()
                     } label: {
@@ -365,7 +364,6 @@ struct TodayContent: View {
             } label: {
                 Label("Identify a photo", systemImage: "camera.metering.center.weighted")
             }
-            NavigationLink(value: Route.garden) { Label("Garden", systemImage: "leaf") }
             SettingsLink { Label("Settings", systemImage: "gearshape") }
         }
 

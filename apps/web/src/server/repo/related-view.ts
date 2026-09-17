@@ -133,14 +133,6 @@ const SQL_RELATED_VIEWS = {
   // includes-installed: identity/relation views, not a browse/count surface
   // — a fixture's related ingredient must stay reachable either direction.
   "location.ingredients": named(),
-  "location.plantingHistory": dated(
-    `COALESCE(
-      (SELECT i."name" FROM "Ingredient" i WHERE i."id" = t."ingredientId")
-        || COALESCE(' · ' || NULLIF(t."variety", ''), ''),
-      t."shortcode"
-    )`,
-    `COALESCE(t."sowedOn", t."plannedDate", t."createdAt"::date)`,
-  ),
   "inventory.ingredient": named(),
   "project.blockedBy": named(),
   "project.tasks": named(

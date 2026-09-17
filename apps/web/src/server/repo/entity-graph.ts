@@ -299,13 +299,13 @@ const labelSql = (entity: Entity, alias: string) => {
           || COALESCE(' · ' || NULLIF(${column("variety")}, ''), ''),
         ${column("shortcode")}
       )`;
-    // `"<Note|Harvest|Move> · <YYYY-MM-DD> · <area name>"` — mirrors
-    // `displayName` in `server/repo/garden/index.ts`, where the `observation`
-    // kind renders as "Note". `locationId` has no local name column, so the
-    // location's name is a correlated subquery against `Location`.
+    // `"<Note|Harvest> · <YYYY-MM-DD> · <area name>"` — mirrors `displayName`
+    // in `server/repo/garden/index.ts`. `locationId` has no local name
+    // column, so the location's name is a correlated subquery against
+    // `Location`.
     case "gardenEntry":
       return sql`COALESCE(
-        (CASE WHEN ${column("kind")} = 'observation' THEN 'Note' ELSE initcap(${column("kind")}::text) END)
+        initcap(${column("kind")}::text)
           || ' · ' || to_char(${column("observedOn")}, 'YYYY-MM-DD')
           || ' · ' || (SELECT l."name" FROM "Location" l WHERE l."id" = ${column("locationId")}),
         ${column("shortcode")}

@@ -2,7 +2,6 @@
  * Location tree and hierarchy operations.
  * Build location trees, type counts, and import updates.
  */
-import { gardenLocationKind } from "@cubby/schemas/garden";
 import {
   locationId as locationIdSchema,
   type LocationId,
@@ -60,8 +59,7 @@ const locationTreeRowSchema = z.object({
   productId: productIdSchema.nullable(),
   type: z.string().nullable(),
   aiDescription: z.string().nullable(),
-  gardenKind: gardenLocationKind.nullable(),
-  gardenConditions: z.string().nullable(),
+  notes: z.string().nullable(),
   depth: z.coerce.number().int().nonnegative(),
 });
 

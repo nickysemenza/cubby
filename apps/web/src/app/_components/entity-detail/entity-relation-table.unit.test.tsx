@@ -58,19 +58,27 @@ describe("planRelationSection", () => {
     expect(stockedAt.limit).toBeNull();
   });
 
-  it("offers no create button when no create intent of the target carries the seed field", () => {
-    // A product cannot be captured "for a purchase"; the section stays
-    // read-only rather than opening a dialog that would drop the scope.
+  it("offers no create button when neither the descriptor's own field nor its brandRef fallback carries a seed", () => {
+    // Direct branch: `product`'s create intents carry no `purchaseId` field.
+    // Fallback branch: the descriptor's `brandRef` names `purchase`, but no
+    // field on `product` itself references a purchase (the relation runs the
+    // other way, through Expense) — the section stays read-only rather than
+    // opening a dialog that would drop the scope.
     expect(planFor("purchase", "products").seed).toBeNull();
   });
 
-  it("picks the first create intent that can be seeded, not only the default one", () => {
-    // gardenEntry's `capture` intent has no `plantingId`; `full` does — the
-    // journal's "Log entry" button depends on falling through to it.
-    expect(planFor("planting", "garden-history").seed).toEqual({
-      intent: "full",
-      field: "plantingId",
-    });
+  it("falls back to the target's reference field sharing the descriptor's brandRef entity when the descriptor's own key names no create field", () => {
+    // Planting's Journal section filters gardenEntry by the derived,
+    // urlOnly `journalPlantingId` descriptor (direct + in-window whole-area
+    // entries) — that key is not itself a create field on gardenEntry. The
+    // fallback resolves `journalPlantingId`'s `brandRef: { entity: "planting" }`
+    // to gardenEntry's own `plantingId` field (the only one referencing
+    // planting), which the `full` create intent carries (`capture` doesn't):
+    // the "Log entry" button seeds a real, writable field instead of
+    // disappearing, and picks `full` rather than the default `capture`.
+    const plan = planFor("planting", "garden-history");
+    expect(plan.filterKey).toBe("journalPlantingId");
+    expect(plan.seed).toEqual({ intent: "full", field: "plantingId" });
   });
 });
 
