@@ -214,6 +214,8 @@ targets:
     sources:
       - path: App/Tests/Navigation
       - path: App/Tests/Browse
+      - path: App/Tests/Photos/PhotoDestinationOptionTests.swift
+      - path: App/Tests/Photos/EntityPickerIdentityTests.swift
     dependencies:
       - target: Cubby-macOS
     settings:

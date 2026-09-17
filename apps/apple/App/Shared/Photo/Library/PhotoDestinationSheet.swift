@@ -18,34 +18,47 @@ struct PhotoDestinationSheet: View {
     }
 
     /// Every gallery entity the generic create editor can open, sorted for a stable menu.
-    private var creatableGalleryEntities: [EntityDescriptor] {
+    private var createOptions: [PhotoDestinationOption] {
         EntityCatalog.all
             .filter { $0.key.nativeActions.contains(.create) && $0.acceptsImages }
             .sorted { $0.plural < $1.plural }
+            .map { PhotoDestinationOption(kind: .create, descriptor: $0) }
+    }
+
+    private var existingOptions: [PhotoDestinationOption] {
+        EntityCatalog.all.filter(\.acceptsImages).map {
+            PhotoDestinationOption(kind: .existing, descriptor: $0)
+        }
     }
 
     var body: some View {
         NavigationStack(path: $flow.path) {
             List {
                 Section("Create a new record") {
-                    ForEach(creatableGalleryEntities, id: \.key) { descriptor in
+                    ForEach(createOptions) { option in
                         Button {
-                            flow.chooseCreate(descriptor.key)
+                            flow.chooseCreate(option.descriptor.key)
                         } label: {
                             Label(
-                                "New \(descriptor.singular)",
-                                systemImage: entitySymbol(for: descriptor.key)
+                                option.title,
+                                systemImage: entitySymbol(for: option.descriptor.key)
                             )
                         }
-                        .accessibilityIdentifier("photos.destination.create.\(descriptor.key.rawValue)")
+                        .accessibilityIdentifier(
+                            "photos.destination.create.\(option.descriptor.key.rawValue)")
                     }
                 }
                 Section("Add to a Cubby record") {
-                    ForEach(EntityCatalog.all.filter(\.acceptsImages), id: \.key) { descriptor in
-                        NavigationLink(value: PhotoImportRoute.entityPicker(descriptor.key.rawValue)) {
-                            Label(descriptor.plural, systemImage: entitySymbol(for: descriptor.key))
+                    ForEach(existingOptions) { option in
+                        NavigationLink(
+                            value: PhotoImportRoute.entityPicker(option.descriptor.key.rawValue)
+                        ) {
+                            Label(
+                                option.title,
+                                systemImage: entitySymbol(for: option.descriptor.key))
                         }
-                        .accessibilityIdentifier("photos.destination.\(descriptor.key.rawValue)")
+                        .accessibilityIdentifier(
+                            "photos.destination.\(option.descriptor.key.rawValue)")
                     }
                 }
             }
@@ -92,6 +105,34 @@ struct PhotoDestinationSheet: View {
     private func finish() {
         onDone()
         dismiss()
+    }
+}
+
+struct PhotoDestinationOption: Identifiable {
+    enum Kind: Hashable {
+        case create
+        case existing
+    }
+
+    enum ID: Hashable {
+        case create(EntityKey)
+        case existing(EntityKey)
+    }
+
+    let kind: Kind
+    let descriptor: EntityDescriptor
+
+    var id: ID {
+        switch kind {
+        case .create: .create(descriptor.key)
+        case .existing: .existing(descriptor.key)
+        }
+    }
+    var title: String {
+        switch kind {
+        case .create: "New \(descriptor.singular)"
+        case .existing: descriptor.plural
+        }
     }
 }
 

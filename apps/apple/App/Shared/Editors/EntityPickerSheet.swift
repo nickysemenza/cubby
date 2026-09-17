@@ -5,6 +5,20 @@ import SwiftUI
 struct EntityPick: Hashable, Identifiable {
     let id: String
     let title: String
+
+    var selectedRowIdentity: EntityPickerRowIdentity { .selected(id) }
+    var resultRowIdentity: EntityPickerRowIdentity { .result(id) }
+}
+
+/// A record can appear in both the selected and result sections; the section is therefore part
+/// of its SwiftUI identity even though both rows represent the same stored record.
+enum EntityPickerRowIdentity: Hashable {
+    case selected(String)
+    case result(String)
+}
+
+private extension EntityRow {
+    var entityPickerResultIdentity: EntityPickerRowIdentity { .result(id) }
 }
 
 /// A searchable picker over one entity, for `id`/`idMulti` filters and `entity-select` controls.
@@ -44,7 +58,7 @@ struct EntityPickerSheet: View {
             List {
                 if !selected.isEmpty {
                     Section("Selected") {
-                        ForEach(selected) { pick in
+                        ForEach(selected, id: \.selectedRowIdentity) { pick in
                             HStack {
                                 Text(pick.title)
                                 Spacer()
@@ -105,7 +119,7 @@ struct EntityPickerSheet: View {
         if hits.isEmpty, !isSearching, searchError == nil {
             Text(term.isEmpty ? "Type to search" : "No matches").foregroundStyle(.secondary)
         }
-        ForEach(hits) { hit in
+        ForEach(hits, id: \.resultRowIdentity) { hit in
             pickRow(hit, imageURL: nil)
         }
     }
@@ -119,7 +133,7 @@ struct EntityPickerSheet: View {
             Text(message).foregroundStyle(.secondary)
         case .loaded:
             if model.rows.isEmpty { Text("No matches").foregroundStyle(.secondary) }
-            ForEach(model.rows) { row in
+            ForEach(model.rows, id: \.entityPickerResultIdentity) { row in
                 pickRow(EntityPick(id: row.id, title: row.title), imageURL: row.imageURL)
             }
             if model.hasMore {
