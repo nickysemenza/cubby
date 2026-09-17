@@ -114,6 +114,26 @@ history is the archive. Permanent product constraints live in the
   kind views yet, so they are unreachable on Apple platforms even where a
   native slot component exists.
 
+- **Bring the shipped surfaces up to the generic-page canvas.** The canvas
+  (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>) is the app's own
+  DESIGN.md tokens and shell applied without accretion; the app diverges by
+  accumulation, not by palette (extra workbench chrome such as
+  Display/Custom/Saved views, uppercase dialog labels, "Jump to section" as a
+  button instead of an inline anchor index). Every entity page now renders
+  through `GenericEntityDetail`, `GenericEntityList`, `DetailSections`,
+  `ListWorkbench` and a few primitives, so conformance lands once. In order:
+  1. Extend the canvas to a complete reference: the generic edit dialog
+     (desktop and phone), a phone list, a section's empty/loading/error
+     states, and the workbench band in its filtered state.
+  2. Audit route by route against it with `/cubby-ui-design-audit`,
+     producing a drift list keyed by component, not page.
+  3. Remediate at the primitive/generic level (`ListWorkbench`,
+     `DetailSections`, `EntityBasicInfo`, `FormFieldGroup`/`SelectField`,
+     chips and eyebrows), deleting page-level chrome the canvas does not
+     have rather than restyling it; one PR with the audit's before/after as
+     evidence, DESIGN.md changed only where the canvas sharpened a rule.
+  Acceptance: a route beside its artboard is distinguishable only by data.
+
 - **`resolve_ingredients` suggests product links.** It created `ground chicken`
   (ING-ZEU3) while PRD-FGC5 "Ground Chicken Breast" sat unlinked; four of the
   five products in that meal had `ingredientId: null`, so nothing costed until
