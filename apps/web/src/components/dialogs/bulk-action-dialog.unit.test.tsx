@@ -93,4 +93,25 @@ describe("BulkActionDialog effect projection", () => {
       "1 of 3 task cannot proceed: a location cannot be its own parent",
     );
   });
+
+  it("honors a caller-owned submission gate without inventing a blocker", () => {
+    render(
+      <BulkActionDialog
+        open
+        onOpenChange={() => {}}
+        items={rows}
+        action="Set Trade"
+        actionLabel="Update"
+        itemNoun="Task"
+        description="Set a new trade."
+        renderItem={(item) => item.name}
+        onSubmit={vi.fn()}
+        isPending={false}
+        submissionDisabled
+      />,
+    );
+
+    expect(confirmButton()).toBeDisabled();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });

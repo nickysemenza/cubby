@@ -1041,7 +1041,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter locations...",
         optionsKey: "productLocations",
-        brandRef: { entity: "location", kind: "id" },
+        brandRef: { entity: "location" },
         nullable: { field: "inventoryPresenceFilter", label: "inventory" },
       },
       {
@@ -1060,7 +1060,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter ingredient...",
         optionsKey: "productIngredients",
-        brandRef: { entity: "ingredient", kind: "id" },
+        brandRef: { entity: "ingredient" },
         nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
       },
       {
@@ -1069,7 +1069,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by crop grown...",
         optionsKey: "productIngredients",
-        brandRef: { entity: "ingredient", kind: "id" },
+        brandRef: { entity: "ingredient" },
       },
       {
         columnId: "expenses",
@@ -1343,7 +1343,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by vendor...",
         optionsKey: "productVendors",
-        brandRef: { entity: "vendor", kind: "id" },
+        brandRef: { entity: "vendor" },
         nullable: { field: "vendorPresenceFilter", label: "vendor" },
       },
       {
@@ -1353,7 +1353,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by project...",
         optionsKey: "project",
-        brandRef: { entity: "project", kind: "id" },
+        brandRef: { entity: "project" },
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
@@ -1368,14 +1368,14 @@ export default defineEntity({
         columnId: "kitId",
         kind: "idMulti",
         placeholder: "Filter by kit...",
-        brandRef: { entity: "product", kind: "id" },
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
         columnId: "usedOnProjectId",
         kind: "idMulti",
         placeholder: "Filter by related used on projects id...",
-        brandRef: { entity: "project", kind: "id" },
+        brandRef: { entity: "project" },
         urlOnly: true,
       },
       {
@@ -1391,7 +1391,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by purchase...",
         optionsKey: "productPurchases",
-        brandRef: { entity: "purchase", kind: "id" },
+        brandRef: { entity: "purchase" },
         nullable: { field: "purchasePresenceFilter", label: "purchase" },
       },
       {

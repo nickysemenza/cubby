@@ -41,9 +41,9 @@ const page: EntityGraphOutput = {
 };
 
 describe("persistent graph map", () => {
-  it("summarizes large branches and reveals cached members explicitly", () => {
-    expect(graphBranchCount(branch, new Map())).toBe(0);
-    expect(projectGraphMap(page, root, new Map()).nodes).toHaveLength(1);
+  it("projects the first loaded page of a large branch by default", () => {
+    expect(graphBranchCount(branch, new Map())).toBe(1);
+    expect(projectGraphMap(page, root, new Map()).nodes).toHaveLength(2);
     const shown = projectGraphMap(
       page,
       root,
@@ -51,6 +51,44 @@ describe("persistent graph map", () => {
     );
     expect(shown.nodes).toHaveLength(2);
     expect(shown.edges).toEqual([edge]);
+  });
+  it("shows twelve of thirteen loaded members until the branch is explicitly expanded", () => {
+    const members = Array.from({ length: 13 }, (_, index) => ({
+      ...child,
+      entityId: `PUR-${index}`,
+    }));
+    const data: EntityGraphOutput = {
+      ...page,
+      nodes: [
+        page.nodes[0]!,
+        ...members.map((member) => ({
+          ...member,
+          label: member.entityId,
+          metadata: {},
+        })),
+      ],
+      edges: members.map((member) => ({
+        ...edge,
+        id: `purchase-vendor-${member.entityId}`,
+        source: member,
+      })),
+      branches: [
+        {
+          ...branch,
+          totalCount: 13,
+          nextOffset: 12,
+          items: members,
+          edgeIds: members.map(
+            (member) => `purchase-vendor-${member.entityId}`,
+          ),
+        },
+      ],
+    };
+    const key = graphBranchKey(root, "purchases");
+    expect(graphBranchCount(data.branches[0]!, new Map())).toBe(12);
+    expect(projectGraphMap(data, root, new Map()).nodes).toHaveLength(13);
+    expect(graphBranchCount(data.branches[0]!, new Map([[key, 0]]))).toBe(0);
+    expect(graphBranchCount(data.branches[0]!, new Map([[key, 13]]))).toBe(13);
   });
   it("keeps shared evidence visible through another expanded branch", () => {
     const other = {

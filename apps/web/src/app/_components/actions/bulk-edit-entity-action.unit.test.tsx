@@ -109,6 +109,7 @@ describe("BulkEditDialogBody", () => {
       fireEvent.keyDown(input, { key: "ArrowDown" });
       fireEvent.click(screen.getByRole("option", { name: optionLabel }));
 
+      expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
       fireEvent.click(screen.getByRole("button", { name: "Update" }));
 
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
@@ -151,7 +152,7 @@ describe("BulkEditDialogBody", () => {
     expect(onSubmit).toHaveBeenCalledWith({ parentId: null });
   });
 
-  it("blocks submission until at least one field is touched", () => {
+  it("is initially quiet and disabled until at least one field is touched", () => {
     render(
       <BulkEditDialogBody
         entity="planting"
@@ -166,5 +167,30 @@ describe("BulkEditDialogBody", () => {
     );
 
     expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText("No changes yet")).toBeNull();
+  });
+
+  it("restores the quiet disabled state when reopening a pristine bulk form", () => {
+    const props = {
+      entity: "product" as const,
+      items: [{ id: "PRD-1", name: "Bench vise", stockTracked: false }],
+      fieldKeys: ["stockTracked"],
+      onOpenChange: vi.fn(),
+      onSubmit: vi.fn(),
+      isPending: false,
+    };
+    const { rerender } = render(<BulkEditDialogBody key="dirty" {...props} />, {
+      wrapper: harness.wrapper,
+    });
+
+    const checkbox = screen.getByRole("checkbox", { name: "Stock tracking" });
+    fireEvent.click(checkbox);
+    expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
+
+    rerender(<BulkEditDialogBody key="pristine" {...props} />);
+
+    expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

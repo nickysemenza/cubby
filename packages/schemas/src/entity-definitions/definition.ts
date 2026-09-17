@@ -705,7 +705,7 @@ const metadataSchemas = () => {
       deriveSchema: z.boolean({ error: "must be a boolean" }).optional(),
       schemaFromRead: z.boolean({ error: "must be a boolean" }).optional(),
       brandRef: z
-        .object({ entity: nonEmptyString(), kind: z.enum(["id", "shortcode"]) })
+        .object({ entity: nonEmptyString() })
         .strict()
         .nullable()
         .optional(),

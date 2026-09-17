@@ -115,4 +115,28 @@ describe("plantingTimeline guide bands", () => {
     expect(ids.length).toBeGreaterThan(0);
     for (const id of ids) expect(id.endsWith(`:${inScope.id}`)).toBe(true);
   });
+
+  it("keeps each guide row's synthetic identity while linking it to its planting", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Guide link crop", gardenGuideKey: GUIDE_KEY_WITH_WINDOW },
+      TEST_ACTOR,
+    );
+    const location = await bed("Guide link bed");
+    const planted = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: location.id, status: "growing" },
+      TEST_ACTOR,
+    );
+
+    const rows = (await timelineFor(planted.id)).rows ?? [];
+    const guideRows = rows.filter((row) => row.id.startsWith("guide-"));
+    expect(guideRows.length).toBeGreaterThan(0);
+    for (const row of guideRows) {
+      expect(row.id).toMatch(
+        new RegExp(`^guide-(sow|transplant):${planted.id}$`),
+      );
+      expect(row.link).toEqual({ entity: "planting", id: planted.id });
+    }
+  });
 });

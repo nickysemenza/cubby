@@ -1,3 +1,4 @@
+import { type ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type {
   FilterOptionKind,
   FilterOptionsInput,
@@ -33,6 +34,11 @@ import {
 } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
+import { DISPLAY_NAME_COLUMN } from "~/server/repo/shortcode-resolver";
+import {
+  SHORTCODE_TABLE,
+  type ShortcodeTable,
+} from "~/server/repo/shortcode-utils";
 
 type DbClient = ReturnType<typeof getDb>;
 
@@ -180,7 +186,7 @@ const toOptionRow = (row: OptionQueryRow): OptionRow => ({
  */
 async function loadRows(
   db: Database,
-  input: FilterOptionsInput,
+  input: Extract<FilterOptionsInput, { kind: FilterOptionKind }>,
   selectedOnly: boolean,
 ): Promise<OptionRow[]> {
   const dbClient = getDb(db);
@@ -241,10 +247,65 @@ async function loadRows(
   );
 }
 
+/**
+ * Generic public-reference roster. It deliberately reads the same shortcode
+ * table and declared display-name column the resolver owns, rather than
+ * teaching filters a second per-entity table/name registry.
+ */
+async function loadEntityRows(
+  db: Database,
+  input: Extract<FilterOptionsInput, { source: "entity" }>,
+  selectedOnly: boolean,
+): Promise<OptionRow[]> {
+  const entity: ShortcodeEntity = input.entity;
+  const table: ShortcodeTable = SHORTCODE_TABLE[entity];
+  const label = DISPLAY_NAME_COLUMN[entity];
+  if (!label)
+    throw new Error(`Entity filter options require a label for ${entity}`);
+  const selected = selectedOnly ? input.selectedIds : [];
+  const rows = await getDb(db)
+    .select({ id: table.shortcode, label })
+    .from(table)
+    .where(
+      and(
+        notDeleted(table),
+        selectedOnly
+          ? selected.length > 0
+            ? inArray(table.shortcode, selected)
+            : undefined
+          : formatSearchTerm(label, input.search),
+      ),
+    )
+    .orderBy(asc(label), asc(table.shortcode))
+    .limit(selectedOnly ? 50 : input.limit + 1)
+    .offset(selectedOnly ? 0 : Number(input.cursor ?? "0"));
+  return rows.map(parseOptionQueryRow).map(toOptionRow);
+}
+
 export async function getFilterOptions(
   db: Database,
   input: FilterOptionsInput,
 ): Promise<FilterOptionsOut> {
+  if (input.source === "entity") {
+    const [pageRows, selectedRows] = await Promise.all([
+      loadEntityRows(db, input, false),
+      input.selectedIds.length > 0 ? loadEntityRows(db, input, true) : [],
+    ]);
+    const hasNextPage = pageRows.length > input.limit;
+    const byId = new Map(
+      pageRows.slice(0, input.limit).map((row) => [row.id, row]),
+    );
+    for (const row of selectedRows) byId.set(row.id, row);
+    return {
+      items: [...byId.values()].map((row) => ({
+        id: row.id,
+        label: row.label,
+      })),
+      nextCursor: hasNextPage
+        ? String(Number(input.cursor ?? "0") + input.limit)
+        : null,
+    };
+  }
   const [pageRows, selectedRows] = await Promise.all([
     loadRows(db, input, false),
     input.selectedIds.length > 0 ? loadRows(db, input, true) : [],

@@ -575,7 +575,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter product...",
         optionsKey: "locationProducts",
-        brandRef: { entity: "product", kind: "id" },
+        brandRef: { entity: "product" },
         nullable: { field: "productPresenceFilter", label: "product" },
       },
       {
@@ -584,7 +584,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter parent...",
         optionsKey: "parentLocation",
-        brandRef: { entity: "location", kind: "id" },
+        brandRef: { entity: "location" },
         nullable: { field: "parentPresenceFilter", label: "parent" },
       },
       {

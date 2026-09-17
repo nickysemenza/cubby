@@ -40,10 +40,8 @@ type ParsedEntityRoute = {
 type FilterWire =
   | Readonly<{ kind: "param"; name: string }>
   | Readonly<{ kind: "range"; from: string; to: string; presence?: string }>;
-type IdentifierRef = Readonly<{
-  entity: string;
-  kind: "id" | "shortcode";
-}>;
+/** Public entity filter values are always shortcodes. */
+type IdentifierRef = Readonly<{ entity: string }>;
 export type FilterDescriptor = Readonly<{
   columnId: string;
   field: string | null;

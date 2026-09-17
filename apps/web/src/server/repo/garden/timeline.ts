@@ -100,6 +100,9 @@ const guideRows = async (
       out.push({
         id: `guide-${method}:${id}`,
         name: `Recommended ${method} · ${row.ingredientName}`,
+        // The synthetic id keeps sow and transplant rows independently stable;
+        // navigation still belongs to the live planting record.
+        link: { entity: "planting", id },
         imageUrl: null,
         intervals: [
           {

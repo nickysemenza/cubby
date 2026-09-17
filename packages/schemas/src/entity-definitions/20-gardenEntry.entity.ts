@@ -338,13 +338,13 @@ export default defineEntity({
         columnId: "locationId",
         kind: "idMulti",
         placeholder: "Filter by location...",
-        brandRef: { entity: "location", kind: "id" },
+        brandRef: { entity: "location" },
       },
       {
         columnId: "plantingId",
         kind: "idMulti",
         placeholder: "Filter by planting...",
-        brandRef: { entity: "planting", kind: "id" },
+        brandRef: { entity: "planting" },
       },
       {
         // A planting's journal: its own entries plus whole-location entries
@@ -352,7 +352,7 @@ export default defineEntity({
         columnId: "journalPlantingId",
         kind: "id",
         placeholder: "Journal for planting...",
-        brandRef: { entity: "planting", kind: "id" },
+        brandRef: { entity: "planting" },
         urlOnly: true,
       },
     ],

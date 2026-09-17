@@ -164,7 +164,7 @@ describe("task list display columns", () => {
       subjectProduct: "For",
       parentTask: "Parent Task",
       dueDate: "Due",
-      dueEndDate: "Due End Date",
+      dueEndDate: "Due end",
       trade: "Trade",
       sortOrder: "Sort Order",
     });

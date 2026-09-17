@@ -34,6 +34,17 @@ const covers = (verb: string, entity: string, surfaces: readonly string[]) =>
   );
 
 describe("manifest registries", () => {
+  it("preserves explicit sentence-case labels for derived garden windows", () => {
+    const labels = Object.fromEntries(
+      entityFieldModels.ingredient.fields.map((field) => [
+        field.key,
+        field.label,
+      ]),
+    );
+    expect(labels.guideSowWindow).toBe("Guide sow window");
+    expect(labels.guideTransplantWindow).toBe("Guide transplant window");
+  });
+
   it("names only registered verbs in every detail hero and list action roster", () => {
     const unknown = entities.flatMap((entity) => {
       const { detail, list } = entitySummary[entity];

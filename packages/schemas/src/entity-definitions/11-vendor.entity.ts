@@ -444,7 +444,7 @@ export default defineEntity({
         columnId: "productId",
         kind: "idMulti",
         placeholder: "Filter by related products id...",
-        brandRef: { entity: "product", kind: "id" },
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
@@ -464,7 +464,7 @@ export default defineEntity({
         columnId: "projectId",
         kind: "idMulti",
         placeholder: "Filter by related projects id...",
-        brandRef: { entity: "project", kind: "id" },
+        brandRef: { entity: "project" },
         urlOnly: true,
       },
       {

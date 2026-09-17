@@ -199,6 +199,7 @@ export default defineEntity({
         key: "dueEndDate",
         kind: "date",
         nullable: true,
+        label: "Due end",
         control: { kind: "date", section: "schedule" },
         display: { list: true, detail: true, detailOrder: 4, listHidden: true },
         validation: {
@@ -630,7 +631,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by project...",
         optionsKey: "project",
-        brandRef: { entity: "project", kind: "id" },
+        brandRef: { entity: "project" },
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
@@ -639,7 +640,7 @@ export default defineEntity({
         urlKey: "productId",
         kind: "id",
         placeholder: "Filter by product id...",
-        brandRef: { entity: "product", kind: "id" },
+        brandRef: { entity: "product" },
         urlOnly: true,
       },
       {
@@ -648,7 +649,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by product...",
         optionsKey: "taskProducts",
-        brandRef: { entity: "product", kind: "id" },
+        brandRef: { entity: "product" },
         nullable: { field: "subjectProductPresenceFilter", label: "product" },
       },
       {
@@ -657,7 +658,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by parent task...",
         optionsKey: "parentTask",
-        brandRef: { entity: "task", kind: "id" },
+        brandRef: { entity: "task" },
         nullable: { field: "parentTaskPresenceFilter", label: "parent task" },
       },
       {

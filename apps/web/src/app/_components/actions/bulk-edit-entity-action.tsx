@@ -365,12 +365,11 @@ export function BulkEditDialogBody({
         description={`Update ${countLabel(items.length, entityLabel(entity).toLowerCase())}. Only the fields you change are written.`}
         renderItem={(item) => item.name}
         effect={(item) => {
-          if (dirtyKeys.length === 0) {
-            return {
-              to: "No changes yet",
-              blocked: "Choose a value to change",
-            };
-          }
+          // A pristine form has no pending mutation. Keeping its rows quiet
+          // avoids presenting a synthetic blocker before the operator chooses
+          // any field, and the dialog's explicit submission gate prevents an
+          // empty bulk update.
+          if (dirtyKeys.length === 0) return undefined;
           const parts = dirtyKeys.map((key) => {
             const field = model.fields.find(
               (candidate) => candidate.key === key,
@@ -392,6 +391,7 @@ export function BulkEditDialogBody({
         unchangedLabel="already set to this"
         onSubmit={handleSubmit}
         isPending={isPending}
+        submissionDisabled={dirtyKeys.length === 0}
       >
         <BulkEditFields
           entity={entity}

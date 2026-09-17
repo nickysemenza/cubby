@@ -306,11 +306,9 @@ function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
 }
 
 function LifecyclesView({
-  entity,
   rows,
   extent,
 }: {
-  entity: TimelineEntity;
   rows: EntityTimelineRow[];
   extent: EntityTimelineOut["extent"];
 }) {
@@ -361,7 +359,7 @@ function LifecyclesView({
                   />
                 )}
                 <TimelineLink
-                  link={{ entity, id: row.id }}
+                  link={row.link}
                   className="min-w-0 truncate text-sm"
                 >
                   {row.name}
@@ -582,7 +580,7 @@ export function EntityTimeline<E extends TimelineEntity>({
         <Description>{data.notes.join(" ")}</Description>
       )}
       {activeMode === "lifecycles" && data.rows ? (
-        <LifecyclesView entity={entity} rows={data.rows} extent={data.extent} />
+        <LifecyclesView rows={data.rows} extent={data.extent} />
       ) : (
         <EventsView groups={data.groups} />
       )}

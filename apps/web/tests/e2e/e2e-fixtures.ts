@@ -153,7 +153,12 @@ export const seedLocationPrerequisite = (
 
 export const seedPlantingPrerequisite = (
   page: Page,
-  opts: { ingredientId: string; locationId?: string; status?: string },
+  opts: {
+    ingredientId: string;
+    locationId?: string;
+    status?: string;
+    taskId?: string;
+  },
 ) =>
   createFixture(
     page,
@@ -162,6 +167,7 @@ export const seedPlantingPrerequisite = (
       ingredientId: opts.ingredientId,
       locationId: opts.locationId ?? null,
       status: opts.status,
+      taskId: opts.taskId,
     }),
   );
 

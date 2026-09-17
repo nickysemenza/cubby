@@ -80,6 +80,44 @@ const NON_ENTITY_FK_TARGETS = {
   StatementRow: "verbatim statement evidence, not a domain entity",
 };
 
+/**
+ * Entity-targeting FKs normally belong to a declared local graph path (or its
+ * inverse). These non-entity source tables only carry owned/metadata state, so
+ * rendering a relationship branch for them would expose implementation rows
+ * rather than a navigable record relationship. Keeping the reason beside each
+ * exemption makes a new FK fail closed, and makes an obsolete exemption fail
+ * once its edge becomes graph-visible.
+ */
+const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "LedgerSourceClaim.expenseId": {
+    classification: "metadata",
+    reason: "ledger reconciliation provenance, not a navigable domain record",
+  },
+  "LedgerSourceClaim.ledgerTransferId": {
+    classification: "metadata",
+    reason: "ledger reconciliation provenance, not a navigable domain record",
+  },
+  "ProductConversionCoverage.productId": {
+    classification: "ownership",
+    reason: "derived conversion-coverage state owned by the product",
+  },
+  "ProductExternalId.productId": {
+    classification: "metadata",
+    reason: "external provider identifier owned by the product",
+  },
+  "ProductUnitMappings.productId": {
+    classification: "ownership",
+    reason: "derived unit-mapping state owned by the product",
+  },
+  "StatementRow.accountId": {
+    classification: "metadata",
+    reason: "verbatim imported banking evidence, not a navigable entity",
+  },
+} as const satisfies Record<
+  string,
+  { classification: "metadata" | "ownership"; reason: string }
+>;
+
 interface IntrospectedEdge {
   /** `${sourceTableName}.${sourceColumnName}`, e.g. "PurchaseImage.imageId". */
   key: string;
@@ -109,6 +147,34 @@ function introspectFkEdges(): IntrospectedEdge[] {
     }
   }
   return edges;
+}
+
+/** Every FK named by a local graph path or its declared inverse. */
+function graphPathEdgeKeys(): ReadonlySet<string> {
+  const keys = new Set<string>();
+  const add = (
+    steps: readonly { edge: string; direction: "outgoing" | "incoming" }[],
+  ) => {
+    for (const step of steps) keys.add(step.edge);
+  };
+  for (const entity of entities) {
+    for (const literal of entityManifest[entity].relationships) {
+      const relationship = entityRelationshipSchema.parse(literal);
+      const sources = [
+        {
+          provenance: relationship.provenance,
+          inverse: relationship.inverse,
+        },
+        ...relationship.sources,
+      ];
+      for (const source of sources) {
+        if (source.provenance.kind === "local-path")
+          add(source.provenance.steps);
+        if (source.inverse) add(source.inverse.steps);
+      }
+    }
+  }
+  return keys;
 }
 
 describe("entity manifest FK guard", () => {
@@ -174,34 +240,46 @@ describe("entity manifest FK guard", () => {
     expect(unexplained).toEqual([]);
   });
 
-  it("every direct entity-to-entity FK is covered by a relationship path", () => {
-    const missing = introspectFkEdges()
+  it("accounts for every entity-targeting FK with a graph path or classified non-entity edge", () => {
+    const edges = introspectFkEdges();
+    const graphEdges = graphPathEdgeKeys();
+    const edgesByKey = new Map(edges.map((edge) => [edge.key, edge]));
+    const missing = edges
       .filter(
         (
           edge,
         ): edge is IntrospectedEdge & {
-          sourceEntity: Entity;
           targetEntity: Entity;
-        } => edge.sourceEntity !== undefined && edge.targetEntity !== undefined,
+        } => edge.targetEntity !== undefined,
       )
       .filter(
         (edge) =>
-          !entityManifest[edge.sourceEntity].relationships.some(
-            (rel) =>
-              rel.target === edge.targetEntity &&
-              rel.provenance.kind === "local-path" &&
-              rel.provenance.steps.some(
-                (step) =>
-                  step.edge === edge.key && step.direction === "outgoing",
-              ),
-          ),
+          !graphEdges.has(edge.key) &&
+          !(edge.key in NON_GRAPH_ENTITY_FK_EXEMPTIONS),
       )
       .map(
         (edge) =>
-          `\`${edge.key}\` points from ${edge.sourceEntity} to ${edge.targetEntity}, but no \`entityManifest.${edge.sourceEntity}.relationships\` entry walks it outgoing to "${edge.targetEntity}".`,
+          `\`${edge.key}\` targets ${edge.targetEntity}, but no graph path/inverse names it and it has no NON_GRAPH_ENTITY_FK_EXEMPTIONS classification.`,
       );
-
-    expect(missing).toEqual([]);
+    const stale = Object.entries(NON_GRAPH_ENTITY_FK_EXEMPTIONS).flatMap(
+      ([key, exemption]) => {
+        const edge = edgesByKey.get(key);
+        if (!edge)
+          return [`\`${key}\` is exempted but is no longer a schema FK.`];
+        if (!edge.targetEntity)
+          return [`\`${key}\` is exempted but does not target an entity.`];
+        if (edge.sourceEntity)
+          return [
+            `\`${key}\` is exempted even though its source is entity ${edge.sourceEntity}; declare a graph path instead.`,
+          ];
+        if (graphEdges.has(key))
+          return [`\`${key}\` is exempted but is now named by a graph path.`];
+        if (exemption.reason.trim().length === 0)
+          return [`\`${key}\` has an empty exemption reason.`];
+        return [];
+      },
+    );
+    expect([...missing, ...stale]).toEqual([]);
   });
 });
 

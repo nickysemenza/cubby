@@ -52,6 +52,8 @@ export type EntityTimelineGroup = z.infer<typeof entityTimelineGroup>;
 export const entityTimelineRow = z.object({
   id: z.string().min(1),
   name: z.string(),
+  /** Navigation target when this row represents a record; synthetic rows may omit it. */
+  link: entityTimelineLink.nullable().optional(),
   imageUrl: z.string().nullable().optional(),
   intervals: z.array(
     z.object({

@@ -25,7 +25,9 @@ export function graphBranchCount(
   return Math.min(
     branch.items.length,
     counts.get(graphBranchKey(branch.root, branch.relationshipKey)) ??
-      (branch.totalCount <= GRAPH_BRANCH_PAGE_SIZE ? branch.items.length : 0),
+      // The first fetched page is useful even when the branch has another
+      // page. Expansion remains explicit through the stored visible count.
+      Math.min(branch.items.length, GRAPH_BRANCH_PAGE_SIZE),
   );
 }
 

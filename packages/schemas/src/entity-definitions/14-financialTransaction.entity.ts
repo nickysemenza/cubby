@@ -655,7 +655,7 @@ export default defineEntity({
         kind: "idMulti",
         placeholder: "Filter by account...",
         optionsKey: "account",
-        brandRef: { entity: "financialAccount", kind: "shortcode" },
+        brandRef: { entity: "financialAccount" },
       },
       {
         columnId: "purchaseId",

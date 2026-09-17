@@ -1,3 +1,4 @@
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -74,6 +75,25 @@ describe("buildFiltersFromManifest", () => {
     expect(
       buildFiltersFromManifest(specs, getter({ project: "proj_1" })),
     ).toEqual({ projectId: "branded:proj_1" });
+  });
+
+  it("keeps an invalid public entity reference non-widening", () => {
+    const specs: FilterSpecCore[] = [
+      {
+        columnId: "ingredientId",
+        kind: "idMulti",
+        brand: (value) => {
+          if (value !== "ING-C2YH") throw new Error("bad shortcode");
+          return value;
+        },
+      },
+    ];
+    expect(
+      buildFiltersFromManifest(specs, getter({ ingredientId: "invalid" })),
+    ).toEqual({ ingredientId: [UNRESOLVABLE_ENTITY_FILTER] });
+    expect(
+      buildFiltersFromManifest(specs, getter({ ingredientId: "ING-C2YH" })),
+    ).toEqual({ ingredientId: ["ING-C2YH"] });
   });
 
   it("expands a range preset into the pair of fields it owns", () => {

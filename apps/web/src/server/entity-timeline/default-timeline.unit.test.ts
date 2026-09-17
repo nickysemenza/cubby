@@ -41,6 +41,7 @@ describe("lifecycleRows", () => {
       window,
     );
     expect(row?.intervals).toEqual(intervals);
+    expect(row?.link).toEqual({ entity: "planting", id: "PLT-TEST" });
   });
 
   it("emits no interval when every start key is null, but still emits markers for other dated fields", () => {
