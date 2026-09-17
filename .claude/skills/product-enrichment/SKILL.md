@@ -132,6 +132,11 @@ authoritative for that field:
   Expense's `productQuantity`, not in a manual Product price.
 - Never blanket-apply a provider response. Compare and write fields
   deliberately.
+- A food Product resolves nutrition through one of three keys — `upc`
+  (auto-matches a USDA branded record), an explicit `fdc_id`, or
+  `labelNutrition` transcribed from the package. Always record the `upc`;
+  which of the other two to set is a nutrition decision owned by
+  `cubby-meal-logging` ("Resolve nutrition"), not by the identity source.
 
 ## Batch the writes, never the research
 
