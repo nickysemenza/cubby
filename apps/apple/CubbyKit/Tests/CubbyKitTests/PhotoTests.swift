@@ -410,3 +410,36 @@ struct PresignedUploadTests {
         }
     }
 }
+
+@Suite("PhotoEvidenceScorer")
+struct PhotoEvidenceScorerTests {
+    private static func analysis(classifierIdentifier: String, confidence: Double) -> PhotoLocalAnalysis {
+        PhotoLocalAnalysis(
+            id: "photo", analyzedAt: Date(timeIntervalSince1970: 0), sha256: "sha",
+            capturedAt: nil, contentType: "image/jpeg", width: 32, height: 24,
+            classifications: [PhotoClassification(identifier: classifierIdentifier, confidence: confidence)],
+            recognizedText: [], featurePrint: PhotoFeaturePrint(revision: "1", data: Data()),
+            provenance: PhotoAnalysisProvenance(source: .files, filename: "photo.jpg"))
+    }
+
+    /// `policyMatches` is the function behind both `suggestedSource`'s "Suggested: …" chip and the
+    /// CLI's `routing` dump — a match at/above a policy's `minimumScore` must flag only that
+    /// entity, and dropping just below must un-flag it, without touching any other entity's verdict.
+    @Test func flagsOnlyTheEntityMeetingItsOwnMinimumScore() throws {
+        let (key, policy) = try #require(
+            PhotoImportCatalog.routingPolicies.first { !$0.value.classifierLabels.isEmpty })
+        let label = try #require(policy.classifierLabels.first)
+        let identifier = "\(label)-detected"
+
+        let above = Self.analysis(
+            classifierIdentifier: identifier, confidence: min(1, policy.minimumScore + 0.1))
+        let aboveMatch = try #require(PhotoEvidenceScorer.policyMatches(above)[key])
+        #expect(aboveMatch.meetsMinimumScore == true)
+        #expect(aboveMatch.classifierIdentifier == identifier)
+
+        let below = Self.analysis(
+            classifierIdentifier: identifier, confidence: max(0, policy.minimumScore - 0.1))
+        let belowMatch = try #require(PhotoEvidenceScorer.policyMatches(below)[key])
+        #expect(belowMatch.meetsMinimumScore == false)
+    }
+}

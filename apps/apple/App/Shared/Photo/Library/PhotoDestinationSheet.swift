@@ -1096,21 +1096,15 @@ final class PhotoImportManifest {
                     ?? type.options.sorted { $0.id < $1.id }.first
                 return option.map { (type.source, $0) }
             }, uniquingKeysWith: { first, _ in first })
-        let candidates = optionsByKey.compactMap { key, option -> (EntityKey, String, Double, String)? in
-            guard let policy = PhotoImportCatalog.routingPolicies[key] else { return nil }
-            let match = analysis.classifications
-                .filter { classification in
-                    let identifier = classification.identifier.lowercased()
-                    return policy.classifierLabels.contains {
-                        identifier.contains($0.lowercased())
-                    }
-                }
-                .max { $0.confidence < $1.confidence }
-            guard let match, match.confidence >= policy.minimumScore else { return nil }
-            return (key, EntityCatalog[key].plural, match.confidence, match.identifier)
+        let matches = PhotoEvidenceScorer.policyMatches(analysis)
+        let candidates = optionsByKey.keys.compactMap { key -> (EntityKey, Double, String)? in
+            guard let match = matches[key], match.meetsMinimumScore,
+                let identifier = match.classifierIdentifier, let confidence = match.classifierConfidence
+            else { return nil }
+            return (key, confidence, identifier)
         }
-        guard let best = candidates.max(by: { $0.2 < $1.2 }) else { return nil }
-        return (best.0, "Suggested: \(best.1) · \(best.3)")
+        guard let best = candidates.max(by: { $0.1 < $1.1 }) else { return nil }
+        return (best.0, "Suggested: \(EntityCatalog[best.0].plural) · \(best.2)")
     }
 
     private struct Candidate: Sendable {
@@ -1200,8 +1194,7 @@ final class PhotoImportManifest {
                     !(page.option.route.requiresReplaceConfirmation && row.imageURL != nil)
                 else { return nil }
                 let description =
-                    ([row.title, row.id]
-                    + (policy?.candidateFields.compactMap { row.raw[$0]?.stringValue } ?? []))
+                    ([row.title, row.id] + PhotoEvidenceScorer.candidateFieldValues(row, policy: policy))
                     .joined(separator: " · ")
                 // Route identity is distinct from the natural source record. A source can expose
                 // existing and create-related routes, so a candidate key must not collide when
@@ -1237,47 +1230,20 @@ final class PhotoImportManifest {
         try Task.checkCancellation()
         let policy = PhotoImportCatalog.routingPolicies[source]
         let ranked = rows.enumerated().map { index, row -> (EntityRow, Double, Int) in
-            let searchable =
-                ([row.title]
-                + (policy?.candidateFields.compactMap { row.raw[$0]?.stringValue } ?? []))
-                .joined(separator: " ").lowercased()
-            let textScore = analyses.values.reduce(0.0) { score, analysis in
-                max(
-                    score,
-                    analysis.recognizedText.reduce(0.0) { textScore, text in
-                        let recognized = text.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            .lowercased()
-                        guard recognized.count >= 3, searchable.contains(recognized) else {
-                            return textScore
-                        }
-                        return max(textScore, 0.96 * text.confidence)
-                    })
+            let identity: Double =
+                visualMatches.values.contains { $0.candidateID == "\(source.rawValue):\(row.id)" } ? 1 : 0
+            // Component-wise max across every prepared analysis, then the shared combine formula —
+            // identity is per-row (not per-analysis), so it is unchanged by the reduce.
+            let evidence = analyses.values.reduce(
+                PhotoEvidenceScorer.Score(text: 0, classifier: 0, date: 0, identity: identity)
+            ) { acc, analysis in
+                let next = PhotoEvidenceScorer.score(
+                    analysis: analysis, row: row, policy: policy, identity: identity)
+                return PhotoEvidenceScorer.Score(
+                    text: max(acc.text, next.text), classifier: max(acc.classifier, next.classifier),
+                    date: max(acc.date, next.date), identity: identity)
             }
-            let classifierScore = analyses.values.reduce(0.0) { score, analysis in
-                max(
-                    score,
-                    analysis.classifications.filter { classification in
-                        policy?.classifierLabels.contains {
-                            classification.identifier.lowercased().contains($0.lowercased())
-                        } ?? false
-                    }.map(\.confidence).max() ?? 0)
-            }
-            let dateScore = analyses.values.reduce(0.0) { score, analysis in
-                guard let day = analysis.capturedAt.map({ PlainDate($0).rawValue }) else {
-                    return score
-                }
-                let matches =
-                    policy?.temporalFields.contains { field in
-                        row.raw[field]?.stringValue?.hasPrefix(day) == true
-                    } ?? false
-                return max(score, matches ? 0.88 : 0)
-            }
-            let visualScore =
-                visualMatches.values.contains {
-                    $0.candidateID == "\(source.rawValue):\(row.id)"
-                } ? 1.0 : 0
-            let score = min(1, max(textScore, dateScore, visualScore) + classifierScore * 0.08)
-            return (row, score, index)
+            return (row, evidence.combined, index)
         }
         return ranked.sorted { lhs, rhs in
             lhs.1 == rhs.1 ? lhs.2 < rhs.2 : lhs.1 > rhs.1
@@ -1293,36 +1259,12 @@ final class PhotoImportManifest {
         let scored = candidates.compactMap { candidate -> (String, Double, Double)? in
             guard let policy = PhotoImportCatalog.routingPolicies[candidate.option.route.source]
             else { return nil }
-            let classifierScore =
-                analysis.classifications
-                .filter { classification in
-                    let identifier = classification.identifier.lowercased()
-                    return policy.classifierLabels.contains {
-                        identifier.contains($0.lowercased())
-                    }
-                }
-                .map(\.confidence).max() ?? 0
-            let searchable =
-                ([candidate.row.title]
-                + policy.candidateFields.compactMap { candidate.row.raw[$0]?.stringValue })
-                .joined(separator: " ").lowercased()
-            let textScore = analysis.recognizedText.reduce(0.0) { score, text in
-                let recognized = text.text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                guard recognized.count >= 3 else { return score }
-                return max(score, searchable.contains(recognized) ? 0.96 * text.confidence : 0)
-            }
-            let capturedDay = analysis.capturedAt.map { PlainDate($0).rawValue }
-            let dateScore =
-                capturedDay.map { day in
-                    policy.temporalFields.contains { field in
-                        candidate.row.raw[field]?.stringValue?.hasPrefix(day) == true
-                    } ? 0.88 : 0
-                } ?? 0
-            let identityScore =
+            let identity: Double =
                 authoritativeOwners.contains(candidate.row.id)
-                    || visualMatch?.candidateID == candidate.routing.id ? 1.0 : 0
-            let evidenceScore = max(textScore, dateScore, identityScore)
-            let score = min(1, evidenceScore + classifierScore * 0.08)
+                    || visualMatch?.candidateID == candidate.routing.id ? 1 : 0
+            let score = PhotoEvidenceScorer.score(
+                analysis: analysis, row: candidate.row, policy: policy, identity: identity
+            ).combined
             return (candidate.routing.id, score, policy.minimumScore)
         }.sorted { $0.1 > $1.1 }
         guard let first = scored.first, first.1 >= first.2 else { return [] }
@@ -2413,32 +2355,16 @@ private struct PhotoRelatedDestinationChooser: View {
         } else {
             return nil
         }
-        guard
-            let dateKey = semanticDateKey, let dateFilter = descriptor.filter(dateKey),
-            case .range(let from, let to, _) = dateFilter.wire,
-            let captureDate
-        else { return result }
-        if descriptor.field(dateKey)?.kind == .timestamp {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            result.set(.single(formatter.string(from: captureDate.addingTimeInterval(-3_600))), for: from)
-            result.set(.single(formatter.string(from: captureDate.addingTimeInterval(3_600))), for: to)
-        } else {
-            let day = PlainDate(captureDate).rawValue
-            result.set(.single(day), for: from)
-            result.set(.single(day), for: to)
+        guard let captureDate else { return result }
+        let dateFilters = PhotoEntityChooserModel.captureDateFilters(
+            descriptor: descriptor, key: semanticDateKey, captureDate: captureDate)
+        for name in dateFilters.names {
+            if let value = dateFilters[name] { result.set(value, for: name) }
         }
         return result
     }
 
-    private var semanticDateKey: String? {
-        PhotoImportCatalog.routingPolicies[descriptor.key]?.temporalFields.first { key in
-            guard let field = descriptor.field(key), let filter = descriptor.filter(key),
-                case .range = filter.wire
-            else { return false }
-            return field.kind == .date || field.kind == .timestamp
-        }
-    }
+    private var semanticDateKey: String? { PhotoEntityChooserModel.semanticDateKey(for: descriptor) }
 }
 
 private struct PhotoEntitySearchModifier: ViewModifier {

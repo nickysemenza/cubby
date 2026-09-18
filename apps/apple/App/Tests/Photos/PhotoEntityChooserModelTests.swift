@@ -72,13 +72,14 @@ struct PhotoEntityChooserModelTests {
         #expect(recorder.snapshot().contains { $0.query == nil })
     }
 
-    @Test(arguments: ["purchase", "gardenEntry", "meal"])
+    @Test(arguments: ["purchase", "gardenEntry", "meal", "inventory"])
     func dateLaneUsesGeneratedEntityDateRange(rawKey: String) async throws {
         let key = try #require(EntityKey(rawValue: rawKey))
         let expectedNames: Set<String> =
             switch rawKey {
             case "purchase": ["dateFrom", "dateTo"]
             case "gardenEntry": ["observedOnFrom", "observedOnTo"]
+            case "inventory": ["verifiedFrom", "verifiedTo"]
             default: ["from", "to"]
             }
         let captureDate = Self.day("2026-09-10")
@@ -96,6 +97,28 @@ struct PhotoEntityChooserModelTests {
         await model.loadInitial()
 
         #expect(recorder.snapshot().first?.filters.names == expectedNames.sorted())
+    }
+
+    /// `inventory.verifiedAt` is a `.timestamp` field (unlike `purchase`/`gardenEntry`/`meal`'s
+    /// `.date` fields above), so its range must be a ±1 hour window around the capture instant,
+    /// not a day boundary — this was the divergent behavior the shared helper needed to preserve.
+    @Test func timestampFieldUsesAnISOPlusMinusOneHourWindow() throws {
+        let descriptor = EntityCatalog[.inventory]
+        let key = try #require(PhotoEntityChooserModel.semanticDateKey(for: descriptor))
+        #expect(key == "verifiedAt")
+        let captureDate = Self.instant("2026-09-10T12:00:00Z")
+
+        let filters = PhotoEntityChooserModel.captureDateFilters(
+            descriptor: descriptor, key: key, captureDate: captureDate)
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        #expect(
+            filters["verifiedFrom"]?.strings.first
+                == formatter.string(from: captureDate.addingTimeInterval(-3_600)))
+        #expect(
+            filters["verifiedTo"]?.strings.first
+                == formatter.string(from: captureDate.addingTimeInterval(3_600)))
     }
 
     @Test func dateLaneFailureDoesNotHideRecentLane() async {
