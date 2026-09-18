@@ -336,7 +336,7 @@ describe("cookbook repository", () => {
   // deleteCookbook is UNGUARDED (lockAndValidateForDelete only locks + checks
   // existence — no assertNoDependents call for sub-recipe usage or meal-plan
   // membership), so it cascades to every imported recipe unconditionally. This
-  // guards the removal-path invariant from root CLAUDE.md: the cascade must
+  // guards the removal-path invariant from root AGENTS.md: the cascade must
   // reach sections/ingredients AND leave no live EntityEmbedding row for
   // either the cookbook or its recipes (mirrors
   // embedding-cascade-invariant.integration.test.ts's per-entity coverage,

@@ -185,7 +185,7 @@ export function EntityIntegrityTab({
  *
  * The sub-scale vertical padding lives here, once, instead of a density-escape
  * comment repeated on every list that needs it. See the Spacing note in
- * apps/web/CLAUDE.md: encapsulate density in a component rather than scattering
+ * apps/web/AGENTS.md: encapsulate density in a component rather than scattering
  * the escape hatch.
  */
 function HairlineRow({ children }: { children: ReactNode }) {

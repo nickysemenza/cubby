@@ -1,7 +1,7 @@
 import Foundation
 
 /// Loads a captured fixture from `Tests/CubbyKitTests/Fixtures/` by filename (including
-/// extension), via `Bundle.module`. Fixtures never contain real household data — see CLAUDE.md.
+/// extension), via `Bundle.module`. Fixtures never contain real household data — see AGENTS.md.
 enum Fixtures {
     static func data(named filename: String) throws -> Data {
         let name = (filename as NSString).deletingPathExtension

@@ -3,13 +3,13 @@
  * a SOFT-DELETED target, for every incoming edge whose `liveness` rule in
  * `ENTITY_EDGE_SEMANTICS` is `must-target-live`.
  *
- * The invariant: soft delete (see the root CLAUDE.md "Soft Delete" section)
+ * The invariant: soft delete (see the root AGENTS.md "Soft Delete" section)
  * hides a row from normal queries but keeps it in the database, so nothing
  * downstream is supposed to notice — except a dangling pointer. A live
  * `PurchaseImage` still naming a soft-deleted `Purchase`, a live `Task` still
  * filed under a soft-deleted `Project`, and so on, are all evidence that some
  * removal path forgot to detach, re-point, or cascade-delete its dependents
- * before the CLAUDE.md "Removal-path invariant" or "Incoming-edge invariant"
+ * before the AGENTS.md "Removal-path invariant" or "Incoming-edge invariant"
  * were satisfied. Almost every edge in the system carries this rule; this
  * detector is the audit that catches a new removal path (or an old one,
  * missed) that skips it.

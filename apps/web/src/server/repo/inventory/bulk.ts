@@ -294,7 +294,7 @@ export const bulkProcessInventoryEntries = async (
       // reconcile, so it MUST honor the repo-wide soft-delete invariant (set
       // deletedAt, keep the row + audit trail) — a hard delete here makes an
       // omitted entry unrecoverable, and "restore is intentionally not
-      // implemented" (CLAUDE.md). NOTE: bulkMoveInventoryEntries' source
+      // implemented" (AGENTS.md). NOTE: bulkMoveInventoryEntries' source
       // collapse below intentionally stays a hard delete — soft-deleting a
       // fully-moved source would leave a zero-qty ghost that notDeleted() hides
       // but valuation/duplicate scans resurface.

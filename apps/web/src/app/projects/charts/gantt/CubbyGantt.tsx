@@ -60,7 +60,7 @@ interface CubbyGanttProps {
 /**
  * Stable empty defaults — both feed `useMemo` dependency arrays below, so an
  * inline `= new Set()` / `= []` would allocate a fresh reference every render
- * and recompute those memos unconditionally (see apps/web/CLAUDE.md's
+ * and recompute those memos unconditionally (see apps/web/AGENTS.md's
  * `unstable-hook-default` rule).
  */
 const NO_CHAIN_IDS: ReadonlySet<string> = new Set<string>();

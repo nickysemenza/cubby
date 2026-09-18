@@ -6,7 +6,7 @@ import { proposeSizeFromTitle, sizeUnitAlternation } from "./title-unit-size";
  * Runs against the real `parse_amount` grammar, not a stub — the whole design
  * is that Rust owns the parsing and the TS regex only locates a candidate.
  *
- * Fixtures are placeholders per CLAUDE.md, but they are not invented: each one
+ * Fixtures are placeholders per AGENTS.md, but they are not invented: each one
  * reproduces the exact STRING SHAPE of a title that broke this parser (a "10G",
  * a trailing "13155q", an em-dash before a size), with brands and any observed
  * price removed. The shape is what the regression is about; the vendor is not,

@@ -7,7 +7,7 @@ exists to resolve the naming drift that the audit flagged — the same concept
 sometimes wears three different names across layers.
 
 > **Layering reminder.** Domain compute (costing, availability, conversions)
-> lives in Rust/WASM (`recipebridge`), not TS. See [CLAUDE.md](../CLAUDE.md) for
+> lives in Rust/WASM (`recipebridge`), not TS. See [AGENTS.md](../AGENTS.md) for
 > where logic belongs. This doc is about *names*, not where logic runs.
 
 ## Naming policy

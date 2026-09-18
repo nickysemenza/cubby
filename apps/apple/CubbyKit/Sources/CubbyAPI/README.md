@@ -9,8 +9,8 @@ The generator renders in document order, and the JSON emits `paths` and
 `components.schemas` sorted, so adding an operation changes only the lines
 that describe it. Positional `_schemaNN` names are assigned at schema
 registration and can still renumber when a new *schema* (not operation) is
-added; `apps/apple/CLAUDE.md` forbids naming those in hand-written Swift for
+added; `apps/apple/AGENTS.md` forbids naming those in hand-written Swift for
 exactly that reason.
 
 Hand-written code names these types only through the aliases in
-`CubbyKit/Sources/CubbyKit/Generated/APITypes.swift`; see `apps/apple/CLAUDE.md`.
+`CubbyKit/Sources/CubbyKit/Generated/APITypes.swift`; see `apps/apple/AGENTS.md`.

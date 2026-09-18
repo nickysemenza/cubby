@@ -22,7 +22,7 @@ fi
 xcodegen generate --spec apps/apple/project.yml --use-cache
 
 # swift-format's --recursive can't exclude a subdirectory, and
-# CubbyKit/Sources/CubbyKit/Generated is emitter-owned (apps/apple/CLAUDE.md)
+# CubbyKit/Sources/CubbyKit/Generated is emitter-owned (apps/apple/AGENTS.md)
 # and must never be reformatted or linted; Sources/CubbyAPI (the whole
 # swift-openapi-generator target) is a sibling of Sources/CubbyKit and is
 # never enumerated either — it is generated end to end.

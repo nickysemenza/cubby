@@ -19,7 +19,7 @@
 // --verbose (full xcodebuild log instead of -quiet).
 //
 // Not a debugging tool: when breakpoints are needed, open the Xcode project and
-// use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/CLAUDE.md
+// use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/AGENTS.md
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
 import { spawnSync } from "node:child_process";

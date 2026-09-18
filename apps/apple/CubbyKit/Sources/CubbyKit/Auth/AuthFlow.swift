@@ -1,7 +1,7 @@
 import Foundation
 import HTTPTypes
 
-/// Bearer sign-in/sign-out against Better Auth. See `apps/apple/CLAUDE.md` "Wire rules": every
+/// Bearer sign-in/sign-out against Better Auth. See `apps/apple/AGENTS.md` "Wire rules": every
 /// `/api/auth/*` request needs `Origin: cubby-mobile://`, and a `set-auth-token` response header
 /// that differs from the stored bearer always overwrites it, never the other way around.
 public actor AuthFlow {

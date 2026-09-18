@@ -514,7 +514,7 @@ export const eqAny = <TColumn extends AnyColumn, TValue>(
  * `eqAny`'s "empty means no constraint" is right for a filter the caller left
  * empty and catastrophically wrong for one whose supplied ids all failed to
  * resolve: that must match nothing, never widen to an unfiltered query
- * (CLAUDE.md, Renderers / saved views / scopes). Pass `undefined` for "not
+ * (AGENTS.md, Renderers / saved views / scopes). Pass `undefined` for "not
  * requested" and the resolved ids — empty array included — otherwise. Pairs
  * with `resolveFilterIds`, which produces exactly that shape.
  */

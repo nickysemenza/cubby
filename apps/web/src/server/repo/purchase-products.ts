@@ -21,7 +21,7 @@
  * Backfilling the 9,606 missing rows was rejected: it would duplicate an edge
  * that already exists and demand a sync rule on every Expense write, including
  * purchase reparenting. The join still carries NO money and NO quantity — that
- * stays on `Expense` (root CLAUDE.md tenet: all money lives on Expense;
+ * stays on `Expense` (root AGENTS.md tenet: all money lives on Expense;
  * `purchase.statedTotal` is never summed into spend).
  *
  * Mirrors `attachProjectResources` / `detachProjectResources` /

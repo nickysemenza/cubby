@@ -18,7 +18,7 @@
  *
  * Lives in `server/db`, not `packages/schemas`: the `column` values are
  * `AnyColumn` references into `schema.ts`, and schemas cannot import
- * `drizzle-orm/pg-core` (see the CLAUDE.md layering note on the WASM/schemas
+ * `drizzle-orm/pg-core` (see the AGENTS.md layering note on the WASM/schemas
  * boundary — this is the same shape of rule, one level down).
  *
  * **This map holds edges and their stable meaning only — never a

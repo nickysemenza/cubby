@@ -87,7 +87,7 @@ type MutationAuditEntry = AuditEntryFields & {
 /**
  * A delete entry, and the proof that an embedding cascade ran with it.
  *
- * The removal-path invariant (root CLAUDE.md) says every path that removes an
+ * The removal-path invariant (root AGENTS.md) says every path that removes an
  * entity must soft-delete its `EntityEmbedding` rows in the same transaction.
  * That used to be a hand-copied line at 21 call sites, caught only after the
  * fact by `findOrphanedEntityEmbeddings` and a real-DB test. The witness moves

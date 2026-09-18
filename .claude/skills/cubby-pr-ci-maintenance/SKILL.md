@@ -6,7 +6,7 @@ description: Inspect and repair Cubby PR checks or address review feedback. Use 
 # Cubby PR and CI maintenance
 
 This skill owns triage and delivery sequencing. Follow [Cubby agent
-rules](../../../CLAUDE.md) and [validation, CI, and delivery](../../../docs/agents/validation.md)
+rules](../../../AGENTS.md) and [validation, CI, and delivery](../../../docs/agents/validation.md)
 for current commands, mandatory hooks, and local versus hosted gates.
 
 ## Procedure

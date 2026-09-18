@@ -73,7 +73,7 @@ const NEXT_TASKS_CAP = 10;
  * Which breakdown counter each task status increments. A finite-key `Record`
  * rather than a `switch`, so adding a `TaskStatus` is a compile error here
  * instead of that status silently vanishing from every project's breakdown
- * (see CLAUDE.md's finite-enum-Record convention).
+ * (see AGENTS.md's finite-enum-Record convention).
  */
 const TASK_STATUS_FIELD = {
   not_started: "notStarted",
