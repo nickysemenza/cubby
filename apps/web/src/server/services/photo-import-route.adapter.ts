@@ -223,6 +223,21 @@ const routeNeedsSourceRecord = (route: Route): boolean =>
         binding.item.from === "source-field"),
   );
 
+const sourceFieldsForRoute = (route: Route): string[] => [
+  ...new Set(
+    route.bindings.flatMap((binding) => {
+      if (binding.from === "source-field") return [binding.sourceField];
+      if (
+        binding.from === "relation-items" &&
+        binding.item.from === "source-field"
+      ) {
+        return binding.item.sourceField ? [binding.item.sourceField] : [];
+      }
+      return [];
+    }),
+  ),
+];
+
 const readSourceRecord = async (
   context: EntityKernelContext,
   route: Route,
@@ -248,7 +263,18 @@ const readSourceRecord = async (
       `Photo route source ${source.id} is unavailable`,
     );
   }
-  return new Map(Object.entries(createBodySchema.parse(result.item)));
+  const item = z.record(z.string(), z.unknown()).parse(result.item);
+  const selected = Object.fromEntries(
+    sourceFieldsForRoute(route)
+      .filter((field) => item[field] !== undefined)
+      .map((field) => [field, item[field]]),
+  );
+  // Entity-kernel reads intentionally return rich server values such as Date.
+  // Route bindings cross into a JSON create-body contract, so normalize only
+  // the compiler-declared source fields instead of parsing the entire record
+  // (which also includes unrelated createdAt/updatedAt Date values).
+  const normalized = JSON.parse(JSON.stringify(selected));
+  return new Map(Object.entries(createBodySchema.parse(normalized)));
 };
 
 const createDestination = async (

@@ -788,6 +788,7 @@ export default defineEntity({
           choice: "alternate",
           bindings: [
             { field: "locationId", from: "source-id" },
+            { field: "kind", from: "constant", value: "note" },
             { field: "observedOn", from: "capture-date" },
           ],
         },

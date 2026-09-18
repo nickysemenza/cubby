@@ -380,9 +380,21 @@ private struct PhotoLibraryPreview: View {
                     ProgressView("Loading photo…")
                 }
                 if let date = asset.creationDate { Text(date.formatted(date: .complete, time: .shortened)) }
-                Section("In Cubby") {
+                Section("Cubby") {
                     let candidates = appModel.photoMatches.storedCandidates(for: asset.localIdentifier)
-                    if candidates.isEmpty { Text("No known match").foregroundStyle(.secondary) }
+                    if candidates.isEmpty {
+                        if appModel.photoMatches.hasKnownResult(for: asset.localIdentifier) {
+                            Label("Ready to add", systemImage: "plus.circle")
+                            Text("No existing copy was found.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else if appModel.photoMatches.isLoading {
+                            ProgressView("Checking for an existing copy…")
+                        } else {
+                            Label("Not checked yet", systemImage: "questionmark.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
                         MatchCandidateView(candidate: candidate)
                         NavigationLink {
@@ -391,12 +403,16 @@ private struct PhotoLibraryPreview: View {
                             Label("Open image in Cubby", systemImage: "arrow.up.right.square")
                         }
                     }
-                    Text(appModel.photoMatches.coverage).font(.caption).foregroundStyle(.secondary)
-                    if appModel.photoMatches.repairFailures > 0 {
-                        Text("Some images could not be checked. Refresh to retry.").font(.caption)
+                    DisclosureGroup("Match details") {
+                        Text(appModel.photoMatches.coverage)
+                        if appModel.photoMatches.repairFailures > 0 {
+                            Text(
+                                "\(appModel.photoMatches.repairFailures) older Cubby image\(appModel.photoMatches.repairFailures == 1 ? "" : "s") could not be checked. Pull to refresh the Photos grid to retry."
+                            )
+                        }
                     }
-                    Text("Recognition does not certify the resolution of an older upload.").font(.caption)
-                        .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }.navigationTitle("Photo")
                 .toolbar {

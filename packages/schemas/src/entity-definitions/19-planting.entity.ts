@@ -592,6 +592,7 @@ export default defineEntity({
               from: "source-field",
               sourceField: "locationId",
             },
+            { field: "kind", from: "constant", value: "note" },
             { field: "observedOn", from: "capture-date" },
           ],
         },

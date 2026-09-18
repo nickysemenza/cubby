@@ -12,7 +12,6 @@ struct PhotoDestinationSheet: View {
     @State private var replacement: ReplacementConfirmation?
     @State private var createContext: PhotoCreateContext?
     @State private var relatedContext: PhotoRelatedContext?
-    @State private var analysisLogExpanded = true
 
     init(items: [PhotoSelectionItem], onDone: @escaping ([String]) -> Void) {
         self.onDone = onDone
@@ -45,9 +44,9 @@ struct PhotoDestinationSheet: View {
                         }
                     }
                 }
-                PhotoAnalysisDisclosure(manifest: manifest, isExpanded: $analysisLogExpanded)
-                footer
+                PhotoAnalysisDisclosure(manifest: manifest)
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) { footer }
             .navigationTitle("Review photos")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -66,6 +65,7 @@ struct PhotoDestinationSheet: View {
                 case .sourceTypes:
                     List {
                         PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
+                        PhotoAnalysisDisclosure(manifest: manifest)
                         Section("Choose what is in the photo") {
                             ForEach(manifest.sourceTypeOptions) { type in
                                 Button {
@@ -108,6 +108,7 @@ struct PhotoDestinationSheet: View {
                 case .routePicker(let source, let row):
                     List {
                         PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
+                        PhotoAnalysisDisclosure(manifest: manifest)
                         if let type = manifest.sourceTypeOptions.first(where: {
                             $0.source == source
                         }) {
@@ -158,12 +159,13 @@ struct PhotoDestinationSheet: View {
                 option: context.option,
                 source: context.source,
                 captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
-                heroItems: manifest.items
+                heroItems: manifest.items,
+                importManifest: manifest
             ) { body in
                 manifest.stageCreate(
                     option: context.option, source: context.source, body: body)
                 createContext = nil
-                if !path.isEmpty { path.removeLast() }
+                path.removeAll()
             }
         }
         .sheet(item: $relatedContext) { context in
@@ -171,7 +173,8 @@ struct PhotoDestinationSheet: View {
                 context: context,
                 createOption: manifest.createAlternative(for: context.option),
                 captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
-                heroItems: manifest.items
+                heroItems: manifest.items,
+                importManifest: manifest
             ) { row in
                 manifest.moveSelected(to: context.option, source: context.source, destination: row)
                 relatedContext = nil
@@ -354,14 +357,16 @@ struct PhotoDestinationSheet: View {
             HStack {
                 Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
                 Spacer()
-                Button(manifest.isCommitting ? manifest.progress : "Add \(manifest.items.count) photos") {
+                Button(manifest.commitActionTitle) {
                     Task {
                         guard let committedIDs = await manifest.commit(client: appModel.client) else {
                             return
                         }
-                        await appModel.photoMatches.refresh(client: appModel.client)
                         onDone(committedIDs)
                         dismiss()
+                        await appModel.photoMatches.refresh(
+                            client: appModel.client,
+                            priorityIDs: Set(committedIDs))
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -383,6 +388,7 @@ final class PhotoImportManifest {
     private(set) var analysisState: PhotoImportAnalysisState = .idle
     private(set) var progress = "Preparing…"
     private(set) var errorMessage: String?
+    private(set) var hasCommitted = false
     private(set) var suggestions: [String: String] = [:]
     private(set) var suggestedSourceTypes: [String: EntityKey] = [:]
     private(set) var suggestedSourceRecords: [String: EntityRow] = [:]
@@ -514,7 +520,25 @@ final class PhotoImportManifest {
 
     var canCommit: Bool {
         !items.isEmpty && needsDestination.isEmpty && unresolvedDuplicateIDs.isEmpty
-            && !isCommitting && !commitRequiresReview
+            && !isCommitting && !hasCommitted && !commitRequiresReview
+    }
+
+    var commitActionTitle: String {
+        if hasCommitted { return "Added" }
+        return isCommitting ? progress : commitButtonTitle
+    }
+
+    var commitButtonTitle: String {
+        let photoCount = items.count
+        let photos = "\(photoCount) photo\(photoCount == 1 ? "" : "s")"
+        let drafts = Dictionary(
+            grouping: assignments.values.compactMap(\.createDraft), by: \.id
+        ).values.compactMap(\.first)
+        guard !drafts.isEmpty else { return "Add \(photos)" }
+        if drafts.count == 1, let draft = drafts.first {
+            return "Add \(photos) + \(EntityCatalog[draft.route.target].singular)"
+        }
+        return "Add \(photos) + \(drafts.count) records"
     }
 
     var commitDisabledReason: String? {
@@ -879,6 +903,8 @@ final class PhotoImportManifest {
             let committedClientIDs = try await transaction.commit(batch) { [weak self] state in
                 Task { @MainActor in self?.updateProgress(state) }
             }
+            hasCommitted = true
+            progress = "Added"
             return committedClientIDs
         } catch let failure as PhotoImportTransaction.Failure {
             switch failure {
@@ -894,11 +920,19 @@ final class PhotoImportManifest {
                 progress = "Try again"
             }
             errorMessage = failure.localizedDescription
+            appendAnalysisLog(
+                "Commit stopped",
+                detail: Self.importErrorDebugDetail(failure),
+                kind: .fallback)
             Diagnostics.report(failure, context: "photos.manifest.commit")
             return nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = Self.importErrorMessage(error)
             progress = "Try again"
+            appendAnalysisLog(
+                "Commit failed",
+                detail: Self.importErrorDebugDetail(error),
+                kind: .fallback)
             Diagnostics.report(error, context: "photos.manifest.commit")
             return nil
         }
@@ -938,6 +972,30 @@ final class PhotoImportManifest {
         case .uploading(let completed, let total): progress = "Uploading \(completed) of \(total)…"
         case .committing: progress = "Adding photos…"
         }
+    }
+
+    private static func importErrorMessage(_ error: any Error) -> String {
+        if let apiError = error as? CubbyAPIError {
+            let message = apiError.errorDescription ?? "Cubby could not complete this request."
+            if let requestID = apiError.detail?.requestId {
+                return "\(message) · Request \(requestID)"
+            }
+            return message
+        }
+        if let localized = error as? any LocalizedError,
+            let description = localized.errorDescription,
+            !description.isEmpty
+        {
+            return description
+        }
+        let description = String(describing: error)
+        return description.isEmpty ? "Cubby could not complete this request." : description
+    }
+
+    private static func importErrorDebugDetail(_ error: any Error) -> String {
+        let type = String(reflecting: Swift.type(of: error))
+        let detail = String(reflecting: error)
+        return detail.isEmpty ? type : "\(type) · \(detail)"
     }
 
     private func duplicateChoice(for itemID: String) -> PhotoImportDuplicateChoice {
@@ -1311,7 +1369,7 @@ struct PhotoImportGroup: Identifiable, Equatable {
 
 private struct PhotoAnalysisDisclosure: View {
     @Bindable var manifest: PhotoImportManifest
-    @Binding var isExpanded: Bool
+    @State private var isExpanded = false
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
@@ -1320,13 +1378,20 @@ private struct PhotoAnalysisDisclosure: View {
                     Text("Decision events will appear here as each photo is analyzed.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(manifest.analysisLog) { entry in
-                                PhotoAnalysisLogRow(entry: entry)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 10) {
+                                ForEach(manifest.analysisLog) { entry in
+                                    PhotoAnalysisLogRow(entry: entry)
+                                        .id(entry.id)
+                                }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .onAppear { scrollToLatest(proxy) }
+                        .onChange(of: manifest.analysisLog.count) { _, _ in
+                            scrollToLatest(proxy)
+                        }
                     }
                     .frame(maxHeight: 220)
                     .accessibilityIdentifier("photos.analysis.log")
@@ -1362,6 +1427,11 @@ private struct PhotoAnalysisDisclosure: View {
         .font(.caption)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+    }
+
+    private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        guard let latest = manifest.analysisLog.last else { return }
+        proxy.scrollTo(latest.id, anchor: .bottom)
     }
 }
 
@@ -1699,6 +1769,9 @@ private struct PhotoEntityChooser: View {
             if !heroItems.isEmpty {
                 PhotoImportHero(items: heroItems)
             }
+            if let importManifest {
+                PhotoAnalysisDisclosure(manifest: importManifest)
+            }
             Group {
                 if let model {
                     if model.isSearching {
@@ -1944,6 +2017,7 @@ private struct PhotoRelatedCreateEditor: View {
     let source: EntityRow
     let captureDate: Date?
     let heroItems: [PhotoSelectionItem]
+    let importManifest: PhotoImportManifest
     let onDraft: ([String: JSONValue]) -> Void
 
     @Environment(AppModel.self) private var appModel
@@ -1961,10 +2035,11 @@ private struct PhotoRelatedCreateEditor: View {
                         if !heroItems.isEmpty {
                             PhotoImportHero(items: heroItems)
                         }
+                        PhotoAnalysisDisclosure(manifest: importManifest)
                         Form {
                             Section {
                                 Label(
-                                    "This record and its photos will be added together",
+                                    "Continue to review. Nothing is added until you confirm the batch.",
                                     systemImage: "checkmark.shield"
                                 )
                                 .foregroundStyle(.secondary)
@@ -1993,13 +2068,13 @@ private struct PhotoRelatedCreateEditor: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Stage") {
+                    Button("Continue") {
                         guard let model, model.canSave else { return }
                         onDraft(model.createBody())
                         dismiss()
                     }
                     .disabled(!(model?.canSave ?? false))
-                    .accessibilityIdentifier("photos.destination.create.stage")
+                    .accessibilityIdentifier("photos.destination.create.continue")
                 }
             }
         }
@@ -2081,6 +2156,7 @@ private struct PhotoRelatedDestinationChooser: View {
     let createOption: PhotoDestinationOption?
     let captureDate: Date?
     let heroItems: [PhotoSelectionItem]
+    let importManifest: PhotoImportManifest
     let onSelect: (EntityRow) -> Void
     let onCreate: (PhotoDestinationOption, [String: JSONValue]) -> Void
 
@@ -2108,6 +2184,7 @@ private struct PhotoRelatedDestinationChooser: View {
                 if !heroItems.isEmpty {
                     PhotoImportHero(items: heroItems)
                 }
+                PhotoAnalysisDisclosure(manifest: importManifest)
                 Group {
                     if isLoading, rows.isEmpty {
                         LoadingIndicator.screen(label: "Loading related \(descriptor.plural)")
@@ -2178,7 +2255,8 @@ private struct PhotoRelatedDestinationChooser: View {
         .task { await load(reset: true) }
         .sheet(item: $creation) { option in
             PhotoRelatedCreateEditor(
-                option: option, source: context.source, captureDate: captureDate, heroItems: heroItems
+                option: option, source: context.source, captureDate: captureDate,
+                heroItems: heroItems, importManifest: importManifest
             ) { body in
                 onCreate(option, body)
                 creation = nil

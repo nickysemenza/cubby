@@ -128,6 +128,7 @@ public actor PhotoImportTransaction {
     private let maximumConcurrentUploads: Int
     private let idempotencyKey: String
     private var stagedByClientID: [String: Staged] = [:]
+    private var committedClientIDs: [String]?
 
     public init(
         client: CubbyClient,
@@ -147,6 +148,7 @@ public actor PhotoImportTransaction {
         _ items: [PhotoImportBatchItem],
         progress: (@Sendable (PhotoImportTransactionProgress) -> Void)? = nil
     ) async throws -> [String] {
+        if let committedClientIDs { return committedClientIDs }
         try Task.checkCancellation()
         for item in items {
             if case .reuse(let imageID) = item.duplicateChoice {
@@ -220,16 +222,33 @@ public actor PhotoImportTransaction {
             _ = try await client.commitPhotoImport(
                 PhotoImportCommitInput(
                     idempotencyKey: idempotencyKey, images: images, creates: drafts))
-        } catch let error as CubbyAPIError where (400..<500).contains(error.status) {
-            // A rejected HTTP request has a definite outcome and its structured validation text
-            // is more useful than reconciliation. Server failures and lost transport responses
-            // remain ambiguous because publication happens after the database commit. A task
-            // cancellation after the request starts is ambiguous for the same reason.
-            throw error
+        } catch let error as CubbyAPIError {
+            // A rejected 4xx request has a definite outcome. A 5xx may happen after the database
+            // commit, so reconcile it first; if every new image is still pending, preserve the
+            // server's useful rejection instead of replacing it with a generic retry message.
+            if (400..<500).contains(error.status) { throw error }
+            do {
+                let reconciled = try await reconcileAfterAmbiguousCommit(items)
+                committedClientIDs = reconciled
+                return reconciled
+            } catch let failure as Failure {
+                if case .commitNotApplied = failure { throw error }
+                throw failure
+            }
         } catch {
-            return try await reconcileAfterAmbiguousCommit(items)
+            let originalError = error
+            do {
+                let reconciled = try await reconcileAfterAmbiguousCommit(items)
+                committedClientIDs = reconciled
+                return reconciled
+            } catch let failure as Failure {
+                if case .commitNotApplied = failure { throw originalError }
+                throw failure
+            }
         }
-        return items.map(\.clientID)
+        let committed = items.map(\.clientID)
+        committedClientIDs = committed
+        return committed
     }
 
     /// A transport error after the commit request is ambiguous: the server may have committed

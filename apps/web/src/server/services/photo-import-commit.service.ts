@@ -164,17 +164,29 @@ const verifyPendingImage = async (
     );
   }
   const integrity = await ports.inspect(bytes, row.contentType);
-  if (
-    integrity.sha256 !== item.analysis.sha256 ||
-    integrity.width !== item.analysis.width ||
-    integrity.height !== item.analysis.height
-  ) {
+  // ImageIO reports display-oriented dimensions while the lightweight server inspector
+  // deliberately reports raw encoded dimensions. Exact bytes can therefore legitimately
+  // present the same width/height pair in the opposite order for EXIF/HEIF rotation.
+  const dimensionsMatch =
+    (integrity.width === item.analysis.width &&
+      integrity.height === item.analysis.height) ||
+    (integrity.width === item.analysis.height &&
+      integrity.height === item.analysis.width);
+  if (integrity.sha256 !== item.analysis.sha256 || !dimensionsMatch) {
     throw createAppError(
       "IMAGE_PRECONDITION_FAILED",
       `Staged bytes for ${imageId} do not match their local analysis`,
     );
   }
-  return { row, integrity, analysis: item.analysis };
+  return {
+    row,
+    integrity: {
+      ...integrity,
+      width: item.analysis.width,
+      height: item.analysis.height,
+    },
+    analysis: item.analysis,
+  };
 };
 
 async function verifyStagedImages(
