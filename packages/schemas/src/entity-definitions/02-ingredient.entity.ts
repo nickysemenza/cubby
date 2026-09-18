@@ -552,7 +552,31 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: {
+      storage: false,
+      displaySources: [
+        {
+          relationPath: ["products"],
+          priority: 0,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [
+        {
+          kind: "existingRelated",
+          routeId: "ingredient-product",
+          relationPath: ["products"],
+        },
+      ],
+      routing: {
+        candidateFields: ["name"],
+        temporalFields: [],
+        lifecycleFilters: [],
+        signals: { ocrFields: ["name"], classifierLabels: ["ingredient"] },
+        abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

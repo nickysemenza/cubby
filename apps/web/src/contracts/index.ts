@@ -38,6 +38,7 @@ export { maintenanceContract } from "./maintenance.contract";
 export { mcpContract } from "./mcp.contract";
 export { mealContract } from "./meal.contract";
 export { problemsContract, problemsStreamsContract } from "./problems.contract";
+export { photoImportContract } from "./photo-import.contract";
 export { productContract, productStreamsContract } from "./product.contract";
 export { projectContract } from "./project.contract";
 export { purchaseContract } from "./purchase.contract";

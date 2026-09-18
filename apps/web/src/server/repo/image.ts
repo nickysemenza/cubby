@@ -172,24 +172,15 @@ export const createUploadedImageRecord = async (
 export const getImageHashIndex = async (
   db: Database,
 ): Promise<ImageHashIndex> => {
-  const rows = await getDb(db)
-    .select({
-      shortcode: image.shortcode,
-      key: image.key,
-      perceptualHash: image.perceptualHash,
-      sourceFingerprint: image.sourceFingerprint,
-      width: image.width,
-      height: image.height,
-    })
-    .from(image)
-    .where(
-      and(
-        eq(image.status, "UPLOADED"),
-        notDeleted(image),
-        displayableImageWhere,
-      ),
-    )
-    .orderBy(desc(image.createdAt), desc(image.id));
+  const rows = await getDb(db).query.image.findMany({
+    where: and(
+      eq(image.status, "UPLOADED"),
+      notDeleted(image),
+      displayableImageWhere,
+    ),
+    orderBy: [desc(image.createdAt), desc(image.id)],
+    with: imageEntityRelations,
+  });
   return {
     algorithmRevision: 1,
     items: rows.map((row) => ({
@@ -198,6 +189,9 @@ export const getImageHashIndex = async (
       sourceFingerprint: row.sourceFingerprint,
       width: row.width,
       height: row.height,
+      directOwnerShortcodes: imageWithRelationsToAPI(row).associations.map(
+        ({ entityId }) => entityId,
+      ),
     })),
     repair: rows
       .filter((row) => row.perceptualHash === null)

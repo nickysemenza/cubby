@@ -11096,6 +11096,8 @@ extension Components {
             public var width: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/ImageHashIndexItem/height`.
             public var height: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/ImageHashIndexItem/directOwnerShortcodes`.
+            public var directOwnerShortcodes: [Swift.String]
             /// Creates a new `ImageHashIndexItem`.
             ///
             /// - Parameters:
@@ -11104,18 +11106,21 @@ extension Components {
             ///   - sourceFingerprint:
             ///   - width:
             ///   - height:
+            ///   - directOwnerShortcodes:
             public init(
                 id: Components.Schemas.ImageShortcode,
                 perceptualHash: Components.Schemas.PerceptualHash? = nil,
                 sourceFingerprint: Components.Schemas.ImageSourceFingerprint? = nil,
                 width: Swift.Int? = nil,
-                height: Swift.Int? = nil
+                height: Swift.Int? = nil,
+                directOwnerShortcodes: [Swift.String]
             ) {
                 self.id = id
                 self.perceptualHash = perceptualHash
                 self.sourceFingerprint = sourceFingerprint
                 self.width = width
                 self.height = height
+                self.directOwnerShortcodes = directOwnerShortcodes
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -11123,6 +11128,7 @@ extension Components {
                 case sourceFingerprint
                 case width
                 case height
+                case directOwnerShortcodes
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -11146,12 +11152,17 @@ extension Components {
                     Swift.Int.self,
                     forKey: .height
                 )
+                self.directOwnerShortcodes = try container.decode(
+                    [Swift.String].self,
+                    forKey: .directOwnerShortcodes
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "perceptualHash",
                     "sourceFingerprint",
                     "width",
-                    "height"
+                    "height",
+                    "directOwnerShortcodes"
                 ])
             }
         }
@@ -14568,6 +14579,10 @@ extension Components {
                 ])
             }
         }
+        /// Any JSON value: a string, number, boolean, null, array or object.
+        ///
+        /// - Remark: Generated from `#/components/schemas/JsonValue`.
+        public typealias JsonValue = OpenAPIRuntime.OpenAPIValueContainer
         /// - Remark: Generated from `#/components/schemas/LedgerAttributionInput`.
         public struct LedgerAttributionInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/LedgerAttributionInput/partyId`.
@@ -21436,6 +21451,1017 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/PerceptualHash`.
         public typealias PerceptualHash = Swift.String
+        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput`.
+        public struct PhotoImportCommitInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/idempotencyKey`.
+            public var idempotencyKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload`.
+            public struct ImagesPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/clientId`.
+                public var clientId: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/imageId`.
+                public var imageId: Components.Schemas.ImageShortcode
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/routeId`.
+                public var routeId: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source`.
+                public struct SourcePayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source/entity`.
+                    @frozen public enum EntityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case product = "product"
+                        case recipe = "recipe"
+                        case ingredient = "ingredient"
+                        case cookbook = "cookbook"
+                        case location = "location"
+                        case inventory = "inventory"
+                        case meal = "meal"
+                        case ledgerParty = "ledgerParty"
+                        case ledgerTransfer = "ledgerTransfer"
+                        case project = "project"
+                        case task = "task"
+                        case vendor = "vendor"
+                        case purchase = "purchase"
+                        case financialAccount = "financialAccount"
+                        case financialTransaction = "financialTransaction"
+                        case wish = "wish"
+                        case expense = "expense"
+                        case image = "image"
+                        case planting = "planting"
+                        case gardenEntry = "gardenEntry"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source/entity`.
+                    public var entity: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload.EntityPayload
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source/id`.
+                    public var id: Swift.String
+                    /// Creates a new `SourcePayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - entity:
+                    ///   - id:
+                    public init(
+                        entity: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload.EntityPayload,
+                        id: Swift.String
+                    ) {
+                        self.entity = entity
+                        self.id = id
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case entity
+                        case id
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source`.
+                public var source: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination`.
+                public struct DestinationPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value1`.
+                    public struct Value1Payload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value1/kind`.
+                        @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                            case existing = "existing"
+                        }
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value1/kind`.
+                        public var kind: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value1Payload.KindPayload
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value1/candidateId`.
+                        public var candidateId: Swift.String
+                        /// Creates a new `Value1Payload`.
+                        ///
+                        /// - Parameters:
+                        ///   - kind:
+                        ///   - candidateId:
+                        public init(
+                            kind: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value1Payload.KindPayload,
+                            candidateId: Swift.String
+                        ) {
+                            self.kind = kind
+                            self.candidateId = candidateId
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case kind
+                            case candidateId
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value1`.
+                    public var value1: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value1Payload?
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value2`.
+                    public struct Value2Payload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value2/kind`.
+                        @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                            case create = "create"
+                        }
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value2/kind`.
+                        public var kind: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value2Payload.KindPayload
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value2/draftId`.
+                        public var draftId: Swift.String
+                        /// Creates a new `Value2Payload`.
+                        ///
+                        /// - Parameters:
+                        ///   - kind:
+                        ///   - draftId:
+                        public init(
+                            kind: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value2Payload.KindPayload,
+                            draftId: Swift.String
+                        ) {
+                            self.kind = kind
+                            self.draftId = draftId
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case kind
+                            case draftId
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value2`.
+                    public var value2: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value2Payload?
+                    /// Creates a new `DestinationPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1:
+                    ///   - value2:
+                    public init(
+                        value1: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value1Payload? = nil,
+                        value2: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try .init(from: decoder)
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try .init(from: decoder)
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try self.value1?.encode(to: encoder)
+                        try self.value2?.encode(to: encoder)
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination`.
+                public var destination: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/duplicateDecision`.
+                @frozen public enum DuplicateDecisionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case reuse = "reuse"
+                    case keepBoth = "keepBoth"
+                    case replace = "replace"
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/duplicateDecision`.
+                public var duplicateDecision: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DuplicateDecisionPayload
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/replaceConfirmed`.
+                public var replaceConfirmed: Swift.Bool?
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis`.
+                public struct AnalysisPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/analysisVersion`.
+                    public var analysisVersion: Swift.Int
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/analyzedAt`.
+                    public var analyzedAt: Foundation.Date
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/sha256`.
+                    public var sha256: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/capturedAt`.
+                    public var capturedAt: Foundation.Date?
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/contentType`.
+                    public var contentType: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/width`.
+                    public var width: Swift.Int
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/height`.
+                    public var height: Swift.Int
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/ClassificationsPayload`.
+                    public struct ClassificationsPayloadPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/ClassificationsPayload/identifier`.
+                        public var identifier: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/ClassificationsPayload/confidence`.
+                        public var confidence: Swift.Double
+                        /// Creates a new `ClassificationsPayloadPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - identifier:
+                        ///   - confidence:
+                        public init(
+                            identifier: Swift.String,
+                            confidence: Swift.Double
+                        ) {
+                            self.identifier = identifier
+                            self.confidence = confidence
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case identifier
+                            case confidence
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/classifications`.
+                    public typealias ClassificationsPayload = [Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ClassificationsPayloadPayload]
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/classifications`.
+                    public var classifications: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ClassificationsPayload
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/RecognizedTextPayload`.
+                    public struct RecognizedTextPayloadPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/RecognizedTextPayload/text`.
+                        public var text: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/RecognizedTextPayload/confidence`.
+                        public var confidence: Swift.Double
+                        /// Creates a new `RecognizedTextPayloadPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - text:
+                        ///   - confidence:
+                        public init(
+                            text: Swift.String,
+                            confidence: Swift.Double
+                        ) {
+                            self.text = text
+                            self.confidence = confidence
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case text
+                            case confidence
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/recognizedText`.
+                    public typealias RecognizedTextPayload = [Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.RecognizedTextPayloadPayload]
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/recognizedText`.
+                    public var recognizedText: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.RecognizedTextPayload
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/featurePrint`.
+                    public struct FeaturePrintPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/featurePrint/revision`.
+                        public var revision: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/featurePrint/data`.
+                        public var data: Swift.String
+                        /// Creates a new `FeaturePrintPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - revision:
+                        ///   - data:
+                        public init(
+                            revision: Swift.String,
+                            data: Swift.String
+                        ) {
+                            self.revision = revision
+                            self.data = data
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case revision
+                            case data
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/featurePrint`.
+                    public var featurePrint: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.FeaturePrintPayload
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/provenance`.
+                    public struct ProvenancePayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/provenance/source`.
+                        @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                            case camera = "camera"
+                            case files = "files"
+                            case photoLibrary = "photoLibrary"
+                            case serverLazy = "serverLazy"
+                        }
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/provenance/source`.
+                        public var source: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ProvenancePayload.SourcePayload
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/provenance/localIdentifier`.
+                        public var localIdentifier: Swift.String?
+                        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/provenance/filename`.
+                        public var filename: Swift.String
+                        /// Creates a new `ProvenancePayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - source:
+                        ///   - localIdentifier:
+                        ///   - filename:
+                        public init(
+                            source: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ProvenancePayload.SourcePayload,
+                            localIdentifier: Swift.String? = nil,
+                            filename: Swift.String
+                        ) {
+                            self.source = source
+                            self.localIdentifier = localIdentifier
+                            self.filename = filename
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case source
+                            case localIdentifier
+                            case filename
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis/provenance`.
+                    public var provenance: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ProvenancePayload
+                    /// Creates a new `AnalysisPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - analysisVersion:
+                    ///   - analyzedAt:
+                    ///   - sha256:
+                    ///   - capturedAt:
+                    ///   - contentType:
+                    ///   - width:
+                    ///   - height:
+                    ///   - classifications:
+                    ///   - recognizedText:
+                    ///   - featurePrint:
+                    ///   - provenance:
+                    public init(
+                        analysisVersion: Swift.Int,
+                        analyzedAt: Foundation.Date,
+                        sha256: Swift.String,
+                        capturedAt: Foundation.Date? = nil,
+                        contentType: Swift.String,
+                        width: Swift.Int,
+                        height: Swift.Int,
+                        classifications: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ClassificationsPayload,
+                        recognizedText: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.RecognizedTextPayload,
+                        featurePrint: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.FeaturePrintPayload,
+                        provenance: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ProvenancePayload
+                    ) {
+                        self.analysisVersion = analysisVersion
+                        self.analyzedAt = analyzedAt
+                        self.sha256 = sha256
+                        self.capturedAt = capturedAt
+                        self.contentType = contentType
+                        self.width = width
+                        self.height = height
+                        self.classifications = classifications
+                        self.recognizedText = recognizedText
+                        self.featurePrint = featurePrint
+                        self.provenance = provenance
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case analysisVersion
+                        case analyzedAt
+                        case sha256
+                        case capturedAt
+                        case contentType
+                        case width
+                        case height
+                        case classifications
+                        case recognizedText
+                        case featurePrint
+                        case provenance
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/analysis`.
+                public var analysis: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload
+                /// Creates a new `ImagesPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - clientId:
+                ///   - imageId:
+                ///   - routeId:
+                ///   - source:
+                ///   - destination:
+                ///   - duplicateDecision:
+                ///   - replaceConfirmed:
+                ///   - analysis:
+                public init(
+                    clientId: Swift.String,
+                    imageId: Components.Schemas.ImageShortcode,
+                    routeId: Swift.String,
+                    source: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload,
+                    destination: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload,
+                    duplicateDecision: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DuplicateDecisionPayload,
+                    replaceConfirmed: Swift.Bool? = nil,
+                    analysis: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload
+                ) {
+                    self.clientId = clientId
+                    self.imageId = imageId
+                    self.routeId = routeId
+                    self.source = source
+                    self.destination = destination
+                    self.duplicateDecision = duplicateDecision
+                    self.replaceConfirmed = replaceConfirmed
+                    self.analysis = analysis
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case clientId
+                    case imageId
+                    case routeId
+                    case source
+                    case destination
+                    case duplicateDecision
+                    case replaceConfirmed
+                    case analysis
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/images`.
+            public typealias ImagesPayload = [Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/images`.
+            public var images: Components.Schemas.PhotoImportCommitInput.ImagesPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/CreatesPayload`.
+            public struct CreatesPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/CreatesPayload/draftId`.
+                public var draftId: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/CreatesPayload/routeId`.
+                public var routeId: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/CreatesPayload/capturedAt`.
+                public var capturedAt: Foundation.Date?
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/CreatesPayload/body`.
+                public struct BodyPayload: Codable, Hashable, Sendable {
+                    /// A container of undocumented properties.
+                    public var additionalProperties: [String: Components.Schemas.JsonValue]
+                    /// Creates a new `BodyPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - additionalProperties: A container of undocumented properties.
+                    public init(additionalProperties: [String: Components.Schemas.JsonValue] = .init()) {
+                        self.additionalProperties = additionalProperties
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                    }
+                    public func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeAdditionalProperties(additionalProperties)
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/CreatesPayload/body`.
+                public var body: Components.Schemas.PhotoImportCommitInput.CreatesPayloadPayload.BodyPayload
+                /// Creates a new `CreatesPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - draftId:
+                ///   - routeId:
+                ///   - capturedAt:
+                ///   - body:
+                public init(
+                    draftId: Swift.String,
+                    routeId: Swift.String,
+                    capturedAt: Foundation.Date? = nil,
+                    body: Components.Schemas.PhotoImportCommitInput.CreatesPayloadPayload.BodyPayload
+                ) {
+                    self.draftId = draftId
+                    self.routeId = routeId
+                    self.capturedAt = capturedAt
+                    self.body = body
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case draftId
+                    case routeId
+                    case capturedAt
+                    case body
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/creates`.
+            public typealias CreatesPayload = [Components.Schemas.PhotoImportCommitInput.CreatesPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/creates`.
+            public var creates: Components.Schemas.PhotoImportCommitInput.CreatesPayload
+            /// Creates a new `PhotoImportCommitInput`.
+            ///
+            /// - Parameters:
+            ///   - idempotencyKey:
+            ///   - images:
+            ///   - creates:
+            public init(
+                idempotencyKey: Swift.String,
+                images: Components.Schemas.PhotoImportCommitInput.ImagesPayload,
+                creates: Components.Schemas.PhotoImportCommitInput.CreatesPayload
+            ) {
+                self.idempotencyKey = idempotencyKey
+                self.images = images
+                self.creates = creates
+            }
+            public enum CodingKeys: String, CodingKey {
+                case idempotencyKey
+                case images
+                case creates
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput`.
+        public struct PhotoImportCommitOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/receiptId`.
+            public var receiptId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/idempotencyKey`.
+            public var idempotencyKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/committedPhotoIds`.
+            public var committedPhotoIds: [Components.Schemas.ImageShortcode]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/committedClientIds`.
+            public var committedClientIds: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/CreatedDestinationsPayload`.
+            public struct CreatedDestinationsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/CreatedDestinationsPayload/draftId`.
+                public var draftId: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/CreatedDestinationsPayload/routeId`.
+                public var routeId: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/CreatedDestinationsPayload/id`.
+                public var id: Swift.String
+                /// Creates a new `CreatedDestinationsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - draftId:
+                ///   - routeId:
+                ///   - id:
+                public init(
+                    draftId: Swift.String,
+                    routeId: Swift.String,
+                    id: Swift.String
+                ) {
+                    self.draftId = draftId
+                    self.routeId = routeId
+                    self.id = id
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case draftId
+                    case routeId
+                    case id
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.draftId = try container.decode(
+                        Swift.String.self,
+                        forKey: .draftId
+                    )
+                    self.routeId = try container.decode(
+                        Swift.String.self,
+                        forKey: .routeId
+                    )
+                    self.id = try container.decode(
+                        Swift.String.self,
+                        forKey: .id
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "draftId",
+                        "routeId",
+                        "id"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/createdDestinations`.
+            public typealias CreatedDestinationsPayload = [Components.Schemas.PhotoImportCommitOutput.CreatedDestinationsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/createdDestinations`.
+            public var createdDestinations: Components.Schemas.PhotoImportCommitOutput.CreatedDestinationsPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/committedAt`.
+            public var committedAt: Foundation.Date
+            /// Creates a new `PhotoImportCommitOutput`.
+            ///
+            /// - Parameters:
+            ///   - receiptId:
+            ///   - idempotencyKey:
+            ///   - committedPhotoIds:
+            ///   - committedClientIds:
+            ///   - createdDestinations:
+            ///   - committedAt:
+            public init(
+                receiptId: Swift.String,
+                idempotencyKey: Swift.String,
+                committedPhotoIds: [Components.Schemas.ImageShortcode],
+                committedClientIds: [Swift.String],
+                createdDestinations: Components.Schemas.PhotoImportCommitOutput.CreatedDestinationsPayload,
+                committedAt: Foundation.Date
+            ) {
+                self.receiptId = receiptId
+                self.idempotencyKey = idempotencyKey
+                self.committedPhotoIds = committedPhotoIds
+                self.committedClientIds = committedClientIds
+                self.createdDestinations = createdDestinations
+                self.committedAt = committedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case receiptId
+                case idempotencyKey
+                case committedPhotoIds
+                case committedClientIds
+                case createdDestinations
+                case committedAt
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.receiptId = try container.decode(
+                    Swift.String.self,
+                    forKey: .receiptId
+                )
+                self.idempotencyKey = try container.decode(
+                    Swift.String.self,
+                    forKey: .idempotencyKey
+                )
+                self.committedPhotoIds = try container.decode(
+                    [Components.Schemas.ImageShortcode].self,
+                    forKey: .committedPhotoIds
+                )
+                self.committedClientIds = try container.decode(
+                    [Swift.String].self,
+                    forKey: .committedClientIds
+                )
+                self.createdDestinations = try container.decode(
+                    Components.Schemas.PhotoImportCommitOutput.CreatedDestinationsPayload.self,
+                    forKey: .createdDestinations
+                )
+                self.committedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .committedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "receiptId",
+                    "idempotencyKey",
+                    "committedPhotoIds",
+                    "committedClientIds",
+                    "createdDestinations",
+                    "committedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput`.
+        public struct PhotoImportStageInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload`.
+            public struct ItemsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/clientId`.
+                public var clientId: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/filename`.
+                public var filename: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/contentType`.
+                @frozen public enum ContentTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case imageJpeg = "image/jpeg"
+                    case imagePng = "image/png"
+                    case imageGif = "image/gif"
+                    case imageWebp = "image/webp"
+                    case imageHeic = "image/heic"
+                    case imageHeif = "image/heif"
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/contentType`.
+                public var contentType: Components.Schemas.PhotoImportStageInput.ItemsPayloadPayload.ContentTypePayload
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/size`.
+                public var size: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/width`.
+                public var width: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/height`.
+                public var height: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/sha256`.
+                public var sha256: Swift.String
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/perceptualHash`.
+                public var perceptualHash: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/sourceFingerprint`.
+                public struct SourceFingerprintPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/sourceFingerprint/hash`.
+                    public var hash: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/sourceFingerprint/aspectRatio`.
+                    public var aspectRatio: Swift.Double
+                    /// Creates a new `SourceFingerprintPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - hash:
+                    ///   - aspectRatio:
+                    public init(
+                        hash: Swift.String,
+                        aspectRatio: Swift.Double
+                    ) {
+                        self.hash = hash
+                        self.aspectRatio = aspectRatio
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case hash
+                        case aspectRatio
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/sourceFingerprint`.
+                public var sourceFingerprint: Components.Schemas.PhotoImportStageInput.ItemsPayloadPayload.SourceFingerprintPayload?
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/ItemsPayload/allowExactReuse`.
+                public var allowExactReuse: Swift.Bool?
+                /// Creates a new `ItemsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - clientId:
+                ///   - filename:
+                ///   - contentType:
+                ///   - size:
+                ///   - width:
+                ///   - height:
+                ///   - sha256:
+                ///   - perceptualHash:
+                ///   - sourceFingerprint:
+                ///   - allowExactReuse:
+                public init(
+                    clientId: Swift.String,
+                    filename: Swift.String,
+                    contentType: Components.Schemas.PhotoImportStageInput.ItemsPayloadPayload.ContentTypePayload,
+                    size: Swift.Int,
+                    width: Swift.Int,
+                    height: Swift.Int,
+                    sha256: Swift.String,
+                    perceptualHash: Swift.String? = nil,
+                    sourceFingerprint: Components.Schemas.PhotoImportStageInput.ItemsPayloadPayload.SourceFingerprintPayload? = nil,
+                    allowExactReuse: Swift.Bool? = nil
+                ) {
+                    self.clientId = clientId
+                    self.filename = filename
+                    self.contentType = contentType
+                    self.size = size
+                    self.width = width
+                    self.height = height
+                    self.sha256 = sha256
+                    self.perceptualHash = perceptualHash
+                    self.sourceFingerprint = sourceFingerprint
+                    self.allowExactReuse = allowExactReuse
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case clientId
+                    case filename
+                    case contentType
+                    case size
+                    case width
+                    case height
+                    case sha256
+                    case perceptualHash
+                    case sourceFingerprint
+                    case allowExactReuse
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/items`.
+            public typealias ItemsPayload = [Components.Schemas.PhotoImportStageInput.ItemsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStageInput/items`.
+            public var items: Components.Schemas.PhotoImportStageInput.ItemsPayload
+            /// Creates a new `PhotoImportStageInput`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            public init(items: Components.Schemas.PhotoImportStageInput.ItemsPayload) {
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput`.
+        public struct PhotoImportStageOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload`.
+            public struct ItemsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value1`.
+                public struct Value1Payload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value1/kind`.
+                    @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case existing = "existing"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value1/kind`.
+                    public var kind: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload.KindPayload
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value1/clientId`.
+                    public var clientId: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value1/imageId`.
+                    public var imageId: Components.Schemas.ImageShortcode
+                    /// Creates a new `Value1Payload`.
+                    ///
+                    /// - Parameters:
+                    ///   - kind:
+                    ///   - clientId:
+                    ///   - imageId:
+                    public init(
+                        kind: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload.KindPayload,
+                        clientId: Swift.String,
+                        imageId: Components.Schemas.ImageShortcode
+                    ) {
+                        self.kind = kind
+                        self.clientId = clientId
+                        self.imageId = imageId
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case kind
+                        case clientId
+                        case imageId
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.kind = try container.decode(
+                            Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload.KindPayload.self,
+                            forKey: .kind
+                        )
+                        self.clientId = try container.decode(
+                            Swift.String.self,
+                            forKey: .clientId
+                        )
+                        self.imageId = try container.decode(
+                            Components.Schemas.ImageShortcode.self,
+                            forKey: .imageId
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "kind",
+                            "clientId",
+                            "imageId"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value1`.
+                public var value1: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload?
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2`.
+                public struct Value2Payload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2/kind`.
+                    @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case upload = "upload"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2/kind`.
+                    public var kind: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload.KindPayload
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2/clientId`.
+                    public var clientId: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2/imageId`.
+                    public var imageId: Components.Schemas.ImageShortcode
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2/uploadUrl`.
+                    public var uploadUrl: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2/key`.
+                    public var key: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2/url`.
+                    public var url: Swift.String
+                    /// Creates a new `Value2Payload`.
+                    ///
+                    /// - Parameters:
+                    ///   - kind:
+                    ///   - clientId:
+                    ///   - imageId:
+                    ///   - uploadUrl:
+                    ///   - key:
+                    ///   - url:
+                    public init(
+                        kind: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload.KindPayload,
+                        clientId: Swift.String,
+                        imageId: Components.Schemas.ImageShortcode,
+                        uploadUrl: Swift.String,
+                        key: Swift.String,
+                        url: Swift.String
+                    ) {
+                        self.kind = kind
+                        self.clientId = clientId
+                        self.imageId = imageId
+                        self.uploadUrl = uploadUrl
+                        self.key = key
+                        self.url = url
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case kind
+                        case clientId
+                        case imageId
+                        case uploadUrl
+                        case key
+                        case url
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.kind = try container.decode(
+                            Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload.KindPayload.self,
+                            forKey: .kind
+                        )
+                        self.clientId = try container.decode(
+                            Swift.String.self,
+                            forKey: .clientId
+                        )
+                        self.imageId = try container.decode(
+                            Components.Schemas.ImageShortcode.self,
+                            forKey: .imageId
+                        )
+                        self.uploadUrl = try container.decode(
+                            Swift.String.self,
+                            forKey: .uploadUrl
+                        )
+                        self.key = try container.decode(
+                            Swift.String.self,
+                            forKey: .key
+                        )
+                        self.url = try container.decode(
+                            Swift.String.self,
+                            forKey: .url
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "kind",
+                            "clientId",
+                            "imageId",
+                            "uploadUrl",
+                            "key",
+                            "url"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value2`.
+                public var value2: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload?
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value3`.
+                public struct Value3Payload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value3/kind`.
+                    @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case failed = "failed"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value3/kind`.
+                    public var kind: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value3Payload.KindPayload
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value3/clientId`.
+                    public var clientId: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value3/retryable`.
+                    public var retryable: Swift.Bool
+                    /// Creates a new `Value3Payload`.
+                    ///
+                    /// - Parameters:
+                    ///   - kind:
+                    ///   - clientId:
+                    ///   - retryable:
+                    public init(
+                        kind: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value3Payload.KindPayload,
+                        clientId: Swift.String,
+                        retryable: Swift.Bool
+                    ) {
+                        self.kind = kind
+                        self.clientId = clientId
+                        self.retryable = retryable
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case kind
+                        case clientId
+                        case retryable
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.kind = try container.decode(
+                            Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value3Payload.KindPayload.self,
+                            forKey: .kind
+                        )
+                        self.clientId = try container.decode(
+                            Swift.String.self,
+                            forKey: .clientId
+                        )
+                        self.retryable = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .retryable
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "kind",
+                            "clientId",
+                            "retryable"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/ItemsPayload/value3`.
+                public var value3: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value3Payload?
+                /// Creates a new `ItemsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                ///   - value3:
+                public init(
+                    value1: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload? = nil,
+                    value2: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload? = nil,
+                    value3: Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value3Payload? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                    self.value3 = value3
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value3 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2,
+                            self.value3
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1?.encode(to: encoder)
+                    try self.value2?.encode(to: encoder)
+                    try self.value3?.encode(to: encoder)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/items`.
+            public typealias ItemsPayload = [Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportStageOutput/items`.
+            public var items: Components.Schemas.PhotoImportStageOutput.ItemsPayload
+            /// Creates a new `PhotoImportStageOutput`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            public init(items: Components.Schemas.PhotoImportStageOutput.ItemsPayload) {
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    Components.Schemas.PhotoImportStageOutput.ItemsPayload.self,
+                    forKey: .items
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items"
+                ])
+            }
+        }
         /// Calendar day as "YYYY-MM-DD"
         ///
         /// - Remark: Generated from `#/components/schemas/PlainDate`.

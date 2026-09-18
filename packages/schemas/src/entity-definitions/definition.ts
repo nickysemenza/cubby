@@ -630,6 +630,122 @@ const metadataSchemas = () => {
     .object({ fields: z.array(nonEmptyString()).min(1) })
     .strict();
 
+  /**
+   * Image policy deliberately lives beside the entity declaration.  Storage,
+   * display fallbacks and import routes are separate facts: a displayed image
+   * must never become an implicit attachment or identity assertion.
+   */
+  const imageStorageMetadataSchema = z.union(
+    [z.literal(false), z.enum(["gallery", "cover", "logo"])],
+    { error: 'must be false, "gallery", "cover" or "logo"' },
+  );
+  const imageRelationPathSchema = z.array(nonEmptyString()).min(1);
+  const imageDisplaySourceMetadataSchema = z
+    .object({
+      relationPath: imageRelationPathSchema,
+      priority: z.number().int().nonnegative(),
+      ordering: z.enum(["declared", "newest", "oldest"]),
+      /** Display fallbacks are borrowed; they are never identity evidence. */
+      identityEvidence: z.boolean({ error: "must be a boolean" }),
+    })
+    .strict();
+  const imageIngressBindingMetadataSchema = z.discriminatedUnion("from", [
+    z
+      .object({ field: nonEmptyString(), from: z.literal("source-id") })
+      .strict(),
+    z
+      .object({
+        field: nonEmptyString(),
+        from: z.literal("source-field"),
+        sourceField: nonEmptyString(),
+      })
+      .strict(),
+    z
+      .object({ field: nonEmptyString(), from: z.literal("capture-date") })
+      .strict(),
+    z
+      .object({
+        field: nonEmptyString(),
+        from: z.literal("constant"),
+        value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+      })
+      .strict(),
+    z
+      .object({
+        field: nonEmptyString(),
+        from: z.literal("relation-items"),
+        item: z
+          .object({
+            field: nonEmptyString(),
+            from: z.enum(["source-id", "source-field", "constant"]),
+            sourceField: nonEmptyString().optional(),
+            value: z
+              .union([z.string(), z.number(), z.boolean(), z.null()])
+              .optional(),
+          })
+          .strict(),
+      })
+      .strict(),
+  ]);
+  const imageIngressMetadataSchema = z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("self"), routeId: nonEmptyString() }).strict(),
+    z
+      .object({
+        kind: z.literal("existingRelated"),
+        routeId: nonEmptyString(),
+        relationPath: imageRelationPathSchema,
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("createRelated"),
+        routeId: nonEmptyString(),
+        relationPath: imageRelationPathSchema,
+        bindings: z.array(imageIngressBindingMetadataSchema).min(1),
+      })
+      .strict(),
+  ]);
+  const imageRoutingMetadataSchema = z
+    .object({
+      candidateFields: z.array(nonEmptyString()).default([]),
+      temporalFields: z.array(nonEmptyString()).default([]),
+      lifecycleFilters: z
+        .array(
+          z
+            .object({
+              field: nonEmptyString(),
+              equals: z.union([z.string(), z.boolean()]),
+            })
+            .strict(),
+        )
+        .default([]),
+      signals: z
+        .object({
+          ocrFields: z.array(nonEmptyString()).default([]),
+          classifierLabels: z.array(nonEmptyString()).default([]),
+        })
+        .strict()
+        .default({ ocrFields: [], classifierLabels: [] }),
+      abstention: z
+        .object({
+          minimumScore: z.number().min(0).max(1),
+          minimumMargin: z.number().min(0).max(1),
+        })
+        .strict(),
+    })
+    .strict();
+  const imagePolicyMetadataSchema = z
+    .object({
+      storage: imageStorageMetadataSchema,
+      displaySources: z
+        .array(imageDisplaySourceMetadataSchema)
+        .optional()
+        .default([]),
+      ingress: z.array(imageIngressMetadataSchema).optional().default([]),
+      routing: imageRoutingMetadataSchema.nullable().optional().default(null),
+    })
+    .strict();
+
   const entityCapabilitiesMetadataSchema = z
     .object({
       auditable: z.boolean({ error: "must be a boolean" }),
@@ -637,10 +753,7 @@ const metadataSchemas = () => {
        * Direct image storage only. Display imagery is universal and resolved
        * independently from this storage declaration.
        */
-      images: z.union(
-        [z.literal(false), z.enum(["gallery", "cover", "logo"])],
-        { error: 'must be false, "gallery", "cover" or "logo"' },
-      ),
+      images: imagePolicyMetadataSchema,
       countable: z.boolean({ error: "must be a boolean" }),
       softDelete: z.boolean({ error: "must be a boolean" }),
       delete: entityDeleteMetadataSchema.nullable(),

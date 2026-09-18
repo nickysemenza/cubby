@@ -85,6 +85,7 @@ export const locationDescriptionSchema = z.object({
 export type LocationDescription = z.infer<typeof locationDescriptionSchema>;
 
 export const aiAnalysisEntityType = z.enum([
+  "image",
   "location",
   "product",
   "recipe",

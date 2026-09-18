@@ -188,7 +188,7 @@ const checkList = (
       );
     viewIds.add(id);
   }
-  if (viewIds.has("shelf") && capabilities.images === false)
+  if (viewIds.has("shelf") && capabilities.images.storage === false)
     throw new EntityDeclarationError(
       `${context}.list.views declares shelf, which needs stored images.`,
     );
@@ -303,7 +303,7 @@ export const compilePresentation = (
       ...detail,
       hero: {
         ...detail.hero,
-        images: detail.hero.images ?? capabilities.images === "gallery",
+        images: detail.hero.images ?? capabilities.images.storage === "gallery",
         actions: detail.hero.actions ?? (facts.hasUpdate ? ["edit"] : []),
       },
     },

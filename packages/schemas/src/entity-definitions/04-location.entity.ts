@@ -769,7 +769,39 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: "gallery",
+    images: {
+      storage: "gallery",
+      displaySources: [
+        {
+          relationPath: ["product"],
+          priority: 1,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [
+        { kind: "self", routeId: "location-self" },
+        {
+          kind: "createRelated",
+          routeId: "location-new-garden-entry",
+          relationPath: ["garden-entries"],
+          bindings: [
+            { field: "locationId", from: "source-id" },
+            { field: "observedOn", from: "capture-date" },
+          ],
+        },
+      ],
+      routing: {
+        candidateFields: ["name", "description"],
+        temporalFields: [],
+        lifecycleFilters: [],
+        signals: {
+          ocrFields: ["name", "description"],
+          classifierLabels: ["location"],
+        },
+        abstention: { minimumScore: 0.7, minimumMargin: 0.12 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

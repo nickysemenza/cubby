@@ -930,7 +930,34 @@ export default defineEntity({
   search: { enabled: true, embedding: false },
   capabilities: {
     auditable: true,
-    images: "gallery",
+    images: {
+      storage: "gallery",
+      displaySources: [
+        {
+          relationPath: ["products"],
+          priority: 1,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["vendor"],
+          priority: 2,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [{ kind: "self", routeId: "purchase-self" }],
+      routing: {
+        candidateFields: ["displayLabel", "orderId", "notes"],
+        temporalFields: ["date"],
+        lifecycleFilters: [],
+        signals: {
+          ocrFields: ["displayLabel", "orderId", "notes"],
+          classifierLabels: ["receipt", "purchase"],
+        },
+        abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

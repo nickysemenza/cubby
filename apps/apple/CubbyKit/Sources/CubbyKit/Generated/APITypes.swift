@@ -244,6 +244,7 @@ public typealias InventoryUpdatePayloadData = Components.Schemas.InventoryUpdate
 public typealias InventoryWithLocationAndProductListAndSideEffectsOut = Components.Schemas.InventoryWithLocationAndProductListAndSideEffectsOut
 public typealias InventoryWithLocationAndProductListOut = Components.Schemas.InventoryWithLocationAndProductListOut
 public typealias InventoryWithLocationAndProductOut = Components.Schemas.InventoryWithLocationAndProductOut
+public typealias JsonValue = Components.Schemas.JsonValue
 public typealias LedgerAttributionInput = Components.Schemas.LedgerAttributionInput
 public typealias LedgerAttributionInputRequest = Components.Schemas.LedgerAttributionInputRequest
 public typealias LedgerAttributions = Components.Schemas.LedgerAttributions
@@ -346,6 +347,10 @@ public typealias NutritionInfo = Components.Schemas.NutritionInfo
 public typealias NutritionMeal = Components.Schemas.NutritionMeal
 public typealias OperationEffect = Components.Schemas.OperationEffect
 public typealias PerceptualHash = Components.Schemas.PerceptualHash
+public typealias PhotoImportCommitInput = Components.Schemas.PhotoImportCommitInput
+public typealias PhotoImportCommitOutput = Components.Schemas.PhotoImportCommitOutput
+public typealias PhotoImportStageInput = Components.Schemas.PhotoImportStageInput
+public typealias PhotoImportStageOutput = Components.Schemas.PhotoImportStageOutput
 public typealias PlainDate = Components.Schemas.PlainDate
 public typealias PlantingCreateInput = Components.Schemas.PlantingCreateInput
 public typealias PlantingDetail = Components.Schemas.PlantingDetail
@@ -492,6 +497,26 @@ public typealias WishListPage = Components.Schemas.WishListPage
 public typealias WishOut = Components.Schemas.WishOut
 public typealias WishShortcode = Components.Schemas.WishShortcode
 public typealias WishUpdateData = Components.Schemas.WishUpdateData
+
+// MARK: - Photo import payloads
+
+public typealias PhotoImportStageItem = Components.Schemas.PhotoImportStageInput.ItemsPayloadPayload
+public typealias PhotoImportStageResult = Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload
+public typealias PhotoImportStageExisting = Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload
+public typealias PhotoImportStageUpload = Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload
+public typealias PhotoImportCommitImage = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload
+public typealias PhotoImportSourcePayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload
+public typealias PhotoImportDuplicateDecisionPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DuplicateDecisionPayload
+public typealias PhotoImportCommitDestination = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload
+public typealias PhotoImportExistingDestination = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value1Payload
+public typealias PhotoImportCreateDestination = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value2Payload
+public typealias PhotoImportAnalysisPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload
+public typealias PhotoImportClassificationPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ClassificationsPayloadPayload
+public typealias PhotoImportRecognizedTextPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.RecognizedTextPayloadPayload
+public typealias PhotoImportFeaturePrintPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.FeaturePrintPayload
+public typealias PhotoImportProvenancePayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ProvenancePayload
+public typealias PhotoImportCreatePayload = Components.Schemas.PhotoImportCommitInput.CreatesPayloadPayload
+public typealias PhotoImportCreateBody = Components.Schemas.PhotoImportCommitInput.CreatesPayloadPayload.BodyPayload
 
 // MARK: - Identifiable
 

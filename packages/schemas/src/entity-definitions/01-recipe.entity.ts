@@ -791,7 +791,45 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: "gallery",
+    images: {
+      storage: "gallery",
+      displaySources: [
+        {
+          relationPath: ["meals"],
+          priority: 1,
+          ordering: "newest",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [
+        { kind: "self", routeId: "recipe-self" },
+        {
+          kind: "existingRelated",
+          routeId: "recipe-meal",
+          relationPath: ["meals"],
+        },
+        {
+          kind: "createRelated",
+          routeId: "recipe-new-meal",
+          relationPath: ["meals"],
+          bindings: [
+            { field: "date", from: "capture-date" },
+            {
+              field: "recipes",
+              from: "relation-items",
+              item: { field: "recipeId", from: "source-id" },
+            },
+          ],
+        },
+      ],
+      routing: {
+        candidateFields: ["name"],
+        temporalFields: [],
+        lifecycleFilters: [],
+        signals: { ocrFields: ["name"], classifierLabels: ["recipe"] },
+        abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

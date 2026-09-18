@@ -215,6 +215,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/meals/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/meals/{id}/patch(resources.meal.update)`.
     func resources_meal_update(_ input: Operations.Resources_meal_update.Input) async throws -> Operations.Resources_meal_update.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/commit`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/commit/post(photoImport.commit)`.
+    func photoImport_commit(_ input: Operations.PhotoImport_commit.Input) async throws -> Operations.PhotoImport_commit.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/stage`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/stage/post(photoImport.stage)`.
+    func photoImport_stage(_ input: Operations.PhotoImport_stage.Input) async throws -> Operations.PhotoImport_stage.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/plantings`.
@@ -1052,6 +1058,28 @@ extension APIProtocol {
     ) async throws -> Operations.Resources_meal_update.Output {
         try await resources_meal_update(Operations.Resources_meal_update.Input(
             path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/commit`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/commit/post(photoImport.commit)`.
+    public func photoImport_commit(
+        headers: Operations.PhotoImport_commit.Input.Headers = .init(),
+        body: Operations.PhotoImport_commit.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_commit.Output {
+        try await photoImport_commit(Operations.PhotoImport_commit.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/stage`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/stage/post(photoImport.stage)`.
+    public func photoImport_stage(
+        headers: Operations.PhotoImport_stage.Input.Headers = .init(),
+        body: Operations.PhotoImport_stage.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_stage.Output {
+        try await photoImport_stage(Operations.PhotoImport_stage.Input(
             headers: headers,
             body: body
         ))

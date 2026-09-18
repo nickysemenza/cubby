@@ -215,6 +215,8 @@ export type CompiledEntity = Readonly<{
   /** Fields a `bulkUpdate` command may patch; null means the capability is undeclared. */
   bulkUpdateFields: readonly string[] | null;
   ports: EntityPorts;
+  /** The manifest-owned image storage, display, ingress and routing policy. */
+  imagePolicy: EntityDeclarationMetadata["capabilities"]["images"];
   relations: EntityDeclarationMetadata["relations"];
   relationMutations: readonly RelationMutation[];
   lifecycle: Readonly<{

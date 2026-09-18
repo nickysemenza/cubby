@@ -3,13 +3,19 @@ import Photos
 import SwiftUI
 
 struct PhotosRootView: View {
+    @Environment(AppModel.self) private var appModel
     @State private var destination: PhotoSelectionBatch?
     var body: some View {
         PhotoLibraryBrowser(maxSelectionCount: nil, picker: false) { items in
             destination = PhotoSelectionBatch(items: items)
         }
         .sheet(item: $destination) { batch in
-            PhotoDestinationSheet(items: batch.items) { destination = nil }
+            PhotoDestinationSheet(items: batch.items) { committedIDs in
+                // The importer reports only the identifiers that the transaction committed.
+                // Leave failed or unassigned selections untouched for an immediate retry.
+                appModel.photoLibrary.selectedIDs.removeAll { committedIDs.contains($0) }
+                destination = nil
+            }
         }
     }
 }
@@ -303,6 +309,12 @@ private struct PhotoLibraryCell: View {
     private var possibleMatch: Bool {
         !represented && !appModel.photoMatches.storedCandidates(for: asset.localIdentifier).isEmpty
     }
+    private var ownerBadge: String? {
+        appModel.photoMatches.ownerBadge(for: asset.localIdentifier)
+    }
+    private var ownerAccessibilityDescription: String? {
+        appModel.photoMatches.ownerAccessibilityDescription(for: asset.localIdentifier)
+    }
     var body: some View {
         Button(action: onTap) {
             Rectangle().fill(PorcelainTokens.inset).aspectRatio(1, contentMode: .fit)
@@ -317,8 +329,18 @@ private struct PhotoLibraryCell: View {
                     if let selection {
                         Text("\(selection)").font(.caption.bold()).padding(7).background(.blue, in: Circle())
                             .foregroundStyle(.white).padding(5)
-                    } else if represented {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, .blue).padding(6)
+                    } else if let ownerBadge {
+                        Text(ownerBadge)
+                            .font(.caption2.weight(.semibold).monospaced())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .padding(.horizontal, 7)
+                            .frame(minHeight: 28)
+                            .foregroundStyle(.primary)
+                            .background(.thinMaterial, in: Capsule())
+                            .overlay { Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1) }
+                            .shadow(radius: 2, y: 1)
+                            .padding(5)
                     } else if possibleMatch || !known {
                         Image(systemName: "questionmark.circle").foregroundStyle(.white).shadow(radius: 2)
                             .padding(6)
@@ -326,7 +348,7 @@ private struct PhotoLibraryCell: View {
                 }
         }.buttonStyle(.plain)
             .accessibilityLabel(
-                "\(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"), \(represented ? "In Cubby" : possibleMatch ? "Possible Cubby match" : known ? "No known match" : "Not checked")"
+                "\(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"), \(ownerAccessibilityDescription ?? (represented ? "In Cubby" : possibleMatch ? "Possible Cubby match" : known ? "No known match" : "Not checked"))"
             )
             .accessibilityValue(selection.map { "Selected photo \($0)" } ?? "")
             .onDisappear { image = nil }

@@ -409,7 +409,7 @@ export default defineEntity({
   search: { enabled: false },
   capabilities: {
     auditable: false,
-    images: false,
+    images: { storage: false },
     countable: true,
     softDelete: true,
     delete: { mode: "hard", bulk: true },

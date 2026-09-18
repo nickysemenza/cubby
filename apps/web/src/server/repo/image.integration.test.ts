@@ -145,6 +145,7 @@ describe("image repository", () => {
       sourceFingerprint: { hash: "fedcba9876543210", aspectRatio: 1.5 },
       width: 1200,
       height: 800,
+      directOwnerShortcodes: [],
     });
     expect(index.repair.map(({ id }) => id)).not.toContain(first.shortcode);
     expect(index.items.map(({ id }) => id)).not.toContain(

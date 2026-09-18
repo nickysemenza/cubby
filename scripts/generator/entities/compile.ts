@@ -711,9 +711,10 @@ const declarationDescriptor = (
   if (declaration.route === null) descriptor.browserRoutes = false;
   descriptor.auditable = declaration.capabilities.auditable;
   descriptor.hasImages =
-    declaration.capabilities.images === "gallery" ||
-    declaration.capabilities.images === "cover";
-  descriptor.imageStorage = declaration.capabilities.images;
+    declaration.capabilities.images.storage === "gallery" ||
+    declaration.capabilities.images.storage === "cover";
+  descriptor.imageStorage = declaration.capabilities.images.storage;
+  descriptor.images = declaration.capabilities.images;
   descriptor.displayImages = true;
   descriptor.searchable = declaration.search.enabled;
   descriptor.embeddable =
@@ -1115,6 +1116,7 @@ export const compileEntity = (
     filterDescriptors: filterDescriptorsWithAudit,
     bulkUpdateFields,
     ports,
+    imagePolicy: declaration.capabilities.images,
     relations: declaration.relations,
     relationMutations,
     lifecycle: {
@@ -1150,6 +1152,285 @@ export const validateEntityIdentities = (
   }
 };
 
+const imagePolicyField = (
+  entity: CompiledEntity,
+  key: string,
+  context: string,
+): EntityField => {
+  const field = entity.fieldModel.fields.find(
+    (candidate) => candidate.key === key,
+  );
+  if (field === undefined)
+    throw new EntityDeclarationError(
+      `${context} references undeclared field ${key}.`,
+    );
+  return field;
+};
+
+const imagePolicyPathTarget = (
+  entities: readonly CompiledEntity[],
+  source: CompiledEntity,
+  path: readonly string[],
+  context: string,
+): CompiledEntity => {
+  let current = source;
+  for (const [index, key] of path.entries()) {
+    const relation = current.relations.find(
+      (candidate) => candidate.key === key,
+    );
+    if (relation === undefined)
+      throw new EntityDeclarationError(
+        `${context}.relationPath[${index}] references undeclared relation ${current.key}.${key}.`,
+      );
+    const target = entities.find((entity) => entity.key === relation.target);
+    if (target === undefined)
+      throw new EntityDeclarationError(
+        `${context}.relationPath[${index}] targets undeclared entity ${relation.target}.`,
+      );
+    current = target;
+  }
+  return current;
+};
+
+type ImageIngressRoute = CompiledEntity["imagePolicy"]["ingress"][number];
+type ImageIngressBinding = Extract<
+  ImageIngressRoute,
+  { kind: "createRelated" }
+>["bindings"][number];
+
+const constantMatchesImageField = (
+  value: Extract<ImageIngressBinding, { from: "constant" }>["value"],
+  field: EntityField,
+): boolean => {
+  if (value === null) return field.nullable;
+  if (field.kind === "number") return Number(value) === value;
+  if (field.kind === "boolean") return value === true || value === false;
+  return (
+    ["text", "enum", "date", "timestamp"].includes(field.kind) &&
+    String(value) === value
+  );
+};
+
+const validateSourceIdImageBinding = (
+  entity: CompiledEntity,
+  targetField: EntityField,
+  context: string,
+): void => {
+  if (
+    targetField.kind !== "identifier" ||
+    targetField.reference?.entity !== entity.key ||
+    targetField.reference.multiple
+  )
+    throw new EntityDeclarationError(
+      `${context} source-id requires a singular ${entity.key} reference target field.`,
+    );
+};
+
+const validateSourceFieldImageBinding = (
+  entity: CompiledEntity,
+  target: CompiledEntity,
+  binding: Extract<ImageIngressBinding, { from: "source-field" }>,
+  targetField: EntityField,
+  context: string,
+): void => {
+  const sourceField = imagePolicyField(entity, binding.sourceField, context);
+  if (
+    sourceField.kind !== targetField.kind ||
+    sourceField.reference?.entity !== targetField.reference?.entity ||
+    sourceField.reference?.multiple !== targetField.reference?.multiple
+  )
+    throw new EntityDeclarationError(
+      `${context} source-field ${binding.sourceField} is incompatible with ${target.key}.${binding.field}.`,
+    );
+};
+
+const validateRelationItemsImageBinding = (
+  entity: CompiledEntity,
+  binding: Extract<ImageIngressBinding, { from: "relation-items" }>,
+  targetField: EntityField,
+  context: string,
+): void => {
+  if (targetField.kind !== "json")
+    throw new EntityDeclarationError(
+      `${context} relation-items requires a json target field.`,
+    );
+  if (binding.item.from === "source-field") {
+    if (binding.item.sourceField === undefined)
+      throw new EntityDeclarationError(
+        `${context} relation-items source-field requires sourceField.`,
+      );
+    imagePolicyField(entity, binding.item.sourceField, context);
+  }
+  if (binding.item.from === "constant" && binding.item.value === undefined)
+    throw new EntityDeclarationError(
+      `${context} relation-items constant requires value.`,
+    );
+};
+
+const validateImageBinding = (
+  entity: CompiledEntity,
+  target: CompiledEntity,
+  binding: ImageIngressBinding,
+  context: string,
+): void => {
+  const targetField = imagePolicyField(target, binding.field, context);
+  if (binding.from === "source-id") {
+    validateSourceIdImageBinding(entity, targetField, context);
+    return;
+  }
+  if (binding.from === "source-field") {
+    validateSourceFieldImageBinding(
+      entity,
+      target,
+      binding,
+      targetField,
+      context,
+    );
+    return;
+  }
+  if (binding.from === "capture-date") {
+    if (!["date", "timestamp"].includes(targetField.kind))
+      throw new EntityDeclarationError(
+        `${context} capture-date requires a date or timestamp target field.`,
+      );
+    return;
+  }
+  if (binding.from === "constant") {
+    if (!constantMatchesImageField(binding.value, targetField))
+      throw new EntityDeclarationError(
+        `${context} constant is incompatible with ${target.key}.${binding.field}.`,
+      );
+    return;
+  }
+  validateRelationItemsImageBinding(entity, binding, targetField, context);
+};
+
+const validateImageIngress = (
+  entities: readonly CompiledEntity[],
+  entity: CompiledEntity,
+  routeOwners: Map<string, string>,
+): void => {
+  const { ingress, routing, storage } = entity.imagePolicy;
+  const context = `${entity.key}.capabilities.images`;
+  const selfRoutes = ingress.filter((route) => route.kind === "self");
+  if (ingress.length > 0 && routing === null)
+    throw new EntityDeclarationError(
+      `${context}.routing is required when ingress routes are declared.`,
+    );
+  if (storage === false && selfRoutes.length !== 0)
+    throw new EntityDeclarationError(
+      `${context}.ingress self requires direct image storage.`,
+    );
+  if (storage !== false && selfRoutes.length !== 1)
+    throw new EntityDeclarationError(
+      `${context}.ingress requires exactly one self route for direct image storage.`,
+    );
+  for (const route of ingress) {
+    const routeOwner = routeOwners.get(route.routeId);
+    if (routeOwner !== undefined)
+      throw new EntityDeclarationError(
+        `${context}.ingress routeId ${route.routeId} conflicts with ${routeOwner}.capabilities.images.ingress.`,
+      );
+    routeOwners.set(route.routeId, entity.key);
+    if (route.kind === "self") continue;
+    const routeContext = `${context}.ingress.${route.routeId}`;
+    const target = imagePolicyPathTarget(
+      entities,
+      entity,
+      route.relationPath,
+      routeContext,
+    );
+    if (target.imagePolicy.storage === false)
+      throw new EntityDeclarationError(
+        `${routeContext} targets ${target.key}, which has no direct image storage.`,
+      );
+    if (route.kind !== "createRelated") continue;
+    const bound = new Set<string>();
+    for (const binding of route.bindings) {
+      if (bound.has(binding.field))
+        throw new EntityDeclarationError(
+          `${routeContext}.bindings assigns ${binding.field} more than once.`,
+        );
+      bound.add(binding.field);
+      validateImageBinding(entity, target, binding, `${routeContext}.bindings`);
+    }
+  }
+};
+
+const validateImageDisplaySources = (
+  entities: readonly CompiledEntity[],
+  entity: CompiledEntity,
+): void => {
+  const context = `${entity.key}.capabilities.images`;
+  for (const [index, source] of entity.imagePolicy.displaySources.entries()) {
+    const sourceContext = `${context}.displaySources[${index}]`;
+    imagePolicyPathTarget(entities, entity, source.relationPath, sourceContext);
+    if (source.identityEvidence)
+      throw new EntityDeclarationError(
+        `${sourceContext}.identityEvidence must be false: borrowed display images are not identity evidence.`,
+      );
+  }
+};
+
+const validateImageRouting = (entity: CompiledEntity): void => {
+  const { routing } = entity.imagePolicy;
+  if (routing === null) return;
+  const context = `${entity.key}.capabilities.images.routing`;
+  const validateFields = (
+    keys: readonly string[],
+    allowed: readonly EntityField["kind"][],
+    name: string,
+  ): void => {
+    if (new Set(keys).size !== keys.length)
+      throw new EntityDeclarationError(
+        `${context}.${name} contains duplicates.`,
+      );
+    for (const key of keys) {
+      const field = imagePolicyField(entity, key, `${context}.${name}`);
+      if (!allowed.includes(field.kind))
+        throw new EntityDeclarationError(
+          `${context}.${name}.${key} has incompatible ${field.kind} field type.`,
+        );
+    }
+  };
+  validateFields(
+    routing.candidateFields,
+    ["text", "text-array", "enum"],
+    "candidateFields",
+  );
+  validateFields(
+    routing.temporalFields,
+    ["date", "timestamp"],
+    "temporalFields",
+  );
+  validateFields(
+    routing.signals.ocrFields,
+    ["text", "text-array"],
+    "signals.ocrFields",
+  );
+  for (const filter of routing.lifecycleFilters) {
+    const field = imagePolicyField(
+      entity,
+      filter.field,
+      `${context}.lifecycleFilters`,
+    );
+    if (!["boolean", "enum", "text"].includes(field.kind))
+      throw new EntityDeclarationError(
+        `${context}.lifecycleFilters.${filter.field} has incompatible ${field.kind} field type.`,
+      );
+  }
+};
+
+/** Validate image routes after the complete relationship graph is available. */
+const validateImagePolicies = (entities: readonly CompiledEntity[]): void => {
+  const routeOwners = new Map<string, string>();
+  for (const entity of entities) {
+    validateImageIngress(entities, entity, routeOwners);
+    validateImageDisplaySources(entities, entity);
+    validateImageRouting(entity);
+  }
+};
+
 export const compileEntityDeclarations = (
   declarations: readonly unknown[],
 ): CompiledEntity[] => {
@@ -1157,6 +1438,7 @@ export const compileEntityDeclarations = (
     throw new EntityDeclarationError("Entity declarations must not be empty.");
   const entities = declarations.map(compileEntity);
   validateEntityIdentities(entities);
+  validateImagePolicies(entities);
   validateRelationSections(entities);
   return entities;
 };

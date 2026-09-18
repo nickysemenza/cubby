@@ -293,7 +293,25 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: "cover",
+    images: {
+      storage: "cover",
+      displaySources: [
+        {
+          relationPath: ["product"],
+          priority: 1,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [{ kind: "self", routeId: "cookbook-cover" }],
+      routing: {
+        candidateFields: [],
+        temporalFields: [],
+        lifecycleFilters: [],
+        signals: { ocrFields: [], classifierLabels: ["cookbook", "cover"] },
+        abstention: { minimumScore: 0.82, minimumMargin: 0.18 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: false },

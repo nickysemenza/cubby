@@ -557,7 +557,54 @@ export default defineEntity({
   capabilities: {
     auditable: true,
     timeline: "custom",
-    images: false,
+    images: {
+      storage: false,
+      displaySources: [
+        {
+          relationPath: ["entries"],
+          priority: 1,
+          ordering: "newest",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["source-product"],
+          priority: 2,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [
+        {
+          kind: "existingRelated",
+          routeId: "planting-garden-entry",
+          relationPath: ["entries"],
+        },
+        {
+          kind: "createRelated",
+          routeId: "planting-new-garden-entry",
+          relationPath: ["entries"],
+          bindings: [
+            { field: "plantingId", from: "source-id" },
+            {
+              field: "locationId",
+              from: "source-field",
+              sourceField: "locationId",
+            },
+            { field: "observedOn", from: "capture-date" },
+          ],
+        },
+      ],
+      routing: {
+        candidateFields: ["variety", "notes"],
+        temporalFields: ["sowedOn", "transplantedOn", "finishedOn"],
+        lifecycleFilters: [{ field: "status", equals: "growing" }],
+        signals: {
+          ocrFields: ["variety", "notes"],
+          classifierLabels: ["plant", "garden"],
+        },
+        abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

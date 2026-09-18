@@ -619,7 +619,20 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: "logo",
+    images: {
+      storage: "logo",
+      ingress: [{ kind: "self", routeId: "vendor-logo" }],
+      routing: {
+        candidateFields: ["name", "website"],
+        temporalFields: [],
+        lifecycleFilters: [],
+        signals: {
+          ocrFields: ["name", "website"],
+          classifierLabels: ["vendor", "logo"],
+        },
+        abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

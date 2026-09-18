@@ -424,7 +424,17 @@ export default defineEntity({
   capabilities: {
     auditable: true,
     timeline: "default",
-    images: "gallery",
+    images: {
+      storage: "gallery",
+      ingress: [{ kind: "self", routeId: "garden-entry-self" }],
+      routing: {
+        candidateFields: ["note"],
+        temporalFields: ["observedOn"],
+        lifecycleFilters: [],
+        signals: { ocrFields: ["note"], classifierLabels: ["garden"] },
+        abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

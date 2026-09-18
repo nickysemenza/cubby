@@ -8,51 +8,49 @@ import Testing
 @MainActor
 @Suite("Photo import flow")
 struct PhotoImportFlowTests {
-    @Test func entityFlowKeepsReviewedSelectionsWhenNavigatingBack() throws {
-        let selected = try selection(filename: "first.jpg")
-        let flow = PhotoImportFlowModel(items: [selected])
-
-        flow.chooseEntity(.product, id: "PRD-2345")
-        #expect(flow.path == [.review])
-
-        var reviewed = selected
-        reviewed.existingImageID = ImageCode("IMG-2345")
-        flow.completeReview([reviewed])
-        #expect(flow.path == [.review, .entityUpload("product", "PRD-2345")])
-
-        flow.path.removeLast()
-        #expect(flow.reviewItems.map(\.id) == [selected.id])
-        #expect(flow.reviewItems.first?.existingImageID?.rawValue == "IMG-2345")
-        #expect(flow.destination == .entity(.product, id: "PRD-2345"))
-    }
-
-    @Test func createFlowUsesTheSameOrderedSelectionAfterBackNavigation() throws {
+    @Test func manifestKeepsUnassignedPhotosOutOfCommitUntilMoved() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let flow = PhotoImportFlowModel(items: [first, second])
+        let manifest = PhotoImportManifest(items: [first, second])
 
-        flow.chooseCreate(.gardenEntry)
-        flow.completeReview([first, second])
-        #expect(flow.path == [.review, .entityCreate("gardenEntry")])
+        #expect(manifest.needsDestination == [first.id, second.id])
+        #expect(!manifest.canCommit)
+        let option = try #require(manifest.destinationOptions.first)
+        manifest.moveSelected(
+            to: option,
+            row: EntityRow(
+                id: "PRD-2345", title: "Example", subtitle: nil, imageURL: nil,
+                raw: ["id": "PRD-2345", "name": "Example"]))
 
-        flow.path.removeLast()
-        #expect(flow.reviewItems.map(\.id) == [first.id, second.id])
-        #expect(flow.destination == .create(.gardenEntry))
+        #expect(manifest.needsDestination.isEmpty)
+        #expect(manifest.groups.count == 1)
+        #expect(manifest.groups[0].photoIDs == [first.id, second.id])
+        #expect(manifest.groups[0].title == "Example  PRD-2345")
+        #expect(manifest.canCommit)
     }
 
-    @Test func unfinishedMatchChoiceSurvivesBackAndForwardNavigation() throws {
-        let selected = try selection(filename: "choice.jpg")
-        let flow = PhotoImportFlowModel(items: [selected])
-        let match = ImageCode("IMG-2345")
+    @Test func destinationsIncludeEveryManifestIngressKind() throws {
+        let manifest = PhotoImportManifest(items: [try selection(filename: "first.jpg")])
+        let routes = manifest.destinationOptions.map(\.route)
 
-        flow.chooseCreate(.gardenEntry)
-        flow.reviewDraft.chooseExisting(match, for: selected.id)
-        flow.path.removeLast()
-        flow.chooseCreate(.gardenEntry)
-
-        #expect(flow.path == [.review])
-        #expect(flow.reviewDraft.decisions[selected.id] == match)
-        #expect(flow.reviewDraft.isDirty)
+        #expect(!routes.isEmpty)
+        #expect(routes.allSatisfy { $0.storage != nil })
+        #expect(routes.contains(where: { $0.kind == "self" }))
+        #expect(routes.contains(where: { $0.kind == "existingRelated" }))
+        #expect(routes.contains(where: { $0.kind == "createRelated" }))
+        #expect(routes.contains(where: { $0.target == .meal }))
+        #expect(routes.contains(where: { $0.target == .project }))
+        #expect(routes.contains(where: { $0.target == .task }))
+        #expect(routes.contains(where: { $0.target == .gardenEntry }))
+        #expect(
+            routes.contains {
+                $0.source == .recipe && $0.target == .meal && $0.kind == "existingRelated"
+            })
+        #expect(
+            routes.contains {
+                $0.source == .planting && $0.target == .gardenEntry
+                    && $0.kind == "createRelated"
+            })
     }
 
     private func selection(filename: String) throws -> PhotoSelectionItem {

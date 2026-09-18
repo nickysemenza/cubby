@@ -634,7 +634,25 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: "gallery",
+    images: {
+      storage: "gallery",
+      displaySources: [
+        {
+          relationPath: ["recipes"],
+          priority: 1,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [{ kind: "self", routeId: "meal-self" }],
+      routing: {
+        candidateFields: ["name"],
+        temporalFields: ["date"],
+        lifecycleFilters: [],
+        signals: { ocrFields: ["name"], classifierLabels: ["meal"] },
+        abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

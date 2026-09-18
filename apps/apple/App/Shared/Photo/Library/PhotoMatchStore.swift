@@ -13,6 +13,10 @@ final class PhotoMatchStore {
     private(set) var error: String?
     private(set) var repairFailures = 0
     private(set) var candidates: [String: [DedupCandidate]] = [:]
+    /// Compact direct-owner data from the hash index, keyed by Cubby image
+    /// shortcode. A grid photo resolves through its already-loaded match list,
+    /// so rendering never issues one request per cell.
+    private(set) var directOwnersByImageID: [String: [String]] = [:]
     private(set) var revision = 0
 
     @ObservationIgnored private var entries: [ImageCode: ImageHashEntry] = [:]
@@ -48,6 +52,33 @@ final class PhotoMatchStore {
         hasIndex && candidates[id] != nil
     }
 
+    func ownerBadge(for id: String) -> String? {
+        PhotoGridBadge.text(for: strongDirectOwnerShortcodes(for: id))
+    }
+
+    func ownerAccessibilityDescription(for id: String) -> String? {
+        PhotoGridBadge.accessibilityDescription(for: strongDirectOwnerShortcodes(for: id))
+    }
+
+    /// Direct owners backed by a strong local fingerprint match. Borrowed display
+    /// images never enter the server summaries, and possible matches remain review-only.
+    func strongDirectOwnerShortcodes(for id: String) -> [String] {
+        storedCandidates(for: id)
+            .filter { $0.confidence == .strong }
+            .flatMap { directOwnersByImageID[$0.id.rawValue] ?? [] }
+    }
+
+    func directOwnerShortcodes(for imageID: ImageCode) -> [String] {
+        directOwnersByImageID[imageID.rawValue] ?? []
+    }
+
+    /// Replaces one index snapshot's ownership summaries atomically. The API
+    /// adapter passes only direct associations; no cell should fetch detail.
+    func setDirectOwnerShortcodes(_ summaries: [String: [String]]) {
+        directOwnersByImageID = summaries
+        revision += 1
+    }
+
     func acquire(_ id: UUID) {
         observers.insert(id)
         schedulePendingRegistrations()
@@ -70,6 +101,7 @@ final class PhotoMatchStore {
         entries = [:]; queries = [:]
         pendingQueries = [:]
         serverCandidates = [:]; batchCandidates = [:]; candidates = [:]
+        directOwnersByImageID = [:]
         entriesRevision += 1
         hasIndex = false; isLoading = false; isRepairing = false
         totalCount = 0; remainingCount = 0; repairFailures = 0; error = nil
@@ -93,6 +125,8 @@ final class PhotoMatchStore {
                 _ = try HashIndex(entries: [], algorithmRevision: document.algorithmRevision.rawValue)
                 let items = try document.items.map(ImageHashEntry.init)
                 entries = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+                directOwnersByImageID = Dictionary(
+                    uniqueKeysWithValues: items.map { ($0.id.rawValue, $0.directOwnerShortcodes) })
                 entriesRevision += 1
                 totalCount = items.count
                 remainingCount = document.repair.count

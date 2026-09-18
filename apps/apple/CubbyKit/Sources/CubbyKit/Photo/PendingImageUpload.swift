@@ -38,7 +38,7 @@ public struct PendingImageUpload: Sendable {
 
     public func upload(
         _ photo: PreparedPhoto,
-        entity: EntityKey,
+        entity: EntityKey?,
         progress: (@Sendable (Phase) -> Void)? = nil
     ) async throws -> Result {
         progress?(.presigning)

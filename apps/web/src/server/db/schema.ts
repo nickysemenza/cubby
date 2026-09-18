@@ -2452,6 +2452,23 @@ export const aiAnalysis = pgTable(
   ],
 );
 
+/** Immutable idempotency record for one atomic manifest-driven photo import. */
+export const photoImportReceipt = pgTable(
+  "PhotoImportReceipt",
+  {
+    id: pkUuid(),
+    idempotencyKey: text("idempotencyKey").notNull(),
+    requestHash: text("requestHash").notNull(),
+    receipt: jsonb("receipt").notNull().$type<unknown>(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("PhotoImportReceipt_idempotencyKey_key").on(
+      table.idempotencyKey,
+    ),
+  ],
+);
+
 export const aiUsage = pgTable(
   "AiUsage",
   {

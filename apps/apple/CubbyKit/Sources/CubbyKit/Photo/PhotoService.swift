@@ -28,7 +28,7 @@ public struct ImageUploadRequest: Sendable, Hashable {
     public let filename: String
     public let size: Int
     public let contentType: String
-    public let entity: EntityKey
+    public let entity: EntityKey?
     public let algorithmRevision: Int
     public let perceptualHash: PerceptualHash64
     public let sourceFingerprint: SourceFingerprint
@@ -39,7 +39,7 @@ public struct ImageUploadRequest: Sendable, Hashable {
         filename: String,
         size: Int,
         contentType: String,
-        entity: EntityKey,
+        entity: EntityKey? = nil,
         algorithmRevision: Int = PerceptualHash64.algorithmRevision,
         perceptualHash: PerceptualHash64,
         sourceFingerprint: SourceFingerprint,

@@ -1,15 +1,18 @@
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { type Entity, entityRefKey, entitySchema } from "@cubby/schemas/entity";
+import type { RelationshipPathStep } from "@cubby/schemas/entity-integrity";
 import {
+  allEntities,
   entityManifest,
-  galleryEntities,
+  imageDisplayBindings,
   isGalleryEntity,
+  localRelationshipByKey,
   type CoverEntity,
   type GalleryEntity,
   type LogoEntity,
 } from "@cubby/schemas/entity-manifest";
 import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
-import { imageShortcode, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { imageShortcode } from "@cubby/schemas/identifiers";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import {
   and,
@@ -31,6 +34,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { mapImages } from "~/server/repo/database-helpers/transform";
 import { displayableImageSql } from "~/server/repo/image-displayability";
+import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -42,27 +46,178 @@ export interface EntityDisplayImageRef {
 
 const DISPLAY_IMAGE_ENTITIES = new Set<Entity>(entitySchema.options);
 
+type DisplaySource = Readonly<{
+  entity: Entity;
+  target: Entity;
+  priority: number;
+  ordering: "declared" | "newest" | "oldest";
+  path: readonly RelationshipPathStep[];
+}>;
+
+type DisplayPath = Readonly<{
+  target: Entity;
+  steps: readonly RelationshipPathStep[];
+}>;
+
 /**
- * One priority-0 UNION ALL arm per gallery entity, mechanically derived from
- * `imageJoinBindings` rather than hand-listed — the same seam
- * `repo/image.ts`'s edge operations read, so a new gallery entity's own
- * photos are covered here the moment it is declared in the manifest. Every
- * `<Entity>Image` join table shares this exact shape: `imageId` FK, a single
- * parent-id column, `sortOrder`/`createdAt`/`deletedAt`.
+ * A display source is a manifest relationship path followed by the target's
+ * direct Image relationship. This deliberately never re-enters the display
+ * resolver: borrowed images are terminal presentation evidence, not another
+ * entity's recursively-derived displayImages.
  */
-const ownGalleryUnionBranch = (
-  entity: GalleryEntity,
-  displayable: SQL,
-): SQL => {
-  const binding = imageJoinBindings[entity];
-  const joinTable = binding.table;
-  return sql`
-        SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", ${joinTable.sortOrder} AS "sortOrder", ${joinTable.createdAt} AS "createdAt", i.id AS "imageId"
-        FROM ${joinTable}
-        JOIN "Image" i ON i.id = ${joinTable.imageId}
-        WHERE refs."entityType" = ${entity} AND ${binding.parentIdColumn} = refs."entityId"
-          AND ${joinTable.deletedAt} IS NULL AND i."deletedAt" IS NULL AND ${displayable}`;
+const imageRelationshipSteps = (
+  entity: Entity,
+): readonly RelationshipPathStep[] => {
+  const imageRelation = entityManifest[entity].relationships.filter(
+    (relation) => relation.target === "image",
+  );
+  if (imageRelation.length !== 1) {
+    throw new Error(
+      `Image-owning ${entity} must declare exactly one direct image relationship`,
+    );
+  }
+  return localRelationshipByKey(entity, imageRelation[0]!.key).provenance.steps;
 };
+
+const displayPathSteps = (
+  entity: Entity,
+  relationPath: readonly string[],
+): DisplayPath => {
+  let current = entity;
+  const steps: RelationshipPathStep[] = [];
+  for (const key of relationPath) {
+    const relation = localRelationshipByKey(current, key);
+    steps.push(...relation.provenance.steps);
+    current = relation.target;
+  }
+  return { target: current, steps };
+};
+
+/** Generated bindings are validated by the manifest compiler; compiling them
+ * once here turns every declared source into a bounded SQL UNION arm. */
+const DISPLAY_SOURCES: readonly DisplaySource[] = allEntities.flatMap(
+  (entity) =>
+    imageDisplayBindings[entity].map((binding) => {
+      const relationship = displayPathSteps(entity, binding.relationPath);
+      if (relationship.target !== binding.targetEntity) {
+        throw new Error(
+          `Image display binding ${entity}.${binding.relationPath.join(".")} targets ${binding.targetEntity}, not ${relationship.target}`,
+        );
+      }
+      return {
+        entity,
+        target: relationship.target,
+        priority: binding.priority,
+        ordering: binding.ordering,
+        path: [
+          ...relationship.steps,
+          ...imageRelationshipSteps(relationship.target),
+        ],
+      };
+    }),
+);
+
+const sourceAlias = (value: string) => value.replaceAll(/[^A-Za-z0-9]/g, "_");
+
+const rootLiveCondition = (entity: Entity, alias: string): SQL =>
+  entityManifest[entity].softDelete
+    ? sql`${sql.raw(`${alias}."deletedAt"`)} IS NULL`
+    : sql`TRUE`;
+
+const optionalColumn = (alias: string, column: string): SQL =>
+  sql.raw(`${alias}."${column}"`);
+
+/**
+ * Direct storage is also resolved through its manifest relationship. Gallery
+ * ordering remains the join row's sortOrder/createdAt; covers and logos have
+ * no join row and use the owner creation time as their stable tie breaker.
+ */
+const directStorageBranch = (entity: Entity): SQL | null => {
+  const storage = entityManifest[entity].images.storage;
+  if (storage === false) return null;
+  const traversal = compileTraversal(
+    entity,
+    imageRelationshipSteps(entity),
+    `display_direct_${sourceAlias(entity)}`,
+    { root: "s", leaf: "i" },
+  );
+  const attachmentHop = traversal.hops.at(-2);
+  const gallery = storage === "gallery";
+  if (gallery && attachmentHop === undefined) {
+    throw new Error(`Gallery ${entity} has no image attachment hop`);
+  }
+  const sortOrder = gallery
+    ? optionalColumn(attachmentHop!.alias, "sortOrder")
+    : sql`0`;
+  const createdAt = gallery
+    ? optionalColumn(attachmentHop!.alias, "createdAt")
+    : optionalColumn("s", "createdAt");
+  return sql`
+        SELECT i.key, i.shortcode, 0 AS priority,
+               NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId",
+               ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
+        FROM ${sql.raw(`"${traversal.rootTable}"`)} s
+        ${traversal.joins}
+        WHERE refs."entityType" = ${entity}
+          AND s.id = refs."entityId"
+          AND ${rootLiveCondition(entity, "s")}
+          AND ${displayableImageSql("i")}`;
+};
+
+/**
+ * A borrowed source stops at the target's direct attachment. Its relation
+ * group is ordered by the final relation hop when one exists, otherwise by
+ * the target record itself. That preserves declared link order while making
+ * newest/oldest policy data-driven rather than an entity-name switch.
+ */
+const displaySourceBranch = (source: DisplaySource, index: number): SQL => {
+  const traversal = compileTraversal(
+    source.entity,
+    source.path,
+    `display_source_${index}_${sourceAlias(source.entity)}`,
+    { root: "s", leaf: "i" },
+  );
+  const targetImageSteps = imageRelationshipSteps(source.target).length;
+  const targetHopIndex = traversal.hops.length - targetImageSteps - 1;
+  const groupHop = traversal.hops.at(targetHopIndex);
+  const groupAlias = groupHop?.alias ?? "s";
+  const attachmentHop = traversal.hops.at(-2);
+  const targetStorage = entityManifest[source.target].images.storage;
+  const targetGallery = targetStorage === "gallery";
+  if (targetGallery && attachmentHop === undefined) {
+    throw new Error(
+      `Gallery display source ${source.target} has no attachment hop`,
+    );
+  }
+  const groupCreatedAt =
+    source.ordering === "newest"
+      ? sql`to_timestamp(-EXTRACT(EPOCH FROM ${optionalColumn(groupAlias, "createdAt")}))`
+      : optionalColumn(groupAlias, "createdAt");
+  const sortOrder = targetGallery
+    ? optionalColumn(attachmentHop!.alias, "sortOrder")
+    : sql`0`;
+  const createdAt = targetGallery
+    ? optionalColumn(attachmentHop!.alias, "createdAt")
+    : optionalColumn(groupAlias, "createdAt");
+  return sql`
+        SELECT i.key, i.shortcode, ${source.priority} AS priority,
+               ${groupCreatedAt} AS "groupCreatedAt", ${optionalColumn(groupAlias, "id")} AS "groupId",
+               ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
+        FROM ${sql.raw(`"${traversal.rootTable}"`)} s
+        ${traversal.joins}
+        WHERE refs."entityType" = ${source.entity}
+          AND s.id = refs."entityId"
+          AND ${rootLiveCondition(source.entity, "s")}
+          AND ${displayableImageSql("i")}`;
+};
+
+const DISPLAY_BRANCHES = [
+  ...allEntities.flatMap((entity) => {
+    const branch = directStorageBranch(entity);
+    return branch === null ? [] : [branch];
+  }),
+  ...DISPLAY_SOURCES.map(displaySourceBranch),
+];
 
 const displayImageRowSchema = z.object({
   entityType: entitySchema,
@@ -103,12 +258,7 @@ async function resolveUniversalEntityDisplayImageLists(
     ),
     sql`, `,
   );
-  const displayable = displayableImageSql("i");
-  const ownGalleryBranches = sql.join(
-    galleryEntities.map((entity) => ownGalleryUnionBranch(entity, displayable)),
-    sql`
-        UNION ALL`,
-  );
+  const displayBranches = sql.join(DISPLAY_BRANCHES, sql` UNION ALL `);
   const result = await unwrapDb(db).execute(sql`
     WITH refs("entityType", "entityId") AS (VALUES ${values})
     SELECT refs."entityType", refs."entityId"::text AS "entityId", (
@@ -126,204 +276,9 @@ async function resolveUniversalEntityDisplayImageLists(
         SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
         FROM "Image" i
         WHERE refs."entityType" = 'image' AND i.id = refs."entityId"
-          AND i."deletedAt" IS NULL AND ${displayable}
+          AND i."deletedAt" IS NULL AND ${displayableImageSql("i")}
         UNION ALL
-        -- Relationship-only (unrelated to any gallery join table): inventory/expense
-        -- each resolve to the product they're about, then show its photos.
-        SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "ProductImage" pi
-        JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" IN ('inventory', 'expense')
-          AND pi."productId" = CASE
-            WHEN refs."entityType" = 'inventory' THEN (
-              SELECT ie."productId"
-              FROM "InventoryEntry" ie
-              JOIN "Product" p ON p.id = ie."productId" AND p."deletedAt" IS NULL
-              WHERE ie.id = refs."entityId" AND ie."deletedAt" IS NULL
-            )
-            WHEN refs."entityType" = 'expense' THEN (
-              SELECT e."productId"
-              FROM "Expense" e
-              JOIN "Product" p ON p.id = e."productId" AND p."deletedAt" IS NULL
-              WHERE e.id = refs."entityId" AND e."deletedAt" IS NULL
-            )
-          END
-          AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        ${ownGalleryBranches}
-        UNION ALL
-        -- A location's own photo wins; the Product it represents is fallback.
-        SELECT i.key, i.shortcode, 1 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "ProductImage" pi
-        JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'location'
-          AND pi."productId" = (
-            SELECT l."productId" FROM "Location" l
-            WHERE l.id = refs."entityId" AND l."deletedAt" IS NULL
-          )
-          AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", 0 AS "sortOrder", c."createdAt", i.id AS "imageId"
-        FROM "Cookbook" c
-        JOIN "Image" i ON i.id = c."coverImageId"
-        WHERE refs."entityType" = 'cookbook' AND c.id = refs."entityId"
-          AND c."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- A cookbook's own cover wins; the physical copy on the shelf (its
-        -- linked Product) is fallback.
-        SELECT i.key, i.shortcode, 1 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "ProductImage" pi
-        JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'cookbook'
-          AND pi."productId" = (
-            SELECT c."productId" FROM "Cookbook" c
-            WHERE c.id = refs."entityId" AND c."deletedAt" IS NULL
-          )
-          AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- A task's own photos win; its subject product's are fallback.
-        SELECT i.key, i.shortcode, 1 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "ProductImage" pi
-        JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'task'
-          AND pi."productId" = (
-            SELECT t."subjectProductId"
-            FROM "Task" t
-            JOIN "Product" p ON p.id = t."subjectProductId" AND p."deletedAt" IS NULL
-            WHERE t.id = refs."entityId" AND t."deletedAt" IS NULL
-          )
-          AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- A task without subject-product media may use its project's own photo.
-        SELECT i.key, i.shortcode, 2 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", pji."sortOrder", pji."createdAt", i.id AS "imageId"
-        FROM "Task" t
-        JOIN "ProjectImage" pji ON pji."projectId" = t."projectId"
-        JOIN "Image" i ON i.id = pji."imageId"
-        WHERE refs."entityType" = 'task' AND t.id = refs."entityId"
-          AND t."deletedAt" IS NULL AND pji."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- Recipes borrow only directly attached meal photos, newest meal first.
-        SELECT i.key, i.shortcode, 1 AS priority, to_timestamp(-EXTRACT(EPOCH FROM m.date::timestamptz)) AS "groupCreatedAt", m.id AS "groupId", mi."sortOrder", mi."createdAt", i.id AS "imageId"
-        FROM "MealRecipe" mr
-        JOIN "Meal" m ON m.id = mr."mealId" AND m."deletedAt" IS NULL
-        JOIN "MealImage" mi ON mi."mealId" = m.id AND mi."deletedAt" IS NULL
-        JOIN "Image" i ON i.id = mi."imageId"
-        WHERE refs."entityType" = 'recipe' AND mr."recipeId" = refs."entityId"
-          AND mr."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- Meals borrow directly attached recipe photos in meal-recipe order.
-        SELECT i.key, i.shortcode, 1 AS priority, mr."createdAt" AS "groupCreatedAt", mr.id AS "groupId", ri."sortOrder", ri."createdAt", i.id AS "imageId"
-        FROM "MealRecipe" mr
-        JOIN "Recipe" r ON r.id = mr."recipeId" AND r."deletedAt" IS NULL
-        JOIN "RecipeImage" ri ON ri."recipeId" = r.id AND ri."deletedAt" IS NULL
-        JOIN "Image" i ON i.id = ri."imageId"
-        WHERE refs."entityType" = 'meal' AND mr."mealId" = refs."entityId"
-          AND mr."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- A planting has no photos of its own: its garden entries' photos are
-        -- the primary source, newest entry first — the negated epoch makes
-        -- ascending sort read as "newest" — falling back to the seed product below.
-        SELECT i.key, i.shortcode, 1 AS priority, to_timestamp(-EXTRACT(EPOCH FROM ge."observedOn"::timestamptz)) AS "groupCreatedAt", ge.id AS "groupId", gi."sortOrder", gi."createdAt", i.id AS "imageId"
-        FROM "GardenEntry" ge
-        JOIN "GardenEntryImage" gi ON gi."gardenEntryId" = ge.id
-        JOIN "Image" i ON i.id = gi."imageId"
-        WHERE refs."entityType" = 'planting' AND ge."plantingId" = refs."entityId"
-          AND ge."deletedAt" IS NULL AND gi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- Seed/source product is the final planting fallback.
-        SELECT i.key, i.shortcode, 2 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "Planting" pl
-        JOIN "ProductImage" pi ON pi."productId" = pl."sourceProductId" AND pi."deletedAt" IS NULL
-        JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'planting' AND pl.id = refs."entityId"
-          AND pl."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- Borrowed: every linked product's photos, products in link order
-        -- (the same linkOrder the ingredient list Product pill uses).
-        SELECT i.key, i.shortcode, 0 AS priority, p."createdAt" AS "groupCreatedAt", p.id AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "Product" p
-        JOIN "ProductImage" pi ON pi."productId" = p.id
-        JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'ingredient' AND p."ingredientId" = refs."entityId"
-          AND p."deletedAt" IS NULL AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- Borrowed: candidate products' photos, candidates in link order.
-        SELECT i.key, i.shortcode, 0 AS priority, wc."createdAt" AS "groupCreatedAt", wc.id AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "WishCandidate" wc
-        JOIN "Product" p ON p.id = wc."productId" AND p."deletedAt" IS NULL
-        JOIN "ProductImage" pi ON pi."productId" = p.id
-        JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'wish' AND wc."wishId" = refs."entityId"
-          AND wc."deletedAt" IS NULL AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- Projects prefer direct task evidence, then products explicitly tied
-        -- through tasks, expenses, or durable tool usage.
-        SELECT i.key, i.shortcode, 1 AS priority, to_timestamp(-EXTRACT(EPOCH FROM t."updatedAt")) AS "groupCreatedAt", t.id AS "groupId", ti."sortOrder", ti."createdAt", i.id AS "imageId"
-        FROM "Task" t JOIN "TaskImage" ti ON ti."taskId" = t.id JOIN "Image" i ON i.id = ti."imageId"
-        WHERE refs."entityType" = 'project' AND t."projectId" = refs."entityId"
-          AND t."deletedAt" IS NULL AND ti."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 2 AS priority, t."createdAt" AS "groupCreatedAt", t.id AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "Task" t JOIN "ProductImage" pi ON pi."productId" = t."subjectProductId" JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'project' AND t."projectId" = refs."entityId"
-          AND t."deletedAt" IS NULL AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 3 AS priority, e."createdAt" AS "groupCreatedAt", e.id AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "Expense" e JOIN "ProductImage" pi ON pi."productId" = e."productId" JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'project' AND e."projectId" = refs."entityId"
-          AND e."deletedAt" IS NULL AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 4 AS priority, ptu."createdAt" AS "groupCreatedAt", ptu.id AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "ProjectToolUsage" ptu JOIN "ProductImage" pi ON pi."productId" = ptu."productId" JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'project' AND ptu."projectId" = refs."entityId"
-          AND ptu."deletedAt" IS NULL AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- Purchases resolve owned receipt photos, then bought products, then vendor.
-        SELECT i.key, i.shortcode, 1 AS priority, pp."createdAt" AS "groupCreatedAt", pp.id AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "PurchaseProduct" pp JOIN "ProductImage" pi ON pi."productId" = pp."productId" JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'purchase' AND pp."purchaseId" = refs."entityId"
-          AND pp."deletedAt" IS NULL AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 1 AS priority, e."createdAt" AS "groupCreatedAt", e.id AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "Expense" e JOIN "ProductImage" pi ON pi."productId" = e."productId" JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'purchase' AND e."purchaseId" = refs."entityId"
-          AND e."deletedAt" IS NULL AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 2 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", 0 AS "sortOrder", v."createdAt", i.id AS "imageId"
-        FROM "Purchase" pu JOIN "Vendor" v ON v.id = pu."vendorId" JOIN "Image" i ON i.id = v."logoImageId"
-        WHERE refs."entityType" = 'purchase' AND pu.id = refs."entityId"
-          AND pu."deletedAt" IS NULL AND v."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- Transactions use confirmed allocations only, never advisory vendorInference.
-        SELECT i.key, i.shortcode, 1 AS priority, a."createdAt" AS "groupCreatedAt", a.id AS "groupId", pui."sortOrder", pui."createdAt", i.id AS "imageId"
-        FROM "FinancialTransactionAllocation" a JOIN "PurchaseImage" pui ON pui."purchaseId" = a."purchaseId" JOIN "Image" i ON i.id = pui."imageId"
-        WHERE refs."entityType" = 'financialTransaction' AND a."transactionId" = refs."entityId"
-          AND a."deletedAt" IS NULL AND pui."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 2 AS priority, a."createdAt" AS "groupCreatedAt", a.id AS "groupId", pi."sortOrder", pi."createdAt", i.id AS "imageId"
-        FROM "FinancialTransactionAllocation" a JOIN "PurchaseProduct" pp ON pp."purchaseId" = a."purchaseId" JOIN "ProductImage" pi ON pi."productId" = pp."productId" JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'financialTransaction' AND a."transactionId" = refs."entityId"
-          AND a."deletedAt" IS NULL AND pp."deletedAt" IS NULL AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 3 AS priority, a."createdAt" AS "groupCreatedAt", a.id AS "groupId", 0 AS "sortOrder", v."createdAt", i.id AS "imageId"
-        FROM "FinancialTransactionAllocation" a JOIN "Purchase" pu ON pu.id = a."purchaseId" JOIN "Vendor" v ON v.id = pu."vendorId" JOIN "Image" i ON i.id = v."logoImageId"
-        WHERE refs."entityType" = 'financialTransaction' AND a."transactionId" = refs."entityId"
-          AND a."deletedAt" IS NULL AND pu."deletedAt" IS NULL AND v."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- An expense without product media uses its confirmed purchase vendor.
-        SELECT i.key, i.shortcode, 1 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", 0 AS "sortOrder", v."createdAt", i.id AS "imageId"
-        FROM "Expense" e
-        JOIN "Purchase" pu ON pu.id = e."purchaseId" AND pu."deletedAt" IS NULL
-        JOIN "Vendor" v ON v.id = pu."vendorId" AND v."deletedAt" IS NULL
-        JOIN "Image" i ON i.id = v."logoImageId"
-        WHERE refs."entityType" = 'expense' AND e.id = refs."entityId"
-          AND e."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", 0 AS "sortOrder", v."createdAt", i.id AS "imageId"
-        FROM "Vendor" v
-        JOIN "Image" i ON i.id = v."logoImageId"
-        WHERE refs."entityType" = 'vendor' AND v.id = refs."entityId"
-          AND v."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
+        ${displayBranches}
         ) raw_candidates
         ORDER BY raw_candidates."imageId", raw_candidates.priority,
                  raw_candidates."groupCreatedAt", raw_candidates."groupId",
@@ -344,153 +299,11 @@ async function resolveUniversalEntityDisplayImageLists(
   );
 }
 
-/** Product rows have no fallback policy: their own gallery is authoritative. */
-async function resolveProductDisplayImageLists(
-  db: Database | DrizzleTransaction,
-  refs: readonly EntityDisplayImageRef[],
-): Promise<Map<string, DisplayImageSummary[]>> {
-  if (refs.length === 0) return new Map();
-  const values = sql.join(
-    refs.map((ref) => sql`(${ref.entityId}::uuid)`),
-    sql`, `,
-  );
-  const result = await unwrapDb(db).execute<{
-    entityId: string;
-    images: Array<{ id: string; key: string }>;
-  }>(sql`
-    WITH refs("entityId") AS (VALUES ${values})
-    SELECT refs."entityId"::text AS "entityId",
-      COALESCE(
-        json_agg(
-          json_build_object('id', i.shortcode, 'key', i.key)
-          ORDER BY pi."sortOrder", pi."createdAt", i.id
-        ) FILTER (WHERE i.id IS NOT NULL),
-        '[]'::json
-      ) AS images
-    FROM refs
-    LEFT JOIN "ProductImage" pi
-      ON pi."productId" = refs."entityId"
-     AND pi."deletedAt" IS NULL
-    LEFT JOIN "Image" i
-      ON i.id = pi."imageId"
-     AND i."deletedAt" IS NULL
-     AND ${displayableImageSql("i")}
-    GROUP BY refs."entityId"
-  `);
-  return new Map(
-    result.rows.map((row) => [
-      entityRefKey("product", row.entityId),
-      row.images.map((img) => ({
-        id: parseShortcodeFor("image", img.id),
-        url: getR2PublicUrl(img.key),
-      })),
-    ]),
-  );
-}
-
-/** Location rows need only their own gallery and represented-product fallback. */
-async function resolveLocationDisplayImageLists(
-  db: Database | DrizzleTransaction,
-  refs: readonly EntityDisplayImageRef[],
-): Promise<Map<string, DisplayImageSummary[]>> {
-  if (refs.length === 0) return new Map();
-  const values = sql.join(
-    refs.map((ref) => sql`(${ref.entityId}::uuid)`),
-    sql`, `,
-  );
-  const result = await unwrapDb(db).execute<{
-    entityId: string;
-    images: Array<{ id: string; key: string }>;
-  }>(sql`
-    WITH refs("entityId") AS (VALUES ${values}), candidates AS (
-      SELECT refs."entityId", i.shortcode, i.key, 0 AS priority,
-             li."sortOrder", li."createdAt", i.id AS "imageId"
-      FROM refs
-      INNER JOIN "LocationImage" li
-        ON li."locationId" = refs."entityId"
-       AND li."deletedAt" IS NULL
-      INNER JOIN "Image" i
-        ON i.id = li."imageId"
-       AND i."deletedAt" IS NULL
-       AND ${displayableImageSql("i")}
-      UNION ALL
-      SELECT refs."entityId", i.shortcode, i.key, 1 AS priority,
-             pi."sortOrder", pi."createdAt", i.id AS "imageId"
-      FROM refs
-      INNER JOIN "Location" l
-        ON l.id = refs."entityId"
-       AND l."deletedAt" IS NULL
-       AND l."productId" IS NOT NULL
-      INNER JOIN "ProductImage" pi
-        ON pi."productId" = l."productId"
-       AND pi."deletedAt" IS NULL
-      INNER JOIN "Image" i
-        ON i.id = pi."imageId"
-       AND i."deletedAt" IS NULL
-       AND ${displayableImageSql("i")}
-    )
-    SELECT refs."entityId"::text AS "entityId",
-      COALESCE(
-        (
-          SELECT json_agg(
-            json_build_object('id', selected.shortcode, 'key', selected.key)
-            ORDER BY selected.priority, selected."sortOrder",
-                     selected."createdAt", selected."imageId"
-          )
-          FROM (
-            SELECT DISTINCT ON (candidates."imageId") candidates.*
-            FROM candidates
-            WHERE candidates."entityId" = refs."entityId"
-            ORDER BY candidates."imageId", candidates.priority,
-                     candidates."sortOrder", candidates."createdAt"
-          ) selected
-        ),
-        '[]'::json
-      ) AS images
-    FROM refs
-  `);
-  return new Map(
-    result.rows.map((row) => [
-      entityRefKey("location", row.entityId),
-      row.images.map((img) => ({
-        id: parseShortcodeFor("image", img.id),
-        url: getR2PublicUrl(img.key),
-      })),
-    ]),
-  );
-}
-
-/**
- * Dispatch homogeneous Product batches to the narrow gallery query. Mixed
- * entity batches retain the universal fallback policy for their non-product
- * refs, while avoiding the all-entity UNION for the product portion.
- */
 async function resolveEntityDisplayImageLists(
   db: Database | DrizzleTransaction,
   refs: readonly EntityDisplayImageRef[],
 ): Promise<Map<string, DisplayImageSummary[]>> {
-  const supported = refs.filter((ref) =>
-    DISPLAY_IMAGE_ENTITIES.has(ref.entityType),
-  );
-  const entityTypes = new Set(supported.map((ref) => ref.entityType));
-  // Graph reads commonly hydrate a product alongside its relationship rows.
-  // Keep those mixed batches on one query so image hydration does not add a
-  // query per entity family; the narrow paths are for homogeneous reads where
-  // they can remove the expensive cross-entity UNION safely.
-  if (entityTypes.size > 1) {
-    return resolveUniversalEntityDisplayImageLists(db, supported);
-  }
-  const productRefs = supported.filter((ref) => ref.entityType === "product");
-  const locationRefs = supported.filter((ref) => ref.entityType === "location");
-  const otherRefs = supported.filter(
-    (ref) => ref.entityType !== "product" && ref.entityType !== "location",
-  );
-  const [productLists, locationLists, otherLists] = await Promise.all([
-    resolveProductDisplayImageLists(db, productRefs),
-    resolveLocationDisplayImageLists(db, locationRefs),
-    resolveUniversalEntityDisplayImageLists(db, otherRefs),
-  ]);
-  return new Map([...productLists, ...locationLists, ...otherLists]);
+  return resolveUniversalEntityDisplayImageLists(db, refs);
 }
 
 const publicEntityRowSchema = z.looseObject({ id: z.string() });

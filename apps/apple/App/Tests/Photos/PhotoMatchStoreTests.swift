@@ -9,6 +9,34 @@ import Testing
 @MainActor
 @Suite("Progressive photo matching", .serialized)
 struct PhotoMatchStoreTests {
+    @Test func ownerBadgeUsesDeterministicPrimaryAndOverflowCount() {
+        #expect(PhotoGridBadge.text(for: ["MEAL-9", "PRJ-2", "MEAL-9"]) == "MEAL-9+1")
+        #expect(PhotoGridBadge.text(for: ["TASK-2"]) == "TASK-2")
+        #expect(PhotoGridBadge.text(for: ["", ""]) == nil)
+        #expect(PhotoGridBadge.accessibilityDescription(for: ["LOC-4K7M"]) == "Owned by LOC-4K7M")
+    }
+
+    @Test func ownerBadgeRequiresAStrongDirectImageMatch() async throws {
+        let possibleClient = try client(
+            index: """
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcde0","sourceFingerprint":null,"width":3,"height":2,"directOwnerShortcodes":["PRJ-2"]}],"repair":[]}
+                """)
+        let possibleStore = PhotoMatchStore()
+        let possibleItem = try selection(hash: "0123456789abcdef")
+        try await possibleStore.check([possibleItem], client: possibleClient)
+        #expect(possibleStore.storedCandidates(for: possibleItem.id).first?.confidence == .possible)
+        #expect(possibleStore.ownerBadge(for: possibleItem.id) == nil)
+
+        let strongClient = try client(
+            index: """
+                {"algorithmRevision":1,"items":[{"id":"IMG-6789","perceptualHash":"0123456789abcdef","sourceFingerprint":null,"width":2,"height":2,"directOwnerShortcodes":["TASK-2"]}],"repair":[]}
+                """)
+        let strongStore = PhotoMatchStore()
+        let strongItem = try selection(hash: "0123456789abcdef")
+        try await strongStore.check([strongItem], client: strongClient)
+        #expect(strongStore.ownerBadge(for: strongItem.id) == "TASK-2")
+    }
+
     @Test func failedRefreshPreservesKnownNoMatchVerdict() async throws {
         let client = try client(index: "{\"algorithmRevision\":1,\"items\":[],\"repair\":[]}")
         let store = PhotoMatchStore()

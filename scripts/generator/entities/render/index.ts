@@ -20,6 +20,7 @@ import { renderRecord } from "./record.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
 import { kernelEntitiesFor } from "./shared.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
+import { renderImagePolicyArtifacts } from "./image-policy.ts";
 
 type ContractEntity = CompiledEntity & {
   contract: NonNullable<CompiledEntity["contract"]>;
@@ -960,6 +961,7 @@ export const renderEntityArtifacts = (
     )
     .join("\n");
   return [
+    ...renderImagePolicyArtifacts(entities),
     {
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
       source:

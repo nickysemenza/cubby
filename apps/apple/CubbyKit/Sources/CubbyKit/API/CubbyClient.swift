@@ -274,7 +274,9 @@ public actor CubbyClient {
                 throw PhotoFile.Failure.unsupportedContentType(request.contentType)
             }
             input.contentType = contentType
-            input.entityType = EntityImage(rawValue: request.entity.rawValue.uppercased())
+            if let entity = request.entity {
+                input.entityType = EntityImage(rawValue: entity.rawValue.uppercased())
+            }
             input.algorithmRevision = .init(rawValue: request.algorithmRevision)
             input.perceptualHash = request.perceptualHash.hex
             input.sourceFingerprint = .init(
@@ -296,6 +298,22 @@ public actor CubbyClient {
                 throw HashIndex.Failure.unsupportedRevision(result.algorithmRevision.rawValue)
             }
             return result
+        }
+    }
+
+    public func stagePhotoImport(_ input: PhotoImportStageInput) async throws
+        -> PhotoImportStageOutput
+    {
+        try await perform {
+            try await api.photoImport_stage(body: .json(input)).ok.body.json
+        }
+    }
+
+    public func commitPhotoImport(_ input: PhotoImportCommitInput) async throws
+        -> PhotoImportCommitOutput
+    {
+        try await perform {
+            try await api.photoImport_commit(body: .json(input)).ok.body.json
         }
     }
 

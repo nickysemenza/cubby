@@ -404,6 +404,15 @@ export const imageHashIndexItemSchema = z.object({
   sourceFingerprint: imageSourceFingerprintSchema.nullable(),
   width: generatedImageFieldSchemas.read.width,
   height: generatedImageFieldSchemas.read.height,
+  directOwnerShortcodes: z.array(
+    anyShortcodeSchema(
+      nonEmptyTuple<ShortcodeEntity>([
+        ...galleryEntities,
+        ...coverEntities,
+        ...logoEntities,
+      ]),
+    ),
+  ),
 });
 export const imageHashIndexSchema = z.object({
   algorithmRevision: z.literal(1),

@@ -454,7 +454,42 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: {
+      storage: false,
+      displaySources: [
+        {
+          relationPath: ["product"],
+          priority: 0,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["location"],
+          priority: 1,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [
+        {
+          kind: "existingRelated",
+          routeId: "inventory-product",
+          relationPath: ["product"],
+        },
+        {
+          kind: "existingRelated",
+          routeId: "inventory-location",
+          relationPath: ["location"],
+        },
+      ],
+      routing: {
+        candidateFields: ["notes"],
+        temporalFields: ["verifiedAt"],
+        lifecycleFilters: [],
+        signals: { ocrFields: ["notes"], classifierLabels: ["inventory"] },
+        abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

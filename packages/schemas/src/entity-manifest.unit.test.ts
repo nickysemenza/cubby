@@ -17,6 +17,8 @@ import {
   entityManifest,
   entityReferences,
   imageEntities,
+  imageIngressRouteById,
+  type ImageIngressRoute,
   galleryEntities,
   logoEntities,
   searchableEntities,
@@ -208,6 +210,36 @@ describe("entity manifest", () => {
         entityManifest[entity].imageStorage !== false,
       );
     }
+  });
+
+  it("generates direct and related photo routes without proxying natural owners", () => {
+    const ingressRoutes: readonly ImageIngressRoute[] = Object.values(
+      imageIngressRouteById,
+    );
+    expect(imageIngressRouteById["recipe-meal"]).toMatchObject({
+      sourceEntity: "recipe",
+      targetEntity: "meal",
+      kind: "existingRelated",
+    });
+    expect(imageIngressRouteById["planting-new-garden-entry"]).toMatchObject({
+      sourceEntity: "planting",
+      targetEntity: "gardenEntry",
+      kind: "createRelated",
+    });
+    expect(
+      ingressRoutes.some(
+        (route) =>
+          route.sourceEntity === "project" && route.targetEntity === "task",
+      ),
+    ).toBe(false);
+    expect(imageIngressRouteById["project-self"].targetEntity).toBe("project");
+    expect(imageIngressRouteById["task-self"].targetEntity).toBe("task");
+    expect(
+      imageIngressRouteById["financial-transaction-confirmed-purchase"],
+    ).toMatchObject({
+      sourceEntity: "financialTransaction",
+      targetEntity: "purchase",
+    });
   });
 
   it("derives the searchable contract", () => {

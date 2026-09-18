@@ -7,19 +7,42 @@ public struct ImageHashEntry: Sendable, Hashable, Codable {
     public let sourceFingerprint: SourceFingerprint?
     public let width: Int?
     public let height: Int?
+    /// Direct owners are returned with the hash index so a grid can render
+    /// ownership without issuing one request per cell.
+    public let directOwnerShortcodes: [String]
 
     public init(
         id: ImageCode,
         perceptualHash: PerceptualHash64? = nil,
         sourceFingerprint: SourceFingerprint? = nil,
         width: Int? = nil,
-        height: Int? = nil
+        height: Int? = nil,
+        directOwnerShortcodes: [String] = []
     ) {
         self.id = id
         self.perceptualHash = perceptualHash
         self.sourceFingerprint = sourceFingerprint
         self.width = width
         self.height = height
+        self.directOwnerShortcodes = directOwnerShortcodes
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, perceptualHash, sourceFingerprint, width, height, directOwnerShortcodes
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(ImageCode.self, forKey: .id)
+        perceptualHash = try container.decodeIfPresent(
+            PerceptualHash64.self, forKey: .perceptualHash)
+        sourceFingerprint = try container.decodeIfPresent(
+            SourceFingerprint.self, forKey: .sourceFingerprint)
+        width = try container.decodeIfPresent(Int.self, forKey: .width)
+        height = try container.decodeIfPresent(Int.self, forKey: .height)
+        directOwnerShortcodes =
+            try container.decodeIfPresent(
+                [String].self, forKey: .directOwnerShortcodes) ?? []
     }
 
     /// One `image.hashIndex` row, its hex hashes parsed.
@@ -31,7 +54,8 @@ public struct ImageHashEntry: Sendable, Hashable, Codable {
                 try SourceFingerprint(hash: PerceptualHash64(hex: $0.hash), aspectRatio: $0.aspectRatio)
             },
             width: item.width,
-            height: item.height)
+            height: item.height,
+            directOwnerShortcodes: item.directOwnerShortcodes)
     }
 }
 

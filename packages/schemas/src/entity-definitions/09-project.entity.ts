@@ -1096,7 +1096,46 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: "gallery",
+    images: {
+      storage: "gallery",
+      displaySources: [
+        {
+          relationPath: ["tasks"],
+          priority: 1,
+          ordering: "newest",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["task-products"],
+          priority: 2,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["purchased-products"],
+          priority: 3,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["resources"],
+          priority: 4,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [{ kind: "self", routeId: "project-self" }],
+      routing: {
+        candidateFields: ["name", "description", "notes"],
+        temporalFields: ["startDate", "endDate"],
+        lifecycleFilters: [{ field: "status", equals: "active" }],
+        signals: {
+          ocrFields: ["name", "description", "notes"],
+          classifierLabels: ["project"],
+        },
+        abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

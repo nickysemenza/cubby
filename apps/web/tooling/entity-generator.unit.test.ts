@@ -98,7 +98,7 @@ const base = {
   search: { enabled: false },
   capabilities: {
     auditable: false,
-    images: false as const,
+    images: { storage: false as const },
     countable: false,
     softDelete: false,
     delete: null,
@@ -247,6 +247,108 @@ const declarationDependencyViolations = async () => {
 };
 
 describe("typed entity compiler", () => {
+  it("rejects image policies whose routes, evidence, or candidate fields escape the manifest", () => {
+    const definition = (
+      images: EntityDeclaration["capabilities"]["images"],
+    ) => ({
+      ...base,
+      model,
+      capabilities: { ...base.capabilities, images },
+    });
+    const routing: NonNullable<
+      EntityDeclaration["capabilities"]["images"]["routing"]
+    > = {
+      candidateFields: ["name"],
+      temporalFields: [],
+      lifecycleFilters: [],
+      signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
+      abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+    };
+
+    expect(() =>
+      compileEntityDeclarations([
+        definition({
+          storage: false,
+          ingress: [
+            {
+              kind: "existingRelated",
+              routeId: "alpha-missing",
+              relationPath: ["missing"],
+            },
+          ],
+          routing,
+        }),
+      ]),
+    ).toThrow("references undeclared relation alpha.missing");
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...definition({
+            storage: false,
+            ingress: [
+              {
+                kind: "existingRelated",
+                routeId: "alpha-related-without-storage",
+                relationPath: ["self"],
+              },
+            ],
+            routing,
+          }),
+          relations: [
+            {
+              key: "self",
+              label: "Self",
+              target: "alpha",
+              cardinality: "one",
+              provenance: {
+                kind: "local-path",
+                steps: [{ edge: "Alpha.id", direction: "outgoing" }],
+              },
+              inverse: {
+                steps: [{ edge: "Alpha.id", direction: "incoming" }],
+              },
+            },
+          ],
+        },
+      ]),
+    ).toThrow("has no direct image storage");
+    expect(() =>
+      compileEntityDeclarations([
+        definition({
+          storage: "gallery",
+          ingress: [],
+          routing,
+        }),
+      ]),
+    ).toThrow("requires exactly one self route");
+    expect(() =>
+      compileEntityDeclarations([
+        definition({
+          storage: false,
+          ingress: [],
+          routing: { ...routing, candidateFields: ["missing"] },
+        }),
+      ]),
+    ).toThrow("references undeclared field missing");
+
+    const directImages = {
+      storage: "gallery" as const,
+      ingress: [{ kind: "self" as const, routeId: "shared-photo-route" }],
+      routing,
+    };
+    expect(() =>
+      compileEntityDeclarations([
+        definition(directImages),
+        {
+          ...definition(directImages),
+          key: "beta",
+          names: { singular: "Beta", plural: "Betas" },
+          presentation: { ...presentation, description: "Beta records." },
+        },
+      ]),
+    ).toThrow("routeId shared-photo-route conflicts");
+  });
+
   it("preserves literal model keys through the inferred declaration contract", () => {
     const definition = defineEntity({
       ...base,

@@ -40,6 +40,8 @@ filter:
     - location.ensureGlobalUnknown
     - location.makeTree
     - meal.getNutrition
+    - photoImport.commit
+    - photoImport.stage
     - problems.getCounts
     - product.findOrCreateByCode
     - product.findOrCreateByUPC

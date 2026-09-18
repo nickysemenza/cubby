@@ -119,6 +119,8 @@ extension OperationRoute {
         OperationRoute(operationID: "oauth.listConnectedApps", method: .get, path: "/api/v1/oauth/listConnectedApps", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "oauth.pruneOrphanedClients", method: .post, path: "/api/v1/oauth/pruneOrphanedClients", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "oauth.revokeConnectedApp", method: .post, path: "/api/v1/oauth/revokeConnectedApp", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "photoImport.commit", method: .post, path: "/api/v1/photoImport/commit", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "photoImport.stage", method: .post, path: "/api/v1/photoImport/stage", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "problems.deleteUnused", method: .post, path: "/api/v1/problems/deleteUnused", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "problems.dryRunPruneAliases", method: .get, path: "/api/v1/problems/dryRunPruneAliases", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "problems.dryRunReparse", method: .get, path: "/api/v1/problems/dryRunReparse", pathParameters: [], queryParameters: [], hasBody: false),

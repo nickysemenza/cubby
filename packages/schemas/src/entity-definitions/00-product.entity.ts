@@ -1886,7 +1886,20 @@ export default defineEntity({
   capabilities: {
     auditable: true,
     timeline: "custom",
-    images: "gallery",
+    images: {
+      storage: "gallery",
+      ingress: [{ kind: "self", routeId: "product-self" }],
+      routing: {
+        candidateFields: ["name", "manufacturer", "model"],
+        temporalFields: [],
+        lifecycleFilters: [],
+        signals: {
+          ocrFields: ["name", "manufacturer", "model"],
+          classifierLabels: ["product"],
+        },
+        abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

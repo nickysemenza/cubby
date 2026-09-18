@@ -260,7 +260,31 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: {
+      storage: false,
+      displaySources: [
+        {
+          relationPath: ["candidates"],
+          priority: 0,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [
+        {
+          kind: "existingRelated",
+          routeId: "wish-product",
+          relationPath: ["candidates"],
+        },
+      ],
+      routing: {
+        candidateFields: ["name", "notes"],
+        temporalFields: [],
+        lifecycleFilters: [{ field: "acquired", equals: false }],
+        signals: { ocrFields: ["name", "notes"], classifierLabels: ["wish"] },
+        abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

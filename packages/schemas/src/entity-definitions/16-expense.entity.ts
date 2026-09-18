@@ -1101,7 +1101,45 @@ export default defineEntity({
   search: { enabled: true, embedding: false },
   capabilities: {
     auditable: true,
-    images: false,
+    images: {
+      storage: false,
+      displaySources: [
+        {
+          relationPath: ["product"],
+          priority: 0,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["purchase"],
+          priority: 1,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+      ingress: [
+        {
+          kind: "existingRelated",
+          routeId: "expense-purchase",
+          relationPath: ["purchase"],
+        },
+        {
+          kind: "existingRelated",
+          routeId: "expense-product",
+          relationPath: ["product"],
+        },
+      ],
+      routing: {
+        candidateFields: ["name", "notes"],
+        temporalFields: ["date"],
+        lifecycleFilters: [],
+        signals: {
+          ocrFields: ["name", "notes"],
+          classifierLabels: ["expense", "receipt"],
+        },
+        abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
+      },
+    },
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

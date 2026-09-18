@@ -4,6 +4,21 @@ export {
   entityInspectorMetadata,
   type EntityInspectorMetadata,
 } from "./generated/entity-inspector.gen";
+export {
+  imageDisplayBindings,
+  imageIngressRouteById,
+  imageIngressRoutes,
+  imageOwners,
+  imagePolicyCatalog,
+  type ImageDisplayBinding,
+  type ImageIngressBinding,
+  type ImageIngressRoute,
+  type ImageIngressRouteId,
+  type ImageOwner,
+  type ImagePolicy,
+  type ImageRoutingPolicy,
+  type ImageStorage,
+} from "./generated/image-policy.gen";
 import { generatedEntityManifest } from "./generated/entity-manifest-data.gen";
 import type { entitySummary } from "./generated/entity-summary.gen";
 import { relatednessSignalSchema } from "./relatedness";
@@ -25,6 +40,35 @@ const mcpOp = z.enum([
   "merge",
 ]);
 
+const imageStorage = z.union([
+  z.literal(false),
+  z.enum(["gallery", "cover", "logo"]),
+]);
+const imagePolicy = z.object({
+  storage: imageStorage,
+  displaySources: z
+    .array(
+      z.object({
+        relationPath: z.array(z.string()).readonly(),
+        priority: z.number().int().nonnegative(),
+        ordering: z.enum(["declared", "newest", "oldest"]),
+        identityEvidence: z.literal(false),
+      }),
+    )
+    .readonly(),
+  ingress: z
+    .array(
+      z.object({
+        kind: z.enum(["self", "existingRelated", "createRelated"]),
+        routeId: z.string(),
+        relationPath: z.array(z.string()).readonly().optional(),
+        bindings: z.array(z.unknown()).readonly().optional(),
+      }),
+    )
+    .readonly(),
+  routing: z.unknown().nullable(),
+});
+
 export const entityDescriptor = z.object({
   dbTable: z.string().nullable(),
   idBrand: z.string().nullable(),
@@ -33,6 +77,8 @@ export const entityDescriptor = z.object({
   browserRoutes: z.boolean().optional(),
   auditable: z.boolean(),
   hasImages: z.boolean(),
+  /** Manifest-owned storage, display fallback and importer route policy. */
+  images: imagePolicy,
   /** How direct images attach; display imagery is resolved for every entity. */
   imageStorage: z.union([
     z.literal(false),

@@ -150,6 +150,28 @@ export const renderApiTypes = (
     hasIdProperty(components[name]),
   );
 
+  const photoImportAliases = reachable.has("PhotoImportCommitInput")
+    ? [
+        "public typealias PhotoImportStageItem = Components.Schemas.PhotoImportStageInput.ItemsPayloadPayload",
+        "public typealias PhotoImportStageResult = Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload",
+        "public typealias PhotoImportStageExisting = Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value1Payload",
+        "public typealias PhotoImportStageUpload = Components.Schemas.PhotoImportStageOutput.ItemsPayloadPayload.Value2Payload",
+        "public typealias PhotoImportCommitImage = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload",
+        "public typealias PhotoImportSourcePayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload",
+        "public typealias PhotoImportDuplicateDecisionPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DuplicateDecisionPayload",
+        "public typealias PhotoImportCommitDestination = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload",
+        "public typealias PhotoImportExistingDestination = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value1Payload",
+        "public typealias PhotoImportCreateDestination = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload.Value2Payload",
+        "public typealias PhotoImportAnalysisPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload",
+        "public typealias PhotoImportClassificationPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ClassificationsPayloadPayload",
+        "public typealias PhotoImportRecognizedTextPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.RecognizedTextPayloadPayload",
+        "public typealias PhotoImportFeaturePrintPayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.FeaturePrintPayload",
+        "public typealias PhotoImportProvenancePayload = Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload.ProvenancePayload",
+        "public typealias PhotoImportCreatePayload = Components.Schemas.PhotoImportCommitInput.CreatesPayloadPayload",
+        "public typealias PhotoImportCreateBody = Components.Schemas.PhotoImportCommitInput.CreatesPayloadPayload.BodyPayload",
+      ]
+    : [];
+
   const resourceEntities = [...nativeOperationIds]
     .flatMap((id) => {
       const match = /^resources\.([^.]+)\.(?:list|get)$/u.exec(id);
@@ -197,6 +219,8 @@ export const renderApiTypes = (
       `${entityAliases.join("\n")}\n\n` +
       "// MARK: - Components\n\n" +
       `${aliased.map((name) => `public typealias ${name} = Components.Schemas.${name}`).join("\n")}\n\n` +
+      "// MARK: - Photo import payloads\n\n" +
+      `${photoImportAliases.join("\n")}\n\n` +
       "// MARK: - Identifiable\n\n" +
       `${identifiable.map((name) => `extension Components.Schemas.${name}: Identifiable {}`).join("\n")}\n`,
   };
