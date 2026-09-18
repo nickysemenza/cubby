@@ -273,4 +273,40 @@ struct PhotoImportStagerTests {
         // `commit(_:)` short-circuits on the already-set `committedClientIDs`: no additional POST.
         #expect(script.seen.withLock { $0 }.count == requestCountBeforeRetry)
     }
+
+    /// 8b/8c: a `createSelf` draft has no source record — the created record's id isn't known
+    /// client-side, so `sourceEntity`/`sourceID` are `nil` and the commit payload must omit
+    /// `source` entirely (never send a null/placeholder reference the server would reject).
+    @Test func createSelfDraftCommitsWithNoSourceField() async throws {
+        defer { PhotoImportStagerStub.handler.withLock { $0 = nil } }
+        let script = RequestScript()
+        PhotoImportStagerStub.handler.withLock { $0 = script.handler }
+
+        let transaction = PhotoImportTransaction(client: try makeClient(), put: { _, _, _ in })
+        script.push(status: 200, json: stageUploadResponse(clientID: "c1", imageID: "IMG-1"))
+        script.push(status: 200, json: commitSuccessResponse(imageID: "IMG-1"))
+
+        let file = try PhotoFile.materialize(
+            try ImageEncoding.encode(TestImages.canvas(width: 32, height: 24, subject: false), as: .jpeg),
+            filename: "c1.jpg")
+        let analysis = PhotoLocalAnalysis(
+            id: "c1", analyzedAt: Date(timeIntervalSince1970: 0), sha256: "sha-c1",
+            capturedAt: nil, contentType: "image/jpeg", width: 32, height: 24,
+            classifications: [], recognizedText: [],
+            featurePrint: PhotoFeaturePrint(revision: "1", data: Data()),
+            provenance: PhotoAnalysisProvenance(source: .files, filename: "c1.jpg"))
+        let createSelfItem = PhotoImportBatchItem(
+            clientID: "c1", file: file, analysis: analysis, routeID: "task-new",
+            sourceEntity: nil, sourceID: nil,
+            draftID: "task-new:new:test-uuid", draftRouteID: "task-new", draftBody: [:],
+            draftCapturedAt: nil)
+
+        let committed = try await transaction.commit([createSelfItem])
+        #expect(committed == ["c1"])
+
+        let commitImages = try #require(
+            script.seen.withLock { $0 }.last?.fields["images"]?.arrayValue)
+        #expect(commitImages.count == 1)
+        #expect(commitImages[0]["source"] == nil)
+    }
 }

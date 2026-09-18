@@ -11,8 +11,11 @@ public struct PhotoImportBatchItem: Sendable {
     public let file: PhotoFile
     public let analysis: PhotoLocalAnalysis
     public let routeID: String
-    public let sourceEntity: EntityKey
-    public let sourceID: String
+    /// `nil` for a `createSelf` draft: there is no source record, and the created record's id is
+    /// not known client-side, so the commit payload omits `source` entirely (server: `images[].source`
+    /// is present iff the route is not `createSelf`).
+    public let sourceEntity: EntityKey?
+    public let sourceID: String?
     public let candidateID: String?
     public let createDraftID: String?
     public let createRouteID: String?
@@ -47,13 +50,15 @@ public struct PhotoImportBatchItem: Sendable {
         self.duplicateChoice = duplicateChoice
     }
 
+    /// A create draft's source is optional: `createRelated` drafts carry the referenced record,
+    /// a `createSelf` draft (no source) passes `nil` for both.
     public init(
         clientID: String,
         file: PhotoFile,
         analysis: PhotoLocalAnalysis,
         routeID: String,
-        sourceEntity: EntityKey,
-        sourceID: String,
+        sourceEntity: EntityKey?,
+        sourceID: String?,
         draftID: String,
         draftRouteID: String,
         draftBody: [String: JSONValue],
@@ -185,11 +190,18 @@ public actor PhotoImportTransaction {
             guard let staged = stagedByClientID[item.clientID] else {
                 throw Failure.invalidStageResponse(item.clientID)
             }
-            guard
-                let sourceEntity = PhotoImportSourcePayload.EntityPayload(
-                    rawValue: item.sourceEntity.rawValue)
-            else {
-                throw Failure.invalidStageResponse("unsupported source:\(item.sourceEntity.rawValue)")
+            let source: PhotoImportSourcePayload?
+            if let sourceEntity = item.sourceEntity, let sourceID = item.sourceID {
+                guard
+                    let payloadEntity = PhotoImportSourcePayload.EntityPayload(
+                        rawValue: sourceEntity.rawValue)
+                else {
+                    throw Failure.invalidStageResponse("unsupported source:\(sourceEntity.rawValue)")
+                }
+                source = PhotoImportSourcePayload(entity: payloadEntity, id: sourceID)
+            } else {
+                // `createSelf`: no source record exists to name.
+                source = nil
             }
             let destination: PhotoImportCommitDestination
             if let candidateID = item.candidateID {
@@ -212,7 +224,7 @@ public actor PhotoImportTransaction {
                 clientId: item.clientID,
                 imageId: staged.imageID,
                 routeId: item.routeID,
-                source: PhotoImportSourcePayload(entity: sourceEntity, id: item.sourceID),
+                source: source,
                 destination: destination,
                 duplicateDecision: duplicateDecision,
                 replaceConfirmed: item.replaceConfirmed,

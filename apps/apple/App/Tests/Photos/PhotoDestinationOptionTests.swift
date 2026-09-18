@@ -25,6 +25,16 @@ struct PhotoDestinationOptionTests {
         #expect(existing.title == "Meals")
     }
 
+    /// A `createSelf` option is never one of the route-picker's menu rows (see
+    /// `PhotoImportManifest.destinationOptions`), but the "New <entity>" row still reuses
+    /// `menuTitle` for its label, so the exhaustive `.createSelf` case must read naturally there.
+    @Test func createSelfOptionHasANewRecordMenuTitle() throws {
+        let route = try #require(PhotoImportCatalog.ingressRoutes.first { $0.id == "task-new" })
+        let option = PhotoDestinationOption(route: route, descriptor: EntityCatalog[.task])
+
+        #expect(option.menuTitle == "New Task")
+    }
+
     @Test func everyMoveMenuRouteHasADistinctTitle() throws {
         let manifest = PhotoImportManifest(items: [])
         let titles = manifest.destinationOptions.map(\.menuTitle)

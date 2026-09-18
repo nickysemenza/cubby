@@ -222,6 +222,75 @@ struct PhotoImportFlowTests {
         #expect(PhotoImportManifest.nonNullSourceFieldValue(binding: binding, source: source) == nil)
     }
 
+    /// 8a: a route's `primaryWhen` outranks the unconditional `.primary` when the picked record's
+    /// field matches. Picks the predicate route from the catalog by `primaryWhen != nil`, never by
+    /// entity name, so this stays correct if the manifest's declared values ever change.
+    @Test func conditionalPrimaryOutranksTheUnconditionalPrimaryWhenThePredicateMatches() async throws {
+        let bed = try selection(filename: "bed.jpg")
+        let shelf = try selection(filename: "shelf.jpg")
+        let bedManifest = PhotoImportManifest(items: [bed])
+        let shelfManifest = PhotoImportManifest(items: [shelf])
+        let type = try #require(bedManifest.sourceTypeOptions.first { $0.source == .location })
+        let conditional = try #require(type.options.first { $0.route.primaryWhen != nil })
+        let predicate = try #require(conditional.route.primaryWhen)
+        let bedRow = EntityRow(
+            id: "LOC-0001", title: "Bed", subtitle: nil, imageURL: nil,
+            raw: ["id": "LOC-0001", "type": .string(predicate.values[0])])
+        let shelfRow = EntityRow(
+            id: "LOC-0002", title: "Shelf", subtitle: nil, imageURL: nil,
+            raw: ["id": "LOC-0002", "type": "a-non-predicate-value"])
+        let client = try routeClient(gardenEntries: [])
+
+        let bedResolution = await bedManifest.chooseSourceRecord(type, row: bedRow, client: client)
+        guard case .resolved = bedResolution else {
+            Issue.record("A matching predicate must resolve via the conditional route")
+            return
+        }
+        #expect(bedManifest.groups.first?.id.hasPrefix(conditional.id) == true)
+
+        let shelfResolution = await shelfManifest.chooseSourceRecord(type, row: shelfRow, client: client)
+        guard case .resolved = shelfResolution else {
+            Issue.record("A non-matching row must fall back to the unconditional primary")
+            return
+        }
+        #expect(shelfManifest.groups.first?.source == .location)
+        #expect(shelfManifest.createDraftBody(for: shelf.id) == nil)
+    }
+
+    /// 8c: `createSelf`'s target-of-createRelated case is discovered purely from the catalog by
+    /// `target == type && kind == .createRelated`, never by entity name; its reference fields are
+    /// each candidate's `source-id`-bound field.
+    @Test func createTargetOptionsExposeTheReferenceFieldsForAPickedTargetType() throws {
+        let candidates = PhotoImportManifest.createTargetOptions(for: .gardenEntry)
+        let referenceFields = Set(
+            candidates.compactMap { option in
+                option.route.bindings.first { $0.source == .sourceId }?.field
+            })
+
+        #expect(!candidates.isEmpty)
+        #expect(candidates.allSatisfy { $0.route.kind == .createRelated && $0.route.target == .gardenEntry })
+        #expect(referenceFields == ["locationId", "plantingId"])
+        let fallback = try #require(PhotoImportManifest.createSelfOption(for: .gardenEntry))
+        #expect(fallback.route.kind == .createSelf)
+        #expect(fallback.route.enabled)
+    }
+
+    /// 8c: a disabled `createSelf` route (e.g. Project — "create one in Projects first") must
+    /// never actually stage a draft, even if something upstream calls `stageCreate` on it — the
+    /// UI disabling its row is not the only guard.
+    @Test func stageCreateNeverStagesADisabledRoute() throws {
+        let item = try selection(filename: "disabled.jpg")
+        let manifest = PhotoImportManifest(items: [item])
+        let option = try #require(PhotoImportManifest.createSelfOption(for: .project))
+        #expect(!option.route.enabled)
+
+        manifest.selectedIDs = [item.id]
+        manifest.stageCreate(option: option, source: nil, body: [:])
+
+        #expect(manifest.needsDestination == [item.id])
+        #expect(manifest.groups.isEmpty)
+    }
+
     @Test func aSharedVisionSuggestionTakesSelectedPhotosStraightToTheirSourceType() {
         let selected = Set(["photo-1", "photo-2"])
 

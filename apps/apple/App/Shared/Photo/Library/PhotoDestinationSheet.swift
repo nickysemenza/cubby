@@ -12,6 +12,8 @@ struct PhotoDestinationSheet: View {
     @State private var replacement: ReplacementConfirmation?
     @State private var createContext: PhotoCreateContext?
     @State private var relatedContext: PhotoRelatedContext?
+    @State private var createSelfContext: PhotoCreateSelfContext?
+    @State private var createTargetContext: PhotoCreateTargetContext?
 
     init(items: [PhotoSelectionItem], onDone: @escaping ([String]) -> Void) {
         self.onDone = onDone
@@ -46,11 +48,14 @@ struct PhotoDestinationSheet: View {
                                     }
                                 }
                                 Spacer()
-                                Button("Change destination…") {
-                                    path.append(.routePicker(source: group.source, row: group.sourceRow))
+                                if let source = group.source, let sourceRow = group.sourceRow {
+                                    Button("Change destination…") {
+                                        path.append(.routePicker(source: source, row: sourceRow))
+                                    }
+                                    .font(.caption)
+                                    .accessibilityIdentifier(
+                                        "photos.manifest.changeDestination.\(group.id)")
                                 }
-                                .font(.caption)
-                                .accessibilityIdentifier("photos.manifest.changeDestination.\(group.id)")
                             }
                         }
                     }
@@ -104,7 +109,8 @@ struct PhotoDestinationSheet: View {
                     }) {
                         PhotoEntityChooser(
                             key: source, captureDates: manifest.selectedItems.map(\.capturedAt),
-                            heroItems: manifest.items, importManifest: manifest
+                            heroItems: manifest.items, importManifest: manifest,
+                            onCreateNew: handleCreateNew
                         ) { row in
                             chooseSourceRecord(type, row: row)
                         }
@@ -167,15 +173,39 @@ struct PhotoDestinationSheet: View {
         }
         .sheet(item: $createContext) { context in
             PhotoRelatedCreateEditor(
-                option: context.option,
-                source: context.source,
+                mode: .createRelated(option: context.option, source: context.source),
                 captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
                 heroItems: manifest.items,
                 importManifest: manifest
-            ) { body in
-                manifest.stageCreate(
-                    option: context.option, source: context.source, body: body)
+            ) { option, sourceRow, body in
+                manifest.stageCreate(option: option, source: sourceRow, body: body)
                 createContext = nil
+                path.removeAll()
+            }
+        }
+        .sheet(item: $createSelfContext) { context in
+            PhotoRelatedCreateEditor(
+                mode: .createSelf(option: context.option),
+                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
+                heroItems: manifest.items,
+                importManifest: manifest
+            ) { option, _, body in
+                manifest.stageCreate(option: option, source: nil, body: body)
+                createSelfContext = nil
+                path.removeAll()
+            }
+        }
+        .sheet(item: $createTargetContext) { context in
+            PhotoRelatedCreateEditor(
+                mode: .createTarget(
+                    descriptor: EntityCatalog[context.type], candidates: context.candidates,
+                    fallback: context.fallback),
+                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
+                heroItems: manifest.items,
+                importManifest: manifest
+            ) { option, sourceRow, body in
+                manifest.stageCreate(option: option, source: sourceRow, body: body)
+                createTargetContext = nil
                 path.removeAll()
             }
         }
@@ -359,6 +389,41 @@ struct PhotoDestinationSheet: View {
         case .`self`:
             manifest.moveSelected(to: option, row: source)
             path.removeAll()
+        case .createSelf:
+            // Unreachable: the route picker's menu is `type.options`, which excludes `createSelf`
+            // (see `destinationOptions`) — that affordance lives on `PhotoEntityChooser`'s "New
+            // <entity>" row instead, which never has an existing `source` row to route from.
+            break
+        }
+    }
+
+    /// Opens (or, when every remaining field is optional, skips straight past) the create editor
+    /// for a type's own `createSelf` route — the "New <entity>" row's plain case, with no source
+    /// record and no candidate routes to choose between.
+    private func stageOrOpenCreateSelfEditor(_ option: PhotoDestinationOption) {
+        guard option.route.enabled else { return }
+        let captureDate = manifest.selectedItems.compactMap(\.capturedAt).min()
+        if PhotoRelatedCreateEditor.hasOnlyOptionalFields(
+            option: option, source: nil, captureDate: captureDate)
+        {
+            manifest.stageCreate(
+                option: option, source: nil,
+                body: PhotoRelatedCreateEditor.createPrefill(
+                    option: option, source: nil, captureDate: captureDate))
+            path.removeAll()
+        } else {
+            createSelfContext = PhotoCreateSelfContext(option: option)
+        }
+    }
+
+    private func handleCreateNew(_ affordance: PhotoNewRecordAffordance) {
+        switch affordance {
+        case .createSelf(let option):
+            stageOrOpenCreateSelfEditor(option)
+        case .createTarget(let candidates, let fallback):
+            guard let type = candidates.first?.route.target ?? fallback?.route.target else { return }
+            createTargetContext = PhotoCreateTargetContext(
+                type: type, candidates: candidates, fallback: fallback)
         }
     }
 
@@ -500,11 +565,32 @@ final class PhotoImportManifest {
         if analysisState.isRunning { analysisState = .idle }
     }
 
+    /// `createSelf` is never a "pick an existing record" option (there is no record to pick) —
+    /// it is the type's "New <singular>" affordance, surfaced separately by
+    /// `createSelfOption(for:)`/`createTargetOptions(for:)` and rendered by `PhotoEntityChooser`.
     var destinationOptions: [PhotoDestinationOption] {
         PhotoImportCatalog.ingressRoutes
-            .filter { $0.storage != nil }
+            .filter { $0.storage != nil && $0.kind != .createSelf }
             .map { PhotoDestinationOption(route: $0, descriptor: EntityCatalog[$0.target]) }
             .sorted { $0.menuTitle < $1.menuTitle }
+    }
+
+    /// The manifest's own-record creation route for `type`. Every entity declares exactly one
+    /// (8b, compiler-enforced) — enabled, or explicitly disabled with a reason — so this is the
+    /// type's "New <singular>" affordance regardless of whether it also has other routes.
+    static func createSelfOption(for type: EntityKey) -> PhotoDestinationOption? {
+        PhotoImportCatalog.ingressRoutes
+            .first { $0.kind == .createSelf && $0.target == type }
+            .map { PhotoDestinationOption(route: $0, descriptor: EntityCatalog[$0.target]) }
+    }
+
+    /// `createRelated` routes from other sources that create `type` as their target (Garden
+    /// entry ← Location/Planting, Meal ← Recipe): the same "New <singular>" row surfaces these as
+    /// alternate ways to create `type`, distinguished by which source reference the user fills in.
+    static func createTargetOptions(for type: EntityKey) -> [PhotoDestinationOption] {
+        PhotoImportCatalog.ingressRoutes
+            .filter { $0.kind == .createRelated && $0.target == type }
+            .map { PhotoDestinationOption(route: $0, descriptor: EntityCatalog[$0.target]) }
     }
 
     /// Natural source types are unique even when one type has several storage routes.
@@ -588,10 +674,14 @@ final class PhotoImportManifest {
             guard let first = values.first else { return nil }
             return PhotoImportGroup(
                 id: first.1.id,
-                title: "\(first.1.title)  \(first.1.shortcode)",
+                // A createSelf draft has no source record, so its header is just the draft's own
+                // title ("New <singular>") rather than "<title>  <shortcode>".
+                title:
+                    first.1.source == nil
+                    ? first.1.title : "\(first.1.title)  \(first.1.shortcode)",
                 evidence: first.1.evidence,
                 photoIDs: values.map { $0.0.id },
-                source: first.1.source.entity,
+                source: first.1.source?.entity,
                 sourceRow: first.1.sourceRow)
         }.sorted { $0.title < $1.title }
     }
@@ -679,7 +769,7 @@ final class PhotoImportManifest {
             return createAlternative(for: option).map { (option, $0) }
         case .createRelated:
             return existingAlternative(for: option).map { ($0, option) }
-        case .`self`:
+        case .`self`, .createSelf:
             return nil
         }
     }
@@ -726,8 +816,17 @@ final class PhotoImportManifest {
         if type.options.contains(where: { $0.route.choice == .prompt }) {
             return .routePicker
         }
+        // 8a: a route's `primaryWhen` (at most one per source, compiler-enforced) outranks the
+        // unconditional `.primary` when the picked record's field matches one of its values —
+        // e.g. a raised-bed Location routes to the Garden Entry route instead of its own gallery.
+        let conditionalPrimary = type.options.first { option in
+            guard let predicate = option.route.primaryWhen else { return false }
+            return row.raw[predicate.field]?.stringValue.map(predicate.values.contains) ?? false
+        }
         guard
-            let primary = type.options.first(where: { $0.route.choice == .primary })
+            let primary =
+                conditionalPrimary
+                ?? type.options.first(where: { $0.route.choice == .primary })
                 ?? type.options.sorted(by: { $0.id < $1.id }).first
         else { return .routePicker }
 
@@ -768,6 +867,10 @@ final class PhotoImportManifest {
             return stageOrOpenCreateEditor(primary, source: row, captureDate: captureDate)
         case .existingRelated:
             return .relatedChooser(option: primary, page: nil)
+        case .createSelf:
+            // Unreachable: `type.options` excludes `createSelf` (see `destinationOptions`); fail
+            // safe to the picker rather than staging a self-creation against a chosen source row.
+            return .routePicker
         }
     }
 
@@ -1032,12 +1135,20 @@ final class PhotoImportManifest {
         advanceFocusAfterAssignment()
     }
 
+    /// `source` is `nil` for a `createSelf` draft — the created record has no source of its own.
     func stageCreate(
-        option: PhotoDestinationOption, source: EntityRow, body: [String: JSONValue],
+        option: PhotoDestinationOption, source: EntityRow?, body: [String: JSONValue],
         photoIDs: Set<String>? = nil
     ) {
+        // A disabled route (project, cookbook, …) is shown so its reason is visible, but is never
+        // an actual staging target — belt-and-suspenders alongside the UI disabling its row.
+        guard option.route.enabled else { return }
         rememberMove()
         let itemsToStage = items.filter { photoIDs?.contains($0.id) ?? selectedIDs.contains($0.id) }
+        guard let source else {
+            stageCreateSelf(option: option, body: body, items: itemsToStage)
+            return
+        }
         let grouped = Dictionary(grouping: itemsToStage) { item in
             item.capturedAt.map { PlainDate($0).rawValue } ?? "undated"
         }
@@ -1065,6 +1176,29 @@ final class PhotoImportManifest {
                 createDraft: draft)
             for item in group { assignments[item.id] = assignment }
         }
+        advanceFocusAfterAssignment()
+    }
+
+    /// A `createSelf` draft has no source record to key or split by day — unlike the path above,
+    /// every "New <entity>" tap is its own record (even for a same-day batch), and every selected
+    /// photo goes to that one record regardless of its individual capture date.
+    private func stageCreateSelf(
+        option: PhotoDestinationOption, body: [String: JSONValue], items itemsToStage: [PhotoSelectionItem]
+    ) {
+        guard !itemsToStage.isEmpty else {
+            advanceFocusAfterAssignment()
+            return
+        }
+        let title = "New \(option.descriptor.singular)"
+        let draft = PhotoCreateDraft(
+            id: "\(option.id):new:\(UUID().uuidString)", route: option.route,
+            source: nil, body: body, title: title,
+            captureDate: itemsToStage.compactMap(\.capturedAt).min())
+        let assignment = PhotoDestinationAssignment(
+            route: option.route, source: nil, sourceRow: nil, recordID: nil,
+            title: title, shortcode: "New", replaceConfirmed: false, evidence: title,
+            createDraft: draft)
+        for item in itemsToStage { assignments[item.id] = assignment }
         advanceFocusAfterAssignment()
     }
 
@@ -1108,22 +1242,24 @@ final class PhotoImportManifest {
                 return PhotoImportBatchItem(
                     clientID: item.id, file: file, analysis: analysis,
                     routeID: assignment.route.id,
-                    sourceEntity: assignment.source.entity,
-                    sourceID: assignment.source.id,
+                    sourceEntity: assignment.source?.entity,
+                    sourceID: assignment.source?.id,
                     draftID: draft.id,
                     draftRouteID: draft.route.id, draftBody: draft.body,
                     draftCapturedAt: draft.captureDate,
                     replaceConfirmed: assignment.replaceConfirmed,
                     duplicateChoice: duplicateChoice(for: item.id))
             }
-            guard let recordID = assignment.recordID else {
+            // Every non-draft assignment (existing/self) always has a source; only a createSelf
+            // draft (handled above) omits one.
+            guard let recordID = assignment.recordID, let source = assignment.source else {
                 throw PhotoImportManifestError.incompleteAssignment
             }
             return PhotoImportBatchItem(
                 clientID: item.id, file: file, analysis: analysis,
                 routeID: assignment.route.id,
-                sourceEntity: assignment.source.entity,
-                sourceID: assignment.source.id,
+                sourceEntity: source.entity,
+                sourceID: source.id,
                 candidateID: recordID,
                 replaceConfirmed: assignment.replaceConfirmed,
                 duplicateChoice: duplicateChoice(for: item.id))
@@ -1595,8 +1731,9 @@ struct PhotoImportGroup: Identifiable, Equatable {
     let title: String
     let evidence: String?
     let photoIDs: [String]
-    let source: EntityKey
-    let sourceRow: EntityRow
+    /// `nil` for a `createSelf` draft: there is no source record to reroute from.
+    let source: EntityKey?
+    let sourceRow: EntityRow?
 }
 
 private struct PhotoAnalysisDisclosure: View {
@@ -1874,6 +2011,8 @@ struct PhotoDestinationOption: Identifiable, Sendable {
             "Existing \(descriptor.singular) for \(EntityCatalog[route.source].singular)"
         case .`self`:
             title
+        case .createSelf:
+            "New \(descriptor.singular)"
         }
     }
 
@@ -1883,7 +2022,7 @@ struct PhotoDestinationOption: Identifiable, Sendable {
             "Create \(descriptor.singular) for \(source.id)"
         case .existingRelated:
             "Choose existing \(descriptor.singular) for \(source.id)"
-        case .`self`:
+        case .`self`, .createSelf:
             menuTitle
         }
     }
@@ -1912,6 +2051,9 @@ struct PhotoSourceTypeOption: Identifiable, Sendable {
             return "Uses a related \(primary.descriptor.singular)"
         case .`self`:
             return "Attaches to an existing \(EntityCatalog[source].singular)"
+        case .createSelf:
+            // Unreachable: `options` is `destinationOptions`-derived, which excludes `createSelf`.
+            return "Creates a new \(EntityCatalog[source].singular)"
         }
     }
 }
@@ -1939,6 +2081,27 @@ private struct PhotoCreateContext: Identifiable {
     var id: String { "\(option.id):\(source.id)" }
 }
 
+/// What tapping `PhotoEntityChooser`'s leading "New <entity>" row should open: the type's own
+/// `createSelf` route, or — when the type is also the target of other sources' `createRelated`
+/// routes (Garden entry ← Location/Planting, Meal ← Recipe) — a chooser among those plus the
+/// type's own enabled route as a fallback.
+enum PhotoNewRecordAffordance {
+    case createSelf(PhotoDestinationOption)
+    case createTarget(candidates: [PhotoDestinationOption], fallback: PhotoDestinationOption?)
+}
+
+private struct PhotoCreateSelfContext: Identifiable {
+    let option: PhotoDestinationOption
+    var id: String { option.id }
+}
+
+private struct PhotoCreateTargetContext: Identifiable {
+    let type: EntityKey
+    let candidates: [PhotoDestinationOption]
+    let fallback: PhotoDestinationOption?
+    var id: String { type.rawValue }
+}
+
 private struct PhotoRelatedContext: Identifiable {
     let option: PhotoDestinationOption
     let source: EntityRow
@@ -1952,7 +2115,8 @@ private struct PhotoRelatedContext: Identifiable {
 private struct PhotoCreateDraft: Sendable {
     let id: String
     let route: PhotoIngressRoute
-    let source: EntityRef
+    /// `nil` for a `createSelf` draft — there is no source record.
+    let source: EntityRef?
     let body: [String: JSONValue]
     let title: String
     let captureDate: Date?
@@ -1960,10 +2124,12 @@ private struct PhotoCreateDraft: Sendable {
 
 private struct PhotoDestinationAssignment: Identifiable {
     let route: PhotoIngressRoute
-    let source: EntityRef
+    /// `nil` for a `createSelf` draft — there is no source record.
+    let source: EntityRef?
     /// The full source record, kept alongside the lightweight `source` ref so a "Change
-    /// destination…" reroute can rebuild the route-picker screen without re-fetching it.
-    let sourceRow: EntityRow
+    /// destination…" reroute can rebuild the route-picker screen without re-fetching it. `nil`
+    /// alongside `source` for a `createSelf` draft.
+    let sourceRow: EntityRow?
     let recordID: String?
     let title: String
     let shortcode: String
@@ -1974,8 +2140,8 @@ private struct PhotoDestinationAssignment: Identifiable {
 
     init(
         route: PhotoIngressRoute,
-        source: EntityRef,
-        sourceRow: EntityRow,
+        source: EntityRef?,
+        sourceRow: EntityRow?,
         recordID: String?,
         title: String,
         shortcode: String,
@@ -2026,6 +2192,7 @@ private struct PhotoEntityChooser: View {
     let captureDates: [Date?]
     let heroItems: [PhotoSelectionItem]
     let importManifest: PhotoImportManifest?
+    let onCreateNew: (PhotoNewRecordAffordance) -> Void
     let onSelect: (EntityRow) -> Void
     @State private var model: PhotoEntityChooserModel?
     @State private var rankOrder: [String: Int] = [:]
@@ -2033,6 +2200,19 @@ private struct PhotoEntityChooser: View {
     @State private var isRanking = false
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
+
+    /// The leading "New <entity>" row's affordance: every entity declares a `createSelf` route
+    /// (8b), so this is `nil` only if the catalog itself is missing that entity's coverage.
+    private var newRecordAffordance: PhotoNewRecordAffordance? {
+        let targets = PhotoImportManifest.createTargetOptions(for: key)
+        if !targets.isEmpty {
+            let selfOption = PhotoImportManifest.createSelfOption(for: key)
+            return .createTarget(
+                candidates: targets, fallback: selfOption?.route.enabled == true ? selfOption : nil)
+        }
+        guard let selfOption = PhotoImportManifest.createSelfOption(for: key) else { return nil }
+        return .createSelf(selfOption)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2053,6 +2233,7 @@ private struct PhotoEntityChooser: View {
                     .accessibilityIdentifier("photos.manifest.resolvingSource")
                 }
             }
+            newRecordRow
             Group {
                 if let model {
                     if model.isSearching {
@@ -2288,25 +2469,144 @@ private struct PhotoEntityChooser: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("photos.destination.row.\(row.id)")
     }
+
+    /// A leading, always-visible (never hidden, regardless of loading/search/empty state) "New
+    /// <entity>" row — enabled, or disabled with its `disabledReason` as a caption.
+    @ViewBuilder
+    private var newRecordRow: some View {
+        if let affordance = newRecordAffordance {
+            let (title, enabled, disabledReason): (String, Bool, String?) =
+                switch affordance {
+                case .createSelf(let option):
+                    (option.menuTitle, option.route.enabled, option.route.disabledReason)
+                case .createTarget:
+                    ("New \(descriptor.singular)", true, nil)
+                }
+            Divider()
+            Button {
+                onCreateNew(affordance)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus.circle").frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                        if let disabledReason {
+                            Text(disabledReason).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .disabled(!enabled)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .accessibilityIdentifier("photos.destination.new.\(key.rawValue)")
+            Divider()
+        }
+    }
+}
+
+/// What the editor is producing: an existing source's related record (today's flow), a type's own
+/// `createSelf` record (no source), or a chooser among the `createRelated` routes that target a
+/// picked type (Garden entry ← Location/Planting, Meal ← Recipe) plus that type's own `createSelf`
+/// route as a fallback when the user fills in no reference.
+private enum PhotoRelatedCreateEditorMode {
+    case createRelated(option: PhotoDestinationOption, source: EntityRow)
+    case createSelf(option: PhotoDestinationOption)
+    case createTarget(
+        descriptor: EntityDescriptor, candidates: [PhotoDestinationOption],
+        fallback: PhotoDestinationOption?)
 }
 
 /// Stages a manifest-declared related record without calling the ordinary entity create endpoint.
 /// The generic field controls still own validation and reference picking; the resulting body is
 /// handed back to the import transaction so the record and its photos commit together.
 private struct PhotoRelatedCreateEditor: View {
-    let option: PhotoDestinationOption
-    let source: EntityRow
+    let mode: PhotoRelatedCreateEditorMode
     let captureDate: Date?
     let heroItems: [PhotoSelectionItem]
     let importManifest: PhotoImportManifest
-    let onDraft: ([String: JSONValue]) -> Void
+    /// The chosen option, its source (`nil` for `createSelf`, or an unresolved `createTarget`),
+    /// and the create body.
+    let onDraft: (PhotoDestinationOption, EntityRow?, [String: JSONValue]) -> Void
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var model: GenericEntityEditModel?
     @State private var pickedTitles: [String: String] = [:]
 
-    private var descriptor: EntityDescriptor { option.descriptor }
+    private var descriptor: EntityDescriptor {
+        switch mode {
+        case .createRelated(let option, _): option.descriptor
+        case .createSelf(let option): option.descriptor
+        case .createTarget(let descriptor, _, _): descriptor
+        }
+    }
+
+    /// The known source record: only `createRelated` has one. `createSelf` has none by schema;
+    /// `createTarget`'s reference is only a typed id (see `referenceFields`), not a resolved row.
+    private var source: EntityRow? {
+        if case .createRelated(_, let row) = mode { return row }
+        return nil
+    }
+
+    /// Every binding across the mode's route(s), merged: `createTarget` prefills whichever
+    /// constant/capture-date fields its candidates (and fallback) share, while leaving each
+    /// candidate's own reference field open for the user (see `renders`).
+    private var effectiveBindings: [PhotoCreateBinding] {
+        switch mode {
+        case .createRelated(let option, _): option.route.bindings
+        case .createSelf(let option): option.route.bindings
+        case .createTarget(_, let candidates, let fallback):
+            candidates.flatMap(\.route.bindings) + (fallback?.route.bindings ?? [])
+        }
+    }
+
+    /// `createTarget`'s reference fields: each candidate `createRelated` route's `source-id`
+    /// binding field, paired with the route filling it in chooses. Sorted for determinism.
+    private var referenceFields: [(field: String, option: PhotoDestinationOption)] {
+        guard case .createTarget(_, let candidates, _) = mode else { return [] }
+        return candidates.compactMap { option in
+            option.route.bindings.first { $0.source == .sourceId }.map { ($0.field, option) }
+        }.sorted { $0.field < $1.field }
+    }
+
+    private var referenceFieldHint: String {
+        let labels = referenceFields.compactMap { descriptor.field($0.field)?.label }
+        guard !labels.isEmpty else {
+            return "Fill in a reference to create this \(descriptor.singular.lowercased())."
+        }
+        return
+            "Fill in \(labels.joined(separator: " or ")) to create this \(descriptor.singular.lowercased())."
+    }
+
+    /// `createTarget`'s route, chosen by whichever reference field the user filled in, else the
+    /// fallback `createSelf` route when none is filled; `nil` disables Continue.
+    private func chosenTargetOption(in model: GenericEntityEditModel) -> PhotoDestinationOption? {
+        guard case .createTarget(_, _, let fallback) = mode else { return nil }
+        for (field, option) in referenceFields where model.draft[field]?.stringValue?.isEmpty == false {
+            return option
+        }
+        return fallback
+    }
+
+    private func canSave(_ model: GenericEntityEditModel) -> Bool {
+        guard model.canSave else { return false }
+        if case .createTarget = mode { return chosenTargetOption(in: model) != nil }
+        return true
+    }
+
+    /// A lightweight row for the reference the user typed/picked, good enough for `stageCreate`'s
+    /// bookkeeping (title, id) — `createTarget` never loads the full referenced record.
+    private func referenceRow(
+        for option: PhotoDestinationOption, model: GenericEntityEditModel
+    ) -> EntityRow? {
+        guard let field = referenceFields.first(where: { $0.option.id == option.id })?.field,
+            let id = model.draft[field]?.stringValue, !id.isEmpty
+        else { return nil }
+        return EntityRow(
+            id: id, title: pickedTitles[field] ?? id, subtitle: nil, imageURL: nil,
+            raw: .object([field: .string(id)]))
+    }
 
     var body: some View {
         NavigationStack {
@@ -2324,6 +2624,12 @@ private struct PhotoRelatedCreateEditor: View {
                                     systemImage: "checkmark.shield"
                                 )
                                 .foregroundStyle(.secondary)
+                            }
+                            if case .createTarget = mode, chosenTargetOption(in: model) == nil {
+                                Section {
+                                    Label(referenceFieldHint, systemImage: "info.circle")
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             ForEach(model.sections) { section in
                                 let fields = section.fields.compactMap(descriptor.field).filter(renders)
@@ -2350,11 +2656,19 @@ private struct PhotoRelatedCreateEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Continue") {
-                        guard let model, model.canSave else { return }
-                        onDraft(model.createBody())
+                        guard let model, canSave(model) else { return }
+                        switch mode {
+                        case .createRelated(let option, let row):
+                            onDraft(option, row, model.createBody())
+                        case .createSelf(let option):
+                            onDraft(option, nil, model.createBody())
+                        case .createTarget:
+                            guard let chosen = chosenTargetOption(in: model) else { return }
+                            onDraft(chosen, referenceRow(for: chosen, model: model), model.createBody())
+                        }
                         dismiss()
                     }
-                    .disabled(!(model?.canSave ?? false))
+                    .disabled(!(model.map(canSave) ?? false))
                     .accessibilityIdentifier("photos.destination.create.continue")
                 }
             }
@@ -2371,28 +2685,34 @@ private struct PhotoRelatedCreateEditor: View {
     }
 
     private func renders(_ field: FieldDescriptor) -> Bool {
-        Self.renders(field, option: option, source: source, captureDate: captureDate)
+        Self.renders(field, bindings: effectiveBindings, source: source, captureDate: captureDate)
     }
 
-    /// Whether the create form would show `field` at all: hidden when a manifest binding
-    /// (source id/field, capture date, constant, relation item) already supplies its value.
-    /// Shared with `PhotoImportManifest.chooseSourceRecord`'s auto-resolve, which needs the full
-    /// create form's rendered-field roster without instantiating this editor.
+    /// Whether the create form would show `field` at all: hidden when a manifest binding already
+    /// supplies its value from a *known* record. `source-id`/`relation-items` hide only when a
+    /// real source row is known (`createRelated`) — `createSelf` never has such bindings by schema,
+    /// and `createTarget`'s reference is only a typed id, so those fields stay open for the user to
+    /// fill in directly. Shared with `PhotoImportManifest.chooseSourceRecord`'s auto-resolve, which
+    /// needs the full create form's rendered-field roster without instantiating this editor.
     static func renders(
-        _ field: FieldDescriptor, option: PhotoDestinationOption, source: EntityRow,
+        _ field: FieldDescriptor, bindings: [PhotoCreateBinding], source: EntityRow?,
         captureDate: Date?
     ) -> Bool {
         if ["pendingImageIds", "removeImageIds", "imageOrder"].contains(field.key) { return false }
-        for binding in option.route.bindings where binding.field == field.key {
+        for binding in bindings where binding.field == field.key {
             switch binding.source {
             case .sourceField:
-                if PhotoImportManifest.nonNullSourceFieldValue(binding: binding, source: source) != nil {
+                if let source,
+                    PhotoImportManifest.nonNullSourceFieldValue(binding: binding, source: source) != nil
+                {
                     return false
                 }
             case .captureDate:
                 if captureDate != nil { return false }
-            case .sourceId, .constant, .relationItems:
+            case .constant:
                 return false
+            case .sourceId, .relationItems:
+                if source != nil { return false }
             }
         }
         guard field.controlKind == .specialized else { return true }
@@ -2400,27 +2720,25 @@ private struct PhotoRelatedCreateEditor: View {
     }
 
     private func createPrefill() -> [String: JSONValue] {
-        Self.createPrefill(option: option, source: source, captureDate: captureDate)
+        Self.createPrefill(bindings: effectiveBindings, source: source, captureDate: captureDate)
     }
 
     static func createPrefill(
-        option: PhotoDestinationOption, source: EntityRow, captureDate: Date?
+        bindings: [PhotoCreateBinding], source: EntityRow?, captureDate: Date?
     ) -> [String: JSONValue] {
         var result: [String: JSONValue] = [:]
-        for binding in option.route.bindings {
+        for binding in bindings {
             switch binding.source {
             case .sourceId:
-                if binding.itemField != nil {
-                    result[binding.field] = .array([.string(source.id)])
-                } else {
-                    result[binding.field] = .string(source.id)
-                }
+                guard let source else { continue }
+                result[binding.field] =
+                    binding.itemField != nil ? .array([.string(source.id)]) : .string(source.id)
             case .sourceField:
-                if let value = PhotoImportManifest.nonNullSourceFieldValue(
-                    binding: binding, source: source)
-                {
-                    result[binding.field] = value
-                }
+                guard let source,
+                    let value = PhotoImportManifest.nonNullSourceFieldValue(
+                        binding: binding, source: source)
+                else { continue }
+                result[binding.field] = value
             case .captureDate:
                 if let captureDate {
                     result[binding.field] = .string(PlainDate(captureDate).rawValue)
@@ -2433,23 +2751,30 @@ private struct PhotoRelatedCreateEditor: View {
                     result[binding.field] = value
                 }
             case .relationItems:
-                if let itemField = binding.itemField {
-                    result[binding.field] = .array([.object([itemField: .string(source.id)])])
-                }
+                guard let source, let itemField = binding.itemField else { continue }
+                result[binding.field] = .array([.object([itemField: .string(source.id)])])
             }
         }
         return result
     }
 
+    static func createPrefill(
+        option: PhotoDestinationOption, source: EntityRow?, captureDate: Date?
+    ) -> [String: JSONValue] {
+        createPrefill(bindings: option.route.bindings, source: source, captureDate: captureDate)
+    }
+
     /// True when every field the create form would show (`renders`) is optional — nullable or
-    /// seeded with a default (`initial`). `chooseSourceRecord`'s auto-resolve stages such a
-    /// create directly instead of opening this editor for fields a person would just accept.
+    /// seeded with a default (`initial`). `chooseSourceRecord`'s auto-resolve (and the "New
+    /// <entity>" row's `createSelf` case) stages such a create directly instead of opening this
+    /// editor for fields a person would just accept. Not used for `createTarget`, which always
+    /// opens the editor — the reference choice needs a person regardless.
     static func hasOnlyOptionalFields(
-        option: PhotoDestinationOption, source: EntityRow, captureDate: Date?
+        option: PhotoDestinationOption, source: EntityRow?, captureDate: Date?
     ) -> Bool {
         option.descriptor.fields
             .filter { $0.controlKind != nil && $0.inCreate }
-            .filter { renders($0, option: option, source: source, captureDate: captureDate) }
+            .filter { renders($0, bindings: option.route.bindings, source: source, captureDate: captureDate) }
             .allSatisfy { $0.nullable || $0.initial != nil }
     }
 }
@@ -2573,9 +2898,9 @@ private struct PhotoRelatedDestinationChooser: View {
         }
         .sheet(item: $creation) { option in
             PhotoRelatedCreateEditor(
-                option: option, source: context.source, captureDate: captureDate,
+                mode: .createRelated(option: option, source: context.source), captureDate: captureDate,
                 heroItems: heroItems, importManifest: importManifest
-            ) { body in
+            ) { option, _, body in
                 onCreate(option, body)
                 creation = nil
                 dismiss()
