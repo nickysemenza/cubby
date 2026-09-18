@@ -123,6 +123,13 @@ public actor PhotoImportTransaction {
         let reusedExisting: Bool
     }
 
+    /// `CubbyAPIError.reason` values that mean "the staged image row no longer exists" rather
+    /// than a definite rejection of this request's content (the wire `code` for both is the
+    /// generic `BAD_REQUEST`/`PRECONDITION_FAILED`, so only `reason` distinguishes them).
+    private static let staleStagedImageReasons: Set<String> = [
+        "REFERENCED_RECORD_MISSING", "IMAGE_PRECONDITION_FAILED",
+    ]
+
     private let client: CubbyClient
     private let put: PresignedUpload.FilePut
     private let maximumConcurrentUploads: Int
@@ -150,6 +157,17 @@ public actor PhotoImportTransaction {
     ) async throws -> [String] {
         if let committedClientIDs { return committedClientIDs }
         try Task.checkCancellation()
+        // A `.reuse` staged entry names an already-UPLOADED image; if the user then switches that
+        // item to "keep both", resending the same id with `duplicateDecision: keepBoth` is a
+        // guaranteed 412 forever. Drop it so `unstaged` below re-stages a fresh upload instead.
+        // One direction only: `.keepBoth → .reuse(id)` is handled by the seed loop overwriting the
+        // entry, and a `reusedExisting == false` (freshly uploaded) entry is never dropped here —
+        // that would orphan a good staged upload.
+        for item in items where item.duplicateChoice == .keepBoth {
+            if stagedByClientID[item.clientID]?.reusedExisting == true {
+                stagedByClientID.removeValue(forKey: item.clientID)
+            }
+        }
         for item in items {
             if case .reuse(let imageID) = item.duplicateChoice {
                 stagedByClientID[item.clientID] = Staged(
@@ -222,17 +240,39 @@ public actor PhotoImportTransaction {
             _ = try await client.commitPhotoImport(
                 PhotoImportCommitInput(
                     idempotencyKey: idempotencyKey, images: images, creates: drafts))
-        } catch let error as CubbyAPIError {
-            // A rejected 4xx request has a definite outcome. A 5xx may happen after the database
-            // commit, so reconcile it first; if every new image is still pending, preserve the
-            // server's useful rejection instead of replacing it with a generic retry message.
-            if (400..<500).contains(error.status) { throw error }
+        } catch let apiError as CubbyAPIError {
+            // A rejected 4xx request has a definite outcome: never route it through the full
+            // ambiguous-commit reconciliation below, and never return committed ids for it — for
+            // an all-reused batch, or a reused image already attached to the same record,
+            // `reconcileAfterAmbiguousCommit` would read that as "committed" for a request the
+            // server rejected outright.
+            if (400..<500).contains(apiError.status) {
+                // `REFERENCED_RECORD_MISSING` (400) / `IMAGE_PRECONDITION_FAILED` (412) fire when
+                // the staged image row was deleted server-side (culled, or the sheet sat open
+                // >24h) — the client would otherwise resend that dead id forever. Any other 4xx
+                // (e.g. `CONSTRAINT_VIOLATION`, also `BAD_REQUEST`) is a definite rejection with no
+                // dead staged state to clear.
+                if let reason = apiError.reason, Self.staleStagedImageReasons.contains(reason) {
+                    do {
+                        _ = try await reconcileStagedIDs(items)
+                    } catch let failure as Failure {
+                        // `.stagedImagesExpired` — the ids reconciliation reported missing.
+                        throw failure
+                    } catch {
+                        // Reconciliation itself failed (still offline, decode error, …): keep the
+                        // definite 4xx (`apiError`, not this reconcile failure) rather than
+                        // replacing it with an ambiguous one.
+                        throw apiError
+                    }
+                }
+                throw apiError
+            }
             do {
                 let reconciled = try await reconcileAfterAmbiguousCommit(items)
                 committedClientIDs = reconciled
                 return reconciled
             } catch let failure as Failure {
-                if case .commitNotApplied = failure { throw error }
+                if case .commitNotApplied = failure { throw apiError }
                 throw failure
             }
         } catch {
@@ -251,11 +291,46 @@ public actor PhotoImportTransaction {
         return committed
     }
 
-    /// A transport error after the commit request is ambiguous: the server may have committed
-    /// before the response was lost. Reconciliation is read-only and never repeats the write.
-    private func reconcileAfterAmbiguousCommit(
+    /// Re-checks an ambiguous or offline commit without resending the write, for a caller that
+    /// already holds a `.commitOutcomeUncertain`/`.commitInvariant` failure from `commit(_:)` (an
+    /// offline "Check status" retry). A successful reconciliation is remembered the same way a
+    /// successful `commit(_:)` is, so a later `commit(_:)` call short-circuits instead of
+    /// re-POSTing the write.
+    public func reconcile(_ items: [PhotoImportBatchItem]) async throws -> [String] {
+        if let committedClientIDs { return committedClientIDs }
+        let reconciled = try await reconcileAfterAmbiguousCommit(items)
+        committedClientIDs = reconciled
+        return reconciled
+    }
+
+    /// Collects the currently staged image ids for `items`, fetches their server-side
+    /// reconciliation, and — when any are reported missing — removes those entries from
+    /// `stagedByClientID` (so a later `commit(_:)` re-stages a fresh upload instead of retrying a
+    /// dead id forever) and throws `.stagedImagesExpired`. Does not itself catch a failure from
+    /// `client.reconcilePhotoImport`: callers disagree on what an unreachable reconcile means (a
+    /// 4xx keeps its original error; an ambiguous commit becomes `.commitOutcomeUncertain`).
+    private func reconcileStagedIDs(
         _ items: [PhotoImportBatchItem]
-    ) async throws -> [String] {
+    ) async throws -> (
+        unique: [String: Staged], imageIDs: [ImageCode], reconciliation: PhotoImportReconcileOutput
+    ) {
+        let (unique, imageIDs) = stagedImageIDs(for: items)
+        let reconciliation = try await client.reconcilePhotoImport(imageIDs)
+        if !reconciliation.missing.isEmpty {
+            let missing = Set(reconciliation.missing)
+            for (clientID, staged) in unique where missing.contains(staged.imageID) {
+                stagedByClientID.removeValue(forKey: clientID)
+            }
+            throw Failure.stagedImagesExpired(reconciliation.missing)
+        }
+        return (unique, imageIDs, reconciliation)
+    }
+
+    /// The staged image id for every item that has one, deduplicated. Pure (no network, no
+    /// mutation) so it can be recomputed after a failed reconcile without re-deriving state.
+    private func stagedImageIDs(
+        for items: [PhotoImportBatchItem]
+    ) -> (unique: [String: Staged], imageIDs: [ImageCode]) {
         let unique = Dictionary(
             items.map { item in
                 (item.clientID, stagedByClientID[item.clientID])
@@ -264,14 +339,23 @@ public actor PhotoImportTransaction {
         let imageIDs = Array(Set(unique.values.map(\.imageID))).sorted {
             $0.rawValue < $1.rawValue
         }
+        return (unique, imageIDs)
+    }
+
+    /// A transport error after the commit request is ambiguous: the server may have committed
+    /// before the response was lost. Reconciliation is read-only and never repeats the write.
+    private func reconcileAfterAmbiguousCommit(
+        _ items: [PhotoImportBatchItem]
+    ) async throws -> [String] {
+        let unique: [String: Staged]
+        let imageIDs: [ImageCode]
         let reconciliation: PhotoImportReconcileOutput
         do {
-            reconciliation = try await client.reconcilePhotoImport(imageIDs)
+            (unique, imageIDs, reconciliation) = try await reconcileStagedIDs(items)
+        } catch let failure as Failure {
+            throw failure
         } catch {
-            throw Failure.commitOutcomeUncertain(imageIDs)
-        }
-        if !reconciliation.missing.isEmpty {
-            throw Failure.stagedImagesExpired(reconciliation.missing)
+            throw Failure.commitOutcomeUncertain(stagedImageIDs(for: items).imageIDs)
         }
         let details = Dictionary(
             reconciliation.items.map { ($0.imageId, $0) },

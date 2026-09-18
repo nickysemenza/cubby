@@ -357,24 +357,40 @@ struct PhotoDestinationSheet: View {
             HStack {
                 Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
                 Spacer()
-                Button(manifest.commitActionTitle) {
-                    Task {
-                        guard let committedIDs = await manifest.commit(client: appModel.client) else {
-                            return
+                if manifest.commitRequiresReview {
+                    Button("Check status") {
+                        Task {
+                            guard
+                                let committedIDs = await manifest.checkCommitStatus(
+                                    client: appModel.client)
+                            else { return }
+                            await finish(with: committedIDs)
                         }
-                        onDone(committedIDs)
-                        dismiss()
-                        await appModel.photoMatches.refresh(
-                            client: appModel.client,
-                            priorityIDs: Set(committedIDs))
                     }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("photos.destination.checkStatus")
+                } else {
+                    Button(manifest.commitActionTitle) {
+                        Task {
+                            guard let committedIDs = await manifest.commit(client: appModel.client)
+                            else { return }
+                            await finish(with: committedIDs)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(!manifest.canCommit)
+                    .accessibilityIdentifier("photos.manifest.add")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(!manifest.canCommit)
-                .accessibilityIdentifier("photos.manifest.add")
             }
         }.padding(16).background(.bar)
+    }
+
+    private func finish(with committedIDs: [String]) async {
+        onDone(committedIDs)
+        dismiss()
+        await appModel.photoMatches.refresh(client: appModel.client, priorityIDs: Set(committedIDs))
     }
 }
 
@@ -552,7 +568,7 @@ final class PhotoImportManifest {
         }
         if commitRequiresReview {
             return
-                "This commit could not be reconciled safely. Close and review the photo associations before trying again."
+                "This commit's outcome could not be confirmed. Check status once you're back online before trying again."
         }
         if isCommitting { return progress }
         return nil
@@ -861,6 +877,40 @@ final class PhotoImportManifest {
         undoSnapshot = []
     }
 
+    /// The wire batch for every selected item, from its resolved assignment and prepared
+    /// (materialized + analyzed) file. Shared by `commit(client:)` and `checkCommitStatus(client:)`
+    /// so both submit/reconcile the same items the same way.
+    private func makeBatch() throws -> [PhotoImportBatchItem] {
+        try items.map { item -> PhotoImportBatchItem in
+            guard let assignment = assignments[item.id],
+                let (file, analysis) = prepared[item.id]
+            else { throw PhotoImportManifestError.incompleteAssignment }
+            if let draft = assignment.createDraft {
+                return PhotoImportBatchItem(
+                    clientID: item.id, file: file, analysis: analysis,
+                    routeID: assignment.route.id,
+                    sourceEntity: assignment.source.entity,
+                    sourceID: assignment.source.id,
+                    draftID: draft.id,
+                    draftRouteID: draft.route.id, draftBody: draft.body,
+                    draftCapturedAt: draft.captureDate,
+                    replaceConfirmed: assignment.replaceConfirmed,
+                    duplicateChoice: duplicateChoice(for: item.id))
+            }
+            guard let recordID = assignment.recordID else {
+                throw PhotoImportManifestError.incompleteAssignment
+            }
+            return PhotoImportBatchItem(
+                clientID: item.id, file: file, analysis: analysis,
+                routeID: assignment.route.id,
+                sourceEntity: assignment.source.entity,
+                sourceID: assignment.source.id,
+                candidateID: recordID,
+                replaceConfirmed: assignment.replaceConfirmed,
+                duplicateChoice: duplicateChoice(for: item.id))
+        }
+    }
+
     func commit(client: CubbyClient) async -> [String]? {
         guard canCommit else { return nil }
         isCommitting = true
@@ -870,34 +920,7 @@ final class PhotoImportManifest {
         defer { isCommitting = false }
         do {
             try await prepareIfNeeded()
-            let batch = try items.map { item -> PhotoImportBatchItem in
-                guard let assignment = assignments[item.id],
-                    let (file, analysis) = prepared[item.id]
-                else { throw PhotoImportManifestError.incompleteAssignment }
-                if let draft = assignment.createDraft {
-                    return PhotoImportBatchItem(
-                        clientID: item.id, file: file, analysis: analysis,
-                        routeID: assignment.route.id,
-                        sourceEntity: assignment.source.entity,
-                        sourceID: assignment.source.id,
-                        draftID: draft.id,
-                        draftRouteID: draft.route.id, draftBody: draft.body,
-                        draftCapturedAt: draft.captureDate,
-                        replaceConfirmed: assignment.replaceConfirmed,
-                        duplicateChoice: duplicateChoice(for: item.id))
-                }
-                guard let recordID = assignment.recordID else {
-                    throw PhotoImportManifestError.incompleteAssignment
-                }
-                return PhotoImportBatchItem(
-                    clientID: item.id, file: file, analysis: analysis,
-                    routeID: assignment.route.id,
-                    sourceEntity: assignment.source.entity,
-                    sourceID: assignment.source.id,
-                    candidateID: recordID,
-                    replaceConfirmed: assignment.replaceConfirmed,
-                    duplicateChoice: duplicateChoice(for: item.id))
-            }
+            let batch = try makeBatch()
             let transaction = transaction ?? PhotoImportTransaction(client: client)
             self.transaction = transaction
             let committedClientIDs = try await transaction.commit(batch) { [weak self] state in
@@ -934,6 +957,52 @@ final class PhotoImportManifest {
                 detail: Self.importErrorDebugDetail(error),
                 kind: .fallback)
             Diagnostics.report(error, context: "photos.manifest.commit")
+            return nil
+        }
+    }
+
+    /// Re-checks a commit whose outcome could not be confirmed (`commitRequiresReview`), without
+    /// resending the write — the only way out of that state besides discarding the manifest, since
+    /// `commit(client:)` refuses to run while the flag is set (`canCommit`).
+    func checkCommitStatus(client: CubbyClient) async -> [String]? {
+        // `let activeTransaction` (rather than shadowing the `transaction` property) so
+        // `.stagedImagesExpired` below can still clear the property itself.
+        guard commitRequiresReview, let activeTransaction = transaction else { return nil }
+        do {
+            let committedIDs = try await activeTransaction.reconcile(try makeBatch())
+            hasCommitted = true
+            commitRequiresReview = false
+            progress = "Added"
+            return committedIDs
+        } catch let failure as PhotoImportTransaction.Failure {
+            switch failure {
+            case .commitNotApplied:
+                commitRequiresReview = false
+                progress = "Ready to retry"
+            case .stagedImagesExpired:
+                transaction = nil
+                commitRequiresReview = false
+                progress = "Stage again"
+            default:
+                // `.commitOutcomeUncertain` (still offline/ambiguous) or `.commitInvariant`
+                // (mixed state): keep `commitRequiresReview` set so "Check status" remains the
+                // only way forward.
+                break
+            }
+            errorMessage = failure.localizedDescription
+            appendAnalysisLog(
+                "Status check stopped",
+                detail: Self.importErrorDebugDetail(failure),
+                kind: .fallback)
+            Diagnostics.report(failure, context: "photos.manifest.checkCommitStatus")
+            return nil
+        } catch {
+            errorMessage = Self.importErrorMessage(error)
+            appendAnalysisLog(
+                "Status check failed",
+                detail: Self.importErrorDebugDetail(error),
+                kind: .fallback)
+            Diagnostics.report(error, context: "photos.manifest.checkCommitStatus")
             return nil
         }
     }
