@@ -143,6 +143,34 @@ enum PreviewFixtures {
         {"cost": {"status": "unavailable", "reason": "no_data"}, "nutrition": {}}
         """
 
+    /// `PhotoDiagnosticsView`'s preview: one entity passing its routing policy, one missing, and a
+    /// Foundation Models decision — enough to exercise every section without a real Vision run.
+    static let samplePhotoDiagnosticsReport: PhotoDiagnosticsReport = decode(
+        """
+        {"file": {"filename": "shelf.jpg", "contentType": "image/jpeg", "width": 3024, "height": 4032,
+                   "capturedAt": "2026-09-12T20:28:43.000Z", "aspectRatio": 1.3333},
+         "hashes": {"sha256": "4bc854c1e872345c8869713bcb39092f6ba6a40a9edcacd357131bd8694f907",
+                    "perceptualHash": "d362ab134d00fb3d",
+                    "sourceFingerprint": {"hash": "d362ab134d00fb3d", "aspectRatio": 1.3333}},
+         "classifications": [{"identifier": "plant", "confidence": 0.895},
+                              {"identifier": "foliage", "confidence": 0.72}],
+         "recognizedText": [{"text": "Lodge", "confidence": 0.91}],
+         "featurePrint": {"revision": "vision-feature-print-2", "bytes": 4352, "data": null},
+         "routing": [
+           {"entity": "planting", "emoji": "🌱", "classifierIdentifier": "plant", "classifierConfidence": 0.895,
+            "minimumScore": 0.76, "meetsMinimumScore": true, "wantedLabels": ["plant", "garden"],
+            "candidateFields": ["name"], "temporalFields": ["plantedOn"], "ocrFields": []},
+           {"entity": "product", "emoji": "📦", "classifierIdentifier": null, "classifierConfidence": null,
+            "minimumScore": 0.72, "meetsMinimumScore": false, "wantedLabels": ["product"],
+            "candidateFields": ["name", "manufacturer"], "temporalFields": [], "ocrFields": ["name"]}],
+         "suggestedSource": "planting",
+         "semanticModel": "available",
+         "semantic": {"status": "used",
+                      "decisions": [{"photoID": "shelf.jpg", "routeID": "planting-self",
+                                     "candidateID": "type:planting", "explanation": "Deterministic local evidence"}]},
+         "timings": {"analyzeMs": 102, "semanticMs": 340}}
+        """)
+
     /// `problems/getCounts`, for `TodayView`'s preview; every per-check count is zero. The list
     /// is every check the server counts (`ProblemsCount.byType` requires each key), so a new
     /// check fails this preview loudly instead of silently rendering a stale shape.

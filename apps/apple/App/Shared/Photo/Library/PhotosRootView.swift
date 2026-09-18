@@ -16,6 +16,10 @@ struct PhotosRootView: View {
                 appModel.photoLibrary.selectedIDs.removeAll { committedIDs.contains($0) }
                 destination = nil
             }
+            // The sheet seeds its manifest from `items` via `State(initialValue:)`, which SwiftUI
+            // applies once per view identity; without keying on the batch, a second presentation
+            // reused the first batch's manifest and showed the old photos.
+            .id(batch.id)
         }
     }
 }
@@ -381,56 +385,28 @@ private struct PhotoLibraryCell: View {
 }
 
 private struct PhotoLibraryPreview: View {
+    enum Tab: String, CaseIterable { case photo = "Photo", diagnostics = "Diagnostics" }
+
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     let asset: PHAsset
     let onSelect: () -> Void
     @State private var image: CGImage?
     @State private var error: String?
+    @State private var tab: Tab = .photo
+    @State private var diagnostics = PhotoDiagnosticsModel()
+
     var body: some View {
         NavigationStack {
             List {
-                if let image {
-                    Image(decorative: image, scale: 1).resizable().scaledToFit().frame(maxHeight: 400)
-                } else if let error {
-                    Text(error).foregroundStyle(PorcelainTokens.destructive)
-                } else {
-                    ProgressView("Loading photo…")
+                Picker("View", selection: $tab) {
+                    ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
-                if let date = asset.creationDate { Text(date.formatted(date: .complete, time: .shortened)) }
-                Section("Cubby") {
-                    let candidates = appModel.photoMatches.storedCandidates(for: asset.localIdentifier)
-                    if candidates.isEmpty {
-                        if appModel.photoMatches.hasKnownResult(for: asset.localIdentifier) {
-                            Label("Ready to add", systemImage: "plus.circle")
-                            Text("No existing copy was found.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        } else if appModel.photoMatches.isLoading {
-                            ProgressView("Checking for an existing copy…")
-                        } else {
-                            Label("Not checked yet", systemImage: "questionmark.circle")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
-                        MatchCandidateView(candidate: candidate)
-                        NavigationLink {
-                            ImageEntityDetailView(id: candidate.id)
-                        } label: {
-                            Label("Open image in Cubby", systemImage: "arrow.up.right.square")
-                        }
-                    }
-                    DisclosureGroup("Match details") {
-                        Text(appModel.photoMatches.coverage)
-                        if appModel.photoMatches.repairFailures > 0 {
-                            Text(
-                                "\(appModel.photoMatches.repairFailures) older Cubby image\(appModel.photoMatches.repairFailures == 1 ? "" : "s") could not be checked. Pull to refresh the Photos grid to retry."
-                            )
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .pickerStyle(.segmented)
+                .listRowSeparator(.hidden)
+                switch tab {
+                case .photo: photoTab
+                case .diagnostics: PhotoDiagnosticsView(model: diagnostics)
                 }
             }.navigationTitle("Photo")
                 .toolbar {
@@ -452,6 +428,70 @@ private struct PhotoLibraryPreview: View {
                         Diagnostics.report(error, context: "photos.preview")
                     }
                 }
+                .onChange(of: tab) { _, newValue in
+                    guard newValue == .diagnostics else { return }
+                    startDiagnosticsIfNeeded()
+                }
+                .onDisappear { diagnostics.cancel() }
+        }
+    }
+
+    @ViewBuilder private var photoTab: some View {
+        if let image {
+            Image(decorative: image, scale: 1).resizable().scaledToFit().frame(maxHeight: 400)
+        } else if let error {
+            Text(error).foregroundStyle(PorcelainTokens.destructive)
+        } else {
+            ProgressView("Loading photo…")
+        }
+        if let date = asset.creationDate { Text(date.formatted(date: .complete, time: .shortened)) }
+        Section("Cubby") {
+            let candidates = appModel.photoMatches.storedCandidates(for: asset.localIdentifier)
+            if candidates.isEmpty {
+                if appModel.photoMatches.hasKnownResult(for: asset.localIdentifier) {
+                    Label("Ready to add", systemImage: "plus.circle")
+                    Text("No existing copy was found.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else if appModel.photoMatches.isLoading {
+                    ProgressView("Checking for an existing copy…")
+                } else {
+                    Label("Not checked yet", systemImage: "questionmark.circle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
+                MatchCandidateView(candidate: candidate)
+                NavigationLink {
+                    ImageEntityDetailView(id: candidate.id)
+                } label: {
+                    Label("Open image in Cubby", systemImage: "arrow.up.right.square")
+                }
+            }
+            DisclosureGroup("Match details") {
+                Text(appModel.photoMatches.coverage)
+                if appModel.photoMatches.repairFailures > 0 {
+                    Text(
+                        "\(appModel.photoMatches.repairFailures) older Cubby image\(appModel.photoMatches.repairFailures == 1 ? "" : "s") could not be checked. Pull to refresh the Photos grid to retry."
+                    )
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Materializing the asset and running Vision costs seconds and RAM, so it happens only once
+    /// the Diagnostics tab is actually opened — never eagerly when the preview itself appears.
+    private func startDiagnosticsIfNeeded() {
+        guard case .idle = diagnostics.state else { return }
+        Task {
+            do {
+                let file = try await PhotoLibraryIO.shared.file(for: asset)
+                diagnostics.run(file: file)
+            } catch {
+                Diagnostics.report(error, context: "photos.diagnostics")
+            }
         }
     }
 }

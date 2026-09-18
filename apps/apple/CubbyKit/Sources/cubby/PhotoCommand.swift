@@ -102,200 +102,72 @@ extension Photo {
                 }
             }
 
-            var semanticByPath: [String: (status: String, decisions: [JSONValue], ms: Double)] = [:]
-            if !skipSemantic {
-                for (path, analysis) in analyses {
-                    let start = Date()
-                    let result = try await Self.runSemantic(analysis)
-                    let ms = Date().timeIntervalSince(start) * 1000
-                    semanticByPath[path] = (result.status, result.decisions, ms)
-                }
+            var reports: [String: PhotoDiagnosticsReport] = [:]
+            for path in paths {
+                guard let file = files[path], let analysis = analyses[path] else { continue }
+                reports[path] = await PhotoDiagnostics.report(
+                    analysis: analysis, file: file, includeFeaturePrintData: includeFeaturePrint,
+                    runSemantic: !skipSemantic, analyzeMs: analyzeMsByPath[path] ?? 0)
             }
 
-            var objects: [JSONValue] = []
+            var entries: [CLIAnalyzeEntry] = []
             var hadError = false
             for path in paths {
                 if let message = errors[path] {
                     hadError = true
-                    objects.append(.object(["path": .string(path), "error": .string(message)]))
+                    entries.append(.failure(path: path, error: message))
                     continue
                 }
-                guard let file = files[path], let analysis = analyses[path] else {
+                guard let report = reports[path] else {
                     hadError = true
-                    objects.append(
-                        .object([
-                            "path": .string(path), "error": .string("Analysis did not complete."),
-                        ]))
+                    entries.append(.failure(path: path, error: "Analysis did not complete."))
                     continue
                 }
-                objects.append(
-                    Self.jsonObject(
-                        path: path, file: file, analysis: analysis,
-                        includeFeaturePrintData: includeFeaturePrint,
-                        analyzeMs: analyzeMsByPath[path] ?? 0,
-                        semantic: semanticByPath[path]))
+                entries.append(.report(report))
             }
 
             if json {
-                print(try CLI.prettyJSON(.array(objects)))
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+                encoder.dateEncodingStrategy = .iso8601
+                print(String(decoding: try encoder.encode(entries), as: UTF8.self))
             } else {
                 for path in paths {
-                    Self.printHumanReport(
-                        path: path, file: files[path], analysis: analyses[path], error: errors[path],
-                        analyzeMs: analyzeMsByPath[path], semantic: semanticByPath[path],
-                        semanticRequested: !skipSemantic)
+                    if let message = errors[path] {
+                        print("\(path): ERROR \(message)")
+                    } else if let report = reports[path] {
+                        Self.printHumanReport(
+                            path: path, report: report, semanticRequested: !skipSemantic)
+                    } else {
+                        print("\(path): ERROR Analysis did not complete.")
+                    }
                 }
             }
 
             if hadError { throw ExitCode.failure }
         }
 
-        // MARK: - Semantic reranking
-
-        private static func runSemantic(_ analysis: PhotoLocalAnalysis) async throws -> (
-            status: String, decisions: [JSONValue]
-        ) {
-            let candidates = PhotoImportCatalog.routingPolicies.keys
-                .sorted { $0.rawValue < $1.rawValue }
-                .map { key in
-                    PhotoRoutingCandidate(
-                        id: "type:\(key.rawValue)", routeID: "\(key.rawValue)-self",
-                        description: EntityCatalog[key].plural)
-                }
-            let matches = PhotoEvidenceScorer.policyMatches(analysis)
-            let deterministicIDs =
-                matches
-                .filter { $0.value.meetsMinimumScore }
-                .sorted { ($0.value.classifierConfidence ?? 0) > ($1.value.classifierConfidence ?? 0) }
-                .map { "type:\($0.key.rawValue)" }
-            let evidence = PhotoRoutingEvidence(
-                photoID: analysis.id, summary: Self.evidenceSummary(analysis),
-                deterministicCandidateIDs: deterministicIDs)
-            let result = try await PhotoSemanticReranker().rerank(
-                evidence: [evidence], candidates: candidates)
-            return (Self.statusName(result.modelStatus), result.decisions.map(Self.decisionJSON))
-        }
-
-        private static func evidenceSummary(_ analysis: PhotoLocalAnalysis) -> String {
-            let classifications = analysis.classifications.prefix(3).map(\.identifier).joined(
-                separator: ", ")
-            let text = analysis.recognizedText.prefix(3).map(\.text).joined(separator: " / ")
-            return
-                "classifications: \(classifications.isEmpty ? "none" : classifications); text: \(text.isEmpty ? "none" : text)"
-        }
-
-        private static func statusName(_ status: PhotoSemanticModelStatus) -> String {
-            switch status {
-            case .used: "used"
-            case .unavailable(let availability): "unavailable(\(availability))"
-            case .failed(let failure): "failed(\(failure.rawValue))"
-            }
-        }
-
-        private static func decisionJSON(_ decision: PhotoRoutingDecision) -> JSONValue {
-            .object([
-                "photoID": .string(decision.photoID),
-                "routeID": decision.routeID.map(JSONValue.string) ?? .null,
-                "candidateID": decision.candidateID.map(JSONValue.string) ?? .null,
-                "explanation": .string(decision.explanation),
-            ])
-        }
-
         // MARK: - JSON assembly
 
-        private static func jsonObject(
-            path: String, file: PhotoFile, analysis: PhotoLocalAnalysis,
-            includeFeaturePrintData: Bool, analyzeMs: Double,
-            semantic: (status: String, decisions: [JSONValue], ms: Double)?
-        ) -> JSONValue {
-            let fileObject: JSONValue = .object([
-                "path": .string(path),
-                "filename": .string(file.filename),
-                "contentType": .string(file.contentType),
-                "width": .number(Double(file.width)),
-                "height": .number(Double(file.height)),
-                "capturedAt": analysis.capturedAt.map { .string($0.ISO8601Format()) } ?? .null,
-                "aspectRatio": .number(file.aspectRatio),
-            ])
-            let sourceFingerprint: JSONValue =
-                analysis.sourceFingerprint.map {
-                    .object(["hash": .string($0.hash.hex), "aspectRatio": .number($0.aspectRatio)])
-                } ?? .null
-            let hashesObject: JSONValue = .object([
-                "sha256": .string(analysis.sha256),
-                "perceptualHash": analysis.perceptualHash.map { .string($0.hex) } ?? .null,
-                "sourceFingerprint": sourceFingerprint,
-            ])
-            let classifications: JSONValue = .array(
-                analysis.classifications.map {
-                    .object(["identifier": .string($0.identifier), "confidence": .number($0.confidence)])
-                })
-            let recognizedText: JSONValue = .array(
-                analysis.recognizedText.map {
-                    .object(["text": .string($0.text), "confidence": .number($0.confidence)])
-                })
-            var featurePrintFields: [String: JSONValue] = [
-                "revision": .string(analysis.featurePrint.revision),
-                "bytes": .number(Double(analysis.featurePrint.data.count)),
-            ]
-            if includeFeaturePrintData {
-                featurePrintFields["data"] = .string(analysis.featurePrint.data.base64EncodedString())
-            }
+        /// One array entry per requested path: a full report for a photo that analyzed, or a bare
+        /// `{path, error}` object for one that didn't — so the array shape never changes with
+        /// argument count and a partial-batch failure never hides the successes around it.
+        private enum CLIAnalyzeEntry: Encodable {
+            case report(PhotoDiagnosticsReport)
+            case failure(path: String, error: String)
 
-            let matches = PhotoEvidenceScorer.policyMatches(analysis)
-            let routing: JSONValue = .array(
-                PhotoImportCatalog.routingPolicies
-                    .sorted { $0.key.rawValue < $1.key.rawValue }
-                    .map { key, policy -> JSONValue in
-                        let match = matches[key]!
-                        var classifierMatch: JSONValue = .null
-                        if let identifier = match.classifierIdentifier,
-                            let confidence = match.classifierConfidence
-                        {
-                            classifierMatch = .object([
-                                "identifier": .string(identifier), "confidence": .number(confidence),
-                            ])
-                        }
-                        return .object([
-                            "entity": .string(key.rawValue),
-                            "classifierMatch": classifierMatch,
-                            "minimumScore": .number(match.minimumScore),
-                            "meetsMinimumScore": .bool(match.meetsMinimumScore),
-                            "candidateFields": .array(policy.candidateFields.map(JSONValue.string)),
-                            "temporalFields": .array(policy.temporalFields.map(JSONValue.string)),
-                            "ocrFields": .array(policy.ocrFields.map(JSONValue.string)),
-                        ])
-                    })
-            // The entity whose classifier match both clears its policy's minimum score and scores
-            // highest among those that do — the same verdict `suggestedSource` surfaces in the app.
-            let suggestedSource =
-                matches
-                .filter { $0.value.meetsMinimumScore }
-                .max { ($0.value.classifierConfidence ?? 0) < ($1.value.classifierConfidence ?? 0) }
-                .map { $0.key.rawValue }
+            private enum FailureKeys: String, CodingKey { case path, error }
 
-            var timingsFields: [String: JSONValue] = ["analyzeMs": .number(analyzeMs)]
-            var topFields: [String: JSONValue] = [
-                "file": fileObject,
-                "hashes": hashesObject,
-                "classifications": classifications,
-                "recognizedText": recognizedText,
-                "featurePrint": .object(featurePrintFields),
-                "routing": routing,
-                "suggestedSource": suggestedSource.map(JSONValue.string) ?? .null,
-                "semanticModel": .string(
-                    String(
-                        describing: FoundationModelsPhotoSemanticModel().availability(for: .current))),
-            ]
-            if let semantic {
-                timingsFields["semanticMs"] = .number(semantic.ms)
-                topFields["semantic"] = .object([
-                    "status": .string(semantic.status),
-                    "decisions": .array(semantic.decisions),
-                ])
+            func encode(to encoder: Encoder) throws {
+                switch self {
+                case .report(let report):
+                    try report.encode(to: encoder)
+                case .failure(let path, let error):
+                    var container = encoder.container(keyedBy: FailureKeys.self)
+                    try container.encode(path, forKey: .path)
+                    try container.encode(error, forKey: .error)
+                }
             }
-            topFields["timings"] = .object(timingsFields)
-            return .object(topFields)
         }
 
         // MARK: - Human-readable report
@@ -303,20 +175,11 @@ extension Photo {
         /// One section per evaluation the app runs on a photo, so a routing miss can be traced to
         /// the stage that produced it. Mirrors the JSON keys; `--json` is the stable machine form.
         private static func printHumanReport(
-            path: String, file: PhotoFile?, analysis: PhotoLocalAnalysis?, error: String?,
-            analyzeMs: Double?, semantic: (status: String, decisions: [JSONValue], ms: Double)?,
-            semanticRequested: Bool
+            path: String, report: PhotoDiagnosticsReport, semanticRequested: Bool
         ) {
-            if let error {
-                print("\(path): ERROR \(error)")
-                return
-            }
-            guard let file, let analysis else {
-                print("\(path): ERROR Analysis did not complete.")
-                return
-            }
-            let captured = analysis.capturedAt?.ISO8601Format() ?? "unknown"
-            let ms = analyzeMs.map { String(format: "%.0f ms", $0) } ?? "-"
+            let file = report.file
+            let captured = file.capturedAt?.ISO8601Format() ?? "unknown"
+            let ms = String(format: "%.0f ms", report.timings.analyzeMs)
             print(
                 "\(file.filename)  \(file.width)x\(file.height) \(file.contentType)  captured=\(captured)  analyzed in \(ms)"
             )
@@ -324,20 +187,20 @@ extension Photo {
             print(
                 "  [1] identity — sha256 + 64-bit perceptual hash (exact/near duplicate detection at staging)"
             )
-            print("      sha256=\(analysis.sha256)")
+            print("      sha256=\(report.identity.sha256)")
             print(
-                "      pHash=\(analysis.perceptualHash?.hex ?? "unavailable")"
-                    + (analysis.sourceFingerprint.map {
+                "      pHash=\(report.identity.perceptualHash ?? "unavailable")"
+                    + (report.identity.sourceFingerprint.map {
                         String(format: "  fingerprint aspect=%.4f", $0.aspectRatio)
                     } ?? ""))
 
             print(
-                "  [2] Vision ClassifyImageRequest r2 — scene/object labels (\(analysis.classifications.count) kept)"
+                "  [2] Vision ClassifyImageRequest r2 — scene/object labels (\(report.classifications.count) kept)"
             )
-            if analysis.classifications.isEmpty {
+            if report.classifications.isEmpty {
                 print("      none")
             } else {
-                for classification in analysis.classifications {
+                for classification in report.classifications {
                     print(
                         "      \(pad(classification.identifier, 28)) \(String(format: "%.3f", classification.confidence))"
                     )
@@ -345,12 +208,12 @@ extension Photo {
             }
 
             print(
-                "  [3] Vision RecognizeTextRequest r3 (accurate) — OCR (\(analysis.recognizedText.count) kept; ≥3 chars matched against candidate fields)"
+                "  [3] Vision RecognizeTextRequest r3 (accurate) — OCR (\(report.recognizedText.count) kept; ≥3 chars matched against candidate fields)"
             )
-            if analysis.recognizedText.isEmpty {
+            if report.recognizedText.isEmpty {
                 print("      none")
             } else {
-                for text in analysis.recognizedText {
+                for text in report.recognizedText {
                     print(String(format: "      %.3f  \"%@\"", text.confidence, text.text))
                 }
             }
@@ -359,38 +222,29 @@ extension Photo {
                 "  [4] Vision GenerateImageFeaturePrintRequest — embedding for visual identity matching against existing gallery images"
             )
             print(
-                "      revision=\(analysis.featurePrint.revision)  bytes=\(analysis.featurePrint.data.count)")
+                "      revision=\(report.featurePrint.revision)  bytes=\(report.featurePrint.bytes)")
 
-            let matches = PhotoEvidenceScorer.policyMatches(analysis)
             print("  [5] routing policies — best classifier label per entity vs. that entity's minimum score")
-            for (key, policy) in PhotoImportCatalog.routingPolicies.sorted(by: {
-                $0.key.rawValue < $1.key.rawValue
-            }) {
-                let match = matches[key]
-                let verdict = match?.meetsMinimumScore == true ? "PASS" : "    "
-                let label = match?.classifierIdentifier.map { "\($0)" } ?? "no label matched"
-                let confidence = match?.classifierConfidence.map { String(format: "%.3f", $0) } ?? "  -  "
+            for verdict in report.routing {
+                let flag = verdict.meetsMinimumScore ? "PASS" : "    "
+                let label = verdict.classifierIdentifier.map { "\($0)" } ?? "no label matched"
+                let confidence = verdict.classifierConfidence.map { String(format: "%.3f", $0) } ?? "  -  "
                 print(
-                    "      \(verdict) \(EntityCatalog[key].emoji) \(pad(key.rawValue, 22)) \(confidence) ≥ \(String(format: "%.2f", policy.minimumScore))  \(pad(label, 18)) wants: \(policy.classifierLabels.joined(separator: ","))"
+                    "      \(flag) \(verdict.emoji) \(pad(verdict.entity.rawValue, 22)) \(confidence) ≥ \(String(format: "%.2f", verdict.minimumScore))  \(pad(label, 18)) wants: \(verdict.wantedLabels.joined(separator: ","))"
                 )
             }
-            let suggested =
-                matches
-                .filter { $0.value.meetsMinimumScore }
-                .max { ($0.value.classifierConfidence ?? 0) < ($1.value.classifierConfidence ?? 0) }
-                .map { $0.key.rawValue }
-            print("      suggested source: \(suggested ?? "none (photo stays in Needs a destination)")")
+            print(
+                "      suggested source: \(report.suggestedSource?.rawValue ?? "none (photo stays in Needs a destination)")"
+            )
 
-            let availability = String(
-                describing: FoundationModelsPhotoSemanticModel().availability(for: .current))
-            print("  [6] Foundation Models reranker — availability=\(availability)")
-            if let semantic {
-                print(String(format: "      status=%@  (%.0f ms)", semantic.status, semantic.ms))
-                for case .object(let decision) in semantic.decisions {
-                    let route = decision["routeID"]?.stringValue ?? "no route"
-                    let candidate = decision["candidateID"]?.stringValue ?? "no candidate"
-                    let explanation = decision["explanation"]?.stringValue ?? ""
-                    print("      → \(route) / \(candidate): \(explanation)")
+            print("  [6] Foundation Models reranker — availability=\(report.semanticModel)")
+            if let semantic = report.semantic {
+                let ms = report.timings.semanticMs ?? 0
+                print(String(format: "      status=%@  (%.0f ms)", semantic.status, ms))
+                for decision in semantic.decisions {
+                    print(
+                        "      → \(decision.routeID ?? "no route") / \(decision.candidateID ?? "no candidate"): \(decision.explanation)"
+                    )
                 }
             } else if !semanticRequested {
                 print("      skipped (--no-semantic)")
