@@ -11,16 +11,24 @@ import type { z } from "zod";
 
 import { imageUploadContract } from "~/contracts/image-upload.contract";
 import { imageContract } from "~/contracts/image.contract";
+import type { LocalPhotoAnalysis } from "~/contracts/photo-import.contract";
 import {
   type EntityKernelContext,
   executeEntity,
 } from "~/server/entity-kernel";
+import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   getImageHashIndex,
   getImagesByProjectIds,
   setImagePerceptualHashes,
 } from "~/server/repo/image";
+import {
+  getLocalImageAnalysis,
+  getImportImageRows,
+  persistLocalImageAnalysis,
+  type ImportImageRow,
+} from "~/server/repo/photo-import";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   cullPendingImagesWorkflow,
@@ -128,6 +136,85 @@ export async function updateImageThenReload<TContext>(
 }
 
 /**
+ * Read + backfill ports for the diagnostics tab's persisted-analysis round
+ * trip. Kept separate from {@link ImageBrowserPorts} because these resolve
+ * through the import row (uuid, status, sha256), not the entity kernel.
+ */
+export interface ImagePhotoAnalysisPorts {
+  getImportRow(
+    context: EntityKernelContext,
+    id: string,
+  ): Promise<ImportImageRow | null>;
+  getAnalysis(
+    context: EntityKernelContext,
+    imageId: string,
+  ): Promise<LocalPhotoAnalysis | null>;
+  persistAnalysis(
+    context: EntityKernelContext,
+    imageId: string,
+    analysis: LocalPhotoAnalysis,
+    analysisVersion: number,
+    sha256: string,
+  ): Promise<void>;
+}
+
+export const productionImagePhotoAnalysisPorts: ImagePhotoAnalysisPorts = {
+  async getImportRow(context, id) {
+    const [row] = await getImportImageRows(context.db, [id]);
+    return row ?? null;
+  },
+  getAnalysis: (context, imageId) => getLocalImageAnalysis(context.db, imageId),
+  persistAnalysis: (context, imageId, analysis, analysisVersion, sha256) =>
+    persistLocalImageAnalysis(
+      context.db,
+      imageId,
+      analysis,
+      analysisVersion,
+      sha256,
+    ),
+};
+
+/** The device's local analysis for an image, or `null` if nothing is persisted. */
+export async function readImageAnalysis(
+  ports: Pick<ImagePhotoAnalysisPorts, "getImportRow" | "getAnalysis">,
+  context: EntityKernelContext,
+  id: string,
+): Promise<LocalPhotoAnalysis | null> {
+  const row = await ports.getImportRow(context, id);
+  if (!row) return null;
+  return ports.getAnalysis(context, row.id);
+}
+
+/**
+ * Backfill a device-run analysis onto an already-uploaded image. Refuses when
+ * the image isn't `UPLOADED` yet or the analysis was computed over different
+ * bytes (`sha256` mismatch) — either means the analysis does not describe the
+ * row it would be attached to.
+ */
+export async function recordImageAnalysis(
+  ports: ImagePhotoAnalysisPorts,
+  context: EntityKernelContext,
+  id: string,
+  analysis: LocalPhotoAnalysis,
+): Promise<{ saved: boolean }> {
+  const row = await ports.getImportRow(context, id);
+  if (!row || row.status !== "UPLOADED" || row.sha256 !== analysis.sha256) {
+    throw createAppError(
+      "IMAGE_PRECONDITION_FAILED",
+      `Image ${id} is not eligible for a local-analysis backfill`,
+    );
+  }
+  await ports.persistAnalysis(
+    context,
+    row.id,
+    analysis,
+    analysis.analysisVersion,
+    analysis.sha256,
+  );
+  return { saved: true };
+}
+
+/**
  * Keep the shortcode-facing projection aligned with the paired resolver result.
  * A zip is only valid when resolution preserves input cardinality.
  */
@@ -172,6 +259,19 @@ export const imageHandlers = implementOperationDomain(imageContract, {
   detail: {
     run: (context, input) =>
       productionImageBrowserPorts.get(context, input.id, "null"),
+  },
+  analysis: {
+    run: (context, input) =>
+      readImageAnalysis(productionImagePhotoAnalysisPorts, context, input.id),
+  },
+  recordAnalysis: {
+    run: (context, input) =>
+      recordImageAnalysis(
+        productionImagePhotoAnalysisPorts,
+        context,
+        input.id,
+        input.analysis,
+      ),
   },
   update: async (context, input) => {
     return updateImageThenReload(productionImageBrowserPorts, context, input);

@@ -18,7 +18,7 @@ export default defineEntity({
         "Keep a tool idea open-ended or compare a few Products before deciding.",
       actionLabel: "Add Wish",
     },
-    icons: { lucide: "Heart", sfSymbol: "star" },
+    icons: { lucide: "Heart", sfSymbol: "star", emoji: "⭐" },
     detail: {
       hero: { actions: ["edit", "markPurchased"] },
       sections: [
@@ -275,6 +275,14 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "wish-product",
           relationPath: ["candidates"],
+          choice: "primary",
+        },
+        {
+          kind: "createSelf",
+          routeId: "wish-new",
+          enabled: false,
+          disabledReason:
+            "Wishes have no image storage of their own; attach photos via the candidate product instead",
         },
       ],
       routing: {

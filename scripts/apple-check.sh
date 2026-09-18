@@ -21,6 +21,17 @@ fi
 
 xcodegen generate --spec apps/apple/project.yml --use-cache
 
+# @State/@StateObject must never be seeded from an init parameter: a re-presented
+# `.sheet(item:)` can then show the previous item's stale state (apps/apple/AGENTS.md,
+# "Traps that cost real time"). Tag a deliberate exception `// state-init-ok: <reason>`
+# on the same line.
+offenders="$(grep -rn 'State(initialValue:\|StateObject(wrappedValue:' apps/apple/App | grep -v 'state-init-ok' || true)"
+if [ -n "$offenders" ]; then
+  echo "Found @State/@StateObject seeded from an init parameter without a state-init-ok tag:" >&2
+  echo "$offenders" >&2
+  exit 1
+fi
+
 # swift-format's --recursive can't exclude a subdirectory, and
 # CubbyKit/Sources/CubbyKit/Generated is emitter-owned (apps/apple/AGENTS.md)
 # and must never be reformatted or linted; Sources/CubbyAPI (the whole

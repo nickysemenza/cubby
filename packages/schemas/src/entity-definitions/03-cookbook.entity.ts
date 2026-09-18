@@ -27,7 +27,7 @@ export default defineEntity({
       description:
         "Drag an EPUB cookbook into the Recipes import page and Cubby will extract its recipes.",
     },
-    icons: { lucide: "BookOpen", sfSymbol: "book.closed" },
+    icons: { lucide: "BookOpen", sfSymbol: "book.closed", emoji: "📖" },
     detail: {
       sections: [
         {
@@ -303,7 +303,16 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "cookbook-cover" }],
+      ingress: [
+        { kind: "self", routeId: "cookbook-cover" },
+        {
+          kind: "createSelf",
+          routeId: "cookbook-new",
+          enabled: false,
+          disabledReason:
+            "Cookbooks need a title and source first; create one in Cookbooks before attaching a cover",
+        },
+      ],
       routing: {
         candidateFields: [],
         temporalFields: [],

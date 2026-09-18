@@ -1,5 +1,6 @@
 import CubbyKit
 import Foundation
+import OSLog
 import Sentry
 
 /// The app's Sentry surface: crash reporting, non-fatal capture, and URLSession tracing whose
@@ -12,6 +13,10 @@ import Sentry
 /// `nonisolated` because `report` is called from actors (`SpotlightIndexer`) as well as MainActor
 /// models, and the SDK is thread-safe. Nothing here holds mutable state.
 nonisolated enum Diagnostics {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.nickysemenza.cubby",
+        category: "Diagnostics")
+
     /// Test hosts launch the real app before loading tests, including intentional error paths.
     /// The scheme flag is available at startup; Xcode's markers also cover alternate test runners.
     static func isTestHost(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
@@ -90,6 +95,8 @@ nonisolated enum Diagnostics {
         if error is CancellationError { return }
         if let urlError = error as? URLError, urlError.code == .cancelled { return }
         if let auth = error as? AuthError, auth == .invalidCredentials || auth == .rateLimited { return }
+        logger.error(
+            "[\(context, privacy: .public)] \(String(reflecting: type(of: error)), privacy: .public): \(String(reflecting: error), privacy: .public)")
         if let api = error as? CubbyAPIError, api.isUnauthorized || api.status == 404 {
             let crumb = Breadcrumb(level: .warning, category: context)
             crumb.message = "HTTP \(api.status) \(api.operationID)"

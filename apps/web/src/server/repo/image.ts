@@ -841,6 +841,27 @@ export const getImageById = async (
 };
 
 /**
+ * Read several images with their direct associations from one database
+ * snapshot. Photo-import reconciliation calls this only after locking the
+ * corresponding rows, so it cannot observe an in-flight commit halfway
+ * through its pending-to-uploaded transition.
+ */
+export const getImagesByShortcodes = async (
+  db: Database,
+  shortcodes: readonly string[],
+): Promise<ImageWithEntity[]> => {
+  if (shortcodes.length === 0) return [];
+  const records = await getDb(db).query.image.findMany({
+    where: and(
+      inArray(image.shortcode, [...new Set(shortcodes)]),
+      notDeleted(image),
+    ),
+    with: imageEntityRelations,
+  });
+  return records.map(imageWithRelationsToAPI);
+};
+
+/**
  * Rename an image. `filename` is the only safely user-editable column — `key`/
  * `url`/`size`/`contentType`/`status` are all derived from the upload itself,
  * so this is intentionally the entire update surface (see `imageUpdateInput`).
@@ -917,26 +938,6 @@ export const getImageByKey = async (
  * {@link countCullablePendingImages} so the Maintenance card's "N affected"
  * figure can't drift from what the button actually removes.
  */
-const findCullablePendingImages = async (
-  db: Database,
-  olderThanHours: number,
-): Promise<Array<{ id: string; key: string }>> => {
-  const dbClient = getDb(db);
-
-  const cutoffDate = new Date();
-  cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
-
-  const pendingImages = await dbClient
-    .select({
-      id: image.id,
-      key: image.key,
-    })
-    .from(image)
-    .where(cullablePendingImageWhere(db, cutoffDate));
-
-  return pendingImages;
-};
-
 export const countCullablePendingImages = async (
   db: Database,
   olderThanHours: number,
@@ -954,22 +955,33 @@ export const cullPendingImages = async (
   db: Database,
   olderThanHours: number,
 ) => {
-  const pendingImages = await findCullablePendingImages(db, olderThanHours);
+  // Claim and delete in one transaction. Commit holds the same image-row locks
+  // while it creates associations and performs its final activation, so
+  // SKIP LOCKED makes this culler leave in-flight imports untouched instead of
+  // deleting rows selected by a stale pre-lock snapshot.
+  return await withTransaction(db, async (tx) => {
+    const cutoffDate = new Date();
+    cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
+    const pendingImages = await tx
+      .select({ id: image.id, key: image.key })
+      .from(image)
+      .where(cullablePendingImageWhere(db, cutoffDate))
+      .for("update", { skipLocked: true });
 
-  if (pendingImages.length === 0) {
-    return { count: 0, deletedIds: [], deletedKeys: [] };
-  }
+    if (pendingImages.length === 0) {
+      return { count: 0, deletedIds: [], deletedKeys: [] };
+    }
 
-  const imageIds = pendingImages.map((img) => img.id);
-  const imageKeys = pendingImages.map((img) => img.key);
+    const imageIds = pendingImages.map((img) => img.id);
+    const imageKeys = pendingImages.map((img) => img.key);
+    await tx.delete(image).where(inArray(image.id, imageIds));
 
-  await getDb(db).delete(image).where(inArray(image.id, imageIds));
-
-  return {
-    count: pendingImages.length,
-    deletedIds: imageIds,
-    deletedKeys: imageKeys,
-  };
+    return {
+      count: pendingImages.length,
+      deletedIds: imageIds,
+      deletedKeys: imageKeys,
+    };
+  });
 };
 
 /**

@@ -208,6 +208,36 @@ history is the archive. Permanent product constraints live in the
   allocated purchase; do not compare a shared purchase's lines against one
   charge's amount.
 
+- **Identify the specific record a photo belongs to, not just its type.** Photo
+  import (app and `cubby photo analyze`) stops at the entity type: for a first
+  photo of a plant the per-record ranking has no signal — OCR needs a label in
+  frame, the date match needs a same-day `sowedOn`/`transplantedOn`, the Vision
+  feature print only matches photos *already attached* to that record, and the
+  classifier label (`plant 0.9`) is identical for every candidate — so the
+  chooser is in default order and the household picks by hand. The on-device
+  Foundation Model is text-only (it sees `classifications: plant, foliage;
+  text: none` plus candidate names and passes through as "Deterministic local
+  evidence"), and Vision ships no species classifier, so on-device cannot close
+  this. Two pieces, both generic over the routing policy's `candidateFields`:
+  - **Server vision identification.** A `photo-import.identify` op (native
+    flagged) running a `defineFeature` sibling of `product-identification`
+    (`server/ai/features.ts`, fast tier, cached, persisted as `aiAnalysis`)
+    over the staged R2 bytes plus the loaded candidate rows; returns ranked
+    ids with confidence and a one-line rationale. The app feeds it into
+    `PhotoEvidenceScorer` as an identity-class score, shows it as a seventh
+    section in the Diagnostics tab and the CLI (`--identify` needs auth), and
+    calls it only when the deterministic pass found no identity signal. Needs
+    an eval set like `inventory-detection-evals.ts` before it ranks anything.
+  - **Widen the on-device visual match.** `PhotoVisualEvidenceMatcher` compares
+    against each candidate's directly owned gallery attachments one at a time;
+    let it use every image reachable through the manifest's `visualEvidence`
+    paths (a planting's garden-entry photos, a recipe's meal photos) and take
+    the best of several references, so the second photo of a plant matches
+    even when the first was filed on an entry rather than the planting.
+  Owners: `apps/web/src/server/ai`, `services/photo-import-*`,
+  `apps/apple/CubbyKit/Sources/CubbyKit/Photo/PhotoEvidenceScorer.swift`,
+  `App/Shared/Photo/Library/PhotoVisualEvidenceMatcher.swift`.
+
 - **Label photo → `labelNutrition`.** The Brami panel was transcribed by hand
   from a photo pasted into chat. Accept an attached image on the product and
   extract the Nutrition Facts panel into `labelNutrition` with the image as

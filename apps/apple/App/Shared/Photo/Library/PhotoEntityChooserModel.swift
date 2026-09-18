@@ -135,7 +135,12 @@ final class PhotoEntityChooserModel {
     }
 
     private func loadDatePage(_ page: Int, replace: Bool) async throws {
-        let result = try await loader(dateFilters, nil, page, "-updatedAt")
+        let filters =
+            captureDate.map {
+                Self.captureDateFilters(
+                    descriptor: descriptor, key: semanticDateKey, captureDate: $0, calendar: calendar)
+            } ?? EntityFilterState()
+        let result = try await loader(filters, nil, page, "-updatedAt")
         if replace { dateMatches = result.items } else { appendUnique(result.items, to: &dateMatches) }
         dateMeta = result.meta
         datePage = page
@@ -165,39 +170,11 @@ final class PhotoEntityChooserModel {
         } while true
     }
 
-    private var dateFilters: EntityFilterState {
-        guard let captureDate, let semanticDateKey else { return EntityFilterState() }
-        let start = calendar.startOfDay(for: captureDate)
-        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.dateFormat = "yyyy-MM-dd"
-        let (from, to): (String, String)
-        switch descriptor.key.rawValue {
-        case "purchase": (from, to) = ("dateFrom", "dateTo")
-        case "gardenEntry": (from, to) = ("observedOnFrom", "observedOnTo")
-        case "meal": (from, to) = ("from", "to")
-        default:
-            // Unknown date-bearing entities still use the declaration's semantic key when it
-            // follows the conventional range naming. They remain searchable without inventing a
-            // request parameter for entities that have no declared range.
-            guard descriptor.filter("\(semanticDateKey)From") != nil,
-                descriptor.filter("\(semanticDateKey)To") != nil
-            else { return EntityFilterState() }
-            (from, to) = ("\(semanticDateKey)From", "\(semanticDateKey)To")
-        }
-        return EntityFilterState([
-            from: .single(formatter.string(from: start)),
-            to: .single(formatter.string(from: end.addingTimeInterval(-1))),
-        ])
-    }
-
     private func isSameSemanticDayAsCapture(_ row: EntityRow) -> Bool {
         guard let captureDate else { return false }
         guard let semanticDateKey, let raw = row.raw[semanticDateKey]?.stringValue else { return false }
-        if raw.count >= 10, let day = Self.plainDate(raw) {
-            return calendar.dateComponents([.era, .year, .month, .day], from: day)
-                == calendar.dateComponents([.era, .year, .month, .day], from: captureDate)
+        if raw.count >= 10 {
+            return String(raw.prefix(10)) == Self.plainDate(captureDate, calendar: calendar)
         }
         guard let parsed = ISO8601DateFormatter().date(from: raw) else { return false }
         return calendar.isDate(parsed, inSameDayAs: captureDate)
@@ -208,20 +185,48 @@ final class PhotoEntityChooserModel {
         rows.append(contentsOf: newRows.filter { ids.insert($0.id).inserted })
     }
 
-    private static func semanticDateKey(for descriptor: EntityDescriptor) -> String? {
-        ["date", "observedOn"].first { key in
-            guard let field = descriptor.field(key) else { return false }
+    /// The routing policy's first temporal field the descriptor can actually filter by (a
+    /// declared `.date`/`.timestamp` field with a `.range` list filter). Shared by
+    /// `PhotoEntityChooserModel`'s own date lane and `PhotoRelatedDestinationChooser`'s related
+    /// list filters — the two other places a photo's capture date narrows an entity list.
+    static func semanticDateKey(for descriptor: EntityDescriptor) -> String? {
+        PhotoImportCatalog.routingPolicies[descriptor.key]?.temporalFields.first { key in
+            guard let field = descriptor.field(key), let filter = descriptor.filter(key),
+                case .range = filter.wire
+            else { return false }
             return field.kind == .date || field.kind == .timestamp
         }
     }
 
-    private static func plainDate(_ raw: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: String(raw.prefix(10)))
+    /// A capture-date range filter for `key` (from `semanticDateKey(for:)`): same-day for a
+    /// `.date` field, ±1 hour for a `.timestamp` field (an inventory entry's `verifiedAt`, say, is
+    /// rarely stamped exactly at the photo's capture instant). Empty when `key` is `nil` or the
+    /// descriptor has no matching `.range` filter.
+    static func captureDateFilters(
+        descriptor: EntityDescriptor, key: String?, captureDate: Date, calendar: Calendar = .current
+    ) -> EntityFilterState {
+        guard let key, let dateFilter = descriptor.filter(key),
+            case .range(let from, let to, _) = dateFilter.wire
+        else { return EntityFilterState() }
+        var result = EntityFilterState()
+        if descriptor.field(key)?.kind == .timestamp {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            result.set(.single(formatter.string(from: captureDate.addingTimeInterval(-3_600))), for: from)
+            result.set(.single(formatter.string(from: captureDate.addingTimeInterval(3_600))), for: to)
+        } else {
+            let day = plainDate(captureDate, calendar: calendar)
+            result.set(.single(day), for: from)
+            result.set(.single(day), for: to)
+        }
+        return result
+    }
+
+    /// `yyyy-MM-dd` in the supplied calendar's time zone. `PlainDate` always uses the device zone,
+    /// which is wrong whenever a caller (or a test) evaluates capture days in another zone.
+    private static func plainDate(_ date: Date, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     private static func describe(_ error: Error) -> String {

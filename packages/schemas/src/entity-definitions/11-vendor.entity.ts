@@ -20,7 +20,7 @@ export default defineEntity({
         "Track the places money goes \u2014 retailers, contractors, suppliers \u2014 so every purchase and expense can point at one.",
       actionLabel: "Add Vendor",
     },
-    icons: { lucide: "Store", sfSymbol: "storefront" },
+    icons: { lucide: "Store", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
       sections: [
         {
@@ -621,7 +621,16 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: "logo",
-      ingress: [{ kind: "self", routeId: "vendor-logo" }],
+      ingress: [
+        { kind: "self", routeId: "vendor-logo" },
+        {
+          kind: "createSelf",
+          routeId: "vendor-new",
+          enabled: false,
+          disabledReason:
+            "Vendors need a name before a logo; create one in Vendors first",
+        },
+      ],
       routing: {
         candidateFields: ["name", "website"],
         temporalFields: [],

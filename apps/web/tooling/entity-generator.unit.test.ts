@@ -30,6 +30,7 @@ import { renderBrowserRouteArtifacts } from "../../../scripts/generator/entities
 import { renderEntityArtifacts } from "../../../scripts/generator/entities/render/index";
 import { renderFilterArtifacts } from "../../../scripts/generator/entities/render/filters";
 import { renderKernelBindingsArtifacts } from "../../../scripts/generator/entities/render/kernel-bindings";
+import { renderImagePolicyArtifacts } from "../../../scripts/generator/entities/render/image-policy";
 import { renderRelationArtifacts } from "../../../scripts/generator/entities/render/relations";
 import {
   generatedBrowserRouteFiles,
@@ -82,7 +83,7 @@ const presentation = {
   domain: null,
   description: "Alpha records.",
   emptyState: { title: "No alphas", description: "Add one." },
-  icons: { lucide: "Box", sfSymbol: "cube" },
+  icons: { lucide: "Box", sfSymbol: "cube", emoji: "🧊" },
 } as const;
 
 const base = {
@@ -330,10 +331,62 @@ describe("typed entity compiler", () => {
         }),
       ]),
     ).toThrow("references undeclared field missing");
+    // Every storage-bearing entity must declare exactly one createSelf route, naming the
+    // entity, so "which entities could create from a photo" is explicit rather than an
+    // absence a client has to notice on its own.
+    expect(() =>
+      compileEntityDeclarations([
+        definition({
+          storage: "gallery",
+          ingress: [{ kind: "self", routeId: "alpha-self-no-create-self" }],
+          routing,
+        }),
+      ]),
+    ).toThrow(
+      "alpha.capabilities.images.ingress requires exactly one createSelf route",
+    );
+    // createSelf has no source record, so its bindings may only draw from the photo itself
+    // (capture-date | constant) — a source-id binding is rejected at the schema layer.
+    // Passed inline (not through the `EntityDeclaration`-typed `definition` helper) so
+    // `compileEntityDeclarations`'s `readonly unknown[]` parameter, not a narrower local
+    // binding, is what accepts this otherwise-statically-forbidden shape.
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model,
+          capabilities: {
+            ...base.capabilities,
+            images: {
+              storage: "gallery",
+              ingress: [
+                { kind: "self", routeId: "alpha-self-bad-binding" },
+                {
+                  kind: "createSelf",
+                  routeId: "alpha-new-bad-binding",
+                  enabled: false,
+                  disabledReason: "test",
+                  bindings: [{ field: "name", from: "source-id" }],
+                },
+              ],
+              routing,
+            },
+          },
+        },
+      ]),
+    ).toThrow(/Invalid discriminator value/);
 
     const directImages = {
       storage: "gallery" as const,
-      ingress: [{ kind: "self" as const, routeId: "shared-photo-route" }],
+      ingress: [
+        { kind: "self" as const, routeId: "shared-photo-route" },
+        {
+          kind: "createSelf" as const,
+          routeId: "shared-photo-route-new",
+          enabled: false,
+          disabledReason: "test",
+        },
+      ],
       routing,
     };
     expect(() =>
@@ -347,6 +400,227 @@ describe("typed entity compiler", () => {
         },
       ]),
     ).toThrow("routeId shared-photo-route conflicts");
+  });
+
+  it("emits a conditional-primary route's resolved literal and predicate", () => {
+    const routing = {
+      candidateFields: ["name"],
+      temporalFields: [],
+      lifecycleFilters: [],
+      signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
+      abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+    } as const;
+    const compiled = compileEntityDeclarations([
+      {
+        ...base,
+        model: {
+          ...model,
+          fields: [
+            ...model.fields,
+            {
+              key: "kind",
+              kind: "enum" as const,
+              validation: {
+                read: z.enum(["a", "b"]),
+                create: z.enum(["a", "b"]).optional(),
+                update: z.enum(["a", "b"]).optional(),
+              },
+            },
+          ],
+        },
+        capabilities: {
+          ...base.capabilities,
+          images: {
+            storage: "gallery" as const,
+            ingress: [
+              {
+                kind: "self" as const,
+                routeId: "alpha-self-conditional",
+                // Falls back to "prompt" (not "alternate") so this fixture does not also
+                // need an unconditional primary route to satisfy the separate "alternate
+                // requires a primary" invariant.
+                choice: {
+                  primary: { when: { field: "kind", oneOf: ["a"] } },
+                  otherwise: "prompt" as const,
+                },
+              },
+              {
+                kind: "createSelf" as const,
+                routeId: "alpha-new-conditional",
+                enabled: false,
+                disabledReason: "test",
+                choice: "prompt" as const,
+              },
+            ],
+            routing,
+          },
+        },
+      },
+    ]);
+    const imagePolicy = renderImagePolicyArtifacts(compiled).find(
+      ({ relativePath }) => relativePath.endsWith("image-policy.gen.ts"),
+    )?.source;
+    expect(imagePolicy).toContain('"routeId":"alpha-self-conditional"');
+    expect(imagePolicy).toContain('"choice":"prompt"');
+    expect(imagePolicy).toContain(
+      '"primaryWhen":{"field":"kind","oneOf":["a"]}',
+    );
+  });
+
+  it("keeps routing visual evidence explicit and requires image-owning targets", async () => {
+    const recipe = (
+      await import("../../../packages/schemas/src/entity-definitions/01-recipe.entity")
+    ).default;
+    const planting = (
+      await import("../../../packages/schemas/src/entity-definitions/19-planting.entity")
+    ).default;
+    const meal = (
+      await import("../../../packages/schemas/src/entity-definitions/06-meal.entity")
+    ).default;
+    expect(recipe.capabilities.images.routing?.visualEvidence).toEqual([
+      { relationPath: ["meals"], priority: 1, ordering: "newest" },
+    ]);
+    expect(planting.capabilities.images.routing?.visualEvidence).toEqual([
+      { relationPath: ["entries"], priority: 1, ordering: "newest" },
+    ]);
+    // A display fallback alone is never promoted to routing evidence.
+    expect("visualEvidence" in (meal.capabilities.images.routing ?? {})).toBe(
+      false,
+    );
+
+    const routing: NonNullable<
+      EntityDeclaration["capabilities"]["images"]["routing"]
+    > = {
+      candidateFields: ["name"],
+      temporalFields: [],
+      lifecycleFilters: [],
+      signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
+      abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+      visualEvidence: [
+        { relationPath: ["related"], priority: 1, ordering: "newest" },
+      ],
+    };
+    const related = {
+      ...base,
+      key: "related",
+      names: { singular: "Related", plural: "Related" },
+      model,
+      capabilities: {
+        ...base.capabilities,
+        images: {
+          storage: "gallery" as const,
+          ingress: [
+            { kind: "self" as const, routeId: "related-self" },
+            {
+              kind: "createSelf" as const,
+              routeId: "related-new",
+              enabled: false,
+              disabledReason: "test",
+            },
+          ],
+          routing: { ...routing, visualEvidence: [] },
+        },
+      },
+    };
+    const source = {
+      ...base,
+      model,
+      relations: [
+        {
+          key: "related",
+          label: "Related",
+          target: "related",
+          cardinality: "one" as const,
+          provenance: {
+            kind: "local-path",
+            steps: [{ edge: "Alpha.relatedId", direction: "outgoing" }],
+          },
+          inverse: {
+            steps: [{ edge: "Alpha.relatedId", direction: "incoming" }],
+          },
+        },
+      ],
+      capabilities: {
+        ...base.capabilities,
+        images: { storage: false as const, routing },
+      },
+    };
+    expect(() => compileEntityDeclarations([source, related])).not.toThrow();
+
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...source,
+          capabilities: {
+            ...source.capabilities,
+            images: {
+              storage: false as const,
+              routing: {
+                ...routing,
+                visualEvidence: [
+                  {
+                    relationPath: ["missing"],
+                    priority: 1,
+                    ordering: "newest" as const,
+                  },
+                ],
+              },
+            },
+          },
+        },
+        related,
+      ]),
+    ).toThrow("references undeclared relation alpha.missing");
+
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...source,
+          capabilities: {
+            ...source.capabilities,
+            images: {
+              storage: false as const,
+              routing: {
+                ...routing,
+                visualEvidence: [
+                  {
+                    relationPath: ["related"],
+                    priority: 1,
+                    ordering: "newest" as const,
+                  },
+                ],
+              },
+            },
+          },
+          relations: [{ ...source.relations[0]!, target: "alpha" }],
+        },
+        related,
+      ]),
+    ).toThrow("targets alpha, which does not have gallery image storage");
+
+    // Cover/logo storage is also rejected: PhotoVisualEvidenceMatcher only
+    // reads attachment-role (gallery) images, so evidence aimed at a
+    // cover/logo-only target could never fire.
+    expect(() =>
+      compileEntityDeclarations([
+        source,
+        {
+          ...related,
+          capabilities: {
+            ...related.capabilities,
+            images: { ...related.capabilities.images, storage: "cover" },
+          },
+        },
+      ]),
+    ).toThrow("targets related, which does not have gallery image storage");
+
+    const compiled = compileEntityDeclarations([source, related]);
+    const artifacts = renderImagePolicyArtifacts(compiled);
+    const imagePolicy = artifacts.find(({ relativePath }) =>
+      relativePath.endsWith("image-policy.gen.ts"),
+    )?.source;
+    expect(imagePolicy).toContain('"visualEvidence"');
+    expect(imagePolicy).toContain('"relationPath":["related"]');
   });
 
   it("preserves literal model keys through the inferred declaration contract", () => {
@@ -1139,6 +1413,7 @@ describe("typed entity compiler", () => {
       ...renderFilterArtifacts(entities),
       ...renderSearchArtifacts(entities),
       ...renderBrowserRouteArtifacts(entities),
+      ...renderImagePolicyArtifacts(entities),
     ];
     const artifact = (suffix: string) =>
       artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))!
@@ -1234,6 +1509,12 @@ describe("typed entity compiler", () => {
       "ENTITY_LIST_FILTER_SCHEMAS",
     );
     expect(artifact("EntityCatalog.swift")).toContain("import CubbyAPISupport");
+    // Icons emit both the SF Symbol and its emoji text fallback (definition.ts
+    // `icons.emoji`) onto the same generated EntityDescriptor.
+    expect(artifact("EntityCatalog.swift")).toContain(
+      'sfSymbol: "text.badge.plus"',
+    );
+    expect(artifact("EntityCatalog.swift")).toContain('emoji: "📓"');
     const swiftEntityKey = artifact("EntityKey.swift");
     expect(swiftEntityKey).toContain("public enum EntityKey");
     const entityKeyBody = swiftEntityKey
@@ -1245,5 +1526,12 @@ describe("typed entity compiler", () => {
     expect(new Set(rawValues)).toEqual(
       new Set(entities.map((entity) => entity.key)),
     );
+    // Regression guard for the Swift enum emitter (image-policy.ts): manifest
+    // vocabularies must render as typed enum cases, not raw string literals.
+    const photoImportCatalog = artifact("PhotoImportCatalog.swift");
+    expect(photoImportCatalog).toContain("public enum PhotoIngressRouteKind");
+    expect(photoImportCatalog).toContain("public enum PhotoBindingSource");
+    expect(photoImportCatalog).toMatch(/kind: \.createRelated/);
+    expect(photoImportCatalog).toMatch(/source: \.captureDate/);
   });
 });

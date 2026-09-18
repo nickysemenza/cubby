@@ -29,7 +29,7 @@ export default defineEntity({
         "Build a list of ingredients to connect your recipes with what's in stock.",
       actionLabel: "Add Ingredient",
     },
-    icons: { lucide: "Carrot", sfSymbol: "leaf" },
+    icons: { lucide: "Carrot", sfSymbol: "leaf", emoji: "🥕" },
     detail: {
       sections: [
         {
@@ -567,6 +567,14 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "ingredient-product",
           relationPath: ["products"],
+          choice: "primary",
+        },
+        {
+          kind: "createSelf",
+          routeId: "ingredient-new",
+          enabled: false,
+          disabledReason:
+            "Ingredients have no image storage of their own; attach photos via a product instead",
         },
       ],
       routing: {

@@ -15,6 +15,20 @@ import {
 // port; the object is only an opaque transaction identity token.
 const database = {} as Database;
 const imageCode = parseShortcodeFor("image", "IMG-ABCD");
+const imageRow = (status: "PENDING" | "UPLOADED") => ({
+  id: "00000000-0000-4000-8000-000000000001",
+  shortcode: imageCode,
+  key: "images/photo.jpg",
+  filename: "photo.jpg",
+  contentType: "image/jpeg",
+  size: 128,
+  status,
+  sha256: status === "UPLOADED" ? "a".repeat(64) : null,
+  width: 12,
+  height: 8,
+  renderStatus: status === "UPLOADED" ? ("verified" as const) : null,
+  storageStatus: status === "UPLOADED" ? ("available" as const) : null,
+});
 
 const context = entityKernelContextSchema.parse({
   db: database,
@@ -25,15 +39,15 @@ const context = entityKernelContextSchema.parse({
   services: { recipeCosting: { bindTo: () => ({}) } },
 });
 
-const input = (candidateId = "PRD-ABCD"): PhotoImportCommitInput => ({
-  idempotencyKey: "photo-import-idempotency-key",
+const input = (): PhotoImportCommitInput => ({
+  idempotencyKey: "legacy-client-key",
   images: [
     {
       clientId: "photo-1",
       imageId: imageCode,
       routeId: "product-self",
-      source: { entity: "product", id: candidateId },
-      destination: { kind: "existing", candidateId },
+      source: { entity: "product", id: "PRD-ABCD" },
+      destination: { kind: "existing", candidateId: "PRD-ABCD" },
       duplicateDecision: "reuse",
       replaceConfirmed: false,
       analysis: {
@@ -58,148 +72,131 @@ const input = (candidateId = "PRD-ABCD"): PhotoImportCommitInput => ({
   creates: [],
 });
 
-describe("photo import atomic commit", () => {
-  it("returns the original receipt for a lost-response retry and publishes once", async () => {
-    let stored: { requestHash: string; receipt: unknown } | null = null;
-    const getImages = vi.fn(async () => [
-      {
-        id: "00000000-0000-4000-8000-000000000001",
-        shortcode: imageCode,
-        key: "images/photo.jpg",
-        filename: "photo.jpg",
-        contentType: "image/jpeg",
-        size: 128,
-        status: "UPLOADED" as const,
-        sha256: "a".repeat(64),
-        width: 12,
-        height: 8,
-        renderStatus: "verified" as const,
-        storageStatus: "available" as const,
-      },
-    ]);
-    const finalizeImage = vi.fn(async () => undefined);
-    const persistAnalysis = vi.fn(async () => undefined);
-    const runSideEffects = vi.fn(async () => undefined);
-    const apply = vi.fn(async () => ({
-      createdDestinations: [],
-      sideEffectEvents: [],
-    }));
-    const ports = {
-      getImages,
-      getObject: vi.fn(),
-      inspect: vi.fn(),
-      findReceipt: vi.fn(async () => stored),
-      insertReceipt: vi.fn(async (_db, _key, requestHash, receipt) => {
-        stored = { requestHash, receipt };
-        return true;
-      }),
-      finalizeImage,
-      persistAnalysis,
-      withTransaction: async (_db, operation) => operation(database),
-      refreshProjection: vi.fn(async () => undefined),
-      runSideEffects,
-    } satisfies PhotoImportCommitPorts;
-    const adapter = {
-      validate: vi.fn(async () => undefined),
-      apply,
-    } satisfies PhotoImportRouteAdapter;
-    const first = await commitPhotoImport(context, input(), adapter, ports);
-    const retried = await commitPhotoImport(context, input(), adapter, ports);
+const adapter: PhotoImportRouteAdapter = {
+  validate: vi.fn(async () => undefined),
+  apply: vi.fn(async () => ({
+    createdDestinations: [],
+    sideEffectEvents: [],
+  })),
+};
 
-    expect(retried).toEqual(first);
-    expect(getImages).toHaveBeenCalledTimes(1);
-    expect(finalizeImage).toHaveBeenCalledTimes(1);
-    expect(persistAnalysis).toHaveBeenCalledTimes(1);
-    expect(apply).toHaveBeenCalledTimes(1);
-    expect(runSideEffects).toHaveBeenCalledTimes(1);
+const portsFor = (
+  status: "PENDING" | "UPLOADED",
+  overrides: Partial<PhotoImportCommitPorts> = {},
+): PhotoImportCommitPorts => {
+  const row = imageRow(status);
+  return {
+    getImages: vi.fn(async () => [row]),
+    lockImages: vi.fn(async () => [row]),
+    getObject: vi.fn(async () => new Response(new Uint8Array(128))),
+    inspect: vi.fn(async () => ({
+      contentType: "image/jpeg",
+      width: 12,
+      height: 8,
+      detectedContentType: "image/jpeg",
+      sha256: "a".repeat(64),
+      renderStatus: "verified" as const,
+      storageStatus: "available" as const,
+      verifiedAt: new Date(),
+    })),
+    activateImages: vi.fn(async () => (status === "PENDING" ? 1 : 0)),
+    persistAnalysis: vi.fn(async () => undefined),
+    withTransaction: async (_db, operation) => operation(database),
+    refreshProjection: vi.fn(async () => undefined),
+    runSideEffects: vi.fn(async () => undefined),
+    ...overrides,
+  };
+};
+
+describe("photo import atomic commit", () => {
+  it("keeps new images pending until the exact final activation", async () => {
+    const ports = portsFor("PENDING");
+    const result = await commitPhotoImport(context, input(), adapter, ports);
+
+    expect(result).toMatchObject({ committedPhotoIds: [imageCode] });
+    expect(ports.lockImages).toHaveBeenCalledTimes(1);
+    expect(ports.persistAnalysis).toHaveBeenCalledTimes(1);
+    expect(ports.activateImages).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(ports.activateImages).mock.invocationCallOrder[0],
+    ).toBeGreaterThan(
+      vi.mocked(ports.persistAnalysis).mock.invocationCallOrder[0]!,
+    );
   });
 
-  it("rejects different content that reuses an idempotency key", async () => {
-    let stored: { requestHash: string; receipt: unknown } | null = null;
-    const ports = {
-      getImages: vi.fn(async () => [
-        {
-          id: "00000000-0000-4000-8000-000000000001",
-          shortcode: imageCode,
-          key: "images/photo.jpg",
-          filename: "photo.jpg",
-          contentType: "image/jpeg",
-          size: 128,
-          status: "UPLOADED" as const,
-          sha256: "a".repeat(64),
-          width: 12,
-          height: 8,
-          renderStatus: "verified" as const,
-          storageStatus: "available" as const,
-        },
-      ]),
-      getObject: vi.fn(),
-      inspect: vi.fn(),
-      findReceipt: vi.fn(async () => stored),
-      insertReceipt: vi.fn(async (_db, _key, requestHash, receipt) => {
-        stored = { requestHash, receipt };
-        return true;
-      }),
-      finalizeImage: vi.fn(async () => undefined),
-      persistAnalysis: vi.fn(async () => undefined),
-      withTransaction: async (_db, operation) => operation(database),
-      refreshProjection: vi.fn(async () => undefined),
-      runSideEffects: vi.fn(async () => undefined),
-    } satisfies PhotoImportCommitPorts;
-    const adapter = {
-      validate: vi.fn(async () => undefined),
-      apply: vi.fn(async () => ({
-        createdDestinations: [],
-        sideEffectEvents: [],
-      })),
-    } satisfies PhotoImportRouteAdapter;
+  it("does not activate an already uploaded reused image", async () => {
+    const ports = portsFor("UPLOADED");
+    const result = await commitPhotoImport(context, input(), adapter, ports);
+
+    expect(result.committedPhotoIds).toEqual([imageCode]);
+    expect(ports.activateImages).toHaveBeenCalledWith(database, []);
+    expect(ports.persistAnalysis).not.toHaveBeenCalled();
+  });
+
+  it("allows explicit reuse of a perceptual duplicate with different bytes", async () => {
+    const reuse = input();
+    reuse.images[0] = {
+      ...reuse.images[0]!,
+      analysis: { ...reuse.images[0]!.analysis, sha256: "b".repeat(64) },
+    };
+    const ports = portsFor("UPLOADED");
+
+    const result = await commitPhotoImport(context, reuse, adapter, ports);
+
+    expect(result.committedPhotoIds).toEqual([imageCode]);
+    expect(ports.activateImages).toHaveBeenCalledWith(database, []);
+    expect(ports.persistAnalysis).not.toHaveBeenCalled();
+  });
+
+  it("does not persist a receipt or replay an ambiguous response", async () => {
+    vi.mocked(adapter.apply).mockClear();
+    const ports = portsFor("UPLOADED");
+    const first = await commitPhotoImport(context, input(), adapter, ports);
     await commitPhotoImport(context, input(), adapter, ports);
 
-    await expect(
-      commitPhotoImport(context, input("PRD-WXYZ"), adapter, ports),
-    ).rejects.toThrow("already used for different content");
-    expect(adapter.apply).toHaveBeenCalledTimes(1);
+    expect(adapter.apply).toHaveBeenCalledTimes(2);
+    expect(first).not.toHaveProperty("receiptId");
+    expect(first).not.toHaveProperty("idempotencyKey");
   });
 
-  it("accepts an explicitly reused verified near-duplicate without persisting its analysis", async () => {
-    const persistAnalysis = vi.fn(async () => undefined);
-    const ports = {
-      getImages: vi.fn(async () => [
-        {
-          id: "00000000-0000-4000-8000-000000000001",
-          shortcode: imageCode,
-          key: "images/existing-photo.jpg",
-          filename: "existing-photo.jpg",
-          contentType: "image/jpeg",
-          size: 128,
-          status: "UPLOADED" as const,
-          sha256: "b".repeat(64),
-          width: 12,
-          height: 8,
-          renderStatus: "verified" as const,
-          storageStatus: "available" as const,
-        },
-      ]),
-      getObject: vi.fn(),
-      inspect: vi.fn(),
-      findReceipt: vi.fn(async () => null),
-      insertReceipt: vi.fn(async () => true),
-      finalizeImage: vi.fn(async () => undefined),
-      persistAnalysis,
-      withTransaction: async (_db, operation) => operation(database),
-      refreshProjection: vi.fn(async () => undefined),
-      runSideEffects: vi.fn(async () => undefined),
-    } satisfies PhotoImportCommitPorts;
-    const adapter = {
-      validate: vi.fn(async () => undefined),
-      apply: vi.fn(async () => ({
-        createdDestinations: [],
-        sideEffectEvents: [],
-      })),
-    } satisfies PhotoImportRouteAdapter;
-    const receipt = await commitPhotoImport(context, input(), adapter, ports);
+  it("rolls back when final activation count is incomplete", async () => {
+    const withRollback = portsFor("PENDING", {
+      activateImages: vi.fn(async () => 0),
+      withTransaction: vi.fn(async (_db, operation) => operation(database)),
+    });
 
-    expect(receipt.committedClientIds).toEqual(["photo-1"]);
-    expect(persistAnalysis).not.toHaveBeenCalled();
+    await expect(
+      commitPhotoImport(context, input(), adapter, withRollback),
+    ).rejects.toThrow("expected 1");
+    expect(withRollback.runSideEffects).not.toHaveBeenCalled();
+  });
+
+  it("rejects a retry loser before route writes when preflight state changed", async () => {
+    vi.mocked(adapter.validate).mockClear();
+    vi.mocked(adapter.apply).mockClear();
+    const ports = portsFor("PENDING", {
+      lockImages: vi.fn(async () => [imageRow("UPLOADED")]),
+    });
+
+    await expect(
+      commitPhotoImport(context, input(), adapter, ports),
+    ).rejects.toThrow("changed while it was being committed");
+    expect(adapter.validate).not.toHaveBeenCalled();
+    expect(adapter.apply).not.toHaveBeenCalled();
+    expect(ports.activateImages).not.toHaveBeenCalled();
+  });
+
+  it("rejects a newly staged retry after the image already became active", async () => {
+    vi.mocked(adapter.validate).mockClear();
+    vi.mocked(adapter.apply).mockClear();
+    const retry = input();
+    retry.images[0] = { ...retry.images[0]!, duplicateDecision: "keepBoth" };
+    const ports = portsFor("UPLOADED");
+
+    await expect(
+      commitPhotoImport(context, retry, adapter, ports),
+    ).rejects.toThrow("was not approved for reuse");
+    expect(adapter.validate).not.toHaveBeenCalled();
+    expect(adapter.apply).not.toHaveBeenCalled();
   });
 });

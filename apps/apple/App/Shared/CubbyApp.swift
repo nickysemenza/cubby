@@ -18,7 +18,10 @@ struct CubbyApp: App {
         // Before anything else so a crash during model setup is still reported.
         Diagnostics.start(baseURL: AppModel.persistedBaseURL)
         let model = AppModel()
-        _model = State(initialValue: model)
+        // `CubbyApp` is instantiated exactly once per process by SwiftUI; `model` is a local
+        // built inside `init()`, not an external init parameter, and there is no re-presentation
+        // to go stale across.
+        _model = State(initialValue: model)  // state-init-ok: single instance for process lifetime
         AppModel.active = model
         // Thumbnails go through Nuke (`Thumb.swift`); a shared on-disk cache under Caches keeps
         // covers warm across launches without growing the app's iCloud/backup footprint (Caches is

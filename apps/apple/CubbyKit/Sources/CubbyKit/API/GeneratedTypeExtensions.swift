@@ -260,3 +260,35 @@ extension ImageAssociation: Identifiable {
     /// The catalog key, when the association's entity is one the catalog knows.
     public var key: EntityKey? { EntityKey(rawValue: entityType.rawValue) }
 }
+
+extension PhotoLocalAnalysis {
+    /// Reconstructs the analysis from the wire payload the server persisted at import time
+    /// (`image.analysis`), so the R2 image detail's "server (at import)" Diagnostics column can be
+    /// built by the same `PhotoDiagnostics.report` the device's own fresh run uses — one report
+    /// shape either side of the wire, not a bespoke comparison renderer.
+    public init(payload: ImageAnalysisOutput) {
+        self.init(
+            id: payload.sha256,
+            analysisVersion: payload.analysisVersion,
+            analyzedAt: payload.analyzedAt,
+            sha256: payload.sha256,
+            capturedAt: payload.capturedAt,
+            contentType: payload.contentType,
+            width: payload.width,
+            height: payload.height,
+            classifications: payload.classifications.map {
+                PhotoClassification(identifier: $0.identifier, confidence: $0.confidence)
+            },
+            recognizedText: payload.recognizedText.map {
+                PhotoRecognizedText(text: $0.text, confidence: $0.confidence)
+            },
+            featurePrint: PhotoFeaturePrint(
+                revision: payload.featurePrint.revision,
+                data: Data(base64Encoded: payload.featurePrint.data) ?? Data()),
+            provenance: PhotoAnalysisProvenance(
+                source: PhotoAnalysisProvenance.Source(rawValue: payload.provenance.source.rawValue)
+                    ?? .files,
+                localIdentifier: payload.provenance.localIdentifier,
+                filename: payload.provenance.filename))
+    }
+}

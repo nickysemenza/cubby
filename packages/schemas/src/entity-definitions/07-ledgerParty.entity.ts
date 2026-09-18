@@ -17,7 +17,7 @@ export default defineEntity({
       description:
         "Household members, guests, and the household itself as a whole show up here once a contribution or transfer names them.",
     },
-    icons: { lucide: "Users", sfSymbol: "person.2" },
+    icons: { lucide: "Users", sfSymbol: "person.2", emoji: "👤" },
     detail: {
       sections: [
         {

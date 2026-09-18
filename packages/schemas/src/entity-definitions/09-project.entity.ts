@@ -29,7 +29,7 @@ export default defineEntity({
         "Track household projects from planning to done \u2014 budget, timeline, and every task and expense along the way.",
       actionLabel: "New Project",
     },
-    icons: { lucide: "Hammer", sfSymbol: "hammer" },
+    icons: { lucide: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
     detail: {
       hero: {
         chip: "status",
@@ -1124,11 +1124,25 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "project-self" }],
+      ingress: [
+        { kind: "self", routeId: "project-self", choice: "primary" },
+        {
+          kind: "createSelf",
+          routeId: "project-new",
+          enabled: false,
+          disabledReason:
+            "Projects need a plan before photos; create one in Projects first",
+        },
+      ],
       routing: {
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["startDate", "endDate"],
-        lifecycleFilters: [{ field: "status", equals: "active" }],
+        lifecycleFilters: [
+          {
+            field: "status",
+            oneOf: ["planning", "not_started", "in_progress"],
+          },
+        ],
         signals: {
           ocrFields: ["name", "description", "notes"],
           classifierLabels: ["project"],

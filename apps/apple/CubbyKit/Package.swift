@@ -43,6 +43,8 @@ let package = Package(
                 "CubbyAPISupport",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
             ],
+            // The provenance note beside the generated sources is documentation, not a resource.
+            exclude: ["README.md"],
             // Line tables only: nothing here is ever stepped through, and full debug info for
             // ~58k generated lines is what makes LLDB stall on launch (see apps/apple/AGENTS.md's
             // "Debugging on device"). `unsafeFlags` is safe because CubbyKit is only ever

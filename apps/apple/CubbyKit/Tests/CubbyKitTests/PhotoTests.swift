@@ -410,3 +410,46 @@ struct PresignedUploadTests {
         }
     }
 }
+
+@Suite("PhotoDiagnostics")
+struct PhotoDiagnosticsTests {
+    private static func analysis(classifierIdentifier: String, confidence: Double) -> PhotoLocalAnalysis {
+        PhotoLocalAnalysis(
+            id: "photo", analyzedAt: Date(timeIntervalSince1970: 0), sha256: "sha",
+            capturedAt: nil, contentType: "image/jpeg", width: 32, height: 24,
+            classifications: [PhotoClassification(identifier: classifierIdentifier, confidence: confidence)],
+            recognizedText: [], featurePrint: PhotoFeaturePrint(revision: "1", data: Data()),
+            provenance: PhotoAnalysisProvenance(source: .files, filename: "photo.jpg"))
+    }
+
+    private static func file() throws -> PhotoFile {
+        try PhotoFile.materialize(
+            try ImageEncoding.encode(TestImages.canvas(width: 32, height: 24, subject: false), as: .jpeg),
+            filename: "photo.jpg")
+    }
+
+    /// `PhotoDiagnostics.report` is what both `suggestedSource`'s "Suggested: …" chip and the CLI's
+    /// `routing` dump are built from (this folds the former standalone `policyMatches` table test
+    /// in, so there's one table test, not two): a match at/above a policy's `minimumScore` must
+    /// flag only that entity — and win `suggestedSource` — while dropping just below must un-flag
+    /// it without touching any other entity's verdict, and the report always carries exactly one
+    /// verdict per routing policy.
+    @Test("routing verdict tracks minimumScore", arguments: [true, false])
+    func routingVerdictTracksMinimumScore(above: Bool) async throws {
+        let (key, policy) = try #require(
+            PhotoImportCatalog.routingPolicies.first { !$0.value.classifierLabels.isEmpty })
+        let label = try #require(policy.classifierLabels.first)
+        let identifier = "\(label)-detected"
+        let confidence = above ? min(1, policy.minimumScore + 0.1) : max(0, policy.minimumScore - 0.1)
+
+        let report = await PhotoDiagnostics.report(
+            analysis: Self.analysis(classifierIdentifier: identifier, confidence: confidence),
+            file: try Self.file(), includeFeaturePrintData: false, runSemantic: false)
+
+        #expect(report.routing.count == PhotoImportCatalog.routingPolicies.count)
+        let verdict = try #require(report.routing.first { $0.entity == key })
+        #expect(verdict.meetsMinimumScore == above)
+        #expect(verdict.classifierIdentifier == identifier)
+        #expect(report.suggestedSource == (above ? key : nil))
+    }
+}

@@ -25,7 +25,7 @@ export default defineEntity({
         "Break a project down into steps, or jot down a one-off to get to later.",
       actionLabel: "New Task",
     },
-    icons: { lucide: "ListChecks", sfSymbol: "checklist" },
+    icons: { lucide: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
     detail: {
       hero: {
         chip: "status",
@@ -811,11 +811,19 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "task-self" }],
+      ingress: [
+        { kind: "self", routeId: "task-self", choice: "primary" },
+        { kind: "createSelf", routeId: "task-new", enabled: true },
+      ],
       routing: {
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["dueDate", "completedAt"],
-        lifecycleFilters: [{ field: "status", equals: "incomplete" }],
+        lifecycleFilters: [
+          {
+            field: "status",
+            oneOf: ["not_started", "later", "in_progress", "blocked"],
+          },
+        ],
         signals: {
           ocrFields: ["name", "description", "notes"],
           classifierLabels: ["task"],

@@ -1,5 +1,6 @@
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { imageShortcode } from "@cubby/schemas/identifiers";
+import { ImageStatus, imageAssociationSchema } from "@cubby/schemas/image";
 import { z } from "zod";
 
 import { defineContract, mutation } from "~/contracts/define";
@@ -64,33 +65,61 @@ const photoImportStageOutputSchema = z.object({
   items: z.array(photoImportStageItemSchema),
 });
 
-const localPhotoAnalysisSchema = z.object({
-  analysisVersion: z.int().positive(),
-  analyzedAt: z.iso.datetime(),
-  sha256: sha256Schema,
-  capturedAt: z.iso.datetime().nullable(),
-  contentType: z.string(),
-  width: z.int().positive(),
-  height: z.int().positive(),
-  classifications: z.array(
+const photoImportReconcileInputSchema = z.object({
+  imageIds: z.array(imageShortcode).min(1).max(100),
+});
+
+const photoImportReconcileOutputSchema = z.object({
+  items: z.array(
     z.object({
-      identifier: z.string(),
-      confidence: z.number().min(0).max(1),
+      imageId: imageShortcode,
+      status: ImageStatus,
+      associations: z.array(imageAssociationSchema),
     }),
   ),
-  recognizedText: z.array(
-    z.object({ text: z.string(), confidence: z.number().min(0).max(1) }),
-  ),
-  featurePrint: z.object({
-    revision: z.string(),
-    data: z.string().min(1),
-  }),
-  provenance: z.object({
-    source: z.enum(["camera", "files", "photoLibrary", "serverLazy"]),
-    localIdentifier: z.string().nullable(),
-    filename: z.string(),
-  }),
+  missing: z.array(imageShortcode),
 });
+
+/**
+ * A fresh schema instance every call, deliberately: the OpenAPI generator
+ * dedupes an object schema into one shared, positionally-named
+ * (`InputSchemaNN`) component the moment the SAME instance appears at two
+ * input positions — which would collapse the commit contract's inlined,
+ * nicely-aliased `PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload`
+ * (consumed by hand-written CubbyKit code) into that positional name. Each
+ * contract member that embeds this in an input calls the builder again so
+ * every usage stays independently inlined and nameable.
+ */
+export const buildLocalPhotoAnalysisSchema = () =>
+  z.object({
+    analysisVersion: z.int().positive(),
+    analyzedAt: z.iso.datetime(),
+    sha256: sha256Schema,
+    capturedAt: z.iso.datetime().nullable(),
+    contentType: z.string(),
+    width: z.int().positive(),
+    height: z.int().positive(),
+    classifications: z.array(
+      z.object({
+        identifier: z.string(),
+        confidence: z.number().min(0).max(1),
+      }),
+    ),
+    recognizedText: z.array(
+      z.object({ text: z.string(), confidence: z.number().min(0).max(1) }),
+    ),
+    featurePrint: z.object({
+      revision: z.string(),
+      data: z.string().min(1),
+    }),
+    provenance: z.object({
+      source: z.enum(["camera", "files", "photoLibrary", "serverLazy"]),
+      localIdentifier: z.string().nullable(),
+      filename: z.string(),
+    }),
+  });
+
+export const localPhotoAnalysisSchema = buildLocalPhotoAnalysisSchema();
 
 const photoImportDestinationSchema = z.union([
   z.object({ kind: z.literal("existing"), candidateId: z.string().min(1) }),
@@ -110,7 +139,10 @@ const photoImportCommitInputSchema = z.object({
         clientId: z.string().min(1).max(128),
         imageId: imageShortcode,
         routeId: z.string().min(1),
-        source: photoImportSourceSchema,
+        // Omitted for a `createSelf` route: there is no source record, the created
+        // record is its own destination (`photo-import-route.adapter.ts` validates
+        // presence is exactly `route.kind !== "createSelf"`).
+        source: photoImportSourceSchema.optional(),
         destination: photoImportDestinationSchema,
         duplicateDecision: z.enum(["reuse", "keepBoth", "replace"]),
         replaceConfirmed: z.boolean().default(false),
@@ -131,11 +163,13 @@ const photoImportCommitInputSchema = z.object({
     .max(100),
 });
 
-export const photoImportReceiptSchema = z.object({
-  receiptId: z.uuid(),
-  idempotencyKey: z.string(),
+/**
+ * The commit response is deliberately an ordinary value, not a persisted
+ * receipt. `idempotencyKey` remains accepted on the input for older clients,
+ * but a commit response is never replayed from server-side state.
+ */
+const photoImportCommitResultSchema = z.object({
   committedPhotoIds: z.array(imageShortcode),
-  committedClientIds: z.array(z.string()),
   createdDestinations: z.array(
     z.object({
       draftId: z.string(),
@@ -146,6 +180,7 @@ export const photoImportReceiptSchema = z.object({
   committedAt: z.iso.datetime(),
 });
 
+export type LocalPhotoAnalysis = z.output<typeof localPhotoAnalysisSchema>;
 export type PhotoImportStageInput = z.output<
   typeof photoImportStageInputSchema
 >;
@@ -155,7 +190,15 @@ export type PhotoImportStageOutput = z.output<
 export type PhotoImportCommitInput = z.output<
   typeof photoImportCommitInputSchema
 >;
-export type PhotoImportReceipt = z.output<typeof photoImportReceiptSchema>;
+export type PhotoImportCommitResult = z.output<
+  typeof photoImportCommitResultSchema
+>;
+export type PhotoImportReconcileInput = z.output<
+  typeof photoImportReconcileInputSchema
+>;
+export type PhotoImportReconcileOutput = z.output<
+  typeof photoImportReconcileOutputSchema
+>;
 
 export const photoImportContract = defineContract("photoImport", {
   stage: mutation({
@@ -166,6 +209,11 @@ export const photoImportContract = defineContract("photoImport", {
   commit: mutation({
     native: "Atomic manifest photo import commit",
     input: photoImportCommitInputSchema,
-    output: photoImportReceiptSchema,
+    output: photoImportCommitResultSchema,
+  }),
+  reconcile: mutation({
+    native: "Lock-aware photo import reconciliation",
+    input: photoImportReconcileInputSchema,
+    output: photoImportReconcileOutputSchema,
   }),
 });

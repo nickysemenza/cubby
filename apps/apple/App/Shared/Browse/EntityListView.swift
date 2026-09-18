@@ -38,7 +38,10 @@ struct EntityListView: View {
     ) {
         self.key = key
         self.initialFilters = filters
-        _model = State(initialValue: model)
+        // Reached via `.navigationDestination(for: Route.self)` (`Route.entityList`, a fresh
+        // path entry per distinct `key`/`filters`) or, on macOS, `.id(key)`-scoped in
+        // `RootSplitView` — both guarantee a full remount, never a stale `model` reused in place.
+        _model = State(initialValue: model)  // state-init-ok
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }

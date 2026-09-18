@@ -27,7 +27,7 @@ export default defineEntity({
         "Create spaces to organize where everything lives \u2014 pantry, fridge, garage, you decide.",
       actionLabel: "Create Location",
     },
-    icons: { lucide: "MapPin", sfSymbol: "mappin.and.ellipse" },
+    icons: { lucide: "MapPin", sfSymbol: "mappin.and.ellipse", emoji: "📍" },
     detail: {
       hero: { breadcrumb: "parentId", images: true },
       sections: [
@@ -780,16 +780,22 @@ export default defineEntity({
         },
       ],
       ingress: [
-        { kind: "self", routeId: "location-self" },
+        { kind: "self", routeId: "location-self", choice: "primary" },
         {
           kind: "createRelated",
           routeId: "location-new-garden-entry",
           relationPath: ["garden-entries"],
+          choice: {
+            primary: { when: { field: "type", oneOf: ["bed", "planter"] } },
+            otherwise: "alternate",
+          },
           bindings: [
             { field: "locationId", from: "source-id" },
+            { field: "kind", from: "constant", value: "note" },
             { field: "observedOn", from: "capture-date" },
           ],
         },
+        { kind: "createSelf", routeId: "location-new", enabled: true },
       ],
       routing: {
         candidateFields: ["name", "description"],

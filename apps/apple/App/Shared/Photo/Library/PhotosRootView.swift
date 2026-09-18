@@ -7,10 +7,14 @@ struct PhotosRootView: View {
     @State private var destination: PhotoSelectionBatch?
     var body: some View {
         PhotoLibraryBrowser(maxSelectionCount: nil, picker: false) { items in
-            destination = PhotoSelectionBatch(items: items)
+            // Built here, once per batch, and owned by the batch rather than seeded into the
+            // sheet's own @State: a re-presented `.sheet(item:)` is not guaranteed to reset
+            // @State seeded from an init parameter when the item changes (apps/apple/AGENTS.md,
+            // "Traps that cost real time"), which previously showed the prior batch's manifest.
+            destination = PhotoSelectionBatch(items: items, manifest: PhotoImportManifest(items: items))
         }
         .sheet(item: $destination) { batch in
-            PhotoDestinationSheet(items: batch.items) { committedIDs in
+            PhotoDestinationSheet(manifest: batch.manifest) { committedIDs in
                 // The importer reports only the identifiers that the transaction committed.
                 // Leave failed or unassigned selections untouched for an immediate retry.
                 appModel.photoLibrary.selectedIDs.removeAll { committedIDs.contains($0) }
@@ -40,6 +44,7 @@ struct LibraryPickerSheet: View {
 struct PhotoSelectionBatch: Identifiable {
     let id = UUID()
     let items: [PhotoSelectionItem]
+    let manifest: PhotoImportManifest
 }
 
 private struct PhotoLibraryBrowser: View {
@@ -50,7 +55,6 @@ private struct PhotoLibraryBrowser: View {
     let picker: Bool
     let onSelection: ([PhotoSelectionItem]) -> Void
     @State private var filter: Filter = .all
-    @State private var selecting = false
     @State private var pickerIDs: [String] = []
     @State private var preview: AssetPreview?
     @State private var session = UUID()
@@ -58,6 +62,15 @@ private struct PhotoLibraryBrowser: View {
     @State private var selectionError: String?
     @State private var loadingSelection = false
     private let columns = [GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 3)]
+    /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
+    /// items fall back to the window toolbar there.
+    private static var selectionBarPlacement: ToolbarItemPlacement {
+        #if os(iOS)
+            .bottomBar
+        #else
+            .automatic
+        #endif
+    }
 
     private var library: PhotoLibraryStore { appModel.photoLibrary }
     private var matches: PhotoMatchStore { appModel.photoMatches }
@@ -83,21 +96,21 @@ private struct PhotoLibraryBrowser: View {
                                             PhotoLibraryCell(asset: asset, selection: selectionNumber(asset))
                                             {
                                                 library.scrollID = asset.localIdentifier
-                                                if selecting || picker {
-                                                    toggle(asset.localIdentifier)
-                                                } else {
+                                                toggle(asset.localIdentifier)
+                                            } onShowDetails: {
+                                                library.scrollID = asset.localIdentifier
+                                                preview = AssetPreview(asset: asset)
+                                            }
+                                            .id(asset.localIdentifier)
+                                            .contextMenu {
+                                                Button(
+                                                    "View photo and Cubby matches",
+                                                    systemImage: "info.circle"
+                                                ) {
+                                                    library.scrollID = asset.localIdentifier
                                                     preview = AssetPreview(asset: asset)
                                                 }
-                                            }.id(asset.localIdentifier)
-                                                .contextMenu {
-                                                    Button(
-                                                        "View photo and Cubby matches",
-                                                        systemImage: "info.circle"
-                                                    ) {
-                                                        library.scrollID = asset.localIdentifier
-                                                        preview = AssetPreview(asset: asset)
-                                                    }
-                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -128,7 +141,6 @@ private struct PhotoLibraryBrowser: View {
                         }
                     }
                 }
-                if selecting || picker { selectionBar }
             } else {
                 permissionFallback
             }
@@ -136,9 +148,28 @@ private struct PhotoLibraryBrowser: View {
         .navigationTitle("Photos")
         .porcelainScreen()
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                if library.hasFullAccess && !picker {
-                    Button(selecting ? "Done selecting" : "Select") { selecting.toggle() }
+            // The `if` must gate the whole `ToolbarItem`, not sit inside its content: a
+            // conditional inside `ToolbarItem` still renders the item's Liquid Glass background
+            // even when the condition is false, showing an empty glass pill in the toolbar.
+            if library.hasFullAccess && !ids.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Clear") { clearSelection() }
+                }
+                ToolbarItemGroup(placement: Self.selectionBarPlacement) {
+                    Text("\(ids.count) selected").foregroundStyle(.secondary)
+                    Spacer()
+                    if loadingSelection {
+                        ProgressView(value: library.selectionProgress).frame(width: 70)
+                            .accessibilityLabel("Downloading selected photos")
+                        Button("Cancel") {
+                            loading?.cancel(); loadingSelection = false
+                        }
+                    } else {
+                        Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(ids.isEmpty)
+                            .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
+                    }
                 }
             }
         }
@@ -151,7 +182,7 @@ private struct PhotoLibraryBrowser: View {
         }
         .photoPreviewPresentation(item: $preview) { selected in
             PhotoLibraryPreview(asset: selected.asset) {
-                toggle(selected.asset.localIdentifier); selecting = true
+                toggle(selected.asset.localIdentifier)
             }
         }
         .alert(
@@ -198,24 +229,6 @@ private struct PhotoLibraryBrowser: View {
                 .font(.caption2).foregroundStyle(.secondary)
             }
         }.padding(12)
-    }
-
-    private var selectionBar: some View {
-        HStack {
-            Text("\(ids.count) selected").font(.subheadline)
-            Spacer()
-            if loadingSelection {
-                ProgressView(value: library.selectionProgress).frame(width: 70)
-                    .accessibilityLabel("Downloading selected photos")
-                Button("Cancel") {
-                    loading?.cancel(); loadingSelection = false
-                }
-            } else {
-                Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
-                    .buttonStyle(.borderedProminent).disabled(ids.isEmpty)
-                    .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
-            }
-        }.padding(12).background(.bar)
     }
 
     private var permissionFallback: some View {
@@ -269,6 +282,10 @@ private struct PhotoLibraryBrowser: View {
         if picker { pickerIDs = selection } else { library.selectedIDs = selection }
     }
 
+    private func clearSelection() {
+        if picker { pickerIDs = [] } else { library.selectedIDs = [] }
+    }
+
     private func prepareSelection() {
         let selected = ids
         loadingSelection = true
@@ -296,6 +313,7 @@ private struct PhotoLibraryCell: View {
     let asset: PHAsset
     let selection: Int?
     let onTap: () -> Void
+    let onShowDetails: () -> Void
     @State private var image: CGImage?
     private var known: Bool {
         appModel.photoLibrary.checked.contains(asset.localIdentifier)
@@ -347,6 +365,20 @@ private struct PhotoLibraryCell: View {
                     }
                 }
         }.buttonStyle(.plain)
+            .overlay(alignment: .topLeading) {
+                Button(action: onShowDetails) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+                .accessibilityLabel("Photo details")
+                .accessibilityIdentifier("photos.grid.details")
+            }
             .accessibilityLabel(
                 "\(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"), \(ownerAccessibilityDescription ?? (represented ? "In Cubby" : possibleMatch ? "Possible Cubby match" : known ? "No known match" : "Not checked"))"
             )
@@ -363,40 +395,28 @@ private struct PhotoLibraryCell: View {
 }
 
 private struct PhotoLibraryPreview: View {
+    enum Tab: String, CaseIterable { case photo = "Photo", diagnostics = "Diagnostics" }
+
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     let asset: PHAsset
     let onSelect: () -> Void
     @State private var image: CGImage?
     @State private var error: String?
+    @State private var tab: Tab = .photo
+    @State private var diagnostics = PhotoDiagnosticsModel()
+
     var body: some View {
         NavigationStack {
             List {
-                if let image {
-                    Image(decorative: image, scale: 1).resizable().scaledToFit().frame(maxHeight: 400)
-                } else if let error {
-                    Text(error).foregroundStyle(PorcelainTokens.destructive)
-                } else {
-                    ProgressView("Loading photo…")
+                Picker("View", selection: $tab) {
+                    ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
-                if let date = asset.creationDate { Text(date.formatted(date: .complete, time: .shortened)) }
-                Section("In Cubby") {
-                    let candidates = appModel.photoMatches.storedCandidates(for: asset.localIdentifier)
-                    if candidates.isEmpty { Text("No known match").foregroundStyle(.secondary) }
-                    ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
-                        MatchCandidateView(candidate: candidate)
-                        NavigationLink {
-                            ImageEntityDetailView(id: candidate.id)
-                        } label: {
-                            Label("Open image in Cubby", systemImage: "arrow.up.right.square")
-                        }
-                    }
-                    Text(appModel.photoMatches.coverage).font(.caption).foregroundStyle(.secondary)
-                    if appModel.photoMatches.repairFailures > 0 {
-                        Text("Some images could not be checked. Refresh to retry.").font(.caption)
-                    }
-                    Text("Recognition does not certify the resolution of an older upload.").font(.caption)
-                        .foregroundStyle(.secondary)
+                .pickerStyle(.segmented)
+                .listRowSeparator(.hidden)
+                switch tab {
+                case .photo: photoTab
+                case .diagnostics: PhotoDiagnosticsView(model: diagnostics)
                 }
             }.navigationTitle("Photo")
                 .toolbar {
@@ -418,6 +438,70 @@ private struct PhotoLibraryPreview: View {
                         Diagnostics.report(error, context: "photos.preview")
                     }
                 }
+                .onChange(of: tab) { _, newValue in
+                    guard newValue == .diagnostics else { return }
+                    startDiagnosticsIfNeeded()
+                }
+                .onDisappear { diagnostics.cancel() }
+        }
+    }
+
+    @ViewBuilder private var photoTab: some View {
+        if let image {
+            Image(decorative: image, scale: 1).resizable().scaledToFit().frame(maxHeight: 400)
+        } else if let error {
+            Text(error).foregroundStyle(PorcelainTokens.destructive)
+        } else {
+            ProgressView("Loading photo…")
+        }
+        if let date = asset.creationDate { Text(date.formatted(date: .complete, time: .shortened)) }
+        Section("Cubby") {
+            let candidates = appModel.photoMatches.storedCandidates(for: asset.localIdentifier)
+            if candidates.isEmpty {
+                if appModel.photoMatches.hasKnownResult(for: asset.localIdentifier) {
+                    Label("Ready to add", systemImage: "plus.circle")
+                    Text("No existing copy was found.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else if appModel.photoMatches.isLoading {
+                    ProgressView("Checking for an existing copy…")
+                } else {
+                    Label("Not checked yet", systemImage: "questionmark.circle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
+                MatchCandidateView(candidate: candidate)
+                NavigationLink {
+                    ImageEntityDetailView(id: candidate.id)
+                } label: {
+                    Label("Open image in Cubby", systemImage: "arrow.up.right.square")
+                }
+            }
+            DisclosureGroup("Match details") {
+                Text(appModel.photoMatches.coverage)
+                if appModel.photoMatches.repairFailures > 0 {
+                    Text(
+                        "\(appModel.photoMatches.repairFailures) older Cubby image\(appModel.photoMatches.repairFailures == 1 ? "" : "s") could not be checked. Pull to refresh the Photos grid to retry."
+                    )
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Materializing the asset and running Vision costs seconds and RAM, so it happens only once
+    /// the Diagnostics tab is actually opened — never eagerly when the preview itself appears.
+    private func startDiagnosticsIfNeeded() {
+        guard case .idle = diagnostics.state else { return }
+        Task {
+            do {
+                let file = try await PhotoLibraryIO.shared.file(for: asset)
+                diagnostics.run(file: file)
+            } catch {
+                Diagnostics.report(error, context: "photos.diagnostics")
+            }
         }
     }
 }

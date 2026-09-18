@@ -196,12 +196,15 @@ public typealias GetImageById = Components.Schemas.GetImageById
 public typealias Gtin = Components.Schemas.Gtin
 public typealias GtinInput = Components.Schemas.GtinInput
 public typealias Id = Components.Schemas.Id
+public typealias ImageAnalysisOutput = Components.Schemas.ImageAnalysisOutput
 public typealias ImageAssociation = Components.Schemas.ImageAssociation
 public typealias ImageAssociationEntity = Components.Schemas.ImageAssociationEntity
 public typealias ImageAssociationRole = Components.Schemas.ImageAssociationRole
 public typealias ImageHashIndex = Components.Schemas.ImageHashIndex
 public typealias ImageHashIndexItem = Components.Schemas.ImageHashIndexItem
 public typealias ImageOut = Components.Schemas.ImageOut
+public typealias ImageRecordAnalysisInput = Components.Schemas.ImageRecordAnalysisInput
+public typealias ImageRecordAnalysisOutput = Components.Schemas.ImageRecordAnalysisOutput
 public typealias ImageRenderStatus = Components.Schemas.ImageRenderStatus
 public typealias ImageShortcode = Components.Schemas.ImageShortcode
 public typealias ImageSourceFingerprint = Components.Schemas.ImageSourceFingerprint
@@ -349,6 +352,8 @@ public typealias OperationEffect = Components.Schemas.OperationEffect
 public typealias PerceptualHash = Components.Schemas.PerceptualHash
 public typealias PhotoImportCommitInput = Components.Schemas.PhotoImportCommitInput
 public typealias PhotoImportCommitOutput = Components.Schemas.PhotoImportCommitOutput
+public typealias PhotoImportReconcileInput = Components.Schemas.PhotoImportReconcileInput
+public typealias PhotoImportReconcileOutput = Components.Schemas.PhotoImportReconcileOutput
 public typealias PhotoImportStageInput = Components.Schemas.PhotoImportStageInput
 public typealias PhotoImportStageOutput = Components.Schemas.PhotoImportStageOutput
 public typealias PlainDate = Components.Schemas.PlainDate
@@ -545,6 +550,7 @@ extension Components.Schemas.GardenEntryOut: Identifiable {}
 extension Components.Schemas.GetImageById: Identifiable {}
 extension Components.Schemas.ImageHashIndexItem: Identifiable {}
 extension Components.Schemas.ImageOut: Identifiable {}
+extension Components.Schemas.ImageRecordAnalysisInput: Identifiable {}
 extension Components.Schemas.ImageWithEntity: Identifiable {}
 extension Components.Schemas.InfLocation: Identifiable {}
 extension Components.Schemas.IngredientDetail: Identifiable {}

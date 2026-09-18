@@ -316,11 +316,24 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
         } catch (error) {
           if (options.request.signal.aborted)
             throw abortError(options.request.signal);
+          const requestId = getRequestId(options.request.headers);
           const normalized = normalizeStartOperationError(
             error,
             stage,
-            getRequestId(options.request.headers),
+            requestId,
           );
+          if (normalized.publicError.code === "INTERNAL_SERVER_ERROR") {
+            console.error(
+              "[start-operation.failure]",
+              {
+                operation: options.operation,
+                stage,
+                requestId,
+                cfRayId: options.request.headers.get("cf-ray") ?? undefined,
+              },
+              normalized.observedError,
+            );
+          }
           const result: StartOperationResult<z.output<OutputSchema>> = {
             ok: false,
             error: normalized.publicError,

@@ -28,7 +28,11 @@ export default defineEntity({
         "Plan recipes onto your calendar to see costs add up and build a shopping list.",
       actionLabel: "Plan a Meal",
     },
-    icons: { lucide: "CalendarDays", sfSymbol: "fork.knife.circle" },
+    icons: {
+      lucide: "CalendarDays",
+      sfSymbol: "fork.knife.circle",
+      emoji: "🍽️",
+    },
     detail: {
       hero: { images: true },
       sections: [
@@ -356,6 +360,13 @@ export default defineEntity({
     schema: { module: "@cubby/schemas/meal", export: "mealFilterFields" },
     descriptors: [
       {
+        columnId: "date",
+        urlKey: "mealDate",
+        kind: "range",
+        wire: { kind: "range", from: "from", to: "to" },
+        placeholder: "Filter by meal date...",
+      },
+      {
         columnId: "mealType",
         kind: "multiselect",
         placeholder: "Filter by meal type...",
@@ -644,7 +655,15 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "meal-self" }],
+      ingress: [
+        { kind: "self", routeId: "meal-self" },
+        {
+          kind: "createSelf",
+          routeId: "meal-new",
+          enabled: true,
+          bindings: [{ field: "date", from: "capture-date" }],
+        },
+      ],
       routing: {
         candidateFields: ["name"],
         temporalFields: ["date"],

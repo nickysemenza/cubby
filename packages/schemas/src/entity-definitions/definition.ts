@@ -497,6 +497,8 @@ const metadataSchemas = () => {
           lucide: nonEmptyString(),
           /** An SF Symbol name for the native app. */
           sfSymbol: nonEmptyString(),
+          /** Text fallback where an SF Symbol can't render: CLI output, notifications, share text. */
+          emoji: nonEmptyString(),
         })
         .strict(),
       detail: z
@@ -649,6 +651,19 @@ const metadataSchemas = () => {
       identityEvidence: z.boolean({ error: "must be a boolean" }),
     })
     .strict();
+  const imageVisualEvidenceMetadataSchema = z
+    .object({
+      relationPath: imageRelationPathSchema,
+      priority: z.number().int().nonnegative(),
+      ordering: z.enum(["declared", "newest", "oldest"]),
+    })
+    .strict();
+  const imageIngressBindingValueSchema = z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+  ]);
   const imageIngressBindingMetadataSchema = z.discriminatedUnion("from", [
     z
       .object({ field: nonEmptyString(), from: z.literal("source-id") })
@@ -667,7 +682,7 @@ const metadataSchemas = () => {
       .object({
         field: nonEmptyString(),
         from: z.literal("constant"),
-        value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+        value: imageIngressBindingValueSchema,
       })
       .strict(),
     z
@@ -679,21 +694,66 @@ const metadataSchemas = () => {
             field: nonEmptyString(),
             from: z.enum(["source-id", "source-field", "constant"]),
             sourceField: nonEmptyString().optional(),
-            value: z
-              .union([z.string(), z.number(), z.boolean(), z.null()])
-              .optional(),
+            value: imageIngressBindingValueSchema.optional(),
           })
           .strict(),
       })
       .strict(),
   ]);
+  /** `createSelf` has no source record, so its bindings may only draw from the photo itself. */
+  const imageIngressSelfBindingMetadataSchema = z.discriminatedUnion("from", [
+    z
+      .object({ field: nonEmptyString(), from: z.literal("capture-date") })
+      .strict(),
+    z
+      .object({
+        field: nonEmptyString(),
+        from: z.literal("constant"),
+        value: imageIngressBindingValueSchema,
+      })
+      .strict(),
+  ]);
+  /**
+   * A route's resolved order is normally a fixed enum. A conditional-primary route instead
+   * promotes itself to primary only when a declared source-entity field matches one of a set
+   * of values (e.g. a Location's `type`), falling back to `otherwise` when it does not. The
+   * compiler enforces `field` is an enum field on the source entity and every value is a member
+   * of it (`validateImageIngress` in `scripts/generator/entities/compile.ts`).
+   */
+  const imageIngressConditionalChoiceMetadataSchema = z
+    .object({
+      primary: z
+        .object({
+          when: z
+            .object({
+              field: nonEmptyString(),
+              oneOf: z.array(nonEmptyString()).min(1),
+            })
+            .strict(),
+        })
+        .strict(),
+      otherwise: z.enum(["alternate", "prompt"]),
+    })
+    .strict();
+  const imageIngressChoiceMetadataSchema = z.union([
+    z.enum(["primary", "alternate", "prompt"]),
+    imageIngressConditionalChoiceMetadataSchema,
+  ]);
   const imageIngressMetadataSchema = z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("self"), routeId: nonEmptyString() }).strict(),
+    z
+      .object({
+        kind: z.literal("self"),
+        routeId: nonEmptyString(),
+        /** How this storage route is resolved after the natural source record. */
+        choice: imageIngressChoiceMetadataSchema.default("primary"),
+      })
+      .strict(),
     z
       .object({
         kind: z.literal("existingRelated"),
         routeId: nonEmptyString(),
         relationPath: imageRelationPathSchema,
+        choice: imageIngressChoiceMetadataSchema.default("alternate"),
       })
       .strict(),
     z
@@ -702,6 +762,21 @@ const metadataSchemas = () => {
         routeId: nonEmptyString(),
         relationPath: imageRelationPathSchema,
         bindings: z.array(imageIngressBindingMetadataSchema).min(1),
+        choice: imageIngressChoiceMetadataSchema.default("alternate"),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("createSelf"),
+        routeId: nonEmptyString(),
+        /** Overrides the created record's own `imagePolicy.storage` for this route only; omit
+         * to use the entity's declared storage (the common case — target === source here). */
+        storage: imageStorageMetadataSchema.optional(),
+        bindings: z.array(imageIngressSelfBindingMetadataSchema).default([]),
+        enabled: z.boolean({ error: "must be a boolean" }),
+        /** Required exactly when `enabled` is false (`validateImageIngress` enforces this). */
+        disabledReason: nonEmptyString().optional(),
+        choice: imageIngressChoiceMetadataSchema.default("alternate"),
       })
       .strict(),
   ]);
@@ -711,12 +786,20 @@ const metadataSchemas = () => {
       temporalFields: z.array(nonEmptyString()).default([]),
       lifecycleFilters: z
         .array(
-          z
-            .object({
-              field: nonEmptyString(),
-              equals: z.union([z.string(), z.boolean()]),
-            })
-            .strict(),
+          z.union([
+            z
+              .object({
+                field: nonEmptyString(),
+                equals: z.union([z.string(), z.boolean()]),
+              })
+              .strict(),
+            z
+              .object({
+                field: nonEmptyString(),
+                oneOf: z.array(z.union([z.string(), z.boolean()])).min(1),
+              })
+              .strict(),
+          ]),
         )
         .default([]),
       signals: z
@@ -726,6 +809,15 @@ const metadataSchemas = () => {
         })
         .strict()
         .default({ ocrFields: [], classifierLabels: [] }),
+      /**
+       * Authoritative visual evidence for photo routing. This is deliberately
+       * separate from borrowed display imagery, which can never become an
+       * identity assertion by being displayed.
+       */
+      visualEvidence: z
+        .array(imageVisualEvidenceMetadataSchema)
+        .optional()
+        .default([]),
       abstention: z
         .object({
           minimumScore: z.number().min(0).max(1),

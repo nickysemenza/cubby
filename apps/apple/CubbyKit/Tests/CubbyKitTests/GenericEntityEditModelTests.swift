@@ -191,7 +191,8 @@ struct GenericEntityEditModelTests {
     ) -> EntityDescriptor {
         EntityDescriptor(
             key: .gardenEntry, singular: "record", plural: "records", basePath: "records",
-            shortcodePrefix: nil, titleField: "id", domain: nil, sfSymbol: "circle", searchable: false,
+            shortcodePrefix: nil, titleField: "id", domain: nil, sfSymbol: "circle", emoji: "📓",
+            searchable: false,
             primarySearch: nil,
             timeline: nil, fields: [], filters: [], relations: [],
             presentation: EntityPresentation(

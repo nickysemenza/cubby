@@ -31,7 +31,7 @@ export default defineEntity({
         "Start tracking what you have and where it lives. Scan a barcode or add it by hand.",
       actionLabel: "Add to Inventory",
     },
-    icons: { lucide: "Package", sfSymbol: "cube.box" },
+    icons: { lucide: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
     detail: {
       sections: [
         {
@@ -475,11 +475,20 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "inventory-product",
           relationPath: ["product"],
+          choice: "prompt",
         },
         {
           kind: "existingRelated",
           routeId: "inventory-location",
           relationPath: ["location"],
+          choice: "prompt",
+        },
+        {
+          kind: "createSelf",
+          routeId: "inventory-new",
+          enabled: false,
+          disabledReason:
+            "Inventory has no image storage of its own; attach photos via the product or location instead",
         },
       ],
       routing: {

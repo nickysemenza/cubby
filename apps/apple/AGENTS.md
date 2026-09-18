@@ -84,6 +84,8 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   `parameterSummary` `nonisolated`. App Shortcut phrases may only embed AppEntity/AppEnum
   parameters, never strings.
 - Every SwiftUI view gets a `#Preview`, fed by `PreviewFixtures` where practical.
+- Screen density (inline titles, system spacing, toolbar-placed actions, hero sizing): see
+  `apps/apple/DESIGN.md` § Density.
 - `#Playground` blocks (`import Playgrounds`) only under `#if DEBUG`. They are exploration
   aids for Xcode, not a verification tier.
 
@@ -161,6 +163,11 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
   and a `-derivedDataPath`.
 - Running `knip --cache` before `packages/wasm` exists poisons `node_modules/.cache/knip`
   ("Unresolved imports …recipebridge_bg.js" on every later pre-commit); `rm -rf` that cache.
+- Symptom: a re-presented `.sheet(item:)` shows the previous item's state even though the item's
+  `id` changed. Rule: state lifetime follows the data's identity — own the model in the presenter
+  (build it alongside the item) or resync with `.task(id:)`; never seed `@State`/`@StateObject`
+  from an init parameter. Gated by `apple-check.sh`'s `State(initialValue:`/
+  `StateObject(wrappedValue:` grep (tag a deliberate exception `// state-init-ok: <reason>`).
 
 ### Debugging on device
 

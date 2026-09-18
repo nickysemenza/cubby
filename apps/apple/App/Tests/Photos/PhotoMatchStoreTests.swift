@@ -55,7 +55,7 @@ struct PhotoMatchStoreTests {
     @Test func equalContentAndSourceMatchesPreferStoredContentAfterMerging() async throws {
         let client = try client(
             index: """
-                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":{"hash":"0123456789abcdef","aspectRatio":1},"width":2,"height":2}],"repair":[]}
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":{"hash":"0123456789abcdef","aspectRatio":1},"width":2,"height":2,"directOwnerShortcodes":[]}],"repair":[]}
                 """)
         let store = PhotoMatchStore()
         let first = try selection(hash: "0123456789abcdef")
@@ -71,7 +71,7 @@ struct PhotoMatchStoreTests {
     @Test func priorityRefreshUpdatesSelectionAndDrainsRemainingLibraryQueries() async throws {
         let client = try client(
             index: """
-                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":null,"width":2,"height":2}],"repair":[]}
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":null,"width":2,"height":2,"directOwnerShortcodes":[]}],"repair":[]}
                 """)
         let store = PhotoMatchStore()
         defer { store.reset() }
@@ -84,7 +84,7 @@ struct PhotoMatchStoreTests {
         PhotoMatchTestProtocol.response.withLock {
             $0 = Data(
                 """
-                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"fedcba9876543210","sourceFingerprint":null,"width":2,"height":2}],"repair":[]}
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"fedcba9876543210","sourceFingerprint":null,"width":2,"height":2,"directOwnerShortcodes":[]}],"repair":[]}
                 """.utf8)
         }
         await store.refresh(client: client, priorityIDs: [selected.id])
@@ -99,7 +99,7 @@ struct PhotoMatchStoreTests {
     @Test func incompleteRepairDoesNotBlockSelectedPhotos() async throws {
         let client = try client(
             index: """
-                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":null,"sourceFingerprint":null,"width":null,"height":null}],"repair":[{"id":"IMG-2345","url":"https://example.invalid/photo.jpg"}]}
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":null,"sourceFingerprint":null,"width":null,"height":null,"directOwnerShortcodes":[]}],"repair":[{"id":"IMG-2345","url":"https://example.invalid/photo.jpg"}]}
                 """)
         let store = PhotoMatchStore()
         let item = try selection(hash: "0123456789abcdef")
@@ -125,7 +125,7 @@ struct PhotoMatchStoreTests {
     @Test func storedContentAndSourceRecognitionRemainDistinct() async throws {
         let client = try client(
             index: """
-                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":null,"width":2,"height":2},{"id":"IMG-6789","perceptualHash":"fedcba9876543210","sourceFingerprint":{"hash":"0123456789abcdef","aspectRatio":1},"width":2,"height":2}],"repair":[]}
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":null,"width":2,"height":2,"directOwnerShortcodes":[]},{"id":"IMG-6789","perceptualHash":"fedcba9876543210","sourceFingerprint":{"hash":"0123456789abcdef","aspectRatio":1},"width":2,"height":2,"directOwnerShortcodes":[]}],"repair":[]}
                 """)
         let store = PhotoMatchStore()
         let item = try selection(hash: "0123456789abcdef")
@@ -168,6 +168,22 @@ struct PhotoMatchStoreTests {
         }
     }
 
+    @Test func preparedAnalysisQueryAvoidsReReadingTheSelectedPhoto() async throws {
+        let client = try client(index: "{\"algorithmRevision\":1,\"items\":[],\"repair\":[]}")
+        let store = PhotoMatchStore()
+        let item = try selectionWithoutQuery()
+        let hash = try PerceptualHash64(hex: "0123456789abcdef")
+        let query = HashQuery(
+            perceptualHash: hash,
+            aspectRatio: 1,
+            sourceFingerprint: SourceFingerprint(hash: hash, aspectRatio: 1))
+
+        try await store.check(
+            [item], client: client, preparedQueries: [item.id: query], refreshIndex: true)
+
+        #expect(store.hasKnownResult(for: item.id))
+    }
+
     private func client(index: String) throws -> CubbyClient {
         PhotoMatchTestProtocol.response.withLock { $0 = Data(index.utf8) }
         let configuration = URLSessionConfiguration.ephemeral
@@ -196,6 +212,18 @@ struct PhotoMatchStoreTests {
             query: HashQuery(
                 perceptualHash: hash,
                 aspectRatio: 1, sourceFingerprint: SourceFingerprint(hash: hash, aspectRatio: 1)))
+    }
+
+    private func selectionWithoutQuery() throws -> PhotoSelectionItem {
+        let image = try #require(
+            CGContext(
+                data: nil, width: 2, height: 2, bitsPerComponent: 8,
+                bytesPerRow: 8, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage())
+        let file = try PhotoFile(
+            url: URL(fileURLWithPath: "/photo-import-must-not-read-this-file.png"),
+            filename: "fixture.png", contentType: "image/png", size: 1, width: 2, height: 2)
+        return PhotoSelectionItem(file: file, preview: image)
     }
 }
 

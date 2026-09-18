@@ -57,7 +57,11 @@ export default defineEntity({
         "Record settlement evidence without changing the expense ledger.",
       actionLabel: "New Transaction",
     },
-    icons: { lucide: "CreditCard", sfSymbol: "arrow.left.arrow.right" },
+    icons: {
+      lucide: "CreditCard",
+      sfSymbol: "arrow.left.arrow.right",
+      emoji: "💳",
+    },
     detail: {
       hero: { stats: ["amount", "status"] },
       sections: [
@@ -1017,6 +1021,14 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "financial-transaction-confirmed-purchase",
           relationPath: ["purchase"],
+          choice: "primary",
+        },
+        {
+          kind: "createSelf",
+          routeId: "financial-transaction-new",
+          enabled: false,
+          disabledReason:
+            "Financial transactions have no image storage of their own; attach photos via the linked purchase instead",
         },
       ],
       routing: {

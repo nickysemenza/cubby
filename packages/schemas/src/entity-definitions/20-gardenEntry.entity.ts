@@ -26,7 +26,7 @@ export default defineEntity({
       description:
         "Add a dated observation, harvest, or photo batch to keep a simple garden history.",
     },
-    icons: { lucide: "CalendarDays", sfSymbol: "text.badge.plus" },
+    icons: { lucide: "CalendarDays", sfSymbol: "text.badge.plus", emoji: "📓" },
     detail: {
       sections: [
         {
@@ -426,7 +426,18 @@ export default defineEntity({
     timeline: "default",
     images: {
       storage: "gallery",
-      ingress: [{ kind: "self", routeId: "garden-entry-self" }],
+      ingress: [
+        { kind: "self", routeId: "garden-entry-self" },
+        {
+          kind: "createSelf",
+          routeId: "garden-entry-new",
+          enabled: true,
+          bindings: [
+            { field: "observedOn", from: "capture-date" },
+            { field: "kind", from: "constant", value: "note" },
+          ],
+        },
+      ],
       routing: {
         candidateFields: ["note"],
         temporalFields: ["observedOn"],

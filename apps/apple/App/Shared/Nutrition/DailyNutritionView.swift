@@ -10,7 +10,9 @@ struct DailyNutritionView: View {
 
     init(day: String, previewSummary: MealNutritionOut? = nil) {
         self.previewSummary = previewSummary
-        _selectedDay = State(initialValue: day)
+        // Reached only via `.navigationDestination(for: Route.self)` (`Route.nutrition(day)`);
+        // each distinct `day` is a separate path entry, never reused in place for another `day`.
+        _selectedDay = State(initialValue: day)  // state-init-ok
     }
 
     var body: some View {

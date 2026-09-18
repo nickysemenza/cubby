@@ -25,9 +25,11 @@ filter:
     - entity.explore
     - entity.graph
     - entity.graphPaths
+    - image.analysis
     - image.detail
     - image.hashIndex
     - image.markUploaded
+    - image.recordAnalysis
     - image.setPerceptualHashes
     - image.uploadImage
     - inventory.findDuplicates
@@ -41,6 +43,7 @@ filter:
     - location.makeTree
     - meal.getNutrition
     - photoImport.commit
+    - photoImport.reconcile
     - photoImport.stage
     - problems.getCounts
     - product.findOrCreateByCode

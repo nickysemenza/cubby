@@ -15,6 +15,7 @@ struct PhotoEntityChooserModelTests {
             descriptor: descriptor,
             captureDates: [captureDate, nil],
             pageSize: 1,
+            calendar: Self.utcCalendar,
             now: today,
             loader: { filters, _, page, _ in
                 if filters["from"] != nil {
@@ -71,12 +72,16 @@ struct PhotoEntityChooserModelTests {
         #expect(recorder.snapshot().contains { $0.query == nil })
     }
 
-    @Test(arguments: ["purchase", "gardenEntry"])
+    @Test(arguments: ["purchase", "gardenEntry", "meal", "inventory"])
     func dateLaneUsesGeneratedEntityDateRange(rawKey: String) async throws {
         let key = try #require(EntityKey(rawValue: rawKey))
         let expectedNames: Set<String> =
-            rawKey == "purchase"
-            ? ["dateFrom", "dateTo"] : ["observedOnFrom", "observedOnTo"]
+            switch rawKey {
+            case "purchase": ["dateFrom", "dateTo"]
+            case "gardenEntry": ["observedOnFrom", "observedOnTo"]
+            case "inventory": ["verifiedFrom", "verifiedTo"]
+            default: ["from", "to"]
+            }
         let captureDate = Self.day("2026-09-10")
         let recorder = FilterRecorder()
         let model = PhotoEntityChooserModel(
@@ -92,6 +97,28 @@ struct PhotoEntityChooserModelTests {
         await model.loadInitial()
 
         #expect(recorder.snapshot().first?.filters.names == expectedNames.sorted())
+    }
+
+    /// `inventory.verifiedAt` is a `.timestamp` field (unlike `purchase`/`gardenEntry`/`meal`'s
+    /// `.date` fields above), so its range must be a ±1 hour window around the capture instant,
+    /// not a day boundary — this was the divergent behavior the shared helper needed to preserve.
+    @Test func timestampFieldUsesAnISOPlusMinusOneHourWindow() throws {
+        let descriptor = EntityCatalog[.inventory]
+        let key = try #require(PhotoEntityChooserModel.semanticDateKey(for: descriptor))
+        #expect(key == "verifiedAt")
+        let captureDate = Self.instant("2026-09-10T12:00:00Z")
+
+        let filters = PhotoEntityChooserModel.captureDateFilters(
+            descriptor: descriptor, key: key, captureDate: captureDate)
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        #expect(
+            filters["verifiedFrom"]?.strings.first
+                == formatter.string(from: captureDate.addingTimeInterval(-3_600)))
+        #expect(
+            filters["verifiedTo"]?.strings.first
+                == formatter.string(from: captureDate.addingTimeInterval(3_600)))
     }
 
     @Test func dateLaneFailureDoesNotHideRecentLane() async {
@@ -126,6 +153,27 @@ struct PhotoEntityChooserModelTests {
         #expect(model.currentGregorianDay == calendar.startOfDay(for: now))
     }
 
+    @Test func semanticDateMatchingUsesThePhotoDevicesLocalDay() async {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: -7 * 60 * 60)!
+        let captureDate = Self.instant("2026-09-10T06:30:00Z")
+        let model = PhotoEntityChooserModel(
+            descriptor: EntityCatalog[.meal], captureDates: [captureDate], calendar: calendar,
+            now: captureDate,
+            loader: { filters, _, _, _ in
+                if filters["from"] != nil {
+                    return Self.page([], page: 1, total: 0)
+                }
+                // 06:30Z is 23:30 on the prior local day. This row must remain in the
+                // date-matched lane rather than being shown as a recent record.
+                return Self.page([Self.row("MEA-local-day", date: "2026-09-09")], page: 1, total: 1)
+            })
+
+        await model.loadInitial()
+
+        #expect(model.recentRows.isEmpty)
+    }
+
     private nonisolated static func day(_ value: String) -> Date {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -133,6 +181,16 @@ struct PhotoEntityChooserModelTests {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: value)!
+    }
+
+    private nonisolated static var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    private nonisolated static func instant(_ value: String) -> Date {
+        ISO8601DateFormatter().date(from: value)!
     }
 
     private nonisolated static func row(_ id: String, date: String?) -> EntityRow {

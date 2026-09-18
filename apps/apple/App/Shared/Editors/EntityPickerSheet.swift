@@ -46,7 +46,9 @@ struct EntityPickerSheet: View {
         self.target = target
         self.multiple = multiple
         self.onPick = onPick
-        _selected = State(initialValue: selected.map { EntityPick(id: $0, title: $0) })
+        // Every call site presents this via `.sheet(isPresented:)`, not `.sheet(item:)` —
+        // dismissing tears the subtree down, so re-presenting rebuilds this seed fresh.
+        _selected = State(initialValue: selected.map { EntityPick(id: $0, title: $0) })  // state-init-ok
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[target] }

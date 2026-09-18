@@ -40,7 +40,11 @@ export default defineEntity({
         "Log what you've bought (or plan to) to keep a project's running cost honest.",
       actionLabel: "New Expense",
     },
-    icons: { lucide: "ReceiptText", sfSymbol: "dollarsign.circle" },
+    icons: {
+      lucide: "ReceiptText",
+      sfSymbol: "dollarsign.circle",
+      emoji: "💸",
+    },
     detail: {
       sections: [
         {
@@ -1122,11 +1126,20 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "expense-purchase",
           relationPath: ["purchase"],
+          choice: "prompt",
         },
         {
           kind: "existingRelated",
           routeId: "expense-product",
           relationPath: ["product"],
+          choice: "prompt",
+        },
+        {
+          kind: "createSelf",
+          routeId: "expense-new",
+          enabled: false,
+          disabledReason:
+            "Expenses have no image storage of their own; attach photos via the purchase or product instead",
         },
       ],
       routing: {

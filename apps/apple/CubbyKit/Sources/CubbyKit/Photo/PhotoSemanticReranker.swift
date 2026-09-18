@@ -5,11 +5,20 @@ public struct PhotoRoutingCandidate: Codable, Hashable, Sendable, Identifiable {
     public let id: String
     public let routeID: String
     public let description: String
+    /// Natural owner type for this candidate. Storage routes are resolved only after this record
+    /// is selected, so a related route never creates a second candidate for the same source row.
+    public let sourceEntity: EntityKey?
+    public let sourceID: String?
 
-    public init(id: String, routeID: String, description: String) {
+    public init(
+        id: String, routeID: String, description: String, sourceEntity: EntityKey? = nil,
+        sourceID: String? = nil
+    ) {
         self.id = id
         self.routeID = routeID
         self.description = description
+        self.sourceEntity = sourceEntity
+        self.sourceID = sourceID
     }
 }
 
@@ -17,11 +26,18 @@ public struct PhotoRoutingEvidence: Codable, Hashable, Sendable {
     public let photoID: String
     public let summary: String
     public let deterministicCandidateIDs: [String]
+    public let typeConfidence: Double?
+    public let recordConfidence: Double?
 
-    public init(photoID: String, summary: String, deterministicCandidateIDs: [String]) {
+    public init(
+        photoID: String, summary: String, deterministicCandidateIDs: [String],
+        typeConfidence: Double? = nil, recordConfidence: Double? = nil
+    ) {
         self.photoID = photoID
         self.summary = summary
         self.deterministicCandidateIDs = deterministicCandidateIDs
+        self.typeConfidence = typeConfidence
+        self.recordConfidence = recordConfidence
     }
 }
 
@@ -89,6 +105,16 @@ public struct PhotoSemanticReranker: Sendable {
 
     public init(model: any PhotoSemanticModel = FoundationModelsPhotoSemanticModel()) {
         self.model = model
+    }
+
+    /// Deterministic local routing is available immediately. Foundation Models may refine these
+    /// choices later, but it is never required before the importer can render actionable results.
+    public func deterministic(
+        evidence: [PhotoRoutingEvidence], candidates: [PhotoRoutingCandidate]
+    ) -> PhotoRerankingResult {
+        PhotoRerankingResult(
+            decisions: deterministicDecisions(evidence: evidence, candidates: candidates),
+            modelStatus: .unavailable(.modelNotReady))
     }
 
     public func rerank(

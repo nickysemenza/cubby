@@ -28,7 +28,7 @@ export default defineEntity({
         "Start a collection of recipes you love. Import one from a URL, or write it from scratch.",
       actionLabel: "Create Recipe",
     },
-    icons: { lucide: "ChefHat", sfSymbol: "fork.knife" },
+    icons: { lucide: "ChefHat", sfSymbol: "fork.knife", emoji: "🍳" },
     detail: {
       hero: { images: true },
       sections: [
@@ -802,16 +802,18 @@ export default defineEntity({
         },
       ],
       ingress: [
-        { kind: "self", routeId: "recipe-self" },
+        { kind: "self", routeId: "recipe-self", choice: "primary" },
         {
           kind: "existingRelated",
           routeId: "recipe-meal",
           relationPath: ["meals"],
+          choice: "alternate",
         },
         {
           kind: "createRelated",
           routeId: "recipe-new-meal",
           relationPath: ["meals"],
+          choice: "alternate",
           bindings: [
             { field: "date", from: "capture-date" },
             {
@@ -821,12 +823,20 @@ export default defineEntity({
             },
           ],
         },
+        { kind: "createSelf", routeId: "recipe-new", enabled: true },
       ],
       routing: {
         candidateFields: ["name"],
         temporalFields: [],
         lifecycleFilters: [],
         signals: { ocrFields: ["name"], classifierLabels: ["recipe"] },
+        visualEvidence: [
+          {
+            relationPath: ["meals"],
+            priority: 1,
+            ordering: "newest",
+          },
+        ],
         abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
       },
     },

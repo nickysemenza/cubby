@@ -8,10 +8,7 @@ import {
 import { anyShortcodeSchema, parseEntityRef } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
-import type {
-  PhotoImportCommitInput,
-  PhotoImportReceipt,
-} from "~/contracts/photo-import.contract";
+import type { PhotoImportCommitInput } from "~/contracts/photo-import.contract";
 import {
   executeEntity,
   type EntityKernelContext,
@@ -60,7 +57,7 @@ const sourceEntityFor = (route: Pick<ImageIngressRoute, "sourceEntity">) =>
 
 export const assertPhotoImportSourceContext = (
   route: Pick<ImageIngressRoute, "routeId" | "sourceEntity">,
-  source: SourceContext,
+  source: NonNullable<SourceContext>,
 ): void => {
   if (
     source.entity !== route.sourceEntity ||
@@ -69,6 +66,40 @@ export const assertPhotoImportSourceContext = (
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       `Source ${source.entity}:${source.id} does not match route ${route.routeId}`,
+    );
+  }
+};
+
+/** A `createSelf` route has no source record — it is the only kind `images[].source` must be
+ * omitted for; every other kind requires one. */
+export const assertPhotoImportSourceCardinality = (
+  route: Pick<ImageIngressRoute, "routeId" | "kind">,
+  source: SourceContext,
+): void => {
+  const requiresSource = route.kind !== "createSelf";
+  if (requiresSource && source === undefined) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Route ${route.routeId} requires a source`,
+    );
+  }
+  if (!requiresSource && source !== undefined) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Route ${route.routeId} is a createSelf route and must not include a source`,
+    );
+  }
+};
+
+/** Refuse a route the manifest declares disabled — the "New <entity>…" affordance stays
+ * visible in the client (`disabledReason` captions it), but never resolves to a commit. */
+export const assertPhotoImportRouteEnabled = (
+  route: Pick<ImageIngressRoute, "routeId" | "enabled" | "disabledReason">,
+): void => {
+  if (!route.enabled) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Route ${route.routeId} is disabled: ${route.disabledReason}`,
     );
   }
 };
@@ -89,14 +120,11 @@ export const assertPhotoImportReplacementAllowed = (
 const sourceFieldValue = (
   sourceRecord: SourceRecord,
   field: string,
-): z.output<ReturnType<typeof z.json>> => {
-  if (!sourceRecord.has(field)) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `Photo route source is missing bound field ${field}`,
-    );
-  }
-  return sourceRecord.get(field) ?? null;
+): z.output<ReturnType<typeof z.json>> | undefined => {
+  // A missing source field stays editable in the local draft. Do not replace it with
+  // an explicit null at commit time; the create schema can then report the real missing
+  // required field and the user can correct it in the editor.
+  return sourceRecord.get(field);
 };
 
 const relationItemValue = (
@@ -106,6 +134,14 @@ const relationItemValue = (
 ) => {
   switch (binding.item.from) {
     case "source-id":
+      // The compiler forbids `relation-items` on a `createSelf` route (it has no
+      // source), so this only runs when `source` is present.
+      if (source === undefined) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Photo route binding ${binding.field} requires a source`,
+        );
+      }
       return source.id;
     case "source-field":
       if (!binding.item.sourceField) {
@@ -132,16 +168,28 @@ export const materializePhotoImportCreateBody = (
   for (const binding of route.bindings) {
     switch (binding.from) {
       case "source-id":
+        // The compiler forbids `source-id` on a `createSelf` route (it has no
+        // source), so this only runs when `source` is present.
+        if (source === undefined) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `Photo route binding ${binding.field} requires a source`,
+          );
+        }
         materialized[binding.field] = source.id;
         break;
       case "source-field":
-        materialized[binding.field] = sourceFieldValue(
-          sourceRecord,
-          binding.sourceField,
-        );
+        const sourceValue = sourceFieldValue(sourceRecord, binding.sourceField);
+        if (sourceValue !== undefined && sourceValue !== null) {
+          materialized[binding.field] = sourceValue;
+        }
         break;
       case "capture-date":
-        if (capturedAt) {
+        if (
+          capturedAt &&
+          (materialized[binding.field] === undefined ||
+            materialized[binding.field] === null)
+        ) {
           materialized[binding.field] = capturedAt.slice(0, 10);
         }
         break;
@@ -149,15 +197,13 @@ export const materializePhotoImportCreateBody = (
         materialized[binding.field] = binding.value;
         break;
       case "relation-items":
-        materialized[binding.field] = [
-          {
-            [binding.item.field]: relationItemValue(
-              binding,
-              source,
-              sourceRecord,
-            ),
-          },
-        ];
+        const value = relationItemValue(binding, source, sourceRecord);
+        if (
+          value !== undefined &&
+          !(binding.item.from === "source-field" && value === null)
+        ) {
+          materialized[binding.field] = [{ [binding.item.field]: value }];
+        }
         break;
     }
   }
@@ -172,6 +218,7 @@ const routeFor = (routeId: string): Route => {
       `Unknown manifest photo route: ${routeId}`,
     );
   }
+  assertPhotoImportRouteEnabled(route);
   return route;
 };
 
@@ -227,12 +274,35 @@ const routeNeedsSourceRecord = (route: Route): boolean =>
         binding.item.from === "source-field"),
   );
 
+const sourceFieldsForRoute = (route: Route): string[] => [
+  ...new Set(
+    route.bindings.flatMap((binding) => {
+      if (binding.from === "source-field") return [binding.sourceField];
+      if (
+        binding.from === "relation-items" &&
+        binding.item.from === "source-field"
+      ) {
+        return binding.item.sourceField ? [binding.item.sourceField] : [];
+      }
+      return [];
+    }),
+  ),
+];
+
 const readSourceRecord = async (
   context: EntityKernelContext,
   route: Route,
   source: SourceContext,
 ): Promise<SourceRecord> => {
   if (!routeNeedsSourceRecord(route)) return new Map();
+  // `routeNeedsSourceRecord` only matches `source-field` bindings, which the compiler
+  // forbids on a `createSelf` route, so `source` is present whenever this is reached.
+  if (source === undefined) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Route ${route.routeId} cannot read its source fields without a source`,
+    );
+  }
   const entity = kernelEntity.safeParse(route.sourceEntity);
   if (!entity.success) {
     throw createAppError(
@@ -252,7 +322,18 @@ const readSourceRecord = async (
       `Photo route source ${source.id} is unavailable`,
     );
   }
-  return new Map(Object.entries(createBodySchema.parse(result.item)));
+  const item = z.record(z.string(), z.unknown()).parse(result.item);
+  const selected = Object.fromEntries(
+    sourceFieldsForRoute(route)
+      .filter((field) => item[field] !== undefined)
+      .map((field) => [field, item[field]]),
+  );
+  // Entity-kernel reads intentionally return rich server values such as Date.
+  // Route bindings cross into a JSON create-body contract, so normalize only
+  // the compiler-declared source fields instead of parsing the entire record
+  // (which also includes unrelated createdAt/updatedAt Date values).
+  const normalized = JSON.parse(JSON.stringify(selected));
+  return new Map(Object.entries(createBodySchema.parse(normalized)));
 };
 
 const createDestination = async (
@@ -303,8 +384,8 @@ const bindingItemForDraft = (
   if (
     items.some(
       (item) =>
-        item.source.entity !== first.source.entity ||
-        item.source.id !== first.source.id,
+        item.source?.entity !== first.source?.entity ||
+        item.source?.id !== first.source?.id,
     )
   ) {
     throw createAppError(
@@ -333,6 +414,7 @@ const validateExistingDestination = async (
   context: EntityKernelContext,
   route: Route,
   item: PhotoImportCommitInput["images"][number],
+  source: NonNullable<SourceContext>,
   sourceId: string,
 ): Promise<void> => {
   if (item.destination.kind !== "existing") {
@@ -361,7 +443,7 @@ const validateExistingDestination = async (
     !(await photoImportRelationExists(
       context.db,
       route.sourceEntity,
-      item.source.id,
+      source.id,
       route.relationPath,
       route.targetEntity,
       item.destination.candidateId,
@@ -369,7 +451,7 @@ const validateExistingDestination = async (
   ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      `Destination ${item.destination.candidateId} is not related to source ${item.source.id}`,
+      `Destination ${item.destination.candidateId} is not related to source ${source.id}`,
     );
   }
   if (isSingularImageOwner(route.targetEntity)) {
@@ -400,13 +482,8 @@ const validatePlan = async (
   const singularDestinations = new Map<string, string>();
   for (const item of input.images) {
     const route = routeFor(item.routeId);
-    assertPhotoImportSourceContext(route, item.source);
-    const sourceId = await resolveOrThrow(
-      context.db,
-      sourceEntityFor(route),
-      item.source.id,
-    );
-    if (route.kind === "createRelated") {
+    assertPhotoImportSourceCardinality(route, item.source);
+    if (route.kind === "createRelated" || route.kind === "createSelf") {
       if (item.destination.kind !== "create") {
         throw createAppError(
           "CONSTRAINT_VIOLATION",
@@ -420,23 +497,41 @@ const validatePlan = async (
           `Draft ${item.destination.draftId} does not match route ${route.routeId}`,
         );
       }
-      const traversals = photoImportRelationTraversals(
-        route.sourceEntity,
-        route.relationPath,
-      );
-      if (
-        !traversals.some(
-          (traversal) => traversal.targetEntity === route.targetEntity,
-        )
-      ) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          `Route ${route.routeId} does not reach its declared target`,
+      // `createSelf` has no relation to traverse: `sourceEntity === targetEntity` and the
+      // created record is its own destination (no `photoImportRelationTraversals` check).
+      if (route.kind === "createRelated") {
+        const traversals = photoImportRelationTraversals(
+          route.sourceEntity,
+          route.relationPath,
         );
+        if (
+          !traversals.some(
+            (traversal) => traversal.targetEntity === route.targetEntity,
+          )
+        ) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `Route ${route.routeId} does not reach its declared target`,
+          );
+        }
       }
       usedDrafts.add(draft.draftId);
     } else {
-      await validateExistingDestination(context, route, item, sourceId);
+      // Cardinality was just checked above: every non-createSelf route requires a source.
+      const source = item.source;
+      if (source === undefined) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Route ${route.routeId} requires a source`,
+        );
+      }
+      assertPhotoImportSourceContext(route, source);
+      const sourceId = await resolveOrThrow(
+        context.db,
+        sourceEntityFor(route),
+        source.id,
+      );
+      await validateExistingDestination(context, route, item, source, sourceId);
     }
     if (route.storage !== "gallery") {
       const destinationKey =
@@ -499,7 +594,8 @@ const applyPlan = async (
   input: PhotoImportCommitInput,
 ): Promise<PhotoImportRouteCommitResult> => {
   const destinations = new Map<string, string>();
-  const createdDestinations: PhotoImportReceipt["createdDestinations"] = [];
+  const createdDestinations: PhotoImportRouteCommitResult["createdDestinations"] =
+    [];
   const events: MutationSideEffectEvent[] = [];
   for (const draft of input.creates) {
     const route = routeFor(draft.routeId);
@@ -509,20 +605,31 @@ const applyPlan = async (
       route,
       await materializedDraftBody(context, route, item, draft),
     );
-    if (
-      !(await photoImportRelationExists(
-        context.db,
-        route.sourceEntity,
-        item.source.id,
-        route.relationPath,
-        route.targetEntity,
-        created.id,
-      ))
-    ) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `Created destination ${created.id} does not satisfy route ${route.routeId}`,
-      );
+    // `createSelf` has no relation path — the created record IS the destination, so there
+    // is nothing for `photoImportRelationExists` to confirm (unlike `createRelated`).
+    if (route.kind !== "createSelf") {
+      const source = item.source;
+      if (source === undefined) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Route ${route.routeId} requires a source`,
+        );
+      }
+      if (
+        !(await photoImportRelationExists(
+          context.db,
+          route.sourceEntity,
+          source.id,
+          route.relationPath,
+          route.targetEntity,
+          created.id,
+        ))
+      ) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Created destination ${created.id} does not satisfy route ${route.routeId}`,
+        );
+      }
     }
     destinations.set(draft.draftId, created.id);
     createdDestinations.push({

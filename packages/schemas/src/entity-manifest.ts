@@ -59,10 +59,34 @@ const imagePolicy = z.object({
   ingress: z
     .array(
       z.object({
-        kind: z.enum(["self", "existingRelated", "createRelated"]),
+        kind: z.enum([
+          "self",
+          "existingRelated",
+          "createRelated",
+          "createSelf",
+        ]),
         routeId: z.string(),
+        // A conditional-primary route resolves to the enum at render time
+        // (`ImageIngressRoute.choice`/`primaryWhen`); this re-validation of the raw
+        // declaration still sees either shape (`imageIngressMetadataSchema`,
+        // `packages/schemas/src/entity-definitions/definition.ts`).
+        choice: z.union([
+          z.enum(["primary", "alternate", "prompt"]),
+          z.object({
+            primary: z.object({
+              when: z.object({
+                field: z.string(),
+                oneOf: z.array(z.string()),
+              }),
+            }),
+            otherwise: z.enum(["alternate", "prompt"]),
+          }),
+        ]),
         relationPath: z.array(z.string()).readonly().optional(),
         bindings: z.array(z.unknown()).readonly().optional(),
+        storage: imageStorage.optional(),
+        enabled: z.boolean().optional(),
+        disabledReason: z.string().optional(),
       }),
     )
     .readonly(),

@@ -1,16 +1,14 @@
-import { photoImportReceiptSchema } from "~/contracts/photo-import.contract";
 import type {
   PhotoImportCommitInput,
-  PhotoImportReceipt,
+  PhotoImportCommitResult,
 } from "~/contracts/photo-import.contract";
 import { deferPublications } from "~/server/background-tasks/publish";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  finalizeImportImage,
-  findPhotoImportReceipt,
+  activateImportImages,
   getImportImageRows,
-  insertPhotoImportReceipt,
+  lockImportImageRows,
   type ImportImageRow,
   persistLocalImageAnalysis,
   withPhotoImportTransaction,
@@ -30,7 +28,7 @@ interface VerifiedImportImage {
 }
 
 export interface PhotoImportRouteCommitResult {
-  createdDestinations: PhotoImportReceipt["createdDestinations"];
+  createdDestinations: PhotoImportCommitResult["createdDestinations"];
   sideEffectEvents: MutationSideEffectEvent[];
 }
 
@@ -54,11 +52,10 @@ export interface PhotoImportRouteAdapter {
 
 export interface PhotoImportCommitPorts {
   getImages: typeof getImportImageRows;
+  lockImages: typeof lockImportImageRows;
   getObject: typeof getS3Object;
   inspect: typeof inspectImageFile;
-  findReceipt: typeof findPhotoImportReceipt;
-  insertReceipt: typeof insertPhotoImportReceipt;
-  finalizeImage: typeof finalizeImportImage;
+  activateImages: typeof activateImportImages;
   persistAnalysis: typeof persistLocalImageAnalysis;
   withTransaction: typeof withPhotoImportTransaction;
   refreshProjection: typeof refreshProjectionsForEvent;
@@ -67,40 +64,14 @@ export interface PhotoImportCommitPorts {
 
 export const productionPhotoImportCommitPorts: PhotoImportCommitPorts = {
   getImages: getImportImageRows,
+  lockImages: lockImportImageRows,
   getObject: getS3Object,
   inspect: inspectImageFile,
-  findReceipt: findPhotoImportReceipt,
-  insertReceipt: insertPhotoImportReceipt,
-  finalizeImage: finalizeImportImage,
+  activateImages: activateImportImages,
   persistAnalysis: persistLocalImageAnalysis,
   withTransaction: withPhotoImportTransaction,
   refreshProjection: refreshProjectionsForEvent,
   runSideEffects: runMutationSideEffectsForEntities,
-};
-
-class IdempotencyRace extends Error {}
-
-const requestFingerprint = async (
-  input: PhotoImportCommitInput,
-): Promise<string> => {
-  const encoded = new TextEncoder().encode(JSON.stringify(input));
-  const digest = await crypto.subtle.digest("SHA-256", encoded);
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-};
-
-const receiptOrConflict = (
-  stored: { requestHash: string; receipt: unknown },
-  requestHash: string,
-): PhotoImportReceipt => {
-  if (stored.requestHash !== requestHash) {
-    throw createAppError(
-      "DUPLICATE_RECORD",
-      "This photo import idempotency key was already used for different content",
-    );
-  }
-  return photoImportReceiptSchema.parse(stored.receipt);
 };
 
 type PhotoImportItem = PhotoImportCommitInput["images"][number];
@@ -110,11 +81,11 @@ const analysesMatch = (
   right: PhotoImportItem["analysis"],
 ): boolean => JSON.stringify(left) === JSON.stringify(right);
 
-const verifyUploadedImage = (
+const verifyUploadedImage = async (
   row: ImportImageRow,
   imageId: string,
   items: PhotoImportItem[],
-): VerifiedImportImage => {
+): Promise<VerifiedImportImage> => {
   if (
     !row.sha256 ||
     row.renderStatus !== "verified" ||
@@ -125,18 +96,15 @@ const verifyUploadedImage = (
       `Existing image ${imageId} is not available for reuse`,
     );
   }
+  if (items.some((item) => item.duplicateDecision !== "reuse")) {
+    throw createAppError(
+      "IMAGE_PRECONDITION_FAILED",
+      `Existing image ${imageId} was not approved for reuse`,
+    );
+  }
   const exactItems = items.filter(
     (item) => row.sha256 === item.analysis.sha256,
   );
-  const selectedDuplicates = items.filter(
-    (item) => row.sha256 !== item.analysis.sha256,
-  );
-  if (selectedDuplicates.some((item) => item.duplicateDecision !== "reuse")) {
-    throw createAppError(
-      "IMAGE_PRECONDITION_FAILED",
-      `Existing image ${imageId} does not match the analyzed bytes`,
-    );
-  }
   const exactAnalysis = exactItems[0]?.analysis ?? null;
   if (
     exactAnalysis &&
@@ -159,7 +127,9 @@ const verifyUploadedImage = (
       storageStatus: "available",
       verifiedAt: new Date(),
     },
-    analysis: exactAnalysis,
+    // A reused active image is already durable. It receives associations only;
+    // local analysis belongs to newly staged rows in this commit.
+    analysis: null,
   };
 };
 
@@ -194,17 +164,29 @@ const verifyPendingImage = async (
     );
   }
   const integrity = await ports.inspect(bytes, row.contentType);
-  if (
-    integrity.sha256 !== item.analysis.sha256 ||
-    integrity.width !== item.analysis.width ||
-    integrity.height !== item.analysis.height
-  ) {
+  // ImageIO reports display-oriented dimensions while the lightweight server inspector
+  // deliberately reports raw encoded dimensions. Exact bytes can therefore legitimately
+  // present the same width/height pair in the opposite order for EXIF/HEIF rotation.
+  const dimensionsMatch =
+    (integrity.width === item.analysis.width &&
+      integrity.height === item.analysis.height) ||
+    (integrity.width === item.analysis.height &&
+      integrity.height === item.analysis.width);
+  if (integrity.sha256 !== item.analysis.sha256 || !dimensionsMatch) {
     throw createAppError(
       "IMAGE_PRECONDITION_FAILED",
       `Staged bytes for ${imageId} do not match their local analysis`,
     );
   }
-  return { row, integrity, analysis: item.analysis };
+  return {
+    row,
+    integrity: {
+      ...integrity,
+      width: item.analysis.width,
+      height: item.analysis.height,
+    },
+    analysis: item.analysis,
+  };
 };
 
 async function verifyStagedImages(
@@ -245,7 +227,7 @@ async function verifyStagedImages(
       );
     }
     if (row.status === "UPLOADED") {
-      verified.push(verifyUploadedImage(row, imageId, items));
+      verified.push(await verifyUploadedImage(row, imageId, items));
       continue;
     }
     if (row.status !== "PENDING") {
@@ -264,99 +246,96 @@ export async function commitPhotoImport(
   input: PhotoImportCommitInput,
   routeAdapter: PhotoImportRouteAdapter,
   ports: PhotoImportCommitPorts = productionPhotoImportCommitPorts,
-): Promise<PhotoImportReceipt> {
-  const requestHash = await requestFingerprint(input);
-  const prior = await ports.findReceipt(context.db, input.idempotencyKey);
-  if (prior) return receiptOrConflict(prior, requestHash);
-
+): Promise<PhotoImportCommitResult> {
   // R2 is verified before the transaction. A rollback never removes staged bytes, so the caller
-  // can correct its plan or retry the same idempotency key without uploading again.
+  // can correct its plan and explicitly resubmit without uploading again. A retry that races this
+  // preflight is still safe: the transaction compares the locked row status with this snapshot
+  // before any route write, so only one request can consume a PENDING image.
   const verified = await verifyStagedImages(context, input, ports);
-  const imagesByCode = new Map(
-    verified.map(({ row }) => [row.shortcode, row] as const),
-  );
+  const imageCodes = [...new Set(input.images.map((item) => item.imageId))];
   let sideEffectEvents: MutationSideEffectEvent[] = [];
   const deferred = deferPublications();
-  try {
-    const receipt = await ports.withTransaction(
-      context.db,
-      async (transactionDb) => {
-        const winner = await ports.findReceipt(
-          transactionDb,
-          input.idempotencyKey,
+  const result = await ports.withTransaction(
+    context.db,
+    async (transactionDb) => {
+      // Lock all rows before validating or writing the route plan. The
+      // preflight above intentionally remains outside the transaction so R2
+      // failures never hold database locks.
+      const lockedRows = await ports.lockImages(transactionDb, imageCodes);
+      const lockedByCode = new Map(
+        lockedRows.map((row) => [row.shortcode, row] as const),
+      );
+      if (lockedByCode.size !== imageCodes.length) {
+        throw createAppError(
+          "REFERENCED_RECORD_MISSING",
+          "One or more staged images disappeared before commit",
         );
-        if (winner) return receiptOrConflict(winner, requestHash);
-
-        const transactionContext = {
-          ...context,
-          db: transactionDb,
-          readDb: transactionDb,
-          services: {
-            ...context.services,
-            recipeCosting: context.services.recipeCosting.bindTo(
-              transactionDb,
-              deferred.publish,
-            ),
-          },
-        };
-        await routeAdapter.validate(transactionContext, input, imagesByCode);
-        for (const staged of verified) {
-          await ports.finalizeImage(
-            transactionDb,
-            staged.row,
-            staged.integrity,
+      }
+      const lockedVerified = verified.map((entry) => {
+        const locked = lockedByCode.get(entry.row.shortcode);
+        if (!locked || locked.status !== entry.row.status) {
+          throw createAppError(
+            "IMAGE_PRECONDITION_FAILED",
+            `Staged image ${entry.row.shortcode} changed while it was being committed`,
           );
-          if (staged.analysis) {
-            await ports.persistAnalysis(
-              transactionDb,
-              staged.row.id,
-              staged.analysis,
-              staged.analysis.analysisVersion,
-              staged.analysis.sha256,
-            );
-          }
         }
-        const applied = await routeAdapter.apply(
-          transactionContext,
-          input,
-          imagesByCode,
-        );
-        sideEffectEvents = applied.sideEffectEvents;
-        for (const event of sideEffectEvents) {
-          await ports.refreshProjection(transactionDb, event);
-        }
-        const result: PhotoImportReceipt = {
-          receiptId: crypto.randomUUID(),
-          idempotencyKey: input.idempotencyKey,
-          committedPhotoIds: [
-            ...new Set(input.images.map((item) => item.imageId)),
-          ],
-          committedClientIds: input.images.map((item) => item.clientId),
-          createdDestinations: applied.createdDestinations,
-          committedAt: new Date().toISOString(),
-        };
-        if (
-          !(await ports.insertReceipt(
+        return { ...entry, row: locked };
+      });
+      const imagesByCode = new Map(
+        lockedVerified.map(({ row }) => [row.shortcode, row] as const),
+      );
+      const transactionContext = {
+        ...context,
+        db: transactionDb,
+        readDb: transactionDb,
+        services: {
+          ...context.services,
+          recipeCosting: context.services.recipeCosting.bindTo(
             transactionDb,
-            input.idempotencyKey,
-            requestHash,
-            result,
-          ))
-        ) {
-          throw new IdempotencyRace();
+            deferred.publish,
+          ),
+        },
+      };
+      await routeAdapter.validate(transactionContext, input, imagesByCode);
+      const applied = await routeAdapter.apply(
+        transactionContext,
+        input,
+        imagesByCode,
+      );
+      sideEffectEvents = applied.sideEffectEvents;
+      for (const staged of lockedVerified) {
+        if (staged.analysis) {
+          await ports.persistAnalysis(
+            transactionDb,
+            staged.row.id,
+            staged.analysis,
+            staged.analysis.analysisVersion,
+            staged.analysis.sha256,
+          );
         }
-        return result;
-      },
-    );
-    await deferred.flush(context.db);
-    await ports.runSideEffects(context.db, sideEffectEvents, undefined, {
-      projection: "skip",
-    });
-    return receipt;
-  } catch (error) {
-    if (!(error instanceof IdempotencyRace)) throw error;
-    const winner = await ports.findReceipt(context.db, input.idempotencyKey);
-    if (!winner) throw error;
-    return receiptOrConflict(winner, requestHash);
-  }
+      }
+      for (const event of sideEffectEvents) {
+        await ports.refreshProjection(transactionDb, event);
+      }
+      const pending = lockedVerified.filter(
+        ({ row }) => row.status === "PENDING",
+      );
+      const activatedCount = await ports.activateImages(transactionDb, pending);
+      if (activatedCount !== pending.length) {
+        throw new Error(
+          `Photo import activated ${activatedCount} images; expected ${pending.length}`,
+        );
+      }
+      return {
+        committedPhotoIds: imageCodes,
+        createdDestinations: applied.createdDestinations,
+        committedAt: new Date().toISOString(),
+      } satisfies PhotoImportCommitResult;
+    },
+  );
+  await deferred.flush(context.db);
+  await ports.runSideEffects(context.db, sideEffectEvents, undefined, {
+    projection: "skip",
+  });
+  return result;
 }

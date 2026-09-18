@@ -42,7 +42,7 @@ export default defineEntity({
         "Add the things you own to track what you have and what it's worth. Scan a barcode or add one by hand.",
       actionLabel: "Add Product",
     },
-    icons: { lucide: "Barcode", sfSymbol: "shippingbox" },
+    icons: { lucide: "Barcode", sfSymbol: "shippingbox", emoji: "📦" },
     detail: {
       hero: {
         images: true,
@@ -1888,7 +1888,10 @@ export default defineEntity({
     timeline: "custom",
     images: {
       storage: "gallery",
-      ingress: [{ kind: "self", routeId: "product-self" }],
+      ingress: [
+        { kind: "self", routeId: "product-self" },
+        { kind: "createSelf", routeId: "product-new", enabled: true },
+      ],
       routing: {
         candidateFields: ["name", "manufacturer", "model"],
         temporalFields: [],

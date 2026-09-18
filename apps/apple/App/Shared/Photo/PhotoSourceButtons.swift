@@ -23,7 +23,7 @@ struct PhotoSourceButtons: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var matchingSession = UUID()
     @State private var showingLibrary = false
-    @State private var review: PhotoSelectionBatch?
+    @State private var review: PhotoMatchReviewBatch?
 
     init(onImage: @escaping (CGImage) -> Void) {
         maxSelectionCount = 1
@@ -95,7 +95,7 @@ struct PhotoSourceButtons: View {
             .nativeSheet(.picker)
         }
         .sheet(item: $review) { batch in
-            PhotoMatchReviewSheet(items: batch.items, onContinue: onSelection)
+            PhotoMatchReviewSheet(draft: batch.draft, onContinue: onSelection)
         }
         #if os(iOS) || os(macOS)
             .onChange(of: photoItems) { _, items in
@@ -183,7 +183,13 @@ struct PhotoSourceButtons: View {
     }
 
     private func deliver(_ selections: [PhotoSelectionItem]) {
-        if reviewsUploads { review = PhotoSelectionBatch(items: selections) } else { onSelection(selections) }
+        // The draft is built here, once per batch, and owned by the batch rather than seeded
+        // into the sheet's own @State — see `PhotoMatchReviewBatch`'s doc comment.
+        if reviewsUploads {
+            review = PhotoMatchReviewBatch(items: selections, draft: PhotoReviewDraft(items: selections))
+        } else {
+            onSelection(selections)
+        }
     }
 
     private func finishPending(skipFailed: Bool) {

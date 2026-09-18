@@ -26,7 +26,7 @@ export default defineEntity({
       description:
         "Record what is growing now or plan the next crop for one of your garden locations.",
     },
-    icons: { lucide: "Sprout", sfSymbol: "leaf" },
+    icons: { lucide: "Sprout", sfSymbol: "leaf", emoji: "🌱" },
     detail: {
       variant: "journal",
       hero: {
@@ -578,11 +578,13 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "planting-garden-entry",
           relationPath: ["entries"],
+          choice: "alternate",
         },
         {
           kind: "createRelated",
           routeId: "planting-new-garden-entry",
           relationPath: ["entries"],
+          choice: "primary",
           bindings: [
             { field: "plantingId", from: "source-id" },
             {
@@ -590,8 +592,16 @@ export default defineEntity({
               from: "source-field",
               sourceField: "locationId",
             },
+            { field: "kind", from: "constant", value: "note" },
             { field: "observedOn", from: "capture-date" },
           ],
+        },
+        {
+          kind: "createSelf",
+          routeId: "planting-new",
+          enabled: false,
+          disabledReason:
+            "Plantings have no image storage of their own; attach photos via a garden entry instead",
         },
       ],
       routing: {
@@ -602,6 +612,13 @@ export default defineEntity({
           ocrFields: ["variety", "notes"],
           classifierLabels: ["plant", "garden"],
         },
+        visualEvidence: [
+          {
+            relationPath: ["entries"],
+            priority: 1,
+            ordering: "newest",
+          },
+        ],
         abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
       },
     },
