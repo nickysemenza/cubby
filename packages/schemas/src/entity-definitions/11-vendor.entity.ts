@@ -621,7 +621,16 @@ export default defineEntity({
     auditable: true,
     images: {
       storage: "logo",
-      ingress: [{ kind: "self", routeId: "vendor-logo" }],
+      ingress: [
+        { kind: "self", routeId: "vendor-logo" },
+        {
+          kind: "createSelf",
+          routeId: "vendor-new",
+          enabled: false,
+          disabledReason:
+            "Vendors need a name before a logo; create one in Vendors first",
+        },
+      ],
       routing: {
         candidateFields: ["name", "website"],
         temporalFields: [],

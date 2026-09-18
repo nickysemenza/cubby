@@ -1195,7 +1195,7 @@ const imagePolicyPathTarget = (
 type ImageIngressRoute = CompiledEntity["imagePolicy"]["ingress"][number];
 type ImageIngressBinding = Extract<
   ImageIngressRoute,
-  { kind: "createRelated" }
+  { kind: "createRelated" } | { kind: "createSelf" }
 >["bindings"][number];
 
 const constantMatchesImageField = (
@@ -1305,14 +1305,97 @@ const validateImageBinding = (
   validateRelationItemsImageBinding(entity, binding, targetField, context);
 };
 
-const validateImageIngress = (
-  entities: readonly CompiledEntity[],
+type ConditionalImageIngressChoice = Exclude<
+  ImageIngressRoute["choice"],
+  string
+>;
+
+/** `allowInTypeGuards` (`.oxlintrc.json`) permits `typeof` only inside a declared type
+ * predicate — this is the one place that decodes the union so nothing downstream re-checks it. */
+const isConditionalChoice = (
+  choice: ImageIngressRoute["choice"],
+): choice is ConditionalImageIngressChoice => typeof choice === "object";
+
+/** The resolved literal a client applies when no conditional predicate overrides it. */
+const resolvedRouteChoice = (
+  route: ImageIngressRoute,
+): "primary" | "alternate" | "prompt" =>
+  isConditionalChoice(route.choice) ? route.choice.otherwise : route.choice;
+
+/** `choice.primary.when`: `field` must be a declared enum field on the source entity and every
+ * `oneOf` value a member of it — the same enum-membership pattern `validateImageRouting`'s
+ * `lifecycleFilters` uses (`safeParse` against the field's own read schema). */
+const validateConditionalPrimaryChoice = (
   entity: CompiledEntity,
-  routeOwners: Map<string, string>,
+  when: { field: string; oneOf: readonly string[] },
+  context: string,
 ): void => {
-  const { ingress, routing, storage } = entity.imagePolicy;
-  const context = `${entity.key}.capabilities.images`;
+  const field = imagePolicyField(entity, when.field, `${context}.primary.when`);
+  if (field.kind !== "enum")
+    throw new EntityDeclarationError(
+      `${context}.primary.when.field ${when.field} must be a declared enum field.`,
+    );
+  if (new Set(when.oneOf).size !== when.oneOf.length)
+    throw new EntityDeclarationError(
+      `${context}.primary.when.oneOf contains duplicate values.`,
+    );
+  for (const value of when.oneOf) {
+    if (field.validation.read?.safeParse(value).success !== true)
+      throw new EntityDeclarationError(
+        `${context}.primary.when.oneOf contains a value outside the declared enum.`,
+      );
+  }
+};
+
+const validateCreateSelfRoute = (
+  entity: CompiledEntity,
+  route: Extract<ImageIngressRoute, { kind: "createSelf" }>,
+  routeContext: string,
+): void => {
+  if (route.enabled) {
+    if (route.disabledReason !== undefined)
+      throw new EntityDeclarationError(
+        `${routeContext}.disabledReason must be omitted when enabled is true.`,
+      );
+    if (entity.imagePolicy.storage === false)
+      throw new EntityDeclarationError(
+        `${routeContext} is enabled but ${entity.key} has no direct image storage to attach to.`,
+      );
+    // Weaker than the runtime lookup `createDestination` uses
+    // (`ENTITY_KERNEL_BINDINGS[entity].schemas.createInput`/`repository.create`): the generator
+    // runs before that generated file exists, so this checks the same manifest-declared signal
+    // `kernelActionsFor` uses to add "create" to the entity's kernel action roster instead.
+    if (entity.contract === null || entity.contract.create === null)
+      throw new EntityDeclarationError(
+        `${routeContext} is enabled but ${entity.key} has no create contract.`,
+      );
+  } else if (route.disabledReason === undefined) {
+    throw new EntityDeclarationError(
+      `${routeContext}.disabledReason is required when enabled is false.`,
+    );
+  }
+  const bound = new Set<string>();
+  for (const binding of route.bindings) {
+    if (bound.has(binding.field))
+      throw new EntityDeclarationError(
+        `${routeContext}.bindings assigns ${binding.field} more than once.`,
+      );
+    bound.add(binding.field);
+    validateImageBinding(entity, entity, binding, `${routeContext}.bindings`);
+  }
+};
+
+/** Route-count invariants that only need the roster, not each route's shape. */
+const validateImageIngressCardinality = (
+  ingress: readonly ImageIngressRoute[],
+  routing: CompiledEntity["imagePolicy"]["routing"],
+  storage: CompiledEntity["imagePolicy"]["storage"],
+  context: string,
+): void => {
   const selfRoutes = ingress.filter((route) => route.kind === "self");
+  const createSelfRoutes = ingress.filter(
+    (route) => route.kind === "createSelf",
+  );
   if (ingress.length > 0 && routing === null)
     throw new EntityDeclarationError(
       `${context}.routing is required when ingress routes are declared.`,
@@ -1325,48 +1408,109 @@ const validateImageIngress = (
     throw new EntityDeclarationError(
       `${context}.ingress requires exactly one self route for direct image storage.`,
     );
-  for (const route of ingress) {
-    const routeOwner = routeOwners.get(route.routeId);
-    if (routeOwner !== undefined)
-      throw new EntityDeclarationError(
-        `${context}.ingress routeId ${route.routeId} conflicts with ${routeOwner}.capabilities.images.ingress.`,
-      );
-    routeOwners.set(route.routeId, entity.key);
-    if (route.kind === "self") continue;
-    const routeContext = `${context}.ingress.${route.routeId}`;
-    const target = imagePolicyPathTarget(
-      entities,
-      entity,
-      route.relationPath,
-      routeContext,
+  if (createSelfRoutes.length > 1)
+    throw new EntityDeclarationError(
+      `${context}.ingress may declare at most one createSelf route.`,
     );
-    if (target.imagePolicy.storage === false)
-      throw new EntityDeclarationError(
-        `${routeContext} targets ${target.key}, which has no direct image storage.`,
-      );
-    if (route.kind !== "createRelated") continue;
-    const bound = new Set<string>();
-    for (const binding of route.bindings) {
-      if (bound.has(binding.field))
-        throw new EntityDeclarationError(
-          `${routeContext}.bindings assigns ${binding.field} more than once.`,
-        );
-      bound.add(binding.field);
-      validateImageBinding(entity, target, binding, `${routeContext}.bindings`);
-    }
-  }
-  const primaryRoutes = ingress.filter((route) => route.choice === "primary");
-  if (primaryRoutes.length > 1)
+  // Makes "which entities could create from a photo, and why not" explicit in the manifest
+  // rather than an absence a client has to notice on its own.
+  if (storage !== false && createSelfRoutes.length !== 1)
+    throw new EntityDeclarationError(
+      `${context}.ingress requires exactly one createSelf route for direct image storage.`,
+    );
+};
+
+/** `choice` cardinality: at most one unconditional and one conditional primary, and any
+ * route resolving to "alternate" (directly or via a conditional's `otherwise`) needs a
+ * primary to be the alternative TO. */
+const validateImageChoiceConsistency = (
+  ingress: readonly ImageIngressRoute[],
+  context: string,
+): void => {
+  const unconditionalPrimaryRoutes = ingress.filter(
+    (route) => route.choice === "primary",
+  );
+  const conditionalPrimaryRoutes = ingress.filter((route) =>
+    isConditionalChoice(route.choice),
+  );
+  if (unconditionalPrimaryRoutes.length > 1)
     throw new EntityDeclarationError(
       `${context}.ingress may declare at most one primary route.`,
     );
+  if (conditionalPrimaryRoutes.length > 1)
+    throw new EntityDeclarationError(
+      `${context}.ingress may declare at most one conditional-primary route.`,
+    );
   if (
-    ingress.some((route) => route.choice === "alternate") &&
-    primaryRoutes.length === 0
+    ingress.some((route) => resolvedRouteChoice(route) === "alternate") &&
+    unconditionalPrimaryRoutes.length === 0
   )
     throw new EntityDeclarationError(
       `${context}.ingress alternate routes require a primary route or must be prompt routes.`,
     );
+};
+
+/** One route's shape: ownership, its `choice.primary.when` predicate (if conditional), and
+ * its kind-specific target/binding rules. */
+const validateImageIngressRoute = (
+  entities: readonly CompiledEntity[],
+  entity: CompiledEntity,
+  route: ImageIngressRoute,
+  routeOwners: Map<string, string>,
+  context: string,
+): void => {
+  const routeOwner = routeOwners.get(route.routeId);
+  if (routeOwner !== undefined)
+    throw new EntityDeclarationError(
+      `${context}.ingress routeId ${route.routeId} conflicts with ${routeOwner}.capabilities.images.ingress.`,
+    );
+  routeOwners.set(route.routeId, entity.key);
+  const routeContext = `${context}.ingress.${route.routeId}`;
+  if (isConditionalChoice(route.choice))
+    validateConditionalPrimaryChoice(
+      entity,
+      route.choice.primary.when,
+      routeContext,
+    );
+  if (route.kind === "self") return;
+  if (route.kind === "createSelf") {
+    validateCreateSelfRoute(entity, route, routeContext);
+    return;
+  }
+  const target = imagePolicyPathTarget(
+    entities,
+    entity,
+    route.relationPath,
+    routeContext,
+  );
+  if (target.imagePolicy.storage === false)
+    throw new EntityDeclarationError(
+      `${routeContext} targets ${target.key}, which has no direct image storage.`,
+    );
+  if (route.kind !== "createRelated") return;
+  const bound = new Set<string>();
+  for (const binding of route.bindings) {
+    if (bound.has(binding.field))
+      throw new EntityDeclarationError(
+        `${routeContext}.bindings assigns ${binding.field} more than once.`,
+      );
+    bound.add(binding.field);
+    validateImageBinding(entity, target, binding, `${routeContext}.bindings`);
+  }
+};
+
+const validateImageIngress = (
+  entities: readonly CompiledEntity[],
+  entity: CompiledEntity,
+  routeOwners: Map<string, string>,
+): void => {
+  const { ingress, routing, storage } = entity.imagePolicy;
+  const context = `${entity.key}.capabilities.images`;
+  validateImageIngressCardinality(ingress, routing, storage, context);
+  for (const route of ingress) {
+    validateImageIngressRoute(entities, entity, route, routeOwners, context);
+  }
+  validateImageChoiceConsistency(ingress, context);
 };
 
 const validateImageDisplaySources = (

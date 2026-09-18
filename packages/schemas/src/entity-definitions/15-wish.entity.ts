@@ -277,6 +277,13 @@ export default defineEntity({
           relationPath: ["candidates"],
           choice: "primary",
         },
+        {
+          kind: "createSelf",
+          routeId: "wish-new",
+          enabled: false,
+          disabledReason:
+            "Wishes have no image storage of their own; attach photos via the candidate product instead",
+        },
       ],
       routing: {
         candidateFields: ["name", "notes"],

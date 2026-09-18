@@ -139,7 +139,10 @@ const photoImportCommitInputSchema = z.object({
         clientId: z.string().min(1).max(128),
         imageId: imageShortcode,
         routeId: z.string().min(1),
-        source: photoImportSourceSchema,
+        // Omitted for a `createSelf` route: there is no source record, the created
+        // record is its own destination (`photo-import-route.adapter.ts` validates
+        // presence is exactly `route.kind !== "createSelf"`).
+        source: photoImportSourceSchema.optional(),
         destination: photoImportDestinationSchema,
         duplicateDecision: z.enum(["reuse", "keepBoth", "replace"]),
         replaceConfirmed: z.boolean().default(false),

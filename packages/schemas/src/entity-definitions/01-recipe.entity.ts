@@ -823,6 +823,7 @@ export default defineEntity({
             },
           ],
         },
+        { kind: "createSelf", routeId: "recipe-new", enabled: true },
       ],
       routing: {
         candidateFields: ["name"],

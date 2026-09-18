@@ -596,6 +596,13 @@ export default defineEntity({
             { field: "observedOn", from: "capture-date" },
           ],
         },
+        {
+          kind: "createSelf",
+          routeId: "planting-new",
+          enabled: false,
+          disabledReason:
+            "Plantings have no image storage of their own; attach photos via a garden entry instead",
+        },
       ],
       routing: {
         candidateFields: ["variety", "notes"],

@@ -22055,7 +22055,7 @@ extension Components {
                     }
                 }
                 /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/source`.
-                public var source: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload
+                public var source: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload?
                 /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination`.
                 public struct DestinationPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/components/schemas/PhotoImportCommitInput/ImagesPayload/destination/value1`.
@@ -22370,7 +22370,7 @@ extension Components {
                     clientId: Swift.String,
                     imageId: Components.Schemas.ImageShortcode,
                     routeId: Swift.String,
-                    source: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload,
+                    source: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.SourcePayload? = nil,
                     destination: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DestinationPayload,
                     duplicateDecision: Components.Schemas.PhotoImportCommitInput.ImagesPayloadPayload.DuplicateDecisionPayload,
                     replaceConfirmed: Swift.Bool? = nil,

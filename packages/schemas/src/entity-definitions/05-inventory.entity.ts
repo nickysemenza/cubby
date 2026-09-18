@@ -483,6 +483,13 @@ export default defineEntity({
           relationPath: ["location"],
           choice: "prompt",
         },
+        {
+          kind: "createSelf",
+          routeId: "inventory-new",
+          enabled: false,
+          disabledReason:
+            "Inventory has no image storage of its own; attach photos via the product or location instead",
+        },
       ],
       routing: {
         candidateFields: ["notes"],

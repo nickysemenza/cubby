@@ -785,13 +785,17 @@ export default defineEntity({
           kind: "createRelated",
           routeId: "location-new-garden-entry",
           relationPath: ["garden-entries"],
-          choice: "alternate",
+          choice: {
+            primary: { when: { field: "type", oneOf: ["bed", "planter"] } },
+            otherwise: "alternate",
+          },
           bindings: [
             { field: "locationId", from: "source-id" },
             { field: "kind", from: "constant", value: "note" },
             { field: "observedOn", from: "capture-date" },
           ],
         },
+        { kind: "createSelf", routeId: "location-new", enabled: true },
       ],
       routing: {
         candidateFields: ["name", "description"],

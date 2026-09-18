@@ -12,6 +12,8 @@ import {
 
 import {
   assertPhotoImportReplacementAllowed,
+  assertPhotoImportRouteEnabled,
+  assertPhotoImportSourceCardinality,
   assertPhotoImportSourceContext,
   materializePhotoImportCreateBody,
 } from "./photo-import-route.adapter";
@@ -168,5 +170,61 @@ describe("manifest photo import routes", () => {
     expect(
       [...coverEntities, ...logoEntities].every(isSingularImageOwner),
     ).toBe(true);
+  });
+
+  // `createSelf` has no source record — `images[].source` is required exactly when
+  // `route.kind !== "createSelf"` (contract change, `photo-import.contract.ts`).
+  it.each([
+    ["createSelf with no source", "product-new", undefined],
+    [
+      "non-createSelf with its source",
+      "product-self",
+      { entity: "product", id: "PRD-1" },
+    ],
+  ] as const)("accepts %s", (_name, routeId, source) => {
+    const route = imageIngressRouteById[routeId];
+    expect(() =>
+      assertPhotoImportSourceCardinality(route, source),
+    ).not.toThrow();
+  });
+
+  it.each([
+    [
+      "createSelf with a source",
+      "product-new",
+      { entity: "product", id: "PRD-1" },
+    ],
+    ["non-createSelf with no source", "product-self", undefined],
+  ] as const)("rejects %s", (_name, routeId, source) => {
+    const route = imageIngressRouteById[routeId];
+    expect(() => assertPhotoImportSourceCardinality(route, source)).toThrow(
+      /source/,
+    );
+  });
+
+  it("rejects a disabled route, naming its manifest reason", () => {
+    const route = imageIngressRouteById["project-new"];
+    expect(route.enabled).toBe(false);
+    expect(() => assertPhotoImportRouteEnabled(route)).toThrow(
+      route.disabledReason!,
+    );
+  });
+
+  it("accepts an enabled createSelf route", () => {
+    expect(() =>
+      assertPhotoImportRouteEnabled(imageIngressRouteById["product-new"]),
+    ).not.toThrow();
+  });
+
+  it("materializes a createSelf create body without a source record", () => {
+    const body = materializePhotoImportCreateBody(
+      imageIngressRouteById["garden-entry-new"],
+      {},
+      undefined,
+      "2026-09-16T23:30:00.000Z",
+      new Map(),
+    );
+
+    expect(body).toEqual({ observedOn: "2026-09-16", kind: "note" });
   });
 });

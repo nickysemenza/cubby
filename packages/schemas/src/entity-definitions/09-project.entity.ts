@@ -1124,7 +1124,16 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "project-self", choice: "primary" }],
+      ingress: [
+        { kind: "self", routeId: "project-self", choice: "primary" },
+        {
+          kind: "createSelf",
+          routeId: "project-new",
+          enabled: false,
+          disabledReason:
+            "Projects need a plan before photos; create one in Projects first",
+        },
+      ],
       routing: {
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["startDate", "endDate"],

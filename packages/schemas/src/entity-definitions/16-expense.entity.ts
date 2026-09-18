@@ -1134,6 +1134,13 @@ export default defineEntity({
           relationPath: ["product"],
           choice: "prompt",
         },
+        {
+          kind: "createSelf",
+          routeId: "expense-new",
+          enabled: false,
+          disabledReason:
+            "Expenses have no image storage of their own; attach photos via the purchase or product instead",
+        },
       ],
       routing: {
         candidateFields: ["name", "notes"],

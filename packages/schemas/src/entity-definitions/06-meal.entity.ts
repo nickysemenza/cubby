@@ -655,7 +655,15 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "meal-self" }],
+      ingress: [
+        { kind: "self", routeId: "meal-self" },
+        {
+          kind: "createSelf",
+          routeId: "meal-new",
+          enabled: true,
+          bindings: [{ field: "date", from: "capture-date" }],
+        },
+      ],
       routing: {
         candidateFields: ["name"],
         temporalFields: ["date"],

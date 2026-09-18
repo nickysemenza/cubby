@@ -303,7 +303,16 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "cookbook-cover" }],
+      ingress: [
+        { kind: "self", routeId: "cookbook-cover" },
+        {
+          kind: "createSelf",
+          routeId: "cookbook-new",
+          enabled: false,
+          disabledReason:
+            "Cookbooks need a title and source first; create one in Cookbooks before attaching a cover",
+        },
+      ],
       routing: {
         candidateFields: [],
         temporalFields: [],

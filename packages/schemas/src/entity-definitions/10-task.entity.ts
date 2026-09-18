@@ -811,7 +811,10 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "task-self", choice: "primary" }],
+      ingress: [
+        { kind: "self", routeId: "task-self", choice: "primary" },
+        { kind: "createSelf", routeId: "task-new", enabled: true },
+      ],
       routing: {
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["dueDate", "completedAt"],

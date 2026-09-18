@@ -1023,6 +1023,13 @@ export default defineEntity({
           relationPath: ["purchase"],
           choice: "primary",
         },
+        {
+          kind: "createSelf",
+          routeId: "financial-transaction-new",
+          enabled: false,
+          disabledReason:
+            "Financial transactions have no image storage of their own; attach photos via the linked purchase instead",
+        },
       ],
       routing: {
         candidateFields: ["merchant", "description"],

@@ -946,7 +946,16 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "purchase-self" }],
+      ingress: [
+        { kind: "self", routeId: "purchase-self" },
+        {
+          kind: "createSelf",
+          routeId: "purchase-new",
+          enabled: false,
+          disabledReason:
+            "Purchases need vendor and order details a photo can't supply; create one in Purchases first",
+        },
+      ],
       routing: {
         candidateFields: ["displayLabel", "orderId", "notes"],
         temporalFields: ["date"],

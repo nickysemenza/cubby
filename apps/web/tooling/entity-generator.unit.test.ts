@@ -331,10 +331,62 @@ describe("typed entity compiler", () => {
         }),
       ]),
     ).toThrow("references undeclared field missing");
+    // Every storage-bearing entity must declare exactly one createSelf route, naming the
+    // entity, so "which entities could create from a photo" is explicit rather than an
+    // absence a client has to notice on its own.
+    expect(() =>
+      compileEntityDeclarations([
+        definition({
+          storage: "gallery",
+          ingress: [{ kind: "self", routeId: "alpha-self-no-create-self" }],
+          routing,
+        }),
+      ]),
+    ).toThrow(
+      "alpha.capabilities.images.ingress requires exactly one createSelf route",
+    );
+    // createSelf has no source record, so its bindings may only draw from the photo itself
+    // (capture-date | constant) — a source-id binding is rejected at the schema layer.
+    // Passed inline (not through the `EntityDeclaration`-typed `definition` helper) so
+    // `compileEntityDeclarations`'s `readonly unknown[]` parameter, not a narrower local
+    // binding, is what accepts this otherwise-statically-forbidden shape.
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model,
+          capabilities: {
+            ...base.capabilities,
+            images: {
+              storage: "gallery",
+              ingress: [
+                { kind: "self", routeId: "alpha-self-bad-binding" },
+                {
+                  kind: "createSelf",
+                  routeId: "alpha-new-bad-binding",
+                  enabled: false,
+                  disabledReason: "test",
+                  bindings: [{ field: "name", from: "source-id" }],
+                },
+              ],
+              routing,
+            },
+          },
+        },
+      ]),
+    ).toThrow(/Invalid discriminator value/);
 
     const directImages = {
       storage: "gallery" as const,
-      ingress: [{ kind: "self" as const, routeId: "shared-photo-route" }],
+      ingress: [
+        { kind: "self" as const, routeId: "shared-photo-route" },
+        {
+          kind: "createSelf" as const,
+          routeId: "shared-photo-route-new",
+          enabled: false,
+          disabledReason: "test",
+        },
+      ],
       routing,
     };
     expect(() =>
@@ -348,6 +400,71 @@ describe("typed entity compiler", () => {
         },
       ]),
     ).toThrow("routeId shared-photo-route conflicts");
+  });
+
+  it("emits a conditional-primary route's resolved literal and predicate", () => {
+    const routing = {
+      candidateFields: ["name"],
+      temporalFields: [],
+      lifecycleFilters: [],
+      signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
+      abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+    } as const;
+    const compiled = compileEntityDeclarations([
+      {
+        ...base,
+        model: {
+          ...model,
+          fields: [
+            ...model.fields,
+            {
+              key: "kind",
+              kind: "enum" as const,
+              validation: {
+                read: z.enum(["a", "b"]),
+                create: z.enum(["a", "b"]).optional(),
+                update: z.enum(["a", "b"]).optional(),
+              },
+            },
+          ],
+        },
+        capabilities: {
+          ...base.capabilities,
+          images: {
+            storage: "gallery" as const,
+            ingress: [
+              {
+                kind: "self" as const,
+                routeId: "alpha-self-conditional",
+                // Falls back to "prompt" (not "alternate") so this fixture does not also
+                // need an unconditional primary route to satisfy the separate "alternate
+                // requires a primary" invariant.
+                choice: {
+                  primary: { when: { field: "kind", oneOf: ["a"] } },
+                  otherwise: "prompt" as const,
+                },
+              },
+              {
+                kind: "createSelf" as const,
+                routeId: "alpha-new-conditional",
+                enabled: false,
+                disabledReason: "test",
+                choice: "prompt" as const,
+              },
+            ],
+            routing,
+          },
+        },
+      },
+    ]);
+    const imagePolicy = renderImagePolicyArtifacts(compiled).find(
+      ({ relativePath }) => relativePath.endsWith("image-policy.gen.ts"),
+    )?.source;
+    expect(imagePolicy).toContain('"routeId":"alpha-self-conditional"');
+    expect(imagePolicy).toContain('"choice":"prompt"');
+    expect(imagePolicy).toContain(
+      '"primaryWhen":{"field":"kind","oneOf":["a"]}',
+    );
   });
 
   it("keeps routing visual evidence explicit and requires image-owning targets", async () => {
@@ -392,7 +509,15 @@ describe("typed entity compiler", () => {
         ...base.capabilities,
         images: {
           storage: "gallery" as const,
-          ingress: [{ kind: "self" as const, routeId: "related-self" }],
+          ingress: [
+            { kind: "self" as const, routeId: "related-self" },
+            {
+              kind: "createSelf" as const,
+              routeId: "related-new",
+              enabled: false,
+              disabledReason: "test",
+            },
+          ],
           routing: { ...routing, visualEvidence: [] },
         },
       },

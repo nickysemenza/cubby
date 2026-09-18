@@ -1888,7 +1888,10 @@ export default defineEntity({
     timeline: "custom",
     images: {
       storage: "gallery",
-      ingress: [{ kind: "self", routeId: "product-self" }],
+      ingress: [
+        { kind: "self", routeId: "product-self" },
+        { kind: "createSelf", routeId: "product-new", enabled: true },
+      ],
       routing: {
         candidateFields: ["name", "manufacturer", "model"],
         temporalFields: [],

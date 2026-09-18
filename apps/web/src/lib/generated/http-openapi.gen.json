@@ -46325,7 +46325,6 @@
                 "clientId",
                 "imageId",
                 "routeId",
-                "source",
                 "destination",
                 "duplicateDecision",
                 "analysis"

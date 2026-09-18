@@ -569,6 +569,13 @@ export default defineEntity({
           relationPath: ["products"],
           choice: "primary",
         },
+        {
+          kind: "createSelf",
+          routeId: "ingredient-new",
+          enabled: false,
+          disabledReason:
+            "Ingredients have no image storage of their own; attach photos via a product instead",
+        },
       ],
       routing: {
         candidateFields: ["name"],
