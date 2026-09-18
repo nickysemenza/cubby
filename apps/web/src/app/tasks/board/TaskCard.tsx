@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { Ban, EllipsisVertical, GripVertical } from "lucide-react";
 
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import { useEntityDisplayImage } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
 import { formatDateRange } from "~/app/projects/project-formatting";
@@ -82,6 +83,11 @@ function blockedByLabel(task: TaskOut, taskById: Record<string, TaskOut>) {
   return `Blocked by ${names.join(", ")}${unresolved}`;
 }
 
+const taskProjectRef = (task: TaskOut) => ({
+  entityType: "project" as const,
+  entityId: task.projectId ?? "",
+});
+
 /**
  * A task as a board card: draggable whole-card (the browser suppresses the
  * click after a native drag, so no separate handle), clickable to open the
@@ -101,6 +107,7 @@ export function TaskCard({
   dropEdge,
 }: TaskCardProps) {
   const navigate = useNavigate();
+  const projectImage = useEntityDisplayImage(taskProjectRef(task));
 
   // The Done column ranks by recency, not manually — its cards opt out of
   // being reorder targets (drops fall through to the cell as a status change).
@@ -274,7 +281,7 @@ export function TaskCard({
               title={task.projectName ?? undefined}
             >
               <EntityInlineLink
-                displayImage={undefined}
+                displayImage={projectImage}
                 entity="project"
                 truncate
                 data={{

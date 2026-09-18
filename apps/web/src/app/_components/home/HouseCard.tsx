@@ -5,8 +5,12 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Hammer } from "lucide-react";
-import { useId } from "react";
+import { useId, useMemo } from "react";
 
+import {
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/project-formatting";
 import { task } from "~/app/tasks/task.functions";
@@ -56,12 +60,20 @@ export function taskBriefingSecondary(
 }
 
 function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
+  const taskImage = useEntityDisplayImage({
+    entityType: "task",
+    entityId: item.id,
+  });
+  const projectImage = useEntityDisplayImage({
+    entityType: "project",
+    entityId: item.projectId ?? "",
+  });
   return (
     <div className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-b border-border py-2 last:border-b-0 sm:min-h-0 sm:py-1.5">
       <EntityInlineLink
         entity="task"
         data={{ id: item.id, name: item.name, status: item.status }}
-        displayImage={undefined}
+        displayImage={taskImage}
         className={TODAY_ENTITY_LINK_CLASS}
         truncate
       />
@@ -72,7 +84,7 @@ function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
         <EntityInlineLink
           entity="project"
           data={{ id: item.projectId, name: item.projectName }}
-          displayImage={undefined}
+          displayImage={projectImage}
           className={TODAY_ENTITY_LINK_CLASS}
           compact
         />
@@ -94,6 +106,16 @@ export function TodayAttention() {
   const titleId = useId();
   const briefing = useQuery(task.todayBriefing.queryOptions());
   const secondary = taskBriefingSecondary(briefing.data);
+  const imageRefs = useMemo(
+    () =>
+      (briefing.data?.next ?? []).flatMap((item) => [
+        { entityType: "task" as const, entityId: item.id },
+        ...(item.projectId
+          ? [{ entityType: "project" as const, entityId: item.projectId }]
+          : []),
+      ]),
+    [briefing.data?.next],
+  );
 
   return (
     <section aria-labelledby={titleId} className="min-w-0">
@@ -171,9 +193,11 @@ export function TodayAttention() {
             Nothing ready right now. Open work is blocked or set aside.
           </p>
         ) : (
-          briefing.data?.next.map((item) => (
-            <TodayTaskRow key={item.id} task={item} />
-          ))
+          <EntityDisplayImagesProvider refs={imageRefs}>
+            {briefing.data?.next.map((item) => (
+              <TodayTaskRow key={item.id} task={item} />
+            ))}
+          </EntityDisplayImagesProvider>
         )}
       </div>
 

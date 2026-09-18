@@ -22,6 +22,10 @@ import {
   type CubbyRow,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -424,6 +428,16 @@ function OverviewView({
 }
 
 function NextWork({ tasks }: { tasks: TaskOut[] }) {
+  const projectRefs = useMemo(
+    () =>
+      tasks.flatMap((task) =>
+        task.projectId
+          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          : [],
+      ),
+    [tasks],
+  );
+  const projectImages = useEntityDisplayImages(projectRefs);
   if (tasks.length === 0) return null;
 
   return (
@@ -445,7 +459,14 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             {task.projectName && task.projectId && (
               <span className="max-w-40 min-w-0 text-xs text-muted-foreground">
                 <EntityInlineLink
-                  displayImage={undefined}
+                  displayImage={
+                    projectImages[
+                      entityDisplayImageKey({
+                        entityType: "project",
+                        entityId: task.projectId,
+                      })
+                    ] ?? null
+                  }
                   entity="project"
                   data={{ id: task.projectId, name: task.projectName }}
                   truncate

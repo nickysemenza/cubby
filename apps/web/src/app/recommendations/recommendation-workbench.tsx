@@ -6,14 +6,20 @@ import {
 import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import {
+  type EntityDisplayImagesQueryOptions,
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/app/_components/entity-media/entity-display-images";
+import { RelatedProductRow } from "~/app/_components/relatedness/related-product-row";
 import { inventory } from "~/app/inventory/inventory.functions";
 import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityMedia } from "~/entities/entity-media.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { recommendations } from "~/lib/recommendations.functions";
@@ -33,6 +39,7 @@ export interface RecommendationWorkbenchOperations {
   readonly dismissDuplicateProduct: typeof recommendations.dismissDuplicateProduct;
   readonly moveEntries: typeof inventory.moveEntries;
   readonly productUpdateMutationOptions: typeof productUpdateMutationOptions;
+  readonly displayImages: EntityDisplayImagesQueryOptions;
 }
 
 export const productionRecommendationWorkbenchOperations: RecommendationWorkbenchOperations =
@@ -46,6 +53,7 @@ export const productionRecommendationWorkbenchOperations: RecommendationWorkbenc
     dismissDuplicateProduct: recommendations.dismissDuplicateProduct,
     moveEntries: inventory.moveEntries,
     productUpdateMutationOptions,
+    displayImages: (input) => entityMedia.displayImages.queryOptions(input),
   };
 
 function RetryAction({
@@ -329,7 +337,18 @@ function ProductRelatednessRecommendation({
 }) {
   const relatedness = useQuery(operations.product.queryOptions({ sourceId }));
   const dismiss = useMutation(operations.dismissProduct.mutationOptions({}));
-  const items = relatedness.data?.items ?? [];
+  const items = useMemo(
+    () => relatedness.data?.items ?? [],
+    [relatedness.data?.items],
+  );
+  const productRefs = useMemo(
+    () =>
+      items.map((item) => ({
+        entityType: "product" as const,
+        entityId: item.shortcode,
+      })),
+    [items],
+  );
 
   if (relatedness.isLoading)
     return (
@@ -364,44 +383,62 @@ function ProductRelatednessRecommendation({
           No current recommendations.
         </p>
       ) : (
-        items.map((item) => (
-          <Row
-            key={item.shortcode}
-            align="center"
-            justify="between"
-            gap="sm"
-            className="border-b border-border pb-2"
-          >
-            <Stack gap="tight" className="min-w-0">
-              <EntityInlineLink
-                entity="product"
-                data={{ id: item.shortcode, name: item.title }}
-                displayImage={null}
-                truncate
-              />
-              <span className="text-xs text-muted-foreground">
-                {item.evidence.map((evidence) => evidence.signal).join(" · ")}
-              </span>
-            </Stack>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={dismiss.isPending}
-              onClick={() =>
+        <EntityDisplayImagesProvider
+          refs={productRefs}
+          queryOptions={operations.displayImages}
+        >
+          {items.map((item) => (
+            <WorkbenchRelatedProductRow
+              key={item.shortcode}
+              item={item}
+              pending={dismiss.isPending}
+              onDismiss={() =>
                 dismiss.mutate({
                   sourceId,
                   targetId: parseShortcodeFor("product", item.shortcode),
                 })
               }
-            >
-              <X className="size-3" />
-              Dismiss
-            </Button>
-          </Row>
-        ))
+            />
+          ))}
+        </EntityDisplayImagesProvider>
       )}
     </Stack>
+  );
+}
+
+function WorkbenchRelatedProductRow({
+  item,
+  pending,
+  onDismiss,
+}: {
+  item: Awaited<
+    ReturnType<typeof recommendations.product.call>
+  >["items"][number];
+  pending: boolean;
+  onDismiss: () => void;
+}) {
+  const displayImage = useEntityDisplayImage({
+    entityType: "product",
+    entityId: item.shortcode,
+  });
+  return (
+    <RelatedProductRow
+      product={{ id: item.shortcode, name: item.title }}
+      displayImage={displayImage}
+      evidence={item.evidence.map((evidence) => evidence.signal).join(" · ")}
+      action={
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onClick={onDismiss}
+        >
+          <X className="size-3" />
+          Dismiss
+        </Button>
+      }
+    />
   );
 }
 

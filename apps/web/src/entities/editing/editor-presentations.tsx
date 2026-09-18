@@ -18,6 +18,10 @@ import {
 import { z } from "zod";
 
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   NullableNumericField,
@@ -236,7 +240,16 @@ function IngredientDuplicateNameHint({ form }: EntityEditorFieldsProps) {
     enabled,
   });
 
-  const matches = data?.items ?? [];
+  const matches = useMemo(() => data?.items ?? [], [data?.items]);
+  const matchRefs = useMemo(
+    () =>
+      matches.map((match) => ({
+        entityType: "ingredient" as const,
+        entityId: match.id,
+      })),
+    [matches],
+  );
+  const displayImages = useEntityDisplayImages(matchRefs);
   if (!enabled || matches.length === 0) return null;
 
   const lower = trimmed.toLowerCase();
@@ -256,7 +269,14 @@ function IngredientDuplicateNameHint({ form }: EntityEditorFieldsProps) {
       <Row gap="xs" wrap>
         {matches.map((m) => (
           <EntityInlineLink
-            displayImage={undefined}
+            displayImage={
+              displayImages[
+                entityDisplayImageKey({
+                  entityType: "ingredient",
+                  entityId: m.id,
+                })
+              ] ?? null
+            }
             key={m.id}
             entity="ingredient"
             data={{ name: m.name, id: m.id }}

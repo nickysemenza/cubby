@@ -4,6 +4,10 @@ import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { Fragment, type ReactElement, useMemo } from "react";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { HEAT_CLASSES, heatBucket } from "~/components/matrix/heat-scale";
@@ -41,6 +45,16 @@ export type TradeCostCell = { trade: Trade; costType: PivotCostKey | null };
 
 /** The expenses behind one cell, top 8 by magnitude + a "+N more" roll-up. */
 function CellPreview({ expenses }: { expenses: ExpenseOut[] }) {
+  const projectRefs = useMemo(
+    () =>
+      expenses.flatMap((expense) =>
+        expense.projectId
+          ? [{ entityType: "project" as const, entityId: expense.projectId }]
+          : [],
+      ),
+    [expenses],
+  );
+  const projectImages = useEntityDisplayImages(projectRefs);
   // Sort by absolute value so a large-magnitude negative (e.g. the −$75k family
   // contribution) surfaces at the top instead of sinking into the rest bucket.
   const sorted = [...expenses].sort(
@@ -60,7 +74,14 @@ function CellPreview({ expenses }: { expenses: ExpenseOut[] }) {
               <span className="text-muted-foreground">
                 {" · "}
                 <EntityInlineLink
-                  displayImage={undefined}
+                  displayImage={
+                    projectImages[
+                      entityDisplayImageKey({
+                        entityType: "project",
+                        entityId: p.projectId,
+                      })
+                    ] ?? null
+                  }
                   entity="project"
                   data={{ id: p.projectId, name: p.projectName }}
                   compact

@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
+import {
+  EntityDisplayImagesProvider,
+  entityDisplayImageKey,
+} from "./entity-media/entity-display-images";
 import { EntityInlineLinkList } from "./EntityInlineLinkList";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -52,5 +56,37 @@ describe("EntityInlineLinkList entity dispatch", () => {
       "href",
       "/usda/171265",
     );
+  });
+
+  it("uses a collection owner's canonical image without issuing a cell request", () => {
+    const product = {
+      id: "PRD-TABLE",
+      name: "Table-owned image",
+      manufacturer: "Cubby",
+    };
+    render(
+      <EntityDisplayImagesProvider
+        refs={[]}
+        seeded={{
+          [entityDisplayImageKey({
+            entityType: "product",
+            entityId: product.id,
+          })]: { url: "https://images.example/table-owned.jpg" },
+        }}
+      >
+        <EntityInlineLinkList
+          entity="product"
+          items={[product]}
+          resolveImages={false}
+        />
+      </EntityDisplayImagesProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      screen
+        .getByRole("link", { name: /Table-owned image/ })
+        .querySelector("img"),
+    ).toHaveAttribute("src", "https://images.example/table-owned.jpg");
   });
 });

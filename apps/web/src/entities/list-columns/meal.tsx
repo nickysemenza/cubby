@@ -17,6 +17,7 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { EntityInlineLinkList } from "~/app/_components/EntityInlineLinkList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -170,16 +171,22 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                 id: "recipes",
                 header: "Recipes",
                 enableSorting: false,
-                meta: {
+                meta: attachCubbyColumnMeta<MealOut>({
                   className: "min-w-0 w-56 overflow-hidden",
                   mobile: { slot: "meta", priority: 20 },
-                },
+                  entityRefs: (row) =>
+                    row.recipes.map((recipe) => ({
+                      entityType: "recipe",
+                      entityId: recipe.recipeId,
+                    })),
+                }),
                 cell: (info) => (
                   <EntityInlineLinkList
                     entity="recipe"
                     items={info.getValue()}
                     compact
                     maxItems={3}
+                    resolveImages={false}
                   />
                 ),
               },

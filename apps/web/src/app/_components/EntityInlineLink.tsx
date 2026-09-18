@@ -1,8 +1,3 @@
-import {
-  isDisplayableImageFile,
-  type ImageRenderStatus,
-  type ImageStorageStatus,
-} from "@cubby/schemas/image";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
@@ -34,24 +29,6 @@ import type { HoverPreviewEntity } from "./preview/preview-entities";
 // Minimal data shape - just id and name
 type MinimalEntityData = { id: string; name: string };
 
-interface InlineImageFile extends ImageUrlSummary {
-  contentType?: string;
-  renderStatus?: ImageRenderStatus | null;
-  storageStatus?: ImageStorageStatus | null;
-}
-
-interface InlineImageProjection {
-  displayImage?: InlineImageFile | null;
-  coverImage?: InlineImageFile | null;
-  logo?: InlineImageFile | null;
-  vendorLogo?: InlineImageFile | null;
-  coverImageUrl?: string | null;
-  coverUrl?: string | null;
-  imageUrl?: string | null;
-  images?: ReadonlyArray<InlineImageFile>;
-  product?: { coverImage?: InlineImageFile | null } | null;
-}
-
 // Discriminated union for entity-specific data shapes
 type EntityInlineLinkProps = {
   openInNewTab?: boolean;
@@ -63,12 +40,8 @@ type EntityInlineLinkProps = {
   truncate?: boolean;
   /** An adjacent dedicated image/mark already identifies this record. */
   showIdentityMark?: boolean;
-  /**
-   * Backend-enriched canonical image. Null explicitly suppresses inline media;
-   * undefined derives from an established enriched projection during rollout.
-   */
-  displayImage: ImageUrlSummary | null | undefined;
-  data: InlineImageProjection;
+  /** Canonical backend-resolved cover; null intentionally renders the mark. */
+  displayImage: ImageUrlSummary | null;
 } & (
   | { entity: "ingredient"; data: MinimalEntityData }
   | {
@@ -80,17 +53,11 @@ type EntityInlineLinkProps = {
   | { entity: "meal"; data: MinimalEntityData & { date?: string | null } }
   | {
       entity: "location";
-      // `images` and `product.coverImage` are declared for the same reason
-      // `product.category` already is: the component reads them. A location
-      // draws its own photo first and the cover of the SKU it IS second, so
-      // both have to be visible to a caller rather than sniffed blind.
+      // `product.category` is declared because `LocationIcon` reads it; image
+      // selection is now supplied only by the canonical display-image contract.
       data: MinimalEntityData & {
         type?: LocationType | null;
-        images?: ReadonlyArray<{ url: string; contentType?: string }>;
-        product?: {
-          category: ProductCategory | null;
-          coverImage?: { url: string; contentType?: string } | null;
-        } | null;
+        product?: { category: ProductCategory | null } | null;
       };
     }
   | { entity: "inventory"; data: MinimalEntityData }
@@ -153,7 +120,7 @@ type EntityInlineLinkProps = {
   | { entity: "wish"; data: MinimalEntityData }
   | {
       entity: "image";
-      data: InlineImageProjection & { id: string; filename: string };
+      data: { id: string; filename: string };
     }
 );
 
@@ -234,10 +201,7 @@ function PreviewEntityLink({
 export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
   const { openInNewTab, className, compact, truncate, showIdentityMark } =
     props;
-  const displayImage =
-    props.displayImage === undefined
-      ? displayImageFromData(props.data)
-      : props.displayImage;
+  const { displayImage } = props;
   const wrapperClass = cn(linkClass, truncate && "min-w-0", className);
 
   return match(props)
@@ -577,59 +541,3 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     ))
     .exhaustive();
 };
-
-/**
- * A candidate is only a thumbnail if it is a displayable PHOTO.
- *
- * `mapImages` deliberately keeps PDF manuals and failed renders in `images` —
- * they are real attachments — so an unfiltered `[0]` drew a location's PDF
- * manual as its identity mark. Same guard `createImageColumn` applies to row
- * thumbnails. A candidate with no `contentType` came from a narrow projection
- * that carries only a url, which is displayable by construction.
- */
-function asDisplayableUrl(
-  file: InlineImageFile | null | undefined,
-): ImageUrlSummary | null {
-  if (!file) return null;
-  if (
-    file.contentType &&
-    !isDisplayableImageFile({
-      contentType: file.contentType,
-      renderStatus: file.renderStatus,
-      storageStatus: file.storageStatus,
-    })
-  ) {
-    return null;
-  }
-  return { url: file.url };
-}
-
-/** Normalize established enriched projections while DTOs converge on one field. */
-export function displayImageFromData(
-  data: InlineImageProjection,
-): ImageUrlSummary | null {
-  const direct = [
-    data.displayImage,
-    data.coverImage,
-    data.logo,
-    data.vendorLogo,
-  ];
-  for (const candidate of direct) {
-    const summary = asDisplayableUrl(candidate);
-    if (summary) return summary;
-  }
-  for (const url of [data.coverImageUrl, data.coverUrl, data.imageUrl]) {
-    if (url) return { url };
-  }
-  if (data.images) {
-    for (const image of data.images) {
-      const summary = asDisplayableUrl(image);
-      if (summary) return summary;
-    }
-  }
-  // A location's own photo wins; the SKU it IS is the fallback — the client
-  // half of `locationCoverImage`. Deliberately AFTER the `images` scan rather
-  // than in `direct` above, or a photographed bin would render its SKU's stock
-  // photo instead of a picture of itself.
-  return asDisplayableUrl(data.product?.coverImage);
-}

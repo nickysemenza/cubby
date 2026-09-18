@@ -14,6 +14,10 @@ import { NoneValue } from "~/components/ui/none-value";
 
 import { buildLocationComboboxItem } from "../combobox/combobox-builders";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImageMap,
+} from "../entity-media/entity-display-images";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { tryFormatAmount } from "../inventory/format-amount";
@@ -105,11 +109,17 @@ export function InventoryEntriesCell<
   onQuickEdit,
   inlineEdit,
 }: InventoryEntriesCellProps<T, TEntry, TEntity>) {
+  const displayImages = useEntityDisplayImageMap();
+
   const renderRelatedEntity = (related: InventoryRelatedEntity["data"]) => {
+    const displayImage =
+      displayImages[
+        entityDisplayImageKey({ entityType: entity, entityId: related.id })
+      ] ?? null;
     if (entity === "location" && isLocationRelatedEntity(related)) {
       return (
         <EntityInlineLink
-          displayImage={undefined}
+          displayImage={displayImage}
           entity="location"
           data={related}
           compact
@@ -119,7 +129,7 @@ export function InventoryEntriesCell<
     if (entity === "product" && isProductRelatedEntity(related)) {
       return (
         <EntityInlineLink
-          displayImage={undefined}
+          displayImage={displayImage}
           entity="product"
           data={related}
           compact
@@ -212,7 +222,14 @@ export function InventoryEntriesCell<
                 <span className="text-muted-foreground/50">@</span>
                 {linkData ? (
                   <EntityInlineLink
-                    displayImage={undefined}
+                    displayImage={
+                      displayImages[
+                        entityDisplayImageKey({
+                          entityType: "location",
+                          entityId: linkData.id,
+                        })
+                      ] ?? null
+                    }
                     entity="location"
                     data={linkData}
                     compact
@@ -261,14 +278,26 @@ export function InventoryEntriesCell<
         throw new Error("Unexpected product in a location inventory cell");
       }
       return (
-        <EntityInlineLinkList entity="location" items={locations} compact />
+        <EntityInlineLinkList
+          entity="location"
+          items={locations}
+          compact
+          resolveImages={false}
+        />
       );
     }
     const products = relatedEntities.filter(isProductRelatedEntity);
     if (products.length !== relatedEntities.length) {
       throw new Error("Unexpected location in a product inventory cell");
     }
-    return <EntityInlineLinkList entity="product" items={products} compact />;
+    return (
+      <EntityInlineLinkList
+        entity="product"
+        items={products}
+        compact
+        resolveImages={false}
+      />
+    );
   })();
   return (
     <Stack gap="tight">

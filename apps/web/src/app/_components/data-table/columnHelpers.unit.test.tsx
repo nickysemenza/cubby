@@ -293,6 +293,20 @@ describe("createEntityInlineLinkColumn", () => {
       { dedupe: true },
     );
 
+  it("publishes collection refs for table-owned image batching", () => {
+    const row: ProductCollectionRow = {
+      products: [
+        { id: "PRD-2ABC", name: "Workbench light", manufacturer: "Makita" },
+        { id: "PRD-3ABC", name: "Task light", manufacturer: "DeWalt" },
+      ],
+    };
+
+    expect(productCollectionColumn().meta?.entityRefs?.(row)).toEqual([
+      { entityType: "product", entityId: "PRD-2ABC" },
+      { entityType: "product", entityId: "PRD-3ABC" },
+    ]);
+  });
+
   it("keeps malformed collection projections strict", () => {
     const malformed: ProductCollectionRow = {
       products: [

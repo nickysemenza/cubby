@@ -1,3 +1,4 @@
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { uniq } from "es-toolkit";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -24,6 +25,10 @@ import { captureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { cn } from "~/lib/utils";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "../../entity-media/entity-display-images";
 import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";
 import { DecompositionView } from "../decomposition-view";
@@ -121,6 +126,16 @@ export function IngredientPreviewTable({
       };
     });
   }, [parsedIngredients, ingredientMatchMap]);
+  const imageRefs = useMemo(
+    () =>
+      ingredientsWithMatch.flatMap((item) =>
+        item.match
+          ? [{ entityType: "ingredient" as const, entityId: item.match.id }]
+          : [],
+      ),
+    [ingredientsWithMatch],
+  );
+  const displayImages = useEntityDisplayImages(imageRefs);
 
   // State for ingredient creation dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -181,6 +196,16 @@ export function IngredientPreviewTable({
             <IngredientRow
               key={item.rowKey}
               item={item}
+              displayImage={
+                item.match
+                  ? (displayImages[
+                      entityDisplayImageKey({
+                        entityType: "ingredient",
+                        entityId: item.match.id,
+                      })
+                    ] ?? null)
+                  : null
+              }
               showRaw={showRaw}
               onCreateClick={() => handleCreateIngredient(item.parsed.name)}
             />
@@ -206,10 +231,12 @@ export function IngredientPreviewTable({
 
 function IngredientRow({
   item,
+  displayImage,
   showRaw,
   onCreateClick,
 }: {
   item: ParsedIngredientWithMatch;
+  displayImage: ImageUrlSummary | null;
   showRaw: boolean;
   onCreateClick: () => void;
 }) {
@@ -233,7 +260,7 @@ function IngredientRow({
             </>
           ) : isMatched && item.match ? (
             <EntityInlineLink
-              displayImage={undefined}
+              displayImage={displayImage}
               entity="ingredient"
               data={{
                 id: item.match.id,

@@ -5,17 +5,17 @@ import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useEffect, useMemo } from "react";
 
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { recommendations } from "~/lib/recommendations.functions";
 import { search } from "~/lib/search.functions";
 
 import {
-  ProductImageSummariesProvider,
-  type ProductImageMap,
-  useHydratedProductImages,
-} from "../products/product-image-summaries";
+  type EntityDisplayImageMap,
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "../entity-media/entity-display-images";
+import { RelatedProductRow } from "./related-product-row";
 import { useEmbeddingReadinessPoll } from "./use-embedding-readiness-poll";
 
 type ProductRecommendationGroup = Extract<
@@ -121,12 +121,12 @@ function ReadyRelatednessLinks({ productId }: { productId: ProductShortcode }) {
 export function RelatednessRail({
   product,
   operations = productionOperations,
-  imageSummaries,
+  seededDisplayImages,
 }: {
   product: { id: ProductShortcode; tags: string[] };
   operations?: RelatednessRailOperations;
-  /** An established product-summary projection avoids a duplicate query. */
-  imageSummaries?: ProductImageMap;
+  /** Canonical results already resolved by a parent avoid duplicate work. */
+  seededDisplayImages?: EntityDisplayImageMap;
 }) {
   const poll = useEmbeddingReadinessPoll(product.id);
   const { refetchInterval, notifyStatus } = poll;
@@ -189,14 +189,20 @@ export function RelatednessRail({
         </p>
       )}
 
-      <ProductImageSummariesProvider
-        productIds={relatedProductIds}
-        summaries={imageSummaries}
+      <EntityDisplayImagesProvider
+        refs={relatedProductIds.map((entityId) => ({
+          entityType: "product",
+          entityId,
+        }))}
+        seeded={seededDisplayImages}
       >
         {items.map((item) => (
-          <RelatedProductRow key={item.target.id} item={item} />
+          <RelatedProductRowWithCanonicalImage
+            key={item.target.id}
+            item={item}
+          />
         ))}
-      </ProductImageSummariesProvider>
+      </EntityDisplayImagesProvider>
 
       {status === "ready" && items.length === 0 && (
         <p className="text-xs text-muted-foreground">
@@ -209,31 +215,27 @@ export function RelatednessRail({
   );
 }
 
-function RelatedProductRow({
+function RelatedProductRowWithCanonicalImage({
   item,
 }: {
   item: ProductRecommendationGroup["proposals"][number];
 }) {
-  const images = useHydratedProductImages(item.target.id);
+  const displayImage = useEntityDisplayImage({
+    entityType: "product",
+    entityId: item.target.id,
+  });
 
   return (
-    <Row
-      align="center"
-      justify="between"
-      gap="sm"
-      className="border-b border-border pb-1 last:border-b-0"
-    >
-      <EntityInlineLink
-        entity="product"
-        data={item.target}
-        displayImage={images[0] ?? null}
-        truncate
-      />
-      <span className="shrink-0 font-mono text-2xs text-slate">
-        {item.score > 0
-          ? `${Math.round(item.score * 100)}% similar`
-          : item.evidence.map((evidence) => evidence.signal).join(" · ")}
-      </span>
-    </Row>
+    <RelatedProductRow
+      product={item.target}
+      displayImage={displayImage}
+      action={
+        <span className="font-mono text-2xs text-slate">
+          {item.score > 0
+            ? `${Math.round(item.score * 100)}% similar`
+            : item.evidence.map((evidence) => evidence.signal).join(" · ")}
+        </span>
+      }
+    />
   );
 }

@@ -1,9 +1,8 @@
 /**
- * Max ids per batched `getManyByIDs` query. Pair with es-toolkit's `chunk` to
- * bound database and serialization work per query; sort the input first if you
- * want stable cache keys.
+ * Max ids per batched query. Pair with es-toolkit's `chunk` to bound database
+ * and serialization work; sort input first for stable cache keys.
  */
-export const ID_CHUNK_SIZE = 50;
+export { ID_CHUNK_SIZE } from "@cubby/schemas/entity-media";
 
 /**
  * Sums a numeric value across items, grouped by a derived key.

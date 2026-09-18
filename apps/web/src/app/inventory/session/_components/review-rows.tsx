@@ -53,7 +53,8 @@ export function LocationReviewCard({
         <div className="min-w-0 flex-1">
           <Row align="baseline" gap="xs" wrap className="min-w-0">
             <EntityInlineLink
-              displayImage={undefined}
+              displayImage={null}
+              showIdentityMark={false}
               entity="location"
               data={{
                 id: location.id,
@@ -107,7 +108,8 @@ export function ItemReviewCard({
           <div className="min-w-0 flex-1">
             <Row align="baseline" gap="xs" wrap className="min-w-0">
               <EntityInlineLink
-                displayImage={undefined}
+                displayImage={null}
+                showIdentityMark={false}
                 entity="product"
                 data={product}
                 truncate

@@ -16,6 +16,10 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
+import {
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -36,6 +40,25 @@ type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 type InventoryFilters = EntityListParamsByEntity["inventory"]["filters"];
 
 const columnHelper = createCubbyColumnHelper<InventoryListItem>();
+
+function InventoryProductLink({
+  product,
+}: {
+  product: InventoryListItem["product"];
+}) {
+  const displayImage = useEntityDisplayImage({
+    entityType: "product",
+    entityId: product.id,
+  });
+  return (
+    <EntityInlineLink
+      displayImage={displayImage}
+      entity="product"
+      data={product}
+      compact
+    />
+  );
+}
 
 /**
  * An inventory entry is about its product, so product verbs — "add another
@@ -151,12 +174,7 @@ export const inventoryListOverride = defineListOverride<
                     : displayGtin(product.primaryGtin);
                 return (
                   <Stack gap="xs" className="min-w-0 flex-1">
-                    <EntityInlineLink
-                      displayImage={undefined}
-                      entity="product"
-                      data={product}
-                      compact
-                    />
+                    <InventoryProductLink product={product} />
                     {upc && (
                       <div className="text-xs text-muted-foreground">
                         <TableLink
@@ -251,6 +269,16 @@ export const inventoryListOverride = defineListOverride<
           <InventoryValuationSummary items={data} variant="compact" />
         ),
       }),
+      wrap: (children, { data }) => (
+        <EntityDisplayImagesProvider
+          refs={data.flatMap((row) => [
+            { entityType: "product" as const, entityId: row.product.id },
+            { entityType: "location" as const, entityId: row.location.id },
+          ])}
+        >
+          {children}
+        </EntityDisplayImagesProvider>
+      ),
     };
   },
 });

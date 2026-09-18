@@ -21,6 +21,10 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { TradeBadge } from "~/app/projects/trade-options";
@@ -113,6 +117,16 @@ export function LinkExpensesDialog({
       ) ?? NO_CANDIDATES,
     [candidatesQuery.data, purchase.id],
   );
+  const projectRefs = useMemo(
+    () =>
+      candidates.flatMap((row) =>
+        row.projectId
+          ? [{ entityType: "project" as const, entityId: row.projectId }]
+          : [],
+      ),
+    [candidates],
+  );
+  const projectImages = useEntityDisplayImages(projectRefs);
   const selected = useMemo(() => [...selectedRows.keys()], [selectedRows]);
   const selectedTotal = useMemo(
     () => sumBy([...selectedRows.values()], (row) => row.cost ?? 0),
@@ -195,7 +209,14 @@ export function LinkExpensesDialog({
               const row = info.row.original;
               return row.projectId && row.projectName ? (
                 <EntityInlineLink
-                  displayImage={undefined}
+                  displayImage={
+                    projectImages[
+                      entityDisplayImageKey({
+                        entityType: "project",
+                        entityId: row.projectId,
+                      })
+                    ] ?? null
+                  }
                   entity="project"
                   data={{ id: row.projectId, name: row.projectName }}
                   truncate
@@ -227,7 +248,7 @@ export function LinkExpensesDialog({
           }),
         );
       }),
-    [helper],
+    [helper, projectImages],
   );
   const workbench = useBoundedListWorkbench({
     entity: "expense",

@@ -1,5 +1,6 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -79,13 +80,16 @@ export function EntityInlineLinkById({
   }
 
   if (isFetchableInlineEntity(entityType) && query.data) {
+    // SAFETY: entityPreviewQueryOptions selects a generated detail operation
+    // whose fetchable-entity outputs all carry canonical displayImages.
+    const data = query.data as { displayImages: ImageUrlSummary[] };
     return (
       <EntityInlineLink
-        displayImage={undefined}
+        displayImage={data.displayImages[0] ?? null}
         entity={entityType}
         // SAFETY: the preview query options and this discriminant are selected
         // by the same fetchable entity guard above.
-        data={query.data as never}
+        data={data as never}
         compact={compact}
       />
     );

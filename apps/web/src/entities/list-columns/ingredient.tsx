@@ -14,6 +14,11 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
+import {
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { EntityInlineLinkList } from "~/app/_components/EntityInlineLinkList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -62,10 +67,14 @@ function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
 
 function ProductPillWithFood({ product }: { product: IngredientProduct }) {
   const food = useHydratedProductFood(product);
+  const displayImage = useEntityDisplayImage({
+    entityType: "product",
+    entityId: product.id,
+  });
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
       <EntityInlineLink
-        displayImage={undefined}
+        displayImage={displayImage}
         entity="product"
         data={product}
         compact
@@ -116,6 +125,7 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
         items={recipes.slice(0, 1)}
         maxItems={1}
         compact
+        resolveImages={false}
       />
     </Row>
   );
@@ -217,10 +227,15 @@ export const ingredientListOverride = defineListOverride<
             columnHelper.accessor("appearsInRecipes", {
               id: "appearsInRecipes",
               header: "Recipes",
-              meta: {
+              meta: attachCubbyColumnMeta<IngredientListItem>({
                 className: "w-56 overflow-hidden",
                 mobile: { slot: "meta", priority: 30 },
-              },
+                entityRefs: (row) =>
+                  row.appearsInRecipes.map((recipe) => ({
+                    entityType: "recipe",
+                    entityId: recipe.id,
+                  })),
+              }),
               cell: (info) => (
                 <RecipeUsageCell ingredient={info.row.original} />
               ),
@@ -284,7 +299,14 @@ function IngredientFoodHydration({
   useEffect(() => onIds(stableIds), [onIds, stableIds]);
   return (
     <ProductFoodSummariesProvider productIds={productIds} summaries={summaries}>
-      {children}
+      <EntityDisplayImagesProvider
+        refs={productIds.map((entityId) => ({
+          entityType: "product" as const,
+          entityId,
+        }))}
+      >
+        {children}
+      </EntityDisplayImagesProvider>
     </ProductFoodSummariesProvider>
   );
 }

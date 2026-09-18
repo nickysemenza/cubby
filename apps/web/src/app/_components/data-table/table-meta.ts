@@ -1,3 +1,4 @@
+import type { EntityRef } from "@cubby/schemas/entity";
 import type { CellData, RowData } from "@tanstack/react-table";
 
 import type { ColumnCellData } from "./cell-data";
@@ -50,6 +51,8 @@ export interface CubbyColumnMeta<TData = CellData> {
   mono?: boolean;
   filterConfig?: FilterConfig;
   cellData?: ColumnCellData<TData>;
+  /** Public refs rendered by this column, collected once at the table owner. */
+  entityRefs?: (row: TData) => readonly EntityRef[];
 }
 
 /**

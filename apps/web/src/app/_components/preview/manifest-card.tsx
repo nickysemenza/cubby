@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { match } from "ts-pattern";
 
 import { Row } from "~/components/layout";
@@ -17,6 +17,10 @@ import {
 } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "../entity-media/entity-display-images";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { NutrientsSummary } from "../units/NutrientsSummary";
 
@@ -186,6 +190,17 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 function BodyBlockView({ block }: { block: BodyBlock }) {
+  const productRefs = useMemo(
+    () =>
+      block.kind === "products"
+        ? block.products.slice(0, 4).map((product) => ({
+            entityType: "product" as const,
+            entityId: product.id,
+          }))
+        : [],
+    [block],
+  );
+  const displayImages = useEntityDisplayImages(productRefs);
   return match(block)
     .with({ kind: "thumb" }, (b) => (
       <Image
@@ -222,7 +237,14 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
         <div className="flex flex-col gap-1">
           {b.products.slice(0, 4).map((p) => (
             <EntityInlineLink
-              displayImage={undefined}
+              displayImage={
+                displayImages[
+                  entityDisplayImageKey({
+                    entityType: "product",
+                    entityId: p.id,
+                  })
+                ] ?? null
+              }
               key={p.id}
               entity="product"
               data={p}

@@ -5,6 +5,10 @@ import {
 } from "@cubby/shared/collection-tag";
 import { Link } from "@tanstack/react-router";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -12,6 +16,30 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { wasm } from "~/lib/wasm";
 
 import type { EntityDetailFieldRenderers } from "./index";
+
+function ProductIngredientLink({
+  ingredient,
+}: {
+  ingredient: { id: string; name: string };
+}) {
+  const displayImages = useEntityDisplayImages([
+    { entityType: "ingredient", entityId: ingredient.id },
+  ]);
+  return (
+    <EntityInlineLink
+      displayImage={
+        displayImages[
+          entityDisplayImageKey({
+            entityType: "ingredient",
+            entityId: ingredient.id,
+          })
+        ] ?? null
+      }
+      entity="ingredient"
+      data={ingredient}
+    />
+  );
+}
 
 export const productDetailFields = {
   id: (product) => ({
@@ -53,14 +81,10 @@ export const productDetailFields = {
   ingredientId: (product) => ({
     value: product.ingredient ? (
       <Row gap="sm" wrap>
-        <EntityInlineLink
-          displayImage={undefined}
-          entity="ingredient"
-          data={{ name: product.ingredient.name, id: product.ingredient.id }}
-        />
+        <ProductIngredientLink ingredient={product.ingredient} />
         {product.food ? (
           <EntityInlineLink
-            displayImage={undefined}
+            displayImage={null}
             entity="usda-food"
             data={product.food}
           />

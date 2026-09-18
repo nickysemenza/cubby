@@ -3,6 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { entities, entityDetailParams } from "~/entities/entities";
 
@@ -12,6 +16,16 @@ import { ChartEmpty } from "./chart-empty";
 import { ChartTooltip } from "./ChartTooltip";
 
 export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
+  const projectRefs = useMemo(
+    () =>
+      tasks.flatMap((task) =>
+        task.projectId
+          ? [{ entityType: "project" as const, entityId: task.projectId }]
+          : [],
+      ),
+    [tasks],
+  );
+  const projectImages = useEntityDisplayImages(projectRefs);
   const { data, from, to, itemsByDay } = useMemo(() => {
     const byDay = new Map<string, number>();
     const itemsByDay = new Map<string, TaskOut[]>();
@@ -85,7 +99,14 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
           {task.projectId && task.projectName && (
             <span className="ml-auto max-w-32 min-w-0 text-muted-foreground">
               <EntityInlineLink
-                displayImage={undefined}
+                displayImage={
+                  projectImages[
+                    entityDisplayImageKey({
+                      entityType: "project",
+                      entityId: task.projectId,
+                    })
+                  ] ?? null
+                }
                 entity="project"
                 data={{ id: task.projectId, name: task.projectName }}
                 truncate

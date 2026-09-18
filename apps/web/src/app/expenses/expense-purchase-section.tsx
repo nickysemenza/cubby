@@ -4,8 +4,12 @@ import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { sumBy } from "es-toolkit";
 import { ListFilter } from "lucide-react";
-import type { FC } from "react";
+import { useMemo, type FC } from "react";
 
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -61,6 +65,19 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   // Expense), and a conditional hook would break the hook order when it does.
   const { data, isPending } = useQuery(operations.chargeContext(expense.id));
   const others = data?.siblings ?? NO_OTHER_EXPENSES;
+  const imageRefs = useMemo(
+    () => [
+      ...(data?.purchase
+        ? [{ entityType: "purchase" as const, entityId: data.purchase.id }]
+        : []),
+      ...others.map((line) => ({
+        entityType: "expense" as const,
+        entityId: line.id,
+      })),
+    ],
+    [data?.purchase, others],
+  );
+  const displayImages = useEntityDisplayImages(imageRefs);
 
   // The caller only mounts this section for an Expense that has a Purchase; this keeps
   // the parent link's `params` honest rather than asserting a non-null id.
@@ -92,7 +109,14 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
             from Purchase, including the purchase date (not this Expense's ledger
             date), so the shared purchase-label ladder stays truthful. */}
         <EntityInlineLink
-          displayImage={undefined}
+          displayImage={
+            displayImages[
+              entityDisplayImageKey({
+                entityType: "purchase",
+                entityId: data.purchase.id,
+              })
+            ] ?? null
+          }
           entity="purchase"
           data={data.purchase}
           truncate
@@ -117,7 +141,14 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
           {others.map((line) => (
             <Row key={line.id} align="center" justify="between" gap="sm">
               <EntityInlineLink
-                displayImage={undefined}
+                displayImage={
+                  displayImages[
+                    entityDisplayImageKey({
+                      entityType: "expense",
+                      entityId: line.id,
+                    })
+                  ] ?? null
+                }
                 entity="expense"
                 data={line}
                 truncate

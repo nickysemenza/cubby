@@ -3,6 +3,10 @@ import { isNonFoodCategory } from "@cubby/shared";
 import { useMemo } from "react";
 
 import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
+import {
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { FullNutrientBreakdown } from "~/app/_components/nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "~/app/_components/nutrition/NutrientDensityStats";
@@ -125,27 +129,55 @@ export const ProductFitsWith: DetailSlotComponent<"product"> = ({
  */
 export const ProductCookbooks: DetailSlotComponent<"product"> = ({
   record: product,
-}) => (
-  <Stack gap="sm">
-    {product.cookbooks.map((cookbook) => (
-      <Row key={cookbook.id} className="items-center justify-between gap-2">
-        <EntityInlineLink
-          displayImage={undefined}
-          entity="cookbook"
-          data={{ id: cookbook.id, name: cookbook.name }}
-        />
-        <EntityFilterLink
-          variant="value"
-          to="/recipes"
-          search={{ source: cookbook.id }}
-          label={`Show all ${countLabel(cookbook.recipeCount, "recipe")} from ${cookbook.name}`}
-        >
-          {countLabel(cookbook.recipeCount, "recipe")}
-        </EntityFilterLink>
-      </Row>
-    ))}
-  </Stack>
-);
+}) => {
+  const refs = useMemo(
+    () =>
+      product.cookbooks.map((cookbook) => ({
+        entityType: "cookbook" as const,
+        entityId: cookbook.id,
+      })),
+    [product.cookbooks],
+  );
+  return (
+    <EntityDisplayImagesProvider refs={refs}>
+      <Stack gap="sm">
+        {product.cookbooks.map((cookbook) => (
+          <CookbookLinkRow key={cookbook.id} cookbook={cookbook} />
+        ))}
+      </Stack>
+    </EntityDisplayImagesProvider>
+  );
+};
+
+function CookbookLinkRow({ cookbook }: { cookbook: ProductCookbooksProps }) {
+  const displayImage = useEntityDisplayImage({
+    entityType: "cookbook",
+    entityId: cookbook.id,
+  });
+  return (
+    <Row className="items-center justify-between gap-2">
+      <EntityInlineLink
+        displayImage={displayImage}
+        entity="cookbook"
+        data={{ id: cookbook.id, name: cookbook.name }}
+      />
+      <EntityFilterLink
+        variant="value"
+        to="/recipes"
+        search={{ source: cookbook.id }}
+        label={`Show all ${countLabel(cookbook.recipeCount, "recipe")} from ${cookbook.name}`}
+      >
+        {countLabel(cookbook.recipeCount, "recipe")}
+      </EntityFilterLink>
+    </Row>
+  );
+}
+
+type ProductCookbooksProps = {
+  id: string;
+  name: string;
+  recipeCount: number;
+};
 
 /** Recipes the product's linked ingredient is used in, one row per usage. */
 export const ProductRecipeAppearances: DetailSlotComponent<"product"> = ({
