@@ -161,7 +161,8 @@ public enum PhotoDiagnostics {
             file: fileInfo, identity: identity, classifications: analysis.classifications,
             recognizedText: analysis.recognizedText, featurePrint: featurePrintFields,
             routing: routing, suggestedSource: suggestedSource, semanticModel: semanticModel,
-            semantic: semantic, timings: PhotoDiagnosticsReport.Timings(
+            semantic: semantic,
+            timings: PhotoDiagnosticsReport.Timings(
                 analyzeMs: analyzeMs, semanticMs: semanticMs))
     }
 
