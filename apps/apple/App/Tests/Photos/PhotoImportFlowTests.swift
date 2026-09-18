@@ -1,12 +1,13 @@
 import CoreGraphics
 import CubbyKit
 import Foundation
+import Synchronization
 import Testing
 
 @testable import Cubby
 
 @MainActor
-@Suite("Photo import flow")
+@Suite("Photo import flow", .serialized)
 struct PhotoImportFlowTests {
     @Test func manifestKeepsUnassignedPhotosOutOfCommitUntilMoved() throws {
         let first = try selection(filename: "first.jpg")
@@ -15,6 +16,9 @@ struct PhotoImportFlowTests {
 
         #expect(manifest.needsDestination == [first.id, second.id])
         #expect(!manifest.canCommit)
+        // 5c defaults selection to the focused photo alone; select both explicitly to exercise
+        // the original whole-batch assignment this test covers.
+        manifest.selectedIDs = Set(manifest.items.map(\.id))
         let option = try #require(manifest.destinationOptions.first)
         manifest.moveSelected(
             to: option,
@@ -27,6 +31,149 @@ struct PhotoImportFlowTests {
         #expect(manifest.groups[0].photoIDs == [first.id, second.id])
         #expect(manifest.groups[0].title == "Example  PRD-2345")
         #expect(manifest.canCommit)
+    }
+
+    @Test func defaultSelectionIsTheFocusedPhotoAndAdvancesAfterAssignment() throws {
+        let first = try selection(filename: "first.jpg")
+        let second = try selection(filename: "second.jpg")
+        let manifest = PhotoImportManifest(items: [first, second])
+
+        #expect(manifest.focusedItemID == first.id)
+        #expect(manifest.selectedIDs == [first.id])
+
+        let option = try #require(manifest.destinationOptions.first)
+        manifest.moveSelected(
+            to: option,
+            row: EntityRow(
+                id: "PRD-2345", title: "Example", subtitle: nil, imageURL: nil,
+                raw: ["id": "PRD-2345", "name": "Example"]))
+
+        #expect(manifest.focusedItemID == second.id)
+        #expect(manifest.selectedIDs == [second.id])
+    }
+
+    @Test func stageCreateKeysDraftsByRouteSourceRecordAndDay() throws {
+        let first = try selection(filename: "first.jpg")
+        let second = try selection(filename: "second.jpg")
+        let manifest = PhotoImportManifest(items: [first, second])
+        let option = try #require(
+            manifest.destinationOptions.first {
+                $0.route.kind == .createRelated && $0.route.source == .planting
+            })
+        let plantingA = EntityRow(
+            id: "PLT-0001", title: "A", subtitle: nil, imageURL: nil, raw: ["id": "PLT-0001"])
+        let plantingB = EntityRow(
+            id: "PLT-0002", title: "B", subtitle: nil, imageURL: nil, raw: ["id": "PLT-0002"])
+
+        manifest.selectedIDs = [first.id]
+        manifest.stageCreate(option: option, source: plantingA, body: [:])
+        manifest.selectedIDs = [second.id]
+        manifest.stageCreate(option: option, source: plantingB, body: [:])
+
+        #expect(manifest.groups.count == 2)
+        #expect(manifest.commitButtonTitle.contains("2"))
+    }
+
+    @Test func stageCreateMergesTheSameSourceRecordOnTheSameDayIntoOneDraft() throws {
+        let first = try selection(filename: "first.jpg")
+        let second = try selection(filename: "second.jpg")
+        let manifest = PhotoImportManifest(items: [first, second])
+        let option = try #require(
+            manifest.destinationOptions.first {
+                $0.route.kind == .createRelated && $0.route.source == .planting
+            })
+        let planting = EntityRow(
+            id: "PLT-0001", title: "A", subtitle: nil, imageURL: nil, raw: ["id": "PLT-0001"])
+
+        manifest.selectedIDs = [first.id]
+        manifest.stageCreate(option: option, source: planting, body: [:])
+        manifest.selectedIDs = [second.id]
+        manifest.stageCreate(option: option, source: planting, body: [:])
+
+        #expect(manifest.groups.count == 1)
+        #expect(Set(manifest.groups[0].photoIDs) == Set([first.id, second.id]))
+    }
+
+    @Test func chooseSourceRecordAutoResolvesASingleSameDayMatch() async throws {
+        let item = try selection(filename: "match.jpg")
+        let manifest = PhotoImportManifest(items: [item])
+        let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
+        let row = EntityRow(
+            id: "PLT-1234", title: "Santa Rosa", subtitle: nil, imageURL: nil,
+            raw: ["id": "PLT-1234", "locationId": "LOC-0007"])
+        let client = try routeClient(gardenEntries: [(id: "GDE-0001", locationId: "LOC-0007")])
+
+        let resolution = await manifest.chooseSourceRecord(type, row: row, client: client)
+
+        guard case .resolved = resolution else {
+            Issue.record("A single same-day match must resolve without a route picker")
+            return
+        }
+        let existing = try #require(
+            manifest.destinationOptions.first {
+                $0.route.kind == .existingRelated && $0.route.source == .planting
+            })
+        #expect(manifest.groups.first?.id == "\(existing.id):GDE-0001")
+        #expect(manifest.needsDestination.isEmpty)
+    }
+
+    @Test func chooseSourceRecordStagesACreateDraftWithThePrefilledBodyWhenNothingMatches() async throws {
+        let item = try selection(filename: "new.jpg")
+        let manifest = PhotoImportManifest(items: [item])
+        let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
+        let row = EntityRow(
+            id: "PLT-5678", title: "Roma", subtitle: nil, imageURL: nil,
+            raw: ["id": "PLT-5678", "locationId": "LOC-0009"])
+        let client = try routeClient(gardenEntries: [])
+
+        let resolution = await manifest.chooseSourceRecord(type, row: row, client: client)
+
+        guard case .resolved = resolution else {
+            Issue.record("An unmatched source with only-optional remaining create fields must stage directly")
+            return
+        }
+        #expect(manifest.needsDestination.isEmpty)
+        let body = try #require(manifest.createDraftBody(for: item.id))
+        #expect(body["locationId"] == .string("LOC-0009"))
+    }
+
+    @Test func chooseSourceRecordOpensTheRelatedChooserForMultipleMatches() async throws {
+        let item = try selection(filename: "ambiguous.jpg")
+        let manifest = PhotoImportManifest(items: [item])
+        let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
+        let row = EntityRow(
+            id: "PLT-4321", title: "Cherokee", subtitle: nil, imageURL: nil,
+            raw: ["id": "PLT-4321", "locationId": "LOC-0001"])
+        let client = try routeClient(
+            gardenEntries: [
+                (id: "GDE-0001", locationId: "LOC-0001"), (id: "GDE-0002", locationId: "LOC-0001"),
+            ])
+
+        let resolution = await manifest.chooseSourceRecord(type, row: row, client: client)
+
+        guard case .relatedChooser(let option, let page) = resolution else {
+            Issue.record("Two same-day matches must hand the sheet a related-chooser context")
+            return
+        }
+        #expect(option.route.kind == .existingRelated)
+        #expect(page?.items.count == 2)
+        #expect(manifest.needsDestination == [item.id])
+    }
+
+    @Test func chooseSourceRecordAlwaysPromptsWhenARouteIsMarkedPrompt() async throws {
+        let item = try selection(filename: "inventory.jpg")
+        let manifest = PhotoImportManifest(items: [item])
+        let type = try #require(manifest.sourceTypeOptions.first { $0.source == .inventory })
+        let row = EntityRow(
+            id: "INV-0001", title: "Flour", subtitle: nil, imageURL: nil, raw: ["id": "INV-0001"])
+        let client = try routeClient(gardenEntries: [])
+
+        let resolution = await manifest.chooseSourceRecord(type, row: row, client: client)
+
+        guard case .routePicker = resolution else {
+            Issue.record("A `.prompt` route must always ask, regardless of the manifest's other routes")
+            return
+        }
     }
 
     @Test func destinationsIncludeEveryManifestIngressKind() throws {
@@ -120,4 +267,44 @@ struct PhotoImportFlowTests {
             contentType: "image/jpeg", size: 1, width: 2, height: 2)
         return PhotoSelectionItem(file: file, preview: image)
     }
+
+    /// A `CubbyClient` stubbed at the network layer (same approach as `PhotoMatchStoreTests`) so
+    /// `chooseSourceRecord`'s auto-resolve exercises the real `findRelated` → `CubbyClient.list`
+    /// path against a canned Garden Entry list page, rather than a re-implemented loader.
+    private func routeClient(gardenEntries: [(id: String, locationId: String)]) throws -> CubbyClient {
+        let items =
+            gardenEntries
+            .map { entry in
+                """
+                {"id":"\(entry.id)","locationId":"\(entry.locationId)","kind":"note","observedOn":"2026-09-10","images":[],"displayName":"\(entry.id)","locationName":"Test bed","createdAt":"2026-09-10T00:00:00Z","updatedAt":"2026-09-10T00:00:00Z","displayImages":[]}
+                """
+            }.joined(separator: ",")
+        let json =
+            "{\"items\":[\(items)],\"meta\":{\"pageIndex\":1,\"pageSize\":25,\"totalCount\":\(gardenEntries.count)}}"
+        PhotoRouteTestProtocol.response.withLock { $0 = Data(json.utf8) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [PhotoRouteTestProtocol.self]
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("test-route-token"), for: "photo-routes.example.invalid")
+        return CubbyClient(
+            baseURL: URL(string: "https://photo-routes.example.invalid")!,
+            credentials: CredentialProvider(host: "photo-routes.example.invalid", store: store),
+            session: URLSession(configuration: configuration))
+    }
+}
+
+/// The synchronized response belongs only to this serialized suite; it never reaches a network.
+nonisolated private final class PhotoRouteTestProtocol: URLProtocol, @unchecked Sendable {
+    static let response = Mutex(Data())
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: 200, httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.response.withLock { $0 })
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

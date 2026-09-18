@@ -50,7 +50,6 @@ private struct PhotoLibraryBrowser: View {
     let picker: Bool
     let onSelection: ([PhotoSelectionItem]) -> Void
     @State private var filter: Filter = .all
-    @State private var selecting = false
     @State private var pickerIDs: [String] = []
     @State private var preview: AssetPreview?
     @State private var session = UUID()
@@ -83,21 +82,21 @@ private struct PhotoLibraryBrowser: View {
                                             PhotoLibraryCell(asset: asset, selection: selectionNumber(asset))
                                             {
                                                 library.scrollID = asset.localIdentifier
-                                                if selecting || picker {
-                                                    toggle(asset.localIdentifier)
-                                                } else {
+                                                toggle(asset.localIdentifier)
+                                            } onShowDetails: {
+                                                library.scrollID = asset.localIdentifier
+                                                preview = AssetPreview(asset: asset)
+                                            }
+                                            .id(asset.localIdentifier)
+                                            .contextMenu {
+                                                Button(
+                                                    "View photo and Cubby matches",
+                                                    systemImage: "info.circle"
+                                                ) {
+                                                    library.scrollID = asset.localIdentifier
                                                     preview = AssetPreview(asset: asset)
                                                 }
-                                            }.id(asset.localIdentifier)
-                                                .contextMenu {
-                                                    Button(
-                                                        "View photo and Cubby matches",
-                                                        systemImage: "info.circle"
-                                                    ) {
-                                                        library.scrollID = asset.localIdentifier
-                                                        preview = AssetPreview(asset: asset)
-                                                    }
-                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -128,7 +127,7 @@ private struct PhotoLibraryBrowser: View {
                         }
                     }
                 }
-                if selecting || picker { selectionBar }
+                if !ids.isEmpty { selectionBar }
             } else {
                 permissionFallback
             }
@@ -137,8 +136,8 @@ private struct PhotoLibraryBrowser: View {
         .porcelainScreen()
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                if library.hasFullAccess && !picker {
-                    Button(selecting ? "Done selecting" : "Select") { selecting.toggle() }
+                if library.hasFullAccess && !ids.isEmpty {
+                    Button("Clear") { clearSelection() }
                 }
             }
         }
@@ -151,7 +150,7 @@ private struct PhotoLibraryBrowser: View {
         }
         .photoPreviewPresentation(item: $preview) { selected in
             PhotoLibraryPreview(asset: selected.asset) {
-                toggle(selected.asset.localIdentifier); selecting = true
+                toggle(selected.asset.localIdentifier)
             }
         }
         .alert(
@@ -269,6 +268,10 @@ private struct PhotoLibraryBrowser: View {
         if picker { pickerIDs = selection } else { library.selectedIDs = selection }
     }
 
+    private func clearSelection() {
+        if picker { pickerIDs = [] } else { library.selectedIDs = [] }
+    }
+
     private func prepareSelection() {
         let selected = ids
         loadingSelection = true
@@ -296,6 +299,7 @@ private struct PhotoLibraryCell: View {
     let asset: PHAsset
     let selection: Int?
     let onTap: () -> Void
+    let onShowDetails: () -> Void
     @State private var image: CGImage?
     private var known: Bool {
         appModel.photoLibrary.checked.contains(asset.localIdentifier)
@@ -347,6 +351,20 @@ private struct PhotoLibraryCell: View {
                     }
                 }
         }.buttonStyle(.plain)
+            .overlay(alignment: .topLeading) {
+                Button(action: onShowDetails) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+                .accessibilityLabel("Photo details")
+                .accessibilityIdentifier("photos.grid.details")
+            }
             .accessibilityLabel(
                 "\(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"), \(ownerAccessibilityDescription ?? (represented ? "In Cubby" : possibleMatch ? "Possible Cubby match" : known ? "No known match" : "Not checked"))"
             )

@@ -8,24 +8,39 @@ import SwiftUI
 struct PhotoImportHero: View {
     let items: [PhotoSelectionItem]
     let selectedIDs: Set<String>
+    /// The manifest's `focusedItemID`, when the caller needs the hero's focus to double as the
+    /// review sheet's default single-photo selection scope. `nil` keeps focus purely local (every
+    /// other caller, which only ever displays photos here).
+    private let externalFocusedID: Binding<String>?
     let onToggle: ((String) -> Void)?
 
-    @State private var focusedID: String
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var internalFocusedID: String
     @State private var showingFullScreen = false
 
     init(
         items: [PhotoSelectionItem], selectedIDs: Set<String> = [],
+        focusedID: Binding<String>? = nil,
         onToggle: ((String) -> Void)? = nil
     ) {
         self.items = items
         self.selectedIDs = selectedIDs
+        self.externalFocusedID = focusedID
         self.onToggle = onToggle
-        _focusedID = State(initialValue: items.first?.id ?? "")
+        _internalFocusedID = State(initialValue: focusedID?.wrappedValue ?? items.first?.id ?? "")
+    }
+
+    private var focusedID: String { externalFocusedID?.wrappedValue ?? internalFocusedID }
+
+    private func setFocusedID(_ id: String) {
+        if let externalFocusedID { externalFocusedID.wrappedValue = id } else { internalFocusedID = id }
     }
 
     private var focusedItem: PhotoSelectionItem? {
         items.first(where: { $0.id == focusedID }) ?? items.first
     }
+
+    private var thumbnailSize: CGFloat { verticalSizeClass == .compact ? 56 : 64 }
 
     var body: some View {
         if let focusedItem {
@@ -36,7 +51,7 @@ struct PhotoImportHero: View {
                     ZStack(alignment: .bottomTrailing) {
                         PhotoImportProgressiveImage(item: focusedItem, maxPixelSize: 1_800)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 270)
+                            .containerRelativeFrame(.vertical) { length, _ in min(270, length * 0.28) }
                             .background(.black.opacity(0.92))
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         Label("Inspect full screen", systemImage: "arrow.up.left.and.arrow.down.right")
@@ -57,13 +72,13 @@ struct PhotoImportHero: View {
                     HStack(spacing: 8) {
                         ForEach(items) { item in
                             Button {
-                                focusedID = item.id
+                                setFocusedID(item.id)
                                 onToggle?(item.id)
                             } label: {
                                 PhotoImportProgressiveImage(
                                     item: item, maxPixelSize: 220, loadsImmediately: false
                                 )
-                                .frame(width: 64, height: 64)
+                                .frame(width: thumbnailSize, height: thumbnailSize)
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)

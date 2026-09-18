@@ -137,7 +137,8 @@ final class PhotoEntityChooserModel {
     private func loadDatePage(_ page: Int, replace: Bool) async throws {
         let filters =
             captureDate.map {
-                Self.captureDateFilters(descriptor: descriptor, key: semanticDateKey, captureDate: $0)
+                Self.captureDateFilters(
+                    descriptor: descriptor, key: semanticDateKey, captureDate: $0, calendar: calendar)
             } ?? EntityFilterState()
         let result = try await loader(filters, nil, page, "-updatedAt")
         if replace { dateMatches = result.items } else { appendUnique(result.items, to: &dateMatches) }
@@ -173,7 +174,7 @@ final class PhotoEntityChooserModel {
         guard let captureDate else { return false }
         guard let semanticDateKey, let raw = row.raw[semanticDateKey]?.stringValue else { return false }
         if raw.count >= 10 {
-            return String(raw.prefix(10)) == PlainDate(captureDate).rawValue
+            return String(raw.prefix(10)) == Self.plainDate(captureDate, calendar: calendar)
         }
         guard let parsed = ISO8601DateFormatter().date(from: raw) else { return false }
         return calendar.isDate(parsed, inSameDayAs: captureDate)
@@ -202,7 +203,7 @@ final class PhotoEntityChooserModel {
     /// rarely stamped exactly at the photo's capture instant). Empty when `key` is `nil` or the
     /// descriptor has no matching `.range` filter.
     static func captureDateFilters(
-        descriptor: EntityDescriptor, key: String?, captureDate: Date
+        descriptor: EntityDescriptor, key: String?, captureDate: Date, calendar: Calendar = .current
     ) -> EntityFilterState {
         guard let key, let dateFilter = descriptor.filter(key),
             case .range(let from, let to, _) = dateFilter.wire
@@ -214,11 +215,18 @@ final class PhotoEntityChooserModel {
             result.set(.single(formatter.string(from: captureDate.addingTimeInterval(-3_600))), for: from)
             result.set(.single(formatter.string(from: captureDate.addingTimeInterval(3_600))), for: to)
         } else {
-            let day = PlainDate(captureDate).rawValue
+            let day = plainDate(captureDate, calendar: calendar)
             result.set(.single(day), for: from)
             result.set(.single(day), for: to)
         }
         return result
+    }
+
+    /// `yyyy-MM-dd` in the supplied calendar's time zone. `PlainDate` always uses the device zone,
+    /// which is wrong whenever a caller (or a test) evaluates capture days in another zone.
+    private static func plainDate(_ date: Date, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     private static func describe(_ error: Error) -> String {
