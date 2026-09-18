@@ -103,7 +103,7 @@ NEVER merge distinct variants a cook treats differently: light vs dark brown sug
 
 Each candidate is shown as "id [N products]: name". Prefer a target that already has products — the merge inherits them.
 
-Default to null when unsure. A wrong merge is destructive, so be conservative.`;
+Decline when unsure. A wrong merge is destructive, so be conservative.`;
 
 export const ingredientMergeSpec: AiSelectionSpec<MergeShortlistEntry> = {
   feature: INGREDIENT_MERGE_FEATURE,

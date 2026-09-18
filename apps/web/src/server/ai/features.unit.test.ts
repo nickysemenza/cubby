@@ -73,12 +73,13 @@ describe("the AI feature table", () => {
     }
   });
 
-  it("declares an output schema for every cacheable feature", () => {
+  it("declares an output schema for every cacheable chat feature", () => {
     // The gateway's response cache keys on the exact request body, which is
     // only deterministic for a structured, single-turn call. Anything
-    // cacheable must therefore be one.
+    // cacheable must therefore be one (a decision call is single-turn by
+    // construction).
     for (const feature of AI_FEATURES) {
-      if (!feature.cache) continue;
+      if (!feature.cache || feature.tier === "decision") continue;
       expect("schema" in feature).toBe(true);
     }
   });
@@ -93,8 +94,9 @@ describe("the AI feature table", () => {
     expect(new Set(labels).size).toBe(labels.length);
   });
 
-  it("caps every feature's output", () => {
+  it("caps every chat feature's output", () => {
     for (const feature of AI_FEATURES) {
+      if (feature.tier === "decision") continue;
       expect(feature.maxTokens).toBeGreaterThan(0);
     }
   });

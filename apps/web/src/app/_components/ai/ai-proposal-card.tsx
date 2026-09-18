@@ -192,7 +192,7 @@ export function AiProposalCard({
           </span>
         </Row>
 
-        <Description>{reasoning}</Description>
+        {reasoning ? <Description>{reasoning}</Description> : null}
 
         {diff}
         {children}

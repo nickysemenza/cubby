@@ -11,7 +11,7 @@
  */
 import { chat, type ModelMessage } from "@tanstack/ai";
 
-import type { AiFeature, AiStructuredFeature } from "~/server/ai/features";
+import type { AiChatFeature, AiStructuredFeature } from "~/server/ai/features";
 import {
   getChatModelConfig,
   type SupportedChatModel,
@@ -97,7 +97,7 @@ export interface StructuredRunPlan {
 }
 
 export function planStructuredRun<T = unknown>(
-  spec: Pick<AiFeature, "feature" | "model" | "cache">,
+  spec: Pick<AiChatFeature, "feature" | "model" | "cache">,
   ctx: AiRunContext<T>,
 ): StructuredRunPlan {
   const metadata: GatewayMetadata = {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  catalogedChatModels,
+  catalogedModels,
+  DECISION_MODEL,
   estimateAiUsageCostUsd,
   FAST_MODEL,
   getAiModelCatalog,
@@ -17,7 +18,7 @@ import {
 describe("the crate catalog backs every registered chat model", () => {
   it("prices every registered chat id", () => {
     const catalog = getAiModelCatalog();
-    for (const model of catalogedChatModels()) {
+    for (const model of catalogedModels()) {
       const entry = catalog.get(model);
       expect(
         entry,
@@ -38,6 +39,15 @@ describe("the crate catalog backs every registered chat model", () => {
         `${model} priced null`,
       ).toBeGreaterThan(0);
     }
+  });
+
+  it("prices the decision tier's free output at zero, not as unknown", () => {
+    expect(
+      estimateAiUsageCostUsd("typesafe", DECISION_MODEL, {
+        inputTokens: 1_000_000,
+        outputTokens: 50,
+      }),
+    ).toBeCloseTo(0.042, 6);
   });
 
   it("adds the provider's cache read and write tokens to the estimate", () => {

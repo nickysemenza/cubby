@@ -11,7 +11,7 @@ interface AiTokenUsage {
   cacheWriteTokens?: number | null;
 }
 
-const aiProvider = z.enum(["anthropic", "openai", "google"]);
+const aiProvider = z.enum(["anthropic", "openai", "google", "typesafe"]);
 type AiProvider = z.infer<typeof aiProvider>;
 
 /**
@@ -46,7 +46,19 @@ interface EmbeddingAiModelConfig {
   pricing: { inputUsdPerMillion: number; outputUsdPerMillion: number };
 }
 
-type AiModelConfig = ChatAiModelConfig | EmbeddingAiModelConfig;
+/**
+ * A closed-set decision model on the gateway's native Workers AI route
+ * (`ai/jev.ts`); priced from the crate catalog like a chat model.
+ */
+interface DecisionAiModelConfig {
+  role: "decision";
+  provider: "typesafe";
+}
+
+type AiModelConfig =
+  | ChatAiModelConfig
+  | EmbeddingAiModelConfig
+  | DecisionAiModelConfig;
 
 const supportedChatModel = z.enum([
   "gpt-5.6-luna",
@@ -60,9 +72,13 @@ export type SupportedChatModel = z.infer<typeof supportedChatModel>;
 const supportedEmbeddingModel = z.enum(["text-embedding-3-small"]);
 export type SupportedEmbeddingModel = z.infer<typeof supportedEmbeddingModel>;
 
+const supportedDecisionModel = z.enum(["typesafe/jev"]);
+export type SupportedDecisionModel = z.infer<typeof supportedDecisionModel>;
+
 const supportedAiModel = z.enum([
   ...supportedChatModel.options,
   ...supportedEmbeddingModel.options,
+  ...supportedDecisionModel.options,
 ]);
 type SupportedAiModel = z.infer<typeof supportedAiModel>;
 
@@ -71,18 +87,25 @@ export const FAST_MODEL = "gpt-5.6-luna" satisfies SupportedChatModel;
 export const VISION_BATCH_MODEL =
   "gemini-2.5-flash" satisfies SupportedChatModel;
 export const REASONING_MODEL = "claude-sonnet-5" satisfies SupportedChatModel;
+/**
+ * The decision tier's model: TypeSafe's Jev, a closed-set decision model
+ * served by Workers AI over its native route rather than a chat one, so it
+ * is not a {@link SupportedChatModel} and takes no chat adapter.
+ */
+export const DECISION_MODEL = "typesafe/jev" satisfies SupportedDecisionModel;
+/** Every model a feature record can name. */
+export type AiModel = SupportedChatModel | SupportedDecisionModel;
 
 export const DEFAULT_EMBEDDING_MODEL =
   "text-embedding-3-small" satisfies SupportedEmbeddingModel;
 
 /**
- * Registered chat ids the crate catalog does not price. Every other chat row
- * must exist there (`models.unit.test.ts` asserts it), so a model added here
- * without a catalog entry fails loudly instead of silently recording
- * null-cost usage.
+ * Registered chat/decision ids the crate catalog does not price. Every other
+ * such row must exist there (`models.unit.test.ts` asserts it), so a model
+ * added here without a catalog entry fails loudly instead of silently
+ * recording null-cost usage.
  */
-const UNCATALOGED_CHAT_MODELS =
-  [] as const satisfies readonly SupportedChatModel[];
+const UNCATALOGED_MODELS = [] as const satisfies readonly AiModel[];
 
 const AI_MODEL_REGISTRY = {
   "gpt-5.6-luna": {
@@ -128,6 +151,10 @@ const AI_MODEL_REGISTRY = {
     dimensions: 1536,
     // Provider list price checked 2026-06-28.
     pricing: { inputUsdPerMillion: 0.02, outputUsdPerMillion: 0 },
+  },
+  "typesafe/jev": {
+    role: "decision",
+    provider: "typesafe",
   },
 } as const satisfies Record<SupportedAiModel, AiModelConfig>;
 
@@ -234,9 +261,9 @@ export function parseSupportedEmbeddingModel(
 /**
  * What one recorded call cost, or `null` when the model is unknown to the
  * registry, the recorded provider disagrees with it, no token counts were
- * reported, or the crate catalog carries no rates for the model. Chat prices
- * come from the catalog (cache reads and writes included when the adapter
- * reports them); the embedding row is priced here.
+ * reported, or the crate catalog carries no rates for the model. Chat and
+ * decision prices come from the catalog (cache reads and writes included
+ * when the adapter reports them); the embedding row is priced here.
  */
 export function estimateAiUsageCostUsd(
   provider: string,
@@ -271,8 +298,11 @@ export function estimateAiUsageCostUsd(
   );
 }
 
-/** Chat ids the crate catalog is expected to price — the membership guard. */
-export function catalogedChatModels(): SupportedChatModel[] {
-  const uncataloged = new Set<string>(UNCATALOGED_CHAT_MODELS);
-  return supportedChatModel.options.filter((model) => !uncataloged.has(model));
+/** Ids the crate catalog is expected to price — the membership guard. */
+export function catalogedModels(): AiModel[] {
+  const uncataloged = new Set<string>(UNCATALOGED_MODELS);
+  return [
+    ...supportedChatModel.options,
+    ...supportedDecisionModel.options,
+  ].filter((model) => !uncataloged.has(model));
 }

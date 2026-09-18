@@ -1,5 +1,6 @@
 import type {
   CategorySuggestion,
+  Confidence,
   DetectedInventoryAiResult,
   LocationDescription,
   LocationTypeSuggestion,
@@ -14,6 +15,7 @@ import type { RecipeFlowAiPlan } from "@cubby/schemas/recipe-flow";
 import type { ImagePart } from "@tanstack/ai";
 
 import {
+  type AiDecisionFeature,
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
   LOCATION_TYPE_SUGGESTION_FEATURE,
@@ -21,6 +23,7 @@ import {
   PRODUCT_IDENTIFICATION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
 } from "~/server/ai/features";
+import { runJevChoice } from "~/server/ai/jev";
 import {
   type AiChatRequest,
   type AiRunContext,
@@ -54,22 +57,14 @@ const CATEGORY_DESCRIPTIONS = {
     "Worn goods: shoes, boots, clothing, outerwear, hats, gloves, worn bags and packs",
 } satisfies Record<ProductCategory, string>;
 
-function buildCategorySystemPrompt(): string {
-  const categoryList = productCategoryValues
-    .map((cat) => `- "${cat}": ${CATEGORY_DESCRIPTIONS[cat]}`)
-    .join("\n");
-
-  return `You are a product categorization assistant. Given a product name and manufacturer, determine the most appropriate category.
-
-Available categories:
-${categoryList}
+/** The category rules; the categories themselves are the Jev choices. */
+const CATEGORY_RULES = `You are a product categorization assistant. Given a product name and manufacturer, determine the most appropriate category.
 
 Rules:
 1. If the product has food-related indicators (like being from a food brand, having nutrition info, being edible), always choose "food"
 2. For ambiguous items, consider the primary use case
 3. "supplies" is for general consumables that don't fit other categories
 4. Be precise: drill bits go in "tool-consumables", not "tools"`;
-}
 
 // Location type descriptions for the LLM to understand what each type means
 // Using `satisfies` to ensure all types have descriptions (build fails if one is missing)
@@ -94,15 +89,8 @@ const LOCATION_TYPE_DESCRIPTIONS = {
     "Outdoor pots and containers for growing: patio planter, hanging planter",
 } satisfies Record<LocationType, string>;
 
-function buildLocationTypeSystemPrompt(): string {
-  const typeList = locationType.options
-    .map((type) => `- "${type}": ${LOCATION_TYPE_DESCRIPTIONS[type]}`)
-    .join("\n");
-
-  return `You are a location classification assistant. Given a location name, determine the most appropriate location type.
-
-Available types:
-${typeList}
+/** The location-type rules; the types themselves are the Jev choices. */
+const LOCATION_TYPE_RULES = `You are a location classification assistant. Given a location name, determine the most appropriate location type.
 
 Rules:
 1. Look for keywords in the name that indicate the type (e.g., "shelf" in name suggests shelf type)
@@ -110,7 +98,6 @@ Rules:
 3. For ambiguous names, consider the most likely physical form
 4. Names with numbers often indicate shelves or drawers (e.g., "Shelf 3", "Drawer 2")
 5. Names mentioning "workbench" or "station" are typically areas or tables`;
-}
 
 function buildProductIdentificationSystemPrompt(): string {
   const categoryList = productCategoryValues
@@ -146,28 +133,10 @@ function imageParts(imageUrls: string[]): ImagePart[] {
 
 /**
  * Pure request builders: each returns the exact systemPrompts/messages the
- * matching `AiClient` method sends. Keep these free of side effects (no
- * adapter, no `chat()` call) — `runStructuredFeature` owns dispatch, usage
- * accounting, and error surfacing.
+ * matching chat-tier `AiClient` method sends. Keep these free of side effects
+ * (no adapter, no `chat()` call) — `runStructuredFeature` owns dispatch,
+ * usage accounting, and error surfacing.
  */
-function buildCategorySuggestionRequest(
-  productName: string,
-  manufacturer: string,
-): AiChatRequest {
-  return {
-    systemPrompts: [buildCategorySystemPrompt()],
-    messages: [
-      {
-        role: "user",
-        content: `Product: "${productName}"
-Manufacturer: "${manufacturer}"
-
-Categorize this product and explain your reasoning.`,
-      },
-    ],
-  };
-}
-
 function buildInventoryDetectionRequest(
   imageUrls: string[],
   locationName: string,
@@ -252,22 +221,6 @@ ${recipeJson}${guidanceText}`,
   };
 }
 
-function buildLocationTypeSuggestionRequest(
-  locationName: string,
-): AiChatRequest {
-  return {
-    systemPrompts: [buildLocationTypeSystemPrompt()],
-    messages: [
-      {
-        role: "user",
-        content: `Location: "${locationName}"
-
-Determine the appropriate type for this location and explain your reasoning.`,
-      },
-    ],
-  };
-}
-
 function buildLocationDescriptionRequest(
   imageUrls: string[],
   locationName: string,
@@ -311,10 +264,41 @@ function buildProductIdentificationRequest(imageUrls: string[]): AiChatRequest {
 }
 
 /**
- * Every method here is the same two lines: build the request, hand it and the
- * feature record to the one runner. Tier, model, token cap, effort, cache
- * policy, error surfacing, and usage accounting all live in `features.ts` +
- * `run-feature.ts`, so none of it is repeated per method.
+ * One exhaustive closed-set classification on the decision tier: Jev picks
+ * over value-labeled choices with no `none` (every product has a category,
+ * every location a type), and the winner's index maps back to the value.
+ * Jev writes no prose, so `reasoning` is the empty string the wire shape
+ * requires.
+ */
+async function classifyWithJev<Value extends string>(args: {
+  feature: AiDecisionFeature;
+  subject: string;
+  rules: string;
+  values: readonly Value[];
+  describe: (value: Value) => string;
+  usage: AiRunContext;
+}): Promise<{ value: Value; confidence: Confidence; reasoning: "" }> {
+  const { selectedIndex, confidence } = await runJevChoice({
+    feature: args.feature,
+    subject: args.subject,
+    rules: args.rules,
+    choices: args.values.map((value) => `${value}: ${args.describe(value)}`),
+    usage: args.usage,
+    allowNone: false,
+  });
+  const value = selectedIndex === null ? undefined : args.values[selectedIndex];
+  if (value === undefined) {
+    throw new Error("Jev classification returned no value.");
+  }
+  return { value, confidence, reasoning: "" };
+}
+
+/**
+ * Every chat-tier method here is the same two lines: build the request, hand
+ * it and the feature record to the one runner. Tier, model, token cap,
+ * effort, cache policy, error surfacing, and usage accounting all live in
+ * `features.ts` + `run-feature.ts`, so none of it is repeated per method.
+ * The two decision-tier methods hand their vocabulary to `classifyWithJev`.
  */
 class AiClient {
   async suggestCategory(
@@ -322,20 +306,30 @@ class AiClient {
     manufacturer: string,
     ctx: AiRunContext,
   ): Promise<CategorySuggestion> {
-    const request = buildCategorySuggestionRequest(productName, manufacturer);
-    return runStructuredFeature(
-      PRODUCT_CATEGORY_SUGGESTION_FEATURE,
-      request,
-      ctx,
-    );
+    const { value: category, ...assessment } = await classifyWithJev({
+      feature: PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+      subject: `Product: "${productName}"\nManufacturer: "${manufacturer}"`,
+      rules: CATEGORY_RULES,
+      values: productCategoryValues,
+      describe: (value) => CATEGORY_DESCRIPTIONS[value],
+      usage: ctx,
+    });
+    return { category, ...assessment };
   }
 
   async suggestLocationType(
     locationName: string,
     ctx: AiRunContext,
   ): Promise<LocationTypeSuggestion> {
-    const request = buildLocationTypeSuggestionRequest(locationName);
-    return runStructuredFeature(LOCATION_TYPE_SUGGESTION_FEATURE, request, ctx);
+    const { value: type, ...assessment } = await classifyWithJev({
+      feature: LOCATION_TYPE_SUGGESTION_FEATURE,
+      subject: `Location: "${locationName}"`,
+      rules: LOCATION_TYPE_RULES,
+      values: locationType.options,
+      describe: (value) => LOCATION_TYPE_DESCRIPTIONS[value],
+      usage: ctx,
+    });
+    return { type, ...assessment };
   }
 
   async describeLocation(
