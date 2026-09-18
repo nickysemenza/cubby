@@ -61,6 +61,7 @@ const imagePolicy = z.object({
       z.object({
         kind: z.enum(["self", "existingRelated", "createRelated"]),
         routeId: z.string(),
+        choice: z.enum(["primary", "alternate", "prompt"]),
         relationPath: z.array(z.string()).readonly().optional(),
         bindings: z.array(z.unknown()).readonly().optional(),
       }),

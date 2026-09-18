@@ -780,11 +780,12 @@ export default defineEntity({
         },
       ],
       ingress: [
-        { kind: "self", routeId: "location-self" },
+        { kind: "self", routeId: "location-self", choice: "primary" },
         {
           kind: "createRelated",
           routeId: "location-new-garden-entry",
           relationPath: ["garden-entries"],
+          choice: "alternate",
           bindings: [
             { field: "locationId", from: "source-id" },
             { field: "observedOn", from: "capture-date" },

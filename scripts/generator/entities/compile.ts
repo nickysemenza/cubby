@@ -1355,6 +1355,18 @@ const validateImageIngress = (
       validateImageBinding(entity, target, binding, `${routeContext}.bindings`);
     }
   }
+  const primaryRoutes = ingress.filter((route) => route.choice === "primary");
+  if (primaryRoutes.length > 1)
+    throw new EntityDeclarationError(
+      `${context}.ingress may declare at most one primary route.`,
+    );
+  if (
+    ingress.some((route) => route.choice === "alternate") &&
+    primaryRoutes.length === 0
+  )
+    throw new EntityDeclarationError(
+      `${context}.ingress alternate routes require a primary route or must be prompt routes.`,
+    );
 };
 
 const validateImageDisplaySources = (
@@ -1417,6 +1429,20 @@ const validateImageRouting = (entity: CompiledEntity): void => {
     if (!["boolean", "enum", "text"].includes(field.kind))
       throw new EntityDeclarationError(
         `${context}.lifecycleFilters.${filter.field} has incompatible ${field.kind} field type.`,
+      );
+    const values = "oneOf" in filter ? filter.oneOf : [filter.equals];
+    if (
+      field.kind === "enum" &&
+      values.some(
+        (value) => field.validation.read?.safeParse(value).success !== true,
+      )
+    )
+      throw new EntityDeclarationError(
+        `${context}.lifecycleFilters.${filter.field} contains a value outside the declared enum.`,
+      );
+    if (new Set(values.map(String)).size !== values.length)
+      throw new EntityDeclarationError(
+        `${context}.lifecycleFilters.${filter.field} contains duplicate values.`,
       );
   }
 };

@@ -802,16 +802,18 @@ export default defineEntity({
         },
       ],
       ingress: [
-        { kind: "self", routeId: "recipe-self" },
+        { kind: "self", routeId: "recipe-self", choice: "primary" },
         {
           kind: "existingRelated",
           routeId: "recipe-meal",
           relationPath: ["meals"],
+          choice: "alternate",
         },
         {
           kind: "createRelated",
           routeId: "recipe-new-meal",
           relationPath: ["meals"],
+          choice: "alternate",
           bindings: [
             { field: "date", from: "capture-date" },
             {

@@ -77,6 +77,55 @@ describe("manifest photo import routes", () => {
     ).toThrow(/does not match route/);
   });
 
+  it("preserves the staged calendar day at the binding boundary", () => {
+    const body = materializePhotoImportCreateBody(
+      { bindings: [{ field: "observedOn", from: "capture-date" }] },
+      { observedOn: "2026-09-17" },
+      { entity: "planting", id: "PLT-1" },
+      "2026-09-16T23:30:00.000Z",
+      new Map(),
+    );
+
+    expect(body.observedOn).toBe("2026-09-17");
+  });
+
+  it("does not overwrite an editable missing source binding with null", () => {
+    const body = materializePhotoImportCreateBody(
+      {
+        bindings: [
+          {
+            field: "locationId",
+            from: "source-field",
+            sourceField: "locationId",
+          },
+        ],
+      },
+      { locationId: "LOC-EDIT" },
+      { entity: "planting", id: "PLT-1" },
+      null,
+      new Map(),
+    );
+
+    expect(body.locationId).toBe("LOC-EDIT");
+
+    const nullableSource = materializePhotoImportCreateBody(
+      {
+        bindings: [
+          {
+            field: "locationId",
+            from: "source-field",
+            sourceField: "locationId",
+          },
+        ],
+      },
+      { locationId: "LOC-EDIT" },
+      { entity: "planting", id: "PLT-1" },
+      null,
+      new Map([["locationId", null]]),
+    );
+    expect(nullableSource.locationId).toBe("LOC-EDIT");
+  });
+
   it("compiles the confirmed transaction-purchase route through allocations", () => {
     const route =
       imageIngressRouteById["financial-transaction-confirmed-purchase"];

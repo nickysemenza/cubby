@@ -19,4 +19,31 @@ struct PhotoDestinationOptionTests {
         #expect(create.menuTitle == "New Meal from Recipe")
         #expect(existing.title == "Meals")
     }
+
+    @Test func everyMoveMenuRouteHasADistinctTitle() throws {
+        let manifest = PhotoImportManifest(items: [])
+        let titles = manifest.destinationOptions.map(\.menuTitle)
+
+        #expect(Set(titles).count == titles.count)
+        #expect(titles.contains("Existing Garden Entry for Planting"))
+        #expect(titles.contains("New Garden Entry from Planting"))
+    }
+
+    @Test func existingRelatedRouteFindsItsManifestDeclaredCreateAlternative() throws {
+        let manifest = PhotoImportManifest(items: [])
+        let existing = try #require(
+            manifest.destinationOptions.first { $0.id == "planting-garden-entry" })
+
+        #expect(manifest.createAlternative(for: existing)?.id == "planting-new-garden-entry")
+    }
+
+    @Test func sourceTypesExplainTheManifestPrimaryOutcome() throws {
+        let manifest = PhotoImportManifest(items: [])
+        let planting = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
+        let gardenEntry = try #require(
+            manifest.sourceTypeOptions.first { $0.source == .gardenEntry })
+
+        #expect(planting.outcomeDescription == "Creates a new Garden Entry")
+        #expect(gardenEntry.outcomeDescription == "Attaches to an existing Garden Entry")
+    }
 }

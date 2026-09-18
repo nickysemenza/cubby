@@ -1124,11 +1124,16 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "project-self" }],
+      ingress: [{ kind: "self", routeId: "project-self", choice: "primary" }],
       routing: {
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["startDate", "endDate"],
-        lifecycleFilters: [{ field: "status", equals: "active" }],
+        lifecycleFilters: [
+          {
+            field: "status",
+            oneOf: ["planning", "not_started", "in_progress"],
+          },
+        ],
         signals: {
           ocrFields: ["name", "description", "notes"],
           classifierLabels: ["project"],

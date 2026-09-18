@@ -89,14 +89,11 @@ export const assertPhotoImportReplacementAllowed = (
 const sourceFieldValue = (
   sourceRecord: SourceRecord,
   field: string,
-): z.output<ReturnType<typeof z.json>> => {
-  if (!sourceRecord.has(field)) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `Photo route source is missing bound field ${field}`,
-    );
-  }
-  return sourceRecord.get(field) ?? null;
+): z.output<ReturnType<typeof z.json>> | undefined => {
+  // A missing source field stays editable in the local draft. Do not replace it with
+  // an explicit null at commit time; the create schema can then report the real missing
+  // required field and the user can correct it in the editor.
+  return sourceRecord.get(field);
 };
 
 const relationItemValue = (
@@ -135,13 +132,17 @@ export const materializePhotoImportCreateBody = (
         materialized[binding.field] = source.id;
         break;
       case "source-field":
-        materialized[binding.field] = sourceFieldValue(
-          sourceRecord,
-          binding.sourceField,
-        );
+        const sourceValue = sourceFieldValue(sourceRecord, binding.sourceField);
+        if (sourceValue !== undefined && sourceValue !== null) {
+          materialized[binding.field] = sourceValue;
+        }
         break;
       case "capture-date":
-        if (capturedAt) {
+        if (
+          capturedAt &&
+          (materialized[binding.field] === undefined ||
+            materialized[binding.field] === null)
+        ) {
           materialized[binding.field] = capturedAt.slice(0, 10);
         }
         break;
@@ -149,15 +150,13 @@ export const materializePhotoImportCreateBody = (
         materialized[binding.field] = binding.value;
         break;
       case "relation-items":
-        materialized[binding.field] = [
-          {
-            [binding.item.field]: relationItemValue(
-              binding,
-              source,
-              sourceRecord,
-            ),
-          },
-        ];
+        const value = relationItemValue(binding, source, sourceRecord);
+        if (
+          value !== undefined &&
+          !(binding.item.from === "source-field" && value === null)
+        ) {
+          materialized[binding.field] = [{ [binding.item.field]: value }];
+        }
         break;
     }
   }

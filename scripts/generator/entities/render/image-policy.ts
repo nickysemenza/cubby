@@ -11,6 +11,7 @@ type ImageRoute = {
   readonly bindings: readonly ImageIngressBinding[];
   readonly append: boolean;
   readonly requiresReplaceConfirmation: boolean;
+  readonly choice: "primary" | "alternate" | "prompt";
 };
 
 type ImageIngressBinding =
@@ -74,6 +75,7 @@ const imageRoutes = (entities: readonly CompiledEntity[]): ImageRoute[] =>
         bindings: route.kind === "createRelated" ? route.bindings : [],
         append: storage === "gallery",
         requiresReplaceConfirmation: storage === "cover" || storage === "logo",
+        choice: route.choice,
       };
     }),
   );
@@ -121,9 +123,9 @@ export const renderImagePolicyArtifacts = (
     'import type { Entity } from "../entity";\n\n' +
     'export type ImageStorage = false | "gallery" | "cover" | "logo";\n' +
     'export type ImageIngressBinding = { readonly field: string; readonly from: "source-id" | "capture-date" } | { readonly field: string; readonly from: "source-field"; readonly sourceField: string } | { readonly field: string; readonly from: "constant"; readonly value: string | number | boolean | null } | { readonly field: string; readonly from: "relation-items"; readonly item: { readonly field: string; readonly from: "source-id" | "source-field" | "constant"; readonly sourceField?: string; readonly value?: string | number | boolean | null } };\n' +
-    'export type ImageIngressRoute = { readonly routeId: string; readonly sourceEntity: Entity; readonly targetEntity: Entity; readonly kind: "self" | "existingRelated" | "createRelated"; readonly storage: ImageStorage; readonly relationPath: readonly string[]; readonly bindings: readonly ImageIngressBinding[]; readonly append: boolean; readonly requiresReplaceConfirmation: boolean };\n' +
+    'export type ImageIngressRoute = { readonly routeId: string; readonly sourceEntity: Entity; readonly targetEntity: Entity; readonly kind: "self" | "existingRelated" | "createRelated"; readonly storage: ImageStorage; readonly relationPath: readonly string[]; readonly bindings: readonly ImageIngressBinding[]; readonly append: boolean; readonly requiresReplaceConfirmation: boolean; readonly choice: "primary" | "alternate" | "prompt" };\n' +
     'export type ImageDisplayBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: "declared" | "newest" | "oldest"; readonly identityEvidence: false };\n\n' +
-    "export type ImageRoutingPolicy = { readonly candidateFields: readonly string[]; readonly temporalFields: readonly string[]; readonly lifecycleFilters: readonly { readonly field: string; readonly equals: string | boolean }[]; readonly signals: { readonly ocrFields: readonly string[]; readonly classifierLabels: readonly string[] }; readonly abstention: { readonly minimumScore: number; readonly minimumMargin: number } };\n" +
+    "export type ImageRoutingPolicy = { readonly candidateFields: readonly string[]; readonly temporalFields: readonly string[]; readonly lifecycleFilters: readonly ({ readonly field: string; readonly equals: string | boolean } | { readonly field: string; readonly oneOf: readonly (string | boolean)[] })[]; readonly signals: { readonly ocrFields: readonly string[]; readonly classifierLabels: readonly string[] }; readonly abstention: { readonly minimumScore: number; readonly minimumMargin: number } };\n" +
     "export type ImagePolicy = { readonly storage: ImageStorage; readonly displaySources: readonly ImageDisplayBinding[]; readonly ingress: readonly ImageIngressRoute[]; readonly routing: ImageRoutingPolicy | null };\n\n" +
     `export const imagePolicyCatalog = ${JSON.stringify(policyCatalog)} as const satisfies Record<Entity, ImagePolicy>;\n\n` +
     `export const imageOwners = ${JSON.stringify(owners)} as const;\n` +
@@ -142,7 +144,7 @@ export const renderImagePolicyArtifacts = (
   const swiftRoutes = routes
     .map(
       (route) =>
-        `    PhotoIngressRoute(id: ${JSON.stringify(route.routeId)}, source: .${route.sourceEntity}, target: .${route.targetEntity}, kind: ${JSON.stringify(route.kind)}, storage: ${route.storage === false ? "nil" : JSON.stringify(route.storage)}, relationPath: ${JSON.stringify(route.relationPath)}, bindings: [${route.bindings.map(swiftBinding).join(", ")}], append: ${route.append}, requiresReplaceConfirmation: ${route.requiresReplaceConfirmation})`,
+        `    PhotoIngressRoute(id: ${JSON.stringify(route.routeId)}, source: .${route.sourceEntity}, target: .${route.targetEntity}, kind: ${JSON.stringify(route.kind)}, storage: ${route.storage === false ? "nil" : JSON.stringify(route.storage)}, relationPath: ${JSON.stringify(route.relationPath)}, bindings: [${route.bindings.map(swiftBinding).join(", ")}], append: ${route.append}, requiresReplaceConfirmation: ${route.requiresReplaceConfirmation}, choice: ${JSON.stringify(route.choice)})`,
     )
     .join(",\n");
   const swiftDisplaySources = Object.entries(displayBindings)
@@ -158,7 +160,7 @@ export const renderImagePolicyArtifacts = (
       const routing = entity.imagePolicy.routing;
       if (routing === null) return [];
       return [
-        `    .${entity.key}: PhotoRoutingPolicy(candidateFields: ${JSON.stringify(routing.candidateFields)}, temporalFields: ${JSON.stringify(routing.temporalFields)}, lifecycleFilters: [${routing.lifecycleFilters.map((filter) => `PhotoLifecycleFilter(field: ${JSON.stringify(filter.field)}, equals: ${JSON.stringify(String(filter.equals))})`).join(", ")}], ocrFields: ${JSON.stringify(routing.signals.ocrFields)}, classifierLabels: ${JSON.stringify(routing.signals.classifierLabels)}, minimumScore: ${routing.abstention.minimumScore}, minimumMargin: ${routing.abstention.minimumMargin})`,
+        `    .${entity.key}: PhotoRoutingPolicy(candidateFields: ${JSON.stringify(routing.candidateFields)}, temporalFields: ${JSON.stringify(routing.temporalFields)}, lifecycleFilters: [${routing.lifecycleFilters.map((filter) => `PhotoLifecycleFilter(field: ${JSON.stringify(filter.field)}, equals: ${"equals" in filter ? JSON.stringify(String(filter.equals)) : "nil"}, oneOf: ${"oneOf" in filter ? JSON.stringify(filter.oneOf.map(String)) : "[]"})`).join(", ")}], ocrFields: ${JSON.stringify(routing.signals.ocrFields)}, classifierLabels: ${JSON.stringify(routing.signals.classifierLabels)}, minimumScore: ${routing.abstention.minimumScore}, minimumMargin: ${routing.abstention.minimumMargin})`,
       ];
     })
     .join(",\n");
@@ -167,9 +169,9 @@ export const renderImagePolicyArtifacts = (
     "// swift-format-ignore-file\n\n" +
     "public struct PhotoCreateBinding: Sendable, Hashable {\n  public let field: String\n  public let source: String\n  public let sourceField: String?\n  public let constantJSON: String?\n  public let itemField: String?\n  public let itemSource: String?\n}\n\n" +
     "public struct PhotoIngressRoute: Sendable, Hashable {\n" +
-    "  public let id: String\n  public let source: EntityKey\n  public let target: EntityKey\n  public let kind: String\n  public let storage: String?\n  public let relationPath: [String]\n  public let bindings: [PhotoCreateBinding]\n  public let append: Bool\n  public let requiresReplaceConfirmation: Bool\n}\n\n" +
+    "  public let id: String\n  public let source: EntityKey\n  public let target: EntityKey\n  public let kind: String\n  public let storage: String?\n  public let relationPath: [String]\n  public let bindings: [PhotoCreateBinding]\n  public let append: Bool\n  public let requiresReplaceConfirmation: Bool\n  public let choice: String\n}\n\n" +
     "public struct PhotoDisplaySource: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: String\n}\n\n" +
-    "public struct PhotoLifecycleFilter: Sendable, Hashable {\n  public let field: String\n  public let equals: String\n}\n\n" +
+    "public struct PhotoLifecycleFilter: Sendable, Hashable {\n  public let field: String\n  public let equals: String?\n  public let oneOf: [String]\n}\n\n" +
     "public struct PhotoRoutingPolicy: Sendable, Hashable {\n  public let candidateFields: [String]\n  public let temporalFields: [String]\n  public let lifecycleFilters: [PhotoLifecycleFilter]\n  public let ocrFields: [String]\n  public let classifierLabels: [String]\n  public let minimumScore: Double\n  public let minimumMargin: Double\n}\n\n" +
     "public enum PhotoImportCatalog {\n  public static let ingressRoutes: [PhotoIngressRoute] = [\n" +
     swiftRoutes +

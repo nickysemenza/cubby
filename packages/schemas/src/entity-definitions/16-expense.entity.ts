@@ -1122,11 +1122,13 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "expense-purchase",
           relationPath: ["purchase"],
+          choice: "prompt",
         },
         {
           kind: "existingRelated",
           routeId: "expense-product",
           relationPath: ["product"],
+          choice: "prompt",
         },
       ],
       routing: {

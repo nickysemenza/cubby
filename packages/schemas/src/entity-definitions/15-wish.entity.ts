@@ -275,6 +275,7 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "wish-product",
           relationPath: ["candidates"],
+          choice: "primary",
         },
       ],
       routing: {

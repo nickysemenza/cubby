@@ -811,11 +811,16 @@ export default defineEntity({
           identityEvidence: false,
         },
       ],
-      ingress: [{ kind: "self", routeId: "task-self" }],
+      ingress: [{ kind: "self", routeId: "task-self", choice: "primary" }],
       routing: {
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["dueDate", "completedAt"],
-        lifecycleFilters: [{ field: "status", equals: "incomplete" }],
+        lifecycleFilters: [
+          {
+            field: "status",
+            oneOf: ["not_started", "later", "in_progress", "blocked"],
+          },
+        ],
         signals: {
           ocrFields: ["name", "description", "notes"],
           classifierLabels: ["task"],

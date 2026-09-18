@@ -475,11 +475,13 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "inventory-product",
           relationPath: ["product"],
+          choice: "prompt",
         },
         {
           kind: "existingRelated",
           routeId: "inventory-location",
           relationPath: ["location"],
+          choice: "prompt",
         },
       ],
       routing: {

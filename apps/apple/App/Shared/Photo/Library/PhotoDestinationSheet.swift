@@ -8,11 +8,11 @@ struct PhotoDestinationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onDone: ([String]) -> Void
     @State private var manifest: PhotoImportManifest
-    @State private var search = ""
     @State private var path: [String] = []
     @State private var replacement: ReplacementConfirmation?
     @State private var createContext: PhotoCreateContext?
     @State private var relatedContext: PhotoRelatedContext?
+    @State private var sourceRecord: PhotoSourceRecordContext?
 
     init(items: [PhotoSelectionItem], onDone: @escaping ([String]) -> Void) {
         self.onDone = onDone
@@ -23,18 +23,16 @@ struct PhotoDestinationSheet: View {
         NavigationStack(path: $path) {
             VStack(alignment: .leading, spacing: 0) {
                 selectedStrip
+                analysisStatus
+                destinationAction
                 List {
-                    if !manifest.filteredNeedsDestination(search).isEmpty {
+                    if !manifest.needsDestination.isEmpty {
                         Section("Needs a destination") {
                             PhotoImportGroupRows(
-                                ids: manifest.filteredNeedsDestination(search), manifest: manifest)
+                                ids: manifest.needsDestination, manifest: manifest)
                         }
                     }
-                    ForEach(
-                        manifest.groups.filter {
-                            search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)
-                        }
-                    ) { group in
+                    ForEach(manifest.groups) { group in
                         Section {
                             PhotoImportGroupRows(ids: group.photoIDs, manifest: manifest)
                         } header: {
@@ -51,35 +49,72 @@ struct PhotoDestinationSheet: View {
                 footer
             }
             .navigationTitle("Review photos")
-            .searchable(text: $search, prompt: "Search destinations")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .automatic) {
-                    HStack {
-                        if manifest.canUndo {
-                            Button("Undo", systemImage: "arrow.uturn.backward") {
-                                manifest.undoLastMove()
-                            }
-                            .keyboardShortcut("z", modifiers: .command)
-                            .accessibilityIdentifier("photos.manifest.undo")
+                    if manifest.canUndo {
+                        Button("Undo", systemImage: "arrow.uturn.backward") {
+                            manifest.undoLastMove()
                         }
-                        Menu("Move to…", systemImage: "folder") {
-                            ForEach(manifest.destinationOptions) { option in
-                                Button(option.title) { path.append(option.id) }
-                            }
-                        }
-                        .disabled(manifest.selectedIDs.isEmpty)
+                        .keyboardShortcut("z", modifiers: .command)
+                        .accessibilityIdentifier("photos.manifest.undo")
                     }
                 }
             }
             .navigationDestination(for: String.self) { routeID in
-                if let option = manifest.destinationOptions.first(where: { $0.id == routeID }) {
+                if routeID == "source-types" {
+                    List {
+                        Section("Choose what is in the photo") {
+                            ForEach(manifest.sourceTypeOptions) { type in
+                                Button {
+                                    path.append("source-type:\(type.source.rawValue)")
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: entitySymbol(for: type.source))
+                                            .frame(width: 24)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(type.title)
+                                            Text(type.outcomeDescription)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                                .accessibilityIdentifier("photos.source-type.\(type.source.rawValue)")
+                            }
+                        }
+                    }
+                    .navigationTitle("Assign selected…")
+                } else if let sourceRaw = routeID.split(separator: ":", maxSplits: 1).last,
+                    routeID.hasPrefix("source-type:"),
+                    let source = EntityKey(rawValue: String(sourceRaw)),
+                    let type = manifest.sourceTypeOptions.first(where: { $0.source == source })
+                {
+                    PhotoEntityChooser(key: source, captureDates: manifest.selectedItems.map(\.capturedAt)) {
+                        row in
+                        chooseSourceRecord(type, row: row)
+                    }
+                } else if routeID == "route-picker", let context = sourceRecord {
+                    List {
+                        Section("Where should this \(EntityCatalog[context.source].singular) store photos?") {
+                            ForEach(context.options) { option in
+                                Button(option.menuTitle) { chooseRoute(option, source: context.row) }
+                                    .accessibilityIdentifier("photos.route.\(option.id)")
+                            }
+                        }
+                    }
+                    .navigationTitle("Choose storage")
+                } else if let option = manifest.destinationOptions.first(where: { $0.id == routeID }) {
                     if option.route.kind == "createRelated" {
                         PhotoEntityChooser(
                             key: option.route.source,
                             captureDates: manifest.selectedItems.map(\.capturedAt)
                         ) { row in
-                            createContext = PhotoCreateContext(option: option, source: row)
+                            if !manifest.autoStageCreate(option: option, source: row) {
+                                createContext = PhotoCreateContext(option: option, source: row)
+                            } else if !path.isEmpty {
+                                path.removeAll()
+                            }
                         }
                     } else if option.route.kind == "existingRelated" {
                         PhotoEntityChooser(
@@ -136,12 +171,131 @@ struct PhotoDestinationSheet: View {
             }
         }
         .sheet(item: $relatedContext) { context in
-            PhotoRelatedDestinationChooser(context: context) { row in
+            PhotoRelatedDestinationChooser(
+                context: context,
+                createOption: manifest.createAlternative(for: context.option),
+                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min()
+            ) { row in
                 manifest.moveSelected(to: context.option, source: context.source, destination: row)
                 relatedContext = nil
                 if !path.isEmpty { path.removeLast() }
+            } onCreate: { option, body in
+                manifest.stageCreate(option: option, source: context.source, body: body)
+                if !path.isEmpty { path.removeLast() }
             }
             .environment(appModel)
+        }
+    }
+
+    @ViewBuilder
+    private var analysisStatus: some View {
+        switch manifest.analysisState {
+        case .idle:
+            EmptyView()
+        case .running(let message):
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small).accessibilityHidden(true)
+                Text(message)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.bar)
+            .accessibilityElement(children: .combine)
+        case .complete:
+            Label(
+                manifest.needsDestination.isEmpty
+                    ? "Analysis complete"
+                    : "Analysis complete · \(manifest.needsDestination.count) need a destination",
+                systemImage: "checkmark.circle"
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        case .failed(let message):
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Label(message, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(PorcelainTokens.destructive)
+                Spacer()
+                Button("Retry") {
+                    Task {
+                        await manifest.analyze(
+                            client: appModel.client, matches: appModel.photoMatches)
+                    }
+                }
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+    }
+
+    @ViewBuilder
+    private var destinationAction: some View {
+        if !manifest.selectedIDs.isEmpty {
+            VStack(spacing: 6) {
+                if let suggested = manifest.selectedSuggestedSourceType {
+                    Button {
+                        path.append("source-type:\(suggested.rawValue)")
+                    } label: {
+                        Label(
+                            "Choose \(EntityCatalog[suggested].singular.lowercased())",
+                            systemImage: entitySymbol(for: suggested)
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("photos.manifest.suggested-source")
+
+                    Button("Choose another type…") { path.append("source-types") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        path.append("source-types")
+                    } label: {
+                        Label("Assign selected…", systemImage: "arrow.right.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .controlSize(.large)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+            .accessibilityIdentifier("photos.manifest.destination")
+        }
+    }
+
+    private func chooseSourceRecord(_ type: PhotoSourceTypeOption, row: EntityRow) {
+        let options = type.options
+        if let primary = options.first(where: { $0.route.choice == "primary" }) {
+            chooseRoute(primary, source: row)
+        } else if options.count == 1, let only = options.first {
+            chooseRoute(only, source: row)
+        } else {
+            sourceRecord = PhotoSourceRecordContext(row: row, options: options)
+            path.append("route-picker")
+        }
+    }
+
+    private func chooseRoute(_ option: PhotoDestinationOption, source: EntityRow) {
+        sourceRecord = nil
+        switch option.route.kind {
+        case "createRelated":
+            if !manifest.autoStageCreate(option: option, source: source) {
+                createContext = PhotoCreateContext(option: option, source: source)
+            } else if !path.isEmpty {
+                path.removeAll()
+            }
+        case "existingRelated":
+            relatedContext = PhotoRelatedContext(option: option, source: source)
+            path.removeAll()
+        default:
+            manifest.moveSelected(to: option, row: source)
+            path.removeAll()
         }
     }
 
@@ -194,6 +348,11 @@ struct PhotoDestinationSheet: View {
                     .font(.caption)
                     .foregroundStyle(PorcelainTokens.destructive)
             }
+            if !manifest.canCommit, let reason = manifest.commitDisabledReason {
+                Label(reason, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             HStack {
                 Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
                 Spacer()
@@ -223,13 +382,16 @@ final class PhotoImportManifest {
     var selectedIDs: Set<String>
     private var assignments: [String: PhotoDestinationAssignment] = [:]
     private(set) var isCommitting = false
+    private(set) var analysisState: PhotoImportAnalysisState = .idle
     private(set) var progress = "Preparing…"
     private(set) var errorMessage: String?
     private(set) var suggestions: [String: String] = [:]
+    private(set) var suggestedSourceTypes: [String: EntityKey] = [:]
     private(set) var foundationModelSummary: String?
     private(set) var duplicateCandidates: [String: [DedupCandidate]] = [:]
     private(set) var duplicateOwnerShortcodes: [String: [String]] = [:]
     private var duplicateDecisions: [String: PhotoDuplicateDecision] = [:]
+    private var analysisGeneration = UUID()
     private var undoSnapshot: [PhotoUndoAssignment] = []
     private var prepared: [String: (PhotoFile, PhotoLocalAnalysis)] = [:]
     private var transaction: PhotoImportTransaction?
@@ -246,6 +408,19 @@ final class PhotoImportManifest {
             .sorted { $0.menuTitle < $1.menuTitle }
     }
 
+    /// Natural source types are unique even when one type has several storage routes.
+    /// The catalog is generated from the manifest; callers must not build an entity roster here.
+    var sourceTypeOptions: [PhotoSourceTypeOption] {
+        let routes = destinationOptions.reduce(into: [EntityKey: [PhotoDestinationOption]]()) {
+            $0[$1.route.source, default: []].append($1)
+        }
+        return routes.keys.sorted { EntityCatalog[$0].plural < EntityCatalog[$1].plural }.compactMap {
+            guard let options = routes[$0] else { return nil }
+            return PhotoSourceTypeOption(
+                source: $0, options: options.sorted { $0.menuTitle < $1.menuTitle })
+        }
+    }
+
     var selectedItems: [PhotoSelectionItem] {
         items.filter { selectedIDs.contains($0.id) }
     }
@@ -254,12 +429,16 @@ final class PhotoImportManifest {
         items.map(\.id).filter { assignments[$0] == nil }
     }
 
-    func filteredNeedsDestination(_ query: String) -> [String] {
-        guard !query.isEmpty else { return needsDestination }
-        return needsDestination.filter { id in
-            items.first(where: { $0.id == id })?.capturedAt?.formatted().localizedCaseInsensitiveContains(
-                query) == true
-        }
+    var selectedSuggestedSourceType: EntityKey? {
+        Self.preferredSourceType(selectedIDs: selectedIDs, suggestions: suggestedSourceTypes)
+    }
+
+    static func preferredSourceType(
+        selectedIDs: Set<String>, suggestions: [String: EntityKey]
+    ) -> EntityKey? {
+        let values = Set(selectedIDs.compactMap { suggestions[$0] })
+        return values.count == 1 && selectedIDs.allSatisfy { suggestions[$0] != nil }
+            ? values.first : nil
     }
 
     var groups: [PhotoImportGroup] {
@@ -282,17 +461,59 @@ final class PhotoImportManifest {
         !items.isEmpty && needsDestination.isEmpty && unresolvedDuplicateIDs.isEmpty && !isCommitting
     }
 
+    var commitDisabledReason: String? {
+        if items.isEmpty { return "Select at least one photo." }
+        if !needsDestination.isEmpty {
+            return
+                "Assign a destination to \(needsDestination.count) photo\(needsDestination.count == 1 ? "" : "s")."
+        }
+        if !unresolvedDuplicateIDs.isEmpty {
+            return "Review the duplicate match decision before adding photos."
+        }
+        if isCommitting { return progress }
+        return nil
+    }
+
     var unresolvedDuplicateIDs: [String] {
         duplicateCandidates.keys.filter { duplicateDecisions[$0] == nil }.sorted()
     }
 
     var canUndo: Bool { !undoSnapshot.isEmpty }
 
+    func createAlternative(for option: PhotoDestinationOption) -> PhotoDestinationOption? {
+        guard option.route.kind == "existingRelated" else { return nil }
+        return destinationOptions.first {
+            $0.route.kind == "createRelated"
+                && $0.route.source == option.route.source
+                && $0.route.target == option.route.target
+                && $0.route.relationPath == option.route.relationPath
+        }
+    }
+
     func analyze(client: CubbyClient, matches: PhotoMatchStore) async {
+        guard !analysisState.isRunning else { return }
+        let generation = UUID()
+        analysisGeneration = generation
+        analysisState = .running("Preparing selected photos…")
         do {
             try await prepareIfNeeded()
+            for item in items {
+                guard let analysis = prepared[item.id]?.1,
+                    let suggestion = suggestedSource(for: analysis)
+                else { continue }
+                suggestedSourceTypes[item.id] = suggestion.source
+                suggestions[item.id] = suggestion.label
+            }
+            analysisState = .running("Checking for duplicates…")
             do {
-                try await matches.check(items, client: client)
+                try await matches.check(
+                    items,
+                    client: client,
+                    preparedQueries: preparedHashQueries,
+                    refreshIndex: false
+                ) { [weak self] status in
+                    self?.analysisState = .running(status)
+                }
                 for item in items {
                     let candidates = Self.uniqueCandidates(matches.storedCandidates(for: item.id))
                     if !candidates.isEmpty {
@@ -308,8 +529,13 @@ final class PhotoImportManifest {
             } catch {
                 Diagnostics.report(error, context: "photos.manifest.identity")
             }
+            analysisState = .running("Finding possible destinations…")
             let candidates = await loadCandidates(client: client)
-            guard !candidates.isEmpty else { return }
+            guard analysisGeneration == generation, !Task.isCancelled else { throw CancellationError() }
+            guard !candidates.isEmpty else {
+                analysisState = .complete
+                return
+            }
             let evidence = items.compactMap { item -> PhotoRoutingEvidence? in
                 guard let analysis = prepared[item.id]?.1 else { return nil }
                 let owners = matches.strongDirectOwnerShortcodes(for: item.id)
@@ -320,38 +546,62 @@ final class PhotoImportManifest {
                     summary: evidenceSummary(analysis, authoritativeOwners: owners),
                     deterministicCandidateIDs: candidateIDs)
             }
-            let result = try await PhotoSemanticReranker().rerank(
+            let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.routing.id, $0) })
+            let reranker = PhotoSemanticReranker()
+            // Publish deterministic decisions before optional Foundation Models work begins.
+            apply(
+                decisions: reranker.deterministic(
+                    evidence: evidence, candidates: candidates.map(\.routing)
+                ).decisions,
+                candidates: byID, generation: generation)
+            analysisState = .running("Refining suggestions on this device…")
+            let result = try await reranker.rerank(
                 evidence: evidence, candidates: candidates.map(\.routing))
+            guard analysisGeneration == generation, !Task.isCancelled else { throw CancellationError() }
             foundationModelSummary = Self.foundationModelSummary(result.modelStatus)
-            let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.row.id, $0) })
-            for decision in result.decisions {
-                guard assignments[decision.photoID] == nil,
-                    let candidateID = decision.candidateID,
-                    let candidate = byID[candidateID],
-                    candidate.option.id == decision.routeID
-                else { continue }
-                assignments[decision.photoID] = PhotoDestinationAssignment(
-                    route: candidate.option.route,
-                    source: EntityRef(entity: candidate.option.route.source, id: candidate.row.id),
-                    recordID: candidate.row.id,
-                    title: candidate.row.title,
-                    shortcode: candidate.row.id,
-                    replaceConfirmed: false,
-                    evidence: decision.explanation)
-                suggestions[decision.photoID] = decision.explanation
-                selectedIDs.remove(decision.photoID)
-            }
-            for item in items where assignments[item.id] == nil {
-                if let analysis = prepared[item.id]?.1,
-                    let suggestion = suggestedDestination(for: analysis)
-                {
-                    suggestions[item.id] = suggestion
-                }
-            }
+            apply(decisions: result.decisions, candidates: byID, generation: generation)
+            analysisState = .complete
         } catch is CancellationError {
+            if !Task.isCancelled, analysisGeneration == generation { analysisState = .idle }
             return
         } catch {
+            if analysisGeneration != generation { return }
+            analysisState = .failed(
+                "Analysis couldn’t finish. Retry, or choose a destination manually.")
             Diagnostics.report(error, context: "photos.manifest.analysis")
+        }
+    }
+
+    private func apply(
+        decisions: [PhotoRoutingDecision], candidates: [String: Candidate], generation: UUID
+    ) {
+        guard analysisGeneration == generation else { return }
+        for decision in decisions {
+            guard assignments[decision.photoID] == nil,
+                let candidateID = decision.candidateID,
+                let candidate = candidates[candidateID],
+                candidate.option.id == decision.routeID
+            else { continue }
+            if candidate.option.route.choice == "prompt" { continue }
+            if candidate.option.route.kind == "createRelated" {
+                _ = autoStageCreate(
+                    option: candidate.option, source: candidate.row,
+                    photoIDs: Set([decision.photoID]))
+                continue
+            }
+            // Existing related routes still need a relationship resolver; retain the
+            // natural source suggestion without pretending the source is the destination.
+            guard candidate.option.route.kind == "self" else { continue }
+            assignments[decision.photoID] = PhotoDestinationAssignment(
+                route: candidate.option.route,
+                source: EntityRef(entity: candidate.option.route.source, id: candidate.row.id),
+                recordID: candidate.row.id,
+                title: "\(candidate.row.title) · \(candidate.row.id)",
+                shortcode: candidate.row.id,
+                replaceConfirmed: false,
+                evidence: decision.explanation)
+            suggestions[decision.photoID] = decision.explanation
+            selectedIDs.remove(decision.photoID)
         }
     }
 
@@ -404,20 +654,99 @@ final class PhotoImportManifest {
     }
 
     func stageCreate(
-        option: PhotoDestinationOption, source: EntityRow, body: [String: JSONValue]
+        option: PhotoDestinationOption, source: EntityRow, body: [String: JSONValue],
+        photoIDs: Set<String>? = nil
     ) {
         rememberMove()
-        let captureDate = selectedItems.compactMap(\.capturedAt).min()
-        let draft = PhotoCreateDraft(
-            id: "photo-import-\(UUID().uuidString)", route: option.route,
-            source: EntityRef(entity: option.route.source, id: source.id), body: body,
-            title: "New \(option.descriptor.singular) from \(source.title)",
-            captureDate: captureDate)
-        let assignment = PhotoDestinationAssignment(
-            route: option.route, source: draft.source, recordID: nil, title: draft.title, shortcode: "New",
-            replaceConfirmed: false, evidence: "Staged from \(source.title)", createDraft: draft)
-        for id in selectedIDs { assignments[id] = assignment }
-        selectedIDs.removeAll()
+        let itemsToStage = items.filter { photoIDs?.contains($0.id) ?? selectedIDs.contains($0.id) }
+        let grouped = Dictionary(grouping: itemsToStage) { item in
+            item.capturedAt.map { PlainDate($0).rawValue } ?? "undated"
+        }
+        for (day, group) in grouped {
+            var dayBody = body
+            if let binding = option.route.bindings.first(where: { $0.source == "capture-date" }) {
+                if day == "undated" {
+                    dayBody.removeValue(forKey: binding.field)
+                } else {
+                    dayBody[binding.field] = .string(day)
+                }
+            }
+            let draft = PhotoCreateDraft(
+                id: "photo-import-\(UUID().uuidString)", route: option.route,
+                source: EntityRef(entity: option.route.source, id: source.id), body: dayBody,
+                title: "\(source.title) · \(source.id)",
+                captureDate: group.compactMap(\.capturedAt).first)
+            let assignment = PhotoDestinationAssignment(
+                route: option.route, source: draft.source, recordID: nil, title: draft.title,
+                shortcode: "New", replaceConfirmed: false,
+                evidence: "New \(option.descriptor.singular) · \(day == "undated" ? "date needed" : day)",
+                createDraft: draft)
+            for item in group { assignments[item.id] = assignment }
+        }
+        selectedIDs.subtract(itemsToStage.map(\.id))
+    }
+
+    @discardableResult
+    func autoStageCreate(
+        option: PhotoDestinationOption, source: EntityRow, photoIDs: Set<String>? = nil
+    ) -> Bool {
+        guard option.route.kind == "createRelated" else { return false }
+        let body = generatedCreateBody(option: option, source: source, photoIDs: photoIDs)
+        let required = option.descriptor.fields.filter(\.requiredOnCreate)
+        guard required.allSatisfy({ body[$0.key].map { $0 != .null } ?? false }) else {
+            return false
+        }
+        stageCreate(option: option, source: source, body: body, photoIDs: photoIDs)
+        return true
+    }
+
+    private func generatedCreateBody(
+        option: PhotoDestinationOption, source: EntityRow, photoIDs: Set<String>? = nil
+    ) -> [String: JSONValue] {
+        var result: [String: JSONValue] = [:]
+        let captureDate = items.filter { photoIDs?.contains($0.id) ?? selectedIDs.contains($0.id) }
+            .compactMap(\.capturedAt).first
+        for binding in option.route.bindings {
+            switch binding.source {
+            case "source-id":
+                if let itemField = binding.itemField {
+                    result[binding.field] = .array([.object([itemField: .string(source.id)])])
+                } else {
+                    result[binding.field] = .string(source.id)
+                }
+            case "source-field":
+                if let value = Self.nonNullSourceFieldValue(binding: binding, source: source) {
+                    result[binding.field] = value
+                }
+            case "capture-date":
+                if let captureDate { result[binding.field] = .string(PlainDate(captureDate).rawValue) }
+            case "constant":
+                if let json = binding.constantJSON, let data = json.data(using: .utf8),
+                    let value = try? JSONDecoder().decode(JSONValue.self, from: data)
+                {
+                    result[binding.field] = value
+                }
+            case "relation-items":
+                if let itemField = binding.itemField {
+                    result[binding.field] = .array([.object([itemField: .string(source.id)])])
+                }
+            default:
+                break
+            }
+        }
+        return result
+    }
+
+    /// A nullable source relationship is a missing binding, not an instruction to write null.
+    /// Keeping this rule in one helper also lets the editor expose the field for repair.
+    static func nonNullSourceFieldValue(
+        binding: PhotoCreateBinding, source: EntityRow
+    ) -> JSONValue? {
+        guard binding.source == "source-field",
+            let sourceField = binding.sourceField,
+            let value = source.raw[sourceField], value != .null
+        else { return nil }
+        return value
     }
 
     func undoLastMove() {
@@ -495,7 +824,12 @@ final class PhotoImportManifest {
                         source: item.provenanceSource,
                         localIdentifier: item.localIdentifier,
                         filename: file.filename))
-            })
+            }
+        ) { [weak self] completed, total in
+            Task { @MainActor in
+                self?.analysisState = .running("Analyzing photo \(completed) of \(total) on device…")
+            }
+        }
         for (index, item) in missing.enumerated() {
             prepared[item.id] = (files[index], analyses[index])
         }
@@ -528,11 +862,17 @@ final class PhotoImportManifest {
         return candidates.filter { seen.insert($0.id).inserted }
     }
 
-    private func suggestedDestination(for analysis: PhotoLocalAnalysis) -> String? {
+    private func suggestedSource(
+        for analysis: PhotoLocalAnalysis
+    ) -> (source: EntityKey, label: String)? {
         let optionsByKey = Dictionary(
-            destinationOptions.filter { $0.route.kind == "self" }.map { ($0.route.target, $0) },
-            uniquingKeysWith: { first, _ in first })
-        let candidates = optionsByKey.compactMap { key, option -> (String, Double, String)? in
+            sourceTypeOptions.compactMap { type -> (EntityKey, PhotoDestinationOption)? in
+                let option =
+                    type.options.first(where: { $0.route.choice == "primary" })
+                    ?? type.options.sorted { $0.id < $1.id }.first
+                return option.map { (type.source, $0) }
+            }, uniquingKeysWith: { first, _ in first })
+        let candidates = optionsByKey.compactMap { key, option -> (EntityKey, String, Double, String)? in
             guard let policy = PhotoImportCatalog.routingPolicies[key] else { return nil }
             let match = analysis.classifications
                 .filter { classification in
@@ -543,44 +883,109 @@ final class PhotoImportManifest {
                 }
                 .max { $0.confidence < $1.confidence }
             guard let match, match.confidence >= policy.minimumScore else { return nil }
-            return (option.descriptor.plural, match.confidence, match.identifier)
+            return (key, EntityCatalog[key].plural, match.confidence, match.identifier)
         }
-        guard let best = candidates.max(by: { $0.1 < $1.1 }) else { return nil }
-        return "Suggested: \(best.0) · \(best.2)"
+        guard let best = candidates.max(by: { $0.2 < $1.2 }) else { return nil }
+        return (best.0, "Suggested: \(best.1) · \(best.3)")
     }
 
-    private struct Candidate {
+    private struct Candidate: Sendable {
         let option: PhotoDestinationOption
         let row: EntityRow
         let routing: PhotoRoutingCandidate
     }
 
+    private struct CandidatePage: Sendable {
+        let index: Int
+        let option: PhotoDestinationOption
+        let rows: [EntityRow]
+        let failure: CandidateLoadFailure?
+    }
+
+    private struct CandidateLoadFailure: LocalizedError, Sendable {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    private var preparedHashQueries: [String: HashQuery] {
+        Dictionary(
+            uniqueKeysWithValues: prepared.compactMap { id, value in
+                let analysis = value.1
+                guard let hash = analysis.perceptualHash else { return nil }
+                let ratio =
+                    Double(max(analysis.width, analysis.height))
+                    / Double(max(1, min(analysis.width, analysis.height)))
+                return (
+                    id,
+                    HashQuery(
+                        perceptualHash: hash,
+                        aspectRatio: ratio,
+                        sourceFingerprint: analysis.sourceFingerprint)
+                )
+            })
+    }
+
     private func loadCandidates(client: CubbyClient) async -> [Candidate] {
-        var result: [Candidate] = []
-        for option in destinationOptions where option.route.kind == "self" {
-            do {
-                let page = try await client.list(option.descriptor, page: 1, pageSize: 25)
-                let policy = PhotoImportCatalog.routingPolicies[option.route.target]
-                for row in page.items
-                where Self.matchesLifecycle(row, policy: policy)
-                    && !(option.route.requiresReplaceConfirmation && row.imageURL != nil)
-                {
-                    let description =
-                        ([row.title, row.id]
-                        + (policy?.candidateFields.compactMap { row.raw[$0]?.stringValue } ?? []))
-                        .joined(separator: " · ")
-                    result.append(
-                        Candidate(
-                            option: option,
-                            row: row,
-                            routing: PhotoRoutingCandidate(
-                                id: row.id, routeID: option.id, description: description)))
+        let options = sourceTypeOptions.compactMap { type in
+            let routes = type.options
+            return routes.first(where: { $0.route.choice == "primary" })
+                ?? routes.sorted { $0.id < $1.id }.first
+        }
+        let pages = await withTaskGroup(of: CandidatePage.self, returning: [CandidatePage].self) {
+            group in
+            var iterator = Array(options.enumerated()).makeIterator()
+
+            func enqueue(_ entry: (offset: Int, element: PhotoDestinationOption)) {
+                group.addTask {
+                    do {
+                        let page = try await client.list(
+                            EntityCatalog[entry.element.route.source], page: 1, pageSize: 25)
+                        return CandidatePage(
+                            index: entry.offset, option: entry.element, rows: page.items,
+                            failure: nil)
+                    } catch {
+                        return CandidatePage(
+                            index: entry.offset, option: entry.element, rows: [],
+                            failure: CandidateLoadFailure(message: error.localizedDescription))
+                    }
                 }
-            } catch {
-                Diagnostics.report(error, context: "photos.manifest.candidates.\(option.id)")
+            }
+
+            for _ in 0..<min(4, options.count) {
+                if let entry = iterator.next() { enqueue(entry) }
+            }
+            var result: [CandidatePage] = []
+            for await page in group {
+                result.append(page)
+                if let entry = iterator.next() { enqueue(entry) }
+            }
+            return result.sorted { $0.index < $1.index }
+        }
+
+        let candidates = pages.flatMap { page -> [Candidate] in
+            if let failure = page.failure {
+                Diagnostics.report(
+                    failure, context: "photos.manifest.candidates.\(page.option.id)")
+            }
+            let policy = PhotoImportCatalog.routingPolicies[page.option.route.source]
+            return page.rows.compactMap { row in
+                guard Self.matchesLifecycle(row, policy: policy),
+                    !(page.option.route.requiresReplaceConfirmation && row.imageURL != nil)
+                else { return nil }
+                let description =
+                    ([row.title, row.id]
+                    + (policy?.candidateFields.compactMap { row.raw[$0]?.stringValue } ?? []))
+                    .joined(separator: " · ")
+                let candidateID = "\(page.option.route.source.rawValue):\(row.id)"
+                return Candidate(
+                    option: page.option,
+                    row: row,
+                    routing: PhotoRoutingCandidate(
+                        id: candidateID, routeID: page.option.id, description: description,
+                        sourceEntity: page.option.route.source, sourceID: row.id))
             }
         }
-        return Array(result.prefix(FoundationModelsPhotoSemanticModel.maximumCandidates))
+        return Array(candidates.prefix(FoundationModelsPhotoSemanticModel.maximumCandidates))
     }
 
     private func deterministicCandidateIDs(
@@ -589,7 +994,7 @@ final class PhotoImportManifest {
         among candidates: [Candidate]
     ) -> [String] {
         let scored = candidates.compactMap { candidate -> (String, Double, Double)? in
-            guard let policy = PhotoImportCatalog.routingPolicies[candidate.option.route.target]
+            guard let policy = PhotoImportCatalog.routingPolicies[candidate.option.route.source]
             else { return nil }
             let classifierScore =
                 analysis.classifications
@@ -619,11 +1024,11 @@ final class PhotoImportManifest {
             let identityScore = authoritativeOwners.contains(candidate.row.id) ? 1.0 : 0
             let evidenceScore = max(textScore, dateScore, identityScore)
             let score = min(1, evidenceScore + classifierScore * 0.08)
-            return (candidate.row.id, score, policy.minimumScore)
+            return (candidate.routing.id, score, policy.minimumScore)
         }.sorted { $0.1 > $1.1 }
         guard let first = scored.first, first.1 >= first.2 else { return [] }
-        let policy = candidates.first(where: { $0.row.id == first.0 }).flatMap {
-            PhotoImportCatalog.routingPolicies[$0.option.route.target]
+        let policy = candidates.first(where: { $0.routing.id == first.0 }).flatMap {
+            PhotoImportCatalog.routingPolicies[$0.option.route.source]
         }
         let runnerUp = scored.dropFirst().first?.1 ?? 0
         guard first.1 - runnerUp >= (policy?.minimumMargin ?? 1) else { return [] }
@@ -646,8 +1051,9 @@ final class PhotoImportManifest {
     private static func matchesLifecycle(_ row: EntityRow, policy: PhotoRoutingPolicy?) -> Bool {
         guard let policy else { return true }
         return policy.lifecycleFilters.allSatisfy { filter in
-            if let value = row.raw[filter.field]?.stringValue { return value == filter.equals }
-            if let value = row.raw[filter.field]?.boolValue { return String(value) == filter.equals }
+            let values = filter.oneOf + (filter.equals.map { [$0] } ?? [])
+            if let value = row.raw[filter.field]?.stringValue { return values.contains(value) }
+            if let value = row.raw[filter.field]?.boolValue { return values.contains(String(value)) }
             return false
         }
     }
@@ -687,6 +1093,12 @@ private struct PhotoImportGroupRows: View {
                                     ?? "Undated photo")
                             if let suggestion = manifest.suggestions[id] {
                                 Text(suggestion).font(.caption).foregroundStyle(.secondary)
+                            } else if manifest.analysisState == .complete,
+                                manifest.needsDestination.contains(id)
+                            {
+                                Text("No confident match")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                             if let candidates = manifest.duplicateCandidates[id] {
                                 Menu {
@@ -739,6 +1151,18 @@ enum PhotoDuplicateDecision: Equatable {
     case keepBoth
 }
 
+enum PhotoImportAnalysisState: Equatable {
+    case idle
+    case running(String)
+    case complete
+    case failed(String)
+
+    var isRunning: Bool {
+        if case .running = self { return true }
+        return false
+    }
+}
+
 private enum PhotoImportManifestError: LocalizedError {
     case incompleteAssignment
 
@@ -747,7 +1171,7 @@ private enum PhotoImportManifestError: LocalizedError {
     }
 }
 
-struct PhotoDestinationOption: Identifiable {
+struct PhotoDestinationOption: Identifiable, Sendable {
     let route: PhotoIngressRoute
     let descriptor: EntityDescriptor
     var id: String { route.id }
@@ -757,11 +1181,38 @@ struct PhotoDestinationOption: Identifiable {
         case "createRelated":
             "New \(descriptor.singular) from \(EntityCatalog[route.source].singular)"
         case "existingRelated":
-            "\(EntityCatalog[route.source].singular) → \(descriptor.plural)"
+            "Existing \(descriptor.singular) for \(EntityCatalog[route.source].singular)"
         default:
             title
         }
     }
+}
+
+struct PhotoSourceTypeOption: Identifiable, Sendable {
+    let source: EntityKey
+    let options: [PhotoDestinationOption]
+    var id: String { source.rawValue }
+    var title: String { EntityCatalog[source].plural }
+    var outcomeDescription: String {
+        guard
+            let primary = options.first(where: { $0.route.choice == "primary" })
+                ?? options.sorted(by: { $0.id < $1.id }).first
+        else { return "Choose an existing record" }
+        switch primary.route.kind {
+        case "createRelated":
+            return "Creates a new \(primary.descriptor.singular)"
+        case "existingRelated":
+            return "Uses a related \(primary.descriptor.singular)"
+        default:
+            return "Attaches to an existing \(EntityCatalog[source].singular)"
+        }
+    }
+}
+
+private struct PhotoSourceRecordContext {
+    let row: EntityRow
+    let options: [PhotoDestinationOption]
+    var source: EntityKey { options[0].route.source }
 }
 
 private struct PhotoCreateContext: Identifiable {
@@ -1090,10 +1541,17 @@ private struct PhotoRelatedCreateEditor: View {
 
     private func renders(_ field: FieldDescriptor) -> Bool {
         if ["pendingImageIds", "removeImageIds", "imageOrder"].contains(field.key) { return false }
-        if option.route.bindings.contains(where: {
-            $0.field == field.key && !($0.source == "capture-date" && captureDate == nil)
-        }) {
-            return false
+        for binding in option.route.bindings where binding.field == field.key {
+            switch binding.source {
+            case "source-field":
+                if PhotoImportManifest.nonNullSourceFieldValue(binding: binding, source: source) != nil {
+                    return false
+                }
+            case "capture-date":
+                if captureDate != nil { return false }
+            default:
+                return false
+            }
         }
         guard field.controlKind == .specialized else { return true }
         return field.reference != nil || field.format == "amount" || field.kind == .textArray
@@ -1110,7 +1568,9 @@ private struct PhotoRelatedCreateEditor: View {
                     result[binding.field] = .string(source.id)
                 }
             case "source-field":
-                if let sourceField = binding.sourceField, let value = source.raw[sourceField] {
+                if let value = PhotoImportManifest.nonNullSourceFieldValue(
+                    binding: binding, source: source)
+                {
                     result[binding.field] = value
                 }
             case "capture-date":
@@ -1141,14 +1601,19 @@ private struct PhotoRelatedCreateEditor: View {
 /// presents the bounded graph page so invalid arbitrary destinations are never offered.
 private struct PhotoRelatedDestinationChooser: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
     let context: PhotoRelatedContext
+    let createOption: PhotoDestinationOption?
+    let captureDate: Date?
     let onSelect: (EntityRow) -> Void
+    let onCreate: (PhotoDestinationOption, [String: JSONValue]) -> Void
 
     @State private var rows: [EntityRow] = []
     @State private var nextOffset: Int?
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var search = ""
+    @State private var creation: PhotoDestinationOption?
 
     private var descriptor: EntityDescriptor { context.option.descriptor }
 
@@ -1174,12 +1639,29 @@ private struct PhotoRelatedDestinationChooser: View {
                         Button("Retry") { Task { await load(reset: true) } }
                     }
                 } else if rows.isEmpty {
-                    ContentUnavailableView(
-                        "No related \(descriptor.plural)",
-                        systemImage: entitySymbol(for: context.option.route.target),
-                        description: Text("\(context.source.title) has no matching destination yet."))
+                    ContentUnavailableView {
+                        Label(
+                            "No related \(descriptor.plural)",
+                            systemImage: entitySymbol(for: context.option.route.target))
+                    } description: {
+                        Text("\(context.source.title) has no matching destination yet.")
+                    } actions: {
+                        if let createOption {
+                            Button("Create \(createOption.descriptor.singular)") {
+                                creation = createOption
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
                 } else {
                     List {
+                        if let createOption {
+                            Section {
+                                Button("Create new \(createOption.descriptor.singular)") {
+                                    creation = createOption
+                                }
+                            }
+                        }
                         ForEach(filteredRows) { row in
                             Button {
                                 onSelect(row)
@@ -1210,6 +1692,15 @@ private struct PhotoRelatedDestinationChooser: View {
         }
         .nativeSheet(.editor)
         .task { await load(reset: true) }
+        .sheet(item: $creation) { option in
+            PhotoRelatedCreateEditor(
+                option: option, source: context.source, captureDate: captureDate
+            ) { body in
+                onCreate(option, body)
+                creation = nil
+                dismiss()
+            }
+        }
     }
 
     private func load(reset: Bool) async {

@@ -688,12 +688,20 @@ const metadataSchemas = () => {
       .strict(),
   ]);
   const imageIngressMetadataSchema = z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("self"), routeId: nonEmptyString() }).strict(),
+    z
+      .object({
+        kind: z.literal("self"),
+        routeId: nonEmptyString(),
+        /** How this storage route is resolved after the natural source record. */
+        choice: z.enum(["primary", "alternate", "prompt"]).default("primary"),
+      })
+      .strict(),
     z
       .object({
         kind: z.literal("existingRelated"),
         routeId: nonEmptyString(),
         relationPath: imageRelationPathSchema,
+        choice: z.enum(["primary", "alternate", "prompt"]).default("alternate"),
       })
       .strict(),
     z
@@ -702,6 +710,7 @@ const metadataSchemas = () => {
         routeId: nonEmptyString(),
         relationPath: imageRelationPathSchema,
         bindings: z.array(imageIngressBindingMetadataSchema).min(1),
+        choice: z.enum(["primary", "alternate", "prompt"]).default("alternate"),
       })
       .strict(),
   ]);
@@ -711,12 +720,20 @@ const metadataSchemas = () => {
       temporalFields: z.array(nonEmptyString()).default([]),
       lifecycleFilters: z
         .array(
-          z
-            .object({
-              field: nonEmptyString(),
-              equals: z.union([z.string(), z.boolean()]),
-            })
-            .strict(),
+          z.union([
+            z
+              .object({
+                field: nonEmptyString(),
+                equals: z.union([z.string(), z.boolean()]),
+              })
+              .strict(),
+            z
+              .object({
+                field: nonEmptyString(),
+                oneOf: z.array(z.union([z.string(), z.boolean()])).min(1),
+              })
+              .strict(),
+          ]),
         )
         .default([]),
       signals: z

@@ -1017,6 +1017,7 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "financial-transaction-confirmed-purchase",
           relationPath: ["purchase"],
+          choice: "primary",
         },
       ],
       routing: {

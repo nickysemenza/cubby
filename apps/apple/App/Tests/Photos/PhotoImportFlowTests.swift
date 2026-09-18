@@ -53,6 +53,45 @@ struct PhotoImportFlowTests {
             })
     }
 
+    @Test func naturalSourceTypesAreUniqueAndPlantingDefaultsToCreateRoute() throws {
+        let manifest = PhotoImportManifest(items: [try selection(filename: "first.jpg")])
+        let types = manifest.sourceTypeOptions
+
+        #expect(Set(types.map(\.source)).count == types.count)
+        let planting = try #require(types.first(where: { $0.source == .planting }))
+        #expect(
+            planting.options.first(where: { $0.route.choice == "primary" })?.id
+                == "planting-new-garden-entry")
+    }
+
+    @Test func missingNullableSourceBindingRemainsEditable() throws {
+        let route = try #require(
+            PhotoImportCatalog.ingressRoutes.first { $0.id == "planting-new-garden-entry" })
+        let binding = try #require(route.bindings.first { $0.field == "locationId" })
+        let source = EntityRow(
+            id: "PLT-1234", title: "Santa Rosa", subtitle: nil, imageURL: nil,
+            raw: .object(["id": .string("PLT-1234"), "locationId": .null]))
+
+        #expect(PhotoImportManifest.nonNullSourceFieldValue(binding: binding, source: source) == nil)
+    }
+
+    @Test func aSharedVisionSuggestionTakesSelectedPhotosStraightToTheirSourceType() {
+        let selected = Set(["photo-1", "photo-2"])
+
+        #expect(
+            PhotoImportManifest.preferredSourceType(
+                selectedIDs: selected,
+                suggestions: ["photo-1": .planting, "photo-2": .planting]) == .planting)
+        #expect(
+            PhotoImportManifest.preferredSourceType(
+                selectedIDs: selected,
+                suggestions: ["photo-1": .planting, "photo-2": .meal]) == nil)
+        #expect(
+            PhotoImportManifest.preferredSourceType(
+                selectedIDs: selected,
+                suggestions: ["photo-1": .planting]) == nil)
+    }
+
     private func selection(filename: String) throws -> PhotoSelectionItem {
         let image = try #require(
             CGContext(

@@ -578,11 +578,13 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "planting-garden-entry",
           relationPath: ["entries"],
+          choice: "alternate",
         },
         {
           kind: "createRelated",
           routeId: "planting-new-garden-entry",
           relationPath: ["entries"],
+          choice: "primary",
           bindings: [
             { field: "plantingId", from: "source-id" },
             {

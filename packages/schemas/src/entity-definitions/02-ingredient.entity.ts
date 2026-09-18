@@ -567,6 +567,7 @@ export default defineEntity({
           kind: "existingRelated",
           routeId: "ingredient-product",
           relationPath: ["products"],
+          choice: "primary",
         },
       ],
       routing: {

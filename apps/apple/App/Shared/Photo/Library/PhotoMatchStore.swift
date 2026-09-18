@@ -218,18 +218,29 @@ final class PhotoMatchStore {
 
     func check(
         _ items: [PhotoSelectionItem], client: CubbyClient,
+        preparedQueries: [String: HashQuery] = [:],
+        refreshIndex: Bool = true,
         status: (String) -> Void = { _ in }
     ) async throws {
         let account = accountGeneration
-        status("Refreshing Cubby photos…")
-        await refresh(client: client, priorityIDs: Set(items.map(\.id)))
+        if refreshIndex || !hasIndex {
+            status("Refreshing Cubby photos…")
+            await refresh(client: client, priorityIDs: Set(items.map(\.id)))
+        }
         guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
-        guard hasIndex, error == nil else { throw PhotoCheckFailure.indexUnavailable(error) }
+        guard hasIndex, !refreshIndex || error == nil else {
+            throw PhotoCheckFailure.indexUnavailable(error)
+        }
         var batch: [ImageHashEntry] = []
         var additions: [String: HashQuery] = [:]
         for (offset, item) in items.enumerated() {
             status("Checking selected photo \(offset + 1) of \(items.count)…")
-            let query = try await item.query()
+            let query: HashQuery
+            if let prepared = preparedQueries[item.id] {
+                query = prepared
+            } else {
+                query = try await item.query()
+            }
             guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
             additions[item.id] = query
             let previous = try await Self.match(entries: batch, queries: [item.id: query])[item.id] ?? []
