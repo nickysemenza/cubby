@@ -8,11 +8,11 @@ struct PhotoDestinationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onDone: ([String]) -> Void
     @State private var manifest: PhotoImportManifest
-    @State private var path: [String] = []
+    @State private var path: [PhotoImportNavigationDestination] = []
     @State private var replacement: ReplacementConfirmation?
     @State private var createContext: PhotoCreateContext?
     @State private var relatedContext: PhotoRelatedContext?
-    @State private var sourceRecord: PhotoSourceRecordContext?
+    @State private var analysisLogExpanded = true
 
     init(items: [PhotoSelectionItem], onDone: @escaping ([String]) -> Void) {
         self.onDone = onDone
@@ -45,7 +45,7 @@ struct PhotoDestinationSheet: View {
                         }
                     }
                 }
-                disclosure
+                PhotoAnalysisDisclosure(manifest: manifest, isExpanded: $analysisLogExpanded)
                 footer
             }
             .navigationTitle("Review photos")
@@ -61,14 +61,15 @@ struct PhotoDestinationSheet: View {
                     }
                 }
             }
-            .navigationDestination(for: String.self) { routeID in
-                if routeID == "source-types" {
+            .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
+                switch destination {
+                case .sourceTypes:
                     List {
                         PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
                         Section("Choose what is in the photo") {
                             ForEach(manifest.sourceTypeOptions) { type in
                                 Button {
-                                    path.append("source-type:\(type.source.rawValue)")
+                                    path.append(.sourceType(type.source))
                                 } label: {
                                     HStack(spacing: 12) {
                                         Image(systemName: entitySymbol(for: type.source))
@@ -86,62 +87,50 @@ struct PhotoDestinationSheet: View {
                         }
                     }
                     .navigationTitle("Assign selected…")
-                } else if let sourceRaw = routeID.split(separator: ":", maxSplits: 1).last,
-                    routeID.hasPrefix("source-type:"),
-                    let source = EntityKey(rawValue: String(sourceRaw)),
-                    let type = manifest.sourceTypeOptions.first(where: { $0.source == source })
-                {
-                    PhotoEntityChooser(
-                        key: source, captureDates: manifest.selectedItems.map(\.capturedAt),
-                        heroItems: manifest.items, importManifest: manifest
-                    ) {
-                        row in
-                        chooseSourceRecord(type, row: row)
+                case .sourceType(let source):
+                    if let type = manifest.sourceTypeOptions.first(where: {
+                        $0.source == source
+                    }) {
+                        PhotoEntityChooser(
+                            key: source, captureDates: manifest.selectedItems.map(\.capturedAt),
+                            heroItems: manifest.items, importManifest: manifest
+                        ) { row in
+                            chooseSourceRecord(type, row: row)
+                        }
+                    } else {
+                        ContentUnavailableView(
+                            "Destination unavailable",
+                            systemImage: "exclamationmark.triangle",
+                            description: Text(
+                                "Cubby couldn't resolve the photo routes for this type."
+                            ))
                     }
-                } else if routeID == "route-picker", let context = sourceRecord {
+                case .routePicker(let source, let row):
                     List {
                         PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
-                        Section("Where should this \(EntityCatalog[context.source].singular) store photos?") {
-                            ForEach(context.options) { option in
-                                Button(option.menuTitle(for: context.row)) {
-                                    chooseRoute(option, source: context.row)
+                        if let type = manifest.sourceTypeOptions.first(where: {
+                            $0.source == source
+                        }) {
+                            Section(
+                                "Where should this \(EntityCatalog[source].singular) store photos?"
+                            ) {
+                                ForEach(type.options) { option in
+                                    Button(option.menuTitle(for: row)) {
+                                        chooseRoute(option, source: row)
+                                    }
+                                    .accessibilityIdentifier("photos.route.\(option.id)")
                                 }
-                                .accessibilityIdentifier("photos.route.\(option.id)")
                             }
+                        } else {
+                            ContentUnavailableView(
+                                "Destination unavailable",
+                                systemImage: "exclamationmark.triangle",
+                                description: Text(
+                                    "Cubby couldn't resolve the photo routes for \(row.id)."
+                                ))
                         }
                     }
                     .navigationTitle("Choose storage")
-                } else if let option = manifest.destinationOptions.first(where: { $0.id == routeID }) {
-                    if option.route.kind == "createRelated" {
-                        PhotoEntityChooser(
-                            key: option.route.source,
-                            captureDates: manifest.selectedItems.map(\.capturedAt),
-                            heroItems: manifest.items, importManifest: manifest
-                        ) { row in
-                            createContext = PhotoCreateContext(option: option, source: row)
-                        }
-                    } else if option.route.kind == "existingRelated" {
-                        PhotoEntityChooser(
-                            key: option.route.source,
-                            captureDates: manifest.selectedItems.map(\.capturedAt),
-                            heroItems: manifest.items, importManifest: manifest
-                        ) { row in
-                            relatedContext = PhotoRelatedContext(option: option, source: row)
-                        }
-                    } else {
-                        PhotoEntityChooser(
-                            key: option.descriptor.key,
-                            captureDates: manifest.selectedItems.map(\.capturedAt),
-                            heroItems: manifest.items, importManifest: manifest
-                        ) { row in
-                            if option.route.requiresReplaceConfirmation, row.imageURL != nil {
-                                replacement = ReplacementConfirmation(option: option, row: row)
-                            } else {
-                                manifest.moveSelected(to: option, row: row)
-                                path.removeLast()
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -262,12 +251,12 @@ struct PhotoDestinationSheet: View {
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("photos.manifest.suggested-source")
 
-                    Button("Choose another type…") { path.append("source-types") }
+                    Button("Choose another type…") { path.append(.sourceTypes) }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
                 } else if let suggested = manifest.selectedSuggestedSourceType {
                     Button {
-                        path.append("source-type:\(suggested.rawValue)")
+                        path.append(.sourceType(suggested))
                     } label: {
                         Label(
                             "Choose \(EntityCatalog[suggested].singular.lowercased())",
@@ -278,12 +267,32 @@ struct PhotoDestinationSheet: View {
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("photos.manifest.suggested-source-type")
 
-                    Button("Choose another type…") { path.append("source-types") }
+                    Button("Choose another type…") { path.append(.sourceTypes) }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                } else if !manifest.selectedSourceTypeSuggestionGroups.isEmpty {
+                    ForEach(manifest.selectedSourceTypeSuggestionGroups) { group in
+                        Button {
+                            manifest.selectSuggestedPhotos(for: group.source)
+                            path.append(.sourceType(group.source))
+                        } label: {
+                            Label(
+                                "Choose \(EntityCatalog[group.source].plural) for \(group.photoIDs.count) photos",
+                                systemImage: entitySymbol(for: group.source)
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier(
+                            "photos.manifest.suggested-group.\(group.source.rawValue)")
+                    }
+
+                    Button("Choose another type…") { path.append(.sourceTypes) }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
                 } else {
                     Button {
-                        path.append("source-types")
+                        path.append(.sourceTypes)
                     } label: {
                         Label("Assign selected…", systemImage: "arrow.right.circle")
                             .frame(maxWidth: .infinity)
@@ -299,20 +308,17 @@ struct PhotoDestinationSheet: View {
     }
 
     private func chooseSourceRecord(_ type: PhotoSourceTypeOption, row: EntityRow) {
-        let options = type.options
         // A natural record can have several concrete destinations (Planting → an existing
         // Garden Entry or a new one). Always expose that route choice after the source is known;
         // otherwise a primary create route would silently create a related record.
-        if options.count == 1, let only = options.first {
+        if let destination = PhotoImportNavigationDestination.sourceSelection(type: type, row: row) {
+            path.append(destination)
+        } else if let only = type.options.first {
             chooseRoute(only, source: row)
-        } else {
-            sourceRecord = PhotoSourceRecordContext(row: row, options: options)
-            path.append("route-picker")
         }
     }
 
     private func chooseRoute(_ option: PhotoDestinationOption, source: EntityRow) {
-        sourceRecord = nil
         switch option.route.kind {
         case "createRelated":
             createContext = PhotoCreateContext(option: option, source: source)
@@ -331,26 +337,6 @@ struct PhotoDestinationSheet: View {
             selectedIDs: manifest.selectedIDs,
             onToggle: manifest.toggle
         )
-    }
-
-    private var disclosure: some View {
-        DisclosureGroup("On-device analysis") {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Vision image classification", systemImage: "eye")
-                Label("Vision text recognition", systemImage: "text.viewfinder")
-                Label("Vision feature print", systemImage: "point.3.connected.trianglepath.dotted")
-                Label("Capture metadata and date", systemImage: "calendar")
-                if let foundationModelSummary = manifest.foundationModelSummary {
-                    Label(foundationModelSummary, systemImage: "apple.intelligence")
-                }
-                Text("No cloud AI is used. Derived analysis data syncs to Cubby.")
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 4)
-        }
-        .font(.caption)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
 
     private var footer: some View {
@@ -401,6 +387,7 @@ final class PhotoImportManifest {
     private(set) var suggestedSourceTypes: [String: EntityKey] = [:]
     private(set) var suggestedSourceRecords: [String: EntityRow] = [:]
     private(set) var foundationModelSummary: String?
+    private(set) var analysisLog: [PhotoAnalysisLogEntry] = []
     private(set) var commitRequiresReview = false
     private(set) var duplicateCandidates: [String: [DedupCandidate]] = [:]
     private(set) var duplicateOwnerShortcodes: [String: [String]] = [:]
@@ -410,6 +397,7 @@ final class PhotoImportManifest {
     private var prepared: [String: (PhotoFile, PhotoLocalAnalysis)] = [:]
     private var transaction: PhotoImportTransaction?
     private var analysisTask: Task<Void, Never>?
+    private var nextAnalysisLogID = 0
 
     init(items: [PhotoSelectionItem]) {
         self.items = items
@@ -462,6 +450,11 @@ final class PhotoImportManifest {
         Self.preferredSourceType(selectedIDs: selectedIDs, suggestions: suggestedSourceTypes)
     }
 
+    var selectedSourceTypeSuggestionGroups: [PhotoSourceTypeSuggestionGroup] {
+        Self.sourceTypeSuggestionGroups(
+            selectedIDs: selectedIDs, suggestions: suggestedSourceTypes)
+    }
+
     var selectedSuggestedSource: PhotoSuggestedSource? {
         guard let source = selectedSuggestedSourceType else { return nil }
         let rows = selectedIDs.compactMap { suggestedSourceRecords[$0] }
@@ -478,6 +471,29 @@ final class PhotoImportManifest {
         let values = Set(selectedIDs.compactMap { suggestions[$0] })
         return values.count == 1 && selectedIDs.allSatisfy { suggestions[$0] != nil }
             ? values.first : nil
+    }
+
+    static func sourceTypeSuggestionGroups(
+        selectedIDs: Set<String>, suggestions: [String: EntityKey]
+    ) -> [PhotoSourceTypeSuggestionGroup] {
+        Dictionary(
+            grouping: selectedIDs.compactMap { photoID in
+                suggestions[photoID].map { (photoID, $0) }
+            }, by: { $0.1 }
+        ).map { source, values in
+            PhotoSourceTypeSuggestionGroup(
+                source: source, photoIDs: values.map(\.0).sorted())
+        }.sorted { lhs, rhs in
+            if lhs.photoIDs.count != rhs.photoIDs.count {
+                return lhs.photoIDs.count > rhs.photoIDs.count
+            }
+            return EntityCatalog[lhs.source].plural < EntityCatalog[rhs.source].plural
+        }
+    }
+
+    func selectSuggestedPhotos(for source: EntityKey) {
+        selectedIDs = Set(
+            selectedIDs.filter { suggestedSourceTypes[$0] == source })
     }
 
     var groups: [PhotoImportGroup] {
@@ -538,15 +554,32 @@ final class PhotoImportManifest {
         guard !analysisState.isRunning else { return }
         let generation = UUID()
         analysisGeneration = generation
+        analysisLog = []
+        nextAnalysisLogID = 0
+        appendAnalysisLog(
+            "Started on-device analysis",
+            detail: "\(items.count) photo\(items.count == 1 ? "" : "s")",
+            kind: .progress)
         analysisState = .running("Preparing selected photos…")
         do {
             try await prepareIfNeeded()
             for item in items {
-                guard let analysis = prepared[item.id]?.1,
-                    let suggestion = suggestedSource(for: analysis)
-                else { continue }
-                suggestedSourceTypes[item.id] = suggestion.source
-                suggestions[item.id] = suggestion.label
+                guard let analysis = prepared[item.id]?.1 else { continue }
+                appendAnalysisLog(
+                    "Vision finished for \(photoLabel(item.id))",
+                    detail: analysisLogSummary(analysis), photoID: item.id, kind: .progress)
+                if let suggestion = suggestedSource(for: analysis) {
+                    suggestedSourceTypes[item.id] = suggestion.source
+                    suggestions[item.id] = suggestion.label
+                    appendAnalysisLog(
+                        "Type suggestion: \(EntityCatalog[suggestion.source].plural)",
+                        detail: suggestion.label, photoID: item.id, kind: .decision)
+                } else {
+                    appendAnalysisLog(
+                        "No confident type suggestion",
+                        detail: "Manual assignment remains available.", photoID: item.id,
+                        kind: .abstention)
+                }
             }
             analysisState = .running("Checking for duplicates…")
             do {
@@ -566,6 +599,13 @@ final class PhotoImportManifest {
                             duplicateOwnerShortcodes[candidate.id.rawValue] =
                                 matches.directOwnerShortcodes(for: candidate.id)
                         }
+                        let duplicateDescription =
+                            "\(candidates.count) existing image match"
+                            + (candidates.count == 1 ? "" : "es")
+                        appendAnalysisLog(
+                            "Possible duplicate for \(photoLabel(item.id))",
+                            detail: duplicateDescription,
+                            photoID: item.id, kind: .decision)
                     }
                 }
             } catch is CancellationError {
@@ -577,9 +617,19 @@ final class PhotoImportManifest {
             let candidates = await loadCandidates(client: client)
             guard analysisGeneration == generation, !Task.isCancelled else { throw CancellationError() }
             guard !candidates.isEmpty else {
+                appendAnalysisLog(
+                    "No record candidates loaded",
+                    detail: "Vision results are preserved; choose a destination manually.",
+                    kind: .abstention)
                 analysisState = .complete
                 return
             }
+            let candidateCounts = Dictionary(grouping: candidates, by: { $0.option.route.source })
+                .map { "\(EntityCatalog[$0.key].plural): \($0.value.count)" }
+                .sorted()
+                .joined(separator: " · ")
+            appendAnalysisLog(
+                "Loaded manifest-scoped candidates", detail: candidateCounts, kind: .progress)
             analysisState = .running("Comparing with existing photos…")
             let visualMatches = await PhotoVisualEvidenceMatcher().matches(
                 analyses: prepared.mapValues(\.1),
@@ -610,25 +660,44 @@ final class PhotoImportManifest {
             let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.routing.id, $0) })
             let reranker = PhotoSemanticReranker()
             // Publish deterministic decisions before optional Foundation Models work begins.
-            apply(
-                decisions: reranker.deterministic(
-                    evidence: evidence, candidates: candidates.map(\.routing)
-                ).decisions,
-                candidates: byID, generation: generation)
+            let deterministic = reranker.deterministic(
+                evidence: evidence, candidates: candidates.map(\.routing))
+            appendDecisionLog(
+                deterministic.decisions, candidates: byID, stage: "Deterministic routing")
+            apply(decisions: deterministic.decisions, candidates: byID, generation: generation)
             analysisState = .running("Refining suggestions on this device…")
+            appendAnalysisLog(
+                "Foundation Models refinement started",
+                detail: "\(evidence.count) photos · \(candidates.count) allowed candidates",
+                kind: .progress)
             let result = try await reranker.rerank(
                 evidence: evidence, candidates: candidates.map(\.routing))
             guard analysisGeneration == generation, !Task.isCancelled else { throw CancellationError() }
             foundationModelSummary = Self.foundationModelSummary(result.modelStatus)
+            appendAnalysisLog(
+                foundationModelSummary ?? "Foundation Models refinement finished",
+                detail: Self.foundationModelLogDetail(result.modelStatus),
+                kind: result.modelStatus == .used ? .decision : .fallback)
+            appendDecisionLog(
+                result.decisions, candidates: byID, stage: "Final routing")
             apply(decisions: result.decisions, candidates: byID, generation: generation)
             analysisState = .complete
+            appendAnalysisLog(
+                "Analysis complete",
+                detail: "\(suggestedSourceTypes.count) of \(items.count) photos received a type suggestion.",
+                kind: .progress)
         } catch is CancellationError {
-            if !Task.isCancelled, analysisGeneration == generation { analysisState = .idle }
+            if !Task.isCancelled, analysisGeneration == generation {
+                analysisState = .idle
+                appendAnalysisLog("Analysis stopped", kind: .fallback)
+            }
             return
         } catch {
             if analysisGeneration != generation { return }
             analysisState = .failed(
                 "Analysis couldn’t finish. Retry, or choose a destination manually.")
+            appendAnalysisLog(
+                "Analysis failed", detail: error.localizedDescription, kind: .error)
             Diagnostics.report(error, context: "photos.manifest.analysis")
         }
     }
@@ -1158,6 +1227,48 @@ final class PhotoImportManifest {
             "Capture date: \(date). Vision labels: \(classifications). Recognized text: \(text).\(identity)\(visual)"
     }
 
+    private func appendDecisionLog(
+        _ decisions: [PhotoRoutingDecision], candidates: [String: Candidate], stage: String
+    ) {
+        for decision in decisions {
+            if let candidateID = decision.candidateID, let candidate = candidates[candidateID] {
+                appendAnalysisLog(
+                    "\(stage): \(candidate.row.title) · \(candidate.row.id)",
+                    detail: decision.explanation, photoID: decision.photoID, kind: .decision)
+            } else {
+                appendAnalysisLog(
+                    "\(stage): abstained", detail: decision.explanation,
+                    photoID: decision.photoID, kind: .abstention)
+            }
+        }
+    }
+
+    private func appendAnalysisLog(
+        _ title: String, detail: String? = nil, photoID: String? = nil,
+        kind: PhotoAnalysisLogEntry.Kind
+    ) {
+        analysisLog.append(
+            PhotoAnalysisLogEntry(
+                id: nextAnalysisLogID, timestamp: Date(), photoID: photoID,
+                title: title, detail: detail, kind: kind))
+        nextAnalysisLogID += 1
+    }
+
+    private func photoLabel(_ id: String) -> String {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return "photo" }
+        return "photo \(index + 1)"
+    }
+
+    private func analysisLogSummary(_ analysis: PhotoLocalAnalysis) -> String {
+        let labels = analysis.classifications.prefix(3).map {
+            "\($0.identifier) \(Int(($0.confidence * 100).rounded()))%"
+        }.joined(separator: ", ")
+        let text = analysis.recognizedText.prefix(2).map(\.text).joined(separator: " · ")
+        let labelSummary = labels.isEmpty ? "no classification labels" : "labels: \(labels)"
+        let textSummary = text.isEmpty ? "no recognized text" : "text: \(text)"
+        return "\(labelSummary) · \(textSummary) · feature print: \(analysis.featurePrint.revision)"
+    }
+
     private static func matchesLifecycle(_ row: EntityRow, policy: PhotoRoutingPolicy?) -> Bool {
         guard let policy else { return true }
         return policy.lifecycleFilters.allSatisfy { filter in
@@ -1178,6 +1289,17 @@ final class PhotoImportManifest {
         case .failed(let reason): "Foundation Models fallback: \(reason.rawValue)"
         }
     }
+
+    private static func foundationModelLogDetail(_ status: PhotoSemanticModelStatus) -> String {
+        switch status {
+        case .used:
+            "Structured semantic reranking completed on this device."
+        case .unavailable:
+            "Deterministic Vision, OCR, metadata, and visual matching results remain active."
+        case .failed:
+            "The model failed safely; deterministic results remain active and no cloud fallback ran."
+        }
+    }
 }
 
 struct PhotoImportGroup: Identifiable, Equatable {
@@ -1185,6 +1307,107 @@ struct PhotoImportGroup: Identifiable, Equatable {
     let title: String
     let evidence: String?
     let photoIDs: [String]
+}
+
+private struct PhotoAnalysisDisclosure: View {
+    @Bindable var manifest: PhotoImportManifest
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 10) {
+                if manifest.analysisLog.isEmpty {
+                    Text("Decision events will appear here as each photo is analyzed.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(manifest.analysisLog) { entry in
+                                PhotoAnalysisLogRow(entry: entry)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 220)
+                    .accessibilityIdentifier("photos.analysis.log")
+                }
+
+                Divider()
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Vision image classification", systemImage: "eye")
+                    Label("Vision text recognition", systemImage: "text.viewfinder")
+                    Label(
+                        "Vision feature print",
+                        systemImage: "point.3.connected.trianglepath.dotted")
+                    Label("Capture metadata and date", systemImage: "calendar")
+                    if let foundationModelSummary = manifest.foundationModelSummary {
+                        Label(foundationModelSummary, systemImage: "apple.intelligence")
+                    }
+                    Text("No cloud AI is used. Derived analysis data syncs to Cubby.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 8)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("On-device AI decision log")
+                if let latest = manifest.analysisLog.last {
+                    Text(latest.title)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .font(.caption)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+}
+
+private struct PhotoAnalysisLogRow: View {
+    let entry: PhotoAnalysisLogEntry
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: symbol)
+                .foregroundStyle(color)
+                .frame(width: 16)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(entry.title).fontWeight(.medium)
+                    Spacer(minLength: 8)
+                    Text(entry.timestamp.formatted(date: .omitted, time: .standard))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if let detail = entry.detail {
+                    Text(detail).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var symbol: String {
+        switch entry.kind {
+        case .progress: "clock"
+        case .decision: "checkmark.circle.fill"
+        case .abstention: "questionmark.circle"
+        case .fallback: "arrow.triangle.branch"
+        case .error: "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch entry.kind {
+        case .progress: .secondary
+        case .decision: .green
+        case .abstention, .fallback: .orange
+        case .error: PorcelainTokens.destructive
+        }
+    }
 }
 
 private struct PhotoImportGroupRows: View {
@@ -1276,6 +1499,29 @@ enum PhotoImportAnalysisState: Equatable {
     }
 }
 
+struct PhotoSourceTypeSuggestionGroup: Identifiable, Equatable {
+    let source: EntityKey
+    let photoIDs: [String]
+    var id: EntityKey { source }
+}
+
+struct PhotoAnalysisLogEntry: Identifiable, Equatable {
+    enum Kind: Equatable {
+        case progress
+        case decision
+        case abstention
+        case fallback
+        case error
+    }
+
+    let id: Int
+    let timestamp: Date
+    let photoID: String?
+    let title: String
+    let detail: String?
+    let kind: Kind
+}
+
 private enum PhotoImportManifestError: LocalizedError {
     case incompleteAssignment
 
@@ -1339,15 +1585,21 @@ struct PhotoSourceTypeOption: Identifiable, Sendable {
     }
 }
 
+enum PhotoImportNavigationDestination: Hashable {
+    case sourceTypes
+    case sourceType(EntityKey)
+    case routePicker(source: EntityKey, row: EntityRow)
+
+    static func sourceSelection(
+        type: PhotoSourceTypeOption, row: EntityRow
+    ) -> PhotoImportNavigationDestination? {
+        type.options.count > 1 ? .routePicker(source: type.source, row: row) : nil
+    }
+}
+
 struct PhotoSuggestedSource: Sendable {
     let type: PhotoSourceTypeOption
     let row: EntityRow
-}
-
-private struct PhotoSourceRecordContext {
-    let row: EntityRow
-    let options: [PhotoDestinationOption]
-    var source: EntityKey { options[0].route.source }
 }
 
 private struct PhotoCreateContext: Identifiable {

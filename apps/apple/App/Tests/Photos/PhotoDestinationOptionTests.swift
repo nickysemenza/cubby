@@ -51,4 +51,17 @@ struct PhotoDestinationOptionTests {
         #expect(planting.outcomeDescription == "Choose an existing or new Garden Entry")
         #expect(gardenEntry.outcomeDescription == "Attaches to an existing Garden Entry")
     }
+
+    @Test func selectingPlantingCarriesItsRecordIntoTheRoutePickerDestination() throws {
+        let manifest = PhotoImportManifest(items: [])
+        let planting = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
+        let curryLeaf = EntityRow(
+            id: "PLT-CJK7", title: "curry leaf", subtitle: nil, imageURL: nil,
+            raw: .object(["id": .string("PLT-CJK7")]))
+
+        #expect(
+            PhotoImportNavigationDestination.sourceSelection(
+                type: planting, row: curryLeaf)
+                == .routePicker(source: .planting, row: curryLeaf))
+    }
 }

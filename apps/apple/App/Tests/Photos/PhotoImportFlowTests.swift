@@ -92,6 +92,23 @@ struct PhotoImportFlowTests {
                 suggestions: ["photo-1": .planting]) == nil)
     }
 
+    @Test func mixedBatchKeepsPartialSourceSuggestionsActionable() throws {
+        let groups = PhotoImportManifest.sourceTypeSuggestionGroups(
+            selectedIDs: ["plant-1", "plant-2", "meal-1", "unknown"],
+            suggestions: [
+                "plant-1": .planting,
+                "plant-2": .planting,
+                "meal-1": .meal,
+            ])
+
+        #expect(groups.count == 2)
+        let planting = try #require(groups.first)
+        #expect(planting.source == .planting)
+        #expect(planting.photoIDs == ["plant-1", "plant-2"])
+        #expect(groups[1].source == .meal)
+        #expect(groups[1].photoIDs == ["meal-1"])
+    }
+
     private func selection(filename: String) throws -> PhotoSelectionItem {
         let image = try #require(
             CGContext(
