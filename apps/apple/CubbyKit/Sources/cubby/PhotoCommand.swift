@@ -371,7 +371,7 @@ extension Photo {
                 let label = match?.classifierIdentifier.map { "\($0)" } ?? "no label matched"
                 let confidence = match?.classifierConfidence.map { String(format: "%.3f", $0) } ?? "  -  "
                 print(
-                    "      \(verdict) \(pad(key.rawValue, 22)) \(confidence) ≥ \(String(format: "%.2f", policy.minimumScore))  \(pad(label, 18)) wants: \(policy.classifierLabels.joined(separator: ","))"
+                    "      \(verdict) \(EntityCatalog[key].emoji) \(pad(key.rawValue, 22)) \(confidence) ≥ \(String(format: "%.2f", policy.minimumScore))  \(pad(label, 18)) wants: \(policy.classifierLabels.joined(separator: ","))"
                 )
             }
             let suggested =

@@ -27,7 +27,7 @@ export default defineEntity({
         "Create spaces to organize where everything lives \u2014 pantry, fridge, garage, you decide.",
       actionLabel: "Create Location",
     },
-    icons: { lucide: "MapPin", sfSymbol: "mappin.and.ellipse" },
+    icons: { lucide: "MapPin", sfSymbol: "mappin.and.ellipse", emoji: "📍" },
     detail: {
       hero: { breadcrumb: "parentId", images: true },
       sections: [

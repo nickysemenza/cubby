@@ -57,7 +57,11 @@ export default defineEntity({
         "Record settlement evidence without changing the expense ledger.",
       actionLabel: "New Transaction",
     },
-    icons: { lucide: "CreditCard", sfSymbol: "arrow.left.arrow.right" },
+    icons: {
+      lucide: "CreditCard",
+      sfSymbol: "arrow.left.arrow.right",
+      emoji: "💳",
+    },
     detail: {
       hero: { stats: ["amount", "status"] },
       sections: [

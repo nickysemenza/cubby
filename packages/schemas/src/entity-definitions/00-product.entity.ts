@@ -42,7 +42,7 @@ export default defineEntity({
         "Add the things you own to track what you have and what it's worth. Scan a barcode or add one by hand.",
       actionLabel: "Add Product",
     },
-    icons: { lucide: "Barcode", sfSymbol: "shippingbox" },
+    icons: { lucide: "Barcode", sfSymbol: "shippingbox", emoji: "📦" },
     detail: {
       hero: {
         images: true,

@@ -31,7 +31,7 @@ export default defineEntity({
         "Start tracking what you have and where it lives. Scan a barcode or add it by hand.",
       actionLabel: "Add to Inventory",
     },
-    icons: { lucide: "Package", sfSymbol: "cube.box" },
+    icons: { lucide: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
     detail: {
       sections: [
         {

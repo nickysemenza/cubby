@@ -480,7 +480,9 @@ function PresentationSection({ entity }: { entity: Entity }) {
               <code>{metadata.icons.lucide}</code>
               <span className="text-muted-foreground/60">web ·</span>
               <code>{metadata.icons.sfSymbol}</code>
-              <span className="text-muted-foreground/60">native</span>
+              <span className="text-muted-foreground/60">native ·</span>
+              <span aria-hidden="true">{metadata.icons.emoji}</span>
+              <span className="text-muted-foreground/60">emoji</span>
             </span>,
           ],
           ["Empty state", emptyState.title],

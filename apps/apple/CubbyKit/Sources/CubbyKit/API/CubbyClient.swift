@@ -347,6 +347,61 @@ public actor CubbyClient {
         }
     }
 
+    /// The device-run local analysis persisted at import time (`photo-local-analysis`), or `nil`
+    /// when none has been recorded yet (`image.analysis` turns a `null` result into a 404, per
+    /// `router.ts`'s nullable-output convention — the same shape `row(_:id:)` above unwraps).
+    public func imageAnalysis(_ id: ImageCode) async throws -> ImageAnalysisOutput? {
+        do {
+            return try await api.image_analysis(query: .init(id: id.rawValue)).ok.body.json
+        } catch {
+            let error = CubbyAPIError.unwrapping(error)
+            if let error = error as? CubbyAPIError, error.status == 404 { return nil }
+            throw error
+        }
+    }
+
+    /// Backfills a device-run analysis onto an already-uploaded image. The server re-checks
+    /// `status`/`sha256` transactionally and refuses with `IMAGE_PRECONDITION_FAILED` when the
+    /// analysis does not describe the row's current bytes; this wrapper only marshals the value —
+    /// this `analysis` payload is a distinct generated type from `ImageAnalysisOutput` above (the
+    /// OpenAPI generator does not dedupe structurally-identical schemas across routes), so its
+    /// fields are read by property and its `.init(...)` types inferred from context, never spelled.
+    public func recordImageAnalysis(_ id: ImageCode, _ analysis: ImageAnalysisOutput) async throws
+        -> Bool
+    {
+        try await perform {
+            try await api.image_recordAnalysis(
+                body: .json(
+                    .init(
+                        id: id.rawValue,
+                        analysis: .init(
+                            analysisVersion: analysis.analysisVersion,
+                            analyzedAt: analysis.analyzedAt,
+                            sha256: analysis.sha256,
+                            capturedAt: analysis.capturedAt,
+                            contentType: analysis.contentType,
+                            width: analysis.width,
+                            height: analysis.height,
+                            classifications: analysis.classifications.map {
+                                .init(identifier: $0.identifier, confidence: $0.confidence)
+                            },
+                            recognizedText: analysis.recognizedText.map {
+                                .init(text: $0.text, confidence: $0.confidence)
+                            },
+                            featurePrint: .init(
+                                revision: analysis.featurePrint.revision,
+                                data: analysis.featurePrint.data),
+                            provenance: .init(
+                                source: .init(rawValue: analysis.provenance.source.rawValue)!,
+                                localIdentifier: analysis.provenance.localIdentifier,
+                                filename: analysis.provenance.filename)
+                        )
+                    )
+                )
+            ).ok.body.json.saved
+        }
+    }
+
     /// The entity's image ids in display order — the order `setImageOrder` rewrites. The detail
     /// payload's `attachments` carry full bodies (URLs included); only the id is projected out
     /// here because that is all this call is for.

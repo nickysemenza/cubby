@@ -4907,6 +4907,48 @@
         }
       }
     },
+    "/api/v1/image/analysis": {
+      "get": {
+        "tags": [
+          "image"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "image.analysis",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAnalysisOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/image/cullPendingImages": {
       "post": {
         "tags": [
@@ -5215,6 +5257,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectImageSummariesOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/image/recordAnalysis": {
+      "post": {
+        "tags": [
+          "image"
+        ],
+        "parameters": [],
+        "operationId": "image.recordAnalysis",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageRecordAnalysisInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageRecordAnalysisOutput"
                 }
               }
             }
@@ -35836,6 +35919,148 @@
         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
         "description": "entity identifier"
       },
+      "ImageAnalysisOutput": {
+        "type": "object",
+        "properties": {
+          "analysisVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "analyzedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "capturedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "height": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "classifications": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "identifier": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "identifier",
+                "confidence"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "recognizedText": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "text",
+                "confidence"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "featurePrint": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "type": "string"
+              },
+              "data": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "revision",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "camera",
+                  "files",
+                  "photoLibrary",
+                  "serverLazy"
+                ]
+              },
+              "localIdentifier": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "filename": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source",
+              "localIdentifier",
+              "filename"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "analysisVersion",
+          "analyzedAt",
+          "sha256",
+          "capturedAt",
+          "contentType",
+          "width",
+          "height",
+          "classifications",
+          "recognizedText",
+          "featurePrint",
+          "provenance"
+        ],
+        "additionalProperties": false
+      },
       "ImageAssociation": {
         "type": "object",
         "properties": {
@@ -36219,6 +36444,167 @@
           "verifiedAt",
           "createdAt",
           "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ImageRecordAnalysisInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "analysis": {
+            "type": "object",
+            "properties": {
+              "analysisVersion": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "analyzedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "capturedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "contentType": {
+                "type": "string"
+              },
+              "width": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "height": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "classifications": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "type": "string"
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "identifier",
+                    "confidence"
+                  ]
+                }
+              },
+              "recognizedText": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "confidence"
+                  ]
+                }
+              },
+              "featurePrint": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "revision",
+                  "data"
+                ]
+              },
+              "provenance": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "camera",
+                      "files",
+                      "photoLibrary",
+                      "serverLazy"
+                    ]
+                  },
+                  "localIdentifier": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "localIdentifier",
+                  "filename"
+                ]
+              }
+            },
+            "required": [
+              "analysisVersion",
+              "analyzedAt",
+              "sha256",
+              "capturedAt",
+              "contentType",
+              "width",
+              "height",
+              "classifications",
+              "recognizedText",
+              "featurePrint",
+              "provenance"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "analysis"
+        ]
+      },
+      "ImageRecordAnalysisOutput": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "saved"
         ],
         "additionalProperties": false
       },

@@ -26,7 +26,7 @@ export default defineEntity({
       description:
         "Add a dated observation, harvest, or photo batch to keep a simple garden history.",
     },
-    icons: { lucide: "CalendarDays", sfSymbol: "text.badge.plus" },
+    icons: { lucide: "CalendarDays", sfSymbol: "text.badge.plus", emoji: "📓" },
     detail: {
       sections: [
         {

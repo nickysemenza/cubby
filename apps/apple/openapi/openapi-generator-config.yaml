@@ -25,9 +25,11 @@ filter:
     - entity.explore
     - entity.graph
     - entity.graphPaths
+    - image.analysis
     - image.detail
     - image.hashIndex
     - image.markUploaded
+    - image.recordAnalysis
     - image.setPerceptualHashes
     - image.uploadImage
     - inventory.findDuplicates

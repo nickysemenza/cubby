@@ -29,7 +29,7 @@ export default defineEntity({
         "Track household projects from planning to done \u2014 budget, timeline, and every task and expense along the way.",
       actionLabel: "New Project",
     },
-    icons: { lucide: "Hammer", sfSymbol: "hammer" },
+    icons: { lucide: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
     detail: {
       hero: {
         chip: "status",

@@ -28,7 +28,7 @@ export default defineEntity({
         "Start a collection of recipes you love. Import one from a URL, or write it from scratch.",
       actionLabel: "Create Recipe",
     },
-    icons: { lucide: "ChefHat", sfSymbol: "fork.knife" },
+    icons: { lucide: "ChefHat", sfSymbol: "fork.knife", emoji: "🍳" },
     detail: {
       hero: { images: true },
       sections: [

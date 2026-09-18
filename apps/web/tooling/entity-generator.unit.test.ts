@@ -83,7 +83,7 @@ const presentation = {
   domain: null,
   description: "Alpha records.",
   emptyState: { title: "No alphas", description: "Add one." },
-  icons: { lucide: "Box", sfSymbol: "cube" },
+  icons: { lucide: "Box", sfSymbol: "cube", emoji: "🧊" },
 } as const;
 
 const base = {
@@ -1384,6 +1384,12 @@ describe("typed entity compiler", () => {
       "ENTITY_LIST_FILTER_SCHEMAS",
     );
     expect(artifact("EntityCatalog.swift")).toContain("import CubbyAPISupport");
+    // Icons emit both the SF Symbol and its emoji text fallback (definition.ts
+    // `icons.emoji`) onto the same generated EntityDescriptor.
+    expect(artifact("EntityCatalog.swift")).toContain(
+      'sfSymbol: "text.badge.plus"',
+    );
+    expect(artifact("EntityCatalog.swift")).toContain('emoji: "📓"');
     const swiftEntityKey = artifact("EntityKey.swift");
     expect(swiftEntityKey).toContain("public enum EntityKey");
     const entityKeyBody = swiftEntityKey

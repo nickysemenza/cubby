@@ -376,6 +376,7 @@ const renderEntityDescriptorLiteral = (
     `    titleField: ${swiftString(entity.inspector.titleField)},\n` +
     `    domain: ${entity.inspector.domain === null ? "nil" : `.${entity.inspector.domain}`},\n` +
     `    sfSymbol: ${swiftString(entity.inspector.icons.sfSymbol)},\n` +
+    `    emoji: ${swiftString(entity.inspector.icons.emoji)},\n` +
     `    searchable: ${swiftBool(searchable)},\n` +
     `    primarySearch: ${primarySearch},\n` +
     `    timeline: ${timeline},\n` +
@@ -668,6 +669,8 @@ export const renderSwiftEntityCatalog = (
     "  public let domain: WayfindingDomain?\n" +
     "  /// SF Symbol name from the declaration's `presentation.icons.sfSymbol`.\n" +
     "  public let sfSymbol: String\n" +
+    "  /// Text fallback from `presentation.icons.emoji` where an SF Symbol can't render: CLI output, notifications, share text.\n" +
+    "  public let emoji: String\n" +
     "  /// Indexed by `search.find`; the intent surface is `searchable` ∧ `httpActions.contains(.get)`.\n" +
     "  public let searchable: Bool\n" +
     "  /// `searchQuery` transport metadata; nil for client-only/custom lists.\n" +

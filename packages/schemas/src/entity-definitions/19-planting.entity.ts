@@ -26,7 +26,7 @@ export default defineEntity({
       description:
         "Record what is growing now or plan the next crop for one of your garden locations.",
     },
-    icons: { lucide: "Sprout", sfSymbol: "leaf" },
+    icons: { lucide: "Sprout", sfSymbol: "leaf", emoji: "🌱" },
     detail: {
       variant: "journal",
       hero: {

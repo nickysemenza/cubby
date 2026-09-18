@@ -80,33 +80,46 @@ const photoImportReconcileOutputSchema = z.object({
   missing: z.array(imageShortcode),
 });
 
-const localPhotoAnalysisSchema = z.object({
-  analysisVersion: z.int().positive(),
-  analyzedAt: z.iso.datetime(),
-  sha256: sha256Schema,
-  capturedAt: z.iso.datetime().nullable(),
-  contentType: z.string(),
-  width: z.int().positive(),
-  height: z.int().positive(),
-  classifications: z.array(
-    z.object({
-      identifier: z.string(),
-      confidence: z.number().min(0).max(1),
+/**
+ * A fresh schema instance every call, deliberately: the OpenAPI generator
+ * dedupes an object schema into one shared, positionally-named
+ * (`InputSchemaNN`) component the moment the SAME instance appears at two
+ * input positions — which would collapse the commit contract's inlined,
+ * nicely-aliased `PhotoImportCommitInput.ImagesPayloadPayload.AnalysisPayload`
+ * (consumed by hand-written CubbyKit code) into that positional name. Each
+ * contract member that embeds this in an input calls the builder again so
+ * every usage stays independently inlined and nameable.
+ */
+export const buildLocalPhotoAnalysisSchema = () =>
+  z.object({
+    analysisVersion: z.int().positive(),
+    analyzedAt: z.iso.datetime(),
+    sha256: sha256Schema,
+    capturedAt: z.iso.datetime().nullable(),
+    contentType: z.string(),
+    width: z.int().positive(),
+    height: z.int().positive(),
+    classifications: z.array(
+      z.object({
+        identifier: z.string(),
+        confidence: z.number().min(0).max(1),
+      }),
+    ),
+    recognizedText: z.array(
+      z.object({ text: z.string(), confidence: z.number().min(0).max(1) }),
+    ),
+    featurePrint: z.object({
+      revision: z.string(),
+      data: z.string().min(1),
     }),
-  ),
-  recognizedText: z.array(
-    z.object({ text: z.string(), confidence: z.number().min(0).max(1) }),
-  ),
-  featurePrint: z.object({
-    revision: z.string(),
-    data: z.string().min(1),
-  }),
-  provenance: z.object({
-    source: z.enum(["camera", "files", "photoLibrary", "serverLazy"]),
-    localIdentifier: z.string().nullable(),
-    filename: z.string(),
-  }),
-});
+    provenance: z.object({
+      source: z.enum(["camera", "files", "photoLibrary", "serverLazy"]),
+      localIdentifier: z.string().nullable(),
+      filename: z.string(),
+    }),
+  });
+
+export const localPhotoAnalysisSchema = buildLocalPhotoAnalysisSchema();
 
 const photoImportDestinationSchema = z.union([
   z.object({ kind: z.literal("existing"), candidateId: z.string().min(1) }),
@@ -164,6 +177,7 @@ const photoImportCommitResultSchema = z.object({
   committedAt: z.iso.datetime(),
 });
 
+export type LocalPhotoAnalysis = z.output<typeof localPhotoAnalysisSchema>;
 export type PhotoImportStageInput = z.output<
   typeof photoImportStageInputSchema
 >;

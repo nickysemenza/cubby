@@ -10912,6 +10912,317 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/Id`.
         public typealias Id = Swift.String
+        /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput`.
+        public struct ImageAnalysisOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/analysisVersion`.
+            public var analysisVersion: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/analyzedAt`.
+            public var analyzedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/sha256`.
+            public var sha256: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/capturedAt`.
+            public var capturedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/contentType`.
+            public var contentType: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/width`.
+            public var width: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/height`.
+            public var height: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/ClassificationsPayload`.
+            public struct ClassificationsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/ClassificationsPayload/identifier`.
+                public var identifier: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/ClassificationsPayload/confidence`.
+                public var confidence: Swift.Double
+                /// Creates a new `ClassificationsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - identifier:
+                ///   - confidence:
+                public init(
+                    identifier: Swift.String,
+                    confidence: Swift.Double
+                ) {
+                    self.identifier = identifier
+                    self.confidence = confidence
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case identifier
+                    case confidence
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.identifier = try container.decode(
+                        Swift.String.self,
+                        forKey: .identifier
+                    )
+                    self.confidence = try container.decode(
+                        Swift.Double.self,
+                        forKey: .confidence
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "identifier",
+                        "confidence"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/classifications`.
+            public typealias ClassificationsPayload = [Components.Schemas.ImageAnalysisOutput.ClassificationsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/classifications`.
+            public var classifications: Components.Schemas.ImageAnalysisOutput.ClassificationsPayload
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/RecognizedTextPayload`.
+            public struct RecognizedTextPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/RecognizedTextPayload/text`.
+                public var text: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/RecognizedTextPayload/confidence`.
+                public var confidence: Swift.Double
+                /// Creates a new `RecognizedTextPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - text:
+                ///   - confidence:
+                public init(
+                    text: Swift.String,
+                    confidence: Swift.Double
+                ) {
+                    self.text = text
+                    self.confidence = confidence
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case text
+                    case confidence
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.text = try container.decode(
+                        Swift.String.self,
+                        forKey: .text
+                    )
+                    self.confidence = try container.decode(
+                        Swift.Double.self,
+                        forKey: .confidence
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "text",
+                        "confidence"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/recognizedText`.
+            public typealias RecognizedTextPayload = [Components.Schemas.ImageAnalysisOutput.RecognizedTextPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/recognizedText`.
+            public var recognizedText: Components.Schemas.ImageAnalysisOutput.RecognizedTextPayload
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/featurePrint`.
+            public struct FeaturePrintPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/featurePrint/revision`.
+                public var revision: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/featurePrint/data`.
+                public var data: Swift.String
+                /// Creates a new `FeaturePrintPayload`.
+                ///
+                /// - Parameters:
+                ///   - revision:
+                ///   - data:
+                public init(
+                    revision: Swift.String,
+                    data: Swift.String
+                ) {
+                    self.revision = revision
+                    self.data = data
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case revision
+                    case data
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.revision = try container.decode(
+                        Swift.String.self,
+                        forKey: .revision
+                    )
+                    self.data = try container.decode(
+                        Swift.String.self,
+                        forKey: .data
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "revision",
+                        "data"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/featurePrint`.
+            public var featurePrint: Components.Schemas.ImageAnalysisOutput.FeaturePrintPayload
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/provenance`.
+            public struct ProvenancePayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/provenance/source`.
+                @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case camera = "camera"
+                    case files = "files"
+                    case photoLibrary = "photoLibrary"
+                    case serverLazy = "serverLazy"
+                }
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/provenance/source`.
+                public var source: Components.Schemas.ImageAnalysisOutput.ProvenancePayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/provenance/localIdentifier`.
+                public var localIdentifier: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/provenance/filename`.
+                public var filename: Swift.String
+                /// Creates a new `ProvenancePayload`.
+                ///
+                /// - Parameters:
+                ///   - source:
+                ///   - localIdentifier:
+                ///   - filename:
+                public init(
+                    source: Components.Schemas.ImageAnalysisOutput.ProvenancePayload.SourcePayload,
+                    localIdentifier: Swift.String? = nil,
+                    filename: Swift.String
+                ) {
+                    self.source = source
+                    self.localIdentifier = localIdentifier
+                    self.filename = filename
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case source
+                    case localIdentifier
+                    case filename
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.source = try container.decode(
+                        Components.Schemas.ImageAnalysisOutput.ProvenancePayload.SourcePayload.self,
+                        forKey: .source
+                    )
+                    self.localIdentifier = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .localIdentifier
+                    )
+                    self.filename = try container.decode(
+                        Swift.String.self,
+                        forKey: .filename
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "source",
+                        "localIdentifier",
+                        "filename"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageAnalysisOutput/provenance`.
+            public var provenance: Components.Schemas.ImageAnalysisOutput.ProvenancePayload
+            /// Creates a new `ImageAnalysisOutput`.
+            ///
+            /// - Parameters:
+            ///   - analysisVersion:
+            ///   - analyzedAt:
+            ///   - sha256:
+            ///   - capturedAt:
+            ///   - contentType:
+            ///   - width:
+            ///   - height:
+            ///   - classifications:
+            ///   - recognizedText:
+            ///   - featurePrint:
+            ///   - provenance:
+            public init(
+                analysisVersion: Swift.Int,
+                analyzedAt: Foundation.Date,
+                sha256: Swift.String,
+                capturedAt: Foundation.Date? = nil,
+                contentType: Swift.String,
+                width: Swift.Int,
+                height: Swift.Int,
+                classifications: Components.Schemas.ImageAnalysisOutput.ClassificationsPayload,
+                recognizedText: Components.Schemas.ImageAnalysisOutput.RecognizedTextPayload,
+                featurePrint: Components.Schemas.ImageAnalysisOutput.FeaturePrintPayload,
+                provenance: Components.Schemas.ImageAnalysisOutput.ProvenancePayload
+            ) {
+                self.analysisVersion = analysisVersion
+                self.analyzedAt = analyzedAt
+                self.sha256 = sha256
+                self.capturedAt = capturedAt
+                self.contentType = contentType
+                self.width = width
+                self.height = height
+                self.classifications = classifications
+                self.recognizedText = recognizedText
+                self.featurePrint = featurePrint
+                self.provenance = provenance
+            }
+            public enum CodingKeys: String, CodingKey {
+                case analysisVersion
+                case analyzedAt
+                case sha256
+                case capturedAt
+                case contentType
+                case width
+                case height
+                case classifications
+                case recognizedText
+                case featurePrint
+                case provenance
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.analysisVersion = try container.decode(
+                    Swift.Int.self,
+                    forKey: .analysisVersion
+                )
+                self.analyzedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .analyzedAt
+                )
+                self.sha256 = try container.decode(
+                    Swift.String.self,
+                    forKey: .sha256
+                )
+                self.capturedAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .capturedAt
+                )
+                self.contentType = try container.decode(
+                    Swift.String.self,
+                    forKey: .contentType
+                )
+                self.width = try container.decode(
+                    Swift.Int.self,
+                    forKey: .width
+                )
+                self.height = try container.decode(
+                    Swift.Int.self,
+                    forKey: .height
+                )
+                self.classifications = try container.decode(
+                    Components.Schemas.ImageAnalysisOutput.ClassificationsPayload.self,
+                    forKey: .classifications
+                )
+                self.recognizedText = try container.decode(
+                    Components.Schemas.ImageAnalysisOutput.RecognizedTextPayload.self,
+                    forKey: .recognizedText
+                )
+                self.featurePrint = try container.decode(
+                    Components.Schemas.ImageAnalysisOutput.FeaturePrintPayload.self,
+                    forKey: .featurePrint
+                )
+                self.provenance = try container.decode(
+                    Components.Schemas.ImageAnalysisOutput.ProvenancePayload.self,
+                    forKey: .provenance
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "analysisVersion",
+                    "analyzedAt",
+                    "sha256",
+                    "capturedAt",
+                    "contentType",
+                    "width",
+                    "height",
+                    "classifications",
+                    "recognizedText",
+                    "featurePrint",
+                    "provenance"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ImageAssociation`.
         public struct ImageAssociation: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ImageAssociation/entityType`.
@@ -11355,6 +11666,240 @@ extension Components {
                     "verifiedAt",
                     "createdAt",
                     "updatedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput`.
+        public struct ImageRecordAnalysisInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis`.
+            public struct AnalysisPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/analysisVersion`.
+                public var analysisVersion: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/analyzedAt`.
+                public var analyzedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/sha256`.
+                public var sha256: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/capturedAt`.
+                public var capturedAt: Foundation.Date?
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/contentType`.
+                public var contentType: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/width`.
+                public var width: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/height`.
+                public var height: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/ClassificationsPayload`.
+                public struct ClassificationsPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/ClassificationsPayload/identifier`.
+                    public var identifier: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/ClassificationsPayload/confidence`.
+                    public var confidence: Swift.Double
+                    /// Creates a new `ClassificationsPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - identifier:
+                    ///   - confidence:
+                    public init(
+                        identifier: Swift.String,
+                        confidence: Swift.Double
+                    ) {
+                        self.identifier = identifier
+                        self.confidence = confidence
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case identifier
+                        case confidence
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/classifications`.
+                public typealias ClassificationsPayload = [Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.ClassificationsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/classifications`.
+                public var classifications: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.ClassificationsPayload
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/RecognizedTextPayload`.
+                public struct RecognizedTextPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/RecognizedTextPayload/text`.
+                    public var text: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/RecognizedTextPayload/confidence`.
+                    public var confidence: Swift.Double
+                    /// Creates a new `RecognizedTextPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - text:
+                    ///   - confidence:
+                    public init(
+                        text: Swift.String,
+                        confidence: Swift.Double
+                    ) {
+                        self.text = text
+                        self.confidence = confidence
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case text
+                        case confidence
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/recognizedText`.
+                public typealias RecognizedTextPayload = [Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.RecognizedTextPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/recognizedText`.
+                public var recognizedText: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.RecognizedTextPayload
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/featurePrint`.
+                public struct FeaturePrintPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/featurePrint/revision`.
+                    public var revision: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/featurePrint/data`.
+                    public var data: Swift.String
+                    /// Creates a new `FeaturePrintPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - revision:
+                    ///   - data:
+                    public init(
+                        revision: Swift.String,
+                        data: Swift.String
+                    ) {
+                        self.revision = revision
+                        self.data = data
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case revision
+                        case data
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/featurePrint`.
+                public var featurePrint: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.FeaturePrintPayload
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/provenance`.
+                public struct ProvenancePayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/provenance/source`.
+                    @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case camera = "camera"
+                        case files = "files"
+                        case photoLibrary = "photoLibrary"
+                        case serverLazy = "serverLazy"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/provenance/source`.
+                    public var source: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.ProvenancePayload.SourcePayload
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/provenance/localIdentifier`.
+                    public var localIdentifier: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/provenance/filename`.
+                    public var filename: Swift.String
+                    /// Creates a new `ProvenancePayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - source:
+                    ///   - localIdentifier:
+                    ///   - filename:
+                    public init(
+                        source: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.ProvenancePayload.SourcePayload,
+                        localIdentifier: Swift.String? = nil,
+                        filename: Swift.String
+                    ) {
+                        self.source = source
+                        self.localIdentifier = localIdentifier
+                        self.filename = filename
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case source
+                        case localIdentifier
+                        case filename
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis/provenance`.
+                public var provenance: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.ProvenancePayload
+                /// Creates a new `AnalysisPayload`.
+                ///
+                /// - Parameters:
+                ///   - analysisVersion:
+                ///   - analyzedAt:
+                ///   - sha256:
+                ///   - capturedAt:
+                ///   - contentType:
+                ///   - width:
+                ///   - height:
+                ///   - classifications:
+                ///   - recognizedText:
+                ///   - featurePrint:
+                ///   - provenance:
+                public init(
+                    analysisVersion: Swift.Int,
+                    analyzedAt: Foundation.Date,
+                    sha256: Swift.String,
+                    capturedAt: Foundation.Date? = nil,
+                    contentType: Swift.String,
+                    width: Swift.Int,
+                    height: Swift.Int,
+                    classifications: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.ClassificationsPayload,
+                    recognizedText: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.RecognizedTextPayload,
+                    featurePrint: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.FeaturePrintPayload,
+                    provenance: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload.ProvenancePayload
+                ) {
+                    self.analysisVersion = analysisVersion
+                    self.analyzedAt = analyzedAt
+                    self.sha256 = sha256
+                    self.capturedAt = capturedAt
+                    self.contentType = contentType
+                    self.width = width
+                    self.height = height
+                    self.classifications = classifications
+                    self.recognizedText = recognizedText
+                    self.featurePrint = featurePrint
+                    self.provenance = provenance
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case analysisVersion
+                    case analyzedAt
+                    case sha256
+                    case capturedAt
+                    case contentType
+                    case width
+                    case height
+                    case classifications
+                    case recognizedText
+                    case featurePrint
+                    case provenance
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisInput/analysis`.
+            public var analysis: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload
+            /// Creates a new `ImageRecordAnalysisInput`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - analysis:
+            public init(
+                id: Swift.String,
+                analysis: Components.Schemas.ImageRecordAnalysisInput.AnalysisPayload
+            ) {
+                self.id = id
+                self.analysis = analysis
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case analysis
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisOutput`.
+        public struct ImageRecordAnalysisOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageRecordAnalysisOutput/saved`.
+            public var saved: Swift.Bool
+            /// Creates a new `ImageRecordAnalysisOutput`.
+            ///
+            /// - Parameters:
+            ///   - saved:
+            public init(saved: Swift.Bool) {
+                self.saved = saved
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saved
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.saved = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .saved
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "saved"
                 ])
             }
         }

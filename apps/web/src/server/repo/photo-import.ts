@@ -18,7 +18,11 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import type { PhotoImportCommitInput } from "~/contracts/photo-import.contract";
+import {
+  localPhotoAnalysisSchema,
+  type LocalPhotoAnalysis,
+  type PhotoImportCommitInput,
+} from "~/contracts/photo-import.contract";
 import type { Database } from "~/server/db";
 import { aiAnalysis, cookbook, image, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -230,6 +234,34 @@ export async function persistLocalImageAnalysis(
       targetWhere: isNull(aiAnalysis.deletedAt),
       set: { result: analysis, updatedAt: new Date() },
     });
+}
+
+/**
+ * Newest non-deleted `photo-local-analysis` row for an image, or `null` if
+ * none exists or the stored `result` no longer matches the current schema
+ * (an old row from a retired `analysisVersion` shape) — the diagnostics tab
+ * treats either as "nothing persisted yet" rather than a server error.
+ */
+export async function getLocalImageAnalysis(
+  db: Database,
+  imageId: string,
+): Promise<LocalPhotoAnalysis | null> {
+  const [row] = await getDb(db)
+    .select({ result: aiAnalysis.result })
+    .from(aiAnalysis)
+    .where(
+      and(
+        eq(aiAnalysis.entityType, "image"),
+        eq(aiAnalysis.entityId, imageId),
+        eq(aiAnalysis.feature, "photo-local-analysis"),
+        isNull(aiAnalysis.deletedAt),
+      ),
+    )
+    .orderBy(desc(aiAnalysis.promptVersion), desc(aiAnalysis.updatedAt))
+    .limit(1);
+  if (!row) return null;
+  const parsed = localPhotoAnalysisSchema.safeParse(row.result);
+  return parsed.success ? parsed.data : null;
 }
 
 export async function withPhotoImportTransaction<T>(

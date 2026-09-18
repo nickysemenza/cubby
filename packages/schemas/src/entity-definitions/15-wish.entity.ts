@@ -18,7 +18,7 @@ export default defineEntity({
         "Keep a tool idea open-ended or compare a few Products before deciding.",
       actionLabel: "Add Wish",
     },
-    icons: { lucide: "Heart", sfSymbol: "star" },
+    icons: { lucide: "Heart", sfSymbol: "star", emoji: "⭐" },
     detail: {
       hero: { actions: ["edit", "markPurchased"] },
       sections: [

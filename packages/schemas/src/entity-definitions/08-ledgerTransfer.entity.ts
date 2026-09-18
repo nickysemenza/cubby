@@ -34,6 +34,7 @@ export default defineEntity({
     icons: {
       lucide: "ArrowLeftRight",
       sfSymbol: "arrow.left.arrow.right.circle",
+      emoji: "🔁",
     },
     detail: {
       sections: [

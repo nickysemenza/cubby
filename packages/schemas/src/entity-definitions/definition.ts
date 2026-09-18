@@ -497,6 +497,8 @@ const metadataSchemas = () => {
           lucide: nonEmptyString(),
           /** An SF Symbol name for the native app. */
           sfSymbol: nonEmptyString(),
+          /** Text fallback where an SF Symbol can't render: CLI output, notifications, share text. */
+          emoji: nonEmptyString(),
         })
         .strict(),
       detail: z

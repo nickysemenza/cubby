@@ -20,7 +20,7 @@ export default defineEntity({
         "Track the places money goes \u2014 retailers, contractors, suppliers \u2014 so every purchase and expense can point at one.",
       actionLabel: "Add Vendor",
     },
-    icons: { lucide: "Store", sfSymbol: "storefront" },
+    icons: { lucide: "Store", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
       sections: [
         {

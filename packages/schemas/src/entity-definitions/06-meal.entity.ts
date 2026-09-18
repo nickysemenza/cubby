@@ -28,7 +28,11 @@ export default defineEntity({
         "Plan recipes onto your calendar to see costs add up and build a shopping list.",
       actionLabel: "Plan a Meal",
     },
-    icons: { lucide: "CalendarDays", sfSymbol: "fork.knife.circle" },
+    icons: {
+      lucide: "CalendarDays",
+      sfSymbol: "fork.knife.circle",
+      emoji: "🍽️",
+    },
     detail: {
       hero: { images: true },
       sections: [

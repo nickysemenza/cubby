@@ -83,6 +83,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/garden-entries/timeline`.
     /// - Remark: Generated from `#/paths//api/v1/garden-entries/timeline/get(resources.gardenEntry.timeline)`.
     func resources_gardenEntry_timeline(_ input: Operations.Resources_gardenEntry_timeline.Input) async throws -> Operations.Resources_gardenEntry_timeline.Output
+    /// - Remark: HTTP `GET /api/v1/image/analysis`.
+    /// - Remark: Generated from `#/paths//api/v1/image/analysis/get(image.analysis)`.
+    func image_analysis(_ input: Operations.Image_analysis.Input) async throws -> Operations.Image_analysis.Output
     /// - Remark: HTTP `GET /api/v1/image/detail`.
     /// - Remark: Generated from `#/paths//api/v1/image/detail/get(image.detail)`.
     func image_detail(_ input: Operations.Image_detail.Input) async throws -> Operations.Image_detail.Output
@@ -92,6 +95,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/image/markUploaded`.
     /// - Remark: Generated from `#/paths//api/v1/image/markUploaded/post(image.markUploaded)`.
     func image_markUploaded(_ input: Operations.Image_markUploaded.Input) async throws -> Operations.Image_markUploaded.Output
+    /// - Remark: HTTP `POST /api/v1/image/recordAnalysis`.
+    /// - Remark: Generated from `#/paths//api/v1/image/recordAnalysis/post(image.recordAnalysis)`.
+    func image_recordAnalysis(_ input: Operations.Image_recordAnalysis.Input) async throws -> Operations.Image_recordAnalysis.Output
     /// - Remark: HTTP `POST /api/v1/image/setPerceptualHashes`.
     /// - Remark: Generated from `#/paths//api/v1/image/setPerceptualHashes/post(image.setPerceptualHashes)`.
     func image_setPerceptualHashes(_ input: Operations.Image_setPerceptualHashes.Input) async throws -> Operations.Image_setPerceptualHashes.Output
@@ -611,6 +617,17 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// - Remark: HTTP `GET /api/v1/image/analysis`.
+    /// - Remark: Generated from `#/paths//api/v1/image/analysis/get(image.analysis)`.
+    public func image_analysis(
+        query: Operations.Image_analysis.Input.Query,
+        headers: Operations.Image_analysis.Input.Headers = .init()
+    ) async throws -> Operations.Image_analysis.Output {
+        try await image_analysis(Operations.Image_analysis.Input(
+            query: query,
+            headers: headers
+        ))
+    }
     /// - Remark: HTTP `GET /api/v1/image/detail`.
     /// - Remark: Generated from `#/paths//api/v1/image/detail/get(image.detail)`.
     public func image_detail(
@@ -634,6 +651,17 @@ extension APIProtocol {
         body: Operations.Image_markUploaded.Input.Body? = nil
     ) async throws -> Operations.Image_markUploaded.Output {
         try await image_markUploaded(Operations.Image_markUploaded.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/image/recordAnalysis`.
+    /// - Remark: Generated from `#/paths//api/v1/image/recordAnalysis/post(image.recordAnalysis)`.
+    public func image_recordAnalysis(
+        headers: Operations.Image_recordAnalysis.Input.Headers = .init(),
+        body: Operations.Image_recordAnalysis.Input.Body? = nil
+    ) async throws -> Operations.Image_recordAnalysis.Output {
+        try await image_recordAnalysis(Operations.Image_recordAnalysis.Input(
             headers: headers,
             body: body
         ))
