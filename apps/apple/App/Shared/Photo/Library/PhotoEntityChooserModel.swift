@@ -166,26 +166,16 @@ final class PhotoEntityChooserModel {
     }
 
     private var dateFilters: EntityFilterState {
-        guard let captureDate, let semanticDateKey else { return EntityFilterState() }
+        guard let captureDate, let semanticDateKey,
+            let dateFilter = descriptor.filter(semanticDateKey),
+            case .range(let from, let to, _) = dateFilter.wire
+        else { return EntityFilterState() }
         let start = calendar.startOfDay(for: captureDate)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
         let formatter = DateFormatter()
         formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd"
-        let (from, to): (String, String)
-        switch descriptor.key.rawValue {
-        case "purchase": (from, to) = ("dateFrom", "dateTo")
-        case "gardenEntry": (from, to) = ("observedOnFrom", "observedOnTo")
-        case "meal": (from, to) = ("from", "to")
-        default:
-            // Unknown date-bearing entities still use the declaration's semantic key when it
-            // follows the conventional range naming. They remain searchable without inventing a
-            // request parameter for entities that have no declared range.
-            guard descriptor.filter("\(semanticDateKey)From") != nil,
-                descriptor.filter("\(semanticDateKey)To") != nil
-            else { return EntityFilterState() }
-            (from, to) = ("\(semanticDateKey)From", "\(semanticDateKey)To")
-        }
         return EntityFilterState([
             from: .single(formatter.string(from: start)),
             to: .single(formatter.string(from: end.addingTimeInterval(-1))),
@@ -195,9 +185,8 @@ final class PhotoEntityChooserModel {
     private func isSameSemanticDayAsCapture(_ row: EntityRow) -> Bool {
         guard let captureDate else { return false }
         guard let semanticDateKey, let raw = row.raw[semanticDateKey]?.stringValue else { return false }
-        if raw.count >= 10, let day = Self.plainDate(raw) {
-            return calendar.dateComponents([.era, .year, .month, .day], from: day)
-                == calendar.dateComponents([.era, .year, .month, .day], from: captureDate)
+        if raw.count >= 10 {
+            return String(raw.prefix(10)) == Self.plainDate(captureDate, calendar: calendar)
         }
         guard let parsed = ISO8601DateFormatter().date(from: raw) else { return false }
         return calendar.isDate(parsed, inSameDayAs: captureDate)
@@ -209,19 +198,21 @@ final class PhotoEntityChooserModel {
     }
 
     private static func semanticDateKey(for descriptor: EntityDescriptor) -> String? {
-        ["date", "observedOn"].first { key in
-            guard let field = descriptor.field(key) else { return false }
+        PhotoImportCatalog.routingPolicies[descriptor.key]?.temporalFields.first { key in
+            guard let field = descriptor.field(key), let filter = descriptor.filter(key),
+                case .range = filter.wire
+            else { return false }
             return field.kind == .date || field.kind == .timestamp
         }
     }
 
-    private static func plainDate(_ raw: String) -> Date? {
+    private static func plainDate(_ date: Date, calendar: Calendar) -> String {
         let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.calendar = calendar
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: String(raw.prefix(10)))
+        return formatter.string(from: date)
     }
 
     private static func describe(_ error: Error) -> String {

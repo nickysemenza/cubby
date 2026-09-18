@@ -356,6 +356,13 @@ export default defineEntity({
     schema: { module: "@cubby/schemas/meal", export: "mealFilterFields" },
     descriptors: [
       {
+        columnId: "date",
+        urlKey: "mealDate",
+        kind: "range",
+        wire: { kind: "range", from: "from", to: "to" },
+        placeholder: "Filter by meal date...",
+      },
+      {
         columnId: "mealType",
         kind: "multiselect",
         placeholder: "Filter by meal type...",

@@ -391,6 +391,7 @@ export async function associatePendingImages<
   parentId: GetColumnData<TParentColumn>,
   pendingImageIds: ImageId[],
   startSortOrder = 0,
+  options: { activate?: boolean } = {},
 ): Promise<void> {
   const requestedIds = [...new Set(pendingImageIds)];
   if (requestedIds.length === 0) {
@@ -453,7 +454,10 @@ export async function associatePendingImages<
       .onConflictDoNothing();
   }
 
-  if (availableRows.length > 0) {
+  // Import commits hold the image row locks and activate every new image in
+  // one final bulk update. Existing callers retain the historical promotion
+  // behavior unless they explicitly opt out here.
+  if (options.activate !== false && availableRows.length > 0) {
     await dbOrTx
       .update(image)
       .set({ status: "UPLOADED" })

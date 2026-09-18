@@ -7,7 +7,7 @@ import OpenAPIRuntime
 /// Every error status in `/api/v1` carries one bare `ApiError` body — there is no `{ok:false}`
 /// envelope. `detail` is `nil` whenever the body isn't that shape (a 502 from an intermediary
 /// proxy, for example, is usually an HTML error page).
-public struct CubbyAPIError: Error, Sendable {
+public struct CubbyAPIError: Error, LocalizedError, Sendable {
     public let status: Int
     public let operationID: String
     public let detail: ErrorDetail?
@@ -32,6 +32,32 @@ public struct CubbyAPIError: Error, Sendable {
 
     /// The body's `reason`, when the server sent one.
     public var reason: String? { detail?.reason }
+
+    /// User-facing text from Cubby's canonical API error body. Falling back to the HTTP status
+    /// keeps SwiftUI from rendering the opaque `CubbyKit.CubbyAPIError error 1` description when
+    /// an intermediary returned HTML or an empty body.
+    public var errorDescription: String? {
+        detail?.message ?? "Cubby could not complete this request (HTTP \(status))."
+    }
+
+    public var failureReason: String? {
+        detail?.requestId.map { "Request \($0)" } ?? operationID
+    }
+
+    public var recoverySuggestion: String? {
+        switch status {
+        case 401:
+            "Sign in again, then retry."
+        case 409:
+            "Refresh the record, review the latest values, and retry."
+        case 429:
+            "Wait a moment, then retry."
+        case 500...599:
+            "Try again. If this continues, contact support."
+        default:
+            nil
+        }
+    }
 
     /// One entry of `ApiError.validationIssues`. The wire path mixes object keys and array
     /// indices, so both arrive here spelled as strings.

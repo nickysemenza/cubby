@@ -649,6 +649,13 @@ const metadataSchemas = () => {
       identityEvidence: z.boolean({ error: "must be a boolean" }),
     })
     .strict();
+  const imageVisualEvidenceMetadataSchema = z
+    .object({
+      relationPath: imageRelationPathSchema,
+      priority: z.number().int().nonnegative(),
+      ordering: z.enum(["declared", "newest", "oldest"]),
+    })
+    .strict();
   const imageIngressBindingMetadataSchema = z.discriminatedUnion("from", [
     z
       .object({ field: nonEmptyString(), from: z.literal("source-id") })
@@ -743,6 +750,15 @@ const metadataSchemas = () => {
         })
         .strict()
         .default({ ocrFields: [], classifierLabels: [] }),
+      /**
+       * Authoritative visual evidence for photo routing. This is deliberately
+       * separate from borrowed display imagery, which can never become an
+       * identity assertion by being displayed.
+       */
+      visualEvidence: z
+        .array(imageVisualEvidenceMetadataSchema)
+        .optional()
+        .default([]),
       abstention: z
         .object({
           minimumScore: z.number().min(0).max(1),

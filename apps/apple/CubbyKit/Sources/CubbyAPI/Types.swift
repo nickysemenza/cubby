@@ -218,6 +218,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/photoImport/commit`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/commit/post(photoImport.commit)`.
     func photoImport_commit(_ input: Operations.PhotoImport_commit.Input) async throws -> Operations.PhotoImport_commit.Output
+    /// - Remark: HTTP `POST /api/v1/photoImport/reconcile`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/reconcile/post(photoImport.reconcile)`.
+    func photoImport_reconcile(_ input: Operations.PhotoImport_reconcile.Input) async throws -> Operations.PhotoImport_reconcile.Output
     /// - Remark: HTTP `POST /api/v1/photoImport/stage`.
     /// - Remark: Generated from `#/paths//api/v1/photoImport/stage/post(photoImport.stage)`.
     func photoImport_stage(_ input: Operations.PhotoImport_stage.Input) async throws -> Operations.PhotoImport_stage.Output
@@ -1069,6 +1072,17 @@ extension APIProtocol {
         body: Operations.PhotoImport_commit.Input.Body? = nil
     ) async throws -> Operations.PhotoImport_commit.Output {
         try await photoImport_commit(Operations.PhotoImport_commit.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/photoImport/reconcile`.
+    /// - Remark: Generated from `#/paths//api/v1/photoImport/reconcile/post(photoImport.reconcile)`.
+    public func photoImport_reconcile(
+        headers: Operations.PhotoImport_reconcile.Input.Headers = .init(),
+        body: Operations.PhotoImport_reconcile.Input.Body? = nil
+    ) async throws -> Operations.PhotoImport_reconcile.Output {
+        try await photoImport_reconcile(Operations.PhotoImport_reconcile.Input(
             headers: headers,
             body: body
         ))

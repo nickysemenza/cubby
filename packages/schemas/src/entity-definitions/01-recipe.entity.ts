@@ -829,6 +829,13 @@ export default defineEntity({
         temporalFields: [],
         lifecycleFilters: [],
         signals: { ocrFields: ["name"], classifierLabels: ["recipe"] },
+        visualEvidence: [
+          {
+            relationPath: ["meals"],
+            priority: 1,
+            ordering: "newest",
+          },
+        ],
         abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
       },
     },

@@ -95,6 +95,9 @@ struct PhotoMatchReviewContent: View {
     var body: some View {
         List {
             Section {
+                PhotoImportHero(items: items)
+            }
+            Section {
                 Text(appModel.photoMatches.coverage)
                 if appModel.photoMatches.remainingCount > 0 {
                     Text(

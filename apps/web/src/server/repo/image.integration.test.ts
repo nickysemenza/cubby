@@ -22,6 +22,8 @@ import {
   createAndAssociateUploadedImage,
   createPendingImageRecord,
   createUploadedImageRecord,
+  countCullablePendingImages,
+  cullPendingImages,
   deleteImages,
   detachImagesFromEntity,
   imageList,
@@ -287,6 +289,96 @@ describe("image repository", () => {
         .from(projectImage)
         .where(inArray(projectImage.imageId, ids)),
     ).toHaveLength(0);
+  });
+
+  it("culls only expired unassociated pending images", async () => {
+    const projectId = (
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "Pending photo cleanup project" }),
+        ctx.actor,
+      )
+    ).entityId;
+    const expired = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "expired-pending.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const protectedByAssociation = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "associated-pending.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const recent = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "recent-pending.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const expiredAt = new Date(Date.now() - 25 * 60 * 60 * 1_000);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ createdAt: expiredAt })
+      .where(inArray(image.id, [expired.id, protectedByAssociation.id]));
+    await associatePendingImages(
+      getDb(ctx.db),
+      imageJoinBindings.project,
+      projectId,
+      [parseEntityId("image", protectedByAssociation.id)],
+      0,
+      { activate: false },
+    );
+
+    expect(await countCullablePendingImages(ctx.db, 24)).toBe(1);
+    expect(await cullPendingImages(ctx.db, 24)).toEqual({
+      count: 1,
+      deletedIds: [expired.id],
+      deletedKeys: [expired.key],
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: image.id, status: image.status })
+        .from(image)
+        .where(inArray(image.id, [protectedByAssociation.id, recent.id])),
+    ).toEqual(
+      expect.arrayContaining([
+        { id: protectedByAssociation.id, status: "PENDING" },
+        { id: recent.id, status: "PENDING" },
+      ]),
+    );
+  });
+
+  it("skips expired pending images locked by an in-flight commit", async () => {
+    const pending = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "commit-locked-pending.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    await getDb(ctx.db)
+      .update(image)
+      .set({ createdAt: new Date(Date.now() - 25 * 60 * 60 * 1_000) })
+      .where(eq(image.id, pending.id));
+
+    await withTransaction(ctx.db, async (tx) => {
+      await tx
+        .select({ id: image.id })
+        .from(image)
+        .where(eq(image.id, pending.id))
+        .for("update");
+      expect(await cullPendingImages(ctx.db, 24)).toEqual({
+        count: 0,
+        deletedIds: [],
+        deletedKeys: [],
+      });
+    });
+
+    expect(await cullPendingImages(ctx.db, 24)).toMatchObject({
+      count: 1,
+      deletedIds: [pending.id],
+    });
   });
 
   /**

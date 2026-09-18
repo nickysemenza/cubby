@@ -17,6 +17,11 @@ struct PhotoDestinationOptionTests {
 
         #expect(create.id != existing.id)
         #expect(create.menuTitle == "New Meal from Recipe")
+        #expect(
+            create.menuTitle(
+                for: EntityRow(
+                    id: "RCP-ABCD", title: "Soup", subtitle: nil, imageURL: nil,
+                    raw: .object([:]))) == "Create Meal for RCP-ABCD")
         #expect(existing.title == "Meals")
     }
 
@@ -43,7 +48,7 @@ struct PhotoDestinationOptionTests {
         let gardenEntry = try #require(
             manifest.sourceTypeOptions.first { $0.source == .gardenEntry })
 
-        #expect(planting.outcomeDescription == "Creates a new Garden Entry")
+        #expect(planting.outcomeDescription == "Choose an existing or new Garden Entry")
         #expect(gardenEntry.outcomeDescription == "Attaches to an existing Garden Entry")
     }
 }

@@ -8,10 +8,7 @@ import {
 import { anyShortcodeSchema, parseEntityRef } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
-import type {
-  PhotoImportCommitInput,
-  PhotoImportReceipt,
-} from "~/contracts/photo-import.contract";
+import type { PhotoImportCommitInput } from "~/contracts/photo-import.contract";
 import {
   executeEntity,
   type EntityKernelContext,
@@ -498,7 +495,8 @@ const applyPlan = async (
   input: PhotoImportCommitInput,
 ): Promise<PhotoImportRouteCommitResult> => {
   const destinations = new Map<string, string>();
-  const createdDestinations: PhotoImportReceipt["createdDestinations"] = [];
+  const createdDestinations: PhotoImportRouteCommitResult["createdDestinations"] =
+    [];
   const events: MutationSideEffectEvent[] = [];
   for (const draft of input.creates) {
     const route = routeFor(draft.routeId);

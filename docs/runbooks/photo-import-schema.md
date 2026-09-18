@@ -1,35 +1,21 @@
 # Photo import schema rollout
 
-The manifest-driven importer is an additive rollout. Apply this expansion before
-deploying code that writes import receipts. `AiAnalysis.entityType` is plain text,
-so accepting `image` needs no database enum migration.
+Photo imports do not require a receipt table or a schema migration. The
+database lifecycle is represented directly by `Image.status`: newly staged
+rows are `PENDING`, and a successful commit performs one final bulk transition
+to `UPLOADED` after all destination writes and projections succeed.
 
-```sql
-CREATE TABLE IF NOT EXISTS "PhotoImportReceipt" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "idempotencyKey" text NOT NULL,
-  "requestHash" text NOT NULL,
-  "receipt" jsonb NOT NULL,
-  "createdAt" timestamp DEFAULT now() NOT NULL,
-  "updatedAt" timestamp DEFAULT now() NOT NULL
-);
+Deployments must therefore work against databases both with and without any
+legacy receipt table that may have been created by an earlier experiment. The
+application no longer reads, writes, or declares that table. This rollout ships
+no `DROP TABLE`; if a later interactive `db:push` proposes dropping the legacy
+table, cancel that statement rather than treating it as part of photo import.
 
-CREATE UNIQUE INDEX IF NOT EXISTS "PhotoImportReceipt_idempotencyKey_key"
-  ON "PhotoImportReceipt" ("idempotencyKey");
-```
+The 24-hour pending-image culler claims rows transactionally with row locks and
+skips rows held by an in-flight import. Any pending image with an association
+is protected from pruning.
 
-After applying the expansion, verify it rather than trusting the push summary:
-
-```sql
-SELECT column_name, data_type, is_nullable
-FROM information_schema.columns
-WHERE table_schema = 'public' AND table_name = 'PhotoImportReceipt'
-ORDER BY ordinal_position;
-
-SELECT indexname, indexdef
-FROM pg_indexes
-WHERE schemaname = 'public' AND tablename = 'PhotoImportReceipt';
-```
-
-Rollback is intentionally not part of the initial deploy. Old application code
-ignores this table, and retaining receipts preserves retry safety across a rollback.
+After a lost commit response, clients use the reconciliation operation rather
+than repeating the commit. Reconciliation takes the same image-row locks and
+then reads every status and direct association in one transaction, so its
+answer cannot straddle an in-flight commit.

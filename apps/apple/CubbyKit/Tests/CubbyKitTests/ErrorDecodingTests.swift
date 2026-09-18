@@ -73,6 +73,28 @@ struct ErrorDecodingTests {
         #expect(!error.isUnauthorized)
     }
 
+    @Test func localizedDescriptionUsesTheServerMessage() {
+        let error = CubbyAPIError(
+            status: 500, operationID: "photoImport.commit",
+            detail: .init(
+                code: "INTERNAL_SERVER_ERROR",
+                message: "The photo batch could not be added.",
+                requestId: "req_sample123")
+        )
+
+        #expect(error.localizedDescription == "The photo batch could not be added.")
+        #expect(error.failureReason == "Request req_sample123")
+        #expect(error.recoverySuggestion == "Try again. If this continues, contact support.")
+    }
+
+    @Test func bodylessErrorsStillHaveUsefulLocalizedText() {
+        let error = CubbyAPIError(status: 503, operationID: "photoImport.commit", detail: nil)
+
+        #expect(error.localizedDescription == "Cubby could not complete this request (HTTP 503).")
+        #expect(error.failureReason == "photoImport.commit")
+        #expect(error.recoverySuggestion == "Try again. If this continues, contact support.")
+    }
+
     /// OpenAPIRuntime wraps every middleware throw in a `ClientError`, which would otherwise hide
     /// the `isUnauthorized`/`isStaleInventory` a caller switches on. `CubbyClient` always unwraps;
     /// this pins the unwrap itself for a caller (`CubbyDebugClient`, the CLI) that talks to a raw

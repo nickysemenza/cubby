@@ -604,6 +604,13 @@ export default defineEntity({
           ocrFields: ["variety", "notes"],
           classifierLabels: ["plant", "garden"],
         },
+        visualEvidence: [
+          {
+            relationPath: ["entries"],
+            priority: 1,
+            ordering: "newest",
+          },
+        ],
         abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
       },
     },

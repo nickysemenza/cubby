@@ -41,6 +41,7 @@ filter:
     - location.makeTree
     - meal.getNutrition
     - photoImport.commit
+    - photoImport.reconcile
     - photoImport.stage
     - problems.getCounts
     - product.findOrCreateByCode

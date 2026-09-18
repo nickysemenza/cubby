@@ -10560,6 +10560,47 @@
         }
       }
     },
+    "/api/v1/photoImport/reconcile": {
+      "post": {
+        "tags": [
+          "photoImport"
+        ],
+        "parameters": [],
+        "operationId": "photoImport.reconcile",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoImportReconcileInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoImportReconcileOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/photoImport/stage": {
       "post": {
         "tags": [
@@ -45956,24 +45997,10 @@
       "PhotoImportCommitOutput": {
         "type": "object",
         "properties": {
-          "receiptId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "idempotencyKey": {
-            "type": "string"
-          },
           "committedPhotoIds": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ImageShortcode"
-            }
-          },
-          "committedClientIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
             }
           },
           "createdDestinations": {
@@ -46006,12 +46033,67 @@
           }
         },
         "required": [
-          "receiptId",
-          "idempotencyKey",
           "committedPhotoIds",
-          "committedClientIds",
           "createdDestinations",
           "committedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PhotoImportReconcileInput": {
+        "type": "object",
+        "properties": {
+          "imageIds": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageShortcode"
+            }
+          }
+        },
+        "required": [
+          "imageIds"
+        ]
+      },
+      "PhotoImportReconcileOutput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "imageId": {
+                  "$ref": "#/components/schemas/ImageShortcode"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/ImageStatus"
+                },
+                "associations": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImageAssociation"
+                  }
+                }
+              },
+              "required": [
+                "imageId",
+                "status",
+                "associations"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageShortcode"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "missing"
         ],
         "additionalProperties": false
       },

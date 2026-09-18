@@ -32,6 +32,14 @@ public struct PhotoDisplaySource: Sendable, Hashable {
   public let ordering: String
 }
 
+public struct PhotoVisualEvidence: Sendable, Hashable {
+  public let source: EntityKey
+  public let target: EntityKey
+  public let relationPath: [String]
+  public let priority: Int
+  public let ordering: String
+}
+
 public struct PhotoLifecycleFilter: Sendable, Hashable {
   public let field: String
   public let equals: String?
@@ -97,6 +105,10 @@ public enum PhotoImportCatalog {
     PhotoDisplaySource(source: .expense, target: .purchase, relationPath: ["purchase"], priority: 1, ordering: "declared"),
     PhotoDisplaySource(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: "newest"),
     PhotoDisplaySource(source: .planting, target: .product, relationPath: ["source-product"], priority: 2, ordering: "declared")
+  ]
+  public static let visualEvidence: [PhotoVisualEvidence] = [
+    PhotoVisualEvidence(source: .recipe, target: .meal, relationPath: ["meals"], priority: 1, ordering: "newest"),
+    PhotoVisualEvidence(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: "newest")
   ]
   public static let routingPolicies: [EntityKey: PhotoRoutingPolicy] = [
     .product: PhotoRoutingPolicy(candidateFields: ["name","manufacturer","model"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name","manufacturer","model"], classifierLabels: ["product"], minimumScore: 0.72, minimumMargin: 0.12),

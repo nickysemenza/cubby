@@ -1,5 +1,6 @@
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { imageShortcode } from "@cubby/schemas/identifiers";
+import { ImageStatus, imageAssociationSchema } from "@cubby/schemas/image";
 import { z } from "zod";
 
 import { defineContract, mutation } from "~/contracts/define";
@@ -62,6 +63,21 @@ const photoImportStageItemSchema = z.union([
 
 const photoImportStageOutputSchema = z.object({
   items: z.array(photoImportStageItemSchema),
+});
+
+const photoImportReconcileInputSchema = z.object({
+  imageIds: z.array(imageShortcode).min(1).max(100),
+});
+
+const photoImportReconcileOutputSchema = z.object({
+  items: z.array(
+    z.object({
+      imageId: imageShortcode,
+      status: ImageStatus,
+      associations: z.array(imageAssociationSchema),
+    }),
+  ),
+  missing: z.array(imageShortcode),
 });
 
 const localPhotoAnalysisSchema = z.object({
@@ -131,11 +147,13 @@ const photoImportCommitInputSchema = z.object({
     .max(100),
 });
 
-export const photoImportReceiptSchema = z.object({
-  receiptId: z.uuid(),
-  idempotencyKey: z.string(),
+/**
+ * The commit response is deliberately an ordinary value, not a persisted
+ * receipt. `idempotencyKey` remains accepted on the input for older clients,
+ * but a commit response is never replayed from server-side state.
+ */
+const photoImportCommitResultSchema = z.object({
   committedPhotoIds: z.array(imageShortcode),
-  committedClientIds: z.array(z.string()),
   createdDestinations: z.array(
     z.object({
       draftId: z.string(),
@@ -155,7 +173,15 @@ export type PhotoImportStageOutput = z.output<
 export type PhotoImportCommitInput = z.output<
   typeof photoImportCommitInputSchema
 >;
-export type PhotoImportReceipt = z.output<typeof photoImportReceiptSchema>;
+export type PhotoImportCommitResult = z.output<
+  typeof photoImportCommitResultSchema
+>;
+export type PhotoImportReconcileInput = z.output<
+  typeof photoImportReconcileInputSchema
+>;
+export type PhotoImportReconcileOutput = z.output<
+  typeof photoImportReconcileOutputSchema
+>;
 
 export const photoImportContract = defineContract("photoImport", {
   stage: mutation({
@@ -166,6 +192,11 @@ export const photoImportContract = defineContract("photoImport", {
   commit: mutation({
     native: "Atomic manifest photo import commit",
     input: photoImportCommitInputSchema,
-    output: photoImportReceiptSchema,
+    output: photoImportCommitResultSchema,
+  }),
+  reconcile: mutation({
+    native: "Lock-aware photo import reconciliation",
+    input: photoImportReconcileInputSchema,
+    output: photoImportReconcileOutputSchema,
   }),
 });

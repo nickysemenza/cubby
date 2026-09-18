@@ -30,6 +30,7 @@ import { renderBrowserRouteArtifacts } from "../../../scripts/generator/entities
 import { renderEntityArtifacts } from "../../../scripts/generator/entities/render/index";
 import { renderFilterArtifacts } from "../../../scripts/generator/entities/render/filters";
 import { renderKernelBindingsArtifacts } from "../../../scripts/generator/entities/render/kernel-bindings";
+import { renderImagePolicyArtifacts } from "../../../scripts/generator/entities/render/image-policy";
 import { renderRelationArtifacts } from "../../../scripts/generator/entities/render/relations";
 import {
   generatedBrowserRouteFiles,
@@ -347,6 +348,138 @@ describe("typed entity compiler", () => {
         },
       ]),
     ).toThrow("routeId shared-photo-route conflicts");
+  });
+
+  it("keeps routing visual evidence explicit and requires image-owning targets", async () => {
+    const recipe = (
+      await import("../../../packages/schemas/src/entity-definitions/01-recipe.entity")
+    ).default;
+    const planting = (
+      await import("../../../packages/schemas/src/entity-definitions/19-planting.entity")
+    ).default;
+    const meal = (
+      await import("../../../packages/schemas/src/entity-definitions/06-meal.entity")
+    ).default;
+    expect(recipe.capabilities.images.routing?.visualEvidence).toEqual([
+      { relationPath: ["meals"], priority: 1, ordering: "newest" },
+    ]);
+    expect(planting.capabilities.images.routing?.visualEvidence).toEqual([
+      { relationPath: ["entries"], priority: 1, ordering: "newest" },
+    ]);
+    // A display fallback alone is never promoted to routing evidence.
+    expect("visualEvidence" in (meal.capabilities.images.routing ?? {})).toBe(
+      false,
+    );
+
+    const routing: NonNullable<
+      EntityDeclaration["capabilities"]["images"]["routing"]
+    > = {
+      candidateFields: ["name"],
+      temporalFields: [],
+      lifecycleFilters: [],
+      signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
+      abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+      visualEvidence: [
+        { relationPath: ["related"], priority: 1, ordering: "newest" },
+      ],
+    };
+    const related = {
+      ...base,
+      key: "related",
+      names: { singular: "Related", plural: "Related" },
+      model,
+      capabilities: {
+        ...base.capabilities,
+        images: {
+          storage: "gallery" as const,
+          ingress: [{ kind: "self" as const, routeId: "related-self" }],
+          routing: { ...routing, visualEvidence: [] },
+        },
+      },
+    };
+    const source = {
+      ...base,
+      model,
+      relations: [
+        {
+          key: "related",
+          label: "Related",
+          target: "related",
+          cardinality: "one" as const,
+          provenance: {
+            kind: "local-path",
+            steps: [{ edge: "Alpha.relatedId", direction: "outgoing" }],
+          },
+          inverse: {
+            steps: [{ edge: "Alpha.relatedId", direction: "incoming" }],
+          },
+        },
+      ],
+      capabilities: {
+        ...base.capabilities,
+        images: { storage: false as const, routing },
+      },
+    };
+    expect(() => compileEntityDeclarations([source, related])).not.toThrow();
+
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...source,
+          capabilities: {
+            ...source.capabilities,
+            images: {
+              storage: false as const,
+              routing: {
+                ...routing,
+                visualEvidence: [
+                  {
+                    relationPath: ["missing"],
+                    priority: 1,
+                    ordering: "newest" as const,
+                  },
+                ],
+              },
+            },
+          },
+        },
+        related,
+      ]),
+    ).toThrow("references undeclared relation alpha.missing");
+
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...source,
+          capabilities: {
+            ...source.capabilities,
+            images: {
+              storage: false as const,
+              routing: {
+                ...routing,
+                visualEvidence: [
+                  {
+                    relationPath: ["related"],
+                    priority: 1,
+                    ordering: "newest" as const,
+                  },
+                ],
+              },
+            },
+          },
+          relations: [{ ...source.relations[0]!, target: "alpha" }],
+        },
+        related,
+      ]),
+    ).toThrow("targets alpha, which has no direct image storage");
+
+    const compiled = compileEntityDeclarations([source, related]);
+    const artifacts = renderImagePolicyArtifacts(compiled);
+    const imagePolicy = artifacts.find(({ relativePath }) =>
+      relativePath.endsWith("image-policy.gen.ts"),
+    )?.source;
+    expect(imagePolicy).toContain('"visualEvidence"');
+    expect(imagePolicy).toContain('"relationPath":["related"]');
   });
 
   it("preserves literal model keys through the inferred declaration contract", () => {

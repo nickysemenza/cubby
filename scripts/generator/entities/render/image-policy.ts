@@ -107,6 +107,28 @@ export const renderImagePolicyArtifacts = (
       })),
     ]),
   );
+  const visualEvidenceBindings = Object.fromEntries(
+    entities.map((entity) => [
+      entity.key,
+      (entity.imagePolicy.routing?.visualEvidence ?? []).map((evidence) => ({
+        ...evidence,
+        targetEntity: pathTarget(entities, entity, evidence.relationPath),
+      })),
+    ]),
+  );
+  const routingPolicies = Object.fromEntries(
+    entities.map((entity) => {
+      const routing = entity.imagePolicy.routing;
+      if (routing === null) return [entity.key, null];
+      return [
+        entity.key,
+        {
+          ...routing,
+          visualEvidence: visualEvidenceBindings[entity.key] ?? [],
+        },
+      ];
+    }),
+  );
   const policyCatalog = Object.fromEntries(
     entities.map((entity) => [
       entity.key,
@@ -114,7 +136,7 @@ export const renderImagePolicyArtifacts = (
         storage: entity.imagePolicy.storage,
         displaySources: displayBindings[entity.key] ?? [],
         ingress: routes.filter((route) => route.sourceEntity === entity.key),
-        routing: entity.imagePolicy.routing,
+        routing: routingPolicies[entity.key] ?? null,
       },
     ]),
   );
@@ -125,7 +147,8 @@ export const renderImagePolicyArtifacts = (
     'export type ImageIngressBinding = { readonly field: string; readonly from: "source-id" | "capture-date" } | { readonly field: string; readonly from: "source-field"; readonly sourceField: string } | { readonly field: string; readonly from: "constant"; readonly value: string | number | boolean | null } | { readonly field: string; readonly from: "relation-items"; readonly item: { readonly field: string; readonly from: "source-id" | "source-field" | "constant"; readonly sourceField?: string; readonly value?: string | number | boolean | null } };\n' +
     'export type ImageIngressRoute = { readonly routeId: string; readonly sourceEntity: Entity; readonly targetEntity: Entity; readonly kind: "self" | "existingRelated" | "createRelated"; readonly storage: ImageStorage; readonly relationPath: readonly string[]; readonly bindings: readonly ImageIngressBinding[]; readonly append: boolean; readonly requiresReplaceConfirmation: boolean; readonly choice: "primary" | "alternate" | "prompt" };\n' +
     'export type ImageDisplayBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: "declared" | "newest" | "oldest"; readonly identityEvidence: false };\n\n' +
-    "export type ImageRoutingPolicy = { readonly candidateFields: readonly string[]; readonly temporalFields: readonly string[]; readonly lifecycleFilters: readonly ({ readonly field: string; readonly equals: string | boolean } | { readonly field: string; readonly oneOf: readonly (string | boolean)[] })[]; readonly signals: { readonly ocrFields: readonly string[]; readonly classifierLabels: readonly string[] }; readonly abstention: { readonly minimumScore: number; readonly minimumMargin: number } };\n" +
+    'type ImageVisualEvidenceBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: "declared" | "newest" | "oldest" };\n\n' +
+    "export type ImageRoutingPolicy = { readonly candidateFields: readonly string[]; readonly temporalFields: readonly string[]; readonly lifecycleFilters: readonly ({ readonly field: string; readonly equals: string | boolean } | { readonly field: string; readonly oneOf: readonly (string | boolean)[] })[]; readonly signals: { readonly ocrFields: readonly string[]; readonly classifierLabels: readonly string[] }; readonly visualEvidence: readonly ImageVisualEvidenceBinding[]; readonly abstention: { readonly minimumScore: number; readonly minimumMargin: number } };\n" +
     "export type ImagePolicy = { readonly storage: ImageStorage; readonly displaySources: readonly ImageDisplayBinding[]; readonly ingress: readonly ImageIngressRoute[]; readonly routing: ImageRoutingPolicy | null };\n\n" +
     `export const imagePolicyCatalog = ${JSON.stringify(policyCatalog)} as const satisfies Record<Entity, ImagePolicy>;\n\n` +
     `export const imageOwners = ${JSON.stringify(owners)} as const;\n` +
@@ -155,6 +178,14 @@ export const renderImagePolicyArtifacts = (
       ),
     )
     .join(",\n");
+  const swiftVisualEvidence = Object.entries(visualEvidenceBindings)
+    .flatMap(([source, bindings]) =>
+      bindings.map(
+        (binding) =>
+          `    PhotoVisualEvidence(source: .${source}, target: .${binding.targetEntity}, relationPath: ${JSON.stringify(binding.relationPath)}, priority: ${binding.priority}, ordering: ${JSON.stringify(binding.ordering)})`,
+      ),
+    )
+    .join(",\n");
   const swiftRoutingPolicies = entities
     .flatMap((entity) => {
       const routing = entity.imagePolicy.routing;
@@ -171,12 +202,15 @@ export const renderImagePolicyArtifacts = (
     "public struct PhotoIngressRoute: Sendable, Hashable {\n" +
     "  public let id: String\n  public let source: EntityKey\n  public let target: EntityKey\n  public let kind: String\n  public let storage: String?\n  public let relationPath: [String]\n  public let bindings: [PhotoCreateBinding]\n  public let append: Bool\n  public let requiresReplaceConfirmation: Bool\n  public let choice: String\n}\n\n" +
     "public struct PhotoDisplaySource: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: String\n}\n\n" +
+    "public struct PhotoVisualEvidence: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: String\n}\n\n" +
     "public struct PhotoLifecycleFilter: Sendable, Hashable {\n  public let field: String\n  public let equals: String?\n  public let oneOf: [String]\n}\n\n" +
     "public struct PhotoRoutingPolicy: Sendable, Hashable {\n  public let candidateFields: [String]\n  public let temporalFields: [String]\n  public let lifecycleFilters: [PhotoLifecycleFilter]\n  public let ocrFields: [String]\n  public let classifierLabels: [String]\n  public let minimumScore: Double\n  public let minimumMargin: Double\n}\n\n" +
     "public enum PhotoImportCatalog {\n  public static let ingressRoutes: [PhotoIngressRoute] = [\n" +
     swiftRoutes +
     "\n  ]\n  public static let displaySources: [PhotoDisplaySource] = [\n" +
     swiftDisplaySources +
+    "\n  ]\n  public static let visualEvidence: [PhotoVisualEvidence] = [\n" +
+    swiftVisualEvidence +
     "\n  ]\n  public static let routingPolicies: [EntityKey: PhotoRoutingPolicy] = [\n" +
     swiftRoutingPolicies +
     "\n  ]\n}\n";

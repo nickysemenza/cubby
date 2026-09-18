@@ -317,6 +317,18 @@ public actor CubbyClient {
         }
     }
 
+    /// Waits for any in-flight commit touching these rows, then returns one
+    /// transactionally consistent status and direct-association snapshot.
+    public func reconcilePhotoImport(_ imageIDs: [ImageCode]) async throws
+        -> PhotoImportReconcileOutput
+    {
+        try await perform {
+            try await api.photoImport_reconcile(
+                body: .json(PhotoImportReconcileInput(imageIds: imageIDs))
+            ).ok.body.json
+        }
+    }
+
     public func setPerceptualHashes(_ items: [ImageHashUpdate]) async throws -> SetPerceptualHashesOutput {
         try await perform {
             try await api.image_setPerceptualHashes(

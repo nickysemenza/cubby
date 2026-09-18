@@ -2,14 +2,9 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  aiAnalysis,
-  meal,
-  mealImage,
-  photoImportReceipt,
-} from "~/server/db/schema";
+import { aiAnalysis, image, meal, mealImage } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import {
   createImageFixture,
   createRecipeFixture,
@@ -20,13 +15,14 @@ import {
   productionPhotoImportCommitPorts,
   type PhotoImportRouteAdapter,
 } from "~/server/services/photo-import-commit.service";
+import { reconcilePhotoImport } from "~/server/services/photo-import-reconcile.service";
 import { manifestPhotoImportRouteAdapter } from "~/server/services/photo-import-route.adapter";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 describe("photo import transaction", () => {
   const ctx = withTestDb();
 
-  it("rolls back a mixed create-and-attach failure, then retries idempotently", async () => {
+  it("rolls back a mixed create-and-attach failure, then retries while staged", async () => {
     const recipe = await createRecipeFixture(
       ctx.db,
       makeRecipeInput({ name: "Photo import recipe" }),
@@ -34,11 +30,13 @@ describe("photo import transaction", () => {
     );
     const sha256 = "a".repeat(64);
     const staged = await createImageFixture(ctx.db, "photo-import", {
+      status: "PENDING",
+      size: 16,
       sha256,
       width: 16,
       height: 16,
-      renderStatus: "verified",
-      storageStatus: "available",
+      renderStatus: null,
+      storageStatus: "unverified",
       verifiedAt: new Date(),
     });
     const context = entityKernelContextSchema.parse(
@@ -94,6 +92,17 @@ describe("photo import transaction", () => {
     };
     const ports = {
       ...productionPhotoImportCommitPorts,
+      getObject: async () => new Response(new Uint8Array(16)),
+      inspect: async () => ({
+        contentType: "image/png",
+        width: 16,
+        height: 16,
+        detectedContentType: "image/png",
+        sha256,
+        renderStatus: "verified" as const,
+        storageStatus: "available" as const,
+        verifiedAt: new Date(),
+      }),
       runSideEffects: async () => {},
     };
 
@@ -114,26 +123,24 @@ describe("photo import transaction", () => {
     ).toHaveLength(0);
     expect(
       await getDb(ctx.db)
-        .select({ id: photoImportReceipt.id })
-        .from(photoImportReceipt)
-        .where(eq(photoImportReceipt.idempotencyKey, input.idempotencyKey)),
-    ).toHaveLength(0);
-
-    const receipt = await commitPhotoImport(
+        .select({ status: image.status })
+        .from(image)
+        .where(eq(image.id, staged.id)),
+    ).toEqual([{ status: "PENDING" }]);
+    const result = await commitPhotoImport(
       context,
       input,
       manifestPhotoImportRouteAdapter,
       ports,
     );
-    const replay = await commitPhotoImport(
-      context,
-      input,
-      manifestPhotoImportRouteAdapter,
-      ports,
-    );
-    expect(replay).toEqual(receipt);
-    expect(receipt.committedClientIds).toEqual(["photo-library-1"]);
-    expect(receipt.createdDestinations).toHaveLength(1);
+    expect(result.committedPhotoIds).toEqual([staged.shortcode]);
+    expect(result.createdDestinations).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select({ status: image.status })
+        .from(image)
+        .where(eq(image.id, staged.id)),
+    ).toEqual([{ status: "UPLOADED" }]);
     expect(
       await getDb(ctx.db).select({ id: mealImage.id }).from(mealImage),
     ).toHaveLength(1);
@@ -224,10 +231,6 @@ describe("photo import transaction", () => {
     );
 
     expect(receipt.committedPhotoIds).toEqual([staged.shortcode]);
-    expect(receipt.committedClientIds).toEqual([
-      "photo-library-duplicate-1",
-      "photo-library-duplicate-2",
-    ]);
     expect(receipt.createdDestinations).toHaveLength(2);
     expect(
       await getDb(ctx.db)
@@ -240,6 +243,42 @@ describe("photo import transaction", () => {
         .select({ id: aiAnalysis.id })
         .from(aiAnalysis)
         .where(eq(aiAnalysis.entityId, staged.id)),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
+  });
+
+  it("reconciles only after an in-flight commit releases its image locks", async () => {
+    const staged = await createImageFixture(ctx.db, "reconcile-locked-photo", {
+      status: "PENDING",
+    });
+    let reconciliation: ReturnType<typeof reconcilePhotoImport> | undefined;
+
+    await withTransaction(ctx.db, async (transaction) => {
+      await transaction
+        .select({ id: image.id })
+        .from(image)
+        .where(eq(image.id, staged.id))
+        .for("update");
+      reconciliation = reconcilePhotoImport(ctx.db, {
+        imageIds: [staged.shortcode],
+      });
+      // Let the reconciliation request reach its row lock while this
+      // transaction still owns it, then model commit's final activation.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      await transaction
+        .update(image)
+        .set({ status: "UPLOADED" })
+        .where(eq(image.id, staged.id));
+    });
+
+    expect(await reconciliation).toEqual({
+      items: [
+        expect.objectContaining({
+          imageId: staged.shortcode,
+          status: "UPLOADED",
+          associations: [],
+        }),
+      ],
+      missing: [],
+    });
   });
 });

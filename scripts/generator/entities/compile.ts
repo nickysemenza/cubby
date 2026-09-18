@@ -1384,6 +1384,35 @@ const validateImageDisplaySources = (
   }
 };
 
+const validateImageVisualEvidence = (
+  entities: readonly CompiledEntity[],
+  entity: CompiledEntity,
+): void => {
+  const routing = entity.imagePolicy.routing;
+  if (routing === null) return;
+  const context = `${entity.key}.capabilities.images.routing`;
+  const seenPaths = new Set<string>();
+  for (const [index, evidence] of routing.visualEvidence.entries()) {
+    const evidenceContext = `${context}.visualEvidence[${index}]`;
+    const pathKey = evidence.relationPath.join(".");
+    if (seenPaths.has(pathKey))
+      throw new EntityDeclarationError(
+        `${evidenceContext}.relationPath duplicates another visual-evidence path.`,
+      );
+    seenPaths.add(pathKey);
+    const target = imagePolicyPathTarget(
+      entities,
+      entity,
+      evidence.relationPath,
+      evidenceContext,
+    );
+    if (target.imagePolicy.storage === false)
+      throw new EntityDeclarationError(
+        `${evidenceContext} targets ${target.key}, which has no direct image storage.`,
+      );
+  }
+};
+
 const validateImageRouting = (entity: CompiledEntity): void => {
   const { routing } = entity.imagePolicy;
   if (routing === null) return;
@@ -1453,6 +1482,7 @@ const validateImagePolicies = (entities: readonly CompiledEntity[]): void => {
   for (const entity of entities) {
     validateImageIngress(entities, entity, routeOwners);
     validateImageDisplaySources(entities, entity);
+    validateImageVisualEvidence(entities, entity);
     validateImageRouting(entity);
   }
 };

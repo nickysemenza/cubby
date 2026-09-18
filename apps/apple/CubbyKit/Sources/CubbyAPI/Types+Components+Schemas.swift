@@ -21935,14 +21935,8 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput`.
         public struct PhotoImportCommitOutput: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/receiptId`.
-            public var receiptId: Swift.String
-            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/idempotencyKey`.
-            public var idempotencyKey: Swift.String
             /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/committedPhotoIds`.
             public var committedPhotoIds: [Components.Schemas.ImageShortcode]
-            /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/committedClientIds`.
-            public var committedClientIds: [Swift.String]
             /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/CreatedDestinationsPayload`.
             public struct CreatedDestinationsPayloadPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/PhotoImportCommitOutput/CreatedDestinationsPayload/draftId`.
@@ -22001,52 +21995,28 @@ extension Components {
             /// Creates a new `PhotoImportCommitOutput`.
             ///
             /// - Parameters:
-            ///   - receiptId:
-            ///   - idempotencyKey:
             ///   - committedPhotoIds:
-            ///   - committedClientIds:
             ///   - createdDestinations:
             ///   - committedAt:
             public init(
-                receiptId: Swift.String,
-                idempotencyKey: Swift.String,
                 committedPhotoIds: [Components.Schemas.ImageShortcode],
-                committedClientIds: [Swift.String],
                 createdDestinations: Components.Schemas.PhotoImportCommitOutput.CreatedDestinationsPayload,
                 committedAt: Foundation.Date
             ) {
-                self.receiptId = receiptId
-                self.idempotencyKey = idempotencyKey
                 self.committedPhotoIds = committedPhotoIds
-                self.committedClientIds = committedClientIds
                 self.createdDestinations = createdDestinations
                 self.committedAt = committedAt
             }
             public enum CodingKeys: String, CodingKey {
-                case receiptId
-                case idempotencyKey
                 case committedPhotoIds
-                case committedClientIds
                 case createdDestinations
                 case committedAt
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.receiptId = try container.decode(
-                    Swift.String.self,
-                    forKey: .receiptId
-                )
-                self.idempotencyKey = try container.decode(
-                    Swift.String.self,
-                    forKey: .idempotencyKey
-                )
                 self.committedPhotoIds = try container.decode(
                     [Components.Schemas.ImageShortcode].self,
                     forKey: .committedPhotoIds
-                )
-                self.committedClientIds = try container.decode(
-                    [Swift.String].self,
-                    forKey: .committedClientIds
                 )
                 self.createdDestinations = try container.decode(
                     Components.Schemas.PhotoImportCommitOutput.CreatedDestinationsPayload.self,
@@ -22057,12 +22027,113 @@ extension Components {
                     forKey: .committedAt
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
-                    "receiptId",
-                    "idempotencyKey",
                     "committedPhotoIds",
-                    "committedClientIds",
                     "createdDestinations",
                     "committedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileInput`.
+        public struct PhotoImportReconcileInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileInput/imageIds`.
+            public var imageIds: [Components.Schemas.ImageShortcode]
+            /// Creates a new `PhotoImportReconcileInput`.
+            ///
+            /// - Parameters:
+            ///   - imageIds:
+            public init(imageIds: [Components.Schemas.ImageShortcode]) {
+                self.imageIds = imageIds
+            }
+            public enum CodingKeys: String, CodingKey {
+                case imageIds
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput`.
+        public struct PhotoImportReconcileOutput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput/ItemsPayload`.
+            public struct ItemsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput/ItemsPayload/imageId`.
+                public var imageId: Components.Schemas.ImageShortcode
+                /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput/ItemsPayload/status`.
+                public var status: Components.Schemas.ImageStatus
+                /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput/ItemsPayload/associations`.
+                public var associations: [Components.Schemas.ImageAssociation]
+                /// Creates a new `ItemsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - imageId:
+                ///   - status:
+                ///   - associations:
+                public init(
+                    imageId: Components.Schemas.ImageShortcode,
+                    status: Components.Schemas.ImageStatus,
+                    associations: [Components.Schemas.ImageAssociation]
+                ) {
+                    self.imageId = imageId
+                    self.status = status
+                    self.associations = associations
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case imageId
+                    case status
+                    case associations
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.imageId = try container.decode(
+                        Components.Schemas.ImageShortcode.self,
+                        forKey: .imageId
+                    )
+                    self.status = try container.decode(
+                        Components.Schemas.ImageStatus.self,
+                        forKey: .status
+                    )
+                    self.associations = try container.decode(
+                        [Components.Schemas.ImageAssociation].self,
+                        forKey: .associations
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "imageId",
+                        "status",
+                        "associations"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput/items`.
+            public typealias ItemsPayload = [Components.Schemas.PhotoImportReconcileOutput.ItemsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput/items`.
+            public var items: Components.Schemas.PhotoImportReconcileOutput.ItemsPayload
+            /// - Remark: Generated from `#/components/schemas/PhotoImportReconcileOutput/missing`.
+            public var missing: [Components.Schemas.ImageShortcode]
+            /// Creates a new `PhotoImportReconcileOutput`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - missing:
+            public init(
+                items: Components.Schemas.PhotoImportReconcileOutput.ItemsPayload,
+                missing: [Components.Schemas.ImageShortcode]
+            ) {
+                self.items = items
+                self.missing = missing
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+                case missing
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    Components.Schemas.PhotoImportReconcileOutput.ItemsPayload.self,
+                    forKey: .items
+                )
+                self.missing = try container.decode(
+                    [Components.Schemas.ImageShortcode].self,
+                    forKey: .missing
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items",
+                    "missing"
                 ])
             }
         }

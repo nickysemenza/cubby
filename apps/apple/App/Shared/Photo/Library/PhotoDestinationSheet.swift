@@ -64,6 +64,7 @@ struct PhotoDestinationSheet: View {
             .navigationDestination(for: String.self) { routeID in
                 if routeID == "source-types" {
                     List {
+                        PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
                         Section("Choose what is in the photo") {
                             ForEach(manifest.sourceTypeOptions) { type in
                                 Button {
@@ -90,16 +91,22 @@ struct PhotoDestinationSheet: View {
                     let source = EntityKey(rawValue: String(sourceRaw)),
                     let type = manifest.sourceTypeOptions.first(where: { $0.source == source })
                 {
-                    PhotoEntityChooser(key: source, captureDates: manifest.selectedItems.map(\.capturedAt)) {
+                    PhotoEntityChooser(
+                        key: source, captureDates: manifest.selectedItems.map(\.capturedAt),
+                        heroItems: manifest.items, importManifest: manifest
+                    ) {
                         row in
                         chooseSourceRecord(type, row: row)
                     }
                 } else if routeID == "route-picker", let context = sourceRecord {
                     List {
+                        PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
                         Section("Where should this \(EntityCatalog[context.source].singular) store photos?") {
                             ForEach(context.options) { option in
-                                Button(option.menuTitle) { chooseRoute(option, source: context.row) }
-                                    .accessibilityIdentifier("photos.route.\(option.id)")
+                                Button(option.menuTitle(for: context.row)) {
+                                    chooseRoute(option, source: context.row)
+                                }
+                                .accessibilityIdentifier("photos.route.\(option.id)")
                             }
                         }
                     }
@@ -108,25 +115,24 @@ struct PhotoDestinationSheet: View {
                     if option.route.kind == "createRelated" {
                         PhotoEntityChooser(
                             key: option.route.source,
-                            captureDates: manifest.selectedItems.map(\.capturedAt)
+                            captureDates: manifest.selectedItems.map(\.capturedAt),
+                            heroItems: manifest.items, importManifest: manifest
                         ) { row in
-                            if !manifest.autoStageCreate(option: option, source: row) {
-                                createContext = PhotoCreateContext(option: option, source: row)
-                            } else if !path.isEmpty {
-                                path.removeAll()
-                            }
+                            createContext = PhotoCreateContext(option: option, source: row)
                         }
                     } else if option.route.kind == "existingRelated" {
                         PhotoEntityChooser(
                             key: option.route.source,
-                            captureDates: manifest.selectedItems.map(\.capturedAt)
+                            captureDates: manifest.selectedItems.map(\.capturedAt),
+                            heroItems: manifest.items, importManifest: manifest
                         ) { row in
                             relatedContext = PhotoRelatedContext(option: option, source: row)
                         }
                     } else {
                         PhotoEntityChooser(
                             key: option.descriptor.key,
-                            captureDates: manifest.selectedItems.map(\.capturedAt)
+                            captureDates: manifest.selectedItems.map(\.capturedAt),
+                            heroItems: manifest.items, importManifest: manifest
                         ) { row in
                             if option.route.requiresReplaceConfirmation, row.imageURL != nil {
                                 replacement = ReplacementConfirmation(option: option, row: row)
@@ -142,7 +148,7 @@ struct PhotoDestinationSheet: View {
         .nativeSheet(.photo)
         .interactiveDismissDisabled(manifest.isCommitting)
         .task {
-            await manifest.analyze(client: appModel.client, matches: appModel.photoMatches)
+            manifest.startAnalysis(client: appModel.client, matches: appModel.photoMatches)
         }
         .confirmationDialog(
             "Replace the existing image?", item: $replacement,
@@ -162,7 +168,8 @@ struct PhotoDestinationSheet: View {
             PhotoRelatedCreateEditor(
                 option: context.option,
                 source: context.source,
-                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min()
+                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
+                heroItems: manifest.items
             ) { body in
                 manifest.stageCreate(
                     option: context.option, source: context.source, body: body)
@@ -174,7 +181,8 @@ struct PhotoDestinationSheet: View {
             PhotoRelatedDestinationChooser(
                 context: context,
                 createOption: manifest.createAlternative(for: context.option),
-                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min()
+                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
+                heroItems: manifest.items
             ) { row in
                 manifest.moveSelected(to: context.option, source: context.source, destination: row)
                 relatedContext = nil
@@ -196,6 +204,11 @@ struct PhotoDestinationSheet: View {
             HStack(spacing: 10) {
                 ProgressView().controlSize(.small).accessibilityHidden(true)
                 Text(message)
+                Spacer()
+                Button("Stop") { manifest.cancelAnalysis() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("photos.analysis.cancel")
             }
             .font(.subheadline)
             .padding(.horizontal, 16)
@@ -221,7 +234,7 @@ struct PhotoDestinationSheet: View {
                 Spacer()
                 Button("Retry") {
                     Task {
-                        await manifest.analyze(
+                        manifest.startAnalysis(
                             client: appModel.client, matches: appModel.photoMatches)
                     }
                 }
@@ -236,7 +249,23 @@ struct PhotoDestinationSheet: View {
     private var destinationAction: some View {
         if !manifest.selectedIDs.isEmpty {
             VStack(spacing: 6) {
-                if let suggested = manifest.selectedSuggestedSourceType {
+                if let suggested = manifest.selectedSuggestedSource {
+                    Button {
+                        chooseSourceRecord(suggested.type, row: suggested.row)
+                    } label: {
+                        Label(
+                            "Choose \(suggested.row.title) · \(suggested.row.id)",
+                            systemImage: entitySymbol(for: suggested.type.source)
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("photos.manifest.suggested-source")
+
+                    Button("Choose another type…") { path.append("source-types") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                } else if let suggested = manifest.selectedSuggestedSourceType {
                     Button {
                         path.append("source-type:\(suggested.rawValue)")
                     } label: {
@@ -247,7 +276,7 @@ struct PhotoDestinationSheet: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("photos.manifest.suggested-source")
+                    .accessibilityIdentifier("photos.manifest.suggested-source-type")
 
                     Button("Choose another type…") { path.append("source-types") }
                         .buttonStyle(.plain)
@@ -271,9 +300,10 @@ struct PhotoDestinationSheet: View {
 
     private func chooseSourceRecord(_ type: PhotoSourceTypeOption, row: EntityRow) {
         let options = type.options
-        if let primary = options.first(where: { $0.route.choice == "primary" }) {
-            chooseRoute(primary, source: row)
-        } else if options.count == 1, let only = options.first {
+        // A natural record can have several concrete destinations (Planting → an existing
+        // Garden Entry or a new one). Always expose that route choice after the source is known;
+        // otherwise a primary create route would silently create a related record.
+        if options.count == 1, let only = options.first {
             chooseRoute(only, source: row)
         } else {
             sourceRecord = PhotoSourceRecordContext(row: row, options: options)
@@ -285,11 +315,7 @@ struct PhotoDestinationSheet: View {
         sourceRecord = nil
         switch option.route.kind {
         case "createRelated":
-            if !manifest.autoStageCreate(option: option, source: source) {
-                createContext = PhotoCreateContext(option: option, source: source)
-            } else if !path.isEmpty {
-                path.removeAll()
-            }
+            createContext = PhotoCreateContext(option: option, source: source)
         case "existingRelated":
             relatedContext = PhotoRelatedContext(option: option, source: source)
             path.removeAll()
@@ -300,25 +326,11 @@ struct PhotoDestinationSheet: View {
     }
 
     private var selectedStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(manifest.items) { item in
-                    Image(decorative: item.preview, scale: 1).resizable().scaledToFill()
-                        .frame(width: 64, height: 64).clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(alignment: .topTrailing) {
-                            if manifest.selectedIDs.contains(item.id) {
-                                Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, .blue)
-                                    .padding(3)
-                            }
-                        }
-                        .onTapGesture { manifest.toggle(item.id) }
-                        .accessibilityLabel(
-                            "Photo \(manifest.items.firstIndex(where: { $0.id == item.id }).map { $0 + 1 } ?? 0)"
-                        )
-                        .accessibilityAddTraits(manifest.selectedIDs.contains(item.id) ? .isSelected : [])
-                }
-            }.padding(.horizontal, 16).padding(.vertical, 12)
-        }.background(.bar)
+        PhotoImportHero(
+            items: manifest.items,
+            selectedIDs: manifest.selectedIDs,
+            onToggle: manifest.toggle
+        )
     }
 
     private var disclosure: some View {
@@ -387,7 +399,9 @@ final class PhotoImportManifest {
     private(set) var errorMessage: String?
     private(set) var suggestions: [String: String] = [:]
     private(set) var suggestedSourceTypes: [String: EntityKey] = [:]
+    private(set) var suggestedSourceRecords: [String: EntityRow] = [:]
     private(set) var foundationModelSummary: String?
+    private(set) var commitRequiresReview = false
     private(set) var duplicateCandidates: [String: [DedupCandidate]] = [:]
     private(set) var duplicateOwnerShortcodes: [String: [String]] = [:]
     private var duplicateDecisions: [String: PhotoDuplicateDecision] = [:]
@@ -395,10 +409,25 @@ final class PhotoImportManifest {
     private var undoSnapshot: [PhotoUndoAssignment] = []
     private var prepared: [String: (PhotoFile, PhotoLocalAnalysis)] = [:]
     private var transaction: PhotoImportTransaction?
+    private var analysisTask: Task<Void, Never>?
 
     init(items: [PhotoSelectionItem]) {
         self.items = items
         selectedIDs = Set(items.map(\.id))
+    }
+
+    func startAnalysis(client: CubbyClient, matches: PhotoMatchStore) {
+        analysisTask?.cancel()
+        analysisTask = Task { [weak self] in
+            await self?.analyze(client: client, matches: matches)
+        }
+    }
+
+    func cancelAnalysis() {
+        analysisTask?.cancel()
+        analysisTask = nil
+        analysisGeneration = UUID()
+        if analysisState.isRunning { analysisState = .idle }
     }
 
     var destinationOptions: [PhotoDestinationOption] {
@@ -433,6 +462,16 @@ final class PhotoImportManifest {
         Self.preferredSourceType(selectedIDs: selectedIDs, suggestions: suggestedSourceTypes)
     }
 
+    var selectedSuggestedSource: PhotoSuggestedSource? {
+        guard let source = selectedSuggestedSourceType else { return nil }
+        let rows = selectedIDs.compactMap { suggestedSourceRecords[$0] }
+        guard let first = rows.first, rows.count == selectedIDs.count,
+            Set(rows.map(\.id)).count == 1,
+            let type = sourceTypeOptions.first(where: { $0.source == source })
+        else { return nil }
+        return PhotoSuggestedSource(type: type, row: first)
+    }
+
     static func preferredSourceType(
         selectedIDs: Set<String>, suggestions: [String: EntityKey]
     ) -> EntityKey? {
@@ -458,7 +497,8 @@ final class PhotoImportManifest {
     }
 
     var canCommit: Bool {
-        !items.isEmpty && needsDestination.isEmpty && unresolvedDuplicateIDs.isEmpty && !isCommitting
+        !items.isEmpty && needsDestination.isEmpty && unresolvedDuplicateIDs.isEmpty
+            && !isCommitting && !commitRequiresReview
     }
 
     var commitDisabledReason: String? {
@@ -469,6 +509,10 @@ final class PhotoImportManifest {
         }
         if !unresolvedDuplicateIDs.isEmpty {
             return "Review the duplicate match decision before adding photos."
+        }
+        if commitRequiresReview {
+            return
+                "This commit could not be reconciled safely. Close and review the photo associations before trying again."
         }
         if isCommitting { return progress }
         return nil
@@ -536,14 +580,31 @@ final class PhotoImportManifest {
                 analysisState = .complete
                 return
             }
+            analysisState = .running("Comparing with existing photos…")
+            let visualMatches = await PhotoVisualEvidenceMatcher().matches(
+                analyses: prepared.mapValues(\.1),
+                candidates: candidates.compactMap { candidate in
+                    guard let source = candidate.routing.sourceEntity,
+                        let sourceID = candidate.routing.sourceID
+                    else { return nil }
+                    return PhotoVisualEvidenceCandidate(
+                        id: candidate.routing.id, source: source, sourceID: sourceID)
+                },
+                client: client)
+            guard analysisGeneration == generation, !Task.isCancelled else {
+                throw CancellationError()
+            }
             let evidence = items.compactMap { item -> PhotoRoutingEvidence? in
                 guard let analysis = prepared[item.id]?.1 else { return nil }
                 let owners = matches.strongDirectOwnerShortcodes(for: item.id)
                 let candidateIDs = deterministicCandidateIDs(
-                    for: analysis, authoritativeOwners: Set(owners), among: candidates)
+                    for: analysis, authoritativeOwners: Set(owners),
+                    visualMatch: visualMatches[item.id], among: candidates)
                 return PhotoRoutingEvidence(
                     photoID: item.id,
-                    summary: evidenceSummary(analysis, authoritativeOwners: owners),
+                    summary: evidenceSummary(
+                        analysis, authoritativeOwners: owners,
+                        visualMatch: visualMatches[item.id], candidates: candidates),
                     deterministicCandidateIDs: candidateIDs)
             }
             let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.routing.id, $0) })
@@ -583,15 +644,15 @@ final class PhotoImportManifest {
                 candidate.option.id == decision.routeID
             else { continue }
             if candidate.option.route.choice == "prompt" { continue }
-            if candidate.option.route.kind == "createRelated" {
-                _ = autoStageCreate(
-                    option: candidate.option, source: candidate.row,
-                    photoIDs: Set([decision.photoID]))
+            suggestedSourceRecords[decision.photoID] = candidate.row
+            // Related routes still need a relationship resolver and an explicit existing-versus-
+            // create choice. Keep the natural source suggestion, but never create a destination
+            // merely because a classifier or Foundation Models ranked its source record.
+            guard candidate.option.route.kind == "self" else {
+                suggestions[decision.photoID] =
+                    "\(candidate.row.title) · \(candidate.row.id) · \(decision.explanation)"
                 continue
             }
-            // Existing related routes still need a relationship resolver; retain the
-            // natural source suggestion without pretending the source is the destination.
-            guard candidate.option.route.kind == "self" else { continue }
             assignments[decision.photoID] = PhotoDestinationAssignment(
                 route: candidate.option.route,
                 source: EntityRef(entity: candidate.option.route.source, id: candidate.row.id),
@@ -600,7 +661,8 @@ final class PhotoImportManifest {
                 shortcode: candidate.row.id,
                 replaceConfirmed: false,
                 evidence: decision.explanation)
-            suggestions[decision.photoID] = decision.explanation
+            suggestions[decision.photoID] =
+                "\(candidate.row.title) · \(candidate.row.id) · \(decision.explanation)"
             selectedIDs.remove(decision.photoID)
         }
     }
@@ -686,57 +748,6 @@ final class PhotoImportManifest {
         selectedIDs.subtract(itemsToStage.map(\.id))
     }
 
-    @discardableResult
-    func autoStageCreate(
-        option: PhotoDestinationOption, source: EntityRow, photoIDs: Set<String>? = nil
-    ) -> Bool {
-        guard option.route.kind == "createRelated" else { return false }
-        let body = generatedCreateBody(option: option, source: source, photoIDs: photoIDs)
-        let required = option.descriptor.fields.filter(\.requiredOnCreate)
-        guard required.allSatisfy({ body[$0.key].map { $0 != .null } ?? false }) else {
-            return false
-        }
-        stageCreate(option: option, source: source, body: body, photoIDs: photoIDs)
-        return true
-    }
-
-    private func generatedCreateBody(
-        option: PhotoDestinationOption, source: EntityRow, photoIDs: Set<String>? = nil
-    ) -> [String: JSONValue] {
-        var result: [String: JSONValue] = [:]
-        let captureDate = items.filter { photoIDs?.contains($0.id) ?? selectedIDs.contains($0.id) }
-            .compactMap(\.capturedAt).first
-        for binding in option.route.bindings {
-            switch binding.source {
-            case "source-id":
-                if let itemField = binding.itemField {
-                    result[binding.field] = .array([.object([itemField: .string(source.id)])])
-                } else {
-                    result[binding.field] = .string(source.id)
-                }
-            case "source-field":
-                if let value = Self.nonNullSourceFieldValue(binding: binding, source: source) {
-                    result[binding.field] = value
-                }
-            case "capture-date":
-                if let captureDate { result[binding.field] = .string(PlainDate(captureDate).rawValue) }
-            case "constant":
-                if let json = binding.constantJSON, let data = json.data(using: .utf8),
-                    let value = try? JSONDecoder().decode(JSONValue.self, from: data)
-                {
-                    result[binding.field] = value
-                }
-            case "relation-items":
-                if let itemField = binding.itemField {
-                    result[binding.field] = .array([.object([itemField: .string(source.id)])])
-                }
-            default:
-                break
-            }
-        }
-        return result
-    }
-
     /// A nullable source relationship is a missing binding, not an instruction to write null.
     /// Keeping this rule in one helper also lets the editor expose the field for repair.
     static func nonNullSourceFieldValue(
@@ -761,6 +772,7 @@ final class PhotoImportManifest {
         guard canCommit else { return nil }
         isCommitting = true
         errorMessage = nil
+        commitRequiresReview = false
         progress = "Adding photos…"
         defer { isCommitting = false }
         do {
@@ -795,10 +807,26 @@ final class PhotoImportManifest {
             }
             let transaction = transaction ?? PhotoImportTransaction(client: client)
             self.transaction = transaction
-            let receipt = try await transaction.commit(batch) { [weak self] state in
+            let committedClientIDs = try await transaction.commit(batch) { [weak self] state in
                 Task { @MainActor in self?.updateProgress(state) }
             }
-            return receipt.committedClientIds
+            return committedClientIDs
+        } catch let failure as PhotoImportTransaction.Failure {
+            switch failure {
+            case .commitOutcomeUncertain, .commitInvariant:
+                commitRequiresReview = true
+                progress = "Review required"
+            case .stagedImagesExpired:
+                transaction = nil
+                progress = "Stage again"
+            case .commitNotApplied:
+                progress = "Ready to retry"
+            default:
+                progress = "Try again"
+            }
+            errorMessage = failure.localizedDescription
+            Diagnostics.report(failure, context: "photos.manifest.commit")
+            return nil
         } catch {
             errorMessage = error.localizedDescription
             progress = "Try again"
@@ -926,7 +954,10 @@ final class PhotoImportManifest {
     }
 
     private func loadCandidates(client: CubbyClient) async -> [Candidate] {
-        let options = sourceTypeOptions.compactMap { type in
+        // Catalogs are expensive and do not improve an abstention. Vision's fast classifier is
+        // the scope for automatic matching; manual assignment later loads only the chosen type.
+        let likelySources = Set(suggestedSourceTypes.values)
+        let options = sourceTypeOptions.filter { likelySources.contains($0.source) }.compactMap { type in
             let routes = type.options
             return routes.first(where: { $0.route.choice == "primary" })
                 ?? routes.sorted { $0.id < $1.id }.first
@@ -976,7 +1007,10 @@ final class PhotoImportManifest {
                     ([row.title, row.id]
                     + (policy?.candidateFields.compactMap { row.raw[$0]?.stringValue } ?? []))
                     .joined(separator: " · ")
-                let candidateID = "\(page.option.route.source.rawValue):\(row.id)"
+                // Route identity is distinct from the natural source record. A source can expose
+                // existing and create-related routes, so a candidate key must not collide when
+                // those routes are loaded together.
+                let candidateID = "\(page.option.id):\(row.id)"
                 return Candidate(
                     option: page.option,
                     row: row,
@@ -988,9 +1022,76 @@ final class PhotoImportManifest {
         return Array(candidates.prefix(FoundationModelsPhotoSemanticModel.maximumCandidates))
     }
 
+    /// Ranks a manually chosen natural-source catalog with the same prepared evidence used for
+    /// automatic suggestions. Visual evidence is deliberately delegated to the manifest catalog
+    /// matcher; it only follows declared paths to directly owned gallery attachments.
+    func rankRows(
+        for source: EntityKey, rows: [EntityRow], client: CubbyClient
+    ) async throws -> [EntityRow] {
+        guard !rows.isEmpty, !prepared.isEmpty else { return rows }
+        try Task.checkCancellation()
+        let analyses = prepared.mapValues(\.1)
+        let visualMatches = await PhotoVisualEvidenceMatcher().matches(
+            analyses: analyses,
+            candidates: rows.map {
+                PhotoVisualEvidenceCandidate(
+                    id: "\(source.rawValue):\($0.id)", source: source, sourceID: $0.id)
+            },
+            client: client)
+        try Task.checkCancellation()
+        let policy = PhotoImportCatalog.routingPolicies[source]
+        let ranked = rows.enumerated().map { index, row -> (EntityRow, Double, Int) in
+            let searchable =
+                ([row.title]
+                + (policy?.candidateFields.compactMap { row.raw[$0]?.stringValue } ?? []))
+                .joined(separator: " ").lowercased()
+            let textScore = analyses.values.reduce(0.0) { score, analysis in
+                max(
+                    score,
+                    analysis.recognizedText.reduce(0.0) { textScore, text in
+                        let recognized = text.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            .lowercased()
+                        guard recognized.count >= 3, searchable.contains(recognized) else {
+                            return textScore
+                        }
+                        return max(textScore, 0.96 * text.confidence)
+                    })
+            }
+            let classifierScore = analyses.values.reduce(0.0) { score, analysis in
+                max(
+                    score,
+                    analysis.classifications.filter { classification in
+                        policy?.classifierLabels.contains {
+                            classification.identifier.lowercased().contains($0.lowercased())
+                        } ?? false
+                    }.map(\.confidence).max() ?? 0)
+            }
+            let dateScore = analyses.values.reduce(0.0) { score, analysis in
+                guard let day = analysis.capturedAt.map({ PlainDate($0).rawValue }) else {
+                    return score
+                }
+                let matches =
+                    policy?.temporalFields.contains { field in
+                        row.raw[field]?.stringValue?.hasPrefix(day) == true
+                    } ?? false
+                return max(score, matches ? 0.88 : 0)
+            }
+            let visualScore =
+                visualMatches.values.contains {
+                    $0.candidateID == "\(source.rawValue):\(row.id)"
+                } ? 1.0 : 0
+            let score = min(1, max(textScore, dateScore, visualScore) + classifierScore * 0.08)
+            return (row, score, index)
+        }
+        return ranked.sorted { lhs, rhs in
+            lhs.1 == rhs.1 ? lhs.2 < rhs.2 : lhs.1 > rhs.1
+        }.map(\.0)
+    }
+
     private func deterministicCandidateIDs(
         for analysis: PhotoLocalAnalysis,
         authoritativeOwners: Set<String>,
+        visualMatch: PhotoVisualEvidenceMatch?,
         among candidates: [Candidate]
     ) -> [String] {
         let scored = candidates.compactMap { candidate -> (String, Double, Double)? in
@@ -1021,7 +1122,9 @@ final class PhotoImportManifest {
                         candidate.row.raw[field]?.stringValue?.hasPrefix(day) == true
                     } ? 0.88 : 0
                 } ?? 0
-            let identityScore = authoritativeOwners.contains(candidate.row.id) ? 1.0 : 0
+            let identityScore =
+                authoritativeOwners.contains(candidate.row.id)
+                    || visualMatch?.candidateID == candidate.routing.id ? 1.0 : 0
             let evidenceScore = max(textScore, dateScore, identityScore)
             let score = min(1, evidenceScore + classifierScore * 0.08)
             return (candidate.routing.id, score, policy.minimumScore)
@@ -1036,7 +1139,8 @@ final class PhotoImportManifest {
     }
 
     private func evidenceSummary(
-        _ analysis: PhotoLocalAnalysis, authoritativeOwners: [String]
+        _ analysis: PhotoLocalAnalysis, authoritativeOwners: [String],
+        visualMatch: PhotoVisualEvidenceMatch?, candidates: [Candidate]
     ) -> String {
         let classifications = analysis.classifications.prefix(4).map(\.identifier).joined(separator: ", ")
         let text = analysis.recognizedText.prefix(4).map(\.text).joined(separator: " ")
@@ -1044,17 +1148,26 @@ final class PhotoImportManifest {
         let identity =
             authoritativeOwners.isEmpty
             ? "" : " Matched authoritative image: \(authoritativeOwners.sorted().joined(separator: ", "))."
+        let visual =
+            visualMatch.flatMap { match in
+                candidates.first(where: { $0.routing.id == match.candidateID }).map {
+                    " Closest declared visual history: \($0.row.title) · \($0.row.id)."
+                }
+            } ?? ""
         return
-            "Capture date: \(date). Vision labels: \(classifications). Recognized text: \(text).\(identity)"
+            "Capture date: \(date). Vision labels: \(classifications). Recognized text: \(text).\(identity)\(visual)"
     }
 
     private static func matchesLifecycle(_ row: EntityRow, policy: PhotoRoutingPolicy?) -> Bool {
         guard let policy else { return true }
         return policy.lifecycleFilters.allSatisfy { filter in
             let values = filter.oneOf + (filter.equals.map { [$0] } ?? [])
-            if let value = row.raw[filter.field]?.stringValue { return values.contains(value) }
-            if let value = row.raw[filter.field]?.boolValue { return values.contains(String(value)) }
-            return false
+            guard !values.isEmpty else { return true }
+            guard
+                let value = row.raw[filter.field]?.stringValue
+                    ?? row.raw[filter.field]?.boolValue.map(String.init)
+            else { return true }
+            return values.contains(value)
         }
     }
 
@@ -1186,6 +1299,17 @@ struct PhotoDestinationOption: Identifiable, Sendable {
             title
         }
     }
+
+    func menuTitle(for source: EntityRow) -> String {
+        switch route.kind {
+        case "createRelated":
+            "Create \(descriptor.singular) for \(source.id)"
+        case "existingRelated":
+            "Choose existing \(descriptor.singular) for \(source.id)"
+        default:
+            menuTitle
+        }
+    }
 }
 
 struct PhotoSourceTypeOption: Identifiable, Sendable {
@@ -1194,6 +1318,12 @@ struct PhotoSourceTypeOption: Identifiable, Sendable {
     var id: String { source.rawValue }
     var title: String { EntityCatalog[source].plural }
     var outcomeDescription: String {
+        let hasRelatedChoices =
+            options.contains { $0.route.kind == "existingRelated" }
+            && options.contains { $0.route.kind == "createRelated" }
+        if hasRelatedChoices, let related = options.first(where: { $0.route.kind == "createRelated" }) {
+            return "Choose an existing or new \(related.descriptor.singular)"
+        }
         guard
             let primary = options.first(where: { $0.route.choice == "primary" })
                 ?? options.sorted(by: { $0.id < $1.id }).first
@@ -1207,6 +1337,11 @@ struct PhotoSourceTypeOption: Identifiable, Sendable {
             return "Attaches to an existing \(EntityCatalog[source].singular)"
         }
     }
+}
+
+struct PhotoSuggestedSource: Sendable {
+    let type: PhotoSourceTypeOption
+    let row: EntityRow
 }
 
 private struct PhotoSourceRecordContext {
@@ -1297,24 +1432,35 @@ private struct PhotoEntityChooser: View {
     @Environment(AppModel.self) private var appModel
     let key: EntityKey
     let captureDates: [Date?]
+    let heroItems: [PhotoSelectionItem]
+    let importManifest: PhotoImportManifest?
     let onSelect: (EntityRow) -> Void
     @State private var model: PhotoEntityChooserModel?
+    @State private var rankOrder: [String: Int] = [:]
+    @State private var rankingGeneration = UUID()
+    @State private var isRanking = false
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
     var body: some View {
-        Group {
-            if let model {
-                if model.isSearching {
-                    searchContent(model)
-                } else if !model.dateMatches.isEmpty || !model.recentRows.isEmpty {
-                    destinationList(model)
-                } else {
-                    emptyState(model)
-                }
-            } else {
-                LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
+        VStack(spacing: 0) {
+            if !heroItems.isEmpty {
+                PhotoImportHero(items: heroItems)
             }
+            Group {
+                if let model {
+                    if model.isSearching {
+                        searchContent(model)
+                    } else if !model.dateMatches.isEmpty || !model.recentRows.isEmpty {
+                        destinationList(model)
+                    } else {
+                        emptyState(model)
+                    }
+                } else {
+                    LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
+                }
+            }
+            .frame(maxHeight: .infinity)
         }
         .navigationTitle(descriptor.plural)
         .modifier(
@@ -1343,7 +1489,72 @@ private struct PhotoEntityChooser: View {
             }
             await model?.loadInitial()
         }
+        .task(id: rankingInputID) {
+            await rankLoadedRows()
+        }
         .refreshControl { await model?.refresh() }
+    }
+
+    private var rankingInputID: String {
+        let dateIDs = model?.dateMatches.map(\.id).joined(separator: ",") ?? ""
+        let recentIDs = model?.recentRows.map(\.id).joined(separator: ",") ?? ""
+        let searchQuery = model?.search?.query ?? ""
+        let searchIDs = model?.searchRows.map(\.id).joined(separator: ",") ?? ""
+        return "\(key.rawValue)|\(searchQuery)|\(dateIDs)|\(recentIDs)|\(searchIDs)"
+    }
+
+    private var loadedRows: [EntityRow] {
+        guard let model else { return [] }
+        var seen = Set<String>()
+        return (model.dateMatches + model.recentRows + model.searchRows).filter {
+            seen.insert($0.id).inserted
+        }
+    }
+
+    /// Manual type selection still benefits from the prepared import evidence. The task is
+    /// view-owned so a new search/type selection cancels stale work without coupling the list
+    /// model to Vision or catalog services.
+    private func rankLoadedRows() async {
+        guard let importManifest else {
+            rankOrder = [:]
+            isRanking = false
+            return
+        }
+        let rows = loadedRows
+        guard !rows.isEmpty else {
+            rankOrder = [:]
+            isRanking = false
+            return
+        }
+        let generation = UUID()
+        rankingGeneration = generation
+        isRanking = true
+        do {
+            let ranked = try await importManifest.rankRows(
+                for: key, rows: rows, client: appModel.client)
+            try Task.checkCancellation()
+            guard rankingGeneration == generation else { return }
+            rankOrder = Dictionary(
+                uniqueKeysWithValues: ranked.enumerated().map { ($0.element.id, $0.offset) })
+        } catch is CancellationError {
+            return
+        } catch {
+            guard rankingGeneration == generation else { return }
+            rankOrder = [:]
+            Diagnostics.report(error, context: "photos.destination.ranking.\(key.rawValue)")
+        }
+        if rankingGeneration == generation {
+            isRanking = false
+        }
+    }
+
+    private func ordered(_ rows: [EntityRow]) -> [EntityRow] {
+        guard !rankOrder.isEmpty else { return rows }
+        return rows.enumerated().sorted { lhs, rhs in
+            let left = rankOrder[lhs.element.id] ?? Int.max
+            let right = rankOrder[rhs.element.id] ?? Int.max
+            return left == right ? lhs.offset < rhs.offset : left < right
+        }.map(\.element)
     }
 
     @ViewBuilder
@@ -1366,13 +1577,19 @@ private struct PhotoEntityChooser: View {
 
     private func destinationList(_ model: PhotoEntityChooserModel) -> some View {
         List {
+            if isRanking {
+                Section {
+                    ProgressView("Ranking likely matches…")
+                        .font(.caption)
+                }
+            }
             if model.hasDateMatches {
                 Section {
                     if let error = model.dateError {
                         Text(error).foregroundStyle(.secondary)
                         Button("Retry date matches") { Task { await model.refresh() } }
                     }
-                    ForEach(model.dateMatches) { row in destinationRow(row, model: model) }
+                    ForEach(ordered(model.dateMatches)) { row in destinationRow(row, model: model) }
                     if model.hasMoreDateMatches {
                         Button {
                             Task { await model.loadMoreDateMatches() }
@@ -1396,7 +1613,7 @@ private struct PhotoEntityChooser: View {
                     Text(error).foregroundStyle(.secondary)
                     Button("Retry recent records") { Task { await model.refresh() } }
                 }
-                ForEach(model.recentRows) { row in destinationRow(row, model: model) }
+                ForEach(ordered(model.recentRows)) { row in destinationRow(row, model: model) }
                 if model.hasMoreRecents {
                     Button {
                         Task { await model.loadMoreRecents() }
@@ -1435,7 +1652,7 @@ private struct PhotoEntityChooser: View {
                 }
             } else {
                 List {
-                    ForEach(search.rows) { row in destinationRow(row, model: model) }
+                    ForEach(ordered(search.rows)) { row in destinationRow(row, model: model) }
                     if search.hasMore {
                         Button {
                             Task { await search.loadNextPage() }
@@ -1474,6 +1691,7 @@ private struct PhotoRelatedCreateEditor: View {
     let option: PhotoDestinationOption
     let source: EntityRow
     let captureDate: Date?
+    let heroItems: [PhotoSelectionItem]
     let onDraft: ([String: JSONValue]) -> Void
 
     @Environment(AppModel.self) private var appModel
@@ -1487,27 +1705,32 @@ private struct PhotoRelatedCreateEditor: View {
         NavigationStack {
             Group {
                 if let model {
-                    Form {
-                        Section {
-                            Label(
-                                "This record and its photos will be added together",
-                                systemImage: "checkmark.shield"
-                            )
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 0) {
+                        if !heroItems.isEmpty {
+                            PhotoImportHero(items: heroItems)
                         }
-                        ForEach(model.sections) { section in
-                            let fields = section.fields.compactMap(descriptor.field).filter(renders)
-                            if !fields.isEmpty {
-                                Section(section.title) {
-                                    ForEach(fields, id: \.key) { field in
-                                        EntityFieldControl(
-                                            field: field, model: model, pickedTitles: $pickedTitles)
+                        Form {
+                            Section {
+                                Label(
+                                    "This record and its photos will be added together",
+                                    systemImage: "checkmark.shield"
+                                )
+                                .foregroundStyle(.secondary)
+                            }
+                            ForEach(model.sections) { section in
+                                let fields = section.fields.compactMap(descriptor.field).filter(renders)
+                                if !fields.isEmpty {
+                                    Section(section.title) {
+                                        ForEach(fields, id: \.key) { field in
+                                            EntityFieldControl(
+                                                field: field, model: model, pickedTitles: $pickedTitles)
+                                        }
                                     }
                                 }
                             }
                         }
+                        .formStyle(.grouped)
                     }
-                    .formStyle(.grouped)
                 } else {
                     LoadingIndicator.screen(label: "Preparing \(descriptor.singular)")
                 }
@@ -1605,6 +1828,7 @@ private struct PhotoRelatedDestinationChooser: View {
     let context: PhotoRelatedContext
     let createOption: PhotoDestinationOption?
     let captureDate: Date?
+    let heroItems: [PhotoSelectionItem]
     let onSelect: (EntityRow) -> Void
     let onCreate: (PhotoDestinationOption, [String: JSONValue]) -> Void
 
@@ -1614,6 +1838,7 @@ private struct PhotoRelatedDestinationChooser: View {
     @State private var errorMessage: String?
     @State private var search = ""
     @State private var creation: PhotoDestinationOption?
+    @State private var listPage = 1
 
     private var descriptor: EntityDescriptor { context.option.descriptor }
 
@@ -1627,65 +1852,72 @@ private struct PhotoRelatedDestinationChooser: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading, rows.isEmpty {
-                    LoadingIndicator.screen(label: "Loading related \(descriptor.plural)")
-                } else if let errorMessage, rows.isEmpty {
-                    ContentUnavailableView {
-                        Label("Couldn't load \(descriptor.plural)", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("Retry") { Task { await load(reset: true) } }
-                    }
-                } else if rows.isEmpty {
-                    ContentUnavailableView {
-                        Label(
-                            "No related \(descriptor.plural)",
-                            systemImage: entitySymbol(for: context.option.route.target))
-                    } description: {
-                        Text("\(context.source.title) has no matching destination yet.")
-                    } actions: {
-                        if let createOption {
-                            Button("Create \(createOption.descriptor.singular)") {
-                                creation = createOption
-                            }
-                            .buttonStyle(.borderedProminent)
+            VStack(spacing: 0) {
+                if !heroItems.isEmpty {
+                    PhotoImportHero(items: heroItems)
+                }
+                Group {
+                    if isLoading, rows.isEmpty {
+                        LoadingIndicator.screen(label: "Loading related \(descriptor.plural)")
+                    } else if let errorMessage, rows.isEmpty {
+                        ContentUnavailableView {
+                            Label(
+                                "Couldn't load \(descriptor.plural)", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(errorMessage)
+                        } actions: {
+                            Button("Retry") { Task { await load(reset: true) } }
                         }
-                    }
-                } else {
-                    List {
-                        if let createOption {
-                            Section {
-                                Button("Create new \(createOption.descriptor.singular)") {
+                    } else if rows.isEmpty {
+                        ContentUnavailableView {
+                            Label(
+                                "No related \(descriptor.plural)",
+                                systemImage: entitySymbol(for: context.option.route.target))
+                        } description: {
+                            Text("No existing destination matches this photo's capture time or day.")
+                        } actions: {
+                            if let createOption {
+                                Button("Create \(createOption.descriptor.singular)") {
                                     creation = createOption
                                 }
+                                .buttonStyle(.borderedProminent)
                             }
                         }
-                        ForEach(filteredRows) { row in
-                            Button {
-                                onSelect(row)
-                            } label: {
-                                EntityRowView(
-                                    key: context.option.route.target, row: row, photoMode: true)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("photos.destination.related.\(row.id)")
-                        }
-                        if nextOffset != nil, search.isEmpty {
-                            Button {
-                                Task { await load(reset: false) }
-                            } label: {
-                                if isLoading {
-                                    LoadingIndicator(label: "Loading more \(descriptor.plural)")
-                                } else {
-                                    Text("Load more")
+                    } else {
+                        List {
+                            if let createOption {
+                                Section {
+                                    Button("Create new \(createOption.descriptor.singular)") {
+                                        creation = createOption
+                                    }
                                 }
                             }
-                            .disabled(isLoading)
+                            ForEach(filteredRows) { row in
+                                Button {
+                                    onSelect(row)
+                                } label: {
+                                    EntityRowView(
+                                        key: context.option.route.target, row: row, photoMode: true)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("photos.destination.related.\(row.id)")
+                            }
+                            if nextOffset != nil, search.isEmpty {
+                                Button {
+                                    Task { await load(reset: false) }
+                                } label: {
+                                    if isLoading {
+                                        LoadingIndicator(label: "Loading more \(descriptor.plural)")
+                                    } else {
+                                        Text("Load more")
+                                    }
+                                }
+                                .disabled(isLoading)
+                            }
                         }
                     }
                 }
+                .frame(maxHeight: .infinity)
             }
             .navigationTitle("Related \(descriptor.plural)")
             .searchable(text: $search, prompt: "Search name or shortcode")
@@ -1694,7 +1926,7 @@ private struct PhotoRelatedDestinationChooser: View {
         .task { await load(reset: true) }
         .sheet(item: $creation) { option in
             PhotoRelatedCreateEditor(
-                option: option, source: context.source, captureDate: captureDate
+                option: option, source: context.source, captureDate: captureDate, heroItems: heroItems
             ) { body in
                 onCreate(option, body)
                 creation = nil
@@ -1714,12 +1946,26 @@ private struct PhotoRelatedDestinationChooser: View {
         if reset {
             rows = []
             nextOffset = nil
+            listPage = 1
         }
         guard !isLoading || reset else { return }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
+            if let filters = relatedListFilters {
+                let page = try await appModel.client.list(
+                    descriptor, page: listPage, pageSize: 25,
+                    sort: semanticDateKey.map { "-\($0)" } ?? "-updatedAt",
+                    filters: filters)
+                rows = Dictionary(
+                    grouping: rows + page.items, by: \.id
+                ).values.compactMap(\.last).sorted { $0.title < $1.title }
+                let hasMore = listPage * page.meta.pageSize < page.meta.totalCount
+                nextOffset = hasMore ? listPage * page.meta.pageSize : nil
+                listPage += 1
+                return
+            }
             let root = EntityRef(entity: context.option.route.source, id: context.source.id)
             let page = try await appModel.client.relationshipPage(
                 root: root,
@@ -1751,6 +1997,49 @@ private struct PhotoRelatedDestinationChooser: View {
         } catch {
             errorMessage = error.localizedDescription
             Diagnostics.report(error, context: "photos.destination.related.\(context.option.id)")
+        }
+    }
+
+    /// Prefer the target's manifest-generated relation and date filters when they exist. This
+    /// makes Planting → Garden Entry show same-day entries (and ±1 hour for timestamp targets)
+    /// without loading an unbounded relationship graph. Routes whose target has no corresponding
+    /// filter continue to use the bounded relationship-page fallback above.
+    private var relatedListFilters: EntityFilterState? {
+        guard
+            let relation = descriptor.filters.first(where: {
+                $0.targetEntity == context.option.route.source
+            })
+        else { return nil }
+        var result = EntityFilterState()
+        if case .param(let name) = relation.wire {
+            result.set(.single(context.source.id), for: name)
+        } else {
+            return nil
+        }
+        guard
+            let dateKey = semanticDateKey, let dateFilter = descriptor.filter(dateKey),
+            case .range(let from, let to, _) = dateFilter.wire,
+            let captureDate
+        else { return result }
+        if descriptor.field(dateKey)?.kind == .timestamp {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            result.set(.single(formatter.string(from: captureDate.addingTimeInterval(-3_600))), for: from)
+            result.set(.single(formatter.string(from: captureDate.addingTimeInterval(3_600))), for: to)
+        } else {
+            let day = PlainDate(captureDate).rawValue
+            result.set(.single(day), for: from)
+            result.set(.single(day), for: to)
+        }
+        return result
+    }
+
+    private var semanticDateKey: String? {
+        PhotoImportCatalog.routingPolicies[descriptor.key]?.temporalFields.first { key in
+            guard let field = descriptor.field(key), let filter = descriptor.filter(key),
+                case .range = filter.wire
+            else { return false }
+            return field.kind == .date || field.kind == .timestamp
         }
     }
 }

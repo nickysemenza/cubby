@@ -7,21 +7,20 @@ import {
   type GalleryEntity,
   type LogoEntity,
 } from "@cubby/schemas/entity-manifest";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  sql,
+  type AnyColumn,
+} from "drizzle-orm";
 import { z } from "zod";
 
-import type {
-  PhotoImportCommitInput,
-  PhotoImportReceipt,
-} from "~/contracts/photo-import.contract";
-import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  aiAnalysis,
-  cookbook,
-  image,
-  photoImportReceipt,
-  vendor,
-} from "~/server/db/schema";
+import type { PhotoImportCommitInput } from "~/contracts/photo-import.contract";
+import type { Database } from "~/server/db";
+import { aiAnalysis, cookbook, image, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   associatePendingImages,
@@ -29,7 +28,6 @@ import {
   imageJoinBindings,
   nextImageSortOrder,
   notDeleted,
-  unwrapDb,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
@@ -109,30 +107,97 @@ export async function getImportImageRows(
     .where(and(inArray(image.shortcode, [...shortcodes]), notDeleted(image)));
 }
 
-export async function finalizeImportImage(
+/** Lock every selected image row for the duration of the import transaction. */
+export async function lockImportImageRows(
   db: Database,
-  row: ImportImageRow,
-  integrity: {
-    width: number | null;
-    height: number | null;
-    detectedContentType: string;
-    sha256: string;
-    renderStatus: "verified" | "failed";
-    storageStatus: "available";
-    verifiedAt: Date;
-  },
-): Promise<void> {
-  if (row.status === "UPLOADED") return;
-  const updated = await getDb(db)
+  shortcodes: readonly string[],
+): Promise<ImportImageRow[]> {
+  if (shortcodes.length === 0) return [];
+  return await getDb(db)
+    .select({
+      id: image.id,
+      shortcode: image.shortcode,
+      key: image.key,
+      filename: image.filename,
+      contentType: image.contentType,
+      size: image.size,
+      status: image.status,
+      sha256: image.sha256,
+      width: image.width,
+      height: image.height,
+      renderStatus: image.renderStatus,
+      storageStatus: image.storageStatus,
+    })
+    .from(image)
+    .where(and(inArray(image.shortcode, [...shortcodes]), notDeleted(image)))
+    .for("update");
+}
+
+/**
+ * Activate all newly staged images as one final database operation. Integrity
+ * metadata is written with the same UPDATE so a failed commit cannot expose a
+ * half-verified image. The caller compares the returned count with its locked
+ * PENDING set and rolls the transaction back on any mismatch.
+ */
+export async function activateImportImages(
+  db: Database,
+  staged: readonly {
+    row: ImportImageRow;
+    integrity: {
+      width: number | null;
+      height: number | null;
+      detectedContentType: string;
+      sha256: string;
+      renderStatus: "verified" | "failed";
+      storageStatus: "available";
+      verifiedAt: Date;
+    };
+  }[],
+): Promise<number> {
+  if (staged.length === 0) return 0;
+  const client = getDb(db);
+  const ids = staged.map(({ row }) => row.id);
+  const byId = <T>(
+    fallback: AnyColumn,
+    pick: (entry: (typeof staged)[number]) => T,
+  ) =>
+    sql<T>`case ${sql.join(
+      staged.map(
+        (entry) => sql`when ${image.id} = ${entry.row.id} then ${pick(entry)}`,
+      ),
+      sql.raw(" "),
+    )} else ${fallback} end`;
+  const updated = await client
     .update(image)
-    .set({ ...integrity, status: "UPLOADED", updatedAt: new Date() })
+    .set({
+      width: byId(image.width, (entry) => entry.integrity.width),
+      height: byId(image.height, (entry) => entry.integrity.height),
+      detectedContentType: byId(
+        image.detectedContentType,
+        (entry) => entry.integrity.detectedContentType,
+      ),
+      sha256: byId(image.sha256, (entry) => entry.integrity.sha256),
+      renderStatus: byId(
+        image.renderStatus,
+        (entry) => entry.integrity.renderStatus,
+      ),
+      storageStatus: byId(
+        image.storageStatus,
+        (entry) => entry.integrity.storageStatus,
+      ),
+      verifiedAt: byId(image.verifiedAt, (entry) => entry.integrity.verifiedAt),
+      status: "UPLOADED",
+      updatedAt: new Date(),
+    })
     .where(
-      and(eq(image.id, row.id), eq(image.status, "PENDING"), notDeleted(image)),
+      and(
+        inArray(image.id, ids),
+        eq(image.status, "PENDING"),
+        notDeleted(image),
+      ),
     )
     .returning({ id: image.id });
-  if (updated.length !== 1) {
-    throw new Error(`Staged image ${row.shortcode} is no longer pending`);
-  }
+  return updated.length;
 }
 
 export async function persistLocalImageAnalysis(
@@ -172,35 +237,6 @@ export async function withPhotoImportTransaction<T>(
   operation: (transactionDb: Database) => Promise<T>,
 ): Promise<T> {
   return withTransactionDatabase(db, operation);
-}
-
-export async function findPhotoImportReceipt(
-  db: Database | DrizzleTransaction,
-  idempotencyKey: string,
-): Promise<{ requestHash: string; receipt: unknown } | null> {
-  const [row] = await unwrapDb(db)
-    .select({
-      requestHash: photoImportReceipt.requestHash,
-      receipt: photoImportReceipt.receipt,
-    })
-    .from(photoImportReceipt)
-    .where(eq(photoImportReceipt.idempotencyKey, idempotencyKey))
-    .limit(1);
-  return row ?? null;
-}
-
-export async function insertPhotoImportReceipt(
-  db: Database,
-  idempotencyKey: string,
-  requestHash: string,
-  receipt: PhotoImportReceipt,
-): Promise<boolean> {
-  const inserted = await getDb(db)
-    .insert(photoImportReceipt)
-    .values({ idempotencyKey, requestHash, receipt })
-    .onConflictDoNothing({ target: photoImportReceipt.idempotencyKey })
-    .returning({ id: photoImportReceipt.id });
-  return inserted.length === 1;
 }
 
 export interface PhotoImportRelationTraversal {
@@ -313,6 +349,7 @@ export async function attachImportedGalleryImages<E extends GalleryEntity>(
     destinationId,
     [...imageIds],
     startSortOrder,
+    { activate: false },
   );
 }
 
