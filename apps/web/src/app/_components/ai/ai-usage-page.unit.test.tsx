@@ -21,7 +21,11 @@ function seedProduct(id: string, name: string) {
   harness.queryClient.setQueryDefaults(options.queryKey, {
     staleTime: Number.POSITIVE_INFINITY,
   });
-  harness.queryClient.setQueryData(options.queryKey, { id, name });
+  harness.queryClient.setQueryData(options.queryKey, {
+    id,
+    name,
+    displayImages: [],
+  });
 }
 
 describe("UsageEntityLink", () => {
