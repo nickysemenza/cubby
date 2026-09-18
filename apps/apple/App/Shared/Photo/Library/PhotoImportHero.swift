@@ -45,83 +45,8 @@ struct PhotoImportHero: View {
     var body: some View {
         if let focusedItem {
             VStack(spacing: 8) {
-                Button {
-                    showingFullScreen = true
-                } label: {
-                    ZStack(alignment: .bottomTrailing) {
-                        PhotoImportProgressiveImage(item: focusedItem, maxPixelSize: 1_800)
-                            .frame(maxWidth: .infinity)
-                            .containerRelativeFrame(.vertical) { length, _ in min(270, length * 0.28) }
-                            .background(.black.opacity(0.92))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        Label("Inspect full screen", systemImage: "arrow.up.left.and.arrow.down.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(.black.opacity(0.65), in: Capsule())
-                            .padding(12)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Photo preview")
-                .accessibilityHint("Opens a full-screen photo viewer")
-                .accessibilityIdentifier("photos.import.hero")
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(items) { item in
-                            Button {
-                                setFocusedID(item.id)
-                                onToggle?(item.id)
-                            } label: {
-                                PhotoImportProgressiveImage(
-                                    item: item, maxPixelSize: 220, loadsImmediately: false
-                                )
-                                .frame(width: thumbnailSize, height: thumbnailSize)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .stroke(
-                                            item.id == focusedItem.id ? Color.accentColor : .clear,
-                                            lineWidth: 3)
-                                }
-                                .overlay(alignment: .topTrailing) {
-                                    if onToggle != nil {
-                                        Image(
-                                            systemName: selectedIDs.contains(item.id)
-                                                ? "checkmark.circle.fill" : "circle"
-                                        )
-                                        .foregroundStyle(
-                                            selectedIDs.contains(item.id) ? .white : .secondary,
-                                            selectedIDs.contains(item.id) ? .blue : .white
-                                        )
-                                        .padding(3)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(
-                                "Photo \(items.firstIndex(where: { $0.id == item.id }).map { $0 + 1 } ?? 0)"
-                            )
-                            .accessibilityValue(
-                                item.id == focusedItem.id
-                                    ? (selectedIDs.contains(item.id) ? "Focused, selected" : "Focused")
-                                    : (selectedIDs.contains(item.id) ? "Selected" : "Not selected")
-                            )
-                            .accessibilityHint(
-                                onToggle == nil
-                                    ? "Double tap to inspect this photo"
-                                    : "Double tap to focus and change selection"
-                            )
-                            .accessibilityAddTraits(item.id == focusedItem.id ? .isSelected : [])
-                            .accessibilityIdentifier("photos.import.filmstrip.\(item.id)")
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 4)
-                }
-                .frame(minHeight: 72)
+                heroButton(for: focusedItem)
+                filmstrip(focused: focusedItem)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -131,6 +56,105 @@ struct PhotoImportHero: View {
                 items: items,
                 initialID: focusedItem.id
             )
+        }
+    }
+
+    private func heroButton(for item: PhotoSelectionItem) -> some View {
+        Button {
+            showingFullScreen = true
+        } label: {
+            ZStack(alignment: .bottomTrailing) {
+                PhotoImportProgressiveImage(item: item, maxPixelSize: 1_800)
+                    .frame(maxWidth: .infinity)
+                    .containerRelativeFrame(.vertical) { length, _ in min(270, length * 0.28) }
+                    .background(.black.opacity(0.92))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Label("Inspect full screen", systemImage: "arrow.up.left.and.arrow.down.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.65), in: Capsule())
+                    .padding(12)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Photo preview")
+        .accessibilityHint("Opens a full-screen photo viewer")
+        .accessibilityIdentifier("photos.import.hero")
+    }
+
+    private func filmstrip(focused: PhotoSelectionItem) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    PhotoImportFilmstripThumb(
+                        item: item,
+                        position: index + 1,
+                        size: thumbnailSize,
+                        isFocused: item.id == focused.id,
+                        isSelected: selectedIDs.contains(item.id),
+                        showsSelection: onToggle != nil
+                    ) {
+                        setFocusedID(item.id)
+                        onToggle?(item.id)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+        }
+        .frame(minHeight: 72)
+    }
+}
+
+/// One filmstrip cell. Focus/selection arrive as plain `Bool`s so the accessibility strings and
+/// symbol styling below are cheap for the type checker (the inline ternaries on
+/// `selectedIDs.contains` pushed the parent `body` past the 200ms limit).
+private struct PhotoImportFilmstripThumb: View {
+    let item: PhotoSelectionItem
+    let position: Int
+    let size: CGFloat
+    let isFocused: Bool
+    let isSelected: Bool
+    let showsSelection: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            PhotoImportProgressiveImage(item: item, maxPixelSize: 220, loadsImmediately: false)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(isFocused ? Color.accentColor : .clear, lineWidth: 3)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if showsSelection { selectionMark }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Photo \(position)")
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint(
+            showsSelection ? "Double tap to focus and change selection" : "Double tap to inspect this photo"
+        )
+        .accessibilityAddTraits(isFocused ? .isSelected : [])
+        .accessibilityIdentifier("photos.import.filmstrip.\(item.id)")
+    }
+
+    private var selectionMark: some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .foregroundStyle(isSelected ? .white : .secondary, isSelected ? .blue : .white)
+            .padding(3)
+    }
+
+    private var accessibilityValue: String {
+        switch (isFocused, isSelected) {
+        case (true, true): "Focused, selected"
+        case (true, false): "Focused"
+        case (false, true): "Selected"
+        case (false, false): "Not selected"
         }
     }
 }
