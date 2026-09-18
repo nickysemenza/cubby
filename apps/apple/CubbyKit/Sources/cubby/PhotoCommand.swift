@@ -30,10 +30,10 @@ extension Photo {
         @Flag(help: "Print structured JSON instead of a compact human table.")
         var json: Bool = false
         @Flag(
-            help:
-                "Also run the on-device Foundation Models reranker over routing-policy candidates (slower; needs Apple Intelligence)."
+            name: .customLong("no-semantic"),
+            help: "Skip the on-device Foundation Models reranker (runs by default; needs Apple Intelligence)."
         )
-        var semantic: Bool = false
+        var skipSemantic: Bool = false
         @Flag(
             name: .customLong("feature-print"),
             help: "Include the base64 feature-print vector (default: byte count only).")
@@ -103,7 +103,7 @@ extension Photo {
             }
 
             var semanticByPath: [String: (status: String, decisions: [JSONValue], ms: Double)] = [:]
-            if semantic {
+            if !skipSemantic {
                 for (path, analysis) in analyses {
                     let start = Date()
                     let result = try await Self.runSemantic(analysis)
@@ -140,8 +140,10 @@ extension Photo {
                 print(try CLI.prettyJSON(.array(objects)))
             } else {
                 for path in paths {
-                    Self.printHumanLine(
-                        path: path, file: files[path], analysis: analyses[path], error: errors[path])
+                    Self.printHumanReport(
+                        path: path, file: files[path], analysis: analyses[path], error: errors[path],
+                        analyzeMs: analyzeMsByPath[path], semantic: semanticByPath[path],
+                        semanticRequested: !skipSemantic)
                 }
             }
 
@@ -296,10 +298,14 @@ extension Photo {
             return .object(topFields)
         }
 
-        // MARK: - Human-readable table
+        // MARK: - Human-readable report
 
-        private static func printHumanLine(
-            path: String, file: PhotoFile?, analysis: PhotoLocalAnalysis?, error: String?
+        /// One section per evaluation the app runs on a photo, so a routing miss can be traced to
+        /// the stage that produced it. Mirrors the JSON keys; `--json` is the stable machine form.
+        private static func printHumanReport(
+            path: String, file: PhotoFile?, analysis: PhotoLocalAnalysis?, error: String?,
+            analyzeMs: Double?, semantic: (status: String, decisions: [JSONValue], ms: Double)?,
+            semanticRequested: Bool
         ) {
             if let error {
                 print("\(path): ERROR \(error)")
@@ -310,27 +316,89 @@ extension Photo {
                 return
             }
             let captured = analysis.capturedAt?.ISO8601Format() ?? "unknown"
+            let ms = analyzeMs.map { String(format: "%.0f ms", $0) } ?? "-"
             print(
-                "\(file.filename)  \(file.width)x\(file.height)  captured=\(captured)  sha256=\(analysis.sha256.prefix(12))…"
+                "\(file.filename)  \(file.width)x\(file.height) \(file.contentType)  captured=\(captured)  analyzed in \(ms)"
             )
-            if !analysis.classifications.isEmpty {
-                let top = analysis.classifications.prefix(5)
-                    .map { String(format: "%@=%.2f", $0.identifier, $0.confidence) }
-                    .joined(separator: "  ")
-                print("  classifications: \(top)")
+
+            print(
+                "  [1] identity — sha256 + 64-bit perceptual hash (exact/near duplicate detection at staging)"
+            )
+            print("      sha256=\(analysis.sha256)")
+            print(
+                "      pHash=\(analysis.perceptualHash?.hex ?? "unavailable")"
+                    + (analysis.sourceFingerprint.map {
+                        String(format: "  fingerprint aspect=%.4f", $0.aspectRatio)
+                    } ?? ""))
+
+            print(
+                "  [2] Vision ClassifyImageRequest r2 — scene/object labels (\(analysis.classifications.count) kept)"
+            )
+            if analysis.classifications.isEmpty {
+                print("      none")
+            } else {
+                for classification in analysis.classifications {
+                    print(
+                        "      \(pad(classification.identifier, 28)) \(String(format: "%.3f", classification.confidence))"
+                    )
+                }
             }
-            if !analysis.recognizedText.isEmpty {
-                let top = analysis.recognizedText.prefix(5)
-                    .map { String(format: "\"%@\"=%.2f", $0.text, $0.confidence) }
-                    .joined(separator: "  ")
-                print("  text: \(top)")
+
+            print(
+                "  [3] Vision RecognizeTextRequest r3 (accurate) — OCR (\(analysis.recognizedText.count) kept; ≥3 chars matched against candidate fields)"
+            )
+            if analysis.recognizedText.isEmpty {
+                print("      none")
+            } else {
+                for text in analysis.recognizedText {
+                    print(String(format: "      %.3f  \"%@\"", text.confidence, text.text))
+                }
             }
-            let verdicts = PhotoEvidenceScorer.policyMatches(analysis)
+
+            print(
+                "  [4] Vision GenerateImageFeaturePrintRequest — embedding for visual identity matching against existing gallery images"
+            )
+            print(
+                "      revision=\(analysis.featurePrint.revision)  bytes=\(analysis.featurePrint.data.count)")
+
+            let matches = PhotoEvidenceScorer.policyMatches(analysis)
+            print("  [5] routing policies — best classifier label per entity vs. that entity's minimum score")
+            for (key, policy) in PhotoImportCatalog.routingPolicies.sorted(by: {
+                $0.key.rawValue < $1.key.rawValue
+            }) {
+                let match = matches[key]
+                let verdict = match?.meetsMinimumScore == true ? "PASS" : "    "
+                let label = match?.classifierIdentifier.map { "\($0)" } ?? "no label matched"
+                let confidence = match?.classifierConfidence.map { String(format: "%.3f", $0) } ?? "  -  "
+                print(
+                    "      \(verdict) \(pad(key.rawValue, 22)) \(confidence) ≥ \(String(format: "%.2f", policy.minimumScore))  \(pad(label, 18)) wants: \(policy.classifierLabels.joined(separator: ","))"
+                )
+            }
+            let suggested =
+                matches
                 .filter { $0.value.meetsMinimumScore }
-                .sorted { $0.key.rawValue < $1.key.rawValue }
-                .map { "\($0.key.rawValue)=\(String(format: "%.2f", $0.value.classifierConfidence ?? 0))" }
-                .joined(separator: "  ")
-            print("  routing: \(verdicts.isEmpty ? "none" : verdicts)")
+                .max { ($0.value.classifierConfidence ?? 0) < ($1.value.classifierConfidence ?? 0) }
+                .map { $0.key.rawValue }
+            print("      suggested source: \(suggested ?? "none (photo stays in Needs a destination)")")
+
+            let availability = String(
+                describing: FoundationModelsPhotoSemanticModel().availability(for: .current))
+            print("  [6] Foundation Models reranker — availability=\(availability)")
+            if let semantic {
+                print(String(format: "      status=%@  (%.0f ms)", semantic.status, semantic.ms))
+                for case .object(let decision) in semantic.decisions {
+                    let route = decision["routeID"]?.stringValue ?? "no route"
+                    let candidate = decision["candidateID"]?.stringValue ?? "no candidate"
+                    let explanation = decision["explanation"]?.stringValue ?? ""
+                    print("      → \(route) / \(candidate): \(explanation)")
+                }
+            } else if !semanticRequested {
+                print("      skipped (--no-semantic)")
+            }
+        }
+
+        private static func pad(_ text: String, _ width: Int) -> String {
+            text.count >= width ? text : text + String(repeating: " ", count: width - text.count)
         }
 
         private static func describe(_ error: Error) -> String {
