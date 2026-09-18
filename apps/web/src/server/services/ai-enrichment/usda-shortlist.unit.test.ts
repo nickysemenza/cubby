@@ -59,7 +59,7 @@ function lookupReturning(
 }
 
 describe("buildUsdaShortlist", () => {
-  it("merges variant results in order, dedupes by fdc_id, and renders id=ok/id=none", async () => {
+  it("merges variant results in order, dedupes by fdc_id, and drops unlinkable foods", async () => {
     const wholeFlour = food({
       fdc_id: 1001,
       description: "Wheat flour, whole-grain",
@@ -108,22 +108,16 @@ describe("buildUsdaShortlist", () => {
     );
 
     // Variant order first (1001 from v0), then v1's own new hit (1002),
-    // v1's repeat of 1001 dropped, then v2's hits (1004, 1003).
-    expect(shortlist.map((entry) => entry.fdcId)).toEqual([
-      1001, 1002, 1004, 1003,
-    ]);
-    expect(shortlist[0]?.linkable).toBe(true);
+    // v1's repeat of 1001 dropped, then v2's linkable hit (1003). The
+    // foundation_food (1004) has no NDB or UPC, so it is never offered as a
+    // choice the model could pick but Cubby could not link.
+    expect(shortlist.map((entry) => entry.fdcId)).toEqual([1001, 1002, 1003]);
     expect(shortlist[0]?.line).toBe(
-      "FDC 1001 [sr_legacy_food, id=ok]: Wheat flour, whole-grain",
-    );
-    // No NDB and no UPC: unlinkable.
-    expect(shortlist[2]?.linkable).toBe(false);
-    expect(shortlist[2]?.line).toBe(
-      "FDC 1004 [foundation_food, id=none]: Flour, foundation",
+      "FDC 1001 [sr_legacy_food]: Wheat flour, whole-grain",
     );
     // Branded: linkable via UPC, and the brand owner is appended.
-    expect(shortlist[3]?.line).toBe(
-      "FDC 1003 [branded_food, King Arthur, id=ok]: ALL PURPOSE FLOUR",
+    expect(shortlist[2]?.line).toBe(
+      "FDC 1003 [branded_food, King Arthur]: ALL PURPOSE FLOUR",
     );
   });
 
@@ -157,8 +151,7 @@ describe("usdaFoodSpec", () => {
   it("uses the fdcId as the selection id", () => {
     const entry = {
       fdcId: 1001,
-      linkable: true,
-      line: "FDC 1001 [sr_legacy_food, id=ok]: Wheat flour",
+      line: "FDC 1001 [sr_legacy_food]: Wheat flour",
       food: food({ fdc_id: 1001, description: "Wheat flour" }),
     };
     expect(usdaFoodSpec.idOf(entry)).toBe("1001");

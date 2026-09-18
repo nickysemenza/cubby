@@ -1,10 +1,10 @@
 /**
  * The one table of AI features.
  *
- * Every structured call Cubby makes is declared here once — tier (which
+ * Every model call Cubby makes is declared here once — tier (which
  * decides the model), token cap, reasoning effort, whether the gateway may
  * cache it, the prompt version the AiAnalysis store keys on, and the schema
- * the model must return. `run-feature.ts` is the only thing that reads a
+ * the model must return. `run-feature.ts` (or `jev.ts`) alone reads a
  * record to actually place a call, so a gateway-wide policy change (a cache
  * TTL, a new middleware, a tier's model) is one edit here or there rather
  * than ten copies of the same block across `clients/ai.ts`.
@@ -17,14 +17,10 @@
 import {
   type AiSelectionResult,
   aiSelectionResultSchema,
-  type CategorySuggestion,
-  categorySuggestionSchema,
   type DetectedInventoryAiResult,
   detectedInventoryAiResultSchema,
   type LocationDescription,
   locationDescriptionSchema,
-  type LocationTypeSuggestion,
-  locationTypeSuggestionSchema,
   type ProductIdentification,
   productIdentificationSchema,
 } from "@cubby/schemas/ai";
@@ -37,6 +33,9 @@ import {
 import type { z } from "zod";
 
 import {
+  type AiModel,
+  type SupportedDecisionModel,
+  DECISION_MODEL,
   FAST_MODEL,
   REASONING_MODEL,
   type SupportedChatModel,
@@ -48,8 +47,12 @@ import type {
   OpenAiEffort,
 } from "~/server/clients/ai-adapters";
 
-/** The three measured tiers a feature can be assigned to. */
-export type AiTier = "fast" | "visionBatch" | "reasoning";
+/**
+ * The three measured chat tiers a feature can be assigned to, plus the
+ * decision tier: Jev answers one closed-set choice with a calibrated
+ * probability over the options and writes no prose (`ai/jev.ts`).
+ */
+export type AiTier = "fast" | "visionBatch" | "reasoning" | "decision";
 
 /**
  * The single place a tier's model is written down. `models.ts` owns the
@@ -59,17 +62,14 @@ export const MODEL_FOR_TIER = {
   fast: FAST_MODEL,
   visionBatch: VISION_BATCH_MODEL,
   reasoning: REASONING_MODEL,
-} as const satisfies Record<AiTier, SupportedChatModel>;
+  decision: DECISION_MODEL,
+} as const satisfies Record<AiTier, AiModel>;
 
 interface AiFeatureShared {
   /** AI Gateway dashboard label, and the `AiUsage`/`AiAnalysis` feature key. */
   feature: string;
-  /** Derived from {@link MODEL_FOR_TIER}; never written by hand. */
-  model: SupportedChatModel;
   /** Bumped when the prompt changes, to invalidate stored AiAnalysis rows. */
   promptVersion: string;
-  /** Output cap. Reasoning/thinking tokens count against it on every tier. */
-  maxTokens: number;
   /**
    * Whether the gateway may serve this call from its response cache. True for
    * every structured feature (they are deterministic on their request body);
@@ -80,22 +80,40 @@ interface AiFeatureShared {
 }
 
 /**
- * The tier and its reasoning dial, typed by the provider-options helper that
- * will receive it — `effort: "none"` is valid on the fast tier and rejected
- * on the reasoning tier, at compile time.
+ * A chat tier and its reasoning dial, typed by the provider-options helper
+ * that will receive it — `effort: "none"` is valid on the fast tier and
+ * rejected on the reasoning tier, at compile time.
  */
-type AiFeatureTier =
+type AiChatFeatureTier = (
   | { tier: "fast"; effort: OpenAiEffort }
   | { tier: "visionBatch"; effort?: CompatEffort }
-  | { tier: "reasoning"; effort?: AnthropicEffort };
+  | { tier: "reasoning"; effort?: AnthropicEffort }
+) & {
+  /** Output cap. Reasoning/thinking tokens count against it on every tier. */
+  maxTokens: number;
+};
 
+/** The decision tier has no output to cap and no reasoning dial. */
+type AiDecisionFeatureTier = { tier: "decision" };
+
+type AiFeatureTier = AiChatFeatureTier | AiDecisionFeatureTier;
+
+// `model` is derived from {@link MODEL_FOR_TIER}, never written by hand; it
+// is typed per family so a chat runner can only ever be handed a chat model.
+/** A feature placed over a chat route by `run-feature.ts`. */
+export type AiChatFeature = AiFeatureShared &
+  AiChatFeatureTier & { model: SupportedChatModel };
+/** A feature placed as one closed-set choice by `ai/jev.ts`. */
+export type AiDecisionFeature = AiFeatureShared &
+  AiDecisionFeatureTier & { model: SupportedDecisionModel };
 /** One feature's full declaration. A discriminated union on `tier`. */
-export type AiFeature = AiFeatureShared & AiFeatureTier;
+export type AiFeature = AiChatFeature | AiDecisionFeature;
 
-/** Distribute over {@link AiFeature}'s union so `switch (spec.tier)` still
- * narrows after the extra field is intersected on. */
-type WithField<K extends string, T> = AiFeature extends infer F
-  ? F extends AiFeature
+/** Distribute over {@link AiChatFeature}'s union so `switch (spec.tier)`
+ * still narrows after the extra field is intersected on. Only chat features
+ * carry a schema: a decision feature's answer is an index, not an object. */
+type WithField<K extends string, T> = AiChatFeature extends infer F
+  ? F extends AiChatFeature
     ? F & { [P in K]: z.ZodType<T> }
     : never
   : never;
@@ -112,9 +130,9 @@ export type AiStructuredFeature<T> = WithField<"schema", T>;
 export type AiAnalysisFeature<T> = WithField<"analysisSchema", T>;
 
 /** Fill in the tier-derived `model`. */
-function defineFeature<
-  S extends Omit<AiFeatureShared, "model"> & AiFeatureTier,
->(declaration: S): S & { model: (typeof MODEL_FOR_TIER)[S["tier"]] } {
+function defineFeature<S extends AiFeatureShared & AiFeatureTier>(
+  declaration: S,
+): S & { model: (typeof MODEL_FOR_TIER)[S["tier"]] } {
   // SAFETY: indexing `MODEL_FOR_TIER` with a `S["tier"]`-typed value yields
   // exactly `(typeof MODEL_FOR_TIER)[S["tier"]]`, but the compiler widens the
   // lookup to the whole union because `S` is still a type parameter here.
@@ -125,51 +143,61 @@ function defineFeature<
 }
 
 // ---------------------------------------------------------------------------
-// Fast tier — GPT-5.6 Luna. Classification, identification, and selection.
+// Decision tier — TypeSafe Jev on Workers AI. Closed-set classification and
+// selection: the feature hands Jev a roster of choices and gets back one
+// index plus a calibrated probability, so there is no id to echo and no
+// prose to parse. A selection whose roster exceeds Jev's limit runs on
+// `SELECTION_OVERFLOW_FEATURE` instead (`ai/selection.ts`).
 // ---------------------------------------------------------------------------
 
 export const PRODUCT_CATEGORY_SUGGESTION_FEATURE = defineFeature({
   feature: "product-category-suggestion",
-  tier: "fast",
-  maxTokens: 300,
-  effort: "none",
+  tier: "decision",
   cache: true,
-  promptVersion: "2026-09-11.1",
-  schema: categorySuggestionSchema,
-}) satisfies AiStructuredFeature<CategorySuggestion>;
+  promptVersion: "2026-09-18.1",
+}) satisfies AiDecisionFeature;
 
 export const LOCATION_TYPE_SUGGESTION_FEATURE = defineFeature({
   feature: "location-type-suggestion",
-  tier: "fast",
-  maxTokens: 300,
-  effort: "none",
+  tier: "decision",
   cache: true,
-  promptVersion: "2026-09-11.1",
-  schema: locationTypeSuggestionSchema,
-}) satisfies AiStructuredFeature<LocationTypeSuggestion>;
+  promptVersion: "2026-09-18.1",
+}) satisfies AiDecisionFeature;
 
 export const LOCATION_SUGGESTION_FEATURE = defineFeature({
   feature: "location-suggestion",
-  tier: "fast",
-  maxTokens: 500,
-  effort: "none",
+  tier: "decision",
   cache: true,
-  promptVersion: "2026-09-11.1",
-  schema: aiSelectionResultSchema,
-}) satisfies AiStructuredFeature<AiSelectionResult>;
+  promptVersion: "2026-09-18.1",
+}) satisfies AiDecisionFeature;
 
 export const USDA_FOOD_SUGGEST_FEATURE = defineFeature({
   feature: "usda-food-suggest",
-  tier: "fast",
-  maxTokens: 500,
-  effort: "none",
+  tier: "decision",
   cache: true,
-  promptVersion: "2026-09-11.1",
-  schema: aiSelectionResultSchema,
-}) satisfies AiStructuredFeature<AiSelectionResult>;
+  promptVersion: "2026-09-18.1",
+}) satisfies AiDecisionFeature;
 
 export const INGREDIENT_MERGE_FEATURE = defineFeature({
   feature: "ingredient-merge",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-09-18.1",
+}) satisfies AiDecisionFeature;
+
+// ---------------------------------------------------------------------------
+// Fast tier — GPT-5.6 Luna. Identification, detection, and oversized
+// selection.
+// ---------------------------------------------------------------------------
+
+/**
+ * Where any `runAiSelection` lands when its roster is larger than the
+ * decision tier takes in one choice: the model names the chosen candidate's
+ * id from a rendered shortlist. Shared by every selection consumer; the
+ * gateway metadata's `operation` says which one overflowed.
+ */
+export const SELECTION_OVERFLOW_FEATURE = defineFeature({
+  feature: "selection-overflow",
   tier: "fast",
   maxTokens: 500,
   effort: "none",
@@ -255,6 +283,7 @@ export const AI_FEATURES = [
   LOCATION_SUGGESTION_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
   INGREDIENT_MERGE_FEATURE,
+  SELECTION_OVERFLOW_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,

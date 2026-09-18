@@ -3,7 +3,7 @@
 // EPUB imports create near-duplicate ingredients that string matching can't
 // catch (scallion≈green onion, cilantro≈coriander, garbanzo≈chickpea).
 // `merge-shortlist.ts` assembles a lexical+semantic shortlist; this asks the
-// fast tier to pick exactly one target in a single structured call via
+// decision tier to pick exactly one target in a single call via
 // `runAiSelection` (no agentic search loop). Suggestions only — merge is
 // destructive, so the user confirms.
 

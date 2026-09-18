@@ -23,7 +23,6 @@ export interface UsdaLookupPort {
 
 export interface UsdaShortlistEntry {
   fdcId: number;
-  linkable: boolean;
   line: string;
   food: FoodSummaryWithLinkedProducts;
 }
@@ -83,22 +82,19 @@ function isLinkable(food: FoodSummaryWithLinkedProducts): boolean {
   );
 }
 
-function formatShortlistLine(
-  food: FoodSummaryWithLinkedProducts,
-  linkable: boolean,
-): string {
+function formatShortlistLine(food: FoodSummaryWithLinkedProducts): string {
   const brand = food.brandedFoodInfo?.brand_owner
     ? `, ${food.brandedFoodInfo.brand_owner}`
     : "";
-  return `FDC ${food.fdc_id} [${food.foodInfo.data_type}${brand}, id=${
-    linkable ? "ok" : "none"
-  }]: ${food.foodInfo.description}`;
+  return `FDC ${food.fdc_id} [${food.foodInfo.data_type}${brand}]: ${food.foodInfo.description}`;
 }
 
 /**
  * Run every {@link usdaQueryVariants} search concurrently, merge the results
  * in variant order (a variant missing because it deduped away is simply
- * skipped), dedupe by `fdc_id`, and cap at `limit`.
+ * skipped), dedupe by `fdc_id`, drop foods Cubby cannot link, and cap at
+ * `limit`. The model picks from a closed set, so an unlinkable food must
+ * never be a choice — filtering here is the only way to enforce that.
  */
 export async function buildUsdaShortlist(
   usdaService: UsdaLookupPort,
@@ -121,12 +117,10 @@ export async function buildUsdaShortlist(
   const byId = new Map<number, UsdaShortlistEntry>();
   for (const { data } of perVariant) {
     for (const food of data) {
-      if (byId.has(food.fdc_id)) continue;
-      const linkable = isLinkable(food);
+      if (byId.has(food.fdc_id) || !isLinkable(food)) continue;
       byId.set(food.fdc_id, {
         fdcId: food.fdc_id,
-        linkable,
-        line: formatShortlistLine(food, linkable),
+        line: formatShortlistLine(food),
         food,
       });
     }
@@ -137,10 +131,9 @@ export async function buildUsdaShortlist(
 const USDA_MATCH_RULES = `You map a recipe ingredient to the single best USDA FoodData Central entry, for nutrition and cost.
 
 Rules:
-1. Prefer the generic whole-food form. Each candidate is tagged "id=ok" (has an NDB number or UPC, so it can be linked) or "id=none". You MUST select a food tagged "id=ok" — a food with no id cannot be linked. sr_legacy_food entries have NDB numbers; foundation_food entries usually do NOT, so prefer sr_legacy_food over foundation_food.
+1. Prefer the generic whole-food form. Prefer sr_legacy_food over foundation_food.
 2. Choose a branded_food ONLY when the ingredient is itself a brand/specific product (e.g. "Biscoff cookies", "Oreos").
-3. The selected id MUST be one shown in the shortlist AND tagged "id=ok". If nothing suitable is found, select null.
-4. Keep reasoning to one sentence. Do not write any other prose.`;
+3. Decline if nothing suitable is shown.`;
 
 export const usdaFoodSpec: AiSelectionSpec<UsdaShortlistEntry> = {
   feature: USDA_FOOD_SUGGEST_FEATURE,

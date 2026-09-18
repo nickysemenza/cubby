@@ -6,7 +6,7 @@ import { Database } from "~/server/db";
 import {
   AGENT_ASK_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
-  PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+  PRODUCT_IDENTIFICATION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
 } from "./features";
 import {
@@ -81,7 +81,7 @@ const UNUSED_RESPONSE = { unused: true } as const;
 
 describe("planStructuredRun", () => {
   it("caches a structured feature for the gateway's full TTL", () => {
-    const plan = planStructuredRun(PRODUCT_CATEGORY_SUGGESTION_FEATURE, {
+    const plan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
       db,
       operation: "suggestCategory",
     });
@@ -94,7 +94,7 @@ describe("planStructuredRun", () => {
   });
 
   it("turns a caller's force into a skip rather than a shorter TTL", () => {
-    const plan = planStructuredRun(PRODUCT_CATEGORY_SUGGESTION_FEATURE, {
+    const plan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
       db,
       operation: "suggestCategory",
       force: true,
@@ -134,14 +134,14 @@ describe("planStructuredRun", () => {
     // A wrong provider here prices the row as null and drops it out of the
     // cost ledger, so it is read from the registry, never hardcoded.
     expect(
-      planStructuredRun(PRODUCT_CATEGORY_SUGGESTION_FEATURE, {
+      planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
         db,
         operation: "suggestCategory",
       }).usage,
     ).toMatchObject({
       provider: "openai",
       model: "gpt-5.6-luna",
-      feature: "product-category-suggestion",
+      feature: "product-identification",
       cacheStatus: "none",
     });
 
@@ -162,7 +162,7 @@ describe("planStructuredRun", () => {
 
   it("records no usage when the caller has no database", () => {
     expect(
-      planStructuredRun(PRODUCT_CATEGORY_SUGGESTION_FEATURE, {
+      planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
         operation: "eval",
       }).usage,
     ).toBeUndefined();
@@ -174,7 +174,7 @@ describe("runStructuredFeature", () => {
     const { calls, ports } = fakeChat([UNUSED_RESPONSE]);
 
     await runStructuredFeature(
-      PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+      PRODUCT_IDENTIFICATION_FEATURE,
       request,
       { db, operation: "suggestCategory" },
       ports,
@@ -182,10 +182,10 @@ describe("runStructuredFeature", () => {
 
     const call = calls[0]!;
     expect(call.modelOptions).toEqual({
-      max_output_tokens: 300,
-      reasoning: { effort: "none" },
+      max_output_tokens: 500,
+      reasoning: { effort: "low" },
     });
-    expect(call.outputSchema).toBe(PRODUCT_CATEGORY_SUGGESTION_FEATURE.schema);
+    expect(call.outputSchema).toBe(PRODUCT_IDENTIFICATION_FEATURE.schema);
     expect(call.systemPrompts).toEqual(["frame"]);
   });
 
@@ -224,7 +224,7 @@ describe("runStructuredFeature", () => {
     const { calls, ports } = fakeChat([UNUSED_RESPONSE]);
 
     await runStructuredFeature(
-      PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+      PRODUCT_IDENTIFICATION_FEATURE,
       request,
       { db, operation: "suggestCategory" },
       ports,
@@ -239,7 +239,7 @@ describe("runStructuredFeature", () => {
   it("attaches a usage middleware only when the caller has a database", async () => {
     const withDb = fakeChat([UNUSED_RESPONSE]);
     await runStructuredFeature(
-      PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+      PRODUCT_IDENTIFICATION_FEATURE,
       request,
       { db, operation: "suggestCategory" },
       withDb.ports,
@@ -248,7 +248,7 @@ describe("runStructuredFeature", () => {
 
     const withoutDb = fakeChat([UNUSED_RESPONSE]);
     await runStructuredFeature(
-      PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+      PRODUCT_IDENTIFICATION_FEATURE,
       request,
       { operation: "eval" },
       withoutDb.ports,
@@ -260,7 +260,7 @@ describe("runStructuredFeature", () => {
 describe("runStructuredFeature repair", () => {
   // `validate` closures below track their own call count instead of
   // inspecting the fake's resolved value: the fake returns plain test
-  // fixtures, not real `CategorySuggestion` output, and the point of these
+  // fixtures, not real `ProductIdentification` output, and the point of these
   // tests is the runner's repair *policy* (how many calls, what the second
   // one carries), not the shape of any one tier's schema.
   const okContext = (): AiRunContext<unknown> => ({
@@ -273,7 +273,7 @@ describe("runStructuredFeature repair", () => {
     const { calls, ports } = fakeChat([{ pass: 1 }]);
 
     const result = await runStructuredFeature(
-      PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+      PRODUCT_IDENTIFICATION_FEATURE,
       request,
       okContext(),
       ports,
@@ -290,7 +290,7 @@ describe("runStructuredFeature repair", () => {
     ]);
 
     const result = await runStructuredFeature(
-      PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+      PRODUCT_IDENTIFICATION_FEATURE,
       request,
       { db, operation: "suggestCategory" },
       ports,
@@ -318,7 +318,7 @@ describe("runStructuredFeature repair", () => {
     };
 
     const result = await runStructuredFeature(
-      PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+      PRODUCT_IDENTIFICATION_FEATURE,
       request,
       ctx,
       ports,
@@ -360,11 +360,11 @@ describe("runStructuredFeature repair", () => {
     // regardless — this proves the runner is explicit about it anyway,
     // exactly the merge `runStructuredFeature` performs before its second
     // `placeCall`.
-    const firstPlan = planStructuredRun(PRODUCT_CATEGORY_SUGGESTION_FEATURE, {
+    const firstPlan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
       db,
       operation: "suggestCategory",
     });
-    const repairPlan = planStructuredRun(PRODUCT_CATEGORY_SUGGESTION_FEATURE, {
+    const repairPlan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
       db,
       operation: "suggestCategory",
       force: true,
@@ -383,12 +383,7 @@ describe("runStructuredFeature repair", () => {
     };
 
     await expect(
-      runStructuredFeature(
-        PRODUCT_CATEGORY_SUGGESTION_FEATURE,
-        request,
-        ctx,
-        ports,
-      ),
+      runStructuredFeature(PRODUCT_IDENTIFICATION_FEATURE, request, ctx, ports),
     ).rejects.toThrow(/still missing a field/);
     expect(calls).toHaveLength(2);
   });

@@ -3,8 +3,8 @@
 // Cookbook ingredients ("AP flour", "orange juice") rarely match the USDA
 // description verbatim, and raw name-search is dominated by branded products.
 // `usda-shortlist.ts` assembles a shortlist from a handful of WASM-derived
-// query variants; this asks the fast tier to pick exactly one candidate in a
-// single structured call via `runAiSelection` (no agentic search loop).
+// query variants; this asks the decision tier to pick exactly one candidate
+// in a single call via `runAiSelection` (no agentic search loop).
 
 import type { Confidence } from "@cubby/schemas/ai";
 import type { IngredientId } from "@cubby/schemas/identifiers";
@@ -36,7 +36,7 @@ export interface UsdaFoodSuggestion {
 
 /**
  * Shortlist USDA foods ourselves ({@link buildUsdaShortlist}), then ask the
- * fast tier to pick exactly one in a single structured call. Returns the
+ * decision tier to pick exactly one in a single call. Returns the
  * full chosen food (with inferred unit mappings) so callers can link it
  * without a re-fetch, or null when nothing fits.
  */
