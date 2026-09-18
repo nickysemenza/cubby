@@ -343,45 +343,10 @@ private struct PhotoLibraryCell: View {
                         Image(systemName: "photo").foregroundStyle(.secondary)
                     }
                 }.clipped()
-                .overlay(alignment: .bottomTrailing) {
-                    if let selection {
-                        Text("\(selection)").font(.caption.bold()).padding(7).background(.blue, in: Circle())
-                            .foregroundStyle(.white).padding(5)
-                    } else if let ownerBadge {
-                        Text(ownerBadge)
-                            .font(.caption2.weight(.semibold).monospaced())
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                            .padding(.horizontal, 7)
-                            .frame(minHeight: 28)
-                            .foregroundStyle(.primary)
-                            .background(.thinMaterial, in: Capsule())
-                            .overlay { Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1) }
-                            .shadow(radius: 2, y: 1)
-                            .padding(5)
-                    } else if possibleMatch || !known {
-                        Image(systemName: "questionmark.circle").foregroundStyle(.white).shadow(radius: 2)
-                            .padding(6)
-                    }
-                }
+                .overlay(alignment: .bottomTrailing) { cornerBadge }
         }.buttonStyle(.plain)
-            .overlay(alignment: .topLeading) {
-                Button(action: onShowDetails) {
-                    Image(systemName: "info.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .padding(4)
-                .accessibilityLabel("Photo details")
-                .accessibilityIdentifier("photos.grid.details")
-            }
-            .accessibilityLabel(
-                "\(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"), \(ownerAccessibilityDescription ?? (represented ? "In Cubby" : possibleMatch ? "Possible Cubby match" : known ? "No known match" : "Not checked"))"
-            )
+            .overlay(alignment: .topLeading) { detailsButton }
+            .accessibilityLabel(cellAccessibilityLabel)
             .accessibilityValue(selection.map { "Selected photo \($0)" } ?? "")
             .onDisappear { image = nil }
             .task(id: asset.modificationDate) {
@@ -391,6 +356,61 @@ private struct PhotoLibraryCell: View {
                 { /* Local-only grid requests can fail for cloud assets; selection retries with network access. */
                 }
             }
+    }
+
+    /// Selection number > owner badge > "unchecked" glyph. Split out of `body` (with the
+    /// accessibility label and the details button) to keep each expression under the
+    /// 200ms type-check budget.
+    @ViewBuilder private var cornerBadge: some View {
+        if let selection {
+            Text("\(selection)").font(.caption.bold()).padding(7).background(.blue, in: Circle())
+                .foregroundStyle(.white).padding(5)
+        } else if let ownerBadge {
+            Text(ownerBadge)
+                .font(.caption2.weight(.semibold).monospaced())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 7)
+                .frame(minHeight: 28)
+                .foregroundStyle(.primary)
+                .background(.thinMaterial, in: Capsule())
+                .overlay { Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1) }
+                .shadow(radius: 2, y: 1)
+                .padding(5)
+        } else if possibleMatch || !known {
+            Image(systemName: "questionmark.circle").foregroundStyle(.white).shadow(radius: 2)
+                .padding(6)
+        }
+    }
+
+    private var detailsButton: some View {
+        Button(action: onShowDetails) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(.ultraThinMaterial, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(4)
+        .accessibilityLabel("Photo details")
+        .accessibilityIdentifier("photos.grid.details")
+    }
+
+    private var cellAccessibilityLabel: String {
+        let date = asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"
+        let status: String
+        if let ownerAccessibilityDescription {
+            status = ownerAccessibilityDescription
+        } else if represented {
+            status = "In Cubby"
+        } else if possibleMatch {
+            status = "Possible Cubby match"
+        } else {
+            status = known ? "No known match" : "Not checked"
+        }
+        return "\(date), \(status)"
     }
 }
 

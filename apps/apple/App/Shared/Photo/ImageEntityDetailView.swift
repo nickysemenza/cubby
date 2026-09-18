@@ -65,7 +65,8 @@ private struct PhotoTab: View {
     var body: some View {
         if let url = detail.imageURL {
             PhotoAttachmentImage(
-                photo: PhotoAttachment(id: detail.id.rawValue, filename: detail.filename, source: .remote(url)),
+                photo: PhotoAttachment(
+                    id: detail.id.rawValue, filename: detail.filename, source: .remote(url)),
                 renderedWidth: nil
             ).frame(maxHeight: 420)
         }

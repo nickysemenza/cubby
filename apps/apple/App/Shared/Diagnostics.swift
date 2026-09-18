@@ -96,7 +96,8 @@ nonisolated enum Diagnostics {
         if let urlError = error as? URLError, urlError.code == .cancelled { return }
         if let auth = error as? AuthError, auth == .invalidCredentials || auth == .rateLimited { return }
         logger.error(
-            "[\(context, privacy: .public)] \(String(reflecting: type(of: error)), privacy: .public): \(String(reflecting: error), privacy: .public)")
+            "[\(context, privacy: .public)] \(String(reflecting: type(of: error)), privacy: .public): \(String(reflecting: error), privacy: .public)"
+        )
         if let api = error as? CubbyAPIError, api.isUnauthorized || api.status == 404 {
             let crumb = Breadcrumb(level: .warning, category: context)
             crumb.message = "HTTP \(api.status) \(api.operationID)"

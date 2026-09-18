@@ -88,7 +88,8 @@ private struct PhotoDiagnosticsReportSections: View {
 
     var body: some View {
         IdentitySection(report: report)
-        EvidenceSection(title: "Classifications", items: report.classifications.map { ($0.identifier, $0.confidence) })
+        EvidenceSection(
+            title: "Classifications", items: report.classifications.map { ($0.identifier, $0.confidence) })
         EvidenceSection(
             title: "Recognized text", items: report.recognizedText.map { ($0.text, $0.confidence) })
         RoutingSection(report: report)
@@ -347,9 +348,10 @@ final class ImageDiagnosticsCompareModel {
             let deviceResult = await deviceTask
             guard !Task.isCancelled else { return }
             self.loading = false
-            if let stored, let file = Self.syntheticFile(
-                contentType: stored.contentType, size: detail.size, width: stored.width,
-                height: stored.height, capturedAt: stored.capturedAt, filename: detail.filename)
+            if let stored,
+                let file = Self.syntheticFile(
+                    contentType: stored.contentType, size: detail.size, width: stored.width,
+                    height: stored.height, capturedAt: stored.capturedAt, filename: detail.filename)
             {
                 self.server = await PhotoDiagnostics.report(
                     analysis: PhotoLocalAnalysis(payload: stored), file: file,
@@ -360,7 +362,8 @@ final class ImageDiagnosticsCompareModel {
                 return
             }
             self.device = deviceReport
-            await self.reconcile(id: id, detail: detail, stored: stored, deviceAnalysis: deviceAnalysis, client: client)
+            await self.reconcile(
+                id: id, detail: detail, stored: stored, deviceAnalysis: deviceAnalysis, client: client)
         }
     }
 

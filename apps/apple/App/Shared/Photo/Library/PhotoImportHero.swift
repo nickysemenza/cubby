@@ -33,7 +33,8 @@ struct PhotoImportHero: View {
     }
 
     private var focusedID: String {
-        externalFocusedID?.wrappedValue ?? (internalFocusedID.isEmpty ? items.first?.id ?? "" : internalFocusedID)
+        externalFocusedID?.wrappedValue
+            ?? (internalFocusedID.isEmpty ? items.first?.id ?? "" : internalFocusedID)
     }
 
     private func setFocusedID(_ id: String) {
