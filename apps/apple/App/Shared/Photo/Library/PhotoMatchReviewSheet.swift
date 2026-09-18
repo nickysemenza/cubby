@@ -2,15 +2,20 @@ import CubbyKit
 import Observation
 import SwiftUI
 
+/// Presenter-owned wrapper for `.sheet(item:)`: the draft is built once, alongside the batch, by
+/// the presenter — not seeded into the sheet's own `@State` from an init parameter, which is not
+/// guaranteed to reset across a re-presentation with a different item (apps/apple/AGENTS.md,
+/// "Traps that cost real time").
+struct PhotoMatchReviewBatch: Identifiable {
+    let id = UUID()
+    let items: [PhotoSelectionItem]
+    let draft: PhotoReviewDraft
+}
+
 struct PhotoMatchReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let draft: PhotoReviewDraft
     let onContinue: ([PhotoSelectionItem]) -> Void
-    @State private var draft: PhotoReviewDraft
-
-    init(items: [PhotoSelectionItem], onContinue: @escaping ([PhotoSelectionItem]) -> Void) {
-        self.onContinue = onContinue
-        _draft = State(initialValue: PhotoReviewDraft(items: items))
-    }
 
     var body: some View {
         NavigationStack {
@@ -272,5 +277,5 @@ struct MatchCandidateView: View {
 }
 
 #Preview(traits: .modifier(SignedInPreview())) {
-    PhotoMatchReviewSheet(items: [], onContinue: { _ in })
+    PhotoMatchReviewSheet(draft: PhotoReviewDraft(items: []), onContinue: { _ in })
 }

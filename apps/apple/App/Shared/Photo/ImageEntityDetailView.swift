@@ -32,6 +32,9 @@ struct ImageEntityDetailView: View {
             }
         }
         .navigationTitle(detail?.filename ?? "Image")
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
         .navigationDestination(for: Route.self) { route in
             RouteDestinationView(route: route)
         }

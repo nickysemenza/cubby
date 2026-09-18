@@ -14,8 +14,11 @@ struct PhotoImportHero: View {
     private let externalFocusedID: Binding<String>?
     let onToggle: ((String) -> Void)?
 
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @State private var internalFocusedID: String
+    // Literal default, no init parameter: falls back to `items.first` lazily in `focusedID`
+    // rather than being seeded from `items`/`focusedID` at init, so a reused view can never show
+    // a stale first-photo default from an earlier `items` array. (state-init-ok pattern; nothing
+    // to tag since there is nothing seeded here.)
+    @State private var internalFocusedID = ""
     @State private var showingFullScreen = false
 
     init(
@@ -27,10 +30,11 @@ struct PhotoImportHero: View {
         self.selectedIDs = selectedIDs
         self.externalFocusedID = focusedID
         self.onToggle = onToggle
-        _internalFocusedID = State(initialValue: focusedID?.wrappedValue ?? items.first?.id ?? "")
     }
 
-    private var focusedID: String { externalFocusedID?.wrappedValue ?? internalFocusedID }
+    private var focusedID: String {
+        externalFocusedID?.wrappedValue ?? (internalFocusedID.isEmpty ? items.first?.id ?? "" : internalFocusedID)
+    }
 
     private func setFocusedID(_ id: String) {
         if let externalFocusedID { externalFocusedID.wrappedValue = id } else { internalFocusedID = id }
@@ -40,7 +44,7 @@ struct PhotoImportHero: View {
         items.first(where: { $0.id == focusedID }) ?? items.first
     }
 
-    private var thumbnailSize: CGFloat { verticalSizeClass == .compact ? 56 : 64 }
+    private let thumbnailSize: CGFloat = 48
 
     var body: some View {
         if let focusedItem {
@@ -60,28 +64,31 @@ struct PhotoImportHero: View {
     }
 
     private func heroButton(for item: PhotoSelectionItem) -> some View {
-        Button {
-            showingFullScreen = true
-        } label: {
-            ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottomTrailing) {
+            Button {
+                showingFullScreen = true
+            } label: {
                 PhotoImportProgressiveImage(item: item, maxPixelSize: 1_800)
                     .frame(maxWidth: .infinity)
-                    .containerRelativeFrame(.vertical) { length, _ in min(270, length * 0.28) }
-                    .background(.black.opacity(0.92))
+                    .containerRelativeFrame(.vertical) { length, _ in min(220, length * 0.22) }
+                    .background(.quaternary)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                Label("Inspect full screen", systemImage: "arrow.up.left.and.arrow.down.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(.black.opacity(0.65), in: Capsule())
-                    .padding(12)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Photo preview")
+            .accessibilityHint("Opens a full-screen photo viewer")
+            .accessibilityIdentifier("photos.import.hero")
+
+            Button {
+                showingFullScreen = true
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
+            .padding(8)
+            .accessibilityLabel("Inspect full screen")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Photo preview")
-        .accessibilityHint("Opens a full-screen photo viewer")
-        .accessibilityIdentifier("photos.import.hero")
     }
 
     private func filmstrip(focused: PhotoSelectionItem) -> some View {
@@ -261,7 +268,10 @@ private struct PhotoImportFullScreenViewer: View {
 
     init(items: [PhotoSelectionItem], initialID: String) {
         self.items = items
-        _selection = State(initialValue: initialID)
+        // Presented via `isPresented:` (sheet/fullScreenCover), not `item:` — the whole subtree
+        // is torn down and rebuilt fresh each presentation, so this can't carry a stale
+        // `initialID` the way an `item:`-keyed sheet can.
+        _selection = State(initialValue: initialID)  // state-init-ok
     }
 
     var body: some View {

@@ -18,7 +18,9 @@ struct AdjustCountSheet: View {
         self.unit = amount.unit
         let draft = AdjustmentQuantityDraft(value: amount.value)
         initialText = draft.text
-        _draft = State(initialValue: draft)
+        // Presented via `.sheet(isPresented:)` at a fixed call site (`BinRowView`) — dismissing
+        // tears the subtree down, so re-presenting rebuilds this seed fresh.
+        _draft = State(initialValue: draft)  // state-init-ok
     }
 
     var body: some View {

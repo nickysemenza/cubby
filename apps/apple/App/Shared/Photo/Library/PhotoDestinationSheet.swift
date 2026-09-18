@@ -6,8 +6,8 @@ import SwiftUI
 struct PhotoDestinationSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
+    let manifest: PhotoImportManifest
     let onDone: ([String]) -> Void
-    @State private var manifest: PhotoImportManifest
     @State private var path: [PhotoImportNavigationDestination] = []
     @State private var replacement: ReplacementConfirmation?
     @State private var createContext: PhotoCreateContext?
@@ -15,67 +15,38 @@ struct PhotoDestinationSheet: View {
     @State private var createSelfContext: PhotoCreateSelfContext?
     @State private var createTargetContext: PhotoCreateTargetContext?
 
-    init(items: [PhotoSelectionItem], onDone: @escaping ([String]) -> Void) {
-        self.onDone = onDone
-        _manifest = State(initialValue: PhotoImportManifest(items: items))
+    /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
+    /// items fall back to the window toolbar there.
+    private static var commitBarPlacement: ToolbarItemPlacement {
+        #if os(iOS)
+            .bottomBar
+        #else
+            .automatic
+        #endif
     }
 
     var body: some View {
         NavigationStack(path: $path) {
             VStack(alignment: .leading, spacing: 0) {
-                selectedStrip
+                PhotoImportHero(
+                    items: manifest.items,
+                    selectedIDs: manifest.selectedIDs,
+                    focusedID: Binding(
+                        get: { manifest.focusedItemID ?? manifest.items.first?.id ?? "" },
+                        set: { manifest.focusedItemID = $0 }),
+                    onToggle: manifest.toggle
+                )
                 analysisStatus
                 destinationAction
-                List {
-                    if !manifest.needsDestination.isEmpty {
-                        Section("Needs a destination") {
-                            PhotoImportGroupRows(
-                                ids: manifest.needsDestination, manifest: manifest,
-                                onChangeDestination: { path.append(.sourceTypes) })
-                        }
-                    }
-                    ForEach(manifest.groups) { group in
-                        Section {
-                            PhotoImportGroupRows(
-                                ids: group.photoIDs, manifest: manifest,
-                                onChangeDestination: { path.append(.sourceTypes) })
-                        } header: {
-                            HStack(alignment: .firstTextBaseline) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(group.title)
-                                    if let evidence = group.evidence {
-                                        Text(evidence).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Spacer()
-                                if let source = group.source, let sourceRow = group.sourceRow {
-                                    Button("Change destination…") {
-                                        path.append(.routePicker(source: source, row: sourceRow))
-                                    }
-                                    .font(.caption)
-                                    .accessibilityIdentifier(
-                                        "photos.manifest.changeDestination.\(group.id)")
-                                }
-                            }
-                        }
-                    }
-                }
-                PhotoAnalysisDisclosure(manifest: manifest)
+                List { manifestListContent }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { footer }
             .navigationTitle("Review photos")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .automatic) {
-                    if manifest.canUndo {
-                        Button("Undo", systemImage: "arrow.uturn.backward") {
-                            manifest.undoLastMove()
-                        }
-                        .keyboardShortcut("z", modifiers: .command)
-                        .accessibilityIdentifier("photos.manifest.undo")
-                    }
-                }
-            }
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .navigationSubtitle("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+            .toolbar { reviewToolbar }
+            .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
             .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
                 switch destination {
                 case .sourceTypes:
@@ -103,6 +74,9 @@ struct PhotoDestinationSheet: View {
                         }
                     }
                     .navigationTitle("Assign selected…")
+                    #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                    #endif
                 case .sourceType(let source):
                     if let type = manifest.sourceTypeOptions.first(where: {
                         $0.source == source
@@ -149,6 +123,9 @@ struct PhotoDestinationSheet: View {
                         }
                     }
                     .navigationTitle("Choose storage")
+                    #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                    #endif
                 }
             }
         }
@@ -231,6 +208,110 @@ struct PhotoDestinationSheet: View {
         }
     }
 
+    /// Extracted so `body` stays under the project's 200ms type-check budget
+    /// (apps/apple/AGENTS.md, "A generator must never emit…" note on long-body stalls; the same
+    /// principle applies to a hand-written body this long).
+    @ViewBuilder
+    private var manifestListContent: some View {
+        if !manifest.needsDestination.isEmpty {
+            Section {
+                PhotoImportGroupRows(
+                    ids: manifest.needsDestination, manifest: manifest,
+                    onChangeDestination: { path.append(.sourceTypes) })
+            } header: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Needs a destination").font(.headline)
+                    if let caption = analysisCompleteCaption {
+                        Text(caption).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        ForEach(Array(manifest.groups.enumerated()), id: \.element.id) { index, group in
+            Section {
+                PhotoImportGroupRows(
+                    ids: group.photoIDs, manifest: manifest,
+                    onChangeDestination: { path.append(.sourceTypes) })
+            } header: {
+                groupHeader(group, showsAnalysisCaption: manifest.needsDestination.isEmpty && index == 0)
+            }
+        }
+        Section {
+            PhotoAnalysisDisclosure(manifest: manifest)
+        }
+    }
+
+    private func groupHeader(_ group: PhotoImportGroup, showsAnalysisCaption: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.title).font(.headline)
+                if let evidence = group.evidence {
+                    Text(evidence).font(.caption).foregroundStyle(.secondary)
+                }
+                if showsAnalysisCaption, let caption = analysisCompleteCaption {
+                    Text(caption).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if let source = group.source, let sourceRow = group.sourceRow {
+                Button("Change destination…") {
+                    path.append(.routePicker(source: source, row: sourceRow))
+                }
+                .font(.caption)
+                .accessibilityIdentifier("photos.manifest.changeDestination.\(group.id)")
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var reviewToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+        if manifest.canUndo {
+            ToolbarItem(placement: .secondaryAction) {
+                Button("Undo", systemImage: "arrow.uturn.backward") {
+                    manifest.undoLastMove()
+                }
+                .keyboardShortcut("z", modifiers: .command)
+                .accessibilityIdentifier("photos.manifest.undo")
+            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button(
+                manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all"
+            ) {
+                manifest.toggleSelectAll()
+            }
+            .accessibilityIdentifier("photos.manifest.selectAll")
+        }
+        ToolbarItemGroup(placement: Self.commitBarPlacement) {
+            Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
+                .foregroundStyle(.secondary)
+            Spacer()
+            if manifest.commitRequiresReview {
+                Button("Check status") {
+                    Task {
+                        guard let committedIDs = await manifest.checkCommitStatus(client: appModel.client)
+                        else { return }
+                        await finish(with: committedIDs)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("photos.destination.checkStatus")
+            } else {
+                Button(manifest.commitActionTitle) {
+                    Task {
+                        guard let committedIDs = await manifest.commit(client: appModel.client)
+                        else { return }
+                        await finish(with: committedIDs)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!manifest.canCommit)
+                .accessibilityIdentifier("photos.manifest.add")
+            }
+        }
+    }
+
     @ViewBuilder
     private var analysisStatus: some View {
         switch manifest.analysisState {
@@ -247,22 +328,15 @@ struct PhotoDestinationSheet: View {
                     .accessibilityIdentifier("photos.analysis.cancel")
             }
             .font(.subheadline)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.bar)
             .accessibilityElement(children: .combine)
         case .complete:
-            Label(
-                manifest.needsDestination.isEmpty
-                    ? "Analysis complete"
-                    : "Analysis complete · \(manifest.needsDestination.count) need a destination",
-                systemImage: "checkmark.circle"
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            // Folded into the first list section's header (`analysisCompleteCaption`) instead of
+            // its own fixed row, so it scrolls with the content rather than sitting above it.
+            EmptyView()
         case .failed(let message):
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Label(message, systemImage: "exclamationmark.triangle")
@@ -276,9 +350,18 @@ struct PhotoDestinationSheet: View {
                 }
             }
             .font(.subheadline)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
         }
+    }
+
+    /// The former standalone "Analysis complete" row, now the first list section's header
+    /// caption (see the `Section` headers in `body`) instead of a fixed row above the list.
+    private var analysisCompleteCaption: String? {
+        guard case .complete = manifest.analysisState else { return nil }
+        return manifest.needsDestination.isEmpty
+            ? "Analysis complete"
+            : "Analysis complete · \(manifest.needsDestination.count) need a destination"
     }
 
     @ViewBuilder
@@ -356,9 +439,8 @@ struct PhotoDestinationSheet: View {
                     .buttonStyle(.bordered)
                 }
             }
-            .controlSize(.large)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
+            .padding(.horizontal)
+            .padding(.bottom, 8)
             .accessibilityIdentifier("photos.manifest.destination")
         }
     }
@@ -427,76 +509,26 @@ struct PhotoDestinationSheet: View {
         }
     }
 
-    private var selectedStrip: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(
-                    manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all"
-                ) {
-                    manifest.toggleSelectAll()
+    /// Error/disabled-reason banners only — the commit action itself lives in the `.bottomBar`
+    /// toolbar group so it gets the system bar's Liquid Glass instead of a hand-built background.
+    @ViewBuilder
+    private var statusFooter: some View {
+        if manifest.errorMessage != nil || (!manifest.canCommit && manifest.commitDisabledReason != nil) {
+            VStack(alignment: .leading, spacing: 4) {
+                if let error = manifest.errorMessage {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(PorcelainTokens.destructive)
                 }
-                .font(.caption)
-                .accessibilityIdentifier("photos.manifest.selectAll")
+                if !manifest.canCommit, let reason = manifest.commitDisabledReason {
+                    Label(reason, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.horizontal, 16)
-            PhotoImportHero(
-                items: manifest.items,
-                selectedIDs: manifest.selectedIDs,
-                focusedID: Binding(
-                    get: { manifest.focusedItemID ?? manifest.items.first?.id ?? "" },
-                    set: { manifest.focusedItemID = $0 }),
-                onToggle: manifest.toggle
-            )
+            .padding(.horizontal)
+            .padding(.vertical, 6)
         }
-    }
-
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let error = manifest.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(PorcelainTokens.destructive)
-            }
-            if !manifest.canCommit, let reason = manifest.commitDisabledReason {
-                Label(reason, systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
-                Spacer()
-                if manifest.commitRequiresReview {
-                    Button("Check status") {
-                        Task {
-                            guard
-                                let committedIDs = await manifest.checkCommitStatus(
-                                    client: appModel.client)
-                            else { return }
-                            await finish(with: committedIDs)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .accessibilityIdentifier("photos.destination.checkStatus")
-                } else {
-                    Button(manifest.commitActionTitle) {
-                        Task {
-                            guard let committedIDs = await manifest.commit(client: appModel.client)
-                            else { return }
-                            await finish(with: committedIDs)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(!manifest.canCommit)
-                    .accessibilityIdentifier("photos.manifest.add")
-                }
-            }
-        }.padding(16).background(.bar)
     }
 
     private func finish(with committedIDs: [String]) async {
@@ -1794,8 +1826,6 @@ private struct PhotoAnalysisDisclosure: View {
             }
         }
         .font(.caption)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
 
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
@@ -2228,7 +2258,7 @@ private struct PhotoEntityChooser: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal)
                     .padding(.top, 4)
                     .accessibilityIdentifier("photos.manifest.resolvingSource")
                 }
@@ -2250,6 +2280,9 @@ private struct PhotoEntityChooser: View {
             .frame(maxHeight: .infinity)
         }
         .navigationTitle(descriptor.plural)
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
         .modifier(
             PhotoEntitySearchModifier(
                 enabled: descriptor.primarySearch != nil,
@@ -2650,6 +2683,9 @@ private struct PhotoRelatedCreateEditor: View {
                 }
             }
             .navigationTitle("New \(descriptor.singular)")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -2882,6 +2918,9 @@ private struct PhotoRelatedDestinationChooser: View {
                 .frame(maxHeight: .infinity)
             }
             .navigationTitle("Related \(descriptor.plural)")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
             .searchable(text: $search, prompt: "Search name or shortcode")
         }
         .nativeSheet(.editor)
@@ -2990,5 +3029,5 @@ private struct PhotoEntitySearchModifier: ViewModifier {
 }
 
 #Preview(traits: .modifier(SignedInPreview())) {
-    PhotoDestinationSheet(items: [], onDone: { _ in })
+    PhotoDestinationSheet(manifest: PhotoImportManifest(items: []), onDone: { _ in })
 }

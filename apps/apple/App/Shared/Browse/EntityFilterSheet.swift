@@ -127,7 +127,9 @@ struct EntityFilterSheet: View {
         self.descriptor = descriptor
         self.onApply = onApply
         self.initial = filters
-        _draft = State(initialValue: EntityFilterDraft(filters))
+        // Presented via `.sheet(isPresented:)` at a fixed call site (`EntityListView`) —
+        // dismissing tears the subtree down, so re-presenting rebuilds this seed fresh.
+        _draft = State(initialValue: EntityFilterDraft(filters))  // state-init-ok
     }
 
     var body: some View {

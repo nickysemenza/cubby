@@ -88,7 +88,10 @@ struct PhotoPreview: View {
 
     init(photos: [PhotoAttachment], selectedID: String) {
         self.photos = photos
-        _index = State(initialValue: photos.firstIndex(where: { $0.id == selectedID }) ?? 0)
+        // Presented via `.photoPreviewPresentation(item:)`, whose item id IS `selectedID` — the
+        // presentation identity and the value seeding `index` are the same value, so they can't
+        // diverge across a re-presentation.
+        _index = State(initialValue: photos.firstIndex(where: { $0.id == selectedID }) ?? 0)  // state-init-ok
     }
 
     var body: some View {

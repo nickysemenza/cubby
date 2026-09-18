@@ -9,7 +9,10 @@ struct SearchView: View {
     @State private var search: SearchModel?
 
     init(search: SearchModel? = nil) {
-        _search = State(initialValue: search)
+        // `search` is a test/preview injection seam; every production call site is
+        // `SearchView()` with no argument, and this is the persistent Search tab root — never
+        // re-presented via an item-keyed sheet with a changing `search` value.
+        _search = State(initialValue: search)  // state-init-ok
     }
 
     var body: some View {

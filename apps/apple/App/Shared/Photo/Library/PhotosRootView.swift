@@ -7,19 +7,19 @@ struct PhotosRootView: View {
     @State private var destination: PhotoSelectionBatch?
     var body: some View {
         PhotoLibraryBrowser(maxSelectionCount: nil, picker: false) { items in
-            destination = PhotoSelectionBatch(items: items)
+            // Built here, once per batch, and owned by the batch rather than seeded into the
+            // sheet's own @State: a re-presented `.sheet(item:)` is not guaranteed to reset
+            // @State seeded from an init parameter when the item changes (apps/apple/AGENTS.md,
+            // "Traps that cost real time"), which previously showed the prior batch's manifest.
+            destination = PhotoSelectionBatch(items: items, manifest: PhotoImportManifest(items: items))
         }
         .sheet(item: $destination) { batch in
-            PhotoDestinationSheet(items: batch.items) { committedIDs in
+            PhotoDestinationSheet(manifest: batch.manifest) { committedIDs in
                 // The importer reports only the identifiers that the transaction committed.
                 // Leave failed or unassigned selections untouched for an immediate retry.
                 appModel.photoLibrary.selectedIDs.removeAll { committedIDs.contains($0) }
                 destination = nil
             }
-            // The sheet seeds its manifest from `items` via `State(initialValue:)`, which SwiftUI
-            // applies once per view identity; without keying on the batch, a second presentation
-            // reused the first batch's manifest and showed the old photos.
-            .id(batch.id)
         }
     }
 }
@@ -44,6 +44,7 @@ struct LibraryPickerSheet: View {
 struct PhotoSelectionBatch: Identifiable {
     let id = UUID()
     let items: [PhotoSelectionItem]
+    let manifest: PhotoImportManifest
 }
 
 private struct PhotoLibraryBrowser: View {
@@ -61,6 +62,15 @@ private struct PhotoLibraryBrowser: View {
     @State private var selectionError: String?
     @State private var loadingSelection = false
     private let columns = [GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 3)]
+    /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
+    /// items fall back to the window toolbar there.
+    private static var selectionBarPlacement: ToolbarItemPlacement {
+        #if os(iOS)
+            .bottomBar
+        #else
+            .automatic
+        #endif
+    }
 
     private var library: PhotoLibraryStore { appModel.photoLibrary }
     private var matches: PhotoMatchStore { appModel.photoMatches }
@@ -131,7 +141,6 @@ private struct PhotoLibraryBrowser: View {
                         }
                     }
                 }
-                if !ids.isEmpty { selectionBar }
             } else {
                 permissionFallback
             }
@@ -139,9 +148,28 @@ private struct PhotoLibraryBrowser: View {
         .navigationTitle("Photos")
         .porcelainScreen()
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                if library.hasFullAccess && !ids.isEmpty {
+            // The `if` must gate the whole `ToolbarItem`, not sit inside its content: a
+            // conditional inside `ToolbarItem` still renders the item's Liquid Glass background
+            // even when the condition is false, showing an empty glass pill in the toolbar.
+            if library.hasFullAccess && !ids.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
                     Button("Clear") { clearSelection() }
+                }
+                ToolbarItemGroup(placement: Self.selectionBarPlacement) {
+                    Text("\(ids.count) selected").foregroundStyle(.secondary)
+                    Spacer()
+                    if loadingSelection {
+                        ProgressView(value: library.selectionProgress).frame(width: 70)
+                            .accessibilityLabel("Downloading selected photos")
+                        Button("Cancel") {
+                            loading?.cancel(); loadingSelection = false
+                        }
+                    } else {
+                        Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(ids.isEmpty)
+                            .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
+                    }
                 }
             }
         }
@@ -201,24 +229,6 @@ private struct PhotoLibraryBrowser: View {
                 .font(.caption2).foregroundStyle(.secondary)
             }
         }.padding(12)
-    }
-
-    private var selectionBar: some View {
-        HStack {
-            Text("\(ids.count) selected").font(.subheadline)
-            Spacer()
-            if loadingSelection {
-                ProgressView(value: library.selectionProgress).frame(width: 70)
-                    .accessibilityLabel("Downloading selected photos")
-                Button("Cancel") {
-                    loading?.cancel(); loadingSelection = false
-                }
-            } else {
-                Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
-                    .buttonStyle(.borderedProminent).disabled(ids.isEmpty)
-                    .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
-            }
-        }.padding(12).background(.bar)
     }
 
     private var permissionFallback: some View {

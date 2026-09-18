@@ -38,6 +38,28 @@ native separators and selection. Phone targets are at least 44 points; Mac
 controls use native density. Content wraps or stacks at accessibility text sizes.
 Use monospaced digits for quantities and a monospaced face only for identifiers.
 
+## Density
+
+The app is high-density on every view — screen space goes to content, not chrome. This is a
+standing rule, not a one-off for any single flow; other screens adopt it as they are touched.
+
+- Inline navigation titles by default; reserve `.large` display mode for a screen with no other
+  competing content.
+- System spacing: omit `padding`/`spacing` lengths rather than hand-picking a number such as
+  `.padding(16)` — the system value adapts across platform, size class, and Dynamic Type. See
+  `axiom-design` (`skills/hig.md`, "What spacing, padding, or margin value should I use?").
+- Default control sizes; `.controlSize(.large)` only for a lone primary action on an otherwise
+  empty screen, never mixed into a list or a busy footer.
+- Actions live in toolbar placements (`.bottomBar`, `.confirmationAction`, `.cancellationAction`,
+  `.secondaryAction`, a toolbar `Menu`, …), never a hand-built `HStack + .background(.bar)` footer
+  or pill — the system toolbar is already Liquid Glass.
+- Hero media (a focused photo, a large preview) is at most ~22% of the container height on
+  phones, e.g. `containerRelativeFrame(.vertical) { min(220, $0 * 0.22) }`, so the rest of the
+  screen stays usable.
+- List rows keep default insets; do not add a per-row `.padding(16)` or similar "to give it room."
+- Check every new or touched view at iPhone width and compact height (landscape) — that is where
+  a screen built at iPad proportions runs out of room first.
+
 ## Navigation
 
 On iPhone retain Today, Capture, Photos, Browse, and Search, each with an independent
