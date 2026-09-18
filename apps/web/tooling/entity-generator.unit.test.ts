@@ -471,7 +471,23 @@ describe("typed entity compiler", () => {
         },
         related,
       ]),
-    ).toThrow("targets alpha, which has no direct image storage");
+    ).toThrow("targets alpha, which does not have gallery image storage");
+
+    // Cover/logo storage is also rejected: PhotoVisualEvidenceMatcher only
+    // reads attachment-role (gallery) images, so evidence aimed at a
+    // cover/logo-only target could never fire.
+    expect(() =>
+      compileEntityDeclarations([
+        source,
+        {
+          ...related,
+          capabilities: {
+            ...related.capabilities,
+            images: { ...related.capabilities.images, storage: "cover" },
+          },
+        },
+      ]),
+    ).toThrow("targets related, which does not have gallery image storage");
 
     const compiled = compileEntityDeclarations([source, related]);
     const artifacts = renderImagePolicyArtifacts(compiled);
@@ -1272,6 +1288,7 @@ describe("typed entity compiler", () => {
       ...renderFilterArtifacts(entities),
       ...renderSearchArtifacts(entities),
       ...renderBrowserRouteArtifacts(entities),
+      ...renderImagePolicyArtifacts(entities),
     ];
     const artifact = (suffix: string) =>
       artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))!
@@ -1378,5 +1395,12 @@ describe("typed entity compiler", () => {
     expect(new Set(rawValues)).toEqual(
       new Set(entities.map((entity) => entity.key)),
     );
+    // Regression guard for the Swift enum emitter (image-policy.ts): manifest
+    // vocabularies must render as typed enum cases, not raw string literals.
+    const photoImportCatalog = artifact("PhotoImportCatalog.swift");
+    expect(photoImportCatalog).toContain("public enum PhotoIngressRouteKind");
+    expect(photoImportCatalog).toContain("public enum PhotoBindingSource");
+    expect(photoImportCatalog).toMatch(/kind: \.createRelated/);
+    expect(photoImportCatalog).toMatch(/source: \.captureDate/);
   });
 });

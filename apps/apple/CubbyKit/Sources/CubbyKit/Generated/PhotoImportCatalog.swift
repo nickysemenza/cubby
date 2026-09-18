@@ -2,26 +2,58 @@
 
 // swift-format-ignore-file
 
+public enum PhotoIngressRouteKind: String, Sendable, Hashable, CaseIterable {
+  case `self` = "self"
+  case existingRelated = "existingRelated"
+  case createRelated = "createRelated"
+}
+
+public enum PhotoRouteChoice: String, Sendable, Hashable, CaseIterable {
+  case primary = "primary"
+  case alternate = "alternate"
+  case prompt = "prompt"
+}
+
+public enum PhotoImageStorage: String, Sendable, Hashable, CaseIterable {
+  case gallery = "gallery"
+  case cover = "cover"
+  case logo = "logo"
+}
+
+public enum PhotoBindingSource: String, Sendable, Hashable, CaseIterable {
+  case sourceId = "source-id"
+  case sourceField = "source-field"
+  case captureDate = "capture-date"
+  case constant = "constant"
+  case relationItems = "relation-items"
+}
+
+public enum PhotoDisplayOrdering: String, Sendable, Hashable, CaseIterable {
+  case declared = "declared"
+  case newest = "newest"
+  case oldest = "oldest"
+}
+
 public struct PhotoCreateBinding: Sendable, Hashable {
   public let field: String
-  public let source: String
+  public let source: PhotoBindingSource
   public let sourceField: String?
   public let constantJSON: String?
   public let itemField: String?
-  public let itemSource: String?
+  public let itemSource: PhotoBindingSource?
 }
 
 public struct PhotoIngressRoute: Sendable, Hashable {
   public let id: String
   public let source: EntityKey
   public let target: EntityKey
-  public let kind: String
-  public let storage: String?
+  public let kind: PhotoIngressRouteKind
+  public let storage: PhotoImageStorage?
   public let relationPath: [String]
   public let bindings: [PhotoCreateBinding]
   public let append: Bool
   public let requiresReplaceConfirmation: Bool
-  public let choice: String
+  public let choice: PhotoRouteChoice
 }
 
 public struct PhotoDisplaySource: Sendable, Hashable {
@@ -29,7 +61,7 @@ public struct PhotoDisplaySource: Sendable, Hashable {
   public let target: EntityKey
   public let relationPath: [String]
   public let priority: Int
-  public let ordering: String
+  public let ordering: PhotoDisplayOrdering
 }
 
 public struct PhotoVisualEvidence: Sendable, Hashable {
@@ -37,7 +69,7 @@ public struct PhotoVisualEvidence: Sendable, Hashable {
   public let target: EntityKey
   public let relationPath: [String]
   public let priority: Int
-  public let ordering: String
+  public let ordering: PhotoDisplayOrdering
 }
 
 public struct PhotoLifecycleFilter: Sendable, Hashable {
@@ -58,57 +90,57 @@ public struct PhotoRoutingPolicy: Sendable, Hashable {
 
 public enum PhotoImportCatalog {
   public static let ingressRoutes: [PhotoIngressRoute] = [
-    PhotoIngressRoute(id: "product-self", source: .product, target: .product, kind: "self", storage: "gallery", relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "recipe-self", source: .recipe, target: .recipe, kind: "self", storage: "gallery", relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "recipe-meal", source: .recipe, target: .meal, kind: "existingRelated", storage: "gallery", relationPath: ["meals"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "alternate"),
-    PhotoIngressRoute(id: "recipe-new-meal", source: .recipe, target: .meal, kind: "createRelated", storage: "gallery", relationPath: ["meals"], bindings: [PhotoCreateBinding(field: "date", source: "capture-date", sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil), PhotoCreateBinding(field: "recipes", source: "relation-items", sourceField: nil, constantJSON: nil, itemField: "recipeId", itemSource: "source-id")], append: true, requiresReplaceConfirmation: false, choice: "alternate"),
-    PhotoIngressRoute(id: "ingredient-product", source: .ingredient, target: .product, kind: "existingRelated", storage: "gallery", relationPath: ["products"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "cookbook-cover", source: .cookbook, target: .cookbook, kind: "self", storage: "cover", relationPath: [], bindings: [], append: false, requiresReplaceConfirmation: true, choice: "primary"),
-    PhotoIngressRoute(id: "location-self", source: .location, target: .location, kind: "self", storage: "gallery", relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "location-new-garden-entry", source: .location, target: .gardenEntry, kind: "createRelated", storage: "gallery", relationPath: ["garden-entries"], bindings: [PhotoCreateBinding(field: "locationId", source: "source-id", sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil), PhotoCreateBinding(field: "kind", source: "constant", sourceField: nil, constantJSON: "\"note\"", itemField: nil, itemSource: nil), PhotoCreateBinding(field: "observedOn", source: "capture-date", sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil)], append: true, requiresReplaceConfirmation: false, choice: "alternate"),
-    PhotoIngressRoute(id: "inventory-product", source: .inventory, target: .product, kind: "existingRelated", storage: "gallery", relationPath: ["product"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "prompt"),
-    PhotoIngressRoute(id: "inventory-location", source: .inventory, target: .location, kind: "existingRelated", storage: "gallery", relationPath: ["location"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "prompt"),
-    PhotoIngressRoute(id: "meal-self", source: .meal, target: .meal, kind: "self", storage: "gallery", relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "project-self", source: .project, target: .project, kind: "self", storage: "gallery", relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "task-self", source: .task, target: .task, kind: "self", storage: "gallery", relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "vendor-logo", source: .vendor, target: .vendor, kind: "self", storage: "logo", relationPath: [], bindings: [], append: false, requiresReplaceConfirmation: true, choice: "primary"),
-    PhotoIngressRoute(id: "purchase-self", source: .purchase, target: .purchase, kind: "self", storage: "gallery", relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "financial-transaction-confirmed-purchase", source: .financialTransaction, target: .purchase, kind: "existingRelated", storage: "gallery", relationPath: ["purchase"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "wish-product", source: .wish, target: .product, kind: "existingRelated", storage: "gallery", relationPath: ["candidates"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "expense-purchase", source: .expense, target: .purchase, kind: "existingRelated", storage: "gallery", relationPath: ["purchase"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "prompt"),
-    PhotoIngressRoute(id: "expense-product", source: .expense, target: .product, kind: "existingRelated", storage: "gallery", relationPath: ["product"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "prompt"),
-    PhotoIngressRoute(id: "planting-garden-entry", source: .planting, target: .gardenEntry, kind: "existingRelated", storage: "gallery", relationPath: ["entries"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "alternate"),
-    PhotoIngressRoute(id: "planting-new-garden-entry", source: .planting, target: .gardenEntry, kind: "createRelated", storage: "gallery", relationPath: ["entries"], bindings: [PhotoCreateBinding(field: "plantingId", source: "source-id", sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil), PhotoCreateBinding(field: "locationId", source: "source-field", sourceField: "locationId", constantJSON: nil, itemField: nil, itemSource: nil), PhotoCreateBinding(field: "kind", source: "constant", sourceField: nil, constantJSON: "\"note\"", itemField: nil, itemSource: nil), PhotoCreateBinding(field: "observedOn", source: "capture-date", sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil)], append: true, requiresReplaceConfirmation: false, choice: "primary"),
-    PhotoIngressRoute(id: "garden-entry-self", source: .gardenEntry, target: .gardenEntry, kind: "self", storage: "gallery", relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: "primary")
+    PhotoIngressRoute(id: "product-self", source: .product, target: .product, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "recipe-self", source: .recipe, target: .recipe, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "recipe-meal", source: .recipe, target: .meal, kind: .existingRelated, storage: .gallery, relationPath: ["meals"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .alternate),
+    PhotoIngressRoute(id: "recipe-new-meal", source: .recipe, target: .meal, kind: .createRelated, storage: .gallery, relationPath: ["meals"], bindings: [PhotoCreateBinding(field: "date", source: .captureDate, sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil), PhotoCreateBinding(field: "recipes", source: .relationItems, sourceField: nil, constantJSON: nil, itemField: "recipeId", itemSource: .sourceId)], append: true, requiresReplaceConfirmation: false, choice: .alternate),
+    PhotoIngressRoute(id: "ingredient-product", source: .ingredient, target: .product, kind: .existingRelated, storage: .gallery, relationPath: ["products"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "cookbook-cover", source: .cookbook, target: .cookbook, kind: .`self`, storage: .cover, relationPath: [], bindings: [], append: false, requiresReplaceConfirmation: true, choice: .primary),
+    PhotoIngressRoute(id: "location-self", source: .location, target: .location, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "location-new-garden-entry", source: .location, target: .gardenEntry, kind: .createRelated, storage: .gallery, relationPath: ["garden-entries"], bindings: [PhotoCreateBinding(field: "locationId", source: .sourceId, sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil), PhotoCreateBinding(field: "kind", source: .constant, sourceField: nil, constantJSON: "\"note\"", itemField: nil, itemSource: nil), PhotoCreateBinding(field: "observedOn", source: .captureDate, sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil)], append: true, requiresReplaceConfirmation: false, choice: .alternate),
+    PhotoIngressRoute(id: "inventory-product", source: .inventory, target: .product, kind: .existingRelated, storage: .gallery, relationPath: ["product"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .prompt),
+    PhotoIngressRoute(id: "inventory-location", source: .inventory, target: .location, kind: .existingRelated, storage: .gallery, relationPath: ["location"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .prompt),
+    PhotoIngressRoute(id: "meal-self", source: .meal, target: .meal, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "project-self", source: .project, target: .project, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "task-self", source: .task, target: .task, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "vendor-logo", source: .vendor, target: .vendor, kind: .`self`, storage: .logo, relationPath: [], bindings: [], append: false, requiresReplaceConfirmation: true, choice: .primary),
+    PhotoIngressRoute(id: "purchase-self", source: .purchase, target: .purchase, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "financial-transaction-confirmed-purchase", source: .financialTransaction, target: .purchase, kind: .existingRelated, storage: .gallery, relationPath: ["purchase"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "wish-product", source: .wish, target: .product, kind: .existingRelated, storage: .gallery, relationPath: ["candidates"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "expense-purchase", source: .expense, target: .purchase, kind: .existingRelated, storage: .gallery, relationPath: ["purchase"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .prompt),
+    PhotoIngressRoute(id: "expense-product", source: .expense, target: .product, kind: .existingRelated, storage: .gallery, relationPath: ["product"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .prompt),
+    PhotoIngressRoute(id: "planting-garden-entry", source: .planting, target: .gardenEntry, kind: .existingRelated, storage: .gallery, relationPath: ["entries"], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .alternate),
+    PhotoIngressRoute(id: "planting-new-garden-entry", source: .planting, target: .gardenEntry, kind: .createRelated, storage: .gallery, relationPath: ["entries"], bindings: [PhotoCreateBinding(field: "plantingId", source: .sourceId, sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil), PhotoCreateBinding(field: "locationId", source: .sourceField, sourceField: "locationId", constantJSON: nil, itemField: nil, itemSource: nil), PhotoCreateBinding(field: "kind", source: .constant, sourceField: nil, constantJSON: "\"note\"", itemField: nil, itemSource: nil), PhotoCreateBinding(field: "observedOn", source: .captureDate, sourceField: nil, constantJSON: nil, itemField: nil, itemSource: nil)], append: true, requiresReplaceConfirmation: false, choice: .primary),
+    PhotoIngressRoute(id: "garden-entry-self", source: .gardenEntry, target: .gardenEntry, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary)
   ]
   public static let displaySources: [PhotoDisplaySource] = [
-    PhotoDisplaySource(source: .recipe, target: .meal, relationPath: ["meals"], priority: 1, ordering: "newest"),
-    PhotoDisplaySource(source: .ingredient, target: .product, relationPath: ["products"], priority: 0, ordering: "declared"),
-    PhotoDisplaySource(source: .cookbook, target: .product, relationPath: ["product"], priority: 1, ordering: "declared"),
-    PhotoDisplaySource(source: .location, target: .product, relationPath: ["product"], priority: 1, ordering: "declared"),
-    PhotoDisplaySource(source: .inventory, target: .product, relationPath: ["product"], priority: 0, ordering: "declared"),
-    PhotoDisplaySource(source: .inventory, target: .location, relationPath: ["location"], priority: 1, ordering: "declared"),
-    PhotoDisplaySource(source: .meal, target: .recipe, relationPath: ["recipes"], priority: 1, ordering: "declared"),
-    PhotoDisplaySource(source: .project, target: .task, relationPath: ["tasks"], priority: 1, ordering: "newest"),
-    PhotoDisplaySource(source: .project, target: .product, relationPath: ["task-products"], priority: 2, ordering: "declared"),
-    PhotoDisplaySource(source: .project, target: .product, relationPath: ["purchased-products"], priority: 3, ordering: "declared"),
-    PhotoDisplaySource(source: .project, target: .product, relationPath: ["resources"], priority: 4, ordering: "declared"),
-    PhotoDisplaySource(source: .task, target: .product, relationPath: ["subject"], priority: 1, ordering: "declared"),
-    PhotoDisplaySource(source: .task, target: .project, relationPath: ["project"], priority: 2, ordering: "declared"),
-    PhotoDisplaySource(source: .purchase, target: .product, relationPath: ["products"], priority: 1, ordering: "declared"),
-    PhotoDisplaySource(source: .purchase, target: .vendor, relationPath: ["vendor"], priority: 2, ordering: "declared"),
-    PhotoDisplaySource(source: .financialTransaction, target: .purchase, relationPath: ["purchase"], priority: 1, ordering: "newest"),
-    PhotoDisplaySource(source: .financialTransaction, target: .product, relationPath: ["products"], priority: 2, ordering: "declared"),
-    PhotoDisplaySource(source: .financialTransaction, target: .vendor, relationPath: ["vendor"], priority: 3, ordering: "declared"),
-    PhotoDisplaySource(source: .wish, target: .product, relationPath: ["candidates"], priority: 0, ordering: "declared"),
-    PhotoDisplaySource(source: .expense, target: .product, relationPath: ["product"], priority: 0, ordering: "declared"),
-    PhotoDisplaySource(source: .expense, target: .purchase, relationPath: ["purchase"], priority: 1, ordering: "declared"),
-    PhotoDisplaySource(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: "newest"),
-    PhotoDisplaySource(source: .planting, target: .product, relationPath: ["source-product"], priority: 2, ordering: "declared")
+    PhotoDisplaySource(source: .recipe, target: .meal, relationPath: ["meals"], priority: 1, ordering: .newest),
+    PhotoDisplaySource(source: .ingredient, target: .product, relationPath: ["products"], priority: 0, ordering: .declared),
+    PhotoDisplaySource(source: .cookbook, target: .product, relationPath: ["product"], priority: 1, ordering: .declared),
+    PhotoDisplaySource(source: .location, target: .product, relationPath: ["product"], priority: 1, ordering: .declared),
+    PhotoDisplaySource(source: .inventory, target: .product, relationPath: ["product"], priority: 0, ordering: .declared),
+    PhotoDisplaySource(source: .inventory, target: .location, relationPath: ["location"], priority: 1, ordering: .declared),
+    PhotoDisplaySource(source: .meal, target: .recipe, relationPath: ["recipes"], priority: 1, ordering: .declared),
+    PhotoDisplaySource(source: .project, target: .task, relationPath: ["tasks"], priority: 1, ordering: .newest),
+    PhotoDisplaySource(source: .project, target: .product, relationPath: ["task-products"], priority: 2, ordering: .declared),
+    PhotoDisplaySource(source: .project, target: .product, relationPath: ["purchased-products"], priority: 3, ordering: .declared),
+    PhotoDisplaySource(source: .project, target: .product, relationPath: ["resources"], priority: 4, ordering: .declared),
+    PhotoDisplaySource(source: .task, target: .product, relationPath: ["subject"], priority: 1, ordering: .declared),
+    PhotoDisplaySource(source: .task, target: .project, relationPath: ["project"], priority: 2, ordering: .declared),
+    PhotoDisplaySource(source: .purchase, target: .product, relationPath: ["products"], priority: 1, ordering: .declared),
+    PhotoDisplaySource(source: .purchase, target: .vendor, relationPath: ["vendor"], priority: 2, ordering: .declared),
+    PhotoDisplaySource(source: .financialTransaction, target: .purchase, relationPath: ["purchase"], priority: 1, ordering: .newest),
+    PhotoDisplaySource(source: .financialTransaction, target: .product, relationPath: ["products"], priority: 2, ordering: .declared),
+    PhotoDisplaySource(source: .financialTransaction, target: .vendor, relationPath: ["vendor"], priority: 3, ordering: .declared),
+    PhotoDisplaySource(source: .wish, target: .product, relationPath: ["candidates"], priority: 0, ordering: .declared),
+    PhotoDisplaySource(source: .expense, target: .product, relationPath: ["product"], priority: 0, ordering: .declared),
+    PhotoDisplaySource(source: .expense, target: .purchase, relationPath: ["purchase"], priority: 1, ordering: .declared),
+    PhotoDisplaySource(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: .newest),
+    PhotoDisplaySource(source: .planting, target: .product, relationPath: ["source-product"], priority: 2, ordering: .declared)
   ]
   public static let visualEvidence: [PhotoVisualEvidence] = [
-    PhotoVisualEvidence(source: .recipe, target: .meal, relationPath: ["meals"], priority: 1, ordering: "newest"),
-    PhotoVisualEvidence(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: "newest")
+    PhotoVisualEvidence(source: .recipe, target: .meal, relationPath: ["meals"], priority: 1, ordering: .newest),
+    PhotoVisualEvidence(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: .newest)
   ]
   public static let routingPolicies: [EntityKey: PhotoRoutingPolicy] = [
     .product: PhotoRoutingPolicy(candidateFields: ["name","manufacturer","model"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name","manufacturer","model"], classifierLabels: ["product"], minimumScore: 0.72, minimumMargin: 0.12),

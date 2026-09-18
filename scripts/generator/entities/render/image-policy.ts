@@ -1,17 +1,39 @@
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 
+/**
+ * Single source of truth for the manifest vocabularies shared by the TS union
+ * types below and the generated Swift enums (see `swiftEnum`): both are
+ * derived from these arrays so the two representations cannot drift.
+ */
+const ROUTE_KINDS = ["self", "existingRelated", "createRelated"] as const;
+const ROUTE_CHOICES = ["primary", "alternate", "prompt"] as const;
+const IMAGE_STORAGE_VALUES = ["gallery", "cover", "logo"] as const;
+/** `imageIngressBindingMetadataSchema` discriminant, packages/schemas/src/entity-definitions/definition.ts. */
+const BINDING_SOURCES = [
+  "source-id",
+  "source-field",
+  "capture-date",
+  "constant",
+  "relation-items",
+] as const;
+const DISPLAY_ORDERINGS = ["declared", "newest", "oldest"] as const;
+
+/** Renders a TS union-of-string-literals type from a wire-value array. */
+const unionType = (values: readonly string[]): string =>
+  values.map((value) => JSON.stringify(value)).join(" | ");
+
 type ImageRoute = {
   readonly routeId: string;
   readonly sourceEntity: string;
   readonly targetEntity: string;
-  readonly kind: "self" | "existingRelated" | "createRelated";
-  readonly storage: false | "gallery" | "cover" | "logo";
+  readonly kind: (typeof ROUTE_KINDS)[number];
+  readonly storage: false | (typeof IMAGE_STORAGE_VALUES)[number];
   readonly relationPath: readonly string[];
   readonly bindings: readonly ImageIngressBinding[];
   readonly append: boolean;
   readonly requiresReplaceConfirmation: boolean;
-  readonly choice: "primary" | "alternate" | "prompt";
+  readonly choice: (typeof ROUTE_CHOICES)[number];
 };
 
 type ImageIngressBinding =
@@ -143,11 +165,11 @@ export const renderImagePolicyArtifacts = (
   const ts =
     generatedHeader +
     'import type { Entity } from "../entity";\n\n' +
-    'export type ImageStorage = false | "gallery" | "cover" | "logo";\n' +
+    `export type ImageStorage = false | ${unionType(IMAGE_STORAGE_VALUES)};\n` +
     'export type ImageIngressBinding = { readonly field: string; readonly from: "source-id" | "capture-date" } | { readonly field: string; readonly from: "source-field"; readonly sourceField: string } | { readonly field: string; readonly from: "constant"; readonly value: string | number | boolean | null } | { readonly field: string; readonly from: "relation-items"; readonly item: { readonly field: string; readonly from: "source-id" | "source-field" | "constant"; readonly sourceField?: string; readonly value?: string | number | boolean | null } };\n' +
-    'export type ImageIngressRoute = { readonly routeId: string; readonly sourceEntity: Entity; readonly targetEntity: Entity; readonly kind: "self" | "existingRelated" | "createRelated"; readonly storage: ImageStorage; readonly relationPath: readonly string[]; readonly bindings: readonly ImageIngressBinding[]; readonly append: boolean; readonly requiresReplaceConfirmation: boolean; readonly choice: "primary" | "alternate" | "prompt" };\n' +
-    'export type ImageDisplayBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: "declared" | "newest" | "oldest"; readonly identityEvidence: false };\n\n' +
-    'type ImageVisualEvidenceBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: "declared" | "newest" | "oldest" };\n\n' +
+    `export type ImageIngressRoute = { readonly routeId: string; readonly sourceEntity: Entity; readonly targetEntity: Entity; readonly kind: ${unionType(ROUTE_KINDS)}; readonly storage: ImageStorage; readonly relationPath: readonly string[]; readonly bindings: readonly ImageIngressBinding[]; readonly append: boolean; readonly requiresReplaceConfirmation: boolean; readonly choice: ${unionType(ROUTE_CHOICES)} };\n` +
+    `export type ImageDisplayBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: ${unionType(DISPLAY_ORDERINGS)}; readonly identityEvidence: false };\n\n` +
+    `type ImageVisualEvidenceBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: ${unionType(DISPLAY_ORDERINGS)} };\n\n` +
     "export type ImageRoutingPolicy = { readonly candidateFields: readonly string[]; readonly temporalFields: readonly string[]; readonly lifecycleFilters: readonly ({ readonly field: string; readonly equals: string | boolean } | { readonly field: string; readonly oneOf: readonly (string | boolean)[] })[]; readonly signals: { readonly ocrFields: readonly string[]; readonly classifierLabels: readonly string[] }; readonly visualEvidence: readonly ImageVisualEvidenceBinding[]; readonly abstention: { readonly minimumScore: number; readonly minimumMargin: number } };\n" +
     "export type ImagePolicy = { readonly storage: ImageStorage; readonly displaySources: readonly ImageDisplayBinding[]; readonly ingress: readonly ImageIngressRoute[]; readonly routing: ImageRoutingPolicy | null };\n\n" +
     `export const imagePolicyCatalog = ${JSON.stringify(policyCatalog)} as const satisfies Record<Entity, ImagePolicy>;\n\n` +
@@ -157,24 +179,44 @@ export const renderImagePolicyArtifacts = (
     'export type ImageIngressRouteId = (typeof imageIngressRoutes)[number]["routeId"];\n' +
     `export const imageIngressRouteById = ${JSON.stringify(routesById)} as const satisfies Record<ImageIngressRouteId, ImageIngressRoute>;\n\n` +
     `export const imageDisplayBindings = ${JSON.stringify(displayBindings)} as const satisfies Record<Entity, readonly ImageDisplayBinding[]>;\n`;
+  /** Wire string ("source-field") -> Swift enum case identifier (sourceField). `self` is a Swift
+   * keyword, so that one case is backticked; the same identifier is valid at both the
+   * declaration site and every `.<case>` reference. */
+  const swiftCaseIdentifier = (wire: string): string => {
+    const camel = wire.replace(/-([a-z0-9])/g, (_match, char: string) =>
+      char.toUpperCase(),
+    );
+    return camel === "self" ? "`self`" : camel;
+  };
+  /** Emits a `String`-backed enum whose cases are derived from a wire-value array (see the
+   * `ROUTE_KINDS`-style consts above), so the Swift and TS vocabularies cannot drift. */
+  const swiftEnum = (name: string, wireValues: readonly string[]): string =>
+    `public enum ${name}: String, Sendable, Hashable, CaseIterable {\n` +
+    wireValues
+      .map(
+        (wire) =>
+          `  case ${swiftCaseIdentifier(wire)} = ${JSON.stringify(wire)}`,
+      )
+      .join("\n") +
+    "\n}\n\n";
   const swiftBinding = (binding: ImageIngressBinding): string => {
     const item = binding.from === "relation-items" ? binding.item : undefined;
     const sourceField =
       binding.from === "source-field" ? binding.sourceField : item?.sourceField;
     const constant = binding.from === "constant" ? binding.value : item?.value;
-    return `PhotoCreateBinding(field: ${JSON.stringify(binding.field)}, source: ${JSON.stringify(binding.from)}, sourceField: ${sourceField === undefined ? "nil" : JSON.stringify(sourceField)}, constantJSON: ${constant === undefined ? "nil" : JSON.stringify(JSON.stringify(constant))}, itemField: ${item === undefined ? "nil" : JSON.stringify(item.field)}, itemSource: ${item === undefined ? "nil" : JSON.stringify(item.from)})`;
+    return `PhotoCreateBinding(field: ${JSON.stringify(binding.field)}, source: .${swiftCaseIdentifier(binding.from)}, sourceField: ${sourceField === undefined ? "nil" : JSON.stringify(sourceField)}, constantJSON: ${constant === undefined ? "nil" : JSON.stringify(JSON.stringify(constant))}, itemField: ${item === undefined ? "nil" : JSON.stringify(item.field)}, itemSource: ${item === undefined ? "nil" : `.${swiftCaseIdentifier(item.from)}`})`;
   };
   const swiftRoutes = routes
     .map(
       (route) =>
-        `    PhotoIngressRoute(id: ${JSON.stringify(route.routeId)}, source: .${route.sourceEntity}, target: .${route.targetEntity}, kind: ${JSON.stringify(route.kind)}, storage: ${route.storage === false ? "nil" : JSON.stringify(route.storage)}, relationPath: ${JSON.stringify(route.relationPath)}, bindings: [${route.bindings.map(swiftBinding).join(", ")}], append: ${route.append}, requiresReplaceConfirmation: ${route.requiresReplaceConfirmation}, choice: ${JSON.stringify(route.choice)})`,
+        `    PhotoIngressRoute(id: ${JSON.stringify(route.routeId)}, source: .${route.sourceEntity}, target: .${route.targetEntity}, kind: .${swiftCaseIdentifier(route.kind)}, storage: ${route.storage === false ? "nil" : `.${swiftCaseIdentifier(route.storage)}`}, relationPath: ${JSON.stringify(route.relationPath)}, bindings: [${route.bindings.map(swiftBinding).join(", ")}], append: ${route.append}, requiresReplaceConfirmation: ${route.requiresReplaceConfirmation}, choice: .${swiftCaseIdentifier(route.choice)})`,
     )
     .join(",\n");
   const swiftDisplaySources = Object.entries(displayBindings)
     .flatMap(([source, bindings]) =>
       bindings.map(
         (binding) =>
-          `    PhotoDisplaySource(source: .${source}, target: .${binding.targetEntity}, relationPath: ${JSON.stringify(binding.relationPath)}, priority: ${binding.priority}, ordering: ${JSON.stringify(binding.ordering)})`,
+          `    PhotoDisplaySource(source: .${source}, target: .${binding.targetEntity}, relationPath: ${JSON.stringify(binding.relationPath)}, priority: ${binding.priority}, ordering: .${swiftCaseIdentifier(binding.ordering)})`,
       ),
     )
     .join(",\n");
@@ -182,7 +224,7 @@ export const renderImagePolicyArtifacts = (
     .flatMap(([source, bindings]) =>
       bindings.map(
         (binding) =>
-          `    PhotoVisualEvidence(source: .${source}, target: .${binding.targetEntity}, relationPath: ${JSON.stringify(binding.relationPath)}, priority: ${binding.priority}, ordering: ${JSON.stringify(binding.ordering)})`,
+          `    PhotoVisualEvidence(source: .${source}, target: .${binding.targetEntity}, relationPath: ${JSON.stringify(binding.relationPath)}, priority: ${binding.priority}, ordering: .${swiftCaseIdentifier(binding.ordering)})`,
       ),
     )
     .join(",\n");
@@ -198,11 +240,16 @@ export const renderImagePolicyArtifacts = (
   const swift =
     generatedHeader +
     "// swift-format-ignore-file\n\n" +
-    "public struct PhotoCreateBinding: Sendable, Hashable {\n  public let field: String\n  public let source: String\n  public let sourceField: String?\n  public let constantJSON: String?\n  public let itemField: String?\n  public let itemSource: String?\n}\n\n" +
+    swiftEnum("PhotoIngressRouteKind", ROUTE_KINDS) +
+    swiftEnum("PhotoRouteChoice", ROUTE_CHOICES) +
+    swiftEnum("PhotoImageStorage", IMAGE_STORAGE_VALUES) +
+    swiftEnum("PhotoBindingSource", BINDING_SOURCES) +
+    swiftEnum("PhotoDisplayOrdering", DISPLAY_ORDERINGS) +
+    "public struct PhotoCreateBinding: Sendable, Hashable {\n  public let field: String\n  public let source: PhotoBindingSource\n  public let sourceField: String?\n  public let constantJSON: String?\n  public let itemField: String?\n  public let itemSource: PhotoBindingSource?\n}\n\n" +
     "public struct PhotoIngressRoute: Sendable, Hashable {\n" +
-    "  public let id: String\n  public let source: EntityKey\n  public let target: EntityKey\n  public let kind: String\n  public let storage: String?\n  public let relationPath: [String]\n  public let bindings: [PhotoCreateBinding]\n  public let append: Bool\n  public let requiresReplaceConfirmation: Bool\n  public let choice: String\n}\n\n" +
-    "public struct PhotoDisplaySource: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: String\n}\n\n" +
-    "public struct PhotoVisualEvidence: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: String\n}\n\n" +
+    "  public let id: String\n  public let source: EntityKey\n  public let target: EntityKey\n  public let kind: PhotoIngressRouteKind\n  public let storage: PhotoImageStorage?\n  public let relationPath: [String]\n  public let bindings: [PhotoCreateBinding]\n  public let append: Bool\n  public let requiresReplaceConfirmation: Bool\n  public let choice: PhotoRouteChoice\n}\n\n" +
+    "public struct PhotoDisplaySource: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: PhotoDisplayOrdering\n}\n\n" +
+    "public struct PhotoVisualEvidence: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: PhotoDisplayOrdering\n}\n\n" +
     "public struct PhotoLifecycleFilter: Sendable, Hashable {\n  public let field: String\n  public let equals: String?\n  public let oneOf: [String]\n}\n\n" +
     "public struct PhotoRoutingPolicy: Sendable, Hashable {\n  public let candidateFields: [String]\n  public let temporalFields: [String]\n  public let lifecycleFilters: [PhotoLifecycleFilter]\n  public let ocrFields: [String]\n  public let classifierLabels: [String]\n  public let minimumScore: Double\n  public let minimumMargin: Double\n}\n\n" +
     "public enum PhotoImportCatalog {\n  public static let ingressRoutes: [PhotoIngressRoute] = [\n" +

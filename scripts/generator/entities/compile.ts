@@ -1406,9 +1406,12 @@ const validateImageVisualEvidence = (
       evidence.relationPath,
       evidenceContext,
     );
-    if (target.imagePolicy.storage === false)
+    // PhotoVisualEvidenceMatcher.directGalleryURLs only reads attachment-role (gallery) images;
+    // a cover/logo-storage target can never surface a URL, so evidence pointed at one would
+    // silently never fire.
+    if (target.imagePolicy.storage !== "gallery")
       throw new EntityDeclarationError(
-        `${evidenceContext} targets ${target.key}, which has no direct image storage.`,
+        `${evidenceContext} targets ${target.key}, which does not have gallery image storage.`,
       );
   }
 };

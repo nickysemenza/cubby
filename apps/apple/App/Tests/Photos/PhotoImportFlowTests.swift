@@ -35,21 +35,21 @@ struct PhotoImportFlowTests {
 
         #expect(!routes.isEmpty)
         #expect(routes.allSatisfy { $0.storage != nil })
-        #expect(routes.contains(where: { $0.kind == "self" }))
-        #expect(routes.contains(where: { $0.kind == "existingRelated" }))
-        #expect(routes.contains(where: { $0.kind == "createRelated" }))
+        #expect(routes.contains(where: { $0.kind == .`self` }))
+        #expect(routes.contains(where: { $0.kind == .existingRelated }))
+        #expect(routes.contains(where: { $0.kind == .createRelated }))
         #expect(routes.contains(where: { $0.target == .meal }))
         #expect(routes.contains(where: { $0.target == .project }))
         #expect(routes.contains(where: { $0.target == .task }))
         #expect(routes.contains(where: { $0.target == .gardenEntry }))
         #expect(
             routes.contains {
-                $0.source == .recipe && $0.target == .meal && $0.kind == "existingRelated"
+                $0.source == .recipe && $0.target == .meal && $0.kind == .existingRelated
             })
         #expect(
             routes.contains {
                 $0.source == .planting && $0.target == .gardenEntry
-                    && $0.kind == "createRelated"
+                    && $0.kind == .createRelated
             })
     }
 
@@ -60,7 +60,7 @@ struct PhotoImportFlowTests {
         #expect(Set(types.map(\.source)).count == types.count)
         let planting = try #require(types.first(where: { $0.source == .planting }))
         #expect(
-            planting.options.first(where: { $0.route.choice == "primary" })?.id
+            planting.options.first(where: { $0.route.choice == .primary })?.id
                 == "planting-new-garden-entry")
     }
 

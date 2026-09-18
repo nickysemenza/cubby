@@ -323,12 +323,12 @@ struct PhotoDestinationSheet: View {
 
     private func chooseRoute(_ option: PhotoDestinationOption, source: EntityRow) {
         switch option.route.kind {
-        case "createRelated":
+        case .createRelated:
             createContext = PhotoCreateContext(option: option, source: source)
-        case "existingRelated":
+        case .existingRelated:
             relatedContext = PhotoRelatedContext(option: option, source: source)
             path.removeAll()
-        default:
+        case .`self`:
             manifest.moveSelected(to: option, row: source)
             path.removeAll()
         }
@@ -581,9 +581,9 @@ final class PhotoImportManifest {
     var canUndo: Bool { !undoSnapshot.isEmpty }
 
     func createAlternative(for option: PhotoDestinationOption) -> PhotoDestinationOption? {
-        guard option.route.kind == "existingRelated" else { return nil }
+        guard option.route.kind == .existingRelated else { return nil }
         return destinationOptions.first {
-            $0.route.kind == "createRelated"
+            $0.route.kind == .createRelated
                 && $0.route.source == option.route.source
                 && $0.route.target == option.route.target
                 && $0.route.relationPath == option.route.relationPath
@@ -752,12 +752,12 @@ final class PhotoImportManifest {
                 let candidate = candidates[candidateID],
                 candidate.option.id == decision.routeID
             else { continue }
-            if candidate.option.route.choice == "prompt" { continue }
+            if candidate.option.route.choice == .prompt { continue }
             suggestedSourceRecords[decision.photoID] = candidate.row
             // Related routes still need a relationship resolver and an explicit existing-versus-
             // create choice. Keep the natural source suggestion, but never create a destination
             // merely because a classifier or Foundation Models ranked its source record.
-            guard candidate.option.route.kind == "self" else {
+            guard candidate.option.route.kind == .`self` else {
                 suggestions[decision.photoID] =
                     "\(candidate.row.title) · \(candidate.row.id) · \(decision.explanation)"
                 continue
@@ -835,7 +835,7 @@ final class PhotoImportManifest {
         }
         for (day, group) in grouped {
             var dayBody = body
-            if let binding = option.route.bindings.first(where: { $0.source == "capture-date" }) {
+            if let binding = option.route.bindings.first(where: { $0.source == .captureDate }) {
                 if day == "undated" {
                     dayBody.removeValue(forKey: binding.field)
                 } else {
@@ -862,7 +862,7 @@ final class PhotoImportManifest {
     static func nonNullSourceFieldValue(
         binding: PhotoCreateBinding, source: EntityRow
     ) -> JSONValue? {
-        guard binding.source == "source-field",
+        guard binding.source == .sourceField,
             let sourceField = binding.sourceField,
             let value = source.raw[sourceField], value != .null
         else { return nil }
@@ -1092,7 +1092,7 @@ final class PhotoImportManifest {
         let optionsByKey = Dictionary(
             sourceTypeOptions.compactMap { type -> (EntityKey, PhotoDestinationOption)? in
                 let option =
-                    type.options.first(where: { $0.route.choice == "primary" })
+                    type.options.first(where: { $0.route.choice == .primary })
                     ?? type.options.sorted { $0.id < $1.id }.first
                 return option.map { (type.source, $0) }
             }, uniquingKeysWith: { first, _ in first })
@@ -1155,7 +1155,7 @@ final class PhotoImportManifest {
         let likelySources = Set(suggestedSourceTypes.values)
         let options = sourceTypeOptions.filter { likelySources.contains($0.source) }.compactMap { type in
             let routes = type.options
-            return routes.first(where: { $0.route.choice == "primary" })
+            return routes.first(where: { $0.route.choice == .primary })
                 ?? routes.sorted { $0.id < $1.id }.first
         }
         let pages = await withTaskGroup(of: CandidatePage.self, returning: [CandidatePage].self) {
@@ -1676,22 +1676,22 @@ struct PhotoDestinationOption: Identifiable, Sendable {
     var title: String { descriptor.plural }
     var menuTitle: String {
         switch route.kind {
-        case "createRelated":
+        case .createRelated:
             "New \(descriptor.singular) from \(EntityCatalog[route.source].singular)"
-        case "existingRelated":
+        case .existingRelated:
             "Existing \(descriptor.singular) for \(EntityCatalog[route.source].singular)"
-        default:
+        case .`self`:
             title
         }
     }
 
     func menuTitle(for source: EntityRow) -> String {
         switch route.kind {
-        case "createRelated":
+        case .createRelated:
             "Create \(descriptor.singular) for \(source.id)"
-        case "existingRelated":
+        case .existingRelated:
             "Choose existing \(descriptor.singular) for \(source.id)"
-        default:
+        case .`self`:
             menuTitle
         }
     }
@@ -1704,21 +1704,21 @@ struct PhotoSourceTypeOption: Identifiable, Sendable {
     var title: String { EntityCatalog[source].plural }
     var outcomeDescription: String {
         let hasRelatedChoices =
-            options.contains { $0.route.kind == "existingRelated" }
-            && options.contains { $0.route.kind == "createRelated" }
-        if hasRelatedChoices, let related = options.first(where: { $0.route.kind == "createRelated" }) {
+            options.contains { $0.route.kind == .existingRelated }
+            && options.contains { $0.route.kind == .createRelated }
+        if hasRelatedChoices, let related = options.first(where: { $0.route.kind == .createRelated }) {
             return "Choose an existing or new \(related.descriptor.singular)"
         }
         guard
-            let primary = options.first(where: { $0.route.choice == "primary" })
+            let primary = options.first(where: { $0.route.choice == .primary })
                 ?? options.sorted(by: { $0.id < $1.id }).first
         else { return "Choose an existing record" }
         switch primary.route.kind {
-        case "createRelated":
+        case .createRelated:
             return "Creates a new \(primary.descriptor.singular)"
-        case "existingRelated":
+        case .existingRelated:
             return "Uses a related \(primary.descriptor.singular)"
-        default:
+        case .`self`:
             return "Attaches to an existing \(EntityCatalog[source].singular)"
         }
     }
@@ -2162,13 +2162,13 @@ private struct PhotoRelatedCreateEditor: View {
         if ["pendingImageIds", "removeImageIds", "imageOrder"].contains(field.key) { return false }
         for binding in option.route.bindings where binding.field == field.key {
             switch binding.source {
-            case "source-field":
+            case .sourceField:
                 if PhotoImportManifest.nonNullSourceFieldValue(binding: binding, source: source) != nil {
                     return false
                 }
-            case "capture-date":
+            case .captureDate:
                 if captureDate != nil { return false }
-            default:
+            case .sourceId, .constant, .relationItems:
                 return false
             }
         }
@@ -2180,35 +2180,33 @@ private struct PhotoRelatedCreateEditor: View {
         var result: [String: JSONValue] = [:]
         for binding in option.route.bindings {
             switch binding.source {
-            case "source-id":
+            case .sourceId:
                 if binding.itemField != nil {
                     result[binding.field] = .array([.string(source.id)])
                 } else {
                     result[binding.field] = .string(source.id)
                 }
-            case "source-field":
+            case .sourceField:
                 if let value = PhotoImportManifest.nonNullSourceFieldValue(
                     binding: binding, source: source)
                 {
                     result[binding.field] = value
                 }
-            case "capture-date":
+            case .captureDate:
                 if let captureDate {
                     result[binding.field] = .string(PlainDate(captureDate).rawValue)
                 }
-            case "constant":
+            case .constant:
                 if let json = binding.constantJSON,
                     let data = json.data(using: .utf8),
                     let value = try? JSONDecoder().decode(JSONValue.self, from: data)
                 {
                     result[binding.field] = value
                 }
-            case "relation-items":
+            case .relationItems:
                 if let itemField = binding.itemField {
                     result[binding.field] = .array([.object([itemField: .string(source.id)])])
                 }
-            default:
-                break
             }
         }
         return result
