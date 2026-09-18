@@ -59,6 +59,8 @@ build order above lazily (the xcframework from the Nx cache; xcodegen with `--us
 time, and then:
 
 - `pnpm apple cli <args…>` — incremental `swift build` of the `cubby` CLI and run it
+- `pnpm apple cli photo analyze <file> --json` — on-device Vision/routing debug dump for a local
+  image, no network or auth
 - `pnpm apple mac` — build `Cubby-macOS` into `apps/apple/DerivedData` and `open` the `.app`
 - `pnpm apple ios [--device <name>]` — build `Cubby-iOS`, install and launch on the paired
   iPhone via `devicectl` (phone must be unlocked)

@@ -6,7 +6,10 @@ struct CubbyCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "cubby",
         abstract: "Cubby native test harness (CLI, not a shipped product).",
-        subcommands: [Version.self, Auth.self, Call.self, Entity.self, Scan.self, Search.self, Parse.self]
+        subcommands: [
+            Version.self, Auth.self, Call.self, Entity.self, Scan.self, Search.self, Parse.self,
+            Photo.self,
+        ]
     )
 }
 
