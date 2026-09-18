@@ -5,7 +5,7 @@ import { statementRowExternalId } from "./statement-row-identity";
 /**
  * Frozen input/output pairs. The values are synthetic on purpose — these
  * fixtures used to be real statement rows, which put a card's last four and two
- * merchants' statement descriptors in a public repo (see CLAUDE.md: test
+ * merchants' statement descriptors in a public repo (see AGENTS.md: test
  * fixtures count).
  *
  * Synthetic costs nothing here. What the pins protect is that the hash never

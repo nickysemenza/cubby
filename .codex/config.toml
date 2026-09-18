@@ -1,9 +1,8 @@
-# There is deliberately no AGENTS.md. Codex discovers it natively, but ours was
-# an 8-line pointer to CLAUDE.md — an extra read hop on every session and a
-# second file to keep in sync. `project_doc_fallback_filenames` below makes
-# Codex load CLAUDE.md directly instead, and per-directory, so work below
-# apps/web also picks up apps/web/CLAUDE.md. One canonical rules file, shared
-# with Claude Code, no drift.
+# The rules file is AGENTS.md (root plus apps/web, apps/apple). Codex discovers
+# AGENTS.md natively and per-directory, so work below apps/web also picks up
+# apps/web/AGENTS.md; Claude Code >= 2.1.277 falls back to AGENTS.md when a
+# folder has no CLAUDE.md. One canonical rules file, shared by both, no drift —
+# do not add a CLAUDE.md pointer, it would shadow AGENTS.md for Claude Code.
 # No `model` / `model_reasoning_effort` pinned here on purpose. Pinning them
 # forced every main task on this repo onto one frontier model at high effort
 # (248 of 255 measured turns) and overrode the user-level default, which made
@@ -14,7 +13,6 @@
 # Screenshots and whole-file dumps are the dominant context intake, and unlike a
 # prose rule this is enforced by the runtime.
 tool_output_token_limit = 24000
-project_doc_fallback_filenames = ["CLAUDE.md"]
 
 [agents]
 enabled = true

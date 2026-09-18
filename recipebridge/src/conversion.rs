@@ -378,7 +378,7 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
 ///
 /// TS calls this instead of multiplying `value` itself: the scalable-kind rule
 /// lives upstream in `Measure::scale`, and a second copy in TS is exactly the
-/// layering violation CLAUDE.md forbids.
+/// layering violation AGENTS.md forbids.
 #[wasm_bindgen]
 pub fn scale_amount(amount: WAmount, factor: f64) -> WAmount {
     amount.scale(factor)
@@ -411,7 +411,7 @@ const SIZE_ALIAS_CANDIDATES: &[&str] = &[
 /// can call this grammar — so some list has to cross the boundary. This makes
 /// that list DERIVED rather than transcribed, for the same reason
 /// `scale_amount` above exists: a second copy in TS is the layering violation
-/// CLAUDE.md forbids. The transcribed version had already drifted, most
+/// AGENTS.md forbids. The transcribed version had already drifted, most
 /// recently a SQL prefilter carrying singular-only spellings that silently
 /// dropped every "5 pounds" title.
 ///

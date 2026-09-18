@@ -104,7 +104,7 @@ function BlockedReasonChips({
 
 /**
  * Read-only, non-paginated, non-selectable rows — a static `<Table>` fits
- * this better than `<RTable>` (see CLAUDE.md's Tables guidance: `<RTable>`
+ * this better than `<RTable>` (see AGENTS.md's Tables guidance: `<RTable>`
  * would be overkill for a "here's your list" view). `next`/`later` arrive
  * pre-sorted server-side (`task.listActionable`), so this renders them as-is
  * — no client sort.

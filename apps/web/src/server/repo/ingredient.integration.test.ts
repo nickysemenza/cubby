@@ -574,7 +574,7 @@ describe("ingredient", () => {
     expect(result!.count).toEqual(1);
   });
 
-  // Removal-path invariant (root CLAUDE.md, guard-enforced): `mergeIngredients`
+  // Removal-path invariant (root AGENTS.md, guard-enforced): `mergeIngredients`
   // is the only removal path in the repo that HARD-deletes its absorbed rows
   // rather than soft-deleting them — which made it easy to miss that the
   // absorbed ingredients' EntityEmbedding rows still need cleanup in the same

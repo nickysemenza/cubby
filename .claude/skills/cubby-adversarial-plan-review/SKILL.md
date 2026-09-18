@@ -11,7 +11,7 @@ revise or implement only when the user requests that work.
 ## Procedure
 
 1. Identify the plan, target checkout, and requested finding format. Read the
-   complete plan and follow [Cubby agent rules](../../../CLAUDE.md) to load the
+   complete plan and follow [Cubby agent rules](../../../AGENTS.md) to load the
    guidance for its affected domains.
 2. Extract the claims that determine whether the plan can work: existing
    behavior, proposed interfaces, ownership, migrations, and acceptance checks.

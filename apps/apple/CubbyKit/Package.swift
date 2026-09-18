@@ -44,7 +44,7 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
             ],
             // Line tables only: nothing here is ever stepped through, and full debug info for
-            // ~58k generated lines is what makes LLDB stall on launch (see apps/apple/CLAUDE.md's
+            // ~58k generated lines is what makes LLDB stall on launch (see apps/apple/AGENTS.md's
             // "Debugging on device"). `unsafeFlags` is safe because CubbyKit is only ever
             // consumed as a local path dependency, never as a versioned remote package.
             // -suppress-warnings: the generator spells `package import struct Foundation.URL`

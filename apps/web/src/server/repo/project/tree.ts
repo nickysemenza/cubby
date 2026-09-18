@@ -4,7 +4,7 @@
  *
  * Why this exists at all: nesting rows in the browser is presentation, but
  * *choosing* which rows to nest is membership, and membership belongs on the
- * server (see CLAUDE.md — "full-page list membership, sorting, totals, and
+ * server (see AGENTS.md — "full-page list membership, sorting, totals, and
  * pagination belong on the server"). A tree built over an ordinary paginated
  * page would have a shape decided by where the page boundary happened to fall:
  * a parent on page 1 and its children on page 3, roots that are only roots

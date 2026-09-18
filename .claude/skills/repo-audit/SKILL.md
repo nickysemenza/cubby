@@ -10,7 +10,7 @@ Run the existing audit contract without duplicating its detailed prompts.
 ## Prepare
 
 1. Work from the Cubby repository root.
-2. Read `README.md`, `CLAUDE.md`, and `.claude/workflows/repo-audit.js` completely.
+2. Read `README.md`, `AGENTS.md`, and `.claude/workflows/repo-audit.js` completely.
 3. Treat `.claude/workflows/repo-audit.js` as the authoritative source for:
    - lane names, scopes, and prompts;
    - finding and verdict schemas;

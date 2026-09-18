@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
 // Richness ordering (SR Legacy > Survey > Foundation > Branded) is reinforced
 // by result sort order + the nutrient count shown alongside, not by color alone.
 //
-// Tokens only (CLAUDE.md): never hardcode hex/oklch — these are the chart
+// Tokens only (AGENTS.md): never hardcode hex/oklch — these are the chart
 // ink-ladder + semantic tokens from styles.css, referenced as CSS vars so a
 // single record drives dots and tinted icons everywhere.
 const DATA_TYPE_COLOR = {

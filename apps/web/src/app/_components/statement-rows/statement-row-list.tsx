@@ -51,7 +51,7 @@ const route = getRouteApi("/_authenticated/statement-rows/");
 type MatchStateSearchValue = StatementRowMatchState | "all";
 
 // Stable defaults — a fresh `[]`/`{}` per render would destabilize every
-// memo downstream while a query is loading (apps/web/CLAUDE.md's
+// memo downstream while a query is loading (apps/web/AGENTS.md's
 // `unstable-hook-default` rule).
 const NO_ROWS: StatementRowOut[] = [];
 const NO_SOURCES: string[] = [];

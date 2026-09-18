@@ -173,7 +173,7 @@ JSONL routes    →  cancellable workflow streams
 - `Database` is a request-scoped handle: routers and services pass it through, while repository helpers are the sanctioned place to resolve its Drizzle client. This keeps the layered architecture by convention and API locality.
 - Adding a baseline entity starts with one compiler spec, followed by the repository adapter and any thin workflow or route extensions; see [docs/entities.md](docs/entities.md).
 
-See [CLAUDE.md](CLAUDE.md) for the prescriptive rules (branded IDs, soft delete, required helpers, React hooks pitfalls).
+See [AGENTS.md](AGENTS.md) for the prescriptive rules (branded IDs, soft delete, required helpers, React hooks pitfalls).
 
 ## 🗂️ Entities
 
@@ -741,9 +741,9 @@ promotion triggers. The README deliberately does not mirror the work list.
 
 ## 📚 Further Docs
 
-- [CLAUDE.md](CLAUDE.md) — agent rules, anti-patterns, required helpers
+- [AGENTS.md](AGENTS.md) — agent rules, anti-patterns, required helpers
 - [apps/web/DESIGN.md](apps/web/DESIGN.md) — visual system, normative tokens, and design guardrails
-- [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — web implementation conventions and failure-prevention rules
+- [apps/web/AGENTS.md](apps/web/AGENTS.md) — web implementation conventions and failure-prevention rules
 - [docs/todos.md](docs/todos.md) — the canonical backlog: goals + load-bearing design decisions + rejected alternatives
 - [docs/terminology.md](docs/terminology.md) — glossary disambiguating UI / code / DB names per concept
 - [docs/entities.md](docs/entities.md) — entity genericization ledger: the fixed-point thesis, every rejected generic-machinery direction with evidence, and what stays hand-written on purpose

@@ -3,7 +3,7 @@
  *
  * ## The invariant
  *
- * Root CLAUDE.md: every path that removes an entity must soft-delete that
+ * Root AGENTS.md: every path that removes an entity must soft-delete that
  * entity's `SearchDocument` and `EntityEmbedding` rows **in the same
  * transaction**. A live search artifact pointing at a removed id is permanent
  * damage — soft deletes aren't restorable, diagnostics flag it forever, and

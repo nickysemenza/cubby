@@ -360,7 +360,7 @@ See existing `.integration.test.ts` files for examples.
 ## Further Reading
 
 - [Drizzle ORM Documentation](https://orm.drizzle.team/)
-- [Project CLAUDE.md](../../../../../CLAUDE.md) - Full architecture guidelines
+- [Project AGENTS.md](../../../../../AGENTS.md) - Full architecture guidelines
 - [Schema Definitions](../db/schema.ts) - Database schema
 - [Agent domain rules](../../../../../docs/agents/domain-rules.md) - Production changes, data/layers/deletion, IDs and runtime traps
 - [Entity genericization](../../../../../docs/entities.md) - The manifest/binding spine and new-entity checklist

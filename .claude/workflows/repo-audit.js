@@ -31,7 +31,7 @@ You are auditing the cubby monorepo at ${ROOT}. It is a personal (single-user) p
 
 HARD RULES:
 - NEVER look inside .claude/, node_modules/, target/, dist/, or generated files (routeTree.gen.ts, *.gen.*). Findings there are invalid.
-- ${ROOT}/CLAUDE.md and ${ROOT}/README.md document intentional conventions and explicit carve-outs. READ CLAUDE.md FIRST. A finding that re-flags a documented carve-out or intentional decision is INVALID (e.g. raw useMutation at the 5 documented carve-out sites, restore-not-implemented for soft delete, raw <table> for matrices/debug surfaces, unsafe*Id at genuine string boundaries, dev-DB-is-prod-Neon).
+- ${ROOT}/AGENTS.md and ${ROOT}/README.md document intentional conventions and explicit carve-outs. READ AGENTS.md FIRST. A finding that re-flags a documented carve-out or intentional decision is INVALID (e.g. raw useMutation at the 5 documented carve-out sites, restore-not-implemented for soft delete, raw <table> for matrices/debug surfaces, unsafe*Id at genuine string boundaries, dev-DB-is-prod-Neon).
 - This is a single-user personal tool: skip multi-tenant, GDPR, rate-limit-per-user, and accessibility-for-others findings.
 - Only report findings you VERIFIED by reading the actual code (not just grep hits). Include exact file path (relative to repo root) and line number.
 - Severity honestly: critical = data loss / security hole / prod crash; high = real bug users hit; medium = latent bug or meaningful debt; low = polish. Do NOT inflate.
@@ -116,14 +116,14 @@ Look for: transaction boundaries that leave data inconsistent on partial failure
     prompt: `${COMMON}
 LANE: Client/React correctness.
 Scope: apps/web/src/app (413 files — prioritize _components, inventory, recipes, products), src/hooks, src/components.
-Look for: hook-dependency bugs (stale closures, missing deps that cause real staleness, inline object/array literals passed to hooks with deps — the CLAUDE.md infinite-loop pattern); useQueries without combine; effects that set state from unstable deps; race conditions in async handlers (setState after unmount, double-submit); optimistic-update rollback bugs; SSR/hydration branching on session or non-deterministic values (Date, locale) — the hydration-gate rule; forms that lose user input. Skip pure style issues.`,
+Look for: hook-dependency bugs (stale closures, missing deps that cause real staleness, inline object/array literals passed to hooks with deps — the AGENTS.md infinite-loop pattern); useQueries without combine; effects that set state from unstable deps; race conditions in async handlers (setState after unmount, double-submit); optimistic-update rollback bugs; SSR/hydration branching on session or non-deterministic values (Date, locale) — the hydration-gate rule; forms that lose user input. Skip pure style issues.`,
   },
   {
     key: "architecture",
     model: "opus",
     prompt: `${COMMON}
 LANE: Architecture & layering.
-Read CLAUDE.md's "Where logic lives", "Service vs. Direct Repo Boundary", and "Opaque Database Type" sections carefully — they define the rules.
+Read AGENTS.md's "Where logic lives", "Service vs. Direct Repo Boundary", and "Opaque Database Type" sections carefully — they define the rules.
 Scope: apps/web/src (server + app), recipebridge/src, packages/schemas.
 Look for: TS code reimplementing logic that recipebridge WASM owns (costing, availability, unit conversion, ingredient parsing/formatting — grep for suspicious unit-math or amount-formatting in TS and verify it is not just thin marshalling); *.service.ts files that are empty pass-throughs (violating the service-boundary rule) or routers doing orchestration a service should own; repo-layer code leaking above the boundary (getDb outside server/repo); duplicated domain logic between the MCP server (server/mcp) and tRPC routers that has already drifted or will; packages/* importing app-level code (dependency direction violations). For each finding state which documented rule it violates.`,
   },
@@ -133,7 +133,7 @@ Look for: TS code reimplementing logic that recipebridge WASM owns (costing, ava
     prompt: `${COMMON}
 LANE: Rust crate quality (recipebridge).
 Scope: recipebridge/src (~3.3k lines), recipebridge/tests, recipebridge/Cargo.toml.
-Rules from memory/CLAUDE.md: no unwrap/expect/panic in prod code (CI-enforced clippy gate, tests exempt); tracing on the WASM hot path must be level=trace + skip_all (workerd CPU-leak incident); edition 2024.
+Rules from memory/AGENTS.md: no unwrap/expect/panic in prod code (CI-enforced clippy gate, tests exempt); tracing on the WASM hot path must be level=trace + skip_all (workerd CPU-leak incident); edition 2024.
 Look for: unwrap/expect/panic/indexing that could panic in prod paths; #[tracing::instrument] on per-call functions at INFO/DEBUG or without skip_all; f64 accumulation bugs in costing math; unbounded recursion without cycle guards (sub-recipe graphs — there is a cycle-taint memo, check it is used everywhere recursion happens); serde/tsify boundary mismatches where a W* type diverges from the TS zod schema consuming it; allocation-heavy hot loops. Run cargo clippy --workspace --all-targets 2>&1 | tail -40 from recipebridge/ if it compiles quickly, and cargo fmt --check.`,
   },
   {
@@ -150,7 +150,7 @@ Look for: N+1 query patterns in repos (loop of awaited queries where one IN quer
     model: "sonnet",
     prompt: `${COMMON}
 LANE: Convention drift.
-Read the current CLAUDE.md and the helper catalogue in docs/agents/root-rules-reference.md before auditing. Respect its caveats and carve-outs; re-flagging an explicit carve-out is the #1 failure mode of this lane.
+Read the current AGENTS.md and the helper catalogue in docs/agents/root-rules-reference.md before auditing. Respect its caveats and carve-outs; re-flagging an explicit carve-out is the #1 failure mode of this lane.
 Scope: apps/web/src.
 Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Run pnpm lint and pnpm format:check if quick. Cross-check every candidate against the carve-out list before reporting.`,
   },
@@ -186,7 +186,7 @@ Look for: high-risk modules with zero test coverage (server/repo transactional m
     model: "haiku",
     prompt: `${COMMON}
 LANE: Docs & CI accuracy.
-Scope: README.md, CLAUDE.md, AGENTS.md, docs/, .github/workflows/, scripts/, docker-compose.yml, .env.example.
+Scope: README.md, AGENTS.md, docs/, .github/workflows/, scripts/, docker-compose.yml, .env.example.
 Look for: README claims that contradict the actual code (commands that no longer exist in package.json, described routes/features that were removed — check docs mention any removed routes); CI workflow steps referencing deleted scripts or wrong paths; workflow jobs with continue-on-error that would mask failures (there was a past incident); stale docs/ files describing superseded designs without a superseded marker; broken relative links in markdown. Verify each claim against the actual file it references.`,
   },
   {
@@ -215,7 +215,7 @@ Finding from the "${laneKey}" auditor:
 
 Steps:
 1. Read the actual file(s) involved. If the file/line does not exist or does not contain what is claimed, refute.
-2. Read ${ROOT}/CLAUDE.md and check whether this is a documented carve-out or intentional decision (the file documents MANY: raw useMutation sites, raw <table> surfaces, unsafe*Id boundaries, soft-delete-no-restore, /* tight */ spacing, dev-DB-is-prod, etc.). If documented as intentional, refute.
+2. Read ${ROOT}/AGENTS.md and check whether this is a documented carve-out or intentional decision (the file documents MANY: raw useMutation sites, raw <table> surfaces, unsafe*Id boundaries, soft-delete-no-restore, /* tight */ spacing, dev-DB-is-prod, etc.). If documented as intentional, refute.
 3. Check whether the claimed failure actually happens on a reachable path (not dead code, not already guarded upstream).
 4. This is a single-user personal app — refute findings only relevant at multi-user scale.
 If uncertain after reading the code, set isReal=false. Also re-grade severity honestly if confirmed.`,

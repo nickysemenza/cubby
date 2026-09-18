@@ -16,15 +16,17 @@ js-sys = "0.3"
 # serde-wasm-bindgen, matching how this crate already crosses the boundary.
 tsify-next = { version = "0.5", features = ["js"] }
 
-# https://doc.rust-lang.org/cargo/reference/config.html
-# override:
-# [patch."https://github.com/nickysemenza/ingredient-parser"]
-# recipe-scraper = { path = "dev/ingredient-parser/recipe-scraper" }
-# ingredient = { path = "dev/ingredient-parser/ingredient-parser" }
-#
 # Pin the shared upstream commit so every CI job builds identical Rust sources.
-# Renovate follows main weekly and updates all three refs together. Locally the
-# global ~/.cargo/config.toml patch (above) can still override to a working copy.
+# Renovate follows main weekly and updates all three refs together.
+#
+# To build against a sibling ingredient-parser working copy, drop a gitignored
+# cubby/.cargo/config.toml with a
+# `[patch."https://github.com/nickysemenza/ingredient-parser"]` table mapping
+# each crate to `path = "../ingredient-parser/<crate>"`. Treat it as a
+# temporary dev-session tool and remove it afterwards: while it is present cargo
+# strips `source =` from Cargo.lock on every build, which dirties the tree and
+# fails the clean-tree pre-push gate, and local builds silently diverge from
+# the pinned rev CI uses.
 ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "5ae8ffbf9e25cd25131176891d42ce0bc85567fe" }
 recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "5ae8ffbf9e25cd25131176891d42ce0bc85567fe" }
 # EPUB cookbook extraction: the whole pipeline (open, chunk, model calls through

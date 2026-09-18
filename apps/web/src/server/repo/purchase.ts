@@ -1750,7 +1750,7 @@ export const mergePurchases = async (
 /**
  * Soft-delete charges.
  *
- * Removal-path invariant (root CLAUDE.md, guard-enforced): the same transaction
+ * Removal-path invariant (root AGENTS.md, guard-enforced): the same transaction
  * soft-deletes the Purchase's `PurchaseImage` rows and NULLS `purchaseId` on its
  * expenses. Nulling rather than cascading is the point — an expense is the money,
  * and deleting a charge must never delete spend. Those rows fall back to reading

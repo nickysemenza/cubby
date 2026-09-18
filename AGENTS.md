@@ -60,12 +60,12 @@ roadmap context.
 - **Schema, migration, delete/merge, identifiers, repo/service boundary, WASM,
   or Workers:** [agent domain rules](docs/agents/domain-rules.md).
 - **React, routes, browser behavior, styling, images, tables, or web UI:**
-  [apps/web/CLAUDE.md](apps/web/CLAUDE.md). For visual/design choices, also read
+  [apps/web/AGENTS.md](apps/web/AGENTS.md). For visual/design choices, also read
   [DESIGN.md](apps/web/DESIGN.md).
 - **Entity genericization, the manifest/binding spine, or new-entity work:**
   [docs/entities.md](docs/entities.md).
 - **iOS/macOS native app, `CubbyKit`, `cubby-ffi`, or UniFFI:**
-  [apps/apple/CLAUDE.md](apps/apple/CLAUDE.md).
+  [apps/apple/AGENTS.md](apps/apple/AGENTS.md).
 
 Open PRs ready for review unless the work is intentionally incomplete or the
 user asks for a draft.
