@@ -99,6 +99,27 @@ history is the archive. Permanent product constraints live in the
   `pnpm run deploy` reaches the script. Rename it `deploy:web` (and update
   `README.md`'s deployment section).
 
+- **Photo-flow leftovers from #1084/#1086.** Small, independent:
+  - `PhotoRelatedCreateEditor.renders(_:)` hides `pendingImageIds`,
+    `removeImageIds`, `imageOrder` by literal; emit the image-field key set
+    from `image-policy.gen.ts` into `PhotoImportCatalog` and read it there.
+  - `PhotoImportManifest.startAnalysis` cancels and relaunches, but the
+    cancelled task's handler skips the `.idle` reset and the new `analyze()`
+    returns early on `isRunning`, so a `.task` re-fire mid-run can leave the
+    state stuck at "running". Reset on cancellation, or gate on a generation
+    token instead of the flag (plausible, not reproduced).
+  - `PhotoImportFullScreenViewer` decodes full resolution per page with an
+    un-cancelled `Task.detached`; a fast swipe queues one ~190 MB decode per
+    page. Cancel on page change and cap in-flight decodes at one.
+  - `EntityDetailView.swift:25` `body` sits at ~207 ms against the 200 ms
+    type-check limit and flickers in and out of the warning; split it like
+    `PhotoImportHero`/`PhotoLibraryCell`.
+  - The `createSelf` compile check verifies "target is creatable" via
+    `contract.create !== null`, not the runtime kernel binding's
+    `createInput` (the generator runs before that file exists); if the two
+    ever disagree the route fails at commit time with `CONSTRAINT_VIOLATION`
+    instead of at generation.
+
 - **Link the generic-page design canvas from `apps/web/DESIGN.md`.**
   <https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL> is the spec the
   generic detail/list pages were built against (hero plate, section kinds,
@@ -588,6 +609,15 @@ history is the archive. Permanent product constraints live in the
 - **Location subtree filters** — Promote when direct-child filtering demonstrably
   blocks a location or inventory workflow; use a scoped descendant-id helper rather
   than the relation-heavy whole-tree CTE.
+
+- **Driven simulator smoke for the photo flow** — Promote when the next
+  SwiftUI identity/state bug ships (the stale second `.sheet(item:)` in
+  #1084 was the first). `apple-check.sh` now gates the known pattern
+  (`State(initialValue:)` from init); the only thing that catches *unknown*
+  ones is a scripted run: `simctl addmedia` two fixture photos, then drive
+  select A → Add to… → Cancel → Clear → select B → Add to… via Axiom `xcui`
+  and assert the hero's identifier names B. Keep it out of the pre-push gate;
+  run it from `apple-check.sh` behind a flag.
 
 - **Match book scans against ledger-imported books** — Promote when the next ISBN scan
   mints a twin. `findOrCreateByISBN` (`product-orchestration.service.ts`) matches on GTIN
