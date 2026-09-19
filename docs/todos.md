@@ -355,14 +355,18 @@ history is the archive. Permanent product constraints live in the
 
 ### Needs a decision or investigation
 
-- **One polymorphic-reference convention.** Three patterns coexist for a
-  row that points at any of several entity types: untyped
+- **`Entity` supertable for polymorphic references.** Three patterns
+  coexist for a row that points at any of several entity types: untyped
   `entityType + entityId` with no FK (search index, embeddings, AI analysis,
   `AiUsage`, audit log); `Image.targetType/targetId` plus eight per-entity
   join tables; and an exclusive-arc CHECK (`LedgerSourceClaim_owner_check`).
-  Write the rule into `docs/agents/domain-rules.md` — untyped pairs only for
-  derived/telemetry rows that may dangle, exclusive-arc nullable FKs for rows
-  that must not, ≤4 targets — before the next such table is added.
+  Decided (2026-09-19): one `Entity(id, kind, body, deletedAt,
+  mergedIntoId)` table populated by `insertWithShortcode`, composite FKs
+  `(id, kind)` from every polymorphic table, global shortcode allocation,
+  and merge redirects via `mergedIntoId` — which also fixes the link a merge
+  loses today. Design and migration in
+  [the purchase import redesign](plans/purchase-import-redesign.md) §10
+  item 7; it is that plan's first pre-work PR and becomes ADR-0004.
 
 - **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Vectorize's per-vector cost is model-agnostic, so a cheaper/faster
