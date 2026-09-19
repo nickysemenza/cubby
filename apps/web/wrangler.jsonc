@@ -210,14 +210,7 @@
     "R2_KEY_PREFIX": "cubby",
     "USDA_API_URL": "https://usda-api.nicky.workers.dev/",
     "UPC_LOOKUP_API_URL": "https://upc-lookup.nicky.workers.dev"
-  },
-  "kv_namespaces": [
-    {
-      "binding": "PROBLEM_COUNTS_KV",
-      "id": "f9ed579a3aa14850aca805868d2d0ef9",
-      "preview_id": "6d96659e5ff74a918e9cabb6453da5c0"
-    }
-  ]
+  }
   // Required secrets (set via `wrangler secret put <NAME>`):
   //   BETTER_AUTH_SECRET
   //   R2_ACCESS_KEY_ID
