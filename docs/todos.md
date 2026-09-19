@@ -27,6 +27,23 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
+- **`empty_expenses` cannot be excepted.** It is missing from
+  `EXCEPTION_REASONS` in `server/repo/data-quality.ts`, so a Purchase whose
+  lines will never exist (an in-store receipt that is gone, an online order
+  older than the vendor's history) sits in `needs_data` forever. Add
+  `unavailable` and `history_expired`, the same class of fix the product
+  identity checks got.
+
+- **Expose Jev's raw probability.** `server/ai/jev.ts` buckets the winning
+  choice into `high | medium | low` and carries a TODO; threshold tuning and
+  any "why did it pick this" surface need the number. Nullable
+  `probability` on `JevChoiceResult` and the suggestion schemas.
+
+- **Generate the MCP instructions' prefix list.** `MCP_SERVER_INSTRUCTIONS`
+  in `server/mcp/server.ts` hand-lists every shortcode prefix while
+  `packages/shared/src/generated/shortcode-registry.gen.ts` already holds
+  them. Render the list from the registry plus entity descriptions so a new
+  entity cannot drift out of the instructions.
 - **`add-to-meal` gets no Jev suggestions.** `meal.mealType`/`mealKind` are
   suggestable from the meal name (`control.suggest` in `06-meal.entity.ts`),
   but `app/meals/add-to-meal.tsx` only holds a `recipeId` and never fetches a
@@ -390,6 +407,29 @@ history is the archive. Permanent product constraints live in the
 
 ### Needs a decision or investigation
 
+- **`Entity` supertable for polymorphic references.** Three patterns
+  coexist for a row that points at any of several entity types: untyped
+  `entityType + entityId` with no FK (search index, embeddings, AI analysis,
+  `AiUsage`, audit log); `Image.targetType/targetId` plus eight per-entity
+  join tables; and an exclusive-arc CHECK (`LedgerSourceClaim_owner_check`).
+  Rule to write into `docs/agents/domain-rules.md`: untyped pairs with a
+  kind CHECK for rows that describe an entity and may outlive it or be
+  rebuilt, plain FKs for one type, arcs only where they exist. An `Entity`
+  supertable was designed, adversarially reviewed, and tabled on 2026-09-19
+  (entities are hard-deleted on two paths; 623 cross-kind body collisions;
+  the edge registry cannot express per-kind generated edges) — read
+  [plans/entity-supertable.md](plans/entity-supertable.md) before reopening.
+
+- **Merge redirects.** A merged-away shortcode in a URL, note, or MCP
+  client resolves to nothing today; `finalizeMerge` records no forward.
+  Add `mergedIntoId` on the mergeable tables (path-compressed at merge
+  time), consult it on resolver miss for reads with a `redirectedFrom`
+  marker, and keep mutations on a non-redirecting resolver that refuses a
+  redirected code — otherwise merging `keep=A, loser=B` where B was earlier
+  absorbed into A resolves to a self-merge. Two tests assert the current
+  404 (`purchase.integration.test.ts`, `vendor.integration.test.ts`) and
+  become named regressions.
+
 - **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Vectorize's per-vector cost is model-agnostic, so a cheaper/faster
   Workers AI embedding model is worth comparing against the OpenAI adapter
@@ -492,7 +532,9 @@ history is the archive. Permanent product constraints live in the
 - **Marketplace seller on Amazon purchases.** `Sold by:` (YANTURION, MIYATCH
   SHOP, Neighborhoodcircle) is lost except in Purchase notes; it decides
   returns and warranty routing. A small `sellerName` on Purchase or Expense
-  is enough — do not mint a Vendor per marketplace seller.
+  is enough — do not mint a Vendor per marketplace seller. The
+  [purchase import redesign](plans/purchase-import-redesign.md) captures
+  `seller` per extracted line; land the column with that writer.
 
 - **Meal nutrition goals.** Let meal planning compare planned nutrition with
   explicit household goals using the existing recipe nutrition totals.
@@ -533,6 +575,25 @@ history is the archive. Permanent product constraints live in the
   `apps/apple/project.yml`, `apps/apple/App`, and `CubbyKit`.
 
 ### Waiting for a trigger
+
+- **Shortcode prefixes of 2–5 letters** — Promote with the first entity that
+  wants a readable prefix. The `XXX-` shape is asserted in six places
+  (`scripts/generator/entities/compile.ts`, `EntityCatalogTests.swift`,
+  `test-support/identifiers.unit.test.ts`,
+  `mcp/entity-kernel.integration.test.ts`, the README prefix table, the MCP
+  instructions); the parser splits on the first dash and the column is
+  `text`, so nothing else cares.
+
+- **Data-exception fingerprints scoped to check inputs** — Promote when a
+  "never available" exception is reopened by an unrelated edit in practice.
+  Today the fingerprint is `<check>:<updatedAt>`, so assigning a project or
+  editing notes re-questions an `unavailable` document; hashing the inputs
+  the check reads (expense count, document set, `orderId`) would reopen it
+  only when evidence changes.
+
+- **`get_vendor_coverage` per account** — Promote when two members hold
+  accounts at the same vendor. Coverage and `needs_data` are per Vendor
+  today, which would conflate their histories.
 
 - **Make hosted Actions the authoritative PR gate if the repository becomes
   public again.** Turn the existing manual CI workflow into required exact-head
@@ -575,7 +636,9 @@ history is the archive. Permanent product constraints live in the
   is therefore not proof of a good image.
 
 - **Durable import checkpoints** — Promote when an import genuinely spans sessions
-  and cannot resume from source keys plus normal MCP queries.
+  and cannot resume from source keys plus normal MCP queries. Superseded in
+  design by [the purchase import redesign](plans/purchase-import-redesign.md)
+  (per-account cursor, resumable agent runs).
 
 - **Entity relation runtime dispatch** — Promote when attach/detach genericization
   resumes. Generate dispatch only for declared runtime ports and make unsupported
@@ -890,11 +953,14 @@ history is the archive. Permanent product constraints live in the
 - **Receipt-shaped import.** Move the deterministic half of a vendor import
   server-side: a `create_purchase_with_lines` (or `import_vendor_orders`)
   call takes a header plus lines with per-order defaults, dedupes on
-  `orderId`, emits the typed tax/fee/tip/discount rows, refuses the order
-  unless the lines sum to `statedTotal`, and attaches the line's image URL —
-  returning only the lines whose Product identity is ambiguous. Today the
-  model spends ~150 tool calls per 16 orders on that mechanical part and ~20
-  on the judgment part.
+  `orderId`, emits the typed tax/fee/tip/discount rows, and attaches the
+  line's image URL — returning only the lines whose Product identity is
+  ambiguous. Today the model spends ~150 tool calls per 16 orders on that
+  mechanical part and ~20 on the judgment part. (The original wording had
+  the writer refuse on `statedTotal`; tenet 5 forbids that — the check
+  belongs in extraction.) Designed in full, with the agent, Mac app browser
+  bridge, and Problems surface around it, in
+  [the purchase import redesign](plans/purchase-import-redesign.md).
 
 - **Recipe scaling extensions.** Explore pan-size targets, interactive parse
   clarification, and baker's-percentage comparison without replacing Product-owned
