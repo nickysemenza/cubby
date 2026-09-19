@@ -14,6 +14,9 @@ struct PhotoDestinationSheet: View {
     @State private var relatedContext: PhotoRelatedContext?
     @State private var createSelfContext: PhotoCreateSelfContext?
     @State private var createTargetContext: PhotoCreateTargetContext?
+    /// A2: reverse-geocodes each group's representative photo so its row can add "· photo ·
+    /// <city>" evidence once known.
+    @State private var provenance = PhotoCaptureProvenance()
 
     /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
     /// items fall back to the window toolbar there.
@@ -158,7 +161,7 @@ struct PhotoDestinationSheet: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.title).font(.headline)
-                if let evidence = group.evidence {
+                if let evidence = groupEvidence(group) {
                     Text(evidence).font(.caption).foregroundStyle(.secondary)
                 }
                 if showsAnalysisCaption, let caption = analysisCompleteCaption {
@@ -174,6 +177,22 @@ struct PhotoDestinationSheet: View {
                 .accessibilityIdentifier("photos.manifest.changeDestination.\(group.id)")
             }
         }
+        .task(id: group.photoIDs.first) {
+            guard let id = group.photoIDs.first,
+                let item = manifest.items.first(where: { $0.id == id })
+            else { return }
+            await provenance.resolve(id: item.id, location: item.location)
+        }
+    }
+
+    /// `group.evidence` with "· photo · <city>" appended once the group's representative photo's
+    /// location has resolved (A2) — never blocks or reflows the row while it's still pending.
+    private func groupEvidence(_ group: PhotoImportGroup) -> String? {
+        let city = group.photoIDs.first
+            .flatMap { id in manifest.items.first(where: { $0.id == id }) }
+            .flatMap { provenance.result(for: $0.id)?.city }
+        let parts = [group.evidence, city.map { "photo · \($0)" }].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     @ToolbarContentBuilder

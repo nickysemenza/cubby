@@ -119,6 +119,28 @@ struct PhotoImportFlowTests {
                 option: option, source: source, captureDate: nil))
     }
 
+    /// A2 (Q15c): the caption is a pure function of (time, zone, city) — no `CLGeocoder` in the
+    /// loop — and drops the " in …" clause entirely when there's no city.
+    @Test func captureProvenanceCaptionFormatsWithAndWithoutACity() throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_757_500_000)
+        let zone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        formatter.timeZone = zone
+        let time = formatter.string(from: capturedAt)
+
+        #expect(
+            PhotoCaptureProvenance.caption(capturedAt: capturedAt, timeZone: zone, city: "San Francisco")
+                == "Set from the photo · taken \(time) in San Francisco")
+        #expect(
+            PhotoCaptureProvenance.caption(capturedAt: capturedAt, timeZone: zone, city: nil)
+                == "Set from the photo · taken \(time)")
+        #expect(
+            PhotoCaptureProvenance.caption(capturedAt: capturedAt, timeZone: zone, city: "")
+                == "Set from the photo · taken \(time)")
+    }
+
     @Test func stageCreateKeysDraftsByRouteSourceRecordAndDay() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")

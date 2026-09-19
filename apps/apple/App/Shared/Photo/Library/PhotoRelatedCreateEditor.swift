@@ -29,6 +29,8 @@ struct PhotoRelatedCreateEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model: GenericEntityEditModel?
     @State private var pickedTitles: [String: String] = [:]
+    /// A2: reverse-geocodes `heroItems.first` for the capture-date provenance caption's city.
+    @State private var provenance = PhotoCaptureProvenance()
 
     private var descriptor: EntityDescriptor {
         switch mode {
@@ -132,8 +134,15 @@ struct PhotoRelatedCreateEditor: View {
                                 if !fields.isEmpty {
                                     Section(section.title) {
                                         ForEach(fields, id: \.key) { field in
-                                            EntityFieldControl(
-                                                field: field, model: model, pickedTitles: $pickedTitles)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                EntityFieldControl(
+                                                    field: field, model: model, pickedTitles: $pickedTitles)
+                                                if let caption = provenanceCaption(for: field, model: model) {
+                                                    Text(caption)
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -182,6 +191,20 @@ struct PhotoRelatedCreateEditor: View {
                 suppressDefaultKeys: captureDateBoundKeys)
             model = created
         }
+        .task(id: heroItems.first?.id) {
+            guard let item = heroItems.first else { return }
+            await provenance.resolve(id: item.id, location: item.location)
+        }
+    }
+
+    /// The caption under a capture-date-bound field once there's a date to attribute it to and
+    /// the person hasn't overridden it — never keys off the field or entity's name (A2).
+    private func provenanceCaption(for field: FieldDescriptor, model: GenericEntityEditModel) -> String? {
+        guard let captureDate, captureDateBoundKeys.contains(field.key), !model.isEdited(field.key)
+        else { return nil }
+        let result = heroItems.first.flatMap { provenance.result(for: $0.id) }
+        return PhotoCaptureProvenance.caption(
+            capturedAt: captureDate, timeZone: result?.timeZone, city: result?.city)
     }
 
     private func renders(_ field: FieldDescriptor) -> Bool {

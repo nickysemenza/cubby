@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreLocation
 import CubbyKit
 import Foundation
 import Photos
@@ -17,6 +18,16 @@ nonisolated struct PhotoSelectionItem: Identifiable, Sendable {
     private let queryOverride: HashQuery?
     var existingImageID: ImageCode?
     var approvedCandidates: Set<ImageCode> = []
+
+    /// For the capture-date provenance caption's reverse-geocoded city (A2). Computed from the
+    /// retained `PHAsset` rather than stored, so it needs no separate population step; nil for a
+    /// picker/file import since `PhotoFile` carries no location metadata yet.
+    var location: CLLocation? {
+        switch source {
+        case .library(let asset): asset.location
+        case .file: nil
+        }
+    }
 
     init(asset: PHAsset, preview: CGImage) {
         id = asset.localIdentifier

@@ -140,6 +140,21 @@ public final class GenericEntityEditModel {
         Set(descriptor.fields.filter(\.nullable).map(\.key))
     }
 
+    /// Keys a person has changed through a control, as opposed to a seed/prefill. A caller-owned
+    /// hint tied to a key's origin (e.g. the photo import editor's capture-date provenance
+    /// caption, A2) reads this to know when to stop showing itself. Controls that write `draft`
+    /// directly call `markEdited`; today only the date control does (the only kind a capture-date
+    /// binding ever targets).
+    public private(set) var editedKeys: Set<String> = []
+
+    public func markEdited(_ key: String) {
+        editedKeys.insert(key)
+    }
+
+    public func isEdited(_ key: String) -> Bool {
+        editedKeys.contains(key)
+    }
+
     // MARK: - Body
 
     public var hasImageChanges: Bool {
