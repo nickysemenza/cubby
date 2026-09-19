@@ -1,6 +1,7 @@
 import CubbyKit
 import Foundation
 import Observation
+import SwiftUI
 
 /// The small ownership label shown in the Photos grid.
 ///
@@ -33,6 +34,9 @@ struct PhotoGridCellState: Equatable, Sendable {
     var possibleMatch: Bool
     var known: Bool
     var accessibilityStatus: String
+    /// On-device classification status (B3/B4): drives the grid cell's 6pt dot. Defaulted so
+    /// existing call sites that predate the classification sweep still compile unchanged.
+    var analysis: PhotoAnalysisStatus = .pending
 
     /// `checked` distinguishes "no match, confirmed" from "not looked at yet" once a photo has
     /// no candidates at all — both otherwise look identical (empty `storedCandidates`).
@@ -40,7 +44,8 @@ struct PhotoGridCellState: Equatable, Sendable {
         storedCandidates: [DedupCandidate],
         strongDirectOwnerShortcodes: [String],
         hasKnownResult: Bool,
-        checked: Bool
+        checked: Bool,
+        analysis: PhotoAnalysisStatus = .pending
     ) -> PhotoGridCellState {
         let represented = storedCandidates.contains { $0.confidence == .strong }
         let possibleMatch = !represented && !storedCandidates.isEmpty
@@ -59,7 +64,19 @@ struct PhotoGridCellState: Equatable, Sendable {
         return PhotoGridCellState(
             badgeText: PhotoGridBadge.text(for: strongDirectOwnerShortcodes),
             represented: represented, possibleMatch: possibleMatch, known: known,
-            accessibilityStatus: status)
+            accessibilityStatus: status, analysis: analysis)
+    }
+}
+
+/// The grid dot's tint: the first `PhotoImportCatalog.categories` entry a photo's hits contain,
+/// colored by its *index* into the token ramp — never by category key, so no category name is a
+/// Swift literal here.
+enum PhotoCategoryTint {
+    static func color(for categories: [String]) -> Color? {
+        guard
+            let index = PhotoImportCatalog.categories.firstIndex(where: { categories.contains($0.key) })
+        else { return nil }
+        return PorcelainTokens.chartRamp[index % PorcelainTokens.chartRamp.count]
     }
 }
 

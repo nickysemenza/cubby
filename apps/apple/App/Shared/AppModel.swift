@@ -85,6 +85,8 @@ final class AppModel {
         self.photoClassificationSweep = PhotoClassificationSweep(
             analysisStore: analysisStore, library: library,
             window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused)
+        let matches = photoMatches
+        photoClassificationSweep.onClassified = { id, status in matches.markAnalysis([id: status]) }
         Task { try? await analysisStore.migrateLegacyHashCacheIfNeeded() }
     }
 
@@ -104,7 +106,8 @@ final class AppModel {
     }
 
     private static var persistedAnalysisWindow: PhotoAnalysisWindow {
-        UserDefaults.standard.string(forKey: "photoAnalysisWindow").flatMap(PhotoAnalysisWindow.init(rawValue:))
+        UserDefaults.standard.string(forKey: "photoAnalysisWindow").flatMap(
+            PhotoAnalysisWindow.init(rawValue:))
             ?? .thisYear
     }
 

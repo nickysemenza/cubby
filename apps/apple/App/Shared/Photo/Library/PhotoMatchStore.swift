@@ -37,6 +37,9 @@ final class PhotoMatchStore {
     /// dependency for every cell).
     @ObservationIgnored private var checkedIDs: Set<String> = []
     @ObservationIgnored private var cellStateBoxes: [String: PhotoGridCellStateBox] = [:]
+    /// Populated by `PhotoLibraryStore`'s batch read on refresh and by the classification sweep as
+    /// it finishes each photo (B4's grid dot). Absent means "not looked at yet by either path".
+    @ObservationIgnored private var analysisByID: [String: PhotoAnalysisStatus] = [:]
 
     var coverage: String {
         if error != nil {
@@ -107,12 +110,22 @@ final class PhotoMatchStore {
         }
     }
 
+    /// Publishes a batch of analysis results into the per-id cell state (B4's grid dot). Bumps
+    /// `revision` so the category filter's memoized id set (keyed on `revision`) invalidates too.
+    func markAnalysis(_ statuses: [String: PhotoAnalysisStatus]) {
+        guard !statuses.isEmpty else { return }
+        for (id, status) in statuses { analysisByID[id] = status }
+        revision += 1
+        publishCellStates(for: statuses.keys)
+    }
+
     private func computeCellState(for id: String) -> PhotoGridCellState {
         PhotoGridCellState.derive(
             storedCandidates: storedCandidates(for: id),
             strongDirectOwnerShortcodes: strongDirectOwnerShortcodes(for: id),
             hasKnownResult: hasKnownResult(for: id),
-            checked: checkedIDs.contains(id))
+            checked: checkedIDs.contains(id),
+            analysis: analysisByID[id] ?? .pending)
     }
 
     private func publishCellState(for id: String) {
@@ -148,6 +161,7 @@ final class PhotoMatchStore {
         serverCandidates = [:]; batchCandidates = [:]; candidates = [:]
         directOwnersByImageID = [:]
         checkedIDs = []; cellStateBoxes = [:]
+        analysisByID = [:]
         entriesRevision += 1
         hasIndex = false; isLoading = false; isRepairing = false
         totalCount = 0; remainingCount = 0; repairFailures = 0; error = nil

@@ -130,6 +130,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         months = grouped.keys.sorted(by: >).map { Month(id: $0, assets: grouped[$0]!) }
         count = result.count
         isLoadingLibrary = false
+        // One batch read for the whole library's dot status, rather than a fetch per cell; the
+        // sweep republishes individual ids afterward as it classifies them.
+        if let statuses = try? await analysisStore.analysisStatuses(for: Array(assetsByID.keys)) {
+            matches.markAnalysis(statuses)
+        }
         let remaining = result.filter { !checked.contains($0.localIdentifier) }
         let completedCount = result.count - remaining.count
         scannedCount = completedCount
