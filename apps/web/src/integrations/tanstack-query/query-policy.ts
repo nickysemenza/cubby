@@ -9,10 +9,9 @@ export const IDEMPOTENT_MUTATION_RETRY = 2;
  * App-wide transport and recovery policy. Domain descriptors choose a cache
  * profile below; they do not restate these defaults.
  *
- * `refetchOnWindowFocus` intentionally keeps TanStack's default `true`; a
- * human-activity gate replaces the raw browser focus signal, so a hidden or
- * offline tab revalidates on its first trusted user input, not merely when it
- * becomes visible or reconnects.
+ * Cached queries are deliberately passive after their first load. Explicit
+ * invalidation and manual refetch remain available, but background browser
+ * focus and component-remount events do not spend network requests.
  */
 export const QUERY_CLIENT_DEFAULT_OPTIONS = {
   queries: {
@@ -20,8 +19,8 @@ export const QUERY_CLIENT_DEFAULT_OPTIONS = {
     gcTime: 5 * MINUTE,
     retry: false,
     networkMode: "online",
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   },
   mutations: {

@@ -56,14 +56,15 @@ async function invalidatedTagsFor<Variables>(
 }
 
 describe("root MutationCache invalidation", () => {
-  it("does not refetch queries merely because the browser reconnects", () => {
+  it("disables ambient browser revalidation for cached queries", () => {
     const { queryClient } = getContext();
+    expect(queryClient.getDefaultOptions().queries?.refetchOnMount).toBe(false);
+    expect(queryClient.getDefaultOptions().queries?.refetchOnWindowFocus).toBe(
+      false,
+    );
     expect(queryClient.getDefaultOptions().queries?.refetchOnReconnect).toBe(
       false,
     );
-    expect(
-      queryClient.getDefaultOptions().queries?.refetchOnWindowFocus,
-    ).not.toBe(false);
   });
 
   it("uses a descriptor's static tag list", async () => {

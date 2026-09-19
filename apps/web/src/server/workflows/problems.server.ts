@@ -6,6 +6,7 @@ import {
   dryRunPruneAliasesOut,
   dryRunReparseOut,
   maintenanceCountsSchema,
+  type ProblemsCount,
   problemsCountSchema,
   problemsCoverageSchema,
   problemsFastSchema,
@@ -19,10 +20,9 @@ import {
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 
-import { getProblemCountsCache } from "~/server/cf-env";
+import { readProblemCountsFromDurableObject } from "~/server/database-freshness/client";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
-import { getCachedProblemCounts } from "~/server/services/problem-counts-cache";
 import {
   findAllViewProblemIds,
   findViewProblems,
@@ -36,6 +36,7 @@ import {
   findFastProblems,
   findMaintenanceCounts,
   findProblemByType,
+  findProblemCounts,
   findTrackerProblems,
   findUpcProblems,
   selectIngredientsWithUnusedAliases,
@@ -96,10 +97,20 @@ export const findFastProblemsWorkflow = defineWorkflowOperation(
   "problems.getFast",
   (c: ProblemsWorkflowContext) => findFastProblems(c.db),
 );
+
+export async function resolveProblemCounts(
+  readFromDurableObject: () => Promise<ProblemsCount | null>,
+  fallback: () => Promise<ProblemsCount>,
+): Promise<ProblemsCount> {
+  return (await readFromDurableObject()) ?? fallback();
+}
+
 export const findProblemCountsWorkflow = defineWorkflowOperation(
   "problems.getCounts",
-  (c: ProblemsWorkflowContext) =>
-    getCachedProblemCounts(c.db, c.upcLookupClient, getProblemCountsCache()),
+  async (c: ProblemsWorkflowContext) =>
+    resolveProblemCounts(readProblemCountsFromDurableObject, () =>
+      findProblemCounts(c.db, c.upcLookupClient),
+    ),
 );
 export const findProblemByTypeWorkflow = defineWorkflowOperation(
   "problems.getByType",

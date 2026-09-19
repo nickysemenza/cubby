@@ -34,15 +34,6 @@ export const runWithExecutionCtx = <T>(
 export const getExecutionCtx = (): WaitUntilContext | undefined =>
   executionCtxStore.getStore();
 
-export interface ProblemCountsCacheAdapter {
-  get(key: string): Promise<string | null>;
-  put(
-    key: string,
-    value: string,
-    options?: { expirationTtl?: number },
-  ): Promise<void>;
-}
-
 let cfEnv: Env | undefined;
 
 export const setCfEnv = (env?: Env): void => {
@@ -74,18 +65,6 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   // SAFETY: Wrangler generates Env bindings structurally from configuration;
   // this adapter narrows that generated queue binding to Cubby's owned port.
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
-};
-
-/** KV-backed derived Problem-count snapshot, absent in plain Node dev/tests. */
-export const getProblemCountsCache = ():
-  | ProblemCountsCacheAdapter
-  | undefined => {
-  const binding = cfEnv?.PROBLEM_COUNTS_KV;
-  if (!binding) return undefined;
-  return {
-    get: (key) => binding.get(key),
-    put: (key, value, options) => binding.put(key, value, options),
-  };
 };
 
 /** Origin-keyed durable calendar publishing state, absent in plain Vite. */

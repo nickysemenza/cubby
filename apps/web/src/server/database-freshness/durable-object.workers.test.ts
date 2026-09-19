@@ -1,6 +1,9 @@
+import { problemsCountSchema } from "@cubby/schemas/problems";
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+
+import { mock } from "~/lib/test/mock-schema";
 
 import { decideReadConsistency } from "../read-consistency";
 
@@ -42,5 +45,37 @@ describe("database freshness Durable Object", () => {
       }).consistency,
     ).toBe("bounded-stale");
     expect(await first.readFreshness()).toEqual(write);
+  });
+
+  it("batches writes behind the first alarm and retains a snapshot when refresh fails", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    const counts = mock(problemsCountSchema, { seed: 17 });
+
+    await stub.recordWrite();
+    const firstAlarm = await runInDurableObject(stub, (_instance, state) =>
+      state.storage.getAlarm(),
+    );
+    expect(firstAlarm).not.toBeNull();
+    if (firstAlarm === null) throw new Error("write did not schedule an alarm");
+    expect(firstAlarm - Date.now()).toBeGreaterThan(14 * 60_000);
+
+    await stub.recordWrite();
+    expect(
+      await runInDurableObject(stub, (_instance, state) =>
+        state.storage.getAlarm(),
+      ),
+    ).toBe(firstAlarm);
+
+    await runInDurableObject(stub, async (instance, state) => {
+      state.storage.sql.exec(
+        "INSERT INTO problem_counts (id, counts_json, computed_at, covered_sequence, quality) VALUES (1, ?, ?, 0, 'complete')",
+        JSON.stringify(counts),
+        Date.now(),
+      );
+      await instance.alarm();
+      expect(await state.storage.getAlarm()).toBeGreaterThan(firstAlarm);
+    });
+
+    expect(await stub.getProblemCounts()).toEqual(counts);
   });
 });

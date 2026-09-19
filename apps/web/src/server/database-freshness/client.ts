@@ -1,3 +1,5 @@
+import type { ProblemsCount } from "@cubby/schemas/problems";
+
 import { getDatabaseFreshnessNamespace } from "~/server/cf-env";
 
 import type { DatabaseFreshness } from "./state";
@@ -6,6 +8,10 @@ const DATABASE_FRESHNESS_RPC_TIMEOUT_MS = 1000;
 export interface DatabaseFreshnessPort {
   readFreshness(): Promise<DatabaseFreshness>;
   recordWrite(): Promise<DatabaseFreshness>;
+}
+
+export interface ProblemCountsSnapshotPort {
+  getProblemCounts(): Promise<ProblemsCount>;
 }
 
 const getPort = () =>
@@ -56,5 +62,20 @@ export async function recordDatabaseWrite(
     await boundedRpc(() => target.recordWrite());
   } catch (error) {
     console.warn("Database freshness notification failed", { source, error });
+  }
+}
+
+export async function readProblemCountsFromDurableObject(
+  port?: ProblemCountsSnapshotPort,
+): Promise<ProblemsCount | null> {
+  const target = port ?? getPort();
+  if (!target) return null;
+  try {
+    // A cold snapshot runs the detector pass, so it must not inherit the
+    // one-second latency bound used by the tiny freshness RPCs.
+    return await target.getProblemCounts();
+  } catch (error) {
+    console.error("Problem-count snapshot RPC failed", error);
+    throw error;
   }
 }
