@@ -209,7 +209,9 @@ public actor PhotoAnalysisStore {
         // Narrow projection: this query runs on every category-chip reload, and the default fetch
         // would materialize every matching record's `fullAnalysis` blob and `topLabels` just to
         // read an identifier and a category list.
-        descriptor.propertiesToFetch = [\.localIdentifier, \.categories, \.classifyVersion, \.fullAnalysisVersion]
+        descriptor.propertiesToFetch = [
+            \.localIdentifier, \.categories, \.classifyVersion, \.fullAnalysisVersion,
+        ]
         let records = try modelContext.fetch(descriptor)
         return Set(records.filter { $0.categories.contains(category) }.map(\.localIdentifier))
     }
