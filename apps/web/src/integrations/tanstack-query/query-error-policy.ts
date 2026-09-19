@@ -24,6 +24,11 @@ export function shouldToastQueryError(
   ) {
     return false;
   }
+  // Suggestion queries (`ai.suggestFields`) are advisory: a hint the field
+  // never asked for, not a value the user requested. An unconfigured AI
+  // gateway would otherwise toast on every dialog a suggestable field appears
+  // in.
+  if (query.meta?.silentErrors === true) return false;
   return !(query.meta?.speculative === true && query.getObserversCount() === 0);
 }
 

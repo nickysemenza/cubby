@@ -55,7 +55,6 @@ import {
 } from "../PendingDocumentUpload";
 import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
 import { UnitMappingPairField } from "../units/unit-mapping-pair-field";
-import { CategoryFieldWithAI } from "./category-field-with-ai";
 import { IdentifyProductButton } from "./identify-product-with-ai";
 
 const EMPTY_PENDING_IMAGES: PendingImage[] = [];
@@ -272,20 +271,15 @@ type ProductFormSectionProps<TFieldValues extends ProductFormFieldValues> =
 
 function ProductDetailsFields<TFieldValues extends ProductFormFieldValues>({
   mode,
-  form,
   paths,
   compact,
   hideNameField,
-  nameValue,
-  manufacturerValue,
   isMisc,
   isFoodForced,
   isBookForced,
-}: ProductFormSectionProps<TFieldValues> & {
+}: Omit<ProductFormSectionProps<TFieldValues>, "form"> & {
   mode: EditMode;
   hideNameField: boolean;
-  nameValue: string;
-  manufacturerValue: string;
   isMisc: boolean;
   isFoodForced: boolean;
   isBookForced: boolean;
@@ -332,19 +326,21 @@ function ProductDetailsFields<TFieldValues extends ProductFormFieldValues>({
               manufacturer: { placeholder: "Enter manufacturer" },
             }}
           />
-          <CategoryFieldWithAI
-            form={form}
-            name={paths.category}
-            productName={nameValue}
-            manufacturer={manufacturerValue}
-            disabled={isFoodForced || isBookForced}
-            description={
-              isFoodForced
-                ? "Forced to 'food' (has USDA link or ingredient)"
-                : isBookForced
-                  ? "Forced to 'books' (has a valid ISBN)"
-                  : undefined
-            }
+          <EntityPrimitiveFields
+            entity="product"
+            mode={mode}
+            section="category"
+            paths={{ category: paths.category }}
+            options={{
+              category: {
+                disabled: isFoodForced || isBookForced,
+                description: isFoodForced
+                  ? "Forced to 'food' (has USDA link or ingredient)"
+                  : isBookForced
+                    ? "Forced to 'books' (has a valid ISBN)"
+                    : undefined,
+              },
+            }}
           />
         </SideBySideFields>
       )}
@@ -884,7 +880,6 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
   const observedFields = observedProductFieldsSchema.parse(form.watch());
   const {
     name: nameValue,
-    manufacturer: manufacturerValue,
     fdc_id: fdcValue,
     upc: upcValue,
     isbn: isbnValue,
@@ -959,12 +954,9 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
     <>
       <ProductDetailsFields
         mode={mode}
-        form={form}
         paths={paths}
         compact={compact}
         hideNameField={hideNameField}
-        nameValue={nameValue}
-        manufacturerValue={manufacturerValue}
         isMisc={isMisc}
         isFoodForced={isFoodForced}
         isBookForced={isBookForced}

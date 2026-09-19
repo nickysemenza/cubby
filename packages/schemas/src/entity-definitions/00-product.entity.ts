@@ -351,7 +351,11 @@ export default defineEntity({
         key: "category",
         kind: "enum",
         nullable: true,
-        control: { kind: "select" },
+        control: {
+          kind: "select",
+          section: "category",
+          suggest: { basis: ["name", "manufacturer"] },
+        },
         display: {
           list: true,
           listOrder: 0,

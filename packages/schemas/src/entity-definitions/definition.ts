@@ -175,6 +175,18 @@ const metadataSchemas = () => {
        * only member today (the household's local calendar date).
        */
       initial: z.literal("today").nullable().optional().default(null),
+      /**
+       * A field whose value the decision tier (Jev) infers from the named
+       * sibling fields (`basis`, model field keys of the same entity). The
+       * browser editor auto-fills it while untouched and offers a one-tap
+       * apply once a value already exists.
+       */
+      suggest: z
+        .object({ basis: z.array(nonEmptyString()).min(1) })
+        .strict()
+        .nullable()
+        .optional()
+        .default(null),
     })
     .strict();
 
@@ -609,6 +621,27 @@ const metadataSchemas = () => {
                 .object({
                   field: fieldKey,
                   equals: z.union([z.string(), z.boolean()]),
+                  fields: z.array(fieldKey).min(1),
+                })
+                .strict(),
+            )
+            .optional()
+            .default([]),
+          /**
+           * Fields hidden from the generic editor while `field` is
+           * present/absent in the **live form** (not the record) — unlike
+           * `readOnlyWhen`, which is record-side and update-only, this is
+           * evaluated reactively in create mode too (e.g. hide `lineKind`
+           * once `productId` is picked). "Present" means a non-empty
+           * trimmed string / non-null id, mirroring `control.suggest`'s
+           * basis-presence rule.
+           */
+          hiddenWhen: z
+            .array(
+              z
+                .object({
+                  field: fieldKey,
+                  present: z.boolean({ error: "must be a boolean" }),
                   fields: z.array(fieldKey).min(1),
                 })
                 .strict(),

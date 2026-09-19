@@ -25,6 +25,7 @@ import { type FC, useMemo } from "react";
 import { type Control, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import { getOptionalIngredientId } from "~/app/_components/form-fields";
 import { InfoRow } from "~/components/common/info-row";
 import { filterAliases } from "~/components/forms/aliases-field";
@@ -558,30 +559,39 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           in a wide modal, or stacked inside a narrow detail card. The
           @container must sit on a PARENT of the queried grid — a container
           never queries its own size. */}
-      <div className="@container/product">
-        <div className="gap-6 @3xl/product:grid @3xl/product:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] @3xl/product:items-start">
-          <Stack>
-            <ProductFormFields
-              mode={product ? "edit" : "create"}
-              form={form}
-              paths={productFormFieldPaths}
-              imageHandlers={imageState}
-              existingImages={existingImages}
-              existingDocuments={existingDocuments}
-              documentFolder={product?.id ?? undefined}
-              pendingImages={imageState.pendingImages}
-            />
-          </Stack>
+      <FieldSuggestionProvider
+        entity="product"
+        mode={product ? "edit" : "create"}
+        paths={{
+          name: productFormFieldPaths.name,
+          manufacturer: productFormFieldPaths.manufacturer,
+        }}
+      >
+        <div className="@container/product">
+          <div className="gap-6 @3xl/product:grid @3xl/product:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] @3xl/product:items-start">
+            <Stack>
+              <ProductFormFields
+                mode={product ? "edit" : "create"}
+                form={form}
+                paths={productFormFieldPaths}
+                imageHandlers={imageState}
+                existingImages={existingImages}
+                existingDocuments={existingDocuments}
+                documentFolder={product?.id ?? undefined}
+                pendingImages={imageState.pendingImages}
+              />
+            </Stack>
 
-          {/* Live fact-sheet — the detail page builds as you type */}
-          <aside className="hidden @3xl/product:sticky @3xl/product:top-20 @3xl/product:block">
-            <div className="max-h-[75vh] overflow-y-auto border border-[var(--border)] bg-card p-4">
-              <p className="mb-2 eyebrow">Live preview</p>
-              <ProductLivePreview control={form.control} />
-            </div>
-          </aside>
+            {/* Live fact-sheet — the detail page builds as you type */}
+            <aside className="hidden @3xl/product:sticky @3xl/product:top-20 @3xl/product:block">
+              <div className="max-h-[75vh] overflow-y-auto border border-[var(--border)] bg-card p-4">
+                <p className="mb-2 eyebrow">Live preview</p>
+                <ProductLivePreview control={form.control} />
+              </div>
+            </aside>
+          </div>
         </div>
-      </div>
+      </FieldSuggestionProvider>
     </FormWrapper>
   );
 };

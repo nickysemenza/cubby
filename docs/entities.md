@@ -286,6 +286,22 @@ projection. Missing controls and display flags expose no UI. A control defaults
 to the `main` section; a reference defaults to one entity. Explicit labels,
 nullability, read keys, sections, and renderers override these defaults.
 
+`control.suggest: { basis }` marks a field whose value the decision tier (Jev)
+infers from named sibling fields, so the browser editor can auto-fill it while
+untouched and offer a one-tap apply once a value already exists. `basis` names
+model field keys on the same entity only — never an `intents.editorFields`
+pseudo field, since detail/table/bulk surfaces have no editor-field data to
+read. The target must be a select-controlled enum, a singular (non-multiple)
+reference, or a nullable text field (a roster-backed name, e.g. `expense.vendor`);
+the compiler rejects anything else, a basis key that doesn't resolve to a model
+field, a basis key naming the field itself, and any cycle in the basis → target
+edges across an entity's suggest fields, so one request can always resolve every
+target in dependency order. The generated `suggestFieldKeys` tuple
+(`packages/schemas/src/generated/entity-field-model.gen.ts`) lists every
+declared `"entity.field"` suggest target, and its `GeneratedSuggestFieldKey`
+union type-enforces that the server's field-suggest registry carries exactly
+one entry per key.
+
 An omitted or null mode has no schema. Zod owns optionality, transformations,
 nullability, descriptions, refinements, and defaults. Put create-only defaults
 only on create schemas, and make partial update schemas explicitly optional so

@@ -4,6 +4,8 @@ import { Pencil, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useState } from "react";
 
+import type { FieldSuggestionSource } from "~/app/_components/ai/field-suggestion";
+import { FieldSuggestionApply } from "~/app/_components/ai/field-suggestion-apply";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -49,6 +51,10 @@ export interface EditableEntityCellProps<TId extends string> {
   trigger?: "wrap" | "pencil";
   /** Enable cmd-C / cmd-V on the focused trigger. */
   clipboard?: CellClipboardSpec<ComboboxItem<TId> | null>;
+  /** When the field's `control.suggest` exists — queries only while the
+   * editor is open (mirrors `EditableSelectEditor`'s `FieldSuggestionApply`),
+   * never at rest. */
+  suggest?: FieldSuggestionSource;
 }
 
 /**
@@ -68,6 +74,7 @@ export function EditableEntityCell<TId extends string>({
   renderValue,
   trigger = "wrap",
   clipboard,
+  suggest,
 }: EditableEntityCellProps<TId>) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(
     value,
@@ -87,6 +94,7 @@ export function EditableEntityCell<TId extends string>({
         label={label}
         clearable={clearable}
         filterItems={filterItems}
+        suggest={suggest}
         onCancel={edit.cancel}
         onCommit={(nextValue) => {
           setOptimisticValue(nextValue);
@@ -146,6 +154,7 @@ function EditableEntityEditor<TId extends string>({
   label,
   clearable,
   filterItems,
+  suggest,
   onCancel,
   onCommit,
 }: {
@@ -155,6 +164,7 @@ function EditableEntityEditor<TId extends string>({
   label: PickerEntity;
   clearable?: boolean;
   filterItems?: (item: ComboboxItem<TId>) => boolean;
+  suggest?: FieldSuggestionSource;
   onCancel: () => void;
   onCommit: (value: ComboboxItem<TId> | null) => void;
 }) {
@@ -189,50 +199,68 @@ function EditableEntityEditor<TId extends string>({
   );
 
   return (
-    <div className="inline-flex w-full items-center gap-1">
-      {/* Mid-save pick gate — mirrors EditableDateEditor's isPending wrapper. */}
-      <div
-        className={cn(
-          "min-w-0 flex-1",
-          isPending && "pointer-events-none opacity-50",
-        )}
-      >
-        <SearchProvider>
-          {({
-            items,
-            onSearchChange,
-            isLoading,
-            onCreateNew,
-            onOpenChange,
-          }) => (
-            <EntityPicker
-              entity={label}
-              label={label}
-              items={filterItems ? items.filter(filterItems) : items}
-              onSearchChange={onSearchChange}
-              isLoading={isLoading}
-              value={selected}
-              setValue={handlePick}
-              onCreateNew={onCreateNew}
-              onOpenChange={onOpenChange}
-              // Open + focus the search input on mount. Focus-only: the entity
-              // search input is internal state, so a type-to-edit seed char isn't
-              // threaded here.
-              openOnMount
-              compact
-              clearable={clearable}
-            />
+    <div className="flex w-full flex-col gap-1">
+      <div className="inline-flex w-full items-center gap-1">
+        {/* Mid-save pick gate — mirrors EditableDateEditor's isPending wrapper. */}
+        <div
+          className={cn(
+            "min-w-0 flex-1",
+            isPending && "pointer-events-none opacity-50",
           )}
-        </SearchProvider>
+        >
+          <SearchProvider>
+            {({
+              items,
+              onSearchChange,
+              isLoading,
+              onCreateNew,
+              onOpenChange,
+            }) => (
+              <EntityPicker
+                entity={label}
+                label={label}
+                items={filterItems ? items.filter(filterItems) : items}
+                onSearchChange={onSearchChange}
+                isLoading={isLoading}
+                value={selected}
+                setValue={handlePick}
+                onCreateNew={onCreateNew}
+                onOpenChange={onOpenChange}
+                // Open + focus the search input on mount. Focus-only: the entity
+                // search input is internal state, so a type-to-edit seed char isn't
+                // threaded here.
+                openOnMount
+                compact
+                clearable={clearable}
+              />
+            )}
+          </SearchProvider>
+        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={isPending}
+        >
+          <X className="size-3.5" />
+        </Button>
       </div>
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={onCancel}
-        disabled={isPending}
-      >
-        <X className="size-3.5" />
-      </Button>
+      {suggest && (
+        <FieldSuggestionApply
+          source={suggest}
+          currentValue={value?.id ?? null}
+          onApply={(suggestion) => {
+            if (!suggestion.value) return;
+            // SAFETY: `suggest.targets` names one reference field of `TId`'s
+            // entity; the suggestion's `value` is that field's id shape.
+            handlePick({
+              id: suggestion.value as TId,
+              shortcode: suggestion.value,
+              name: suggestion.label ?? suggestion.value,
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

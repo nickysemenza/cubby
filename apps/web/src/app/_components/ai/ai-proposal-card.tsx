@@ -88,27 +88,6 @@ export function AiTextDiff({
 }
 
 /**
- * The value a proposal would write, named. The reasoning explains a choice;
- * this states it — without it a card argues for "tool-consumables" without
- * ever printing the words, and the only way to learn what Accept does is to
- * press it.
- */
-export function ProposedValue({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
-  return (
-    <Row align="baseline" gap="sm" className="border-t border-border pt-2">
-      <span className="eyebrow text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium">{value}</span>
-    </Row>
-  );
-}
-
-/**
  * One AI answer, presented as a proposal: what the model produced, how sure it
  * is, why, where it came from, and two ways out.
  *

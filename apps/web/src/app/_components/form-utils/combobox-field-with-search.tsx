@@ -21,6 +21,8 @@ interface ComboboxFieldWithSearchProps<
   searchType: SearchType;
   productIntent?: ProductPickerIntent;
   disabledItemReasons?: Readonly<Record<string, string>>;
+  /** The manifest target key this field suggests, e.g. `"locationId"`. */
+  suggestField?: string;
 }
 
 /**
@@ -37,6 +39,7 @@ export function ComboboxFieldWithSearch<
   searchType,
   productIntent,
   disabledItemReasons,
+  suggestField,
 }: ComboboxFieldWithSearchProps<TFieldValues, TName>) {
   return (
     <WithEntitySearch
@@ -55,6 +58,7 @@ export function ComboboxFieldWithSearch<
           onOpenChange={onOpenChange}
           entity={searchType}
           disabledItemReasons={disabledItemReasons}
+          suggestField={suggestField}
         />
       )}
     </WithEntitySearch>

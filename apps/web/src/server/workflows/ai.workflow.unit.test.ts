@@ -9,18 +9,12 @@ import {
   detectInventoryItemsWorkflow,
   precomputeEnrichmentProposalsWorkflow,
   suggestIngredientMergeBatchWorkflow,
-  suggestLocationWorkflow,
   suggestUsdaFoodBatchWorkflow,
   suggestUsdaFoodWorkflow,
 } from "./ai.server";
 
 describe("AI workflow graphs", () => {
   it("declares resolution before AI reads and writes", () => {
-    expect(
-      inspectWorkflow(suggestLocationWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["call", "call"]);
     expect(
       inspectWorkflow(describeLocationWorkflow.definition).steps.map(
         (step) => step.type,

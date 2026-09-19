@@ -10,33 +10,14 @@ import {
   useMemo,
   useState,
 } from "react";
-import {
-  Controller,
-  type FieldValues,
-  type UseFormReturn,
-} from "react-hook-form";
+import { type FieldValues, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import {
-  NullableNumericField,
-  PlainDateField,
-  SelectField,
-  UnifiedTextField,
-} from "~/app/_components/form-utils";
-import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
-import { VendorField } from "~/app/_components/form-utils/vendor-field";
-import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
-import { TypeFieldWithAI } from "~/app/_components/locations/type-field-with-ai";
-import {
-  costTypeOptions,
-  expenseLineKindOptions,
-} from "~/app/expenses/expense-options";
 import {
   SelectField as FinanceSelectField,
   SourceAliasesField,
@@ -46,7 +27,6 @@ import {
   FinancialTransactionFormFields,
   type FinancialTransactionFormValues,
 } from "~/app/finance/financial-transaction-form";
-import { tradeOptions } from "~/app/projects/shared";
 import { AliasesField } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -54,7 +34,6 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { Switch } from "~/components/ui/switch";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 
@@ -111,109 +90,17 @@ function TaskCaptureFields() {
   return <EntityIntentFields entity="task" intent="capture" />;
 }
 
-function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
-  const productId = form.watch("productId");
-  const parsedProductId = z.string().safeParse(productId);
-  const hasProduct = parsedProductId.success && parsedProductId.data.length > 0;
-  const disposition = context.disposition === true;
-  return (
-    <>
-      <EntityPrimitiveFields
-        entity="expense"
-        mode="create"
-        section="main"
-        options={{
-          name: { placeholder: "What did you buy?", focusOnMount: true },
-        }}
-      />
-      {!hasProduct ? (
-        <SelectField
-          form={form}
-          name="lineKind"
-          label="Line kind"
-          options={[
-            { value: "auto", label: "Auto-detect from name" },
-            ...expenseLineKindOptions,
-          ]}
-        />
-      ) : null}
-      <NullableNumericField
-        form={form}
-        name="cost"
-        label="Cost"
-        placeholder="e.g. 24.99"
-        step="0.01"
-        prefix="$"
-      />
-      {hasProduct ? (
-        <NullableNumericField
-          form={form}
-          name="productQuantity"
-          label="Product quantity"
-          placeholder="Unknown"
-          step="any"
-        />
-      ) : null}
-      <Controller
-        control={form.control}
-        name="future"
-        render={({ field }) => (
-          <>
-            <FormFieldGroup label="Planned">
-              <Row align="center" gap="sm">
-                <Switch
-                  checked={field.value === true}
-                  onCheckedChange={field.onChange}
-                />
-                <span className="text-sm text-muted-foreground">
-                  {field.value === true ? "Not bought yet" : "Already bought"}
-                </span>
-              </Row>
-            </FormFieldGroup>
-            <PlainDateField
-              form={form}
-              name="date"
-              label={field.value === true ? "Expected date" : "Expense date"}
-            />
-          </>
-        )}
-      />
-      <SelectField
-        form={form}
-        name="costType"
-        label="Cost Type"
-        options={costTypeOptions}
-      />
-      <SelectField
-        form={form}
-        name="trade"
-        label="Trade"
-        options={tradeOptions}
-      />
-      <VendorField
-        form={form}
-        name="vendor"
-        label="Vendor"
-        placeholder={disposition ? "Sold to / given to" : "Where from?"}
-      />
-      <UnifiedTextField
-        form={form}
-        name="orderId"
-        label="Order #"
-        placeholder="Vendor order #"
-      />
-      <EntityValueField<FieldValues, "project">
-        form={form}
-        name="projectId"
-        entity="project"
-        label="Project"
-        SearchProvider={(props) => (
-          <WithEntitySearch entity="project" {...props} />
-        )}
-        clearable
-      />
-    </>
-  );
+/**
+ * `EntityIntentFields` renders every "capture"-roster field generically,
+ * `name` focused first (its own special case, mirroring the old hand-rolled
+ * `focusOnMount`). Two behaviors the hand-rolled version had are accepted
+ * losses (see the plan): the "Planned" switch's date label no longer flips
+ * between "Expected date"/"Expense date" (`future`'s manifest checkbox has a
+ * fixed label), and the vendor placeholder no longer varies with
+ * `context.disposition` ("Sold to / given to" vs "Where from?").
+ */
+function ExpenseCaptureFields() {
+  return <EntityIntentFields entity="expense" intent="capture" />;
 }
 
 function ProjectCaptureFields() {
@@ -310,21 +197,16 @@ function InventoryFullFields() {
 
 /**
  * Location's rich fields beyond what `EntityIntentFields` renders generically:
- * `type` is declared with no editor control (like meal's `pendingImageIds`)
- * because it needs the AI-suggest widget — behavior with no generic
- * equivalent, so it stays a hand-rendered field bound to the same `"type"`
- * RHF path the kernel already resolves. A product-linked location can still
- * carry a form-factor `type` (the product link is identity, not form factor —
- * `Location_productId_type_check` is gone), so the control stays visible
- * regardless of `productId`. `collections` is a pure editor-only pseudo field
- * (folded into the stored `tags` at submit by `locationBuildData` in
- * `definitions.ts`) shown only once a location exists — the create dialog
- * stays a quick add; aliases/collections/photos are filled in afterward from
- * the edit dialog.
+ * `type` is a manifest `select` control (`control.suggest: { basis: ["name"] }`)
+ * like any other suggestable enum, so `EntityIntentFields` renders it and its
+ * auto-suggest hint with no hand-written wiring here. `collections` is a pure
+ * editor-only pseudo field (folded into the stored `tags` at submit by
+ * `locationBuildData` in `definitions.ts`) shown only once a location exists —
+ * the create dialog stays a quick add; aliases/collections/photos are filled
+ * in afterward from the edit dialog.
  */
 function LocationFields({ form, record }: EntityEditorFieldsProps) {
   const editing = record !== undefined;
-  const nameValue = z.string().catch("").parse(form.watch("name"));
   return (
     <>
       <EntityIntentFields
@@ -332,7 +214,6 @@ function LocationFields({ form, record }: EntityEditorFieldsProps) {
         intent={editing ? "full" : "capture"}
         mode={editing ? "edit" : "create"}
       />
-      <TypeFieldWithAI form={form} name="type" locationName={nameValue} />
       {editing && (
         <AliasesField
           form={form}

@@ -1,12 +1,8 @@
 import {
   aiLocationIdInput,
-  categorySuggestionInput,
-  categorySuggestionSchema,
   detectedInventorySchema,
-  locationSuggestionInput,
-  locationSuggestionSchema,
-  locationTypeSuggestionInput,
-  locationTypeSuggestionSchema,
+  fieldSuggestionsInput,
+  fieldSuggestionsOut,
   productIdentificationInput,
   productIdentificationSchema,
   usdaFoodSuggestionInput,
@@ -34,13 +30,14 @@ import { getErrorMessage } from "~/lib/error-utils";
 /** The registry model each spec's code path actually runs on, shown per card
  * instead of one global badge now that every feature can pick its own tier. */
 const FAST_TIER_MODEL = "gpt-5.6-luna";
+/** Every `ai.suggestFields` target runs on the decision tier (`classify.ts` /
+ * `runAiSelection`), not the fast tier the other cards use. */
+const DECISION_TIER_MODEL = "typesafe/jev";
 
 const jsonValueSchema = z.json();
 type JsonValue = z.infer<typeof jsonValueSchema>;
 type SmokeResult =
-  | z.infer<typeof categorySuggestionSchema>
-  | z.infer<typeof locationTypeSuggestionSchema>
-  | z.infer<typeof locationSuggestionSchema>
+  | z.infer<typeof fieldSuggestionsOut>
   | z.infer<typeof usdaFoodSuggestionOut>
   | z.infer<typeof productIdentificationSchema>
   | z.infer<typeof detectedInventorySchema>;
@@ -60,30 +57,17 @@ interface EndpointSpec {
 // for uniformity across shapes.
 const SPECS: EndpointSpec[] = [
   {
-    key: "suggestCategory",
-    label: "ai.suggestCategory",
-    description: "Structured output — product → category",
-    model: FAST_TIER_MODEL,
-    defaultInput: { productName: "cordless drill", manufacturer: "DeWalt" },
-    run: (i) => ai.suggestCategory.call(categorySuggestionInput.parse(i)),
-  },
-  {
-    key: "suggestLocationType",
-    label: "ai.suggestLocationType",
-    description: "Structured output — location name → type",
-    model: FAST_TIER_MODEL,
-    defaultInput: { locationName: "workbench drawer 3" },
-    run: (i) =>
-      ai.suggestLocationType.call(locationTypeSuggestionInput.parse(i)),
-  },
-  {
-    key: "suggestLocation",
-    label: "ai.suggestLocation",
+    key: "suggestFields",
+    label: "ai.suggestFields",
     description:
-      "Shortlist + one structured call over your real location roster — product → where to put it",
-    model: FAST_TIER_MODEL,
-    defaultInput: { productId: "PRD-XXXX" },
-    run: (i) => ai.suggestLocation.call(locationSuggestionInput.parse(i)),
+      "Manifest-driven field auto-suggest — one round trip, targets resolved in dependency order (enum, reference, or roster-backed text)",
+    model: DECISION_TIER_MODEL,
+    defaultInput: {
+      entity: "product",
+      targets: ["category"],
+      basis: { name: "cordless drill", manufacturer: "DeWalt" },
+    },
+    run: (i) => ai.suggestFields.call(fieldSuggestionsInput.parse(i)),
   },
   {
     key: "suggestUsdaFood",

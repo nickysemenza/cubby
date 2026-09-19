@@ -14,6 +14,8 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import type { FieldSuggestionSource } from "~/app/_components/ai/field-suggestion";
+import { FieldSuggestionApply } from "~/app/_components/ai/field-suggestion-apply";
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
@@ -105,6 +107,10 @@ type EditableSelectConfig = {
    * *out* of the undecided worklist, never back in.
    */
   clearable?: boolean;
+  /** When the field's `control.suggest` exists — queries only while the
+   * editor is open (`EditableSelectEditor` mounts `FieldSuggestionApply`
+   * beneath the picker), never at rest. */
+  suggest?: FieldSuggestionSource;
 };
 
 type EditableDateConfig = {
@@ -184,6 +190,7 @@ export function EditableCell(props: EditableCellProps) {
         options={config.options}
         placeholder={config.placeholder}
         clearable={config.clearable}
+        suggest={config.suggest}
         renderValue={props.renderValue}
         clipboard={props.clipboard}
         trigger={props.trigger ?? "wrap"}
@@ -658,6 +665,7 @@ function EditableSelectCellInternal({
   options,
   placeholder = "Select...",
   clearable,
+  suggest,
   renderValue,
   clipboard,
   trigger,
@@ -668,6 +676,7 @@ function EditableSelectCellInternal({
   options: FilterableComboboxItem[];
   placeholder?: string;
   clearable?: boolean;
+  suggest?: FieldSuggestionSource;
   renderValue: (value: string | null) => React.ReactNode;
   clipboard?: CellClipboardSpec<string | null>;
   trigger: EditTriggerMode;
@@ -702,6 +711,7 @@ function EditableSelectCellInternal({
             options={options}
             placeholder={placeholder}
             clearable={clearable}
+            suggest={suggest}
             onCancel={edit.cancel}
             onCommit={(nextValue) => {
               setOptimisticValue(nextValue);
@@ -720,6 +730,7 @@ function EditableSelectEditor({
   options,
   placeholder,
   clearable,
+  suggest,
   onCancel,
   onCommit,
 }: {
@@ -728,6 +739,7 @@ function EditableSelectEditor({
   options: FilterableComboboxItem[];
   placeholder: string;
   clearable?: boolean;
+  suggest?: FieldSuggestionSource;
   onCancel: () => void;
   onCommit: (value: string | null) => void;
 }) {
@@ -744,30 +756,38 @@ function EditableSelectEditor({
 
   return (
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Inline table-editor controls own keyboard behavior; this wrapper only blocks the row click.
-    <div
-      className="inline-flex items-center gap-1"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <StaticPicker
-        items={options}
-        value={value}
-        onValueChange={(next) => void handlePick(next)}
-        label={placeholder}
-        placeholder={placeholder}
-        disabled={isPending}
-        className="w-48"
-        openOnMount
-        compact
-        clearable={clearable}
-      />
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={onCancel}
-        disabled={isPending}
-      >
-        <X className="size-3.5" />
-      </Button>
+    <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+      <div className="inline-flex items-center gap-1">
+        <StaticPicker
+          items={options}
+          value={value}
+          onValueChange={(next) => void handlePick(next)}
+          label={placeholder}
+          placeholder={placeholder}
+          disabled={isPending}
+          className="w-48"
+          openOnMount
+          compact
+          clearable={clearable}
+        />
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={isPending}
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+      {suggest && (
+        <FieldSuggestionApply
+          source={suggest}
+          currentValue={value}
+          onApply={(suggestion) => {
+            if (suggestion.value) void handlePick(suggestion.value);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,103 +1,24 @@
 import type {
-  CategorySuggestion,
-  Confidence,
   DetectedInventoryAiResult,
   LocationDescription,
-  LocationTypeSuggestion,
   ProductIdentification,
 } from "@cubby/schemas/ai";
-import { type LocationType, locationType } from "@cubby/schemas/location";
-import {
-  type ProductCategory,
-  productCategoryValues,
-} from "@cubby/schemas/product";
+import { productCategoryValues } from "@cubby/schemas/product";
 import type { RecipeFlowAiPlan } from "@cubby/schemas/recipe-flow";
 import type { ImagePart } from "@tanstack/ai";
 
 import {
-  type AiDecisionFeature,
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
-  LOCATION_TYPE_SUGGESTION_FEATURE,
-  PRODUCT_CATEGORY_SUGGESTION_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
 } from "~/server/ai/features";
-import { runJevChoice } from "~/server/ai/jev";
 import {
   type AiChatRequest,
   type AiRunContext,
   runStructuredFeature,
 } from "~/server/ai/run-feature";
-
-// Category descriptions for the LLM to understand what each category means
-// Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)
-const CATEGORY_DESCRIPTIONS = {
-  food: "Consumable food items: flour, olive oil, canned tomatoes, spices, meat, produce, beverages",
-  tools:
-    "Power and hand tools: drills, saws, grinders, screwdrivers, wrenches, measuring tools",
-  "tool-consumables":
-    "Consumable items used with tools: grinding discs, drill bits, sandpaper, saw blades, router bits",
-  "tool-accessories":
-    "Non-consumable tool add-ons: jigs, fixtures, guides, router tables, dust collection attachments",
-  storage:
-    "Organization and storage: toolboxes, systainers, packout, bags, bins, shelving units",
-  hardware:
-    "Fasteners and fittings: screws, nails, bolts, nuts, washers, hinges, brackets",
-  electronics:
-    "Electronic devices and components: raspberry pi, arduino, cables, monitors, adapters, sensors",
-  software: "Software licenses, applications, and subscriptions",
-  books:
-    "Physical books: novels, reference books, manuals, art books, and printed cookbooks",
-  household:
-    "Home items: furniture, cookware, appliances, decor, cleaning equipment, linens",
-  supplies:
-    "General consumable supplies: cleaning products, tape, batteries, glue, lubricants, rags",
-  apparel:
-    "Worn goods: shoes, boots, clothing, outerwear, hats, gloves, worn bags and packs",
-} satisfies Record<ProductCategory, string>;
-
-/** The category rules; the categories themselves are the Jev choices. */
-const CATEGORY_RULES = `You are a product categorization assistant. Given a product name and manufacturer, determine the most appropriate category.
-
-Rules:
-1. If the product has food-related indicators (like being from a food brand, having nutrition info, being edible), always choose "food"
-2. For ambiguous items, consider the primary use case
-3. "supplies" is for general consumables that don't fit other categories
-4. Be precise: drill bits go in "tool-consumables", not "tools"`;
-
-// Location type descriptions for the LLM to understand what each type means
-// Using `satisfies` to ensure all types have descriptions (build fails if one is missing)
-const LOCATION_TYPE_DESCRIPTIONS = {
-  house: "The complete household or property: Home",
-  room: "Large spaces in a building: workshop, garage, kitchen, office, bedroom, basement, attic",
-  area: "Zones or sections within rooms: workbench area, cutting station, charging station, reading nook",
-  shelf:
-    "Horizontal storage surfaces: top shelf, shelf 3, wall shelf, closet shelf",
-  cabinet:
-    "Enclosed storage with doors: tool cabinet, kitchen cabinet, medicine cabinet",
-  drawer: "Pull-out compartments: desk drawer, toolbox drawer, kitchen drawer",
-  // Crates and totes deliberately have no type of their own any more: they are
-  // Products, and a location that is one carries `productId` instead. The
-  // classifier should reach for `box` and let the operator attach the SKU.
-  box: "Cardboard or plastic boxes, crates and totes: shipping box, storage box, parts box, stackable crate",
-  bag: "Fabric or plastic bags: tool bag, shopping bag, parts bag",
-  table: "Work surfaces: workbench, desk, countertop, craft table",
-  cart: "Mobile storage with wheels: tool cart, utility cart, rolling cart",
-  bed: "Outdoor in-ground or raised garden beds: raised bed 1, front garden bed",
-  planter:
-    "Outdoor pots and containers for growing: patio planter, hanging planter",
-} satisfies Record<LocationType, string>;
-
-/** The location-type rules; the types themselves are the Jev choices. */
-const LOCATION_TYPE_RULES = `You are a location classification assistant. Given a location name, determine the most appropriate location type.
-
-Rules:
-1. Look for keywords in the name that indicate the type (e.g., "shelf" in name suggests shelf type)
-2. Consider the hierarchy: rooms contain areas, areas contain shelves/cabinets/drawers, etc.
-3. For ambiguous names, consider the most likely physical form
-4. Names with numbers often indicate shelves or drawers (e.g., "Shelf 3", "Drawer 2")
-5. Names mentioning "workbench" or "station" are typically areas or tables`;
+import { CATEGORY_DESCRIPTIONS } from "~/server/ai/vocabularies";
 
 function buildProductIdentificationSystemPrompt(): string {
   const categoryList = productCategoryValues
@@ -264,74 +185,15 @@ function buildProductIdentificationRequest(imageUrls: string[]): AiChatRequest {
 }
 
 /**
- * One exhaustive closed-set classification on the decision tier: Jev picks
- * over value-labeled choices with no `none` (every product has a category,
- * every location a type), and the winner's index maps back to the value.
- * Jev writes no prose, so `reasoning` is the empty string the wire shape
- * requires.
- */
-async function classifyWithJev<Value extends string>(args: {
-  feature: AiDecisionFeature;
-  subject: string;
-  rules: string;
-  values: readonly Value[];
-  describe: (value: Value) => string;
-  usage: AiRunContext;
-}): Promise<{ value: Value; confidence: Confidence; reasoning: "" }> {
-  const { selectedIndex, confidence } = await runJevChoice({
-    feature: args.feature,
-    subject: args.subject,
-    rules: args.rules,
-    choices: args.values.map((value) => `${value}: ${args.describe(value)}`),
-    usage: args.usage,
-    allowNone: false,
-  });
-  const value = selectedIndex === null ? undefined : args.values[selectedIndex];
-  if (value === undefined) {
-    throw new Error("Jev classification returned no value.");
-  }
-  return { value, confidence, reasoning: "" };
-}
-
-/**
  * Every chat-tier method here is the same two lines: build the request, hand
  * it and the feature record to the one runner. Tier, model, token cap,
  * effort, cache policy, error surfacing, and usage accounting all live in
  * `features.ts` + `run-feature.ts`, so none of it is repeated per method.
- * The two decision-tier methods hand their vocabulary to `classifyWithJev`.
+ * Closed-set field picks (category, location type, put-away location, …) go
+ * through `ai.suggestFields` / `FIELD_SUGGEST_REGISTRY` instead — see
+ * `server/ai/field-suggest/`.
  */
 class AiClient {
-  async suggestCategory(
-    productName: string,
-    manufacturer: string,
-    ctx: AiRunContext,
-  ): Promise<CategorySuggestion> {
-    const { value: category, ...assessment } = await classifyWithJev({
-      feature: PRODUCT_CATEGORY_SUGGESTION_FEATURE,
-      subject: `Product: "${productName}"\nManufacturer: "${manufacturer}"`,
-      rules: CATEGORY_RULES,
-      values: productCategoryValues,
-      describe: (value) => CATEGORY_DESCRIPTIONS[value],
-      usage: ctx,
-    });
-    return { category, ...assessment };
-  }
-
-  async suggestLocationType(
-    locationName: string,
-    ctx: AiRunContext,
-  ): Promise<LocationTypeSuggestion> {
-    const { value: type, ...assessment } = await classifyWithJev({
-      feature: LOCATION_TYPE_SUGGESTION_FEATURE,
-      subject: `Location: "${locationName}"`,
-      rules: LOCATION_TYPE_RULES,
-      values: locationType.options,
-      describe: (value) => LOCATION_TYPE_DESCRIPTIONS[value],
-      usage: ctx,
-    });
-    return { type, ...assessment };
-  }
-
   async describeLocation(
     imageUrls: string[],
     locationName: string,

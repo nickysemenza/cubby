@@ -141,6 +141,7 @@ export function taskTradeColumn(
         if (!newTrade) return;
         await save(newTrade, task);
       },
+      suggest: { entity: "task", field: "trade" },
     },
   });
 }
@@ -242,6 +243,7 @@ export function expenseCostTypeColumn(
         if (!newCostType) return;
         await save(newCostType, expense);
       },
+      suggest: { entity: "expense", field: "costType" },
     },
   });
 }
@@ -274,6 +276,7 @@ export function expenseTradeColumn(
         if (!newTrade) return;
         await save(newTrade, expense);
       },
+      suggest: { entity: "expense", field: "trade" },
     },
   });
 }

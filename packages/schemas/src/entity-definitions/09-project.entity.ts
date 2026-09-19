@@ -203,7 +203,7 @@ export default defineEntity({
         key: "kind",
         kind: "enum",
         nullable: true,
-        control: { kind: "select" },
+        control: { kind: "select", suggest: { basis: ["name", "notes"] } },
         display: {
           list: true,
           detail: true,

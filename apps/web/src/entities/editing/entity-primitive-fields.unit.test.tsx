@@ -1,10 +1,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { EntityPrimitiveFields } from "./entity-primitive-fields";
+import type { EntitySuggestionsOperations } from "~/app/_components/ai/field-suggestion";
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
+import { ai } from "~/lib/ai.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
+import {
+  EntityIntentFields,
+  EntityPrimitiveFields,
+} from "./entity-primitive-fields";
+import { entitySelectOptionsFor } from "./select-options";
 
 type IngredientValues = { name: string; usuallyOnHand: boolean };
 type NumericValues = Record<string, number | null | undefined>;
@@ -141,6 +150,32 @@ function LocationMainFields() {
   );
 }
 
+/** Same section, wrapped in the provider a real edit dialog mounts — proves
+ * `renderPrimitiveField`'s select branch actually wires `suggestField` off
+ * `control.suggest` (`location.type`, see `04-location.entity.ts`) through to
+ * a rendered hint, not just that the hook itself works (already covered by
+ * `use-auto-field-suggestion.unit.test.tsx`). */
+function LocationMainFieldsWithSuggestions({
+  operations,
+}: {
+  operations: EntitySuggestionsOperations;
+}) {
+  const form = useForm({
+    defaultValues: { name: "Garage Shelf", imageOrder: "[]" },
+  });
+  return (
+    <FormProvider {...form}>
+      <FieldSuggestionProvider
+        entity="location"
+        mode="edit"
+        operations={operations}
+      >
+        <EntityPrimitiveFields entity="location" mode="edit" section="main" />
+      </FieldSuggestionProvider>
+    </FormProvider>
+  );
+}
+
 function RecipeNotesForm({
   onSubmit,
 }: {
@@ -174,7 +209,34 @@ describe("EntityPrimitiveFields", () => {
       screen.getAllByRole("textbox").map((el) => el.getAttribute("name")),
     ).toEqual(["name", "notes"]);
     expect(screen.queryByLabelText(/image order/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    // `type` is the only combobox: its manifest `control.kind: "select"`
+    // (added for `control.suggest`, see `04-location.entity.ts`) is the sole
+    // legitimate one in this section; `imageOrder`'s JSON must never surface
+    // as a second one.
+    expect(screen.getByRole("combobox", { name: "type" })).toBeVisible();
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+  });
+
+  it("renders a suggestion hint for a select field declared with control.suggest", async () => {
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async () => ({
+        suggestions: {
+          type: {
+            value: "room",
+            label: "Room",
+            detail: null,
+            confidence: "high",
+            reasoning: "",
+          },
+        },
+      })),
+    };
+    const harness = createBrowserTestHarness();
+    render(<LocationMainFieldsWithSuggestions operations={operations} />, {
+      wrapper: harness.wrapper,
+    });
+    expect(await screen.findByText("Suggested: Room")).toBeInTheDocument();
+    harness.dispose();
   });
 
   it("selects declared sections without duplicating controls or guessing specialized renderers", () => {
@@ -352,4 +414,91 @@ describe("EntityPrimitiveFields", () => {
       expect(submitted).toEqual({ [field]: expected });
     },
   );
+});
+
+/**
+ * Reactive to the *live form*, not the record (`presentation.edit.hiddenWhen`
+ * on `16-expense.entity.ts`, mirroring the old hand-rolled `ExpenseCaptureFields`'
+ * `hasProduct` toggle — see `editor-presentations.tsx`).
+ */
+type ExpenseCaptureTestValues = {
+  name: string;
+  lineKind: string;
+  cost: number | null;
+  date: string;
+  future: boolean;
+  projectId: string | null;
+  productId: string | null;
+  productQuantity: number | null;
+  vendor: string;
+  orderId: string;
+  trade: string;
+  costType: string;
+};
+
+function ExpenseCaptureFields() {
+  const form = useForm<ExpenseCaptureTestValues>({
+    defaultValues: {
+      name: "",
+      lineKind: "auto",
+      cost: null,
+      date: "",
+      future: false,
+      projectId: null,
+      productId: null,
+      productQuantity: null,
+      vendor: "",
+      orderId: "",
+      trade: "other",
+      costType: "materials",
+    },
+  });
+  return (
+    <FormProvider {...form}>
+      <button
+        type="button"
+        onClick={() =>
+          form.setValue("productId", "PRD-4K7M", { shouldDirty: true })
+        }
+      >
+        Set product
+      </button>
+      <EntityIntentFields entity="expense" intent="capture" />
+    </FormProvider>
+  );
+}
+
+describe("EntityIntentFields", () => {
+  let harness: ReturnType<typeof createBrowserTestHarness>;
+
+  beforeEach(() => {
+    harness = createBrowserTestHarness();
+  });
+
+  afterEach(() => {
+    harness.dispose();
+  });
+
+  it("hides lineKind once a product is picked and shows productQuantity instead (hiddenWhen)", () => {
+    render(<ExpenseCaptureFields />, { wrapper: harness.wrapper });
+    expect(screen.getByLabelText("Line kind")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Product quantity")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Set product" }));
+
+    expect(screen.queryByLabelText("Line kind")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Product quantity")).toBeInTheDocument();
+  });
+
+  it('offers lineKind\'s create-only "auto" sentinel on create but not on edit', () => {
+    // `"auto"` isn't a real `ExpenseLineKind` — offering it once a record is
+    // being edited would let a submit fail validation on a value only the
+    // create-only `buildData` strips (`definitions.ts`).
+    expect(
+      entitySelectOptionsFor("expense", "lineKind", "create"),
+    ).toContainEqual(expect.objectContaining({ value: "auto" }));
+    expect(
+      entitySelectOptionsFor("expense", "lineKind", "edit"),
+    ).not.toContainEqual(expect.objectContaining({ value: "auto" }));
+  });
 });

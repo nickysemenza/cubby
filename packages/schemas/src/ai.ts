@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
+import { shortcodeEntities } from "./entity-manifest";
 import { moneyNullable } from "./money";
 import {
   ingredientShortcode,
@@ -7,7 +8,6 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { locationAncestorOut, locationType } from "./location";
 import { productCategory } from "./product";
 import { foodSummaryWithLinkedProducts } from "./usda";
 
@@ -31,52 +31,9 @@ export const aiSelectionResultSchema = z.object({
 });
 export type AiSelectionResult = z.infer<typeof aiSelectionResultSchema>;
 
-export const categorySuggestionSchema = z.object({
-  category: productCategory,
-  confidence: confidence,
-  reasoning: z.string(),
-});
-
-export type CategorySuggestion = z.infer<typeof categorySuggestionSchema>;
-
-export const categorySuggestionInput = z.object({
-  productName: z.string().min(1),
-  manufacturer: z.string().min(1),
-});
-
-export const locationTypeSuggestionSchema = z.object({
-  type: locationType,
-  confidence: confidence,
-  reasoning: z.string(),
-});
-
-export type LocationTypeSuggestion = z.infer<
-  typeof locationTypeSuggestionSchema
->;
-
-export const locationTypeSuggestionInput = z.object({
-  locationName: z.string().min(1),
-});
-
 export const aiLocationIdInput = z.object({
   locationId: locationShortcode,
 });
-
-export const locationSuggestionInput = z.object({
-  productId: productShortcode,
-});
-
-export const locationSuggestionSchema = z.object({
-  location: z.object({
-    id: locationShortcode,
-    name: z.string(),
-    type: locationType.nullable(),
-    ancestors: z.array(locationAncestorOut),
-  }),
-  confidence: confidence,
-  reasoning: z.string(),
-});
-export type LocationSuggestion = z.infer<typeof locationSuggestionSchema>;
 
 export const locationDescriptionSchema = z.object({
   description: z.string(),
@@ -351,3 +308,40 @@ export const aiUsageSummaryRowSchema = z.object({
 
 export const aiUsageSummaryOut = z.array(aiUsageSummaryRowSchema);
 export type AiUsageSummaryRow = z.infer<typeof aiUsageSummaryRowSchema>;
+
+/**
+ * `ai.suggestFields` — one request per form, resolved server-side in
+ * dependency order (`server/ai/field-suggest/suggest-fields.ts`). `targets`
+ * and the keys of `basis` are bare manifest field keys of `entity` (not
+ * `entity.field` composites — `entity` already scopes them); `basis` values
+ * are shortcodes for reference fields and plain text otherwise, `null` when
+ * unset/unknown so the server can chain a sibling target's own resolution.
+ */
+export const fieldSuggestionsInput = z.object({
+  entity: z.enum(shortcodeEntities),
+  targets: z.array(z.string().min(1)).min(1),
+  basis: z.record(z.string(), z.string().nullable()),
+});
+export type FieldSuggestionsInput = z.infer<typeof fieldSuggestionsInput>;
+
+/**
+ * One target's answer: `value` is the raw field value (a shortcode for a
+ * reference target, the enum member for an enum target, the chosen string
+ * for a text-roster target), `label` is display text, and `detail` is
+ * secondary context (e.g. a location's ancestor path) when the spec has one.
+ * `null` means no suggestion could be made — an unusable basis or an empty
+ * roster — not an error.
+ */
+export const fieldSuggestionSchema = z.object({
+  value: z.string().nullable(),
+  label: z.string().nullable(),
+  detail: z.string().nullable(),
+  confidence,
+  reasoning: z.string(),
+});
+export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
+
+export const fieldSuggestionsOut = z.object({
+  suggestions: z.record(z.string(), fieldSuggestionSchema.nullable()),
+});
+export type FieldSuggestionsOut = z.infer<typeof fieldSuggestionsOut>;
