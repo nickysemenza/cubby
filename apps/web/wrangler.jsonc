@@ -216,6 +216,9 @@
     "R2_BUCKET_NAME": "foo",
     "R2_PUBLIC_URL": "https://media.nickysemenza.com",
     "R2_KEY_PREFIX": "cubby",
+    // OAuth client IDs are public identifiers. The paired client secret is a
+    // Worker secret and must never be committed.
+    "GOOGLE_CLIENT_ID": "183601884678-9rddrge4anct24rnbvqb5jm5q9fb8oqg.apps.googleusercontent.com",
     "USDA_API_URL": "https://usda-api.nicky.workers.dev/",
     "UPC_LOOKUP_API_URL": "https://upc-lookup.nicky.workers.dev"
   }
@@ -224,6 +227,6 @@
   //   R2_ACCESS_KEY_ID
   //   R2_SECRET_ACCESS_KEY
   //   AI_GATEWAY_API_KEY (optional)
-  //   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (optional; required for Gmail discovery)
+  //   GOOGLE_CLIENT_SECRET (optional; required for Gmail discovery)
   // Note: DATABASE_URL is provided by the Hyperdrive binding, not a secret.
 }

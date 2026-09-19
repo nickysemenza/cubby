@@ -129,6 +129,9 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - **Tooling:** Oxlint + Oxfmt (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PostgreSQL + IntegreSQL (authoritative contracts)
 - **Observability:** OpenTelemetry → Jaeger (dev only) · Sentry (the Apple app reports to its own `cubby-apple` project)
 
+The reconstructable provider inventory, resource identifiers, secret names,
+and drift-check procedure live in [docs/infrastructure.md](docs/infrastructure.md).
+
 ## 📦 Monorepo Layout
 
 ### Apps (deployed)
