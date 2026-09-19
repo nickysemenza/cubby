@@ -44,7 +44,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
 
     override init() {
         super.init()
-        thumbnails.totalCostLimit = 24 * 1024 * 1024
+        #if os(macOS)
+            thumbnails.totalCostLimit = 64 * 1024 * 1024
+        #else
+            thumbnails.totalCostLimit = 24 * 1024 * 1024
+        #endif
     }
 
     func activate(_ id: UUID, matches: PhotoMatchStore, client: CubbyClient) async {
@@ -141,7 +145,9 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 guard !Task.isCancelled, generation == token else { return }
                 // Visible cells may finish work after this scan's snapshot was taken.
                 if checked.contains(asset.localIdentifier) { continue }
-                do { pending[asset.localIdentifier] = try await query(asset) } catch is CancellationError {
+                do {
+                    pending[asset.localIdentifier] = try await query(asset).query
+                } catch is CancellationError {
                     return
                 } catch { /* Cloud-only assets remain unknown until explicitly selected. */  }
                 // Coalesce progress even when cloud-only assets cannot be fingerprinted.
@@ -149,6 +155,10 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                     scannedCount = completedCount + offset + 1
                 }
                 if pending.count >= 32 {
+                    // Mark checked before the match round trip so a cell's published state
+                    // reads "known: no match" as soon as it publishes, instead of the stale
+                    // "not checked" it would show if `checked` only updated afterward.
+                    matches.markChecked(pending.keys)
                     await matches.registerBatch(pending)
                     guard generation == token else { return }
                     checked.formUnion(pending.keys)
@@ -157,6 +167,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 await Task.yield()
             }
             if !pending.isEmpty {
+                matches.markChecked(pending.keys)
                 await matches.registerBatch(pending)
                 guard generation == token else { return }
                 checked.formUnion(pending.keys)
@@ -165,26 +176,47 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
 
-    func thumbnail(_ asset: PHAsset, matches: PhotoMatchStore) async throws -> CGImage {
+    /// `degraded` fires (possibly more than once) with a fast, low-resolution frame before the
+    /// final image resolves, so a cell can show it immediately instead of a blank tile.
+    func thumbnail(
+        _ asset: PHAsset, matches: PhotoMatchStore, degraded: ((CGImage) -> Void)? = nil
+    ) async throws -> CGImage {
         let token = generation
-        let image = try await loadImage(asset)
+        let image = try await loadImage(asset, degraded: degraded)
         guard generation == token else { throw CancellationError() }
         thumbnails.setObject(
             ImageBox(image), forKey: asset.localIdentifier as NSString,
             cost: image.bytesPerRow * image.height)
-        let query = try await query(asset)
-        await matches.register(id: asset.localIdentifier, query: query)
+        let hashed = try await query(asset)
+        // A cell re-executes this `.task` every time it reappears (e.g. scrolled back into
+        // view), but `query(_:)` only recomputes the hash the first time this asset's current
+        // modification date is seen. Re-registering an already-known hash re-triggers a full
+        // match recompute (and every cell's cell-state republish) for no new information, so
+        // skip it once the hash itself is nothing new.
+        if hashed.isNew {
+            matches.markChecked([asset.localIdentifier])
+            await matches.register(id: asset.localIdentifier, query: hashed.query)
+        }
         guard generation == token else { throw CancellationError() }
         checked.insert(asset.localIdentifier)
         return image
     }
 
-    private func loadImage(_ asset: PHAsset) async throws -> CGImage {
+    private func loadImage(_ asset: PHAsset, degraded: ((CGImage) -> Void)?) async throws -> CGImage {
         let id = asset.localIdentifier
         if let box = thumbnails.object(forKey: id as NSString) { return box.image }
         if let task = visibleWork[id] { return try await task.value }
         let token = generation
-        let task = Task { try await PhotoLibraryIO.shared.thumbnail(for: asset) }
+        let task = Task {
+            let stream = await PhotoLibraryIO.shared.thumbnails(for: asset)
+            var last: CGImage?
+            for try await frame in stream {
+                last = frame
+                degraded?(frame)
+            }
+            guard let last else { throw PhotoLibraryFailure.cloudUnavailable }
+            return last
+        }
         visibleWork[id] = task
         defer { if generation == token { visibleWork[id] = nil } }
         return try await task.value
@@ -225,26 +257,35 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
 
-    private func query(_ asset: PHAsset) async throws -> HashQuery {
+    /// `isNew` is false when `hash` came from the on-disk cache (this exact modification date
+    /// was already fingerprinted, in this session or an earlier one) rather than being computed
+    /// just now.
+    private func query(_ asset: PHAsset) async throws -> (query: HashQuery, isNew: Bool) {
         let token = generation
         let id = asset.localIdentifier
         let hash: PerceptualHash64
+        let isNew: Bool
         if let cached = await cache.hash(forLocalIdentifier: id, modificationDate: asset.modificationDate) {
             hash = cached
+            isNew = false
         } else {
             // Fingerprints use an independent final-quality, full-frame request. Grid cache
             // entries must never become canonical hashes if display sizing/cropping changes.
             let source = try await PhotoLibraryIO.shared.thumbnail(for: asset, network: false)
             hash = try await Task.detached(priority: .utility) { try PerceptualHash64.compute(source) }.value
             try await cache.store(hash, forLocalIdentifier: id, modificationDate: asset.modificationDate)
+            isNew = true
         }
         guard !Task.isCancelled, generation == token else { throw CancellationError() }
         let ratio =
             Double(max(asset.pixelWidth, asset.pixelHeight))
             / Double(max(1, min(asset.pixelWidth, asset.pixelHeight)))
-        return HashQuery(
-            perceptualHash: hash, aspectRatio: ratio,
-            sourceFingerprint: SourceFingerprint(hash: hash, aspectRatio: ratio))
+        return (
+            HashQuery(
+                perceptualHash: hash, aspectRatio: ratio,
+                sourceFingerprint: SourceFingerprint(hash: hash, aspectRatio: ratio)),
+            isNew
+        )
     }
 
     private func stopWork() {

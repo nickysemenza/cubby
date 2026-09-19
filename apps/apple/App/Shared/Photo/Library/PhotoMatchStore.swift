@@ -31,6 +31,12 @@ final class PhotoMatchStore {
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var accountGeneration = UUID()
     @ObservationIgnored private var observers: Set<UUID> = []
+    /// Mirrors `PhotoLibraryStore.checked` for the ids this store has been asked about, so
+    /// `PhotoGridCellState.derive` can tell "no match, confirmed" from "not looked at yet" without
+    /// this store reading the library's set directly (which would reintroduce a whole-collection
+    /// dependency for every cell).
+    @ObservationIgnored private var checkedIDs: Set<String> = []
+    @ObservationIgnored private var cellStateBoxes: [String: PhotoGridCellStateBox] = [:]
 
     var coverage: String {
         if error != nil {
@@ -77,6 +83,45 @@ final class PhotoMatchStore {
     func setDirectOwnerShortcodes(_ summaries: [String: [String]]) {
         directOwnersByImageID = summaries
         revision += 1
+        publishCellStates(for: cellStateBoxes.keys)
+    }
+
+    /// The per-id, `@Observable` box a grid cell reads instead of this store's dictionaries
+    /// directly. Marks `id` checked-so-far as "unknown" the first time it is asked about, then
+    /// `markChecked`/`registerBatch`/`refresh` refine it in place as real results arrive.
+    func cellStateBox(for id: String) -> PhotoGridCellStateBox {
+        if let box = cellStateBoxes[id] { return box }
+        let box = PhotoGridCellStateBox(state: computeCellState(for: id))
+        cellStateBoxes[id] = box
+        return box
+    }
+
+    /// Called by `PhotoLibraryStore` right before it hands a batch to `register`/`registerBatch`,
+    /// so the resulting cell state reads "known: no match" rather than "not checked" as soon as
+    /// that batch's match results publish, instead of lagging behind the library's own `checked`
+    /// set (which updates only after the async match round trip returns).
+    func markChecked(_ ids: some Sequence<String>) {
+        for id in ids where !checkedIDs.contains(id) {
+            checkedIDs.insert(id)
+            publishCellState(for: id)
+        }
+    }
+
+    private func computeCellState(for id: String) -> PhotoGridCellState {
+        PhotoGridCellState.derive(
+            storedCandidates: storedCandidates(for: id),
+            strongDirectOwnerShortcodes: strongDirectOwnerShortcodes(for: id),
+            hasKnownResult: hasKnownResult(for: id),
+            checked: checkedIDs.contains(id))
+    }
+
+    private func publishCellState(for id: String) {
+        guard let box = cellStateBoxes[id] else { return }
+        box.state = computeCellState(for: id)
+    }
+
+    private func publishCellStates(for ids: some Sequence<String>) {
+        for id in ids { publishCellState(for: id) }
     }
 
     func acquire(_ id: UUID) {
@@ -102,6 +147,7 @@ final class PhotoMatchStore {
         pendingQueries = [:]
         serverCandidates = [:]; batchCandidates = [:]; candidates = [:]
         directOwnersByImageID = [:]
+        checkedIDs = []; cellStateBoxes = [:]
         entriesRevision += 1
         hasIndex = false; isLoading = false; isRepairing = false
         totalCount = 0; remainingCount = 0; repairFailures = 0; error = nil
@@ -328,6 +374,7 @@ final class PhotoMatchStore {
         }
         serverCandidates = nextServerCandidates
         candidates = nextCandidates
+        publishCellStates(for: querySnapshot.keys)
     }
 
     nonisolated private static func match(

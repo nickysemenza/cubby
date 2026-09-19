@@ -16,6 +16,47 @@ struct PhotoMatchStoreTests {
         #expect(PhotoGridBadge.accessibilityDescription(for: ["LOC-4K7M"]) == "Owned by LOC-4K7M")
     }
 
+    // MARK: - PhotoGridCellState derivation
+
+    @Test func cellStateRepresentsAStrongCandidateWithItsOwnerBadge() {
+        let candidate = DedupCandidate(
+            id: ImageCode("IMG-1"), basis: .content, confidence: .strong, distance: 0)
+        let state = PhotoGridCellState.derive(
+            storedCandidates: [candidate], strongDirectOwnerShortcodes: ["PRJ-2"], hasKnownResult: true,
+            checked: true)
+        #expect(state.represented)
+        #expect(!state.possibleMatch)
+        #expect(state.known)
+        #expect(state.badgeText == "PRJ-2")
+        #expect(state.accessibilityStatus == "Owned by PRJ-2")
+    }
+
+    @Test func cellStateIsAPossibleMatchWhenNoCandidateIsStrong() {
+        let candidate = DedupCandidate(
+            id: ImageCode("IMG-1"), basis: .content, confidence: .possible, distance: 3)
+        let state = PhotoGridCellState.derive(
+            storedCandidates: [candidate], strongDirectOwnerShortcodes: [], hasKnownResult: true,
+            checked: true)
+        #expect(!state.represented)
+        #expect(state.possibleMatch)
+        #expect(state.badgeText == nil)
+        #expect(state.accessibilityStatus == "Possible Cubby match")
+    }
+
+    @Test func cellStateWithNoCandidatesReadsKnownOrUncheckedFromChecked() {
+        let known = PhotoGridCellState.derive(
+            storedCandidates: [], strongDirectOwnerShortcodes: [], hasKnownResult: true, checked: true)
+        #expect(!known.represented)
+        #expect(!known.possibleMatch)
+        #expect(known.known)
+        #expect(known.accessibilityStatus == "No known match")
+
+        let unchecked = PhotoGridCellState.derive(
+            storedCandidates: [], strongDirectOwnerShortcodes: [], hasKnownResult: true, checked: false)
+        #expect(!unchecked.known)
+        #expect(unchecked.accessibilityStatus == "Not checked")
+    }
+
     @Test func ownerBadgeRequiresAStrongDirectImageMatch() async throws {
         let possibleClient = try client(
             index: """
@@ -182,6 +223,42 @@ struct PhotoMatchStoreTests {
             [item], client: client, preparedQueries: [item.id: query], refreshIndex: true)
 
         #expect(store.hasKnownResult(for: item.id))
+    }
+
+    /// A cell reads `cellStateBox(for:).state` instead of `candidates`/`directOwnersByImageID`
+    /// directly so it re-renders only on its own status change; this pins that a `registerBatch`
+    /// touching one id republishes only that id's box, leaving an already-settled, untouched
+    /// box's reference and value alone.
+    @Test func cellStatePublicationTouchesOnlyTheIdsABatchUpdates() async throws {
+        let client = try client(
+            index: """
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":null,"width":2,"height":2,"directOwnerShortcodes":["PRJ-2"]}],"repair":[]}
+                """)
+        let store = PhotoMatchStore()
+        defer { store.reset() }
+        await store.refresh(client: client)
+        let matchingQuery = try await selection(hash: "0123456789abcdef").query()
+        let noMatchQuery = try await selection(hash: "fedcba9876543210").query()
+
+        // Settle "untouched" first: checked, with a known (empty) result.
+        store.markChecked(["untouched"])
+        await store.registerBatch(["untouched": noMatchQuery])
+        let untouchedBox = store.cellStateBox(for: "untouched")
+        let untouchedState = untouchedBox.state
+        #expect(untouchedState.known)
+        #expect(!untouchedState.represented)
+
+        let touchedBox = store.cellStateBox(for: "touched")
+        #expect(!touchedBox.state.represented)
+
+        store.markChecked(["touched"])
+        await store.registerBatch(["touched": matchingQuery])
+
+        #expect(store.cellStateBox(for: "touched") === touchedBox)
+        #expect(touchedBox.state.represented)
+        #expect(touchedBox.state.badgeText == "PRJ-2")
+        #expect(store.cellStateBox(for: "untouched") === untouchedBox)
+        #expect(untouchedBox.state == untouchedState)
     }
 
     private func client(index: String) throws -> CubbyClient {
