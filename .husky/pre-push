@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
 set -e
 
+# Fast local feedback; GitHub Actions runs database, build, browser, Rust, and
+# Apple validation before a PR can merge.
 pnpm verify:push

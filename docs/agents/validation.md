@@ -91,42 +91,29 @@ Durable Object tests (`workers-tests`). Dependency deduplication
 workspace file, patch, or lockfile change, or let hosted `pnpm run check:all`
 catch it.
 
-Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm verify:push`: it
-requires a clean tree before and after one sequential `nx affected` graph over
-`generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check`,
-explicitly comparing `--base=origin/main --head=HEAD`, with `--nxBail` and
-static output. Refresh the local `origin/main` ref before pushing when needed;
-it must be the intended comparison point. Nx project relationships determine
-affected selection and prerequisite ordering, while target `inputs` and
-`dependentTasksOutputFiles` determine cache reuse. A web-only push can therefore
-skip the `rust` and `apple-check` targets, while Rust changes select web through
-its declared `recipebridge` relationship. The target-list order is not an
-execution-order guarantee. There is no separate trailing `pnpm check`, and the push gate does
-not escalate to the full suite. Hooks are mandatory: agents never use
-`--no-verify` to bypass a failure. Pre-commit checks the **whole working tree**,
-not the index, so a commit fails while any concurrent agent's files are mid-edit
-— stage early and commit between agent waves. Regenerated files (`routeTree.gen.ts`
-and friends) are fine to commit; do not revert generated churn. Pre-commit does
-not `cargo fmt` recipebridge; the pre-push gate's `rust` target does, so check
-Rust formatting before pushing.
+Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm verify:push`: a
+clean-tree affected graph over `generate,types,lint,format,knip,test`, explicitly
+comparing `origin/main` to `HEAD`. It deliberately excludes database, Worker
+build, browser, Rust, and Apple work; GitHub Actions is the required full
+verification. Refresh the local base before pushing when needed. Hooks are
+mandatory: agents never use `--no-verify` to bypass them.
 
-Local verification gates merging: run `pnpm verify:local` on the clean final
+`pnpm verify:local` remains an optional full clean-tree diagnostic on a final
 commit (`nx run-many -t
 generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`).
 The reusable clean-tree check rejects staged, unstaged, and untracked files
-before the graph and confirms the tree remains clean afterward. This is the
-merge gate. Unlike the deleted `ci-scope.ts`, there is no separate "high-risk"
-classification that escalates it — `verify:local` always runs the full target
+before the graph and confirms the tree remains clean afterward. Unlike the
+deleted `ci-scope.ts`, there is no separate "high-risk" classification that
+escalates it — `verify:local` always runs the full target
 list. Selected cached targets may replay, but E2E is uncached and always runs;
 its `build-cf` dependency ensures the served bundle is current and may itself
 reuse a cache entry. The textual target-list order is not a dependency guarantee;
 Nx's graph supplies WASM-before-consumer and build-before-E2E ordering.
 `pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true` to force every target to
 actually run, which is what a high-risk or pre-release change should use.
-Hosted full verification and coverage are explicitly dispatched when needed
-(see [CI](../ci.md)). Main builds and deploys affected Workers automatically
-without repeating tests. If hosted verification is requested, observe its exact
-final commit result before merge. `claude-review` remains an opt-in PR label;
+GitHub Actions runs the complete verification matrix for every pull request and
+`main` push (see [CI](../ci.md)). Observe the required checks on the exact final
+PR head before merge. `claude-review` remains an opt-in internal-PR label;
 previews are manually dispatched.
 
 These changes reduce duplicate work and stale generated-artifact cache paths,

@@ -1,6 +1,6 @@
 name: Deploy
 
-# Local verification gates merging. This workflow only builds and deploys main.
+# Required PR CI gates merging. This workflow builds and deploys current main.
 on:
   push:
     branches: [main]

@@ -129,9 +129,9 @@ generated shape.
   `scripts/apple-check.sh`, the `apple` Nx target on `apps/apple/project.json`) gates
   formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
-  The `apple` target is affected-scoped like every other Nx target: it runs from the pre-push
-  gate (`pnpm verify:push`, via `nx affected -t … apple`) when `apps/apple/` or `cubby-ffi/`
-  changed, and unconditionally from `pnpm verify:local(:full)`.
+  `pnpm verify:local(:full)` runs the `apple` target locally when a full native
+  diagnostic is needed. GitHub Actions runs `pnpm apple check` on macOS for
+  every PR and `main` push.
 
 ### Universal links
 
