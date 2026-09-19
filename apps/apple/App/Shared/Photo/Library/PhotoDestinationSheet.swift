@@ -5,6 +5,8 @@ import SwiftUI
 struct PhotoDestinationSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.developerOverlays) private var developerOverlays
     let manifest: PhotoImportManifest
     let onDone: ([String]) -> Void
     @State private var path: [PhotoImportNavigationDestination] = []
@@ -13,6 +15,9 @@ struct PhotoDestinationSheet: View {
     @State private var relatedContext: PhotoRelatedContext?
     @State private var createSelfContext: PhotoCreateSelfContext?
     @State private var createTargetContext: PhotoCreateTargetContext?
+    /// A2: reverse-geocodes each group's representative photo so its row can add "· photo ·
+    /// <city>" evidence once known.
+    @State private var provenance = PhotoCaptureProvenance()
 
     /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
     /// items fall back to the window toolbar there.
@@ -26,113 +31,26 @@ struct PhotoDestinationSheet: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack(alignment: .leading, spacing: 0) {
-                PhotoImportHero(
-                    items: manifest.items,
-                    selectedIDs: manifest.selectedIDs,
-                    focusedID: Binding(
-                        get: { manifest.focusedItemID ?? manifest.items.first?.id ?? "" },
-                        set: { manifest.focusedItemID = $0 }),
-                    onToggle: manifest.toggle
-                )
-                analysisStatus
-                destinationAction
-                List { manifestListContent }
-            }
-            .navigationTitle("Review photos")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .navigationSubtitle("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
-            .toolbar { reviewToolbar }
-            .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
-            .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
-                switch destination {
-                case .sourceTypes:
-                    List {
-                        PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
-                        PhotoAnalysisDisclosure(manifest: manifest)
-                        Section("Choose what is in the photo") {
-                            ForEach(manifest.sourceTypeOptions) { type in
-                                Button {
-                                    path.append(.sourceType(type.source))
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: entitySymbol(for: type.source))
-                                            .frame(width: 24)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(type.title)
-                                            Text(type.outcomeDescription)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                }
-                                .accessibilityIdentifier("photos.source-type.\(type.source.rawValue)")
-                            }
-                        }
-                    }
-                    .navigationTitle("Assign selected…")
-                    #if os(iOS)
-                        .navigationBarTitleDisplayMode(.inline)
-                    #endif
-                case .sourceType(let source):
-                    if let type = manifest.sourceTypeOptions.first(where: {
-                        $0.source == source
-                    }) {
-                        PhotoEntityChooser(
-                            key: source, captureDates: manifest.selectedItems.map(\.capturedAt),
-                            heroItems: manifest.items, importManifest: manifest,
-                            onCreateNew: handleCreateNew
-                        ) { row in
-                            chooseSourceRecord(type, row: row)
-                        }
-                    } else {
-                        ContentUnavailableView(
-                            "Destination unavailable",
-                            systemImage: "exclamationmark.triangle",
-                            description: Text(
-                                "Cubby couldn't resolve the photo routes for this type."
-                            ))
-                    }
-                case .routePicker(let source, let row):
-                    List {
-                        PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
-                        PhotoAnalysisDisclosure(manifest: manifest)
-                        if let type = manifest.sourceTypeOptions.first(where: {
-                            $0.source == source
-                        }) {
-                            Section(
-                                "Where should this \(EntityCatalog[source].singular) store photos?"
-                            ) {
-                                ForEach(type.options) { option in
-                                    Button(option.menuTitle(for: row)) {
-                                        chooseRoute(option, source: row)
-                                    }
-                                    .accessibilityIdentifier("photos.route.\(option.id)")
-                                }
-                            }
-                        } else {
-                            ContentUnavailableView(
-                                "Destination unavailable",
-                                systemImage: "exclamationmark.triangle",
-                                description: Text(
-                                    "Cubby couldn't resolve the photo routes for \(row.id)."
-                                ))
-                        }
-                    }
-                    .navigationTitle("Choose storage")
-                    #if os(iOS)
-                        .navigationBarTitleDisplayMode(.inline)
-                    #endif
+            reviewLayout
+                .navigationTitle("Review photos")
+                #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .navigationSubtitle("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+                .toolbar { reviewToolbar }
+                .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
+                .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
+                    destinationScreen(destination)
                 }
-            }
         }
         .nativeSheet(.photo)
         .interactiveDismissDisabled(manifest.isCommitting)
         .task {
             manifest.startAnalysis(client: appModel.client, matches: appModel.photoMatches)
         }
+        // A1: a pushed chooser/editor defers the manifest's focus/selection advance until the
+        // pop back to the review list (see `PhotoImportManifest.isNavigating`).
+        .onChange(of: path) { _, newPath in manifest.isNavigating = !newPath.isEmpty }
         .confirmationDialog(
             "Replace the existing image?", item: $replacement,
             titleVisibility: .visible
@@ -150,8 +68,8 @@ struct PhotoDestinationSheet: View {
         .sheet(item: $createContext) { context in
             PhotoRelatedCreateEditor(
                 mode: .createRelated(option: context.option, source: context.source),
-                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
-                heroItems: manifest.items,
+                captureDate: manifest.scopedCaptureDate,
+                heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, sourceRow, body in
                 manifest.stageCreate(option: option, source: sourceRow, body: body)
@@ -162,8 +80,8 @@ struct PhotoDestinationSheet: View {
         .sheet(item: $createSelfContext) { context in
             PhotoRelatedCreateEditor(
                 mode: .createSelf(option: context.option),
-                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
-                heroItems: manifest.items,
+                captureDate: manifest.scopedCaptureDate,
+                heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, _, body in
                 manifest.stageCreate(option: option, source: nil, body: body)
@@ -176,8 +94,8 @@ struct PhotoDestinationSheet: View {
                 mode: .createTarget(
                     descriptor: EntityCatalog[context.type], candidates: context.candidates,
                     fallback: context.fallback),
-                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
-                heroItems: manifest.items,
+                captureDate: manifest.scopedCaptureDate,
+                heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, sourceRow, body in
                 manifest.stageCreate(option: option, source: sourceRow, body: body)
@@ -186,12 +104,12 @@ struct PhotoDestinationSheet: View {
             }
         }
         .sheet(item: $relatedContext) { context in
-            let captureDate = manifest.selectedItems.compactMap(\.capturedAt).min()
+            let captureDate = manifest.scopedCaptureDate
             PhotoRelatedDestinationChooser(
                 context: context,
                 createOption: manifest.createAlternative(for: context.option),
                 captureDate: captureDate,
-                heroItems: manifest.items,
+                heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { row in
                 manifest.moveSelected(
@@ -244,11 +162,14 @@ struct PhotoDestinationSheet: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.title).font(.headline)
-                if let evidence = group.evidence {
+                if let evidence = groupEvidence(group) {
                     Text(evidence).font(.caption).foregroundStyle(.secondary)
                 }
                 if showsAnalysisCaption, let caption = analysisCompleteCaption {
                     Text(caption).font(.caption).foregroundStyle(.secondary)
+                }
+                if developerOverlays {
+                    DevOverlayText(group.decision.reasonLabel)
                 }
             }
             Spacer()
@@ -260,11 +181,30 @@ struct PhotoDestinationSheet: View {
                 .accessibilityIdentifier("photos.manifest.changeDestination.\(group.id)")
             }
         }
+        .task(id: group.photoIDs.first) {
+            guard let id = group.photoIDs.first,
+                let item = manifest.items.first(where: { $0.id == id })
+            else { return }
+            await provenance.resolve(id: item.id, location: item.location)
+        }
+    }
+
+    /// `group.evidence` with "· photo · <city>" appended once the group's representative photo's
+    /// location has resolved (A2) — never blocks or reflows the row while it's still pending.
+    private func groupEvidence(_ group: PhotoImportGroup) -> String? {
+        let city = group.photoIDs.first
+            .flatMap { id in manifest.items.first(where: { $0.id == id }) }
+            .flatMap { provenance.result(for: $0.id)?.city }
+        let parts = [group.evidence, city.map { "photo · \($0)" }].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     @ToolbarContentBuilder
     private var reviewToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+        if developerOverlays {
+            ToolbarItem { CopyDiagnosticsButton { reviewDiagnostics } }
+        }
         if manifest.canUndo {
             ToolbarItem(placement: .secondaryAction) {
                 Button("Undo", systemImage: "arrow.uturn.backward") {
@@ -274,13 +214,10 @@ struct PhotoDestinationSheet: View {
                 .accessibilityIdentifier("photos.manifest.undo")
             }
         }
-        ToolbarItem(placement: .primaryAction) {
-            Button(
-                manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all"
-            ) {
-                manifest.toggleSelectAll()
-            }
-            .accessibilityIdentifier("photos.manifest.selectAll")
+        // At regular width the button sits under the filmstrip in the side column (see
+        // `reviewLayout`); in the toolbar it would land beside Cancel in macOS's bottom bar.
+        if horizontalSizeClass != .regular {
+            ToolbarItem(placement: .primaryAction) { selectAllButton }
         }
         ToolbarItemGroup(placement: Self.commitBarPlacement) {
             Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
@@ -309,6 +246,158 @@ struct PhotoDestinationSheet: View {
                 .accessibilityIdentifier("photos.manifest.add")
             }
         }
+    }
+
+    /// Pushed screens for the review flow. Kept out of `body` so its expression stays under the
+    /// 200ms type-check budget.
+    @ViewBuilder
+    private func destinationScreen(_ destination: PhotoImportNavigationDestination) -> some View {
+        switch destination {
+        case .sourceTypes:
+            List {
+                PhotoImportHero(items: manifest.scopedHeroItems)
+                PhotoAnalysisDisclosure(manifest: manifest)
+                Section("Choose what is in the photo") {
+                    ForEach(manifest.sourceTypeOptions) { type in
+                        Button {
+                            path.append(.sourceType(type.source))
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: entitySymbol(for: type.source))
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(type.title)
+                                    Text(type.outcomeDescription)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("photos.source-type.\(type.source.rawValue)")
+                    }
+                }
+            }
+            .navigationTitle("Assign selected…")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+        case .sourceType(let source):
+            if let type = manifest.sourceTypeOptions.first(where: {
+                $0.source == source
+            }) {
+                PhotoEntityChooser(
+                    key: source, captureDates: manifest.selectedItems.map(\.capturedAt),
+                    heroItems: manifest.scopedHeroItems, importManifest: manifest,
+                    onCreateNew: handleCreateNew
+                ) { row in
+                    chooseSourceRecord(type, row: row)
+                }
+            } else {
+                ContentUnavailableView(
+                    "Destination unavailable",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(
+                        "Cubby couldn't resolve the photo routes for this type."
+                    ))
+            }
+        case .routePicker(let source, let row):
+            List {
+                PhotoImportHero(items: manifest.scopedHeroItems)
+                PhotoAnalysisDisclosure(manifest: manifest)
+                if let type = manifest.sourceTypeOptions.first(where: {
+                    $0.source == source
+                }) {
+                    Section(
+                        "Where should this \(EntityCatalog[source].singular) store photos?"
+                    ) {
+                        ForEach(type.options) { option in
+                            Button(option.menuTitle(for: row)) {
+                                chooseRoute(option, source: row)
+                            }
+                            .accessibilityIdentifier("photos.route.\(option.id)")
+                        }
+                    }
+                } else {
+                    ContentUnavailableView(
+                        "Destination unavailable",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(
+                            "Cubby couldn't resolve the photo routes for \(row.id)."
+                        ))
+                }
+            }
+            .navigationTitle("Choose storage")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+        }
+    }
+
+    /// Phones stack hero → status → list. At regular width (iPad, macOS sheet) the hero, filmstrip
+    /// and assign action form a fixed side column so the assignment list gets the full height —
+    /// stacked, a 960pt-wide Mac sheet left the list ~40% of the height with half the width empty.
+    @ViewBuilder private var reviewLayout: some View {
+        if horizontalSizeClass == .regular {
+            // A3: a `GeometryReader` at the sheet root gives the column a share of the actual
+            // sheet width instead of a fixed 400pt that was cramped once the Mac sheet started
+            // tracking the (larger) window; `.padding()` keeps the title clear of the top safe
+            // area and the hero clear of the divider, both of which used to run edge-to-edge.
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    sideColumn(width: max(400, geometry.size.width * 0.36))
+                    Divider()
+                    List { manifestListContent }
+                }
+            }
+            #if os(macOS)
+                .frame(minWidth: 960, minHeight: 620)
+            #endif
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                hero(heightCap: (220, 0.22))
+                analysisStatus
+                destinationAction
+                List { manifestListContent }
+            }
+        }
+    }
+
+    /// The regular-width hero/filmstrip/assign-action column, extracted so `reviewLayout` stays
+    /// under the project's type-check budget (apps/apple/AGENTS.md).
+    private func sideColumn(width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            hero(heightCap: (480, 0.5))
+            HStack {
+                Text("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                selectAllButton.buttonStyle(.borderless)
+            }
+            analysisStatus
+            destinationAction
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .frame(width: width)
+    }
+
+    private var selectAllButton: some View {
+        Button(manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all") {
+            manifest.toggleSelectAll()
+        }
+        .accessibilityIdentifier("photos.manifest.selectAll")
+    }
+
+    private func hero(heightCap: (points: CGFloat, fraction: CGFloat)) -> some View {
+        PhotoImportHero(
+            items: manifest.items,
+            selectedIDs: manifest.selectedIDs,
+            focusedID: Binding(
+                get: { manifest.focusedItemID ?? manifest.items.first?.id ?? "" },
+                set: { manifest.focusedItemID = $0 }),
+            heightCap: heightCap,
+            onToggle: manifest.toggle
+        )
     }
 
     @ViewBuilder
@@ -468,7 +557,9 @@ struct PhotoDestinationSheet: View {
             relatedContext = PhotoRelatedContext(option: option, source: source)
             path.removeAll()
         case .`self`:
-            manifest.moveSelected(to: option, row: source)
+            // Reached only via the interactive route picker (a `.prompt` route, or an ambiguous
+            // fallback) — `.prompted`, distinct from a chooser row's plain `.user` pick.
+            manifest.moveSelected(to: option, row: source, decision: .prompted)
             path.removeAll()
         case .createSelf:
             // Unreachable: the route picker's menu is `type.options`, which excludes `createSelf`
@@ -483,7 +574,7 @@ struct PhotoDestinationSheet: View {
     /// record and no candidate routes to choose between.
     private func stageOrOpenCreateSelfEditor(_ option: PhotoDestinationOption) {
         guard option.route.enabled else { return }
-        let captureDate = manifest.selectedItems.compactMap(\.capturedAt).min()
+        let captureDate = manifest.scopedCaptureDate
         if PhotoRelatedCreateEditor.hasOnlyOptionalFields(
             option: option, source: nil, captureDate: captureDate)
         {
@@ -530,6 +621,18 @@ struct PhotoDestinationSheet: View {
         }
     }
 
+    /// Developer overlays layer 7: every group's decision reason plus each unassigned photo's
+    /// best-scoring evidence breakdown.
+    private var reviewDiagnostics: PhotoReviewDiagnostics {
+        PhotoReviewDiagnostics(
+            groups: manifest.groups.map {
+                .init(title: $0.title, photoCount: $0.photoIDs.count, decision: $0.decision.reasonLabel)
+            },
+            needsDestination: manifest.needsDestination.map { id in
+                .init(photoID: id, suggestion: manifest.suggestions[id], score: manifest.suggestionScores[id])
+            })
+    }
+
     private func finish(with committedIDs: [String]) async {
         onDone(committedIDs)
         dismiss()
@@ -538,6 +641,7 @@ struct PhotoDestinationSheet: View {
 }
 
 private struct PhotoImportGroupRows: View {
+    @Environment(\.developerOverlays) private var developerOverlays
     let ids: [String]
     @Bindable var manifest: PhotoImportManifest
     /// Pulls a single wrongly grouped photo out for a fresh source-type pick without undoing the
@@ -565,6 +669,9 @@ private struct PhotoImportGroupRows: View {
                                 Text("No confident match")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                            }
+                            if developerOverlays, let score = manifest.suggestionScores[id] {
+                                DevOverlayText(Self.scoreCaption(score))
                             }
                             if let candidates = manifest.duplicateCandidates[id] {
                                 Menu {
@@ -626,6 +733,35 @@ private struct PhotoImportGroupRows: View {
         manifest.focusedItemID = id
         onChangeDestination()
     }
+
+    /// "text 0.00 · date 0.88 · visual 1.00 · classifier 0.08 → 0.96" (developer overlays layer 2).
+    /// `Score.identity` is shown as "visual": it is set from an authoritative-owner or visual-match
+    /// hit, never from text/date/classifier evidence — see `PhotoEvidenceScorer.score`.
+    private static func scoreCaption(_ score: PhotoEvidenceScorer.Score) -> String {
+        let parts = [
+            "text \(String(format: "%.2f", score.text))",
+            "date \(String(format: "%.2f", score.date))",
+            "visual \(String(format: "%.2f", score.identity))",
+            "classifier \(String(format: "%.2f", score.classifier))",
+        ]
+        return "\(parts.joined(separator: " · ")) → \(String(format: "%.2f", score.combined))"
+    }
+}
+
+/// Developer overlays layer 7's "Copy diagnostics" payload for the review sheet.
+private struct PhotoReviewDiagnostics: Encodable {
+    struct Group: Encodable {
+        let title: String
+        let photoCount: Int
+        let decision: String
+    }
+    struct Suggestion: Encodable {
+        let photoID: String
+        let suggestion: String?
+        let score: PhotoEvidenceScorer.Score?
+    }
+    let groups: [Group]
+    let needsDestination: [Suggestion]
 }
 
 private struct ReplacementConfirmation: Identifiable {
@@ -651,4 +787,9 @@ struct PhotoEntitySearchModifier: ViewModifier {
 
 #Preview(traits: .modifier(SignedInPreview())) {
     PhotoDestinationSheet(manifest: PhotoImportManifest(items: []), onDone: { _ in })
+}
+
+#Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
+    PhotoDestinationSheet(manifest: PhotoImportManifest(items: []), onDone: { _ in })
+        .environment(\.developerOverlays, true)
 }

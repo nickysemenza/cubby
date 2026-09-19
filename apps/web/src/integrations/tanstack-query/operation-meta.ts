@@ -28,6 +28,12 @@ export interface CubbyOperationMeta extends Record<string, unknown> {
   /** Named descriptor policy and the resolved timings copied onto query options. */
   cacheProfile?: OperationCacheProfile;
   freshness?: OperationFreshnessPolicy;
+  /**
+   * Suppress the global error toast for this query. Suggestion queries are
+   * advisory (a hint, never a value the user asked for) — an unconfigured AI
+   * gateway must not toast on every dialog a suggestable field appears in.
+   */
+  silentErrors?: boolean;
 }
 
 export type OperationCacheTag = readonly [string, ...string[]];

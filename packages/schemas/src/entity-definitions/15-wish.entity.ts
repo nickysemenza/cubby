@@ -286,10 +286,11 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "home",
         candidateFields: ["name", "notes"],
         temporalFields: [],
         lifecycleFilters: [{ field: "acquired", equals: false }],
-        signals: { ocrFields: ["name", "notes"], classifierLabels: ["wish"] },
+        signals: { ocrFields: ["name", "notes"], classifierLabels: ["gift"] },
         abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
       },
     },

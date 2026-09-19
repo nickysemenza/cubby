@@ -1,6 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   type LocationShortcode,
   type ProductShortcode,
@@ -28,6 +29,10 @@ import {
   EntityActionRowMenuItems,
   type EntityActionSubject,
 } from "~/app/_components/actions/entity-actions";
+import {
+  fieldSuggestionBasisFromRecord,
+  suggestTargetsFor,
+} from "~/app/_components/ai/field-suggestion";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { renderScalarValue } from "~/components/common/scalar-value";
 import { Row } from "~/components/layout";
@@ -1485,6 +1490,11 @@ interface SingleEntityEditableConfig<T> {
    * record. Defaults to editable.
    */
   isEditable?: (row: T) => boolean;
+  /** When the owning field's `control.suggest` exists — the row's own entity
+   * and the manifest field key this column edits (not the referenced
+   * `TEntity`). Basis is built from `row` per cell, queried only while its
+   * editor is open. */
+  suggest?: { entity: ShortcodeEntity; field: string };
 }
 
 export function createSingleEntityInlineLinkColumn<
@@ -1557,6 +1567,18 @@ export function createSingleEntityInlineLinkColumn<
         if (!SearchProvider) return <NoneValue />;
         const row = info.row.original;
         const current = item ? buildSingleEntityItem(entity, item) : null;
+        const suggestConfig = editable.suggest;
+        const suggest = suggestConfig
+          ? {
+              entity: suggestConfig.entity,
+              targets: [suggestConfig.field],
+              basis: fieldSuggestionBasisFromRecord(
+                suggestConfig.entity,
+                suggestTargetsFor(suggestConfig.entity, [suggestConfig.field]),
+                row,
+              ),
+            }
+          : undefined;
         return (
           <EditableEntityCell
             value={current}
@@ -1570,6 +1592,7 @@ export function createSingleEntityInlineLinkColumn<
             }
             onSave={(newId) => editable.onSave(newId, row)}
             clipboard={cellData ? specFromCellData(cellData, row) : undefined}
+            suggest={suggest}
             SearchProvider={SearchProvider}
             renderValue={(v) => {
               if (!v) return <NoneValue />;
@@ -1852,6 +1875,10 @@ export function createFilterableSelectColumn<
     editable?: {
       parseValue: (value: string | null) => T[K];
       onSave: (newValue: T[K], row: T) => Promise<void>;
+      /** When the column's `control.suggest` exists — the row's entity and
+       * the manifest field key this column edits. Basis is built from `row`
+       * per cell, queried only while its editor is open. */
+      suggest?: { entity: ShortcodeEntity; field: string };
     };
   },
 ) {
@@ -1887,23 +1914,40 @@ export function createFilterableSelectColumn<
       cellData,
       renderValue: renderCell,
       renderEditable: editable
-        ? (value, row, clipboard) => (
-            <EditableCell
-              value={value ?? null}
-              onSave={(nextValue) =>
-                editable.onSave(editable.parseValue(nextValue), row)
-              }
-              clipboard={clipboard}
-              config={{
-                type: "select",
-                options: options.selectOptions,
-                placeholder: options.placeholder,
-              }}
-              renderValue={(nextValue) =>
-                renderCell(editable.parseValue(nextValue))
-              }
-            />
-          )
+        ? (value, row, clipboard) => {
+            const suggestConfig = editable.suggest;
+            const suggest = suggestConfig
+              ? {
+                  entity: suggestConfig.entity,
+                  targets: [suggestConfig.field],
+                  basis: fieldSuggestionBasisFromRecord(
+                    suggestConfig.entity,
+                    suggestTargetsFor(suggestConfig.entity, [
+                      suggestConfig.field,
+                    ]),
+                    row,
+                  ),
+                }
+              : undefined;
+            return (
+              <EditableCell
+                value={value ?? null}
+                onSave={(nextValue) =>
+                  editable.onSave(editable.parseValue(nextValue), row)
+                }
+                clipboard={clipboard}
+                config={{
+                  type: "select",
+                  options: options.selectOptions,
+                  placeholder: options.placeholder,
+                  suggest,
+                }}
+                renderValue={(nextValue) =>
+                  renderCell(editable.parseValue(nextValue))
+                }
+              />
+            );
+          }
         : undefined,
     },
   );
@@ -2208,6 +2252,10 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     filterConfig?: FilterConfig;
     editable?: {
       onSave: (newProjectId: ProjectShortcode | null, row: T) => Promise<void>;
+      /** When the owning field's `control.suggest` exists — the row's own
+       * entity and the manifest field key this column edits (`T` is shared
+       * across task/expense, so the caller names which). */
+      suggest?: { entity: ShortcodeEntity; field: string };
     };
   },
 ) {
@@ -2248,6 +2296,18 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
         const current: ComboboxItem<ProjectShortcode> | null =
           id && name ? { id: parseShortcodeFor("project", id), name } : null;
         const row = info.row.original;
+        const suggestConfig = editable.suggest;
+        const suggest = suggestConfig
+          ? {
+              entity: suggestConfig.entity,
+              targets: [suggestConfig.field],
+              basis: fieldSuggestionBasisFromRecord(
+                suggestConfig.entity,
+                suggestTargetsFor(suggestConfig.entity, [suggestConfig.field]),
+                row,
+              ),
+            }
+          : undefined;
         return (
           <EditableEntityCell
             value={current}
@@ -2256,6 +2316,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
             trigger="pencil"
             onSave={(newId) => editable.onSave(newId, row)}
             clipboard={specFromCellData(cellData, row)}
+            suggest={suggest}
             SearchProvider={(props) => (
               <WithEntitySearch entity="project" {...props} />
             )}

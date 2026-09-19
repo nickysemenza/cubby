@@ -36,7 +36,7 @@ struct PhotoDestinationOptionTests {
     }
 
     @Test func everyMoveMenuRouteHasADistinctTitle() throws {
-        let manifest = PhotoImportManifest(items: [])
+        let manifest = makeManifest(items: [])
         let titles = manifest.destinationOptions.map(\.menuTitle)
 
         #expect(Set(titles).count == titles.count)
@@ -45,7 +45,7 @@ struct PhotoDestinationOptionTests {
     }
 
     @Test func existingRelatedRouteFindsItsManifestDeclaredCreateAlternative() throws {
-        let manifest = PhotoImportManifest(items: [])
+        let manifest = makeManifest(items: [])
         let existing = try #require(
             manifest.destinationOptions.first { $0.id == "planting-garden-entry" })
 
@@ -53,7 +53,7 @@ struct PhotoDestinationOptionTests {
     }
 
     @Test func sourceTypesExplainTheManifestPrimaryOutcome() throws {
-        let manifest = PhotoImportManifest(items: [])
+        let manifest = makeManifest(items: [])
         let planting = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let gardenEntry = try #require(
             manifest.sourceTypeOptions.first { $0.source == .gardenEntry })
@@ -63,7 +63,7 @@ struct PhotoDestinationOptionTests {
     }
 
     @Test func selectingPlantingCarriesItsRecordIntoTheRoutePickerDestination() throws {
-        let manifest = PhotoImportManifest(items: [])
+        let manifest = makeManifest(items: [])
         let planting = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let curryLeaf = EntityRow(
             id: "PLT-CJK7", title: "curry leaf", subtitle: nil, imageURL: nil,

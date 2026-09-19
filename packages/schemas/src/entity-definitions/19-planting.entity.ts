@@ -605,6 +605,7 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "plants",
         candidateFields: ["variety", "notes"],
         temporalFields: ["sowedOn", "transplantedOn", "finishedOn"],
         lifecycleFilters: [{ field: "status", equals: "growing" }],

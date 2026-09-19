@@ -11,6 +11,7 @@ import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { tradeOptions } from "~/app/projects/shared";
@@ -143,51 +144,74 @@ export function SettleExpenseDialog({
         submitButtonText="Mark purchased"
         footerMode="dialog"
       >
-        <NullableNumericField
-          form={form}
-          name="cost"
-          label="Final cost"
-          placeholder="e.g. 24.99"
-          step="0.01"
-          prefix="$"
-        />
-        <PlainDateField form={form} name="date" label="Expense date" />
-        <SelectField
-          form={form}
-          name="costType"
-          label="Cost Type"
-          options={costTypeOptions}
-        />
-        <SelectField
-          form={form}
-          name="trade"
-          label="Trade"
-          options={tradeOptions}
-        />
-        <EntityValueField<SettleExpenseValues, "project">
-          form={form}
-          name="projectId"
-          entity="project"
-          label="Project"
-          SearchProvider={(props) => (
-            <WithEntitySearch entity="project" {...props} />
-          )}
-          clearable
-        />
-        {/* Roster picker, not free text — see `VendorField`. */}
-        <VendorField form={form} name="vendor" label="Vendor" />
-        <UnifiedTextField
-          form={form}
-          name="orderId"
-          label="Order #"
-          placeholder="Vendor order #"
-        />
-        <NullableTextareaField
-          form={form}
-          name="notes"
-          label="Notes"
-          placeholder="Optional notes"
-        />
+        {/* `FormWrapper` already mounts its own `<FormProvider>`, which is
+        what `FieldSuggestionProvider` reads its live form state from — no
+        second provider needed. `productId`/`name`/`notes` aren't rendered
+        here, so they ride as a fixed basis rather than a live watch. */}
+        <FieldSuggestionProvider
+          entity="expense"
+          mode="edit"
+          staticBasis={{
+            name: expense.name,
+            productId: expense.productId,
+            notes: expense.notes,
+          }}
+          fieldKeys={["costType", "trade", "projectId", "vendor"]}
+        >
+          <NullableNumericField
+            form={form}
+            name="cost"
+            label="Final cost"
+            placeholder="e.g. 24.99"
+            step="0.01"
+            prefix="$"
+          />
+          <PlainDateField form={form} name="date" label="Expense date" />
+          <SelectField
+            form={form}
+            name="costType"
+            label="Cost Type"
+            options={costTypeOptions}
+            suggestField="costType"
+          />
+          <SelectField
+            form={form}
+            name="trade"
+            label="Trade"
+            options={tradeOptions}
+            suggestField="trade"
+          />
+          <EntityValueField<SettleExpenseValues, "project">
+            form={form}
+            name="projectId"
+            entity="project"
+            label="Project"
+            SearchProvider={(props) => (
+              <WithEntitySearch entity="project" {...props} />
+            )}
+            clearable
+            suggestField="projectId"
+          />
+          {/* Roster picker, not free text — see `VendorField`. */}
+          <VendorField
+            form={form}
+            name="vendor"
+            label="Vendor"
+            suggestField="vendor"
+          />
+          <UnifiedTextField
+            form={form}
+            name="orderId"
+            label="Order #"
+            placeholder="Vendor order #"
+          />
+          <NullableTextareaField
+            form={form}
+            name="notes"
+            label="Notes"
+            placeholder="Optional notes"
+          />
+        </FieldSuggestionProvider>
       </FormWrapper>
     </ResponsiveDialog>
   );

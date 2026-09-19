@@ -150,27 +150,6 @@ function defineFeature<S extends AiFeatureShared & AiFeatureTier>(
 // `SELECTION_OVERFLOW_FEATURE` instead (`ai/selection.ts`).
 // ---------------------------------------------------------------------------
 
-export const PRODUCT_CATEGORY_SUGGESTION_FEATURE = defineFeature({
-  feature: "product-category-suggestion",
-  tier: "decision",
-  cache: true,
-  promptVersion: "2026-09-18.1",
-}) satisfies AiDecisionFeature;
-
-export const LOCATION_TYPE_SUGGESTION_FEATURE = defineFeature({
-  feature: "location-type-suggestion",
-  tier: "decision",
-  cache: true,
-  promptVersion: "2026-09-18.1",
-}) satisfies AiDecisionFeature;
-
-export const LOCATION_SUGGESTION_FEATURE = defineFeature({
-  feature: "location-suggestion",
-  tier: "decision",
-  cache: true,
-  promptVersion: "2026-09-18.1",
-}) satisfies AiDecisionFeature;
-
 export const USDA_FOOD_SUGGEST_FEATURE = defineFeature({
   feature: "usda-food-suggest",
   tier: "decision",
@@ -180,6 +159,21 @@ export const USDA_FOOD_SUGGEST_FEATURE = defineFeature({
 
 export const INGREDIENT_MERGE_FEATURE = defineFeature({
   feature: "ingredient-merge",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-09-18.1",
+}) satisfies AiDecisionFeature;
+
+/**
+ * Every `ai.suggestFields` target — enum classification and reference/text
+ * selection alike — runs as this one feature. Per-target telemetry comes from
+ * `AiRunContext.operation` (`suggestFields.<entity>.<field>`), not a
+ * per-field feature record, so adding a field to
+ * `FIELD_SUGGEST_REGISTRY` (`field-suggest/registry.ts`) needs no new entry
+ * here.
+ */
+export const FIELD_SUGGESTION_FEATURE = defineFeature({
+  feature: "field-suggestion",
   tier: "decision",
   cache: true,
   promptVersion: "2026-09-18.1",
@@ -278,11 +272,9 @@ export const AGENT_ASK_FEATURE = defineFeature({
 
 /** Every declared feature, for the registry assertions in the unit test. */
 export const AI_FEATURES = [
-  PRODUCT_CATEGORY_SUGGESTION_FEATURE,
-  LOCATION_TYPE_SUGGESTION_FEATURE,
-  LOCATION_SUGGESTION_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
   INGREDIENT_MERGE_FEATURE,
+  FIELD_SUGGESTION_FEATURE,
   SELECTION_OVERFLOW_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,

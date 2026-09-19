@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { photoCategoryKeys } from "../photo-categories";
 
 /** The scalar shapes the entity compiler can persist and project. */
 export const entityFieldKinds = [
@@ -174,6 +175,18 @@ const metadataSchemas = () => {
        * only member today (the household's local calendar date).
        */
       initial: z.literal("today").nullable().optional().default(null),
+      /**
+       * A field whose value the decision tier (Jev) infers from the named
+       * sibling fields (`basis`, model field keys of the same entity). The
+       * browser editor auto-fills it while untouched and offers a one-tap
+       * apply once a value already exists.
+       */
+      suggest: z
+        .object({ basis: z.array(nonEmptyString()).min(1) })
+        .strict()
+        .nullable()
+        .optional()
+        .default(null),
     })
     .strict();
 
@@ -614,6 +627,27 @@ const metadataSchemas = () => {
             )
             .optional()
             .default([]),
+          /**
+           * Fields hidden from the generic editor while `field` is
+           * present/absent in the **live form** (not the record) — unlike
+           * `readOnlyWhen`, which is record-side and update-only, this is
+           * evaluated reactively in create mode too (e.g. hide `lineKind`
+           * once `productId` is picked). "Present" means a non-empty
+           * trimmed string / non-null id, mirroring `control.suggest`'s
+           * basis-presence rule.
+           */
+          hiddenWhen: z
+            .array(
+              z
+                .object({
+                  field: fieldKey,
+                  present: z.boolean({ error: "must be a boolean" }),
+                  fields: z.array(fieldKey).min(1),
+                })
+                .strict(),
+            )
+            .optional()
+            .default([]),
         })
         .strict()
         .optional()
@@ -809,6 +843,14 @@ const metadataSchemas = () => {
         })
         .strict()
         .default({ ocrFields: [], classifierLabels: [] }),
+      /**
+       * The photo category (`packages/schemas/src/photo-categories.ts`) this entity's
+       * routing belongs to. Optional here — not because a routing entity may omit it, but
+       * so a missing value reaches `validateImageRouting` (scripts/generator/entities/compile.ts)
+       * with the entity's key still in hand, for a message that names the entity instead of
+       * a bare declaration index. An unrecognized value still fails here, at the enum.
+       */
+      category: z.enum(photoCategoryKeys).optional(),
       /**
        * Authoritative visual evidence for photo routing. This is deliberately
        * separate from borrowed display imagery, which can never become an

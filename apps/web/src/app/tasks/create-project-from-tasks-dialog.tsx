@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import {
   FormWrapper,
   NullableNumericField,
@@ -99,13 +100,23 @@ export function CreateProjectFromTasksDialog({
           placeholder="What are you working on?"
           focusOnMount
         />
-        <SelectField
-          form={form}
-          name="kind"
-          label="Kind"
-          options={projectKindOptions}
-          nullable
-        />
+        {/* This dialog has no `notes` field, so `project.kind`'s `notes`
+        basis key is fixed null rather than watching an unregistered path. */}
+        <FieldSuggestionProvider
+          entity="project"
+          mode="create"
+          staticBasis={{ notes: null }}
+          fieldKeys={["kind"]}
+        >
+          <SelectField
+            form={form}
+            name="kind"
+            label="Kind"
+            options={projectKindOptions}
+            nullable
+            suggestField="kind"
+          />
+        </FieldSuggestionProvider>
         <NullableNumericField
           form={form}
           name="costEstimate"

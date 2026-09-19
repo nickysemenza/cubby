@@ -836,6 +836,14 @@ export const renderEntityArtifacts = (
       ];
     }),
   );
+  // Every `"entity.field"` whose control declares `suggest`, across all
+  // entities, in declaration order — the decision-tier (Jev) field-suggest
+  // registry keys off this list (`GeneratedSuggestFieldKey`).
+  const suggestFieldKeys = entities.flatMap(({ key, fieldModel }) =>
+    fieldModel.fields
+      .filter((field) => field.control?.suggest != null)
+      .map((field) => `${key}.${field.key}`),
+  );
   const entitySortEntries = entities.flatMap(({ key, fieldModel }) =>
     fieldModel.sort === null
       ? []
@@ -1045,7 +1053,7 @@ export const renderEntityArtifacts = (
         `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
         `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string; placeholder: string | null; initial: "today" | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | "amount" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string; placeholder: string | null; initial: "today" | null; suggest: { readonly basis: readonly string[] } | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | "amount" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +
@@ -1058,7 +1066,12 @@ export const renderEntityArtifacts = (
           entries: fieldModels,
           satisfies: "Record<Entity, GeneratedEntityFieldModel>",
           comment: "// One authoritative field model per compiled entity.",
-        }),
+        }) +
+        "\n" +
+        '// Every `"entity.field"` whose control declares `suggest` (the\n' +
+        "// decision-tier auto-fill target list), across all entities.\n" +
+        `export const suggestFieldKeys = ${compactLiteral(suggestFieldKeys)} as const;\n` +
+        "export type GeneratedSuggestFieldKey = (typeof suggestFieldKeys)[number];\n",
     },
     {
       relativePath: "packages/schemas/src/generated/entity-edit-intents.gen.ts",

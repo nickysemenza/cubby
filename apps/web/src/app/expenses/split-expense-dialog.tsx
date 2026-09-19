@@ -15,6 +15,7 @@ import { sumBy } from "es-toolkit";
 import { Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { FieldSuggestionApply } from "~/app/_components/ai/field-suggestion-apply";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
@@ -355,6 +356,24 @@ export function SplitExpenseDialog({
                   </Row>
                 )}
               </Row>
+              <FieldSuggestionApply
+                source={{
+                  entity: "expense",
+                  targets: ["trade"],
+                  basis: {
+                    name: part.name || null,
+                    projectId: part.projectId,
+                    vendor: expense.vendor,
+                  },
+                }}
+                currentValue={part.trade}
+                onApply={(suggestion) => {
+                  const parsed = tradeSchema.safeParse(suggestion.value);
+                  if (parsed.success) {
+                    updatePart(part.key, { trade: parsed.data });
+                  }
+                }}
+              />
             </Stack>
           ))}
         </Stack>

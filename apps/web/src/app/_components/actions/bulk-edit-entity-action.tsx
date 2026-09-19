@@ -1,9 +1,12 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import {
+  entityInspectorMetadata,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import type { UseMutationOptions } from "@tanstack/react-query";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Controller,
   FormProvider,
@@ -13,6 +16,11 @@ import {
 } from "react-hook-form";
 
 import {
+  fieldSuggestionBasisFromRecord,
+  suggestTargetsFor,
+} from "~/app/_components/ai/field-suggestion";
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
+import {
   WithEntitySearch,
   type WithEntitySearchProps,
 } from "~/app/_components/combobox/with-search-hook";
@@ -20,13 +28,11 @@ import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendo
 import { PlainDateField, SelectField } from "~/app/_components/form-utils";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
-import { costTypeOptions } from "~/app/expenses/expense-options";
-import { tradeOptions } from "~/app/projects/trade-options";
-import { taskStatusOptions } from "~/app/tasks/task-options";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { entityFieldPresentation } from "~/entities/editing/entity-field-presentation";
+import { entitySelectOptionsFor } from "~/entities/editing/select-options";
 import { entityLabel } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
@@ -99,30 +105,17 @@ const asBulkEditRow = (row: EntityActionRow): BulkEditRow => ({
 
 /**
  * Option labels for bulk-edit fields whose manifest `control` carries no
- * `options` of its own. Mirrors `richSelectOptions` in
- * `entities/editing/entity-primitive-fields.tsx` (that file is owned by
- * another lane this PR must not touch) but is not the same table: bulk edit
+ * `options` of its own — the shared `entitySelectOptionsFor` table
+ * (`entities/editing/select-options.ts`), also used by `EntityIntentFields`/
+ * `EntityPrimitiveFields` and detail-page inline `select` editors. Bulk edit
  * reaches `expense.trade`/`expense.costType`, which the standard editor never
  * routes through `EntityIntentFields` for (expense has its own bespoke edit
- * form), so those two keys have no counterpart there.
+ * form) — the shared table still covers them.
  */
-const bulkEditSelectOptions = {
-  "task.status": taskStatusOptions,
-  "task.trade": tradeOptions,
-  "expense.trade": tradeOptions,
-  "expense.costType": costTypeOptions,
-} satisfies Readonly<
-  Record<string, { value: string; label: string; color?: string }[]>
->;
-
 function selectOptionsFor(entity: Entity, field: BulkEditFieldModel) {
-  const key = `${entity}.${field.key}`;
-  if (Object.hasOwn(bulkEditSelectOptions, key)) {
-    // SAFETY: the `Object.hasOwn` check above proves `key` is one of
-    // `bulkEditSelectOptions`'s own declared keys, not an arbitrary string.
-    return bulkEditSelectOptions[key as keyof typeof bulkEditSelectOptions];
-  }
-  return field.control?.options ?? [];
+  return (
+    entitySelectOptionsFor(entity, field.key) ?? field.control?.options ?? []
+  );
 }
 
 /**
@@ -204,6 +197,7 @@ function renderBulkEditField(
         options={selectOptionsFor(entity, field)}
         nullable={field.nullable}
         description={presentation.description ?? undefined}
+        suggestField={control.suggest ? field.key : undefined}
       />
     );
   }
@@ -273,6 +267,7 @@ function BulkEditFields({
               label={field.label}
               clearable={field.nullable}
               SearchProvider={searchProviderFor(field.reference.entity)}
+              suggestField={field.control?.suggest ? field.key : undefined}
             />
           );
         }
@@ -339,6 +334,24 @@ export function BulkEditDialogBody({
   const model = entityFieldModels[entity];
   const dirtyKeys = fieldKeys.filter((key) => Boolean(dirtyFields[key]));
 
+  // Multi-row basis is ambiguous (which row's `name`/`vendor`/... would Jev
+  // read?) — suggestions are offered only when exactly one row is staged, and
+  // the basis is a fixed snapshot of that row rather than a live RHF watch
+  // (bulk edit's fields start untouched, not tied to any one row's value).
+  const singleItem = items.length === 1 ? items[0] : null;
+  const suggestionStaticBasis = useMemo(() => {
+    if (!singleItem) return null;
+    // SAFETY: bulk edit only ever mounts for `bulkEditEntities`, all of which
+    // carry a shortcode prefix (the generic browser CRUD roster).
+    const shortcodeEntity = entity as ShortcodeEntity;
+    return fieldSuggestionBasisFromRecord(
+      shortcodeEntity,
+      suggestTargetsFor(shortcodeEntity, fieldKeys),
+      singleItem,
+    );
+    // oxlint-disable-next-line react/exhaustive-deps -- `fieldKeys` is a stable per-entity roster; `entity` is a stable prop.
+  }, [singleItem]);
+
   const handleSubmit = form.handleSubmit(async (values) => {
     const data: BulkEditDraft = {};
     for (const key of dirtyKeys) {
@@ -393,12 +406,29 @@ export function BulkEditDialogBody({
         isPending={isPending}
         submissionDisabled={dirtyKeys.length === 0}
       >
-        <BulkEditFields
-          entity={entity}
-          fieldKeys={fieldKeys}
-          form={form}
-          searchProviderFor={searchProviderFor}
-        />
+        {suggestionStaticBasis ? (
+          <FieldSuggestionProvider
+            // SAFETY: see the `suggestionStaticBasis` cast above.
+            entity={entity as ShortcodeEntity}
+            mode="edit"
+            staticBasis={suggestionStaticBasis}
+            fieldKeys={fieldKeys}
+          >
+            <BulkEditFields
+              entity={entity}
+              fieldKeys={fieldKeys}
+              form={form}
+              searchProviderFor={searchProviderFor}
+            />
+          </FieldSuggestionProvider>
+        ) : (
+          <BulkEditFields
+            entity={entity}
+            fieldKeys={fieldKeys}
+            form={form}
+            searchProviderFor={searchProviderFor}
+          />
+        )}
       </BulkActionDialog>
     </FormProvider>
   );

@@ -102,13 +102,22 @@ export default defineEntity({
       ],
       actions: ["bulkEdit", "delete"],
     },
+    // Mirrors the capture dialog's old hand-rolled behavior: a line with a
+    // product picked has no separate "line kind" (it IS the product's
+    // purchase), and a quantity is only meaningful once a product is set.
+    edit: {
+      hiddenWhen: [
+        { field: "productId", present: true, fields: ["lineKind"] },
+        { field: "productId", present: false, fields: ["productQuantity"] },
+      ],
+    },
   },
   model: {
     fields: [
       {
         key: "name",
         kind: "text",
-        control: { kind: "text" },
+        control: { kind: "text", placeholder: "What did you buy?" },
         display: {
           list: true,
           detail: true,
@@ -186,7 +195,11 @@ export default defineEntity({
       {
         key: "costType",
         kind: "enum",
-        control: { kind: "select", section: "details" },
+        control: {
+          kind: "select",
+          section: "details",
+          suggest: { basis: ["name", "productId", "vendor"] },
+        },
         display: { list: true, detail: true, detailOrder: 50 },
         validation: {
           read: costTypeSchema,
@@ -197,7 +210,13 @@ export default defineEntity({
       {
         key: "trade",
         kind: "enum",
-        control: { kind: "select", section: "details" },
+        control: {
+          kind: "select",
+          section: "details",
+          suggest: {
+            basis: ["name", "notes", "productId", "vendor", "projectId"],
+          },
+        },
         display: { list: true, detail: true, detailOrder: 60 },
         validation: {
           read: tradeSchema,
@@ -248,7 +267,11 @@ export default defineEntity({
         nullable: true,
         label: "Project",
         reference: { entity: "project" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name", "vendor", "productId", "date"] },
+        },
         display: {
           list: true,
           detail: true,
@@ -267,7 +290,11 @@ export default defineEntity({
         nullable: true,
         label: "Product",
         reference: { entity: "product" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name", "vendor"] },
+        },
         display: {
           list: true,
           detail: true,
@@ -310,7 +337,12 @@ export default defineEntity({
         key: "vendor",
         kind: "text",
         nullable: true,
-        control: { kind: "text", section: "details" },
+        control: {
+          kind: "specialized",
+          renderer: "vendor-name",
+          section: "details",
+          suggest: { basis: ["name", "notes", "orderId"] },
+        },
         display: { detail: true, detailOrder: 100 },
         validation: {
           read: z.string().nullable(),
@@ -1143,12 +1175,13 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "documents",
         candidateFields: ["name", "notes"],
         temporalFields: ["date"],
         lifecycleFilters: [],
         signals: {
           ocrFields: ["name", "notes"],
-          classifierLabels: ["expense", "receipt"],
+          classifierLabels: ["receipt"],
         },
         abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
       },

@@ -117,7 +117,11 @@ export default defineEntity({
         key: "mealType",
         kind: "enum",
         nullable: true,
-        control: { kind: "select", placeholder: "Which meal of the day?" },
+        control: {
+          kind: "select",
+          placeholder: "Which meal of the day?",
+          suggest: { basis: ["name"] },
+        },
         display: { list: true, detail: true },
         validation: {
           read: mealTypeSchema.nullable(),
@@ -138,7 +142,7 @@ export default defineEntity({
       {
         key: "mealKind",
         kind: "enum",
-        control: { kind: "select" },
+        control: { kind: "select", suggest: { basis: ["name"] } },
         display: { list: true, detail: true },
         validation: {
           read: mealKindSchema,
@@ -665,10 +669,11 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "food",
         candidateFields: ["name"],
         temporalFields: ["date"],
         lifecycleFilters: [],
-        signals: { ocrFields: ["name"], classifierLabels: ["meal"] },
+        signals: { ocrFields: ["name"], classifierLabels: ["food"] },
         abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
       },
     },

@@ -33,6 +33,10 @@ public enum PhotoEvidenceScorer {
         public var combined: Double {
             min(1, max(text, date, identity) + classifier * PhotoEvidenceScorer.classifierWeight)
         }
+
+        /// No evidence at all — `rankRows`' fallback when nothing has been prepared yet to score
+        /// against (developer overlays layer 3 still needs *a* score to render, even a zero one).
+        public static let zero = Score(text: 0, classifier: 0, date: 0, identity: 0)
     }
 
     /// Per-entity-type policy verdict for one analysis. The classifier match is modeled as two

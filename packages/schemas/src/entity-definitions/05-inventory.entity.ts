@@ -79,7 +79,11 @@ export default defineEntity({
         label: "Location",
         readKey: null,
         reference: { entity: "location" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["productId"] },
+        },
         display: { detail: true, detailOrder: 1 },
         validation: {
           read: null,
@@ -492,10 +496,11 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "home",
         candidateFields: ["notes"],
         temporalFields: ["verifiedAt"],
         lifecycleFilters: [],
-        signals: { ocrFields: ["notes"], classifierLabels: ["inventory"] },
+        signals: { ocrFields: ["notes"], classifierLabels: ["crate"] },
         abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
       },
     },

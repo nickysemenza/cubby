@@ -277,12 +277,23 @@ struct EntityFieldControl: View {
         let isSet = value.stringValue.map { !$0.isEmpty } ?? false
         if field.nullable {
             Toggle(
-                label, isOn: Binding(get: { isSet }, set: { model.draft[key] = $0 ? encode(.now) : .null }))
+                label,
+                isOn: Binding(
+                    get: { isSet },
+                    set: {
+                        model.draft[key] = $0 ? encode(.now) : .null
+                        model.markEdited(key)
+                    }))
         }
         if isSet || !field.nullable {
             DatePicker(
                 label,
-                selection: Binding(get: { decode(value) ?? .now }, set: { model.draft[key] = encode($0) }),
+                selection: Binding(
+                    get: { decode(value) ?? .now },
+                    set: {
+                        model.draft[key] = encode($0)
+                        model.markEdited(key)
+                    }),
                 displayedComponents: field.kind == .timestamp ? [.date, .hourAndMinute] : .date
             )
             .labelsVisibility(field.nullable ? .hidden : .automatic)

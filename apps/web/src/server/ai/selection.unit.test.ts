@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
 
-import { LOCATION_SUGGESTION_FEATURE } from "./features";
+import { FIELD_SUGGESTION_FEATURE } from "./features";
 import { JEV_MAX_CANDIDATES, type JevPort } from "./jev";
 import {
   type AiSelectionSpec,
@@ -28,7 +28,7 @@ interface Widget {
 // Any decision feature record will do here: `runAiSelection` only forwards
 // it to `runJevChoice`, whose own contract is covered in `jev.unit.test.ts`.
 const spec: AiSelectionSpec<Widget> = {
-  feature: LOCATION_SUGGESTION_FEATURE,
+  feature: FIELD_SUGGESTION_FEATURE,
   rules: "Pick the widget that best matches the subject.",
   idOf: (widget) => widget.id,
   renderLine: (widget) => `${widget.id}: ${widget.label}`,

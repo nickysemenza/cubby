@@ -7,6 +7,10 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedServer = SettingsServer.production
     @State private var draftURL = ""
+    @AppStorage("photoAnalysisWindow") private var photoAnalysisWindowRaw = PhotoAnalysisWindow.thisYear
+        .rawValue
+    @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
+    @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
     #if os(macOS)
         @AppStorage(DockBadge.showInDockDefaultsKey) private var showProblemsInDock = true
     #endif
@@ -90,6 +94,8 @@ struct SettingsView: View {
                 }
             }
 
+            if model.phase == .signedIn { photosSection }
+
             #if os(macOS)
                 Section {
                     Toggle("Show problem count in Dock", isOn: $showProblemsInDock)
@@ -105,6 +111,9 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .onAppear(perform: synchronizeServerSelection)
         .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
+        .photoAnalysisLifecycle(model: model, paused: photoAnalysisPaused) {
+            await loadPhotoAnalysisSummary()
+        }
         #if os(iOS)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         #endif
@@ -113,6 +122,50 @@ struct SettingsView: View {
                 if !enabled { DockBadge.clear() }
             }
         #endif
+    }
+
+    /// Split out of `body` to keep its expression under the 200ms type-check budget
+    /// (apps/apple/AGENTS.md, "Language and style").
+    private var photosSection: some View {
+        Section {
+            Picker("Analysis window", selection: photoAnalysisWindowBinding) {
+                ForEach(PhotoAnalysisWindow.allCases) { window in
+                    Text(window.title).tag(window)
+                }
+            }
+            LabeledContent("Analysed") { Text(photoAnalysisSummaryText) }
+                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+            Toggle("Pause analysis", isOn: $photoAnalysisPaused)
+                .frame(minHeight: PorcelainTokens.touchTarget - 12)
+        } header: {
+            Eyebrow("Photos")
+        } footer: {
+            Text("On-device category classification runs quietly while the Photos tab is open.")
+                .font(.porcelainLabel)
+                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+        }
+    }
+
+    private var photoAnalysisWindowBinding: Binding<PhotoAnalysisWindow> {
+        Binding(
+            get: { PhotoAnalysisWindow(rawValue: photoAnalysisWindowRaw) ?? .thisYear },
+            set: { window in
+                photoAnalysisWindowRaw = window.rawValue
+                model.photoClassificationSweep.setWindow(window)
+            })
+    }
+
+    private var photoAnalysisSummaryText: String {
+        guard let photoAnalysisSummary else { return "…" }
+        return "\(photoAnalysisSummary.analysed) of \(photoAnalysisSummary.total)"
+    }
+
+    private func loadPhotoAnalysisSummary() async {
+        let total = model.photoLibrary.count
+        let analysed =
+            (try? await model.photoAnalysisStore.classifiedCount(
+                newerThan: PhotoClassificationSweep.classifyVersion)) ?? 0
+        photoAnalysisSummary = (analysed, total)
     }
 
     private var customServerURL: URL? {
@@ -143,6 +196,17 @@ struct SettingsView: View {
         let server = SettingsServer(baseURL: model.baseURL)
         selectedServer = server
         if server == .custom { draftURL = model.baseURL.absoluteString }
+    }
+}
+
+extension View {
+    /// Bundled into one modifier (rather than two more chained calls in `body`) so `SettingsView`'s
+    /// `body` stays under the 200ms type-check budget.
+    fileprivate func photoAnalysisLifecycle(
+        model: AppModel, paused: Bool, loadSummary: @escaping () async -> Void
+    ) -> some View {
+        task(id: model.photoLibrary.count) { await loadSummary() }
+            .onChange(of: paused) { _, paused in model.photoClassificationSweep.setPaused(paused) }
     }
 }
 

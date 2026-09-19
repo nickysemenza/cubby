@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LOCATION_SUGGESTION_FEATURE } from "./features";
+import { FIELD_SUGGESTION_FEATURE } from "./features";
 import {
   JEV_MAX_CANDIDATES,
   type JevChoiceResponse,
@@ -9,7 +9,7 @@ import {
 } from "./jev";
 
 const base = {
-  feature: LOCATION_SUGGESTION_FEATURE,
+  feature: FIELD_SUGGESTION_FEATURE,
   subject: "pick one",
   rules: "Choose one.",
   usage: { operation: "jev-test", cacheStatus: "none" as const },

@@ -8,8 +8,8 @@
  *
  * Two deliberate differences from the single-product dialog:
  *
- * - **No AI location suggester.** `LocationFieldWithAI` reads one product's
- *   history to propose a shelf (`basisKey={productId}`); with a mixed
+ * - **No AI location suggester.** `FieldSuggestionProvider` for
+ *   `inventory.locationId` needs one product as its basis; with a mixed
  *   selection there is no single basis to suggest from, and picking one row's
  *   product to stand for the rest would be a guess wearing a suggestion's
  *   clothes.

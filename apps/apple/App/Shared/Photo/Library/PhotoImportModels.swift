@@ -9,11 +9,40 @@ struct PhotoImportGroup: Identifiable, Equatable {
     /// `nil` for a `createSelf` draft: there is no source record to reroute from.
     let source: EntityKey?
     let sourceRow: EntityRow?
+    /// Developer overlays layer 2: the reason this group's photos landed here.
+    let decision: PhotoRouteDecision
 }
 
 enum PhotoDuplicateDecision: Equatable {
     case reuse(ImageCode)
     case keepBoth
+}
+
+/// Why a photo landed on its destination (developer overlays layer 2's group-header reason and
+/// per-assignment breakdown). Set at every `PhotoDestinationAssignment` construction site in
+/// `PhotoImportManifest`: `chooseSourceRecord`'s automatic branches, the background analyzer's
+/// `apply`, the route picker, and every manual chooser/editor pick.
+enum PhotoRouteDecision: Equatable {
+    /// The type's unconditional `.primary` route, taken without asking.
+    case automaticPrimary
+    /// A route's `primaryWhen` predicate matched the picked record's field.
+    case automaticConditional(field: String, value: String)
+    /// `chooseSourceRecord` auto-resolved a same-day existing/create pair to exactly one match.
+    case existingSameDay(count: Int)
+    /// The source type declared a `.prompt` route; the route picker's own pick was taken.
+    case prompted
+    /// Any other manual pick: a chooser row tap, a related-record pick, or an editor submission.
+    case user
+
+    var reasonLabel: String {
+        switch self {
+        case .automaticPrimary: "auto · primary"
+        case .automaticConditional(let field, let value): "auto · primaryWhen \(field)=\(value)"
+        case .existingSameDay(let count): "existing (\(count) same-day)"
+        case .prompted: "prompt"
+        case .user: "user"
+        }
+    }
 }
 
 enum PhotoImportAnalysisState: Equatable {
@@ -182,6 +211,9 @@ struct PhotoDestinationAssignment: Identifiable {
     let replaceConfirmed: Bool
     let evidence: String
     let createDraft: PhotoCreateDraft?
+    /// Developer overlays layer 2: why this assignment happened. Defaults to `.user` since most
+    /// construction sites are manual picks; the few automatic ones pass their own reason.
+    let decision: PhotoRouteDecision
     var id: String { "\(route.id):\(createDraft?.id ?? recordID ?? "unassigned")" }
 
     init(
@@ -193,7 +225,8 @@ struct PhotoDestinationAssignment: Identifiable {
         shortcode: String,
         replaceConfirmed: Bool,
         evidence: String,
-        createDraft: PhotoCreateDraft? = nil
+        createDraft: PhotoCreateDraft? = nil,
+        decision: PhotoRouteDecision = .user
     ) {
         self.route = route
         self.source = source
@@ -204,6 +237,7 @@ struct PhotoDestinationAssignment: Identifiable {
         self.replaceConfirmed = replaceConfirmed
         self.evidence = evidence
         self.createDraft = createDraft
+        self.decision = decision
     }
 }
 

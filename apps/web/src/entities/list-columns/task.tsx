@@ -88,6 +88,7 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
                     data: { projectId: newProjectId },
                   });
                 },
+                suggest: { entity: "task", field: "projectId" },
               },
             }),
           );

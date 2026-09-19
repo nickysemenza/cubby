@@ -249,4 +249,25 @@ struct MiddlewareTests {
         // A 502 is not an auth failure; the credential survives.
         #expect(try store.load(for: "localhost:3000") == .bearer("fine"))
     }
+
+    /// Developer overlays layer 6: the installed `RequestObserver` records every request's
+    /// operation id, timing, and status — including a decoded error response, whose status is
+    /// still known before the middleware throws.
+    @Test func recordsOperationIDTimingAndStatusThroughTheInstalledObserver() async throws {
+        let (credentials, _) = try provider(with: .bearer("tok.sig"))
+        let trace = await RequestTrace()
+        let middleware = CubbyAuthMiddleware(credentials: credentials, observer: trace)
+        _ = try await middleware.intercept(
+            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
+            body: nil,
+            baseURL: URL(string: "http://localhost:3000")!,
+            operationID: "resources.product.list"
+        ) { _, body, _ in
+            (HTTPResponse(status: .ok), body)
+        }
+        let last = await trace.last
+        #expect(last?.operationID == "resources.product.list")
+        #expect(last?.status == 200)
+        #expect((last?.ms ?? -1) >= 0)
+    }
 }

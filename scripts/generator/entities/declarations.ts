@@ -113,6 +113,7 @@ type EntityFieldControl = Readonly<{
   section: string;
   placeholder: string | null;
   initial: "today" | null;
+  suggest: Readonly<{ basis: readonly string[] }> | null;
 }>;
 export type EntityField = Readonly<{
   key: string;

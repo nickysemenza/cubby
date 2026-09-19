@@ -96,9 +96,26 @@ public struct PhotoRoutingPolicy: Sendable, Hashable {
   public let classifierLabels: [String]
   public let minimumScore: Double
   public let minimumMargin: Double
+  public let category: String
+}
+
+public struct PhotoCategory: Sendable, Hashable {
+  public let key: String
+  public let label: String
+  public let emoji: String
+  /** Base labels UNION every member entity's own classifier labels — computed by the
+   * generator (scripts/generator/entities/render/image-policy.ts); never recompute here. */
+  public let classifierLabels: [String]
+  public let entities: [EntityKey]
 }
 
 public enum PhotoImportCatalog {
+  public static let categories: [PhotoCategory] = [
+    PhotoCategory(key: "plants", label: "Plants", emoji: "🌱", classifierLabels: ["plant","foliage","flower","tree","shrub","garden","herb","decorative_plant","cactus"], entities: [.planting, .gardenEntry]),
+    PhotoCategory(key: "food", label: "Food", emoji: "🍽️", classifierLabels: ["food","fruit","vegetable","drink","dessert","bread"], entities: [.recipe, .ingredient, .meal]),
+    PhotoCategory(key: "documents", label: "Documents", emoji: "🧾", classifierLabels: ["receipt","document","book","newspaper","checkbook","credit_card"], entities: [.cookbook, .purchase, .financialTransaction, .expense]),
+    PhotoCategory(key: "home", label: "Home", emoji: "🏠", classifierLabels: ["kitchen","furniture","tool","appliance","bookshelf","cardboard_box","toolbox","garage","container","closet","shed","crate","sticky_note","storefront","sign","gift"], entities: [.product, .location, .inventory, .project, .task, .vendor, .wish])
+  ]
   public static let ingressRoutes: [PhotoIngressRoute] = [
     PhotoIngressRoute(id: "product-self", source: .product, target: .product, kind: .`self`, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .primary, primaryWhen: nil, enabled: true, disabledReason: nil),
     PhotoIngressRoute(id: "product-new", source: .product, target: .product, kind: .createSelf, storage: .gallery, relationPath: [], bindings: [], append: true, requiresReplaceConfirmation: false, choice: .alternate, primaryWhen: nil, enabled: true, disabledReason: nil),
@@ -169,21 +186,21 @@ public enum PhotoImportCatalog {
     PhotoVisualEvidence(source: .planting, target: .gardenEntry, relationPath: ["entries"], priority: 1, ordering: .newest)
   ]
   public static let routingPolicies: [EntityKey: PhotoRoutingPolicy] = [
-    .product: PhotoRoutingPolicy(candidateFields: ["name","manufacturer","model"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name","manufacturer","model"], classifierLabels: ["product"], minimumScore: 0.72, minimumMargin: 0.12),
-    .recipe: PhotoRoutingPolicy(candidateFields: ["name"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name"], classifierLabels: ["recipe"], minimumScore: 0.74, minimumMargin: 0.14),
-    .ingredient: PhotoRoutingPolicy(candidateFields: ["name"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name"], classifierLabels: ["ingredient"], minimumScore: 0.78, minimumMargin: 0.16),
-    .cookbook: PhotoRoutingPolicy(candidateFields: [], temporalFields: [], lifecycleFilters: [], ocrFields: [], classifierLabels: ["cookbook","cover"], minimumScore: 0.82, minimumMargin: 0.18),
-    .location: PhotoRoutingPolicy(candidateFields: ["name","description"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name","description"], classifierLabels: ["location"], minimumScore: 0.7, minimumMargin: 0.12),
-    .inventory: PhotoRoutingPolicy(candidateFields: ["notes"], temporalFields: ["verifiedAt"], lifecycleFilters: [], ocrFields: ["notes"], classifierLabels: ["inventory"], minimumScore: 0.8, minimumMargin: 0.16),
-    .meal: PhotoRoutingPolicy(candidateFields: ["name"], temporalFields: ["date"], lifecycleFilters: [], ocrFields: ["name"], classifierLabels: ["meal"], minimumScore: 0.74, minimumMargin: 0.14),
-    .project: PhotoRoutingPolicy(candidateFields: ["name","description","notes"], temporalFields: ["startDate","endDate"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: nil, oneOf: ["planning","not_started","in_progress"])], ocrFields: ["name","description","notes"], classifierLabels: ["project"], minimumScore: 0.72, minimumMargin: 0.12),
-    .task: PhotoRoutingPolicy(candidateFields: ["name","description","notes"], temporalFields: ["dueDate","completedAt"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: nil, oneOf: ["not_started","later","in_progress","blocked"])], ocrFields: ["name","description","notes"], classifierLabels: ["task"], minimumScore: 0.72, minimumMargin: 0.12),
-    .vendor: PhotoRoutingPolicy(candidateFields: ["name","website"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name","website"], classifierLabels: ["vendor","logo"], minimumScore: 0.76, minimumMargin: 0.14),
-    .purchase: PhotoRoutingPolicy(candidateFields: ["displayLabel","orderId","notes"], temporalFields: ["date"], lifecycleFilters: [], ocrFields: ["displayLabel","orderId","notes"], classifierLabels: ["receipt","purchase"], minimumScore: 0.76, minimumMargin: 0.14),
-    .financialTransaction: PhotoRoutingPolicy(candidateFields: ["merchant","description"], temporalFields: ["transactionDate"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: "posted", oneOf: [])], ocrFields: ["merchant","description"], classifierLabels: ["transaction","receipt"], minimumScore: 0.8, minimumMargin: 0.16),
-    .wish: PhotoRoutingPolicy(candidateFields: ["name","notes"], temporalFields: [], lifecycleFilters: [PhotoLifecycleFilter(field: "acquired", equals: "false", oneOf: [])], ocrFields: ["name","notes"], classifierLabels: ["wish"], minimumScore: 0.78, minimumMargin: 0.16),
-    .expense: PhotoRoutingPolicy(candidateFields: ["name","notes"], temporalFields: ["date"], lifecycleFilters: [], ocrFields: ["name","notes"], classifierLabels: ["expense","receipt"], minimumScore: 0.78, minimumMargin: 0.16),
-    .planting: PhotoRoutingPolicy(candidateFields: ["variety","notes"], temporalFields: ["sowedOn","transplantedOn","finishedOn"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: "growing", oneOf: [])], ocrFields: ["variety","notes"], classifierLabels: ["plant","garden"], minimumScore: 0.76, minimumMargin: 0.14),
-    .gardenEntry: PhotoRoutingPolicy(candidateFields: ["note"], temporalFields: ["observedOn"], lifecycleFilters: [], ocrFields: ["note"], classifierLabels: ["garden"], minimumScore: 0.72, minimumMargin: 0.12)
+    .product: PhotoRoutingPolicy(candidateFields: ["name","manufacturer","model"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name","manufacturer","model"], classifierLabels: ["container"], minimumScore: 0.72, minimumMargin: 0.12, category: "home"),
+    .recipe: PhotoRoutingPolicy(candidateFields: ["name"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name"], classifierLabels: ["food"], minimumScore: 0.74, minimumMargin: 0.14, category: "food"),
+    .ingredient: PhotoRoutingPolicy(candidateFields: ["name"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name"], classifierLabels: ["vegetable","fruit"], minimumScore: 0.78, minimumMargin: 0.16, category: "food"),
+    .cookbook: PhotoRoutingPolicy(candidateFields: [], temporalFields: [], lifecycleFilters: [], ocrFields: [], classifierLabels: ["book"], minimumScore: 0.82, minimumMargin: 0.18, category: "documents"),
+    .location: PhotoRoutingPolicy(candidateFields: ["name","description"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name","description"], classifierLabels: ["closet","shed"], minimumScore: 0.7, minimumMargin: 0.12, category: "home"),
+    .inventory: PhotoRoutingPolicy(candidateFields: ["notes"], temporalFields: ["verifiedAt"], lifecycleFilters: [], ocrFields: ["notes"], classifierLabels: ["crate"], minimumScore: 0.8, minimumMargin: 0.16, category: "home"),
+    .meal: PhotoRoutingPolicy(candidateFields: ["name"], temporalFields: ["date"], lifecycleFilters: [], ocrFields: ["name"], classifierLabels: ["food"], minimumScore: 0.74, minimumMargin: 0.14, category: "food"),
+    .project: PhotoRoutingPolicy(candidateFields: ["name","description","notes"], temporalFields: ["startDate","endDate"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: nil, oneOf: ["planning","not_started","in_progress"])], ocrFields: ["name","description","notes"], classifierLabels: ["toolbox"], minimumScore: 0.72, minimumMargin: 0.12, category: "home"),
+    .task: PhotoRoutingPolicy(candidateFields: ["name","description","notes"], temporalFields: ["dueDate","completedAt"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: nil, oneOf: ["not_started","later","in_progress","blocked"])], ocrFields: ["name","description","notes"], classifierLabels: ["sticky_note"], minimumScore: 0.72, minimumMargin: 0.12, category: "home"),
+    .vendor: PhotoRoutingPolicy(candidateFields: ["name","website"], temporalFields: [], lifecycleFilters: [], ocrFields: ["name","website"], classifierLabels: ["storefront","sign"], minimumScore: 0.76, minimumMargin: 0.14, category: "home"),
+    .purchase: PhotoRoutingPolicy(candidateFields: ["displayLabel","orderId","notes"], temporalFields: ["date"], lifecycleFilters: [], ocrFields: ["displayLabel","orderId","notes"], classifierLabels: ["receipt"], minimumScore: 0.76, minimumMargin: 0.14, category: "documents"),
+    .financialTransaction: PhotoRoutingPolicy(candidateFields: ["merchant","description"], temporalFields: ["transactionDate"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: "posted", oneOf: [])], ocrFields: ["merchant","description"], classifierLabels: ["receipt","credit_card"], minimumScore: 0.8, minimumMargin: 0.16, category: "documents"),
+    .wish: PhotoRoutingPolicy(candidateFields: ["name","notes"], temporalFields: [], lifecycleFilters: [PhotoLifecycleFilter(field: "acquired", equals: "false", oneOf: [])], ocrFields: ["name","notes"], classifierLabels: ["gift"], minimumScore: 0.78, minimumMargin: 0.16, category: "home"),
+    .expense: PhotoRoutingPolicy(candidateFields: ["name","notes"], temporalFields: ["date"], lifecycleFilters: [], ocrFields: ["name","notes"], classifierLabels: ["receipt"], minimumScore: 0.78, minimumMargin: 0.16, category: "documents"),
+    .planting: PhotoRoutingPolicy(candidateFields: ["variety","notes"], temporalFields: ["sowedOn","transplantedOn","finishedOn"], lifecycleFilters: [PhotoLifecycleFilter(field: "status", equals: "growing", oneOf: [])], ocrFields: ["variety","notes"], classifierLabels: ["plant","garden"], minimumScore: 0.76, minimumMargin: 0.14, category: "plants"),
+    .gardenEntry: PhotoRoutingPolicy(candidateFields: ["note"], temporalFields: ["observedOn"], lifecycleFilters: [], ocrFields: ["note"], classifierLabels: ["garden"], minimumScore: 0.72, minimumMargin: 0.12, category: "plants")
   ]
 }

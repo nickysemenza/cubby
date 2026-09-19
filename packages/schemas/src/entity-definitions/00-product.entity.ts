@@ -351,7 +351,11 @@ export default defineEntity({
         key: "category",
         kind: "enum",
         nullable: true,
-        control: { kind: "select" },
+        control: {
+          kind: "select",
+          section: "category",
+          suggest: { basis: ["name", "manufacturer"] },
+        },
         display: {
           list: true,
           listOrder: 0,
@@ -1893,12 +1897,13 @@ export default defineEntity({
         { kind: "createSelf", routeId: "product-new", enabled: true },
       ],
       routing: {
+        category: "home",
         candidateFields: ["name", "manufacturer", "model"],
         temporalFields: [],
         lifecycleFilters: [],
         signals: {
           ocrFields: ["name", "manufacturer", "model"],
-          classifierLabels: ["product"],
+          classifierLabels: ["container"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },

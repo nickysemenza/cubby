@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { useState } from "react";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import {
   FormWrapper,
   NullableNumericField,
@@ -184,21 +185,27 @@ function EditableCalendarItem({
         label={item.kind === "task" ? "Due date" : "Date"}
       />
       {item.kind === "meal" && (
-        <>
+        <FieldSuggestionProvider
+          entity="meal"
+          mode="edit"
+          fieldKeys={["mealType", "mealKind"]}
+        >
           <SelectField
             form={session.form}
             name="mealType"
             label="Meal type"
             options={mealTypeOptions}
             nullable
+            suggestField="mealType"
           />
           <SelectField
             form={session.form}
             name="mealKind"
             label="Kind"
             options={mealKindOptions}
+            suggestField="mealKind"
           />
-        </>
+        </FieldSuggestionProvider>
       )}
       {item.kind === "task" && (
         <>

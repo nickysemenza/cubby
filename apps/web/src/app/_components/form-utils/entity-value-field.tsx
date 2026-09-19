@@ -12,6 +12,9 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
+import { FieldSuggestionHint } from "~/app/_components/ai/field-suggestion-hint";
+import { useAutoFieldSuggestion } from "~/app/_components/ai/use-auto-field-suggestion";
+
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
@@ -29,6 +32,7 @@ export function EntityValueField<
   placeholder,
   SearchProvider,
   clearable,
+  suggestField,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -37,7 +41,21 @@ export function EntityValueField<
   placeholder?: string;
   SearchProvider: (props: WithEntitySearchProps<ShortcodeFor<E>>) => ReactNode;
   clearable?: boolean;
+  /** The manifest target key this field suggests (e.g. `"projectId"`). The
+   * suggested id is seeded into the picker as a labeled item (`seedItem`) so
+   * an auto-filled value never renders as a bare shortcode before its label
+   * has loaded via search. */
+  suggestField?: string;
 }) {
+  // Called unconditionally regardless of `suggestField` — a no-op without a
+  // mounted `FieldSuggestionProvider`, same as `AutoSuggestSlot`.
+  const { suggestion, applied, isPending, apply, seedItem } =
+    useAutoFieldSuggestion({
+      form,
+      name,
+      field: suggestField ?? "",
+      disabled: !suggestField,
+    });
   return (
     <SearchProvider>
       {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
@@ -49,11 +67,16 @@ export function EntityValueField<
             const id = rawId ? parseShortcodeFor(entity, rawId) : null;
             const selected =
               items.find((item) => item.id === id) ??
-              (id
-                ? ({ id, shortcode: id, name: id } satisfies ComboboxItem<
-                    ShortcodeFor<E>
-                  >)
-                : null);
+              (id && seedItem?.id === id
+                ? ({
+                    ...seedItem,
+                    id,
+                  } satisfies ComboboxItem<ShortcodeFor<E>>)
+                : id
+                  ? ({ id, shortcode: id, name: id } satisfies ComboboxItem<
+                      ShortcodeFor<E>
+                    >)
+                  : null);
             return (
               <FormFieldGroup
                 htmlFor={name}
@@ -86,6 +109,14 @@ export function EntityValueField<
                   onOpenChange={onOpenChange}
                   clearable={clearable}
                 />
+                {suggestField && (
+                  <FieldSuggestionHint
+                    suggestion={suggestion}
+                    applied={applied}
+                    pending={isPending}
+                    onApply={apply}
+                  />
+                )}
               </FormFieldGroup>
             );
           }}

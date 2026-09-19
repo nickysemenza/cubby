@@ -6,6 +6,8 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 
+import { AutoSuggestSlot } from "~/app/_components/ai/auto-suggest-slot";
+
 import { EntityPicker } from "../combobox/entity-picker";
 import {
   type VendorName,
@@ -40,6 +42,7 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
   name,
   label = "Vendor",
   placeholder = "Where from?",
+  suggestField,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -50,6 +53,9 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
    * "Sold to / given to" instead.
    */
   placeholder?: string;
+  /** The manifest target key this field suggests, e.g. `"vendor"` — a text
+   * roster target, so the suggested value is the vendor name string itself. */
+  suggestField?: string;
 }) {
   return (
     <WithVendorSearch>
@@ -94,6 +100,13 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
                   onOpenChange={onOpenChange}
                   clearable
                 />
+                {suggestField && (
+                  <AutoSuggestSlot
+                    form={form}
+                    name={name}
+                    field={suggestField}
+                  />
+                )}
               </FormFieldGroup>
             );
           }}

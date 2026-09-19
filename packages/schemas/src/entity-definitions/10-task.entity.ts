@@ -124,7 +124,11 @@ export default defineEntity({
         nullable: true,
         label: "Project",
         reference: { entity: "project" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name"] },
+        },
         display: {
           list: true,
           detail: true,
@@ -143,7 +147,11 @@ export default defineEntity({
         nullable: true,
         label: "For",
         reference: { entity: "product" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["name"] },
+        },
         display: {
           list: true,
           detail: true,
@@ -217,7 +225,10 @@ export default defineEntity({
       {
         key: "trade",
         kind: "enum",
-        control: { kind: "select" },
+        control: {
+          kind: "select",
+          suggest: { basis: ["name", "projectId"] },
+        },
         display: {
           list: true,
           detail: true,
@@ -816,6 +827,7 @@ export default defineEntity({
         { kind: "createSelf", routeId: "task-new", enabled: true },
       ],
       routing: {
+        category: "home",
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["dueDate", "completedAt"],
         lifecycleFilters: [
@@ -826,7 +838,7 @@ export default defineEntity({
         ],
         signals: {
           ocrFields: ["name", "description", "notes"],
-          classifierLabels: ["task"],
+          classifierLabels: ["sticky_note"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },

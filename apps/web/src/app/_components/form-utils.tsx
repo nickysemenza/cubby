@@ -17,6 +17,7 @@ import {
 } from "react-hook-form";
 import { toast } from "sonner";
 
+import { AutoSuggestSlot } from "~/app/_components/ai/auto-suggest-slot";
 import { Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button, type buttonVariants } from "~/components/ui/button";
@@ -653,6 +654,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   entity,
   clearable = true,
   disabledItemReasons,
+  suggestField,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, ComboboxItem | null | undefined>;
@@ -671,6 +673,11 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   entity: PickerEntity;
   clearable?: boolean;
   disabledItemReasons?: Readonly<Record<string, string>>;
+  /** The manifest target key this field suggests (e.g. `"projectId"`). The
+   * field's value is the whole `ComboboxItem`, so an auto-fill writes one
+   * directly — no separate `seedItem` lookup needed the way `EntityValueField`
+   * (id-valued) requires it. */
+  suggestField?: string;
 }) {
   return (
     <Controller
@@ -714,6 +721,14 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
             onOpenChange={onOpenChange}
             clearable={clearable}
           />
+          {suggestField && (
+            <AutoSuggestSlot
+              form={form}
+              name={name}
+              field={suggestField}
+              valueKind="item"
+            />
+          )}
         </FormFieldGroup>
       )}
     />
@@ -882,6 +897,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   nullable = false,
   disabled = false,
   description,
+  suggestField,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -896,6 +912,10 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   nullable?: boolean;
   disabled?: boolean;
   description?: string;
+  /** The manifest target key this field suggests (e.g. `"trade"`) — mounts an
+   * `AutoSuggestSlot` under the picker. Omit for a field with no
+   * `control.suggest`. */
+  suggestField?: string;
 }) {
   const controlId = useId();
   // Build items list, prepending "None" option if nullable
@@ -926,6 +946,9 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
             label={label.toLowerCase()}
             disabled={disabled}
           />
+          {suggestField && (
+            <AutoSuggestSlot form={form} name={name} field={suggestField} />
+          )}
         </FormFieldGroup>
       )}
     />

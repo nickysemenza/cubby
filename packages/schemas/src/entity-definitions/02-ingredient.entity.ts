@@ -578,10 +578,14 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "food",
         candidateFields: ["name"],
         temporalFields: [],
         lifecycleFilters: [],
-        signals: { ocrFields: ["name"], classifierLabels: ["ingredient"] },
+        signals: {
+          ocrFields: ["name"],
+          classifierLabels: ["vegetable", "fruit"],
+        },
         abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
       },
     },
