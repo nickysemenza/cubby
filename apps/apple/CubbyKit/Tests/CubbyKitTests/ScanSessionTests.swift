@@ -64,7 +64,10 @@ private func settle(_ session: ScanSession, timeout: Duration = .seconds(2)) asy
     }
 }
 
-@Suite("ScanSession")
+// Each case drives a MainActor-owned drain through a child Task. Serializing the suite keeps a
+// neighboring case from starving that task on a loaded CI runner; the cases otherwise isolate
+// all service state.
+@Suite("ScanSession", .serialized)
 @MainActor
 struct ScanSessionTests {
     let shelf = LocationCode("LOC-2345")
