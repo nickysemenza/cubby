@@ -88,6 +88,8 @@ store.
 | 41 | Currency | Lines are written at the USD figure the page shows; a page with no USD figure gets a `foreign_currency` finding and no lines. Nothing is scaled from `statedTotal` or held for settlement *(review: tenet 5)*. |
 | 42 | Dedupe key | The existing `Purchase.orderId` + `Purchase_vendorId_orderId_key`; `vendorAccountId` is an attribute *(review)*. |
 | 43 | Shortcode prefixes | 2–5 letters (§10 item 0). `VendorAccount` is `VACCT-`; `ImportRun`/`ImportFinding` have no shortcode. |
+| 44 | Completeness | Every entity gets a 0–100 completeness score derived from its data-quality checks, each check weighted and carrying an `expectedIf` predicate; a Purchase at a `receipt_only` vendor is complete at amount + project + date, one at an `online_account` vendor is not complete without lines. Generalises today's `complete \| needs_data \| defect` (§10 item 2). |
+| 45 | "Tried, not available" | A data exception with reason `history_expired` (or `unavailable`) on `empty_expenses` / `primary_document`, fingerprinted on the fields the check reads so unrelated edits (project, notes) do not reopen it. The agent sets it automatically for orders older than the earliest order the vendor still shows; a human can set it from the Purchase. |
 
 ## 3. Domain model changes
 
@@ -107,7 +109,7 @@ is `(): AnyPgColumn =>` across modules), unique, CHECK `userId IS NULL OR kind
 | `vendorId` | FK Vendor |
 | `ledgerPartyId` | FK LedgerParty (member); the owner |
 | `label` | e.g. "Nicky's Amazon" |
-| `cursor` | JSON `{ newestOrderAt, orderIdsOnNewestDate[], backfillBeforeOrderAt }` — order ids are not monotonic, so the cursor is a date plus the ids already seen on it |
+| `cursor` | JSON `{ newestOrderAt, orderIdsOnNewestDate[], backfillBeforeOrderAt, earliestAvailableOrderAt }` — order ids are not monotonic, so the cursor is a date plus the ids already seen on it; `earliestAvailableOrderAt` is the oldest order the site still shows, which bounds what backfill can ever recover |
 | `status` | `active \| paused_auth \| paused_offline \| disabled` — the only run status |
 | `lastRunAt`, `lastSuccessAt` | |
 
@@ -215,6 +217,7 @@ DOs do. Skill file = the judgment half of the current skill. Tools:
 | `cubby.list_known_orders(vendorAccountId, since)` | server | so the agent stops at the cursor |
 | `cubby.save_hints(patch)` | server | writes `Vendor.agentHints` |
 | `cubby.finish_run(summary)` | server | closes the `ImportRun` (idempotent), triggers the auditor |
+| `cubby.mark_history_expired(vendorAccountId, earliestAvailableOrderAt)` | server | records the bound on the cursor and sets `history_expired` exceptions on `empty_expenses` / `primary_document` for this account's Purchases dated before it that have neither; never touches a Purchase that has lines or a document |
 
 Discovered order ids from Gmail are pushed into the DO's worklist; they are
 not Purchases until lines exist, and the next Gmail poll re-derives them if
@@ -275,7 +278,7 @@ Returns per order:
 
 Every request stays under Jev's 32 000-byte cap by construction (labels, not
 payloads). All register in `AI_FEATURES` with versioned prompts. Thresholds
-use the raw probability exposed by §10 item 4.
+use the raw probability exposed by §10 item 5.
 
 ### 4.6 Server: auditor
 
@@ -360,6 +363,11 @@ settlement half stays.
 11. **Vendor learning.** New vendor → the agent (or a Claude Code session)
     finds the orders page, saves hints; failure later invalidates hints →
     rediscover.
+12. **History expired.** Backfill reaches the last page the site offers →
+    `mark_history_expired` → older line-less, document-less Purchases on that
+    account stop counting as incomplete; their score reflects amount +
+    project + date only. A `receipt_only` vendor's Purchases never expected
+    lines in the first place, so nothing needs marking there.
 
 ## 6. Cost and evaluation
 
@@ -464,27 +472,49 @@ first, as separate small PRs, in this order.
    the request context; expose "which member am I" on the OpenAPI session
    endpoint. Needed by strict ownership; useful today for attribution
    defaults.
-2. **Google provider in better-auth.** Enable `google` with `linkSocial`,
+2. **Completeness score and durable "not available" exceptions.** Three
+   changes to `apps/web/src/server/repo/data-quality.ts` and the manifest:
+   - *Vendor-aware checks.* Each check gains an `expectedIf` predicate
+     evaluated against the row and its Vendor: `empty_expenses` and
+     `primary_document` are expected only when `orderEvidence =
+     online_account` (or `null`, which should nag once); a `receipt_only`
+     vendor expects a document but not lines; `not_expected` expects
+     neither. Unexpected checks do not count.
+   - *Exceptable `empty_expenses`.* Add it to `EXCEPTION_REASONS` with
+     `history_expired` and `unavailable`; add `history_expired` to
+     `primary_document`. Fingerprint these exceptions on the fields the
+     check reads (live expense count, document set) rather than
+     `updatedAt`, so assigning a project or editing notes does not reopen
+     them; adding a line or a document still does.
+   - *Score.* Replace the three-valued status with a weighted 0–100 score
+     per entity (each manifest declaration lists its checks with weights;
+     excepted and unexpected checks count as satisfied), keep the status as
+     a derived bucket for existing filters, and expose the score on list
+     reads and as a sort for every entity — today only Purchase and Product
+     have checks, and only Product has a sort (`identity_strength`). The
+     import expectation detectors (§4.8), the Problems worklists, and the
+     enrichment backlog all read this instead of their own predicates.
+3. **Google provider in better-auth.** Enable `google` with `linkSocial`,
    offline access, incremental scopes; a settings card to connect/disconnect.
-3. **Job id through AI telemetry.** `jobKind`/`jobId` on `AiRunContext`,
+4. **Job id through AI telemetry.** `jobKind`/`jobId` on `AiRunContext`,
    `GatewayMetadata`, `jev.ts`, the versioned telemetry queue event, the
    consumer, and `AiUsage`. Makes any workflow's cost `SUM(AiUsage)`.
-4. **Expose Jev's raw probability.** `JevChoiceResult.probability` beside the
+5. **Expose Jev's raw probability.** `JevChoiceResult.probability` beside the
    bucketed `confidence` (the TODO in `jev.ts`); surface it on the suggestion
    schemas as nullable. Thresholds above depend on it.
-5. **SQLite Durable Object pattern.** First `new_sqlite_classes` +
+6. **SQLite Durable Object pattern.** First `new_sqlite_classes` +
    `migrations` entry in `wrangler.jsonc`, documented in
    `docs/agents/domain-rules.md` next to the Workers section; the spike
    produces it.
-6. **Polymorphic reference rule (doc only).** Write into
+7. **Polymorphic reference rule (doc only).** Write into
    `docs/agents/domain-rules.md`: untyped `entityType + entityId` for
    derived/telemetry rows that may dangle; exclusive-arc nullable FKs with a
    CHECK (precedent `LedgerSourceClaim_owner_check`) for rows that must not;
    ≤4 targets. No helper code.
-7. **Mac app networking.** WebSocket client in `CubbyKit` with bearer auth and
+8. **Mac app networking.** WebSocket client in `CubbyKit` with bearer auth and
    reconnect; the Apple Events entitlement and usage string in the macOS
    target; the `BrowserBridge` protocol.
-8. **Delete the superseded Markdown** (after step 3 of §8.2): remove the
+9. **Delete the superseded Markdown** (after step 3 of §8.2): remove the
    vendor-order invariant paragraphs from `purchase-import/SKILL.md` and its
    references; keep judgment, settlement, and client mechanics; the war
    stories become writer test names.
