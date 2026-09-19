@@ -151,6 +151,49 @@ actor PhotoLibraryIO {
         }
     }
 
+    /// A 512px, local-only (no iCloud network fetch) thumbnail for the classification sweep
+    /// (B3). Deliberately its own request rather than reusing `thumbnail(for:)`'s 256px grid
+    /// size — Vision's classifier does better on a larger frame, and this must never register a
+    /// `PHImageResultIsDegradedKey` frame as final the way the grid's progressive stream can.
+    func classificationThumbnail(for asset: PHAsset) async throws -> CGImage {
+        let options = PHImageRequestOptions()
+        options.version = .current
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .exact
+        options.isNetworkAccessAllowed = false
+        let request = PhotoRequest<CGImage>()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                request.install(continuation)
+                let id = manager.requestImage(
+                    for: asset, targetSize: CGSize(width: 512, height: 512),
+                    contentMode: .aspectFit, options: options
+                ) { image, info in
+                    if (info?[PHImageCancelledKey] as? Bool) == true {
+                        request.finish(.failure(CancellationError()))
+                    } else if let error = info?[PHImageErrorKey] as? Error {
+                        request.finish(.failure(error))
+                    } else if (info?[PHImageResultIsDegradedKey] as? Bool) != true {
+                        #if os(macOS)
+                            let decoded = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                        #else
+                            let decoded = image?.cgImage
+                        #endif
+                        if let decoded {
+                            request.finish(.success(decoded))
+                        } else {
+                            request.finish(.failure(PhotoLibraryFailure.cloudUnavailable))
+                        }
+                    }
+                }
+                request.started(id, manager: manager)
+            }
+        } onCancel: { [manager] in
+            request.cancel(manager: manager)
+        }
+    }
+
     /// `PhotosRootView` calls these for the visible month's assets ± one neighbor as sections
     /// scroll on/off screen, so PhotoKit has already decoded nearby thumbnails before a fling
     /// reaches them.

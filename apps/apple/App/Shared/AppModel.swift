@@ -37,6 +37,7 @@ final class AppModel {
     let photoMatches = PhotoMatchStore()
     let photoAnalysisStore: PhotoAnalysisStore
     let photoLibrary: PhotoLibraryStore
+    let photoClassificationSweep: PhotoClassificationSweep
     var lastError: String?
     /// Bumped by every write the app makes to an entity; a list or detail showing one of
     /// `entityMutationKeys` refreshes on the next revision (`.task(id:)` on the views).
@@ -79,7 +80,11 @@ final class AppModel {
         self.auth = AuthFlow(baseURL: url, credentials: credentials)
         let analysisStore = Self.makeAnalysisStore()
         self.photoAnalysisStore = analysisStore
-        self.photoLibrary = PhotoLibraryStore(analysisStore: analysisStore)
+        let library = PhotoLibraryStore(analysisStore: analysisStore)
+        self.photoLibrary = library
+        self.photoClassificationSweep = PhotoClassificationSweep(
+            analysisStore: analysisStore, library: library,
+            window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused)
         Task { try? await analysisStore.migrateLegacyHashCacheIfNeeded() }
     }
 
@@ -96,6 +101,15 @@ final class AppModel {
             // to than surfacing that at launch.
             return try! PhotoAnalysisStore.make(inMemory: true)
         }
+    }
+
+    private static var persistedAnalysisWindow: PhotoAnalysisWindow {
+        UserDefaults.standard.string(forKey: "photoAnalysisWindow").flatMap(PhotoAnalysisWindow.init(rawValue:))
+            ?? .thisYear
+    }
+
+    private static var persistedAnalysisPaused: Bool {
+        UserDefaults.standard.bool(forKey: "photoAnalysisPaused")
     }
 
     /// Preview state is fully established synchronously; constructing a canvas never starts work.
