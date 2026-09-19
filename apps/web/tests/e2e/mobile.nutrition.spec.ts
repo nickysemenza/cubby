@@ -10,9 +10,13 @@ test("phone nutrition focuses a nutrient with legible contributions and repair n
   await page.goto(`/recipes/${recipe.id}?view=data&nutritionBasis=serving`);
   await waitForAppHydration(page);
   const focus = page.getByRole("combobox", { name: "Focused nutrient" });
-  await focus.selectOption("protein");
   const contributions = page.getByTestId("nutrition-contributions");
-  await expect(contributions).toContainText("5 g–10 g known · partial");
+  // A native select can update during the small SSR-to-React handoff window in WebKit. Retry the
+  // harmless selection until the rendered contribution proves React received its change event.
+  await expect(async () => {
+    await focus.selectOption("protein");
+    await expect(contributions).toContainText("5 g–10 g known · partial");
+  }).toPass({ timeout: 5000 });
   await expect(
     contributions.getByText(`${name} measured`, { exact: true }),
   ).toBeVisible();

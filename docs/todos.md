@@ -596,17 +596,6 @@ history is the archive. Permanent product constraints live in the
   accounts at the same vendor. Coverage and `needs_data` are per Vendor
   today, which would conflate their histories.
 
-- **Make hosted Actions the authoritative PR gate if the repository becomes
-  public again.** Turn the existing manual CI workflow into required exact-head
-  PR checks and keep its Linux lanes parallel: repository validation, auxiliary
-  packages, Rust, web tests/build, PostgreSQL, and Chromium/WebKit E2E. Add the
-  Apple gate on a standard macOS runner after the shared Rust/FFI artifact is
-  available; it should run alongside the web lanes, not after them. Target a
-  4–7 minute warm critical path and no more than 10 minutes cold. Once hosted
-  checks are trustworthy, reduce routine local pre-push work to the clean-tree
-  guard plus affected static/fast tests, while retaining `verify:local:full` as
-  an explicit escape hatch. Do not make the repository public for CI alone.
-
 - **`PurchaseLine` SKU annotation** — Promote when store SKU, quantity, or unit-price
   detail is genuinely wanted. It is annotation only; `Expense` remains financial
   truth.

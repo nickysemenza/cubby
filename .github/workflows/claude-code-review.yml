@@ -12,9 +12,11 @@ jobs:
   claude-review:
     if: |
       contains(github.event.pull_request.labels.*.name, 'claude-review') &&
-      github.event.pull_request.user.login != 'renovate[bot]'
+      github.event.pull_request.user.login != 'renovate[bot]' &&
+      !github.event.pull_request.head.repo.fork
 
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read

@@ -1,8 +1,9 @@
 # Continuous integration
 
-Routine verification runs locally. GitHub hosts the complete suite only when
-explicitly requested; merging to `main` automatically builds and deploys affected
-production Workers without running tests or E2E again.
+GitHub Actions runs the complete verification matrix on every pull request to
+`main` and every `main` push. Required checks on the exact PR head are the merge
+gate. Merging to `main` independently starts deployment of affected production
+Workers; deployment never waits for post-merge CI.
 
 ## Local verification
 
@@ -17,7 +18,7 @@ which projects and prerequisite targets are selected and ordered. Target
 `inputs` and `dependentTasksOutputFiles` decide cache keys and whether a selected
 target can reuse a prior result; they are separate concerns.
 
-After committing, run `pnpm verify:local`
+`pnpm verify:local` is an optional local diagnostic:
 (`nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`).
 `--parallel=1` is deliberate: every tier is already parallel inside (vitest
 workers, Playwright workers, cargo, xcodebuild), and running tiers side by
@@ -25,8 +26,8 @@ side on one host reproduces the contention the sequential `test:all` removed
 — measured 2026-09-16, the web unit tier took 196s instead of 24s under
 `run-many`'s default parallelism and tripped a 5s test timeout.
 It first rejects an uncommitted or untracked working tree and checks it again
-after the run; this is an exact-`HEAD` merge gate and any generated churn must
-be resolved before handoff. It then runs every target across every project —
+after the run; any generated churn must be resolved before handoff. It then runs
+every target across every project —
 most selected targets replay from cache on a small change, so an unaffected
 native or PostgreSQL gate costs a cache lookup, not a rebuild. E2E is explicitly
 uncached and always runs its browser tests; its `build-cf` prerequisite may
@@ -39,18 +40,13 @@ regardless of cache state — use it for high-risk changes or before a release.
 Both print static actionable diagnostics and step timings.
 
 **Pre-push.** `.husky/pre-push` runs `pnpm verify:push`, which requires a clean
-tree before and after one `nx affected` graph over
-`generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check`.
-It explicitly compares `origin/main` to `HEAD` with `--base=origin/main
---head=HEAD`, runs sequentially with `--nxBail --outputStyle=static`, and never
-adds a separate trailing `pnpm check`. Refresh the local base first when
-needed (`git fetch origin main`); the local `origin/main` ref must represent
-the intended comparison point. A clean tree is required because generated
-outputs and untracked files would otherwise make the result ambiguous.
-`nx affected` selects projects from their declared relationships and target
-inputs: a web-only change can skip `rust`/`apple-check`, while a Rust change
-selects web through its explicit `recipebridge` relationship. This remains a
-scoped gate, not a full-suite escalation.
+tree before and after an affected graph over
+`generate,types,lint,format,knip,test`. It explicitly compares `origin/main`
+to `HEAD`, runs sequentially with `--nxBail --outputStyle=static`, and omits
+database, Worker-build, browser, Rust, and Apple work. Those full lanes run in
+GitHub Actions before a PR can merge. Refresh the local base first when needed
+(`git fetch origin main`); the local `origin/main` ref must represent the
+intended comparison point.
 
 Node 24, pnpm 12.3.4, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
@@ -77,25 +73,21 @@ fails, so a machine without Xcode still passes — `pnpm apple check` runs the
 same script directly. The `rust` target runs fmt/clippy/test per crate
 (`recipebridge/project.json`, `cubby-ffi/project.json`); `verify:local(:full)`
 runs both projects' `rust` target regardless of what changed, `verify:push`
-only the affected one. There is no hosted macOS runner yet — the `apple`
-target only runs locally; a `workflow_dispatch` job behind a `run_ios` input is
-a possible follow-up, not implemented.
+does not select either native target. The hosted `Apple checks` job runs
+`pnpm apple check` on macOS for every verification workflow; it has the same
+format, package-test, OpenAPI-drift, and simulator-build coverage as the local
+target.
 
-## Optional hosted suite
+## Hosted suite
 
-Once this workflow is on the default branch, request full verification with:
-
-```sh
-gh workflow run ci.yaml --ref <branch> -f mode=verify
-```
-
-Use `-f mode=coverage` for full instrumented coverage. Neither mode deploys.
-There are no automatic PR verification or scheduled coverage runs. The separate
-Markdown link workflow is also manual. Opt-in Claude workflows remain available.
-Hosted browser lanes test the exact bundle produced by the node test lane and
-retain the same discovery and no-skip guard as local runs. Explicit manual
-preview dispatch remains available; verification no longer dispatches previews
-automatically.
+The `CI` workflow runs automatically for pull requests to `main` and pushes to
+`main`. It runs repository validation and dependency deduplication, auxiliary
+tests and Worker builds, Rust checks, web node/UI tests, PostgreSQL integration
+tests, Chromium and WebKit E2E, and the Apple check. The browser lanes test the
+exact bundle produced by the node test lane and retain the discovery and no-skip
+guard. Coverage remains a manual `workflow_dispatch` option (`mode=coverage`);
+it does not deploy. The separate Markdown link workflow, previews, and opt-in
+Claude workflows remain manual.
 
 ## Deployment
 
@@ -107,9 +99,23 @@ top-level path is not a fail-safe "deploy everything" — add the path to the
 filter(s) it should affect. Each Worker serializes
 production deployments and checks that the commit is still current main before
 building and again before deploying. Production never depends on a test job.
-This trusts verification performed before merging. Builds/deployments still use
-GitHub Actions minutes; this policy removes repeated hosted verification costs,
-not all Actions usage. No self-hosted runner or Cloudflare Builds is required.
+This trusts required PR checks before merging. Public-repository standard
+GitHub-hosted runners are free; no self-hosted runner or Cloudflare Builds is
+required.
+
+## Branch protection and measurement
+
+After the first passing PR exposes the check names, protect `main` by requiring
+a pull request and every CI lane. Keep `strict` disabled so a green
+non-conflicting branch need not rebase, allow administrator bypasses, and do not
+require human review.
+
+Record ten exact-head public PR runs before changing topology: queue time,
+required-check p50/p95, per-lane duration, cache behavior, cancellations, and
+merge-to-deploy duration. The target is a 4–7 minute warm critical path and no
+more than 10 minutes cold. Optimize only a measured bottleneck; prior evidence
+already rejects node_modules caching and extra E2E sharding.
+
 Cloudflare Workers Builds was piloted and rejected: native PostgreSQL/pgvector/
 IntegreSQL and both browser engines worked, but no run reached a complete
 hosted pass with a cold-plus-two-warm timing result, so the pilot was

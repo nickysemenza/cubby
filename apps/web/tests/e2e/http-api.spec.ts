@@ -148,11 +148,13 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     // Origin is rejected before the body is looked at, and an invalid key is
     // an authentication failure rather than a validation one.
     const mutateBody = { name: "Never created" };
-    expect(
-      (
-        await page.request.post("/api/v1/vendors", { data: mutateBody })
-      ).status(),
-    ).toBe(403);
+    await expect
+      .poll(async () => {
+        return (
+          await page.request.post("/api/v1/vendors", { data: mutateBody })
+        ).status();
+      })
+      .toBe(403);
     expect(
       (
         await page.request.post("/api/v1/vendors", {

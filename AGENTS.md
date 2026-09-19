@@ -6,7 +6,7 @@
   fail. `pnpm typecheck` is cheap. Run one file with `pnpm test:file src/…`
   (path relative to `apps/web`) — that is the spelling, not `vitest`/`npx
   vitest`. At handoff, the root agent runs `pnpm check` plus affected tests;
-  before a PR, run the existing full relevant gates.
+  GitHub Actions is the required full verification before merge.
 - A failing test run already lists what failed, at the end of its output and in
   `apps/web/.vitest-failures.txt`. Read those instead of re-running the tier —
   measured, 24% of all test runs were a re-run of one that had just failed.
@@ -32,13 +32,12 @@
   restate a typecheck; consolidate same-shape per-entity tests into one
   table-driven test. A test that names a regression or invariant in a comment
   is consolidated, never dropped.
-- Git hooks are mandatory validation. Never use `--no-verify`; fix the failing
-  pre-commit or scoped pre-push gate before committing or pushing.
-- Before merge, verify the exact final commit locally with `pnpm verify:local`.
-  It runs the full target list; use `pnpm verify:local:full` to bypass Nx caches
-  for high-risk or pre-release changes.
-  Hosted verification and coverage are manual; main only builds and deploys.
-  The pre-push hook is a scoped fast gate, not a substitute.
+- Git hooks are mandatory validation. Pre-commit runs `pnpm check`; pre-push
+  runs the affected static and fast-test graph. Never use `--no-verify` to
+  bypass either.
+- `pnpm verify:local(:full)` remains the explicit local full-diagnostic path.
+  Before merge, GitHub Actions must pass on the exact final PR head. Coverage
+  remains manually dispatchable; `main` runs CI after deployment starts.
 - Spend tool calls on bytes that earn their place. Batch independent read-only
   shell into one call, but prefer a targeted `Grep`/`Glob` over dumping a large
   file: the cost is calls x bytes returned, not calls alone. Re-read a file only

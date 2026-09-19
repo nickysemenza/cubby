@@ -161,17 +161,15 @@ export default defineConfig({
             name: "mcp-contract",
             include: mcpContractTests,
             pool: "threads",
-            // These files use no module mocks or mutable globals: sharing the
-            // module graph (isolate: false) is what makes importing the MCP
-            // graph once safe. `maxWorkers` must match every other project in
-            // this groupOrder (Vitest requires it — they share one execution
-            // batch); the old dedicated `fileParallelism: false` tail forced a
-            // single worker, but that only mattered when this ran alone.
-            isolate: false,
+            // worker-validation temporarily replaces Zod and Function globals
+            // to assert the Worker-safe MCP path. It therefore cannot share a
+            // module graph with catalog tests, even though those tests do not
+            // themselves mutate state.
+            isolate: true,
             maxWorkers: 5,
-            // Group 0, alongside unit/ui, instead of a serial tail after them:
-            // it shares the same "no mocks, no mutable globals" safety case,
-            // and running it after group 0 bought nothing but wall time.
+            // Keep this compact catalog group parallel with unit/UI rather
+            // than turning one global-state regression check into a serial CI
+            // tail.
             sequence: { groupOrder: 0 },
           },
         },

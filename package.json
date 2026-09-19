@@ -21,7 +21,7 @@
     "format": "oxfmt .",
     "verify:local": "pnpm check:clean && nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --nxBail --outputStyle=static && pnpm check:clean",
     "verify:local:full": "pnpm check:clean && NX_SKIP_NX_CACHE=true nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --nxBail --outputStyle=static && pnpm check:clean",
-    "verify:push": "pnpm check:clean && nx affected --base=origin/main --head=HEAD -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --nxBail --outputStyle=static && pnpm check:clean",
+    "verify:push": "pnpm check:clean && nx affected --base=origin/main --head=HEAD -t generate,types,lint,format,knip,test --parallel=1 --nxBail --outputStyle=static && pnpm check:clean",
     "test": "NX_DAEMON=false nx run cubby-checks:fast-tests --outputStyle=stream",
     "test:unit": "pnpm --filter @cubby/web test:unit",
     "test:ui": "pnpm --filter @cubby/web test:ui",

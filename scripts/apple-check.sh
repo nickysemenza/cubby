@@ -57,10 +57,20 @@ apps/apple/scripts/generate-openapi.sh --check
 
 # Same DerivedData as `pnpm apple`, so this build is incremental over the dev
 # loop's instead of a second full compile of CubbyKit.
+#
+# Xcode 26.6's batch frontend can abort in IR generation with
+# `report_at_maximum_capacity` while compiling Cubby-iOS on hosted macOS. CI
+# has no interactive iteration to benefit from batch compilation, so compile
+# one primary file at a time there; keep the normal faster batch mode locally.
+build_settings=(COMPILER_INDEX_STORE_ENABLE=NO)
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  build_settings+=(SWIFT_ENABLE_BATCH_MODE=NO)
+fi
+
 xcodebuild \
   -project apps/apple/Cubby.xcodeproj \
   -scheme Cubby-iOS \
   -destination "generic/platform=iOS Simulator" \
   -derivedDataPath apps/apple/DerivedData \
-  COMPILER_INDEX_STORE_ENABLE=NO \
+  "${build_settings[@]}" \
   build
