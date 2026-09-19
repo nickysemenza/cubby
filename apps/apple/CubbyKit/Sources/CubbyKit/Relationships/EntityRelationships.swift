@@ -316,6 +316,18 @@ public final class EntityRelationshipsModel {
         }
     }
 
+    public func requestRefresh() {
+        Task { @MainActor [self] in
+            await refresh()
+        }
+    }
+
+    public func requestNextPage(for branch: EntityGraphBranch) {
+        Task { @MainActor [self] in
+            await loadNextPage(for: branch)
+        }
+    }
+
     public func focus(on reference: EntityRef) async {
         guard let source, graph?.nodes.contains(where: { $0.reference == reference }) == true else {
             return

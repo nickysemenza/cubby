@@ -50,10 +50,10 @@ struct EntityRelationshipsSection: View {
             }
 
             if let error = model.graphError {
-                InlineRelationshipError(message: error) { Task { await model.refresh() } }
+                InlineRelationshipError(message: error) { model.requestRefresh() }
             }
             if let error = model.recommendationError {
-                InlineRelationshipError(message: error) { Task { await model.refresh() } }
+                InlineRelationshipError(message: error) { model.requestRefresh() }
             }
         }
         .onChange(of: model.graphError) { _, error in
@@ -190,11 +190,12 @@ private struct RelationshipRecommendationGroupView: View {
     }
 
     private func accept(_ proposal: ActionableRelationshipRecommendation) {
-        Task {
-            if let acceptance = await model.accept(proposal, basisKey: basisKey) {
-                onAccepted(acceptance)
-            }
-        }
+        requestRelationshipAcceptance(
+            model: model,
+            proposal: proposal,
+            basisKey: basisKey,
+            onAccepted: onAccepted
+        )
     }
 }
 
@@ -316,11 +317,13 @@ struct RelationshipRecommendationReviewSheet: View {
     }
 
     private func accept() {
-        Task {
-            if let acceptance = await model.accept(review.proposal, basisKey: review.basisKey) {
-                onAccepted(acceptance)
-                dismiss()
-            }
+        requestRelationshipAcceptance(
+            model: model,
+            proposal: review.proposal,
+            basisKey: review.basisKey
+        ) { acceptance in
+            onAccepted(acceptance)
+            dismiss()
         }
     }
 }
@@ -545,7 +548,7 @@ private struct RelationshipBranchList: View {
                     }
                     if let nextOffset = branch.nextOffset {
                         Button {
-                            Task { await model.loadNextPage(for: branch) }
+                            model.requestNextPage(for: branch)
                         } label: {
                             if model.pagingBranchIDs.contains(branch.id) {
                                 LoadingIndicator(label: "Loading more \(branch.label.lowercased())")
@@ -561,7 +564,7 @@ private struct RelationshipBranchList: View {
                     }
                     if let error = model.pageErrors[branch.id] {
                         InlineRelationshipError(message: error) {
-                            Task { await model.loadNextPage(for: branch) }
+                            model.requestNextPage(for: branch)
                         }
                     }
                 } label: {
@@ -697,10 +700,7 @@ private struct RelationshipNodeDetailsSheet: View {
                 }
                 Section {
                     Button {
-                        Task {
-                            await model.focus(on: node.reference)
-                            if model.graph?.root == node.reference { dismiss() }
-                        }
+                        requestRelationshipFocus(model: model, on: node.reference) { dismiss() }
                     } label: {
                         Label("Focus graph here", systemImage: "scope")
                             .frame(maxWidth: .infinity, minHeight: PorcelainTokens.touchTarget)
