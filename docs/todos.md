@@ -27,6 +27,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
+- **`add-to-meal` gets no Jev suggestions.** `meal.mealType`/`mealKind` are
+  suggestable from the meal name (`control.suggest` in `06-meal.entity.ts`),
+  but `app/meals/add-to-meal.tsx` only holds a `recipeId` and never fetches a
+  name, so there is no text basis. Fetch the recipe name there and mount
+  `FieldSuggestionApply` beside its two pickers, as `split-expense-dialog.tsx`
+  does for trade.
+
 - **Canvas conformance follow-ups.** The generic pages now render the
   canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
   workbench band with declared-filter chips and `Actions ▾`, plate verbs,
@@ -136,6 +143,23 @@ history is the archive. Permanent product constraints live in the
 ---
 
 ## Ready projects
+
+- **Expense project suggestion ignores trade affinity.** The
+  `expense.projectId` roster in `server/ai/field-suggest/registry.ts` is
+  `projectNameOptions` plus each project's date window; the same-trade
+  affinity `rankProjectSuggestions` (`services/project-suggestions.ts`)
+  already computes is not rendered into the roster lines, so Jev cannot
+  prefer the project whose other expenses share the line's trade. Feed the
+  affinity cells into `renderLine` and re-evaluate on `/ai-usage`.
+
+- **Settle-expense is the last bespoke expense dialog.** Everything it edits
+  is an expense field, so it should be a `settle` update intent through the
+  generic editor with `future: false` fixed in `buildData`. Blocker:
+  `use-entity-commands.ts` skips the network call when no rendered field is
+  dirty, so a no-touch "Mark purchased" (same-day settling, the common case)
+  would silently no-op. Add an "always submit" intent flag to the editing
+  registry, then delete `settle-expense-dialog.tsx` (its selects already
+  bind to the suggest registry via `suggestField`).
 
 - **Product edit still opens `ProductForm` in a dialog** instead of the
   generic editor's `structured-field` renderers, because `unitMappings` and
