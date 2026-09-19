@@ -10,6 +10,7 @@ struct PhotoEntityChooser: View {
     let onCreateNew: (PhotoNewRecordAffordance) -> Void
     let onSelect: (EntityRow) -> Void
     @State private var model: PhotoEntityChooserModel?
+    @State private var searchText = ""
     @State private var rankOrder: [String: Int] = [:]
     @State private var rankingGeneration = UUID()
     @State private var isRanking = false
@@ -71,15 +72,17 @@ struct PhotoEntityChooser: View {
         .modifier(
             PhotoEntitySearchModifier(
                 enabled: descriptor.primarySearch != nil,
-                text: Binding(
-                    get: { model?.search?.query ?? "" },
-                    set: { model?.setSearchQuery($0) }
-                ),
+                text: $searchText,
                 prompt: descriptor.primarySearch?.placeholder
                     ?? "Search \(descriptor.plural.lowercased()) or shortcode"
             )
         )
+        // Same shape as `EntityListView`: `.searchable` owns a plain `@State` string and the
+        // model is told about changes. Binding the field straight to the observable model's
+        // normalized `query` left the chooser showing unfiltered rows on macOS.
+        .onChange(of: searchText) { _, value in model?.setSearchQuery(value) }
         .task(id: key) {
+            searchText = ""
             if model == nil {
                 model = PhotoEntityChooserModel(
                     descriptor: descriptor, captureDates: captureDates,
@@ -110,10 +113,11 @@ struct PhotoEntityChooser: View {
 
     private var loadedRows: [EntityRow] {
         guard let model else { return [] }
+        // A query replaces the date/recent lanes rather than adding to them; merging all three
+        // made a search look unfiltered (typing "plum" still listed every recent planting).
+        if model.isSearching { return model.searchRows }
         var seen = Set<String>()
-        return (model.dateMatches + model.recentRows + model.searchRows).filter {
-            seen.insert($0.id).inserted
-        }
+        return (model.dateMatches + model.recentRows).filter { seen.insert($0.id).inserted }
     }
 
     /// Manual type selection still benefits from the prepared import evidence. The task is

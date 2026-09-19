@@ -106,6 +106,19 @@ final class PhotoImportManifest {
         items.filter { selectedIDs.contains($0.id) }
     }
 
+    /// What a pushed chooser/editor shows above its list: only the photos the pick will apply
+    /// to, with the focused one first so the hero opens on it rather than on the batch's first
+    /// photo. Falls back to the whole batch when nothing is selected.
+    var scopedHeroItems: [PhotoSelectionItem] {
+        let scoped = selectedItems.isEmpty ? items : selectedItems
+        guard let focusedItemID, let index = scoped.firstIndex(where: { $0.id == focusedItemID }),
+            index != 0
+        else { return scoped }
+        var ordered = scoped
+        ordered.insert(ordered.remove(at: index), at: 0)
+        return ordered
+    }
+
     var needsDestination: [String] {
         items.map(\.id).filter { assignments[$0] == nil }
     }
