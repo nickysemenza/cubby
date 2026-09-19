@@ -13,7 +13,9 @@ private func settle<T: Sendable>(_ drain: ScanDrain<T>, timeout: Duration = .sec
     }
 }
 
-@Suite("ScanDrain")
+// Cases schedule a MainActor-owned drain through child Tasks. Run this suite serially so a
+// neighboring case cannot starve a drain past its condition-based timeout on a loaded CI runner.
+@Suite("ScanDrain", .serialized)
 @MainActor
 struct ScanDrainTests {
     let shelf = LocationCode("LOC-2345")
