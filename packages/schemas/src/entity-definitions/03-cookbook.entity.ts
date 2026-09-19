@@ -314,10 +314,11 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "documents",
         candidateFields: [],
         temporalFields: [],
         lifecycleFilters: [],
-        signals: { ocrFields: [], classifierLabels: ["cookbook", "cover"] },
+        signals: { ocrFields: [], classifierLabels: ["book"] },
         abstention: { minimumScore: 0.82, minimumMargin: 0.18 },
       },
     },

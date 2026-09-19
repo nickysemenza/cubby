@@ -816,6 +816,7 @@ export default defineEntity({
         { kind: "createSelf", routeId: "task-new", enabled: true },
       ],
       routing: {
+        category: "home",
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["dueDate", "completedAt"],
         lifecycleFilters: [
@@ -826,7 +827,7 @@ export default defineEntity({
         ],
         signals: {
           ocrFields: ["name", "description", "notes"],
-          classifierLabels: ["task"],
+          classifierLabels: ["sticky_note"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },

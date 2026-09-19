@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { photoCategoryKeys } from "../photo-categories";
 
 /** The scalar shapes the entity compiler can persist and project. */
 export const entityFieldKinds = [
@@ -809,6 +810,14 @@ const metadataSchemas = () => {
         })
         .strict()
         .default({ ocrFields: [], classifierLabels: [] }),
+      /**
+       * The photo category (`packages/schemas/src/photo-categories.ts`) this entity's
+       * routing belongs to. Optional here — not because a routing entity may omit it, but
+       * so a missing value reaches `validateImageRouting` (scripts/generator/entities/compile.ts)
+       * with the entity's key still in hand, for a message that names the entity instead of
+       * a bare declaration index. An unrecognized value still fails here, at the enum.
+       */
+      category: z.enum(photoCategoryKeys).optional(),
       /**
        * Authoritative visual evidence for photo routing. This is deliberately
        * separate from borrowed display imagery, which can never become an

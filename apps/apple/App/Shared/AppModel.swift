@@ -35,7 +35,13 @@ final class AppModel {
     /// a new photo the moment it lands, so it matches before the next rebuild).
     let featurePrints = FeaturePrintIndex()
     let photoMatches = PhotoMatchStore()
-    let photoLibrary = PhotoLibraryStore()
+    let photoAnalysisStore: PhotoAnalysisStore
+    let photoLibrary: PhotoLibraryStore
+    let photoClassificationSweep: PhotoClassificationSweep
+    /// Developer overlays layer 6: installed on every `CubbyClient` this model builds, so the
+    /// request-timing strip reflects requests made through any of them (the base client and, after
+    /// a base-URL change, its replacement).
+    let requestTrace = RequestTrace()
     var lastError: String?
     /// Bumped by every write the app makes to an entity; a list or detail showing one of
     /// `entityMutationKeys` refreshes on the next revision (`.task(id:)` on the views).
@@ -74,8 +80,43 @@ final class AppModel {
         self.baseURL = url
         let credentials = CredentialProvider(host: CubbyBaseURL.host(of: url), store: store)
         self.credentials = credentials
-        self.client = CubbyClient(baseURL: url, credentials: credentials)
+        self.client = CubbyClient(baseURL: url, credentials: credentials, requestObserver: requestTrace)
         self.auth = AuthFlow(baseURL: url, credentials: credentials)
+        let analysisStore = Self.makeAnalysisStore()
+        self.photoAnalysisStore = analysisStore
+        let library = PhotoLibraryStore(analysisStore: analysisStore)
+        self.photoLibrary = library
+        self.photoClassificationSweep = PhotoClassificationSweep(
+            analysisStore: analysisStore, library: library,
+            window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused)
+        let matches = photoMatches
+        photoClassificationSweep.onClassified = { id, snapshot in matches.markAnalysis([id: snapshot]) }
+        Task { try? await analysisStore.migrateLegacyHashCacheIfNeeded() }
+    }
+
+    /// The persistent store at `Application Support/Cubby/PhotoAnalysis.store`, falling back to an
+    /// in-memory container (photo hashing/classification just resets for this launch) rather than
+    /// crashing the app if the on-disk store cannot be opened.
+    private static func makeAnalysisStore() -> PhotoAnalysisStore {
+        do {
+            return try PhotoAnalysisStore.make()
+        } catch {
+            Diagnostics.report(error, context: "photos.analysisStore.container")
+            // The in-memory configuration has no file-system failure mode to hit; if it still
+            // throws, SwiftData itself is broken and there is nothing more graceful to fall back
+            // to than surfacing that at launch.
+            return try! PhotoAnalysisStore.make(inMemory: true)
+        }
+    }
+
+    private static var persistedAnalysisWindow: PhotoAnalysisWindow {
+        UserDefaults.standard.string(forKey: "photoAnalysisWindow").flatMap(
+            PhotoAnalysisWindow.init(rawValue:))
+            ?? .thisYear
+    }
+
+    private static var persistedAnalysisPaused: Bool {
+        UserDefaults.standard.bool(forKey: "photoAnalysisPaused")
     }
 
     /// Preview state is fully established synchronously; constructing a canvas never starts work.
@@ -85,7 +126,8 @@ final class AppModel {
         if signedIn { try? store.save(credential, for: CubbyBaseURL.host(of: baseURL)) }
         let model = AppModel(store: store, baseURL: baseURL)
         model.client = CubbyClient(
-            baseURL: baseURL, credentials: model.credentials, session: PreviewURLProtocol.session())
+            baseURL: baseURL, credentials: model.credentials, session: PreviewURLProtocol.session(),
+            requestObserver: model.requestTrace)
         model.credential = signedIn ? credential : nil
         model.phase = signedIn ? .signedIn : .signedOut
         return model
@@ -188,7 +230,7 @@ final class AppModel {
         photoLibrary.reset()
         let credentials = CredentialProvider(host: host, store: store)
         self.credentials = credentials
-        client = CubbyClient(baseURL: baseURL, credentials: credentials)
+        client = CubbyClient(baseURL: baseURL, credentials: credentials, requestObserver: requestTrace)
         auth = AuthFlow(baseURL: baseURL, credentials: credentials)
     }
 

@@ -4,8 +4,18 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var appliedStashedLaunchLink = false
+    @AppStorage("developerOverlays") private var developerOverlays = false
 
     var body: some View {
+        content
+            // Set once, at the root, from storage: every descendant reads it via
+            // `@Environment(\.developerOverlays)` instead of its own `@AppStorage`, so toggling in
+            // `DevView` updates every open screen at once.
+            .environment(\.developerOverlays, developerOverlays)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch model.phase {
         case .restoring:
             VStack(spacing: PorcelainTokens.Space.md) {
@@ -30,6 +40,14 @@ struct RootView: View {
             #if os(iOS)
                 .task { applyStashedLaunchLinkIfNeeded() }
             #endif
+            // Layer 6: a one-line monospaced strip for the last request `CubbyAuthMiddleware`
+            // observed, only while the toggle is on — an overlay/caption only, never affecting the
+            // rest of the layout (`DESIGN.md` § Developer overlays).
+            .safeAreaInset(edge: .bottom) {
+                if developerOverlays, let last = model.requestTrace.last {
+                    RequestTraceStrip(entry: last)
+                }
+            }
         }
     }
 

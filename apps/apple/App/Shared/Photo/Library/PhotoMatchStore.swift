@@ -18,6 +18,11 @@ final class PhotoMatchStore {
     /// so rendering never issues one request per cell.
     private(set) var directOwnersByImageID: [String: [String]] = [:]
     private(set) var revision = 0
+    /// Bumped by `markAnalysis`, coalesced (at most once per second or per 50 photos, whichever
+    /// first) rather than once per photo like `revision` used to be. `.task(id:)` category-filter
+    /// reloads and the "N of M analysed" caption key off this instead, so a background sweep
+    /// classifying thousands of photos does not force those to refetch/re-render per photo.
+    private(set) var classifiedRevision = 0
 
     @ObservationIgnored private var entries: [ImageCode: ImageHashEntry] = [:]
     @ObservationIgnored private var queries: [String: HashQuery] = [:]
@@ -31,6 +36,18 @@ final class PhotoMatchStore {
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var accountGeneration = UUID()
     @ObservationIgnored private var observers: Set<UUID> = []
+    /// Mirrors `PhotoLibraryStore.checked` for the ids this store has been asked about, so
+    /// `PhotoGridCellState.derive` can tell "no match, confirmed" from "not looked at yet" without
+    /// this store reading the library's set directly (which would reintroduce a whole-collection
+    /// dependency for every cell).
+    @ObservationIgnored private var checkedIDs: Set<String> = []
+    @ObservationIgnored private var cellStateBoxes: [String: PhotoGridCellStateBox] = [:]
+    /// Populated by `PhotoLibraryStore`'s batch read on refresh and by the classification sweep as
+    /// it finishes each photo (B4's grid dot; developer overlays layer 1's timing/label). Absent
+    /// means "not looked at yet by either path".
+    @ObservationIgnored private var analysisByID: [String: PhotoAssetSnapshot] = [:]
+    @ObservationIgnored private var uncoalescedClassifiedCount = 0
+    @ObservationIgnored private var lastClassifiedRevisionBump = Date.distantPast
 
     var coverage: String {
         if error != nil {
@@ -77,6 +94,70 @@ final class PhotoMatchStore {
     func setDirectOwnerShortcodes(_ summaries: [String: [String]]) {
         directOwnersByImageID = summaries
         revision += 1
+        publishCellStates(for: cellStateBoxes.keys)
+    }
+
+    /// The per-id, `@Observable` box a grid cell reads instead of this store's dictionaries
+    /// directly. Marks `id` checked-so-far as "unknown" the first time it is asked about, then
+    /// `markChecked`/`registerBatch`/`refresh` refine it in place as real results arrive.
+    func cellStateBox(for id: String) -> PhotoGridCellStateBox {
+        if let box = cellStateBoxes[id] { return box }
+        let box = PhotoGridCellStateBox(state: computeCellState(for: id))
+        cellStateBoxes[id] = box
+        return box
+    }
+
+    /// Called by `PhotoLibraryStore` right before it hands a batch to `register`/`registerBatch`,
+    /// so the resulting cell state reads "known: no match" rather than "not checked" as soon as
+    /// that batch's match results publish, instead of lagging behind the library's own `checked`
+    /// set (which updates only after the async match round trip returns).
+    func markChecked(_ ids: some Sequence<String>) {
+        for id in ids where !checkedIDs.contains(id) {
+            checkedIDs.insert(id)
+            publishCellState(for: id)
+        }
+    }
+
+    /// Publishes a batch of analysis snapshots into the per-id cell state (B4's grid dot; developer
+    /// overlays layer 1's timing/label). Each cell's own box (`publishCellStates` below) updates
+    /// immediately regardless of batch size — this call site is the only observer that needs a
+    /// per-photo signal. `revision` itself is left untouched (a sweep classifying thousands of
+    /// photos one at a time must not force every observer keyed on it — the ownership filter cache,
+    /// the grid's `FilteredMonthAssetsCache` — to invalidate and re-render per photo); the coalesced
+    /// `classifiedRevision` below is what the category chip filter and "N of M analysed" caption
+    /// key off instead.
+    func markAnalysis(_ snapshots: [String: PhotoAssetSnapshot]) {
+        guard !snapshots.isEmpty else { return }
+        for (id, snapshot) in snapshots { analysisByID[id] = snapshot }
+        publishCellStates(for: snapshots.keys)
+        uncoalescedClassifiedCount += snapshots.count
+        let now = Date()
+        guard uncoalescedClassifiedCount >= 50 || now.timeIntervalSince(lastClassifiedRevisionBump) >= 1
+        else { return }
+        classifiedRevision += 1
+        uncoalescedClassifiedCount = 0
+        lastClassifiedRevisionBump = now
+    }
+
+    private func computeCellState(for id: String) -> PhotoGridCellState {
+        let snapshot = analysisByID[id]
+        return PhotoGridCellState.derive(
+            storedCandidates: storedCandidates(for: id),
+            strongDirectOwnerShortcodes: strongDirectOwnerShortcodes(for: id),
+            hasKnownResult: hasKnownResult(for: id),
+            checked: checkedIDs.contains(id),
+            analysis: snapshot?.status ?? .pending,
+            classifyMs: snapshot?.classifyMs,
+            topLabel: snapshot?.topLabels.max(by: { $0.confidence < $1.confidence })?.identifier)
+    }
+
+    private func publishCellState(for id: String) {
+        guard let box = cellStateBoxes[id] else { return }
+        box.state = computeCellState(for: id)
+    }
+
+    private func publishCellStates(for ids: some Sequence<String>) {
+        for id in ids { publishCellState(for: id) }
     }
 
     func acquire(_ id: UUID) {
@@ -102,11 +183,15 @@ final class PhotoMatchStore {
         pendingQueries = [:]
         serverCandidates = [:]; batchCandidates = [:]; candidates = [:]
         directOwnersByImageID = [:]
+        checkedIDs = []; cellStateBoxes = [:]
+        analysisByID = [:]
+        uncoalescedClassifiedCount = 0; lastClassifiedRevisionBump = .distantPast
         entriesRevision += 1
         hasIndex = false; isLoading = false; isRepairing = false
         totalCount = 0; remainingCount = 0; repairFailures = 0; error = nil
         observers = []
         revision += 1
+        classifiedRevision += 1
     }
 
     func refresh(client: CubbyClient, priorityIDs: Set<String>? = nil) async {
@@ -328,6 +413,7 @@ final class PhotoMatchStore {
         }
         serverCandidates = nextServerCandidates
         candidates = nextCandidates
+        publishCellStates(for: querySnapshot.keys)
     }
 
     nonisolated private static func match(

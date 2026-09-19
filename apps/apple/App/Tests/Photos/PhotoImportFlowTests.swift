@@ -12,7 +12,7 @@ struct PhotoImportFlowTests {
     @Test func manifestKeepsUnassignedPhotosOutOfCommitUntilMoved() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let manifest = PhotoImportManifest(items: [first, second])
+        let manifest = makeManifest(items: [first, second])
 
         #expect(manifest.needsDestination == [first.id, second.id])
         #expect(!manifest.canCommit)
@@ -36,7 +36,7 @@ struct PhotoImportFlowTests {
     @Test func defaultSelectionIsTheFocusedPhotoAndAdvancesAfterAssignment() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let manifest = PhotoImportManifest(items: [first, second])
+        let manifest = makeManifest(items: [first, second])
 
         #expect(manifest.focusedItemID == first.id)
         #expect(manifest.selectedIDs == [first.id])
@@ -52,10 +52,102 @@ struct PhotoImportFlowTests {
         #expect(manifest.selectedIDs == [second.id])
     }
 
+    /// A1 regression: `scopedCaptureDate` (and therefore every editor/stage prefill) falls back to
+    /// the whole batch when the selection is empty, exactly like `scopedHeroItems` — the original
+    /// bug read `selectedItems.compactMap(\.capturedAt).min()` directly with no such fallback, so
+    /// deselecting (or an auto-assign, or the analyzer) silently lost the photo's date.
+    @Test func editorPrefillStillCarriesThePhotoDayWhenSelectionIsEmptied() throws {
+        let captured = Date(timeIntervalSince1970: 1_757_500_000)
+        let item = try selection(filename: "dated.jpg", capturedAt: captured)
+        let manifest = makeManifest(items: [item])
+        manifest.selectedIDs = []
+
+        let option = try #require(
+            manifest.destinationOptions.first {
+                $0.route.kind == .createRelated && $0.route.source == .planting
+            })
+        let source = EntityRow(
+            id: "PLT-0001", title: "Roma", subtitle: nil, imageURL: nil, raw: ["id": "PLT-0001"])
+
+        #expect(manifest.scopedCaptureDate == captured)
+        let body = PhotoRelatedCreateEditor.createPrefill(
+            option: option, source: source, captureDate: manifest.scopedCaptureDate)
+        #expect(body["observedOn"] == .string(PlainDate(captured).rawValue))
+    }
+
+    /// A1 regression: the background analyzer's `apply` may only ever write `assignments`/
+    /// `suggestions` — it must never touch `selectedIDs`, which used to yank the selection out
+    /// from under a photo the person had open in a chooser or editor.
+    @Test func analyzerApplyNeverMutatesSelectedIDs() throws {
+        let item = try selection(filename: "match.jpg")
+        let manifest = makeManifest(items: [item])
+        manifest.selectedIDs = [item.id]
+        let option = try #require(
+            manifest.destinationOptions.first { $0.route.kind == .`self` && $0.route.choice != .prompt })
+        let row = EntityRow(
+            id: "PRD-9999", title: "Example", subtitle: nil, imageURL: nil,
+            raw: ["id": "PRD-9999", "name": "Example"])
+        let routing = PhotoRoutingCandidate(id: "candidate-1", routeID: option.id, description: row.title)
+        let candidate = PhotoImportManifest.Candidate(option: option, row: row, routing: routing)
+        let decision = PhotoRoutingDecision(
+            photoID: item.id, routeID: option.id, candidateID: routing.id, explanation: "Matched by test")
+
+        manifest.applyRoutingDecisions([decision], candidates: [routing.id: candidate])
+
+        #expect(manifest.selectedIDs == [item.id])
+        #expect(manifest.groups.count == 1)
+        // Developer overlays layer 2: the analyzer's automatic assignment records a route decision
+        // too, not only a manual pick's `.user`.
+        #expect(manifest.groups.first?.decision == .automaticPrimary)
+    }
+
+    /// A1 (Q7b): an undated photo's capture-date-bound field never gets a value from `createPrefill`
+    /// and `hasOnlyOptionalFields` must not treat it as optional just because its schema default is
+    /// `initial: "today"` — the editor must open and require a real date from the person.
+    @Test func undatedPhotoLeavesObservedOnAbsentAndRequired() throws {
+        let item = try selection(filename: "undated.jpg")
+        let manifest = makeManifest(items: [item])
+        let option = try #require(
+            manifest.destinationOptions.first {
+                $0.route.kind == .createRelated && $0.route.source == .planting
+            })
+        let source = EntityRow(
+            id: "PLT-0002", title: "Cherokee", subtitle: nil, imageURL: nil, raw: ["id": "PLT-0002"])
+
+        let body = PhotoRelatedCreateEditor.createPrefill(option: option, source: source, captureDate: nil)
+
+        #expect(body["observedOn"] == nil)
+        #expect(
+            !PhotoRelatedCreateEditor.hasOnlyOptionalFields(
+                option: option, source: source, captureDate: nil))
+    }
+
+    /// A2 (Q15c): the caption is a pure function of (time, zone, city) — no `CLGeocoder` in the
+    /// loop — and drops the " in …" clause entirely when there's no city.
+    @Test func captureProvenanceCaptionFormatsWithAndWithoutACity() throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_757_500_000)
+        let zone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        formatter.timeZone = zone
+        let time = formatter.string(from: capturedAt)
+
+        #expect(
+            PhotoCaptureProvenance.caption(capturedAt: capturedAt, timeZone: zone, city: "San Francisco")
+                == "Set from the photo · taken \(time) in San Francisco")
+        #expect(
+            PhotoCaptureProvenance.caption(capturedAt: capturedAt, timeZone: zone, city: nil)
+                == "Set from the photo · taken \(time)")
+        #expect(
+            PhotoCaptureProvenance.caption(capturedAt: capturedAt, timeZone: zone, city: "")
+                == "Set from the photo · taken \(time)")
+    }
+
     @Test func stageCreateKeysDraftsByRouteSourceRecordAndDay() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let manifest = PhotoImportManifest(items: [first, second])
+        let manifest = makeManifest(items: [first, second])
         let option = try #require(
             manifest.destinationOptions.first {
                 $0.route.kind == .createRelated && $0.route.source == .planting
@@ -77,7 +169,7 @@ struct PhotoImportFlowTests {
     @Test func stageCreateMergesTheSameSourceRecordOnTheSameDayIntoOneDraft() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let manifest = PhotoImportManifest(items: [first, second])
+        let manifest = makeManifest(items: [first, second])
         let option = try #require(
             manifest.destinationOptions.first {
                 $0.route.kind == .createRelated && $0.route.source == .planting
@@ -96,7 +188,7 @@ struct PhotoImportFlowTests {
 
     @Test func chooseSourceRecordAutoResolvesASingleSameDayMatch() async throws {
         let item = try selection(filename: "match.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let row = EntityRow(
             id: "PLT-1234", title: "Santa Rosa", subtitle: nil, imageURL: nil,
@@ -115,11 +207,15 @@ struct PhotoImportFlowTests {
             })
         #expect(manifest.groups.first?.id == "\(existing.id):GDE-0001")
         #expect(manifest.needsDestination.isEmpty)
+        // Developer overlays layer 2: a single same-day auto-resolve records `.existingSameDay`.
+        #expect(manifest.groups.first?.decision == .existingSameDay(count: 1))
     }
 
     @Test func chooseSourceRecordStagesACreateDraftWithThePrefilledBodyWhenNothingMatches() async throws {
-        let item = try selection(filename: "new.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        // Dated on purpose: an undated photo leaves the required `observedOn` empty and opens the
+        // editor instead (see `undatedPhotoLeavesObservedOnAbsentAndRequired`).
+        let item = try selection(filename: "new.jpg", capturedAt: Date(timeIntervalSince1970: 1_789_000_000))
+        let manifest = makeManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let row = EntityRow(
             id: "PLT-5678", title: "Roma", subtitle: nil, imageURL: nil,
@@ -135,11 +231,14 @@ struct PhotoImportFlowTests {
         #expect(manifest.needsDestination.isEmpty)
         let body = try #require(manifest.createDraftBody(for: item.id))
         #expect(body["locationId"] == .string("LOC-0009"))
+        // Developer overlays layer 2: an unconditional primary route with no matches records
+        // `.automaticPrimary`.
+        #expect(manifest.groups.first?.decision == .automaticPrimary)
     }
 
     @Test func chooseSourceRecordOpensTheRelatedChooserForMultipleMatches() async throws {
         let item = try selection(filename: "ambiguous.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let row = EntityRow(
             id: "PLT-4321", title: "Cherokee", subtitle: nil, imageURL: nil,
@@ -162,7 +261,7 @@ struct PhotoImportFlowTests {
 
     @Test func chooseSourceRecordAlwaysPromptsWhenARouteIsMarkedPrompt() async throws {
         let item = try selection(filename: "inventory.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .inventory })
         let row = EntityRow(
             id: "INV-0001", title: "Flour", subtitle: nil, imageURL: nil, raw: ["id": "INV-0001"])
@@ -177,7 +276,7 @@ struct PhotoImportFlowTests {
     }
 
     @Test func destinationsIncludeEveryManifestIngressKind() throws {
-        let manifest = PhotoImportManifest(items: [try selection(filename: "first.jpg")])
+        let manifest = makeManifest(items: [try selection(filename: "first.jpg")])
         let routes = manifest.destinationOptions.map(\.route)
 
         #expect(!routes.isEmpty)
@@ -201,7 +300,7 @@ struct PhotoImportFlowTests {
     }
 
     @Test func naturalSourceTypesAreUniqueAndPlantingDefaultsToCreateRoute() throws {
-        let manifest = PhotoImportManifest(items: [try selection(filename: "first.jpg")])
+        let manifest = makeManifest(items: [try selection(filename: "first.jpg")])
         let types = manifest.sourceTypeOptions
 
         #expect(Set(types.map(\.source)).count == types.count)
@@ -226,10 +325,11 @@ struct PhotoImportFlowTests {
     /// field matches. Picks the predicate route from the catalog by `primaryWhen != nil`, never by
     /// entity name, so this stays correct if the manifest's declared values ever change.
     @Test func conditionalPrimaryOutranksTheUnconditionalPrimaryWhenThePredicateMatches() async throws {
-        let bed = try selection(filename: "bed.jpg")
-        let shelf = try selection(filename: "shelf.jpg")
-        let bedManifest = PhotoImportManifest(items: [bed])
-        let shelfManifest = PhotoImportManifest(items: [shelf])
+        let captured = Date(timeIntervalSince1970: 1_789_000_000)
+        let bed = try selection(filename: "bed.jpg", capturedAt: captured)
+        let shelf = try selection(filename: "shelf.jpg", capturedAt: captured)
+        let bedManifest = makeManifest(items: [bed])
+        let shelfManifest = makeManifest(items: [shelf])
         let type = try #require(bedManifest.sourceTypeOptions.first { $0.source == .location })
         let conditional = try #require(type.options.first { $0.route.primaryWhen != nil })
         let predicate = try #require(conditional.route.primaryWhen)
@@ -247,6 +347,10 @@ struct PhotoImportFlowTests {
             return
         }
         #expect(bedManifest.groups.first?.id.hasPrefix(conditional.id) == true)
+        // Developer overlays layer 2: the matched predicate is recorded, not just "automatic".
+        #expect(
+            bedManifest.groups.first?.decision
+                == .automaticConditional(field: predicate.field, value: predicate.values[0]))
 
         let shelfResolution = await shelfManifest.chooseSourceRecord(type, row: shelfRow, client: client)
         guard case .resolved = shelfResolution else {
@@ -255,6 +359,7 @@ struct PhotoImportFlowTests {
         }
         #expect(shelfManifest.groups.first?.source == .location)
         #expect(shelfManifest.createDraftBody(for: shelf.id) == nil)
+        #expect(shelfManifest.groups.first?.decision == .automaticPrimary)
     }
 
     /// 8c: `createSelf`'s target-of-createRelated case is discovered purely from the catalog by
@@ -280,7 +385,7 @@ struct PhotoImportFlowTests {
     /// UI disabling its row is not the only guard.
     @Test func stageCreateNeverStagesADisabledRoute() throws {
         let item = try selection(filename: "disabled.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let option = try #require(PhotoImportManifest.createSelfOption(for: .project))
         #expect(!option.route.enabled)
 
@@ -325,7 +430,7 @@ struct PhotoImportFlowTests {
         #expect(groups[1].photoIDs == ["meal-1"])
     }
 
-    private func selection(filename: String) throws -> PhotoSelectionItem {
+    private func selection(filename: String, capturedAt: Date? = nil) throws -> PhotoSelectionItem {
         let image = try #require(
             CGContext(
                 data: nil, width: 2, height: 2, bitsPerComponent: 8,
@@ -333,7 +438,7 @@ struct PhotoImportFlowTests {
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage())
         let file = try PhotoFile(
             url: URL(fileURLWithPath: "/unused-\(filename)"), filename: filename,
-            contentType: "image/jpeg", size: 1, width: 2, height: 2)
+            contentType: "image/jpeg", size: 1, width: 2, height: 2, capturedAt: capturedAt)
         return PhotoSelectionItem(file: file, preview: image)
     }
 

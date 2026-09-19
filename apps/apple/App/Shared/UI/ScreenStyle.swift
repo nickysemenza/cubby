@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if os(macOS)
+    import AppKit
+#endif
+
 extension View {
     /// Screen-level keyboard dismissal without overriding the system's surface or scroll edges.
     func porcelainScreen() -> some View {
@@ -137,6 +141,13 @@ private struct NativeSheetPresentation: ViewModifier {
     let purpose: NativeSheetPurpose
     @Environment(\.dynamicTypeSize) private var textSize
     @State private var detent: PresentationDetent = .medium
+    #if os(macOS)
+        // Q1b: the photo review sheet tracks the window instead of a fixed size that clipped on
+        // a large display and wasted space on a small one. Read once in `.task` (the window isn't
+        // reliably available before the sheet's first layout pass) rather than reactively — good
+        // enough for "opens sized to the window", not worth a live-resize observer.
+        @State private var windowSize = CGSize(width: 960, height: 620)
+    #endif
 
     func body(content: Content) -> some View {
         #if os(macOS)
@@ -149,7 +160,11 @@ private struct NativeSheetPresentation: ViewModifier {
                     .frame(minWidth: 480, idealWidth: 620, minHeight: 440, idealHeight: 680)
             case .photo, .preview:
                 content.presentationSizing(.page)
-                    .frame(minWidth: 520, idealWidth: 800, minHeight: 440, idealHeight: 680)
+                    .frame(
+                        minWidth: 960, idealWidth: photoSheetSize.width,
+                        minHeight: 620, idealHeight: photoSheetSize.height
+                    )
+                    .task { windowSize = NSApp.keyWindow?.frame.size ?? windowSize }
             }
         #else
             switch purpose {
@@ -168,4 +183,14 @@ private struct NativeSheetPresentation: ViewModifier {
             }
         #endif
     }
+
+    #if os(macOS)
+        /// ~85% of the window, capped so it never dwarfs a large display and floored so it never
+        /// shrinks to uselessness on a small one.
+        private var photoSheetSize: CGSize {
+            CGSize(
+                width: max(960, min(windowSize.width * 0.85, 1400)),
+                height: max(620, min(windowSize.height * 0.85, 1000)))
+        }
+    #endif
 }

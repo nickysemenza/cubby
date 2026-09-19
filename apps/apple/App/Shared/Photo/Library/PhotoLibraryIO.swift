@@ -62,6 +62,9 @@ nonisolated private final class PhotoRequest<Value: Sendable>: Sendable {
 actor PhotoLibraryIO {
     static let shared = PhotoLibraryIO()
     private let manager = PHCachingImageManager()
+    /// Shared by every grid/hash-source request and by `startCaching`/`stopCaching`, so a
+    /// pre-warmed cache entry actually matches what the grid later requests.
+    private static let targetSize = CGSize(width: 256, height: 256)
 
     func thumbnail(for asset: PHAsset, network: Bool = false, progress: (@Sendable (Double) -> Void)? = nil)
         async throws -> CGImage
@@ -78,7 +81,7 @@ actor PhotoLibraryIO {
             return try await withCheckedThrowingContinuation { continuation in
                 request.install(continuation)
                 let id = manager.requestImage(
-                    for: asset, targetSize: CGSize(width: 256, height: 256),
+                    for: asset, targetSize: Self.targetSize,
                     contentMode: .aspectFit, options: options
                 ) { image, info in
                     if (info?[PHImageCancelledKey] as? Bool) == true {
@@ -103,6 +106,110 @@ actor PhotoLibraryIO {
         } onCancel: { [manager] in
             request.cancel(manager: manager)
         }
+    }
+
+    /// Progressive grid thumbnails: `.opportunistic` may deliver a fast, low-resolution frame
+    /// before the final one. The grid shows that degraded frame immediately instead of a blank
+    /// cell while flinging, then replaces it once the final frame arrives. `query(_:)`'s hash
+    /// source deliberately keeps using `thumbnail(for:)` above (`.highQualityFormat`, single
+    /// frame) — a degraded frame must never become the input to a perceptual hash.
+    func thumbnails(for asset: PHAsset, network: Bool = false)
+        async -> AsyncThrowingStream<CGImage, Error>
+    {
+        let options = PHImageRequestOptions()
+        options.version = .current
+        options.deliveryMode = .opportunistic
+        options.resizeMode = .exact
+        options.isNetworkAccessAllowed = network
+        return AsyncThrowingStream { continuation in
+            let id = manager.requestImage(
+                for: asset, targetSize: Self.targetSize,
+                contentMode: .aspectFit, options: options
+            ) { image, info in
+                if (info?[PHImageCancelledKey] as? Bool) == true {
+                    continuation.finish(throwing: CancellationError())
+                    return
+                }
+                if let error = info?[PHImageErrorKey] as? Error {
+                    continuation.finish(throwing: error)
+                    return
+                }
+                #if os(macOS)
+                    let decoded = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                #else
+                    let decoded = image?.cgImage
+                #endif
+                let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) == true
+                guard let decoded else {
+                    if !isDegraded { continuation.finish(throwing: PhotoLibraryFailure.cloudUnavailable) }
+                    return
+                }
+                continuation.yield(decoded)
+                if !isDegraded { continuation.finish() }
+            }
+            continuation.onTermination = { [manager] _ in manager.cancelImageRequest(id) }
+        }
+    }
+
+    /// A 512px, local-only (no iCloud network fetch) thumbnail for the classification sweep
+    /// (B3). Deliberately its own request rather than reusing `thumbnail(for:)`'s 256px grid
+    /// size — Vision's classifier does better on a larger frame, and this must never register a
+    /// `PHImageResultIsDegradedKey` frame as final the way the grid's progressive stream can.
+    ///
+    /// `PHImageRequestOptions` has no QoS/priority knob of its own — `PHImageManager` services
+    /// every request on its own internal queue regardless of the calling `Task`'s priority, so
+    /// the sweep's `Task(priority: .utility)` (`PhotoClassificationSweep.reconcile()`) governs
+    /// only the Vision/actor work around this call, not the PhotoKit fetch itself.
+    func classificationThumbnail(for asset: PHAsset) async throws -> CGImage {
+        let options = PHImageRequestOptions()
+        options.version = .current
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .exact
+        options.isNetworkAccessAllowed = false
+        let request = PhotoRequest<CGImage>()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                request.install(continuation)
+                let id = manager.requestImage(
+                    for: asset, targetSize: CGSize(width: 512, height: 512),
+                    contentMode: .aspectFit, options: options
+                ) { image, info in
+                    if (info?[PHImageCancelledKey] as? Bool) == true {
+                        request.finish(.failure(CancellationError()))
+                    } else if let error = info?[PHImageErrorKey] as? Error {
+                        request.finish(.failure(error))
+                    } else if (info?[PHImageResultIsDegradedKey] as? Bool) != true {
+                        #if os(macOS)
+                            let decoded = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                        #else
+                            let decoded = image?.cgImage
+                        #endif
+                        if let decoded {
+                            request.finish(.success(decoded))
+                        } else {
+                            request.finish(.failure(PhotoLibraryFailure.cloudUnavailable))
+                        }
+                    }
+                }
+                request.started(id, manager: manager)
+            }
+        } onCancel: { [manager] in
+            request.cancel(manager: manager)
+        }
+    }
+
+    /// `PhotosRootView` calls these for the visible month's assets ± one neighbor as sections
+    /// scroll on/off screen, so PhotoKit has already decoded nearby thumbnails before a fling
+    /// reaches them.
+    func startCaching(_ assets: [PHAsset]) {
+        manager.startCachingImages(
+            for: assets, targetSize: Self.targetSize, contentMode: .aspectFit, options: nil)
+    }
+
+    func stopCaching(_ assets: [PHAsset]) {
+        manager.stopCachingImages(
+            for: assets, targetSize: Self.targetSize, contentMode: .aspectFit, options: nil)
     }
 
     func file(for asset: PHAsset, progress: (@Sendable (Double) -> Void)? = nil) async throws -> PhotoFile {

@@ -33,6 +33,10 @@ enum PorcelainTokens {
     static let houseCyan = Color("House")
     static let financeMagenta = Color("Finance")
 
+    /// A category-agnostic chart ramp: a photo category is tinted by its *index* into this array
+    /// (`PhotoCategoryTint`), never by its key, so a category rename never touches this list.
+    static let chartRamp: [Color] = [cookSaffron, pantryGreen, planViolet, houseCyan, financeMagenta]
+
     // Shapes: controls 6, panels 8, chips 5. Boundaries are 1px; no shadow at rest.
     static let radiusControl: CGFloat = 6
     static let radiusPanel: CGFloat = 8

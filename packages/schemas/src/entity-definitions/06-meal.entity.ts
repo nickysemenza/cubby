@@ -665,10 +665,11 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "food",
         candidateFields: ["name"],
         temporalFields: ["date"],
         lifecycleFilters: [],
-        signals: { ocrFields: ["name"], classifierLabels: ["meal"] },
+        signals: { ocrFields: ["name"], classifierLabels: ["food"] },
         abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
       },
     },

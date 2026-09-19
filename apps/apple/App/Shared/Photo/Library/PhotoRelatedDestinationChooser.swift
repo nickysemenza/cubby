@@ -7,6 +7,7 @@ import SwiftUI
 struct PhotoRelatedDestinationChooser: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.developerOverlays) private var developerOverlays
     let context: PhotoRelatedContext
     let createOption: PhotoDestinationOption?
     let captureDate: Date?
@@ -22,6 +23,7 @@ struct PhotoRelatedDestinationChooser: View {
     @State private var search = ""
     @State private var creation: PhotoDestinationOption?
     @State private var listPage = 1
+    @State private var rankScores: [String: PhotoEvidenceScorer.Score] = [:]
 
     private var descriptor: EntityDescriptor { context.option.descriptor }
 
@@ -76,12 +78,17 @@ struct PhotoRelatedDestinationChooser: View {
                                     }
                                 }
                             }
-                            ForEach(filteredRows) { row in
+                            ForEach(Array(filteredRows.enumerated()), id: \.element.id) { index, row in
                                 Button {
                                     onSelect(row)
                                 } label: {
-                                    EntityRowView(
-                                        key: context.option.route.target, row: row, photoMode: true)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        EntityRowView(
+                                            key: context.option.route.target, row: row, photoMode: true)
+                                        if developerOverlays {
+                                            DevOverlayText(rankDiagnosticCaption(for: row, rank: index))
+                                        }
+                                    }
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("photos.destination.related.\(row.id)")
@@ -108,6 +115,11 @@ struct PhotoRelatedDestinationChooser: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
             .searchable(text: $search, prompt: "Search name or shortcode")
+            .toolbar {
+                if developerOverlays {
+                    ToolbarItem { CopyDiagnosticsButton { rankingDiagnostics } }
+                }
+            }
         }
         .nativeSheet(.editor)
         .task {
@@ -121,6 +133,7 @@ struct PhotoRelatedDestinationChooser: View {
                 await load(reset: true)
             }
         }
+        .task(id: rows.map(\.id)) { await rankRows() }
         .sheet(item: $creation) { option in
             PhotoRelatedCreateEditor(
                 mode: .createRelated(option: option, source: context.source), captureDate: captureDate,
@@ -197,4 +210,33 @@ struct PhotoRelatedDestinationChooser: View {
         }
     }
 
+    /// Developer overlays layer 3: this chooser has one flat list (no separate date/recent lanes),
+    /// so ranking only adds the `combined` score; rank position is the list's own display order.
+    private func rankRows() async {
+        guard developerOverlays, !rows.isEmpty else { return }
+        do {
+            let ranked = try await importManifest.rankRows(
+                for: context.option.route.target, rows: rows, client: appModel.client)
+            rankScores = Dictionary(uniqueKeysWithValues: ranked.map { ($0.row.id, $0.score) })
+        } catch is CancellationError {
+        } catch {
+            Diagnostics.report(error, context: "photos.destination.related.ranking.\(context.option.id)")
+        }
+    }
+
+    /// "#2 · 0.74 · date" — every row here is already date/relation-scoped by `findRelated`, so the
+    /// lane is "search" only while the local filter narrows it, else "date".
+    private func rankDiagnosticCaption(for row: EntityRow, rank: Int) -> String {
+        let combined = rankScores[row.id].map { String(format: "%.2f", $0.combined) } ?? "—"
+        let lane = search.isEmpty ? "date" : "search"
+        return "#\(rank + 1) · \(combined) · \(lane)"
+    }
+
+    private var rankingDiagnostics: [PhotoChooserRowDiagnostic] {
+        filteredRows.enumerated().map { index, row in
+            PhotoChooserRowDiagnostic(
+                id: row.id, rank: index, combined: rankScores[row.id]?.combined,
+                lane: search.isEmpty ? "date" : "search")
+        }
+    }
 }

@@ -12,6 +12,7 @@ struct DevView: View {
     @State private var apiResult: String?
     @State private var checking = false
     @State private var sentryResult: String?
+    @AppStorage("developerOverlays") private var developerOverlays = false
 
     /// A deliberately thrown, locally defined error so a Sentry test event is recognisable as
     /// one and never mistaken for a real failure.
@@ -136,6 +137,20 @@ struct DevView: View {
                         PanelDivider()
                         LabeledRow(label: "Host", value: model.host, mono: true)
                     }
+                }
+
+                VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                    Eyebrow("Debug")
+                    Panel(padding: 0, spacing: 0) {
+                        Toggle("Developer overlays", isOn: $developerOverlays)
+                            .padding(.horizontal, PorcelainTokens.Space.md)
+                            .frame(minHeight: PorcelainTokens.touchTarget)
+                    }
+                    Text(
+                        "Shows analysis timings, score breakdowns, route decisions, ids and request timing on every screen."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
                 }
 
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {

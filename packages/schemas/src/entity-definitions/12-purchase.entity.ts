@@ -957,12 +957,13 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "documents",
         candidateFields: ["displayLabel", "orderId", "notes"],
         temporalFields: ["date"],
         lifecycleFilters: [],
         signals: {
           ocrFields: ["displayLabel", "orderId", "notes"],
-          classifierLabels: ["receipt", "purchase"],
+          classifierLabels: ["receipt"],
         },
         abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
       },

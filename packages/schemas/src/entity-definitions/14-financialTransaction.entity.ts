@@ -1032,12 +1032,13 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "documents",
         candidateFields: ["merchant", "description"],
         temporalFields: ["transactionDate"],
         lifecycleFilters: [{ field: "status", equals: "posted" }],
         signals: {
           ocrFields: ["merchant", "description"],
-          classifierLabels: ["transaction", "receipt"],
+          classifierLabels: ["receipt", "credit_card"],
         },
         abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
       },

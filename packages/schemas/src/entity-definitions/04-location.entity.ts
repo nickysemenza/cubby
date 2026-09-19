@@ -798,12 +798,13 @@ export default defineEntity({
         { kind: "createSelf", routeId: "location-new", enabled: true },
       ],
       routing: {
+        category: "home",
         candidateFields: ["name", "description"],
         temporalFields: [],
         lifecycleFilters: [],
         signals: {
           ocrFields: ["name", "description"],
-          classifierLabels: ["location"],
+          classifierLabels: ["closet", "shed"],
         },
         abstention: { minimumScore: 0.7, minimumMargin: 0.12 },
       },

@@ -23,7 +23,10 @@ import {
   findExtraArtifacts,
   generatedHeader,
 } from "../../../scripts/generator/artifacts";
-import { compileEntityDeclarations } from "../../../scripts/generator/entities/compile";
+import {
+  compileEntityDeclarations,
+  validatePhotoCategoryLabels,
+} from "../../../scripts/generator/entities/compile";
 import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
 import type { CompiledEntity } from "../../../scripts/generator/entities/declarations";
 import { renderBrowserRouteArtifacts } from "../../../scripts/generator/entities/render/browser-routes";
@@ -264,6 +267,7 @@ describe("typed entity compiler", () => {
       lifecycleFilters: [],
       signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
       abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+      category: "food",
     };
 
     expect(() =>
@@ -409,6 +413,7 @@ describe("typed entity compiler", () => {
       lifecycleFilters: [],
       signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
       abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+      category: "food",
     } as const;
     const compiled = compileEntityDeclarations([
       {
@@ -496,6 +501,7 @@ describe("typed entity compiler", () => {
       lifecycleFilters: [],
       signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
       abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+      category: "food",
       visualEvidence: [
         { relationPath: ["related"], priority: 1, ordering: "newest" },
       ],
@@ -1533,5 +1539,68 @@ describe("typed entity compiler", () => {
     expect(photoImportCatalog).toContain("public enum PhotoBindingSource");
     expect(photoImportCatalog).toMatch(/kind: \.createRelated/);
     expect(photoImportCatalog).toMatch(/source: \.captureDate/);
+    // The manifest's plants category names its two garden-adjacent routing
+    // entities; a typo in either mapping (B1) would silently drop a member.
+    expect(photoImportCatalog).toMatch(
+      /PhotoCategory\(key: "plants", .*entities: \[\.planting, \.gardenEntry\]\)/,
+    );
+  });
+});
+
+describe("photo categories (B1)", () => {
+  const routing: NonNullable<
+    EntityDeclaration["capabilities"]["images"]["routing"]
+  > = {
+    candidateFields: ["name"],
+    temporalFields: [],
+    lifecycleFilters: [],
+    signals: { ocrFields: ["name"], classifierLabels: ["alpha"] },
+    abstention: { minimumScore: 0.7, minimumMargin: 0.1 },
+    category: "food",
+  };
+  // `category: unknown` (not `EntityDeclaration`-shaped) on purpose: a present-but-undefined
+  // key and a missing key parse identically here, so this also covers the "field omitted
+  // entirely" declaration shape without needing a second, statically-rejected fixture —
+  // exercised through `compileEntityDeclarations`'s `readonly unknown[]` parameter.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- exercises compileEntityDeclarations's readonly unknown[] boundary with an invalid wire value
+  const withCategory = (category: unknown) => ({
+    ...base,
+    model,
+    capabilities: {
+      ...base.capabilities,
+      images: {
+        storage: false as const,
+        ingress: [],
+        routing: { ...routing, category },
+      },
+    },
+  });
+
+  it("requires a category on every routing-policy entity, naming the entity", () => {
+    expect(() => compileEntityDeclarations([withCategory(undefined)])).toThrow(
+      "alpha.capabilities.images.routing.category is required.",
+    );
+  });
+
+  it("rejects a category outside the declared photo-category vocabulary", () => {
+    expect(() => compileEntityDeclarations([withCategory("vehicles")])).toThrow(
+      /category/,
+    );
+  });
+
+  it("rejects a classifier label declared in two categories' base lists", () => {
+    const categories = {
+      plants: { classifierLabels: ["leaf", "stem"] },
+      garden: { classifierLabels: ["stem", "trowel"] },
+    };
+    expect(() => validatePhotoCategoryLabels(categories)).toThrow(
+      'photoCategories.garden classifierLabel "stem" also appears in photoCategories.plants.',
+    );
+    expect(() =>
+      validatePhotoCategoryLabels({
+        plants: { classifierLabels: ["leaf"] },
+        garden: { classifierLabels: ["trowel"] },
+      }),
+    ).not.toThrow();
   });
 });

@@ -24,7 +24,11 @@ final class PhotoDiagnosticsModel {
     private var generation = 0
     private var task: Task<Void, Never>?
 
-    func run(file: PhotoFile) {
+    /// `localIdentifier`/`analysisStore` are passed only when this is a Photos-library asset (the
+    /// library preview): the resulting full analysis is written into `PhotoAnalysisStore` so a
+    /// later Diagnostics open is instant and the classification sweep skips this photo. A Files
+    /// import (no `localIdentifier`) never persists anything here.
+    func run(file: PhotoFile, localIdentifier: String? = nil, analysisStore: PhotoAnalysisStore? = nil) {
         task?.cancel()
         generation += 1
         let generation = self.generation
@@ -45,6 +49,16 @@ final class PhotoDiagnosticsModel {
                 try Task.checkCancellation()
                 guard generation == self.generation else { return }
                 self.state = .ready(report)
+                if let localIdentifier, let analysisStore,
+                    let data = try? JSONEncoder.cubby().encode(analysis)
+                {
+                    try? await analysisStore.upsertFullAnalysis(
+                        localIdentifier: localIdentifier, analysis: data,
+                        version: PhotoLocalAnalysis.currentVersion,
+                        categories: PhotoCategoryHit.matchedCategories(for: analysis.classifications),
+                        topLabels: PhotoCategoryHit.topLabels(for: analysis.classifications),
+                        classifyVersion: PhotoClassificationSweep.classifyVersion)
+                }
             } catch is CancellationError {
                 // A newer run (or the view disappearing) owns the visible state.
             } catch {

@@ -60,6 +60,12 @@ standing rule, not a one-off for any single flow; other screens adopt it as they
 - Check every new or touched view at iPhone width and compact height (landscape) — that is where
   a screen built at iPad proportions runs out of room first.
 
+### Developer overlays
+
+`@Environment(\.developerOverlays)`'s layers never shift layout — overlay/caption content only,
+set with `Font.porcelainCode` and secondary color, added to an existing view rather than reserving
+new space of its own.
+
 ## Navigation
 
 On iPhone retain Today, Capture, Photos, Browse, and Search, each with an independent

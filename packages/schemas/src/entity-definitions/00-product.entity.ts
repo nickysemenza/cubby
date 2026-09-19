@@ -1893,12 +1893,13 @@ export default defineEntity({
         { kind: "createSelf", routeId: "product-new", enabled: true },
       ],
       routing: {
+        category: "home",
         candidateFields: ["name", "manufacturer", "model"],
         temporalFields: [],
         lifecycleFilters: [],
         signals: {
           ocrFields: ["name", "manufacturer", "model"],
-          classifierLabels: ["product"],
+          classifierLabels: ["container"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },

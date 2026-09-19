@@ -11,7 +11,9 @@ struct PhotosRootView: View {
             // sheet's own @State: a re-presented `.sheet(item:)` is not guaranteed to reset
             // @State seeded from an init parameter when the item changes (apps/apple/AGENTS.md,
             // "Traps that cost real time"), which previously showed the prior batch's manifest.
-            destination = PhotoSelectionBatch(items: items, manifest: PhotoImportManifest(items: items))
+            destination = PhotoSelectionBatch(
+                items: items,
+                manifest: PhotoImportManifest(items: items, analysisStore: appModel.photoAnalysisStore))
         }
         .sheet(item: $destination) { batch in
             PhotoDestinationSheet(manifest: batch.manifest) { committedIDs in
@@ -41,6 +43,14 @@ struct LibraryPickerSheet: View {
     }
 }
 
+/// Layer 7's "Copy diagnostics" payload for the grid.
+private struct PhotoGridDiagnosticEntry: Encodable {
+    let localIdentifier: String
+    let classifyMs: Double?
+    let topLabel: String?
+    let categories: [String]
+}
+
 struct PhotoSelectionBatch: Identifiable {
     let id = UUID()
     let items: [PhotoSelectionItem]
@@ -51,6 +61,7 @@ private struct PhotoLibraryBrowser: View {
     enum Filter: String, CaseIterable { case all = "All", missing = "Not in Cubby", found = "In Cubby" }
     @Environment(AppModel.self) private var appModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.developerOverlays) private var developerOverlays
     let maxSelectionCount: Int?
     let picker: Bool
     let onSelection: ([PhotoSelectionItem]) -> Void
@@ -61,6 +72,19 @@ private struct PhotoLibraryBrowser: View {
     @State private var loading: Task<Void, Never>?
     @State private var selectionError: String?
     @State private var loadingSelection = false
+    /// Reference-type caches held stable across renders by `@State`: mutating their contents
+    /// during `body` is safe (only reassigning the `@State` binding itself would invalidate the
+    /// view), and — unlike a tracked `@State` value — updating them never itself triggers a
+    /// re-render, which matters since `monthCaching` mutates on every scroll frame.
+    @State private var filteredAssets = FilteredMonthAssetsCache()
+    @State private var monthCaching = MonthCachingCoordinator()
+    @State private var selectedCategory: PhotoCategory?
+    @State private var categoryMatches: Set<String> = []
+    @State private var unanalysedCount = 0
+    /// Bumped every time `loadCategoryFilter()` replaces `categoryMatches`, so
+    /// `FilteredMonthAssetsCache` (keyed on this, not `matches.revision` — see B4/finding 2) knows
+    /// to re-run `includes()` for a category filter even though no ownership match changed.
+    @State private var categoryMatchesRevision = 0
     private let columns = [GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 3)]
     /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
     /// items fall back to the window toolbar there.
@@ -82,37 +106,25 @@ private struct PhotoLibraryBrowser: View {
                 controls
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 12) {
+                        // `pinnedViews: .sectionHeaders` keeps each month's label on screen while
+                        // its photos scroll under it; the header's `.bar` background doubles as
+                        // the divider between months, so no separate divider view is needed.
+                        LazyVStack(alignment: .leading, spacing: 12, pinnedViews: .sectionHeaders) {
+                            let selectionNumbers = selectionNumbers()
                             ForEach(library.months) { month in
-                                let assets = month.assets.filter(includes)
-                                if !assets.isEmpty {
-                                    Text(
-                                        month.id == .distantPast
-                                            ? "Undated" : month.id.formatted(.dateTime.month(.wide).year())
-                                    )
-                                    .font(.headline).padding(.horizontal, 12).id(month.id)
-                                    LazyVGrid(columns: columns, spacing: 3) {
-                                        ForEach(assets, id: \.localIdentifier) { asset in
-                                            PhotoLibraryCell(asset: asset, selection: selectionNumber(asset))
-                                            {
-                                                library.scrollID = asset.localIdentifier
-                                                toggle(asset.localIdentifier)
-                                            } onShowDetails: {
-                                                library.scrollID = asset.localIdentifier
-                                                preview = AssetPreview(asset: asset)
-                                            }
-                                            .id(asset.localIdentifier)
-                                            .contextMenu {
-                                                Button(
-                                                    "View photo and Cubby matches",
-                                                    systemImage: "info.circle"
-                                                ) {
-                                                    library.scrollID = asset.localIdentifier
-                                                    preview = AssetPreview(asset: asset)
-                                                }
-                                            }
-                                        }
-                                    }
+                                MonthSection(
+                                    month: month, assets: monthAssets(month),
+                                    columns: columns, selectionNumbers: selectionNumbers,
+                                    library: library, preview: $preview, onToggle: toggle
+                                )
+                                .id(month.id)
+                                .onAppear {
+                                    monthCaching.monthDidAppear(month.id, months: library.months)
+                                    updateVisibleMonths()
+                                }
+                                .onDisappear {
+                                    monthCaching.monthDidDisappear(month.id, months: library.months)
+                                    updateVisibleMonths()
                                 }
                             }
                         }
@@ -120,7 +132,18 @@ private struct PhotoLibraryBrowser: View {
                     }
                     .refreshable { await library.refresh(matches: matches, client: appModel.client) }
                     .onAppear {
-                        if let id = library.scrollID { proxy.scrollTo(id, anchor: .center) }
+                        // Scroll to the containing month first: `scrollTo` on an id nested two
+                        // lazy containers deep (`LazyVStack` > `Section` > `LazyVGrid`) can miss
+                        // if that content has never been laid out, so land on the (top-level,
+                        // always-addressable) month section before refining to the exact photo.
+                        if let id = library.scrollID {
+                            if let month = library.months.first(where: { m in
+                                m.assets.contains { $0.localIdentifier == id }
+                            }) {
+                                proxy.scrollTo(month.id, anchor: .top)
+                            }
+                            proxy.scrollTo(id, anchor: .center)
+                        }
                     }
                     .overlay {
                         if library.count == 0 {
@@ -151,6 +174,9 @@ private struct PhotoLibraryBrowser: View {
             // The `if` must gate the whole `ToolbarItem`, not sit inside its content: a
             // conditional inside `ToolbarItem` still renders the item's Liquid Glass background
             // even when the condition is false, showing an empty glass pill in the toolbar.
+            if developerOverlays && library.hasFullAccess {
+                ToolbarItem { CopyDiagnosticsButton { gridDiagnostics } }
+            }
             if library.hasFullAccess && !ids.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Clear") { clearSelection() }
@@ -180,6 +206,21 @@ private struct PhotoLibraryBrowser: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await library.refresh(matches: matches, client: appModel.client) } }
         }
+        .photoSweepLifecycle(
+            active: !picker, sweep: appModel.photoClassificationSweep, scenePhase: scenePhase,
+            categoryFilterKey: CategoryFilterKey(
+                category: selectedCategory?.key, revision: matches.classifiedRevision)
+        ) {
+            await loadCategoryFilter()
+        }
+        .onChange(of: library.monthsRevision) { _, _ in
+            // The sweep's own candidate provider reads `library.months`; a fresh (or newly
+            // populated, or library-changed) month list needs `reconcile()` re-run so a sweep
+            // that started with zero candidates (Photos tab opened before the library loaded)
+            // actually starts once photos exist, and a finished sweep re-arms for new photos.
+            guard !picker else { return }
+            appModel.photoClassificationSweep.reconcile()
+        }
         .photoPreviewPresentation(item: $preview) { selected in
             PhotoLibraryPreview(asset: selected.asset) {
                 toggle(selected.asset.localIdentifier)
@@ -202,6 +243,7 @@ private struct PhotoLibraryBrowser: View {
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("photos.filter")
+            if !picker { categoryChipRow }
             HStack(spacing: 6) {
                 if library.isLoadingLibrary || library.isScanning || matches.isLoading || matches.isRepairing
                 {
@@ -231,6 +273,32 @@ private struct PhotoLibraryBrowser: View {
         }.padding(12)
     }
 
+    /// A second, single-select chip row (B4) below the ownership `Filter` picker: one chip per
+    /// `PhotoImportCatalog.categories` entry (never a hardcoded category name), plus the sweep's
+    /// live "Analysing… N of M" status while it runs.
+    private var categoryChipRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    if let status = appModel.photoClassificationSweep.statusText {
+                        Text(status).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    ForEach(PhotoImportCatalog.categories, id: \.key) { category in
+                        CategoryChip(
+                            category: category, selected: selectedCategory?.key == category.key
+                        ) {
+                            selectedCategory = selectedCategory?.key == category.key ? nil : category
+                        }
+                    }
+                }
+            }
+            if selectedCategory != nil, unanalysedCount > 0 {
+                Text("\(unanalysedCount) photos not analysed yet")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
     private var permissionFallback: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -254,7 +322,30 @@ private struct PhotoLibraryBrowser: View {
         }
     }
 
+    /// Developer overlays layer 7: every currently loaded asset's classify timing/label/categories,
+    /// read from the same per-id boxes the grid cells already observe (no new whole-store read).
+    private var gridDiagnostics: [PhotoGridDiagnosticEntry] {
+        library.months.flatMap(\.assets).map { asset in
+            let state = matches.cellStateBox(for: asset.localIdentifier).state
+            let categories: [String] = {
+                if case .analysed(let categories) = state.analysis { return categories }
+                return []
+            }()
+            return PhotoGridDiagnosticEntry(
+                localIdentifier: asset.localIdentifier, classifyMs: state.classifyMs,
+                topLabel: state.topLabel, categories: categories)
+        }
+    }
+
     private func includes(_ asset: PHAsset) -> Bool {
+        guard passesOwnershipFilter(asset) else { return false }
+        guard selectedCategory != nil else { return true }
+        // A category filter excludes anything not yet analysed — its category is unknown until
+        // the sweep or a full analysis has actually looked at it.
+        return categoryMatches.contains(asset.localIdentifier)
+    }
+
+    private func passesOwnershipFilter(_ asset: PHAsset) -> Bool {
         if filter == .all { return true }
         let represented = matches.storedCandidates(for: asset.localIdentifier).contains {
             $0.confidence == .strong
@@ -266,8 +357,40 @@ private struct PhotoLibraryBrowser: View {
         }
     }
 
-    private func selectionNumber(_ asset: PHAsset) -> Int? {
-        ids.firstIndex(of: asset.localIdentifier).map { $0 + 1 }
+    /// Built once per render instead of a per-cell `ids.firstIndex(of:)` scan, which made the
+    /// whole grid's selection-number lookup O(selected count) *per cell* (O(n·m) overall).
+    private func selectionNumbers() -> [String: Int] {
+        Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0 + 1) })
+    }
+
+    private func monthAssets(_ month: PhotoLibraryStore.Month) -> [PHAsset] {
+        filteredAssets.assets(
+            for: month, filter: filter, category: selectedCategory?.key, revision: matches.revision,
+            categoryRevision: categoryMatchesRevision
+        ) { month.assets.filter(includes) }
+    }
+
+    private func updateVisibleMonths() {
+        guard !picker else { return }
+        appModel.photoClassificationSweep.updateVisibleMonths(monthCaching.visibleMonthIDs)
+    }
+
+    /// Batch-loads `selectedCategory`'s matching ids plus the whole library's unanalysed count,
+    /// memoized per `(category, matches.classifiedRevision)` by `.task(id:)` — a category switch
+    /// or the sweep's coalesced classification signal both invalidate it, nothing else re-fetches.
+    private func loadCategoryFilter() async {
+        guard let category = selectedCategory else {
+            categoryMatches = []
+            unanalysedCount = 0
+            return
+        }
+        async let matched = appModel.photoAnalysisStore.ids(
+            in: category.key, newerThan: PhotoClassificationSweep.classifyVersion)
+        async let analysedTotal = appModel.photoAnalysisStore.classifiedCount(
+            newerThan: PhotoClassificationSweep.classifyVersion)
+        categoryMatches = (try? await matched) ?? []
+        unanalysedCount = max(0, library.count - ((try? await analysedTotal) ?? 0))
+        categoryMatchesRevision += 1
     }
 
     private func toggle(_ id: String) {
@@ -303,35 +426,192 @@ private struct PhotoLibraryBrowser: View {
     }
 }
 
+/// `month.assets.filter(includes)` recomputed on every render was an O(library size) scan
+/// regardless of whether anything changed. Keyed by month id, invalidated only when the filter
+/// picker, the category chip selection, `PhotoMatchStore.revision` (ownership matches — never
+/// bumped by a photo's classification, see `markAnalysis`), or `categoryMatchesRevision` (bumped
+/// once per `loadCategoryFilter()` batch load, not once per photo) actually changes.
+private final class FilteredMonthAssetsCache {
+    private var entries:
+        [Date: (
+            filter: PhotoLibraryBrowser.Filter, category: String?, revision: Int,
+            categoryRevision: Int, assets: [PHAsset]
+        )] = [:]
+
+    func assets(
+        for month: PhotoLibraryStore.Month, filter: PhotoLibraryBrowser.Filter, category: String?,
+        revision: Int, categoryRevision: Int, compute: () -> [PHAsset]
+    ) -> [PHAsset] {
+        if let cached = entries[month.id], cached.filter == filter, cached.category == category,
+            cached.revision == revision, cached.categoryRevision == categoryRevision
+        {
+            return cached.assets
+        }
+        let result = compute()
+        entries[month.id] = (filter, category, revision, categoryRevision, result)
+        return result
+    }
+}
+
+/// Tracks which months are on screen (via each `Section`'s `onAppear`/`onDisappear`) and keeps
+/// `PHCachingImageManager` warm for the visible month plus one neighbor on each side, so a fling
+/// past the edge of the visible window finds decoded thumbnails waiting instead of starting a
+/// fresh request.
+@MainActor
+private final class MonthCachingCoordinator {
+    private var visible: Set<Date> = []
+    private var cached: Set<Date> = []
+
+    /// Fed to `PhotoClassificationSweep.updateVisibleMonths` so the sweep orders visible months
+    /// first (B3, Q4c).
+    var visibleMonthIDs: [Date] { Array(visible) }
+
+    func monthDidAppear(_ id: Date, months: [PhotoLibraryStore.Month]) {
+        visible.insert(id)
+        reconcile(months: months)
+    }
+
+    func monthDidDisappear(_ id: Date, months: [PhotoLibraryStore.Month]) {
+        visible.remove(id)
+        reconcile(months: months)
+    }
+
+    private func reconcile(months: [PhotoLibraryStore.Month]) {
+        var wanted: Set<Date> = []
+        for id in visible {
+            guard let index = months.firstIndex(where: { $0.id == id }) else { continue }
+            let lower = max(0, index - 1)
+            let upper = min(months.count - 1, index + 1)
+            for neighbor in lower...upper { wanted.insert(months[neighbor].id) }
+        }
+        let toStart = wanted.subtracting(cached)
+        let toStop = cached.subtracting(wanted)
+        cached = wanted
+        for id in toStart {
+            guard let month = months.first(where: { $0.id == id }) else { continue }
+            Task { await PhotoLibraryIO.shared.startCaching(month.assets) }
+        }
+        for id in toStop {
+            guard let month = months.first(where: { $0.id == id }) else { continue }
+            Task { await PhotoLibraryIO.shared.stopCaching(month.assets) }
+        }
+    }
+}
+
 private struct AssetPreview: Identifiable {
     let asset: PHAsset
     var id: String { asset.localIdentifier }
 }
 
+/// `.task(id:)` key for the category filter's batch load: a category switch or a new analysis
+/// batch (`revision`) both need a fresh `PhotoAnalysisStore.ids(in:newerThan:)` read.
+private struct CategoryFilterKey: Equatable {
+    let category: String?
+    let revision: Int
+}
+
+extension View {
+    /// Bundles B3's tab-visibility/scene-phase wiring and B4's category-filter reload into one
+    /// modifier — kept out of `PhotoLibraryBrowser.body` (rather than four more chained calls) so
+    /// that property's type-check time stays under the 200ms budget. `active` is `false` for the
+    /// picker sheet's browser instance, which never drives the sweep or shows the category chips.
+    fileprivate func photoSweepLifecycle(
+        active: Bool, sweep: PhotoClassificationSweep, scenePhase: ScenePhase,
+        categoryFilterKey: CategoryFilterKey, loadCategoryFilter: @escaping () async -> Void
+    ) -> some View {
+        onAppear { if active { sweep.setActive(true) } }
+            .onDisappear { if active { sweep.setActive(false) } }
+            .onChange(of: scenePhase) { _, phase in if active { sweep.setSceneActive(phase == .active) } }
+            .task(id: categoryFilterKey) { await loadCategoryFilter() }
+    }
+}
+
+private struct CategoryChip: View {
+    let category: PhotoCategory
+    let selected: Bool
+    let action: () -> Void
+
+    private var tint: Color {
+        let index = PhotoImportCatalog.categories.firstIndex { $0.key == category.key } ?? 0
+        return PorcelainTokens.chartRamp[index % PorcelainTokens.chartRamp.count]
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text("\(category.emoji) \(category.label)")
+        }
+        .buttonStyle(.bordered)
+        .tint(selected ? tint : nil)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// One month's grid + pinned header, extracted out of `PhotoLibraryBrowser.body` (rather than
+/// nesting `LazyVGrid`/`ForEach`/`contextMenu` four levels deep inline) so that property's
+/// type-check time stays under the 200ms budget.
+private struct MonthSection: View {
+    let month: PhotoLibraryStore.Month
+    let assets: [PHAsset]
+    let columns: [GridItem]
+    let selectionNumbers: [String: Int]
+    let library: PhotoLibraryStore
+    @Binding var preview: AssetPreview?
+    let onToggle: (String) -> Void
+
+    var body: some View {
+        if !assets.isEmpty {
+            Section {
+                LazyVGrid(columns: columns, spacing: 3) {
+                    ForEach(assets, id: \.localIdentifier) { asset in
+                        cell(for: asset)
+                    }
+                }
+            } header: {
+                header
+            }
+        }
+    }
+
+    private func cell(for asset: PHAsset) -> some View {
+        PhotoLibraryCell(asset: asset, selection: selectionNumbers[asset.localIdentifier]) {
+            library.scrollID = asset.localIdentifier
+            onToggle(asset.localIdentifier)
+        } onShowDetails: {
+            library.scrollID = asset.localIdentifier
+            preview = AssetPreview(asset: asset)
+        }
+        .contextMenu {
+            Button("View photo and Cubby matches", systemImage: "info.circle") {
+                library.scrollID = asset.localIdentifier
+                preview = AssetPreview(asset: asset)
+            }
+        }
+    }
+
+    private var header: some View {
+        Text(month.id == .distantPast ? "Undated" : month.id.formatted(.dateTime.month(.wide).year()))
+            .font(.headline)
+            .padding(.horizontal, 12)
+            .padding(.vertical)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.bar)
+    }
+}
+
 private struct PhotoLibraryCell: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.developerOverlays) private var developerOverlays
     let asset: PHAsset
     let selection: Int?
     let onTap: () -> Void
     let onShowDetails: () -> Void
     @State private var image: CGImage?
-    private var known: Bool {
-        appModel.photoLibrary.checked.contains(asset.localIdentifier)
-            && appModel.photoMatches.hasKnownResult(for: asset.localIdentifier)
-    }
-    private var represented: Bool {
-        appModel.photoMatches.storedCandidates(for: asset.localIdentifier).contains {
-            $0.confidence == .strong
-        }
-    }
-    private var possibleMatch: Bool {
-        !represented && !appModel.photoMatches.storedCandidates(for: asset.localIdentifier).isEmpty
-    }
-    private var ownerBadge: String? {
-        appModel.photoMatches.ownerBadge(for: asset.localIdentifier)
-    }
-    private var ownerAccessibilityDescription: String? {
-        appModel.photoMatches.ownerAccessibilityDescription(for: asset.localIdentifier)
+    /// Reading this box's `state` (rather than `photoMatches.candidates`/`directOwnersByImageID`
+    /// directly) is what makes this cell re-render only on its own status changes: Observation
+    /// tracks whole-property access, so reading those dictionaries here would re-render every
+    /// mounted cell on each scan batch, regardless of which asset it touched.
+    private var cellState: PhotoGridCellState {
+        appModel.photoMatches.cellStateBox(for: asset.localIdentifier).state
     }
     var body: some View {
         Button(action: onTap) {
@@ -344,6 +624,7 @@ private struct PhotoLibraryCell: View {
                     }
                 }.clipped()
                 .overlay(alignment: .bottomTrailing) { cornerBadge }
+                .overlay(alignment: .topTrailing) { analysisDot }
         }.buttonStyle(.plain)
             .overlay(alignment: .topLeading) { detailsButton }
             .accessibilityLabel(cellAccessibilityLabel)
@@ -351,7 +632,9 @@ private struct PhotoLibraryCell: View {
             .onDisappear { image = nil }
             .task(id: asset.modificationDate) {
                 do {
-                    image = try await appModel.photoLibrary.thumbnail(asset, matches: appModel.photoMatches)
+                    image = try await appModel.photoLibrary.thumbnail(
+                        asset, matches: appModel.photoMatches
+                    ) { frame in image = frame }
                 } catch
                 { /* Local-only grid requests can fail for cloud assets; selection retries with network access. */
                 }
@@ -362,11 +645,12 @@ private struct PhotoLibraryCell: View {
     /// accessibility label and the details button) to keep each expression under the
     /// 200ms type-check budget.
     @ViewBuilder private var cornerBadge: some View {
+        let state = cellState
         if let selection {
             Text("\(selection)").font(.caption.bold()).padding(7).background(.blue, in: Circle())
                 .foregroundStyle(.white).padding(5)
-        } else if let ownerBadge {
-            Text(ownerBadge)
+        } else if let badgeText = state.badgeText {
+            Text(badgeText)
                 .font(.caption2.weight(.semibold).monospaced())
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -377,10 +661,37 @@ private struct PhotoLibraryCell: View {
                 .overlay { Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1) }
                 .shadow(radius: 2, y: 1)
                 .padding(5)
-        } else if possibleMatch || !known {
+        } else if state.possibleMatch || !state.known {
             Image(systemName: "questionmark.circle").foregroundStyle(.white).shadow(radius: 2)
                 .padding(6)
         }
+    }
+
+    /// B4's grid dot: absent while pending, `.secondary` once analysed with no category hit,
+    /// category-tinted (by ramp index, never by key) once a hit lands. Developer overlays layer 1
+    /// adds the classify time and top label underneath, purely as an overlay caption — it never
+    /// changes the tile's own layout.
+    @ViewBuilder private var analysisDot: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            switch cellState.analysis {
+            case .pending:
+                EmptyView()
+            case .analysed(let categories):
+                Circle().fill(PhotoCategoryTint.color(for: categories) ?? Color.secondary)
+                    .frame(width: 6, height: 6)
+            }
+            if developerOverlays, let classifyMs = cellState.classifyMs {
+                DevOverlayText(analysisOverlayCaption(classifyMs))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+        }
+        .padding(6)
+    }
+
+    private func analysisOverlayCaption(_ classifyMs: Double) -> String {
+        let label = cellState.topLabel.map { " · \($0)" } ?? ""
+        return "\(Int(classifyMs))ms\(label)"
     }
 
     private var detailsButton: some View {
@@ -400,17 +711,7 @@ private struct PhotoLibraryCell: View {
 
     private var cellAccessibilityLabel: String {
         let date = asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"
-        let status: String
-        if let ownerAccessibilityDescription {
-            status = ownerAccessibilityDescription
-        } else if represented {
-            status = "In Cubby"
-        } else if possibleMatch {
-            status = "Possible Cubby match"
-        } else {
-            status = known ? "No known match" : "Not checked"
-        }
-        return "\(date), \(status)"
+        return "\(date), \(cellState.accessibilityStatus)"
     }
 }
 
@@ -518,7 +819,9 @@ private struct PhotoLibraryPreview: View {
         Task {
             do {
                 let file = try await PhotoLibraryIO.shared.file(for: asset)
-                diagnostics.run(file: file)
+                diagnostics.run(
+                    file: file, localIdentifier: asset.localIdentifier,
+                    analysisStore: appModel.photoAnalysisStore)
             } catch {
                 Diagnostics.report(error, context: "photos.diagnostics")
             }
@@ -527,3 +830,19 @@ private struct PhotoLibraryPreview: View {
 }
 
 #Preview(traits: .modifier(SignedInPreview())) { NavigationStack { PhotosRootView() } }
+
+#Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
+    NavigationStack { PhotosRootView() }
+        .environment(\.developerOverlays, true)
+}
+
+#Preview("Category chips") {
+    HStack {
+        ForEach(PhotoImportCatalog.categories, id: \.key) { category in
+            CategoryChip(
+                category: category, selected: category.key == PhotoImportCatalog.categories.first?.key
+            ) {}
+        }
+    }
+    .padding()
+}
