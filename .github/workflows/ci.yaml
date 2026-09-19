@@ -75,6 +75,12 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
+      # Validation rebuilds the package to verify generated WASM is current;
+      # restoring its output alone does not provide the wasm-pack executable.
+      - name: Install wasm-pack for validation
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
+        with:
+          tool: wasm-pack
       - name: Run repository validation
         shell: bash
         env:
