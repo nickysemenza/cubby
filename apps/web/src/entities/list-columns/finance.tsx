@@ -48,7 +48,6 @@ import {
   createFinancialTransactionAccountColumn,
   createFinancialTransactionAmountColumn,
   createFinancialTransactionIdentityColumn,
-  createFinancialTransactionPostedDateColumn,
   createFinancialTransactionStatusColumn,
 } from "~/app/finance/financial-transaction-columns";
 import { financialTransactionKindOptions } from "~/app/finance/financial-transaction-kind-options";
@@ -58,7 +57,6 @@ import {
 } from "~/app/finance/ledger-party-columns";
 import {
   createLedgerTransferAmountColumn,
-  createLedgerTransferDateColumn,
   createLedgerTransferEvidenceCountColumn,
   createLedgerTransferFromPartyColumn,
   createLedgerTransferToPartyColumn,
@@ -278,7 +276,6 @@ export const financialTransactionListOverride = defineListOverride<
               },
             }),
           );
-          add(createFinancialTransactionPostedDateColumn(transactionHelper));
           add(
             transactionHelper.accessor("vendorInference", {
               id: "possibleVendor",
@@ -370,7 +367,6 @@ const transferOverrides = createCubbyColumnCollection<LedgerTransferOut>(
     add(createLedgerTransferFromPartyColumn(transferHelper));
     add(createLedgerTransferToPartyColumn(transferHelper));
     add(createLedgerTransferAmountColumn(transferHelper));
-    add(createLedgerTransferDateColumn(transferHelper));
     add(createLedgerTransferEvidenceCountColumn(transferHelper));
   },
 );

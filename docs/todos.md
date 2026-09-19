@@ -412,7 +412,8 @@ history is the archive. Permanent product constraints live in the
   `entityType + entityId` with no FK (search index, embeddings, AI analysis,
   `AiUsage`, audit log); `Image.targetType/targetId` plus eight per-entity
   join tables; and an exclusive-arc CHECK (`LedgerSourceClaim_owner_check`).
-  Rule to write into `docs/agents/domain-rules.md`: untyped pairs with a
+  Current rule in `docs/agents/domain-rules.md#data-layers-and-deletion`:
+  untyped pairs with a
   kind CHECK for rows that describe an entity and may outlive it or be
   rebuilt, plain FKs for one type, arcs only where they exist. An `Entity`
   supertable was designed, adversarially reviewed, and tabled on 2026-09-19
@@ -766,6 +767,11 @@ history is the archive. Permanent product constraints live in the
   `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability context
   lives in [the native README](../apps/apple/README.md).
 
+- **Generated native list/detail parity.** Keep Swift on the existing generated
+  `EntityCatalog` and OpenAPI contracts. Revisit shared Rust only when a
+  concrete cross-client rule cannot be expressed by those surfaces; do not
+  create a second entity catalog pre-emptively.
+
 - **Natural CI evidence** — Revisit sharding only when ordinary exact-head runs
   show a repeatable tail imbalance or regression. Use native reporter output;
   do not add duration databases, custom sequencers, or manufactured timing runs.
@@ -1012,13 +1018,10 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
   `FinancialAccount`, or its statement rows can never settle anything. Add the
   missing ones with aliases before the next statement import.
 
-- **Settle the bare card charges.** 618 posted `purchase`-kind transactions
-  ($38.6k) plus 31 refunds and 8 income rows have no Purchase allocation as of
-  2026-09-14; the 22 sole-charge mismatches are a separate short list. Work
-  from `/finance` with the purchase-presence filter set to none, matching to
-  existing Purchases before booking new ones (`match_expenses`,
-  `suggest_financial_transfer_pairs`). The 147 lump-line orders are a lower
-  tier: itemize only where a receipt is on hand.
+- **Settle bare card charges.** Work from `/finance` with the purchase-presence
+  filter set to none, matching existing Purchases before booking new ones
+  (`match_expenses`, `suggest_financial_transfer_pairs`). Itemize lump-line
+  orders only where a receipt is on hand.
 
 - **Ingest the Duboce Beds 2026–27 plan with `garden-plan-import`.** Turn the
   household's written seasonal plan into Locations, one season Project,

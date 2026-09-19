@@ -123,6 +123,3 @@ suffix, because TanStack's file router needs physical files there and a
 header, so `generate:check` still catches a stale or hand-edited one, and each
 is listed explicitly in `.gitattributes`. To customize one, set that
 `route.list` / `route.detail` to `null` in the declaration and write the file.
-
-For the helper catalogue and exact edge-case rules, load the relevant heading in
-[the preserved root reference](root-rules-reference.md).

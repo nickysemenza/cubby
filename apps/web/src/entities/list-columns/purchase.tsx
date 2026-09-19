@@ -5,7 +5,6 @@ import { useMemo } from "react";
 
 import {
   createCurrencyColumn,
-  createPlainDateColumn,
   createTextColumn,
   renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
@@ -161,12 +160,6 @@ export const purchaseListOverride = defineListOverride<
                   });
                 },
               },
-            }),
-          );
-          add(
-            createPlainDateColumn(columnHelper, "date", {
-              header: "Date",
-              mobile: { slot: "meta", priority: 30 },
             }),
           );
           // Hand-rolled rather than `createCurrencyColumn`: that factory

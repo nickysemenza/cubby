@@ -150,7 +150,7 @@ Look for: N+1 query patterns in repos (loop of awaited queries where one IN quer
     model: "sonnet",
     prompt: `${COMMON}
 LANE: Convention drift.
-Read the current AGENTS.md and the helper catalogue in docs/agents/root-rules-reference.md before auditing. Respect its caveats and carve-outs; re-flagging an explicit carve-out is the #1 failure mode of this lane.
+Read the current AGENTS.md, docs/agents/domain-rules.md, and docs/agents/web-runtime.md before auditing. Respect their caveats and carve-outs; re-flagging an explicit carve-out is the #1 failure mode of this lane.
 Scope: apps/web/src.
 Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Run pnpm lint and pnpm format:check if quick. Cross-check every candidate against the carve-out list before reporting.`,
   },

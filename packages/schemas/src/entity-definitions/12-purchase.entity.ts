@@ -141,7 +141,13 @@ export default defineEntity({
         key: "date",
         kind: "date",
         control: { kind: "date", section: "schedule", initial: "today" },
-        display: { list: true, detail: true, detailOrder: 3 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 3,
+          format: "plainDate",
+          mobile: { slot: "meta", priority: 30 },
+        },
         validation: {
           read: plainDate.describe("The vendor order or receipt date"),
           create: plainDate,
