@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 
 /// Drives a generic Browse detail screen for one `EntityDescriptor` and one row id.
@@ -24,6 +25,10 @@ public final class GenericEntityDetailModel {
     public private(set) var activity: Activity = .idle
     public private(set) var initialError: String?
     public private(set) var refreshError: String?
+    /// When `row` was last fetched (developer overlays layer 4: "fetched-at + age"). Set on every
+    /// successful initial load or refresh; left as-is on a failed refresh so the overlay still
+    /// reports the age of the content actually on screen.
+    public private(set) var fetchedAt: Date?
 
     private let client: CubbyClient
     private var loadedID: String?
@@ -93,6 +98,7 @@ public final class GenericEntityDetailModel {
                 row = result
                 loadedID = id
                 phase = .loaded
+                fetchedAt = Date()
             } else {
                 let message = "No \(descriptor.singular) called \(id)"
                 if retainingContent {

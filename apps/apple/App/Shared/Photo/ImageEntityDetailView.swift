@@ -7,6 +7,7 @@ struct ImageEntityDetailView: View {
 
     let id: ImageCode
     @Environment(AppModel.self) private var appModel
+    @Environment(\.developerOverlays) private var developerOverlays
     @State private var detail: ImageWithEntity?
     @State private var error: String?
     @State private var tab: Tab = .photo
@@ -21,7 +22,13 @@ struct ImageEntityDetailView: View {
                 .pickerStyle(.segmented)
                 .listRowSeparator(.hidden)
                 switch tab {
-                case .photo: PhotoTab(detail: detail, appModel: appModel)
+                case .photo:
+                    PhotoTab(detail: detail, appModel: appModel)
+                    if developerOverlays {
+                        Section("Developer overlays") {
+                            DevOverlayText(ImageDiagnostics.compareCaption(diagnostics))
+                        }
+                    }
                 case .diagnostics: ImageDiagnosticsCompareView(model: diagnostics)
                 }
             } else if let error {
@@ -39,7 +46,18 @@ struct ImageEntityDetailView: View {
             RouteDestinationView(route: route)
         }
         .toolbar {
-            ShareLink(item: appModel.webURL(for: id.rawValue))
+            ToolbarItem { ShareLink(item: appModel.webURL(for: id.rawValue)) }
+            if developerOverlays {
+                ToolbarItem {
+                    CopyDiagnosticsButton {
+                        ImageDetailDiagnostics(
+                            id: id.rawValue, serverSha256: diagnostics.server?.identity.sha256,
+                            deviceSha256: diagnostics.device?.identity.sha256,
+                            serverPerceptualHash: diagnostics.server?.identity.perceptualHash,
+                            devicePerceptualHash: diagnostics.device?.identity.perceptualHash)
+                    }
+                }
+            }
         }
         .task(id: "\(appModel.host):\(id.rawValue)") { await load() }
         .onChange(of: tab) { _, newValue in
@@ -91,6 +109,35 @@ private struct PhotoTab: View {
     }
 }
 
+/// Developer overlays layer 5: server vs. device sha256/pHash, read from whichever
+/// `ImageDiagnosticsCompareModel` results are already loaded (the Diagnostics tab having been
+/// visited this session) — never triggers a device analysis just for this caption.
+private enum ImageDiagnostics {
+    static func compareCaption(_ model: ImageDiagnosticsCompareModel) -> String {
+        guard model.server != nil || model.device != nil else { return "device: not run" }
+        let server = model.server?.identity.sha256.prefix(12) ?? "—"
+        let device = model.device?.identity.sha256.prefix(12) ?? "—"
+        let serverHash = model.server?.identity.perceptualHash ?? "—"
+        let deviceHash = model.device?.identity.perceptualHash ?? "—"
+        return
+            "sha256 server \(server) · device \(device) — pHash server \(serverHash) · device \(deviceHash)"
+    }
+}
+
+/// Layer 7's "Copy diagnostics" payload for the Photo tab.
+private struct ImageDetailDiagnostics: Encodable {
+    let id: String
+    let serverSha256: String?
+    let deviceSha256: String?
+    let serverPerceptualHash: String?
+    let devicePerceptualHash: String?
+}
+
 #Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack { ImageEntityDetailView(id: ImageCode("IMG-2345")) }
+}
+
+#Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
+    NavigationStack { ImageEntityDetailView(id: ImageCode("IMG-2345")) }
+        .environment(\.developerOverlays, true)
 }

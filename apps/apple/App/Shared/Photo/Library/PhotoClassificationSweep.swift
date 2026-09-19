@@ -113,8 +113,9 @@ final class PhotoClassificationSweep {
     private(set) var cursor: Date?
 
     /// Fired on the main actor as each photo finishes, so `PhotoMatchStore.markAnalysis` can
-    /// republish that one cell's dot without the grid polling the store.
-    var onClassified: ((String, PhotoAnalysisStatus) -> Void)?
+    /// republish that one cell's dot (and, under developer overlays, its timing/label) without the
+    /// grid polling the store.
+    var onClassified: ((String, PhotoAssetSnapshot) -> Void)?
 
     @ObservationIgnored private let analysisStore: PhotoAnalysisStore
     @ObservationIgnored private let thermal: any PhotoThermalSource
@@ -288,7 +289,14 @@ final class PhotoClassificationSweep {
                 classifyMs: outcome.classifyMs)
             analysedCount += 1
             cursor = candidate.creationDate
-            onClassified?(candidate.localIdentifier, .analysed(categories: outcome.categories))
+            onClassified?(
+                candidate.localIdentifier,
+                PhotoAssetSnapshot(
+                    localIdentifier: candidate.localIdentifier, modificationDate: nil,
+                    perceptualHash: nil, hashRevision: 0, categories: outcome.categories,
+                    topLabels: outcome.topLabels, classifyVersion: Self.classifyVersion,
+                    classifyMs: outcome.classifyMs, classifiedAt: Date(), fullAnalysis: nil,
+                    fullAnalysisVersion: nil))
         } catch {
             // A store write failure leaves the photo pending; the next sweep pass retries it.
         }

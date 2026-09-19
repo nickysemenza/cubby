@@ -37,6 +37,10 @@ struct PhotoGridCellState: Equatable, Sendable {
     /// On-device classification status (B3/B4): drives the grid cell's 6pt dot. Defaulted so
     /// existing call sites that predate the classification sweep still compile unchanged.
     var analysis: PhotoAnalysisStatus = .pending
+    /// Developer overlays layer 1: how long the on-device classifier took, and its top label —
+    /// published per-id from the same store box as `analysis`, never a new whole-store read.
+    var classifyMs: Double?
+    var topLabel: String?
 
     /// `checked` distinguishes "no match, confirmed" from "not looked at yet" once a photo has
     /// no candidates at all — both otherwise look identical (empty `storedCandidates`).
@@ -45,7 +49,9 @@ struct PhotoGridCellState: Equatable, Sendable {
         strongDirectOwnerShortcodes: [String],
         hasKnownResult: Bool,
         checked: Bool,
-        analysis: PhotoAnalysisStatus = .pending
+        analysis: PhotoAnalysisStatus = .pending,
+        classifyMs: Double? = nil,
+        topLabel: String? = nil
     ) -> PhotoGridCellState {
         let represented = storedCandidates.contains { $0.confidence == .strong }
         let possibleMatch = !represented && !storedCandidates.isEmpty
@@ -64,7 +70,7 @@ struct PhotoGridCellState: Equatable, Sendable {
         return PhotoGridCellState(
             badgeText: PhotoGridBadge.text(for: strongDirectOwnerShortcodes),
             represented: represented, possibleMatch: possibleMatch, known: known,
-            accessibilityStatus: status, analysis: analysis)
+            accessibilityStatus: status, analysis: analysis, classifyMs: classifyMs, topLabel: topLabel)
     }
 }
 

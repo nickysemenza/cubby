@@ -38,6 +38,10 @@ final class AppModel {
     let photoAnalysisStore: PhotoAnalysisStore
     let photoLibrary: PhotoLibraryStore
     let photoClassificationSweep: PhotoClassificationSweep
+    /// Developer overlays layer 6: installed on every `CubbyClient` this model builds, so the
+    /// request-timing strip reflects requests made through any of them (the base client and, after
+    /// a base-URL change, its replacement).
+    let requestTrace = RequestTrace()
     var lastError: String?
     /// Bumped by every write the app makes to an entity; a list or detail showing one of
     /// `entityMutationKeys` refreshes on the next revision (`.task(id:)` on the views).
@@ -76,7 +80,7 @@ final class AppModel {
         self.baseURL = url
         let credentials = CredentialProvider(host: CubbyBaseURL.host(of: url), store: store)
         self.credentials = credentials
-        self.client = CubbyClient(baseURL: url, credentials: credentials)
+        self.client = CubbyClient(baseURL: url, credentials: credentials, requestObserver: requestTrace)
         self.auth = AuthFlow(baseURL: url, credentials: credentials)
         let analysisStore = Self.makeAnalysisStore()
         self.photoAnalysisStore = analysisStore
@@ -86,7 +90,7 @@ final class AppModel {
             analysisStore: analysisStore, library: library,
             window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused)
         let matches = photoMatches
-        photoClassificationSweep.onClassified = { id, status in matches.markAnalysis([id: status]) }
+        photoClassificationSweep.onClassified = { id, snapshot in matches.markAnalysis([id: snapshot]) }
         Task { try? await analysisStore.migrateLegacyHashCacheIfNeeded() }
     }
 
@@ -122,7 +126,8 @@ final class AppModel {
         if signedIn { try? store.save(credential, for: CubbyBaseURL.host(of: baseURL)) }
         let model = AppModel(store: store, baseURL: baseURL)
         model.client = CubbyClient(
-            baseURL: baseURL, credentials: model.credentials, session: PreviewURLProtocol.session())
+            baseURL: baseURL, credentials: model.credentials, session: PreviewURLProtocol.session(),
+            requestObserver: model.requestTrace)
         model.credential = signedIn ? credential : nil
         model.phase = signedIn ? .signedIn : .signedOut
         return model
@@ -225,7 +230,7 @@ final class AppModel {
         photoLibrary.reset()
         let credentials = CredentialProvider(host: host, store: store)
         self.credentials = credentials
-        client = CubbyClient(baseURL: baseURL, credentials: credentials)
+        client = CubbyClient(baseURL: baseURL, credentials: credentials, requestObserver: requestTrace)
         auth = AuthFlow(baseURL: baseURL, credentials: credentials)
     }
 

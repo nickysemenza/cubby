@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PhotoEntityChooser: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.developerOverlays) private var developerOverlays
     let key: EntityKey
     let captureDates: [Date?]
     let heroItems: [PhotoSelectionItem]
@@ -12,6 +13,7 @@ struct PhotoEntityChooser: View {
     @State private var model: PhotoEntityChooserModel?
     @State private var searchText = ""
     @State private var rankOrder: [String: Int] = [:]
+    @State private var rankScores: [String: PhotoEvidenceScorer.Score] = [:]
     @State private var rankingGeneration = UUID()
     @State private var isRanking = false
 
@@ -101,6 +103,20 @@ struct PhotoEntityChooser: View {
             await rankLoadedRows()
         }
         .refreshControl { await model?.refresh() }
+        .toolbar {
+            if developerOverlays {
+                ToolbarItem { CopyDiagnosticsButton { rankingDiagnostics } }
+            }
+        }
+    }
+
+    /// Developer overlays layer 7: rank/score/lane for every currently loaded row.
+    private var rankingDiagnostics: [PhotoChooserRowDiagnostic] {
+        loadedRows.enumerated().map { index, row in
+            PhotoChooserRowDiagnostic(
+                id: row.id, rank: rankOrder[row.id] ?? index,
+                combined: rankScores[row.id]?.combined, lane: lane(for: row))
+        }
     }
 
     private var rankingInputID: String {
@@ -126,12 +142,14 @@ struct PhotoEntityChooser: View {
     private func rankLoadedRows() async {
         guard let importManifest else {
             rankOrder = [:]
+            rankScores = [:]
             isRanking = false
             return
         }
         let rows = loadedRows
         guard !rows.isEmpty else {
             rankOrder = [:]
+            rankScores = [:]
             isRanking = false
             return
         }
@@ -144,17 +162,29 @@ struct PhotoEntityChooser: View {
             try Task.checkCancellation()
             guard rankingGeneration == generation else { return }
             rankOrder = Dictionary(
-                uniqueKeysWithValues: ranked.enumerated().map { ($0.element.id, $0.offset) })
+                uniqueKeysWithValues: ranked.enumerated().map { ($0.element.row.id, $0.offset) })
+            rankScores = Dictionary(uniqueKeysWithValues: ranked.map { ($0.row.id, $0.score) })
         } catch is CancellationError {
             return
         } catch {
             guard rankingGeneration == generation else { return }
             rankOrder = [:]
+            rankScores = [:]
             Diagnostics.report(error, context: "photos.destination.ranking.\(key.rawValue)")
         }
         if rankingGeneration == generation {
             isRanking = false
         }
+    }
+
+    /// Developer overlays layer 3: which evidence lane most likely placed `row` — the row's own
+    /// list membership when it's unambiguous, else whether its score carries a visual identity hit.
+    private func lane(for row: EntityRow) -> String {
+        guard let model else { return "recent" }
+        if model.isSearching { return "search" }
+        if rankScores[row.id]?.identity == 1 { return "visual" }
+        if model.dateMatches.contains(where: { $0.id == row.id }) { return "date" }
+        return "recent"
     }
 
     private func ordered(_ rows: [EntityRow]) -> [EntityRow] {
@@ -286,10 +316,22 @@ struct PhotoEntityChooser: View {
         Button {
             onSelect(row)
         } label: {
-            EntityRowView(key: key, row: row, photoMode: true)
+            VStack(alignment: .leading, spacing: 2) {
+                EntityRowView(key: key, row: row, photoMode: true)
+                if developerOverlays {
+                    DevOverlayText(rankDiagnosticCaption(for: row))
+                }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("photos.destination.row.\(row.id)")
+    }
+
+    /// "#2 · 0.74 · date" — rank position, combined score, and lane (developer overlays layer 3).
+    private func rankDiagnosticCaption(for row: EntityRow) -> String {
+        let rank = rankOrder[row.id].map { "#\($0 + 1)" } ?? "—"
+        let combined = rankScores[row.id].map { String(format: "%.2f", $0.combined) } ?? "—"
+        return "\(rank) · \(combined) · \(lane(for: row))"
     }
 
     /// A leading, always-visible (never hidden, regardless of loading/search/empty state) "New

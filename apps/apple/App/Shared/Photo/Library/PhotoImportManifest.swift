@@ -37,6 +37,10 @@ final class PhotoImportManifest {
     private(set) var commitRequiresReview = false
     private(set) var duplicateCandidates: [String: [DedupCandidate]] = [:]
     private(set) var duplicateOwnerShortcodes: [String: [String]] = [:]
+    /// Developer overlays layer 2: each photo's best-scoring candidate from the deterministic
+    /// evidence pass, kept alongside its `PhotoEvidenceScorer.Score` breakdown rather than only the
+    /// combined value the routing decision already used.
+    private(set) var suggestionScores: [String: PhotoEvidenceScorer.Score] = [:]
     private var duplicateDecisions: [String: PhotoDuplicateDecision] = [:]
     private var analysisGeneration = UUID()
     private var undoSnapshot: [PhotoUndoAssignment] = []
@@ -227,7 +231,8 @@ final class PhotoImportManifest {
                 evidence: first.1.evidence,
                 photoIDs: values.map { $0.0.id },
                 source: first.1.source?.entity,
-                sourceRow: first.1.sourceRow)
+                sourceRow: first.1.sourceRow,
+                decision: first.1.decision)
         }.sorted { $0.title < $1.title }
     }
 
@@ -374,6 +379,10 @@ final class PhotoImportManifest {
                 ?? type.options.first(where: { $0.route.choice == .primary })
                 ?? type.options.sorted(by: { $0.id < $1.id }).first
         else { return .routePicker }
+        // Developer overlays layer 2: the decision this automatic resolution records, shared by
+        // every branch below regardless of which physical route (self, existing, create) it ends
+        // up taking — `primary`'s predicate/choice is what determined the pick either way.
+        let decision = Self.automaticDecision(route: primary.route, row: row)
 
         let captureDate = scopedCaptureDate
 
@@ -385,31 +394,34 @@ final class PhotoImportManifest {
                     let page = try await Self.findRelated(
                         option: pair.existing, source: row, captureDate: captureDate, client: client)
                 else {
-                    return stageOrOpenCreateEditor(pair.create, source: row, captureDate: captureDate)
+                    return stageOrOpenCreateEditor(
+                        pair.create, source: row, captureDate: captureDate, decision: decision)
                 }
                 switch page.items.count {
                 case 0:
-                    return stageOrOpenCreateEditor(pair.create, source: row, captureDate: captureDate)
+                    return stageOrOpenCreateEditor(
+                        pair.create, source: row, captureDate: captureDate, decision: decision)
                 case 1:
                     moveSelected(
                         to: pair.existing, source: row, destination: page.items[0],
-                        captureDate: captureDate)
+                        captureDate: captureDate, decision: .existingSameDay(count: page.items.count))
                     return .resolved
                 default:
                     return .relatedChooser(option: pair.existing, page: page)
                 }
             } catch {
                 Diagnostics.report(error, context: "photos.manifest.findRelated")
-                return stageOrOpenCreateEditor(pair.create, source: row, captureDate: captureDate)
+                return stageOrOpenCreateEditor(
+                    pair.create, source: row, captureDate: captureDate, decision: decision)
             }
         }
 
         switch primary.route.kind {
         case .`self`:
-            moveSelected(to: primary, row: row)
+            moveSelected(to: primary, row: row, decision: decision)
             return .resolved
         case .createRelated:
-            return stageOrOpenCreateEditor(primary, source: row, captureDate: captureDate)
+            return stageOrOpenCreateEditor(primary, source: row, captureDate: captureDate, decision: decision)
         case .existingRelated:
             return .relatedChooser(option: primary, page: nil)
         case .createSelf:
@@ -419,8 +431,22 @@ final class PhotoImportManifest {
         }
     }
 
+    /// The route decision to record for an automatic pick: `primaryWhen` when its predicate
+    /// matched `row`'s field, else the plain unconditional `.primary` choice. Shared by
+    /// `chooseSourceRecord`'s auto-resolve and the background analyzer's `apply` so the review
+    /// sheet's decision reason reads identically from both paths.
+    private static func automaticDecision(route: PhotoIngressRoute, row: EntityRow) -> PhotoRouteDecision {
+        if let predicate = route.primaryWhen, let value = row.raw[predicate.field]?.stringValue,
+            predicate.values.contains(value)
+        {
+            return .automaticConditional(field: predicate.field, value: value)
+        }
+        return .automaticPrimary
+    }
+
     private func stageOrOpenCreateEditor(
-        _ option: PhotoDestinationOption, source: EntityRow, captureDate: Date?
+        _ option: PhotoDestinationOption, source: EntityRow, captureDate: Date?,
+        decision: PhotoRouteDecision
     ) -> PhotoSourceRecordResolution {
         if PhotoRelatedCreateEditor.hasOnlyOptionalFields(
             option: option, source: source, captureDate: captureDate)
@@ -428,7 +454,8 @@ final class PhotoImportManifest {
             stageCreate(
                 option: option, source: source,
                 body: PhotoRelatedCreateEditor.createPrefill(
-                    option: option, source: source, captureDate: captureDate))
+                    option: option, source: source, captureDate: captureDate),
+                decision: decision)
             return .resolved
         }
         return .createEditor(option: option)
@@ -546,7 +573,7 @@ final class PhotoImportManifest {
                 guard let analysis = prepared[item.id]?.1 else { return nil }
                 let owners = matches.strongDirectOwnerShortcodes(for: item.id)
                 let candidateIDs = deterministicCandidateIDs(
-                    for: analysis, authoritativeOwners: Set(owners),
+                    for: analysis, photoID: item.id, authoritativeOwners: Set(owners),
                     visualMatch: visualMatches[item.id], among: candidates)
                 return PhotoRoutingEvidence(
                     photoID: item.id,
@@ -628,7 +655,8 @@ final class PhotoImportManifest {
                 title: "\(candidate.row.title) · \(candidate.row.id)",
                 shortcode: candidate.row.id,
                 replaceConfirmed: false,
-                evidence: decision.explanation)
+                evidence: decision.explanation,
+                decision: Self.automaticDecision(route: candidate.option.route, row: candidate.row))
             suggestions[decision.photoID] =
                 "\(candidate.row.title) · \(candidate.row.id) · \(decision.explanation)"
             // A1: the background analyzer only ever writes `assignments`/`suggestions`. It must
@@ -659,19 +687,23 @@ final class PhotoImportManifest {
             ? candidate.id.rawValue : (PhotoGridBadge.text(for: owners) ?? candidate.id.rawValue)
     }
 
-    func moveSelected(to option: PhotoDestinationOption, row: EntityRow, replace: Bool = false) {
+    func moveSelected(
+        to option: PhotoDestinationOption, row: EntityRow, replace: Bool = false,
+        decision: PhotoRouteDecision = .user
+    ) {
         rememberMove()
         let assignment = PhotoDestinationAssignment(
             route: option.route, source: EntityRef(entity: option.route.source, id: row.id),
             sourceRow: row, recordID: row.id, title: row.title,
-            shortcode: row.id, replaceConfirmed: replace, evidence: "Assigned manually")
+            shortcode: row.id, replaceConfirmed: replace, evidence: "Assigned manually",
+            decision: decision)
         for id in selectedIDs { assignments[id] = assignment }
         advanceFocusAfterAssignment()
     }
 
     func moveSelected(
         to option: PhotoDestinationOption, source: EntityRow, destination: EntityRow,
-        captureDate: Date? = nil
+        captureDate: Date? = nil, decision: PhotoRouteDecision = .user
     ) {
         rememberMove()
         let evidence =
@@ -685,7 +717,8 @@ final class PhotoImportManifest {
             title: destination.title,
             shortcode: destination.id,
             replaceConfirmed: false,
-            evidence: evidence)
+            evidence: evidence,
+            decision: decision)
         for id in selectedIDs { assignments[id] = assignment }
         advanceFocusAfterAssignment()
     }
@@ -693,7 +726,7 @@ final class PhotoImportManifest {
     /// `source` is `nil` for a `createSelf` draft — the created record has no source of its own.
     func stageCreate(
         option: PhotoDestinationOption, source: EntityRow?, body: [String: JSONValue],
-        photoIDs: Set<String>? = nil
+        photoIDs: Set<String>? = nil, decision: PhotoRouteDecision = .user
     ) {
         // A disabled route (project, cookbook, …) is shown so its reason is visible, but is never
         // an actual staging target — belt-and-suspenders alongside the UI disabling its row.
@@ -701,7 +734,7 @@ final class PhotoImportManifest {
         rememberMove()
         let itemsToStage = items.filter { photoIDs?.contains($0.id) ?? selectedIDs.contains($0.id) }
         guard let source else {
-            stageCreateSelf(option: option, body: body, items: itemsToStage)
+            stageCreateSelf(option: option, body: body, items: itemsToStage, decision: decision)
             return
         }
         let grouped = Dictionary(grouping: itemsToStage) { item in
@@ -728,7 +761,7 @@ final class PhotoImportManifest {
                 title: draft.title,
                 shortcode: "New", replaceConfirmed: false,
                 evidence: "New \(option.descriptor.singular) · \(day == "undated" ? "date needed" : day)",
-                createDraft: draft)
+                createDraft: draft, decision: decision)
             for item in group { assignments[item.id] = assignment }
         }
         advanceFocusAfterAssignment()
@@ -738,7 +771,8 @@ final class PhotoImportManifest {
     /// every "New <entity>" tap is its own record (even for a same-day batch), and every selected
     /// photo goes to that one record regardless of its individual capture date.
     private func stageCreateSelf(
-        option: PhotoDestinationOption, body: [String: JSONValue], items itemsToStage: [PhotoSelectionItem]
+        option: PhotoDestinationOption, body: [String: JSONValue], items itemsToStage: [PhotoSelectionItem],
+        decision: PhotoRouteDecision = .user
     ) {
         guard !itemsToStage.isEmpty else {
             advanceFocusAfterAssignment()
@@ -764,7 +798,7 @@ final class PhotoImportManifest {
         let assignment = PhotoDestinationAssignment(
             route: option.route, source: nil, sourceRow: nil, recordID: nil,
             title: title, shortcode: "New", replaceConfirmed: false, evidence: title,
-            createDraft: draft)
+            createDraft: draft, decision: decision)
         for item in itemsToStage { assignments[item.id] = assignment }
         advanceFocusAfterAssignment()
     }
@@ -1153,13 +1187,21 @@ final class PhotoImportManifest {
         return Array(candidates.prefix(FoundationModelsPhotoSemanticModel.maximumCandidates))
     }
 
+    /// One ranked row plus the evidence score that placed it there (developer overlays layer 3:
+    /// rank position, `combined`, and which lane — date/recent/search/visual — the row's identity
+    /// component came from).
+    struct RankedRow {
+        let row: EntityRow
+        let score: PhotoEvidenceScorer.Score
+    }
+
     /// Ranks a manually chosen natural-source catalog with the same prepared evidence used for
     /// automatic suggestions. Visual evidence is deliberately delegated to the manifest catalog
     /// matcher; it only follows declared paths to directly owned gallery attachments.
     func rankRows(
         for source: EntityKey, rows: [EntityRow], client: CubbyClient
-    ) async throws -> [EntityRow] {
-        guard !rows.isEmpty, !prepared.isEmpty else { return rows }
+    ) async throws -> [RankedRow] {
+        guard !rows.isEmpty, !prepared.isEmpty else { return rows.map { RankedRow(row: $0, score: .zero) } }
         try Task.checkCancellation()
         let analyses = prepared.mapValues(\.1)
         let visualMatches = await PhotoVisualEvidenceMatcher().matches(
@@ -1171,7 +1213,7 @@ final class PhotoImportManifest {
             client: client)
         try Task.checkCancellation()
         let policy = PhotoImportCatalog.routingPolicies[source]
-        let ranked = rows.enumerated().map { index, row -> (EntityRow, Double, Int) in
+        let ranked = rows.enumerated().map { index, row -> (RankedRow, Int) in
             let identity: Double =
                 visualMatches.values.contains { $0.candidateID == "\(source.rawValue):\(row.id)" } ? 1 : 0
             // Component-wise max across every prepared analysis, then the shared combine formula —
@@ -1185,37 +1227,41 @@ final class PhotoImportManifest {
                     text: max(acc.text, next.text), classifier: max(acc.classifier, next.classifier),
                     date: max(acc.date, next.date), identity: identity)
             }
-            return (row, evidence.combined, index)
+            return (RankedRow(row: row, score: evidence), index)
         }
         return ranked.sorted { lhs, rhs in
-            lhs.1 == rhs.1 ? lhs.2 < rhs.2 : lhs.1 > rhs.1
+            lhs.0.score.combined == rhs.0.score.combined
+                ? lhs.1 < rhs.1 : lhs.0.score.combined > rhs.0.score.combined
         }.map(\.0)
     }
 
     private func deterministicCandidateIDs(
         for analysis: PhotoLocalAnalysis,
+        photoID: String,
         authoritativeOwners: Set<String>,
         visualMatch: PhotoVisualEvidenceMatch?,
         among candidates: [Candidate]
     ) -> [String] {
-        let scored = candidates.compactMap { candidate -> (String, Double, Double)? in
+        let scored = candidates.compactMap { candidate -> (String, PhotoEvidenceScorer.Score, Double)? in
             guard let policy = PhotoImportCatalog.routingPolicies[candidate.option.route.source]
             else { return nil }
             let identity: Double =
                 authoritativeOwners.contains(candidate.row.id)
                     || visualMatch?.candidateID == candidate.routing.id ? 1 : 0
             let score = PhotoEvidenceScorer.score(
-                analysis: analysis, row: candidate.row, policy: policy, identity: identity
-            ).combined
+                analysis: analysis, row: candidate.row, policy: policy, identity: identity)
             return (candidate.routing.id, score, policy.minimumScore)
-        }.sorted { $0.1 > $1.1 }
-        guard let first = scored.first, first.1 >= first.2 else { return [] }
+        }.sorted { $0.1.combined > $1.1.combined }
+        // Developer overlays layer 2: keep the winning candidate's full breakdown (text/date/
+        // identity/classifier), not only the `combined` value the routing decision below uses.
+        if let best = scored.first { suggestionScores[photoID] = best.1 }
+        guard let first = scored.first, first.1.combined >= first.2 else { return [] }
         let policy = candidates.first(where: { $0.routing.id == first.0 }).flatMap {
             PhotoImportCatalog.routingPolicies[$0.option.route.source]
         }
-        let runnerUp = scored.dropFirst().first?.1 ?? 0
-        guard first.1 - runnerUp >= (policy?.minimumMargin ?? 1) else { return [] }
-        return scored.prefix(5).filter { $0.1 >= $0.2 }.map(\.0)
+        let runnerUp = scored.dropFirst().first?.1.combined ?? 0
+        guard first.1.combined - runnerUp >= (policy?.minimumMargin ?? 1) else { return [] }
+        return scored.prefix(5).filter { $0.1.combined >= $0.2 }.map(\.0)
     }
 
     private func evidenceSummary(

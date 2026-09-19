@@ -18,9 +18,11 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
     public static let maxErrorBodyBytes = 1 << 20
 
     private let credentials: CredentialProvider
+    private let observer: (any RequestObserver)?
 
-    public init(credentials: CredentialProvider) {
+    public init(credentials: CredentialProvider, observer: (any RequestObserver)? = nil) {
         self.credentials = credentials
+        self.observer = observer
     }
 
     public func intercept(
@@ -34,7 +36,9 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
         let authentication = await credentials.requestState()
         Self.apply(authentication, to: &request.headerFields)
 
+        let start = Date()
         let (response, responseBody) = try await next(request, body, baseURL)
+        let ms = Date().timeIntervalSince(start) * 1000
         await credentials.processResponse(
             for: authentication,
             status: response.status.code,
@@ -42,6 +46,7 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
             setCookieHeaders: response.headerFields[values: .setCookie],
             responseURL: baseURL
         )
+        await observer?.record(operationID: operationID, ms: ms, status: Int(response.status.code))
         guard response.status.code >= 400 else { return (response, responseBody) }
 
         let data: Data

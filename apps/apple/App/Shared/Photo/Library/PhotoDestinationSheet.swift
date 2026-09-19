@@ -6,6 +6,7 @@ struct PhotoDestinationSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.developerOverlays) private var developerOverlays
     let manifest: PhotoImportManifest
     let onDone: ([String]) -> Void
     @State private var path: [PhotoImportNavigationDestination] = []
@@ -167,6 +168,9 @@ struct PhotoDestinationSheet: View {
                 if showsAnalysisCaption, let caption = analysisCompleteCaption {
                     Text(caption).font(.caption).foregroundStyle(.secondary)
                 }
+                if developerOverlays {
+                    DevOverlayText(group.decision.reasonLabel)
+                }
             }
             Spacer()
             if let source = group.source, let sourceRow = group.sourceRow {
@@ -198,6 +202,9 @@ struct PhotoDestinationSheet: View {
     @ToolbarContentBuilder
     private var reviewToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+        if developerOverlays {
+            ToolbarItem { CopyDiagnosticsButton { reviewDiagnostics } }
+        }
         if manifest.canUndo {
             ToolbarItem(placement: .secondaryAction) {
                 Button("Undo", systemImage: "arrow.uturn.backward") {
@@ -550,7 +557,9 @@ struct PhotoDestinationSheet: View {
             relatedContext = PhotoRelatedContext(option: option, source: source)
             path.removeAll()
         case .`self`:
-            manifest.moveSelected(to: option, row: source)
+            // Reached only via the interactive route picker (a `.prompt` route, or an ambiguous
+            // fallback) — `.prompted`, distinct from a chooser row's plain `.user` pick.
+            manifest.moveSelected(to: option, row: source, decision: .prompted)
             path.removeAll()
         case .createSelf:
             // Unreachable: the route picker's menu is `type.options`, which excludes `createSelf`
@@ -612,6 +621,18 @@ struct PhotoDestinationSheet: View {
         }
     }
 
+    /// Developer overlays layer 7: every group's decision reason plus each unassigned photo's
+    /// best-scoring evidence breakdown.
+    private var reviewDiagnostics: PhotoReviewDiagnostics {
+        PhotoReviewDiagnostics(
+            groups: manifest.groups.map {
+                .init(title: $0.title, photoCount: $0.photoIDs.count, decision: $0.decision.reasonLabel)
+            },
+            needsDestination: manifest.needsDestination.map { id in
+                .init(photoID: id, suggestion: manifest.suggestions[id], score: manifest.suggestionScores[id])
+            })
+    }
+
     private func finish(with committedIDs: [String]) async {
         onDone(committedIDs)
         dismiss()
@@ -620,6 +641,7 @@ struct PhotoDestinationSheet: View {
 }
 
 private struct PhotoImportGroupRows: View {
+    @Environment(\.developerOverlays) private var developerOverlays
     let ids: [String]
     @Bindable var manifest: PhotoImportManifest
     /// Pulls a single wrongly grouped photo out for a fresh source-type pick without undoing the
@@ -647,6 +669,9 @@ private struct PhotoImportGroupRows: View {
                                 Text("No confident match")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                            }
+                            if developerOverlays, let score = manifest.suggestionScores[id] {
+                                DevOverlayText(Self.scoreCaption(score))
                             }
                             if let candidates = manifest.duplicateCandidates[id] {
                                 Menu {
@@ -708,6 +733,35 @@ private struct PhotoImportGroupRows: View {
         manifest.focusedItemID = id
         onChangeDestination()
     }
+
+    /// "text 0.00 · date 0.88 · visual 1.00 · classifier 0.08 → 0.96" (developer overlays layer 2).
+    /// `Score.identity` is shown as "visual": it is set from an authoritative-owner or visual-match
+    /// hit, never from text/date/classifier evidence — see `PhotoEvidenceScorer.score`.
+    private static func scoreCaption(_ score: PhotoEvidenceScorer.Score) -> String {
+        let parts = [
+            "text \(String(format: "%.2f", score.text))",
+            "date \(String(format: "%.2f", score.date))",
+            "visual \(String(format: "%.2f", score.identity))",
+            "classifier \(String(format: "%.2f", score.classifier))",
+        ]
+        return "\(parts.joined(separator: " · ")) → \(String(format: "%.2f", score.combined))"
+    }
+}
+
+/// Developer overlays layer 7's "Copy diagnostics" payload for the review sheet.
+private struct PhotoReviewDiagnostics: Encodable {
+    struct Group: Encodable {
+        let title: String
+        let photoCount: Int
+        let decision: String
+    }
+    struct Suggestion: Encodable {
+        let photoID: String
+        let suggestion: String?
+        let score: PhotoEvidenceScorer.Score?
+    }
+    let groups: [Group]
+    let needsDestination: [Suggestion]
 }
 
 private struct ReplacementConfirmation: Identifiable {
@@ -733,4 +787,9 @@ struct PhotoEntitySearchModifier: ViewModifier {
 
 #Preview(traits: .modifier(SignedInPreview())) {
     PhotoDestinationSheet(manifest: PhotoImportManifest(items: []), onDone: { _ in })
+}
+
+#Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
+    PhotoDestinationSheet(manifest: PhotoImportManifest(items: []), onDone: { _ in })
+        .environment(\.developerOverlays, true)
 }

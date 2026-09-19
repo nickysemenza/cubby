@@ -11,6 +11,7 @@ struct EntityDetailView: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.developerOverlays) private var developerOverlays
     @State private var model: GenericEntityDetailModel?
     @State private var relationshipsModel: EntityRelationshipsModel?
     @State private var relationSections: [RelationSectionModel] = []
@@ -51,6 +52,9 @@ struct EntityDetailView: View {
                 activity.isEligibleForSearch = false
             }
             .toolbar {
+                if developerOverlays, let row = model?.row {
+                    ToolbarItem { copyDiagnosticsButton(row: row, fetchedAt: model?.fetchedAt) }
+                }
                 if let row = model?.row {
                     if key.nativeActions.contains(.update) {
                         ToolbarItem(placement: .primaryAction) {
@@ -145,6 +149,7 @@ struct EntityDetailView: View {
                     descriptor: descriptor, row: row,
                     relationSections: relationSections,
                     relationshipsModel: relationshipsModel,
+                    fetchedAt: model.fetchedAt,
                     onRelationshipAccepted: appModel.recordRelationshipMutation,
                     onCreateRelation: { creatingRelation = $0 },
                     onChanged: { Task { await refresh() } }
@@ -170,6 +175,11 @@ struct EntityDetailView: View {
         } else {
             LoadingIndicator.screen(label: "Loading \(descriptor.singular)")
         }
+    }
+
+    /// Extracted so `body`'s toolbar closure stays under the project's 200ms type-check budget.
+    private func copyDiagnosticsButton(row: EntityRow, fetchedAt: Date?) -> some View {
+        CopyDiagnosticsButton { EntityDetailDiagnostics(shortcode: row.id, fetchedAt: fetchedAt) }
     }
 
     private func setup() async {
@@ -216,11 +226,15 @@ struct EntityDetailContent: View {
     let row: EntityRow
     var relationSections: [RelationSectionModel] = []
     var relationshipsModel: EntityRelationshipsModel? = nil
+    /// Developer overlays layer 4: when this row was fetched. `nil` in previews/fixtures that
+    /// never went through `GenericEntityDetailModel`.
+    var fetchedAt: Date? = nil
     var onRelationshipAccepted: (RelationshipAcceptance) -> Void = { _ in }
     var onCreateRelation: (RelationSectionModel) -> Void = { _ in }
     var onChanged: () -> Void = {}
 
     @Environment(AppModel.self) private var appModel
+    @Environment(\.developerOverlays) private var developerOverlays
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
     @State private var reviewedRelationship: RelationshipRecommendationReview?
@@ -247,6 +261,12 @@ struct EntityDetailContent: View {
                     {
                         actions
                     }
+                }
+                // Layer 4: shortcode + fetched-at/age. The generic entity API never exposes the
+                // underlying uuid (only shortcodes cross the wire — see apps/apple/AGENTS.md), so
+                // there is nothing to show beyond the shortcode already in `row.id`.
+                if developerOverlays {
+                    DevOverlayText(EntityDetailDiagnostics(shortcode: row.id, fetchedAt: fetchedAt).caption)
                 }
             }
             if let journal = journalSection {
@@ -402,12 +422,48 @@ struct EntityDetailContent: View {
     }
 }
 
+/// Developer overlays layer 4/7: shortcode plus fetched-at/age. No `uuid` field — the generic
+/// entity API never exposes the underlying uuid, only the public shortcode (`row.id`).
+private struct EntityDetailDiagnostics: Encodable {
+    let shortcode: String
+    let fetchedAt: Date?
+
+    var caption: String {
+        guard let fetchedAt else { return shortcode }
+        let age = Date().timeIntervalSince(fetchedAt)
+        return "\(shortcode) · fetched \(Self.ageFormatter.string(from: age) ?? "0s") ago"
+    }
+
+    private static let ageFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute, .second]
+        formatter.unitsStyle = .abbreviated
+        formatter.maximumUnitCount = 1
+        return formatter
+    }()
+}
+
 #Preview {
     NavigationStack {
-        EntityDetailContent(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow)
-            .navigationTitle("Cast Iron Skillet")
+        EntityDetailContent(
+            descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow,
+            fetchedAt: Date()
+        )
+        .navigationTitle("Cast Iron Skillet")
     }
     .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Developer overlays on") {
+    NavigationStack {
+        EntityDetailContent(
+            descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow,
+            fetchedAt: Date()
+        )
+        .navigationTitle("Cast Iron Skillet")
+    }
+    .environment(PreviewFixtures.signedInModel())
+    .environment(\.developerOverlays, true)
 }
 
 #Preview("Expense project alternative") {

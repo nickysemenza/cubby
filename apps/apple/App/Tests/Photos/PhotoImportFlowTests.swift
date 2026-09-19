@@ -96,6 +96,9 @@ struct PhotoImportFlowTests {
 
         #expect(manifest.selectedIDs == [item.id])
         #expect(manifest.groups.count == 1)
+        // Developer overlays layer 2: the analyzer's automatic assignment records a route decision
+        // too, not only a manual pick's `.user`.
+        #expect(manifest.groups.first?.decision == .automaticPrimary)
     }
 
     /// A1 (Q7b): an undated photo's capture-date-bound field never gets a value from `createPrefill`
@@ -204,6 +207,8 @@ struct PhotoImportFlowTests {
             })
         #expect(manifest.groups.first?.id == "\(existing.id):GDE-0001")
         #expect(manifest.needsDestination.isEmpty)
+        // Developer overlays layer 2: a single same-day auto-resolve records `.existingSameDay`.
+        #expect(manifest.groups.first?.decision == .existingSameDay(count: 1))
     }
 
     @Test func chooseSourceRecordStagesACreateDraftWithThePrefilledBodyWhenNothingMatches() async throws {
@@ -226,6 +231,9 @@ struct PhotoImportFlowTests {
         #expect(manifest.needsDestination.isEmpty)
         let body = try #require(manifest.createDraftBody(for: item.id))
         #expect(body["locationId"] == .string("LOC-0009"))
+        // Developer overlays layer 2: an unconditional primary route with no matches records
+        // `.automaticPrimary`.
+        #expect(manifest.groups.first?.decision == .automaticPrimary)
     }
 
     @Test func chooseSourceRecordOpensTheRelatedChooserForMultipleMatches() async throws {
@@ -339,6 +347,10 @@ struct PhotoImportFlowTests {
             return
         }
         #expect(bedManifest.groups.first?.id.hasPrefix(conditional.id) == true)
+        // Developer overlays layer 2: the matched predicate is recorded, not just "automatic".
+        #expect(
+            bedManifest.groups.first?.decision
+                == .automaticConditional(field: predicate.field, value: predicate.values[0]))
 
         let shelfResolution = await shelfManifest.chooseSourceRecord(type, row: shelfRow, client: client)
         guard case .resolved = shelfResolution else {
@@ -347,6 +359,7 @@ struct PhotoImportFlowTests {
         }
         #expect(shelfManifest.groups.first?.source == .location)
         #expect(shelfManifest.createDraftBody(for: shelf.id) == nil)
+        #expect(shelfManifest.groups.first?.decision == .automaticPrimary)
     }
 
     /// 8c: `createSelf`'s target-of-createRelated case is discovered purely from the catalog by

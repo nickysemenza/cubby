@@ -82,18 +82,35 @@ public struct PhotoAssetSnapshot: Sendable, Hashable {
         (classifiedAt != nil || fullAnalysisVersion != nil) ? .analysed(categories: categories) : .pending
     }
 
+    /// Public so a caller that classified a photo outside this store (the sweep's `onClassified`
+    /// hook, ahead of its own `upsertClassification` write) can build the same shape `markAnalysis`
+    /// consumes, instead of a second bespoke "analysis update" type.
+    public init(
+        localIdentifier: String, modificationDate: Date?, perceptualHash: PerceptualHash64?,
+        hashRevision: Int, categories: [String], topLabels: [PhotoLabelScore], classifyVersion: Int,
+        classifyMs: Double?, classifiedAt: Date?, fullAnalysis: Data?, fullAnalysisVersion: Int?
+    ) {
+        self.localIdentifier = localIdentifier
+        self.modificationDate = modificationDate
+        self.perceptualHash = perceptualHash
+        self.hashRevision = hashRevision
+        self.categories = categories
+        self.topLabels = topLabels
+        self.classifyVersion = classifyVersion
+        self.classifyMs = classifyMs
+        self.classifiedAt = classifiedAt
+        self.fullAnalysis = fullAnalysis
+        self.fullAnalysisVersion = fullAnalysisVersion
+    }
+
     fileprivate init(_ record: PhotoAssetRecord) {
-        localIdentifier = record.localIdentifier
-        modificationDate = record.modificationDate
-        perceptualHash = record.perceptualHash.map { PerceptualHash64(value: UInt64(bitPattern: $0)) }
-        hashRevision = record.hashRevision
-        categories = record.categories
-        topLabels = record.topLabels
-        classifyVersion = record.classifyVersion
-        classifyMs = record.classifyMs
-        classifiedAt = record.classifiedAt
-        fullAnalysis = record.fullAnalysis
-        fullAnalysisVersion = record.fullAnalysisVersion
+        self.init(
+            localIdentifier: record.localIdentifier, modificationDate: record.modificationDate,
+            perceptualHash: record.perceptualHash.map { PerceptualHash64(value: UInt64(bitPattern: $0)) },
+            hashRevision: record.hashRevision, categories: record.categories, topLabels: record.topLabels,
+            classifyVersion: record.classifyVersion, classifyMs: record.classifyMs,
+            classifiedAt: record.classifiedAt, fullAnalysis: record.fullAnalysis,
+            fullAnalysisVersion: record.fullAnalysisVersion)
     }
 }
 

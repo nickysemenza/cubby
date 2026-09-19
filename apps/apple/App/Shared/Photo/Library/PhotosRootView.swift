@@ -43,6 +43,14 @@ struct LibraryPickerSheet: View {
     }
 }
 
+/// Layer 7's "Copy diagnostics" payload for the grid.
+private struct PhotoGridDiagnosticEntry: Encodable {
+    let localIdentifier: String
+    let classifyMs: Double?
+    let topLabel: String?
+    let categories: [String]
+}
+
 struct PhotoSelectionBatch: Identifiable {
     let id = UUID()
     let items: [PhotoSelectionItem]
@@ -53,6 +61,7 @@ private struct PhotoLibraryBrowser: View {
     enum Filter: String, CaseIterable { case all = "All", missing = "Not in Cubby", found = "In Cubby" }
     @Environment(AppModel.self) private var appModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.developerOverlays) private var developerOverlays
     let maxSelectionCount: Int?
     let picker: Bool
     let onSelection: ([PhotoSelectionItem]) -> Void
@@ -161,6 +170,9 @@ private struct PhotoLibraryBrowser: View {
             // The `if` must gate the whole `ToolbarItem`, not sit inside its content: a
             // conditional inside `ToolbarItem` still renders the item's Liquid Glass background
             // even when the condition is false, showing an empty glass pill in the toolbar.
+            if developerOverlays && library.hasFullAccess {
+                ToolbarItem { CopyDiagnosticsButton { gridDiagnostics } }
+            }
             if library.hasFullAccess && !ids.isEmpty {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Clear") { clearSelection() }
@@ -294,6 +306,21 @@ private struct PhotoLibraryBrowser: View {
                 }
                 PhotoSourceButtons(maxSelectionCount: maxSelectionCount ?? 100, onSelection: onSelection)
             }.padding(24).frame(maxWidth: 560)
+        }
+    }
+
+    /// Developer overlays layer 7: every currently loaded asset's classify timing/label/categories,
+    /// read from the same per-id boxes the grid cells already observe (no new whole-store read).
+    private var gridDiagnostics: [PhotoGridDiagnosticEntry] {
+        library.months.flatMap(\.assets).map { asset in
+            let state = matches.cellStateBox(for: asset.localIdentifier).state
+            let categories: [String] = {
+                if case .analysed(let categories) = state.analysis { return categories }
+                return []
+            }()
+            return PhotoGridDiagnosticEntry(
+                localIdentifier: asset.localIdentifier, classifyMs: state.classifyMs,
+                topLabel: state.topLabel, categories: categories)
         }
     }
 
@@ -555,6 +582,7 @@ private struct MonthSection: View {
 
 private struct PhotoLibraryCell: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.developerOverlays) private var developerOverlays
     let asset: PHAsset
     let selection: Int?
     let onTap: () -> Void
@@ -622,16 +650,30 @@ private struct PhotoLibraryCell: View {
     }
 
     /// B4's grid dot: absent while pending, `.secondary` once analysed with no category hit,
-    /// category-tinted (by ramp index, never by key) once a hit lands.
+    /// category-tinted (by ramp index, never by key) once a hit lands. Developer overlays layer 1
+    /// adds the classify time and top label underneath, purely as an overlay caption — it never
+    /// changes the tile's own layout.
     @ViewBuilder private var analysisDot: some View {
-        switch cellState.analysis {
-        case .pending:
-            EmptyView()
-        case .analysed(let categories):
-            Circle().fill(PhotoCategoryTint.color(for: categories) ?? Color.secondary)
-                .frame(width: 6, height: 6)
-                .padding(6)
+        VStack(alignment: .trailing, spacing: 2) {
+            switch cellState.analysis {
+            case .pending:
+                EmptyView()
+            case .analysed(let categories):
+                Circle().fill(PhotoCategoryTint.color(for: categories) ?? Color.secondary)
+                    .frame(width: 6, height: 6)
+            }
+            if developerOverlays, let classifyMs = cellState.classifyMs {
+                DevOverlayText(analysisOverlayCaption(classifyMs))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
         }
+        .padding(6)
+    }
+
+    private func analysisOverlayCaption(_ classifyMs: Double) -> String {
+        let label = cellState.topLabel.map { " · \($0)" } ?? ""
+        return "\(Int(classifyMs))ms\(label)"
     }
 
     private var detailsButton: some View {
@@ -770,6 +812,11 @@ private struct PhotoLibraryPreview: View {
 }
 
 #Preview(traits: .modifier(SignedInPreview())) { NavigationStack { PhotosRootView() } }
+
+#Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
+    NavigationStack { PhotosRootView() }
+        .environment(\.developerOverlays, true)
+}
 
 #Preview("Category chips") {
     HStack {

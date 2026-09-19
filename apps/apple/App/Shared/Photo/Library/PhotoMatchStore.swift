@@ -38,8 +38,9 @@ final class PhotoMatchStore {
     @ObservationIgnored private var checkedIDs: Set<String> = []
     @ObservationIgnored private var cellStateBoxes: [String: PhotoGridCellStateBox] = [:]
     /// Populated by `PhotoLibraryStore`'s batch read on refresh and by the classification sweep as
-    /// it finishes each photo (B4's grid dot). Absent means "not looked at yet by either path".
-    @ObservationIgnored private var analysisByID: [String: PhotoAnalysisStatus] = [:]
+    /// it finishes each photo (B4's grid dot; developer overlays layer 1's timing/label). Absent
+    /// means "not looked at yet by either path".
+    @ObservationIgnored private var analysisByID: [String: PhotoAssetSnapshot] = [:]
 
     var coverage: String {
         if error != nil {
@@ -110,22 +111,26 @@ final class PhotoMatchStore {
         }
     }
 
-    /// Publishes a batch of analysis results into the per-id cell state (B4's grid dot). Bumps
-    /// `revision` so the category filter's memoized id set (keyed on `revision`) invalidates too.
-    func markAnalysis(_ statuses: [String: PhotoAnalysisStatus]) {
-        guard !statuses.isEmpty else { return }
-        for (id, status) in statuses { analysisByID[id] = status }
+    /// Publishes a batch of analysis snapshots into the per-id cell state (B4's grid dot; developer
+    /// overlays layer 1's timing/label). Bumps `revision` so the category filter's memoized id set
+    /// (keyed on `revision`) invalidates too.
+    func markAnalysis(_ snapshots: [String: PhotoAssetSnapshot]) {
+        guard !snapshots.isEmpty else { return }
+        for (id, snapshot) in snapshots { analysisByID[id] = snapshot }
         revision += 1
-        publishCellStates(for: statuses.keys)
+        publishCellStates(for: snapshots.keys)
     }
 
     private func computeCellState(for id: String) -> PhotoGridCellState {
-        PhotoGridCellState.derive(
+        let snapshot = analysisByID[id]
+        return PhotoGridCellState.derive(
             storedCandidates: storedCandidates(for: id),
             strongDirectOwnerShortcodes: strongDirectOwnerShortcodes(for: id),
             hasKnownResult: hasKnownResult(for: id),
             checked: checkedIDs.contains(id),
-            analysis: analysisByID[id] ?? .pending)
+            analysis: snapshot?.status ?? .pending,
+            classifyMs: snapshot?.classifyMs,
+            topLabel: snapshot?.topLabels.max(by: { $0.confidence < $1.confidence })?.identifier)
     }
 
     private func publishCellState(for id: String) {

@@ -132,8 +132,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         isLoadingLibrary = false
         // One batch read for the whole library's dot status, rather than a fetch per cell; the
         // sweep republishes individual ids afterward as it classifies them.
-        if let statuses = try? await analysisStore.analysisStatuses(for: Array(assetsByID.keys)) {
-            matches.markAnalysis(statuses)
+        if let snapshots = try? await analysisStore.snapshots(for: Array(assetsByID.keys)) {
+            matches.markAnalysis(snapshots)
         }
         let remaining = result.filter { !checked.contains($0.localIdentifier) }
         let completedCount = result.count - remaining.count
