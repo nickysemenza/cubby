@@ -244,7 +244,7 @@ public struct FoundationModelsPhotoSemanticModel: PhotoSemanticModel {
         do {
             let response = try await session.respond(
                 to: prompt, generating: GeneratedPhotoReranking.self,
-                options: GenerationOptions(samplingMode: .greedy))
+                options: GenerationOptions(sampling: .greedy))
             return response.content.decisions.map {
                 PhotoRoutingDecision(
                     photoID: $0.photoID, routeID: $0.routeID, candidateID: $0.candidateID,
