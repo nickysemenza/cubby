@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateFinancialReconciliation,
   type FinancialReconciliationInput,
+  purchaseFinancialMismatchFingerprintRawSql,
   purchaseFinancialMismatchSql,
 } from "./financial-reconciliation";
 
@@ -122,5 +123,12 @@ describe("settlement mismatch exception predicate", () => {
     const predicate = purchaseFinancialMismatchSql('"Purchase"');
     expect(predicate).toContain("to_jsonb");
     expect(predicate).not.toContain('"updatedAt"');
+  });
+
+  it("includes the compared settlement total in the evidence fingerprint", () => {
+    const fingerprint =
+      purchaseFinancialMismatchFingerprintRawSql('"Purchase"');
+    expect(fingerprint).toContain('sum(a."amount")');
+    expect(fingerprint).toContain("ft.\"status\" IN ('expected', 'pending')");
   });
 });

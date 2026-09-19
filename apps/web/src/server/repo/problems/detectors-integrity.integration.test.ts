@@ -13,12 +13,20 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   gardenEntryImage,
+  importFinding,
+  importHunt,
+  importRun,
+  importSourceClaim,
   ledgerSourceClaim,
   locationImage,
+  mailboxCursor,
   mealImage,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
+  merchantVendorRule,
+  orderMail,
+  orderMailAttachment,
   productComponent,
   productConversionCoverage,
   productExternalId,
@@ -28,6 +36,7 @@ import {
   projectImage,
   projectToolUsage,
   purchaseImage,
+  purchasePaymentEvidence,
   purchaseProduct,
   recipeImage,
   recipeSection,
@@ -36,6 +45,7 @@ import {
   statementRow,
   taskDependency,
   taskImage,
+  user,
   wishCandidate,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
@@ -51,7 +61,7 @@ import {
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 84 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across every `must-target-live` incoming edge in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -209,6 +219,105 @@ const mkLedgerTransfer = async (db: Database) => {
   });
 };
 
+const mkUser = (db: Database) =>
+  insertAndReturn(db, user, {
+    id: uniq("user"),
+    name: "Liveness fixture",
+    email: `${uniq("liveness")}@example.test`,
+  });
+
+const mkVendorAccount = async (db: Database) => {
+  const [vendor, party] = await Promise.all([mkVendor(db), mkLedgerParty(db)]);
+  return insertWithShortcode(db, "vendorAccount", {
+    label: uniq("Vendor account"),
+    vendorId: vendor.id,
+    ledgerPartyId: party.id,
+  });
+};
+
+const mkImportRun = async (
+  db: Database,
+  values: Partial<
+    Pick<typeof importRun.$inferInsert, "ledgerPartyId" | "vendorAccountId">
+  > = {},
+) => {
+  const party = values.ledgerPartyId ?? (await mkLedgerParty(db)).id;
+  return insertAndReturn(db, importRun, {
+    ledgerPartyId: party,
+    vendorAccountId: values.vendorAccountId,
+    trigger: "manual",
+  });
+};
+
+const mkImportSourceClaim = async (
+  db: Database,
+  values: Partial<
+    Pick<
+      typeof importSourceClaim.$inferInsert,
+      "ledgerPartyId" | "vendorAccountId" | "purchaseId"
+    >
+  > = {},
+) => {
+  const party = values.ledgerPartyId ?? (await mkLedgerParty(db)).id;
+  const run = await mkImportRun(db);
+  return insertAndReturn(db, importSourceClaim, {
+    ledgerPartyId: party,
+    vendorAccountId: values.vendorAccountId,
+    purchaseId: values.purchaseId,
+    kind: "browser_order",
+    externalKey: uniq("source"),
+    checksum: uniq("checksum"),
+    firstRunId: run.id,
+    lastRunId: run.id,
+    outputFingerprint: uniq("output"),
+  });
+};
+
+const mkImportHunt = async (
+  db: Database,
+  values: Partial<
+    Pick<
+      typeof importHunt.$inferInsert,
+      | "ledgerPartyId"
+      | "financialTransactionId"
+      | "vendorId"
+      | "vendorAccountId"
+      | "receiptImageId"
+    >
+  > = {},
+) => {
+  const party = values.ledgerPartyId ?? (await mkLedgerParty(db)).id;
+  const transaction =
+    values.financialTransactionId ?? (await mkFinancialTransaction(db)).id;
+  return insertAndReturn(db, importHunt, {
+    ledgerPartyId: party,
+    financialTransactionId: transaction,
+    vendorId: values.vendorId,
+    vendorAccountId: values.vendorAccountId,
+    receiptImageId: values.receiptImageId,
+    dateFrom: "2026-01-01",
+    dateTo: "2026-01-02",
+  });
+};
+
+const mkOrderMail = async (
+  db: Database,
+  values: Partial<
+    Pick<typeof orderMail.$inferInsert, "ledgerPartyId" | "vendorId">
+  > = {},
+) => {
+  const party = values.ledgerPartyId ?? (await mkLedgerParty(db)).id;
+  return insertAndReturn(db, orderMail, {
+    ledgerPartyId: party,
+    vendorId: values.vendorId,
+    messageId: uniq("message"),
+    sender: "orders@example.test",
+    subject: "Liveness fixture order",
+    receivedAt: new Date("2026-01-01T12:00:00Z"),
+    rawChecksum: uniq("mail-checksum"),
+  });
+};
+
 const mkRecipeSection = async (db: Database) => {
   const r = await mkRecipe(db);
   return insertAndReturn(db, recipeSection, {
@@ -235,6 +344,7 @@ const TARGET_FACTORIES = {
   project: mkProject,
   task: mkTask,
   vendor: mkVendor,
+  vendorAccount: mkVendorAccount,
   purchase: mkPurchase,
   financialAccount: mkFinancialAccount,
   financialTransaction: mkFinancialTransaction,
@@ -245,6 +355,115 @@ const TARGET_FACTORIES = {
  * (named by the edge key) points at `targetId`. Every other required column on
  * the source row is filled with an unrelated, always-live fixture. */
 const SOURCE_FACTORIES = {
+  "ImportHunt.receiptImageId": (db, targetId) =>
+    mkImportHunt(db, { receiptImageId: targetId }),
+  "OrderMailAttachment.imageId": async (db, targetId) => {
+    const mail = await mkOrderMail(db);
+    return insertAndReturn(db, orderMailAttachment, {
+      orderMailId: mail.id,
+      providerAttachmentId: uniq("attachment"),
+      filename: "receipt.pdf",
+      mimeType: "application/pdf",
+      checksum: uniq("attachment-checksum"),
+      imageId: targetId,
+    });
+  },
+  "VendorAccount.ledgerPartyId": async (db, targetId) => {
+    const vendor = await mkVendor(db);
+    return insertWithShortcode(db, "vendorAccount", {
+      label: uniq("Vendor account"),
+      vendorId: vendor.id,
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+    });
+  },
+  "ImportRun.ledgerPartyId": (db, targetId) =>
+    mkImportRun(db, { ledgerPartyId: parseEntityId("ledgerParty", targetId) }),
+  "ImportSourceClaim.ledgerPartyId": (db, targetId) =>
+    mkImportSourceClaim(db, {
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+    }),
+  "ImportFinding.ledgerPartyId": (db, targetId) =>
+    insertAndReturn(db, importFinding, {
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+      targetType: "purchase",
+      targetId,
+      kind: "liveness-fixture",
+      summary: "Liveness fixture",
+      evidenceFingerprint: uniq("finding"),
+    }),
+  "ImportHunt.ledgerPartyId": (db, targetId) =>
+    mkImportHunt(db, {
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+    }),
+  "MerchantVendorRule.ledgerPartyId": async (db, targetId) => {
+    const [vendor, actor] = await Promise.all([mkVendor(db), mkUser(db)]);
+    return insertAndReturn(db, merchantVendorRule, {
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+      normalizedMerchant: uniq("merchant"),
+      vendorId: vendor.id,
+      confirmedByUserId: actor.id,
+    });
+  },
+  "MailboxCursor.ledgerPartyId": (db, targetId) =>
+    insertAndReturn(db, mailboxCursor, {
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+    }),
+  "OrderMail.ledgerPartyId": (db, targetId) =>
+    mkOrderMail(db, {
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+    }),
+  "VendorAccount.vendorId": async (db, targetId) => {
+    const party = await mkLedgerParty(db);
+    return insertWithShortcode(db, "vendorAccount", {
+      label: uniq("Vendor account"),
+      vendorId: parseEntityId("vendor", targetId),
+      ledgerPartyId: party.id,
+    });
+  },
+  "ImportHunt.vendorId": (db, targetId) =>
+    mkImportHunt(db, { vendorId: parseEntityId("vendor", targetId) }),
+  "MerchantVendorRule.vendorId": async (db, targetId) => {
+    const [party, actor] = await Promise.all([mkLedgerParty(db), mkUser(db)]);
+    return insertAndReturn(db, merchantVendorRule, {
+      ledgerPartyId: party.id,
+      normalizedMerchant: uniq("merchant"),
+      vendorId: parseEntityId("vendor", targetId),
+      confirmedByUserId: actor.id,
+    });
+  },
+  "OrderMail.vendorId": (db, targetId) =>
+    mkOrderMail(db, { vendorId: parseEntityId("vendor", targetId) }),
+  "ImportSourceClaim.purchaseId": (db, targetId) =>
+    mkImportSourceClaim(db, {
+      purchaseId: parseEntityId("purchase", targetId),
+    }),
+  "PurchasePaymentEvidence.purchaseId": async (db, targetId) => {
+    const claim = await mkImportSourceClaim(db);
+    return insertAndReturn(db, purchasePaymentEvidence, {
+      purchaseId: parseEntityId("purchase", targetId),
+      sourceClaimId: claim.id,
+      amount: 1,
+      evidenceIndex: 0,
+    });
+  },
+  "ImportHunt.financialTransactionId": (db, targetId) =>
+    mkImportHunt(db, {
+      financialTransactionId: parseEntityId("financialTransaction", targetId),
+    }),
+  "Purchase.vendorAccountId": async (db, targetId) => {
+    const vendor = await mkVendor(db);
+    return insertWithShortcode(db, "purchase", {
+      vendorId: vendor.id,
+      vendorAccountId: parseEntityId("vendorAccount", targetId),
+      date: "2024-01-15",
+    });
+  },
+  "ImportRun.vendorAccountId": (db, targetId) =>
+    mkImportRun(db, { vendorAccountId: targetId }),
+  "ImportSourceClaim.vendorAccountId": (db, targetId) =>
+    mkImportSourceClaim(db, { vendorAccountId: targetId }),
+  "ImportHunt.vendorAccountId": (db, targetId) =>
+    mkImportHunt(db, { vendorAccountId: targetId }),
   "ExpenseAttribution.expenseId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
     return insertAndReturn(db, expenseAttribution, {
@@ -978,11 +1197,9 @@ interface DerivedEdgeSpec {
   targetEntity: Entity;
   role: EdgeRole;
   sourceTableName: string;
-  /** False only for the two source tables with no `deletedAt` column at all
-   * (ProjectDependency, TaskDependency — see schema.ts: both omit
-   * `...softDeletedAt()`). The "soft-deleted source" matrix case doesn't apply
-   * to them, so it's skipped for those edges rather than attempted and failing
-   * to compile a `deletedAt` update against a column that doesn't exist. */
+  /** False for source tables with no `deletedAt` column. The "soft-deleted
+   * source" matrix case doesn't apply to them, so it is skipped rather than
+   * attempting an update against a column that does not exist. */
   sourceSoftDeletable: boolean;
 }
 
@@ -1002,8 +1219,17 @@ function entityTableName(entity: Entity): string {
 }
 
 const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
+  "ImportFinding",
+  "ImportHunt",
+  "ImportRun",
+  "ImportSourceClaim",
+  "MailboxCursor",
+  "MerchantVendorRule",
+  "OrderMail",
+  "OrderMailAttachment",
   "ProjectDependency",
   "ProductConversionCoverage",
+  "PurchasePaymentEvidence",
   "TaskDependency",
 ]);
 
@@ -1043,11 +1269,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 78 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 99 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(78);
+    expect(derivedMustTargetLiveEdges).toHaveLength(99);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

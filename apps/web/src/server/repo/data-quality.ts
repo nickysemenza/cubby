@@ -796,8 +796,13 @@ const purchaseFingerprint = (
           settleableExpenseTotal: settleableTotal / 100,
           settleableUnpricedExpenseCount: settleableUnpriced,
         }).status === "mismatch";
+      const comparisonTotal =
+        financial.outstandingTransactionCount > 0
+          ? financial.projectedTotal
+          : financial.postedTotal;
       return evidenceFingerprint(check, [
         mismatch,
+        comparisonTotal,
         settleableTotal / 100,
         settleableUnpriced,
       ]);
