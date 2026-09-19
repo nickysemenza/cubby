@@ -12,6 +12,11 @@ struct SettingsView: View {
     @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
     @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
     @State private var photosReady = false
+    /// On iOS Settings is a view-based `NavigationLink` destination. Pushing Dev through the
+    /// tab's value path before popping Settings makes SwiftUI animate two independent stacks at
+    /// once, which can leave the destination visually blank. Pop first, then append the route
+    /// from this view's disappearance callback.
+    @State private var opensDeveloperToolsAfterDismissal = false
     #if os(macOS)
         @AppStorage(DockBadge.showInDockDefaultsKey) private var showProblemsInDock = true
     #endif
@@ -88,7 +93,11 @@ struct SettingsView: View {
             if model.phase == .signedIn {
                 Section("Utilities") {
                     Button("Developer tools", systemImage: "wrench.and.screwdriver") {
-                        model.navigator.openDev()
+                        #if os(iOS)
+                            opensDeveloperToolsAfterDismissal = true
+                        #else
+                            model.navigator.openDev()
+                        #endif
                         dismiss()
                     }
                     .accessibilityIdentifier("settings.developerTools")
@@ -114,6 +123,13 @@ struct SettingsView: View {
             synchronizeServerSelection()
             photosReady = model.photoAnalysisStore != nil
         }
+        #if os(iOS)
+            .onDisappear {
+                guard opensDeveloperToolsAfterDismissal else { return }
+                opensDeveloperToolsAfterDismissal = false
+                model.navigator.openDev()
+            }
+        #endif
         .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
         .photoAnalysisLifecycle(ready: photosReady, model: model, paused: photoAnalysisPaused) {
             await loadPhotoAnalysisSummary()
