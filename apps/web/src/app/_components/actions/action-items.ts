@@ -1,5 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  browserRoutedEntities,
+  type BrowserRoutedEntity,
+} from "@cubby/schemas/entity-manifest";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
@@ -68,31 +71,37 @@ interface EntityCreateSearch {
 }
 
 /**
- * Build an entity-create action, sourcing label + create route from the
- * entities registry. Keeps "New {label}" / `routes.new` single-sourced.
+ * Build an entity-create action from the generated route capability. The
+ * manifest is the source of truth: dialog routes deep-link through the list,
+ * while page routes use their generated `/new` route.
  */
 function entityCreate(
   entity: BrowserRoutedEntity,
-  id: string,
-  icon: LucideIcon,
-  surfaces: ActionSurface[],
-  keywords?: string[],
+  surfaces: ActionSurface[] = ["navbar-create", "palette-quick"],
 ): ActionItem {
   const def = entities[entity];
+  const { routes } = def;
+  const create = "create" in routes ? routes.create : undefined;
+  if (create === undefined) {
+    throw new Error(`Entity ${entity} has no browser create capability`);
+  }
+  const dialog = create === "dialog";
+  const newRoute = "new" in routes ? routes.new : undefined;
   return {
-    id,
+    id: `add-${entity}`,
     entity,
-    // Discovery wording — the navbar create menu renders its own "New {label}"
-    // (see quick-actions-menu); this `name` is what the palette/search surface.
     name: `Add ${def.label}`,
-    path:
-      ("new" in def.routes ? def.routes.new : undefined) ??
-      `/${def.basePath}/new`,
-    icon,
-    keywords,
+    path: newRoute ?? routes.list,
+    search: dialog ? { create: true } : undefined,
+    icon: def.lucideIcon,
+    keywords: ["create", "new", def.label.toLocaleLowerCase()],
     surfaces,
   };
 }
+
+const genericEntityCreateActions = browserRoutedEntities
+  .filter((entity) => "create" in entities[entity].routes)
+  .map((entity) => entityCreate(entity));
 
 /**
  * Build a quick action for a registered verb, sourcing label + icon from the
@@ -118,10 +127,9 @@ function verbAction(
 
 /**
  * The single canonical quick-action registry. Every surface derives its slice
- * from here via {@link actionsForSurface}. Entity-create actions read
- * label/route from the entities registry; New Ingredient is intentionally
- * kept off the navbar/palette (dev-level, not a headline create) but still
- * carries an `empty-state` entry below so its list's empty state resolves.
+ * from here via {@link actionsForSurface}. Entity-create actions come from
+ * generated route capabilities, so adding a generic create route cannot be
+ * forgotten in this menu.
  */
 export const actionItems: ActionItem[] = [
   // `home-quick` is deliberately only the four recurring household verbs.
@@ -161,140 +169,7 @@ export const actionItems: ActionItem[] = [
     keywords: ["shop", "buy", "groceries", "needs", "meal plan"],
     surfaces: ["palette-quick", "home-quick"],
   },
-  entityCreate(
-    "product",
-    "add-product",
-    Plus,
-    ["navbar-create", "palette-quick"],
-    ["create", "new", "item"],
-  ),
-  entityCreate(
-    "recipe",
-    "add-recipe",
-    entities.recipe.lucideIcon,
-    ["navbar-create", "palette-quick"],
-    ["create", "new", "cooking"],
-  ),
-  // Dialog-created entities: no `/new` route, so the create is deep-linked with
-  // `?create=true` on the index page. They still carry `entity` — the surfaces
-  // read `path`/`search` off the item, so `entity` only supplies the icon and
-  // the "New {label}" wording, and `createActionFor` can find them.
-  {
-    id: "add-location",
-    entity: "location",
-    name: "Add Location",
-    path: entities.location.routes.list,
-    search: { create: true },
-    icon: entities.location.lucideIcon,
-    keywords: ["create", "new", "place", "room"],
-    surfaces: ["navbar-create", "palette-quick"],
-  },
-  {
-    id: "add-task",
-    entity: "task",
-    name: "Add Task",
-    path: entities.task.routes.list,
-    search: { create: true },
-    icon: entities.task.lucideIcon,
-    keywords: ["create", "new", "todo", "house", "chore"],
-    surfaces: ["navbar-create", "palette-quick"],
-  },
-  {
-    id: "add-project",
-    entity: "project",
-    name: "Add Project",
-    path: entities.project.routes.list,
-    search: { create: true },
-    icon: entities.project.lucideIcon,
-    keywords: ["create", "new", "house", "renovation", "trade"],
-    surfaces: ["navbar-create", "palette-quick"],
-  },
-  {
-    id: "add-expense",
-    entity: "expense",
-    name: "Add Expense",
-    path: entities.expense.routes.list,
-    search: { create: true },
-    icon: entities.expense.lucideIcon,
-    keywords: ["create", "new", "expense", "receipt", "spend", "cost"],
-    surfaces: ["navbar-create", "palette-quick"],
-  },
-  {
-    id: "add-meal",
-    entity: "meal",
-    name: "Add Meal",
-    path: entities.meal.routes.list,
-    search: { create: true },
-    icon: entities.meal.lucideIcon,
-    keywords: ["create", "new", "plan", "dinner", "calendar"],
-    surfaces: ["navbar-create", "palette-quick"],
-  },
-  // Dialog-created, but deliberately not offered in the navbar or palette —
-  // these are created in the flow of working a list, not from a global menu.
-  // They are here so the list empty states have somewhere to point.
-  {
-    id: "add-ingredient",
-    entity: "ingredient",
-    name: "Add Ingredient",
-    path: entities.ingredient.routes.list,
-    search: { create: true },
-    icon: entities.ingredient.lucideIcon,
-    surfaces: ["empty-state"],
-  },
-  {
-    id: "add-vendor",
-    entity: "vendor",
-    name: "Add Vendor",
-    path: entities.vendor.routes.list,
-    search: { create: true },
-    icon: entities.vendor.lucideIcon,
-    surfaces: ["empty-state"],
-  },
-  {
-    id: "add-vendor-account",
-    entity: "vendorAccount",
-    name: "Add Vendor Account",
-    path: entities.vendorAccount.routes.list,
-    search: { create: true },
-    icon: entities.vendorAccount.lucideIcon,
-    surfaces: ["empty-state"],
-  },
-  {
-    id: "add-purchase",
-    entity: "purchase",
-    name: "Add Purchase",
-    path: entities.purchase.routes.list,
-    search: { create: true },
-    icon: entities.purchase.lucideIcon,
-    surfaces: ["empty-state"],
-  },
-  {
-    id: "add-financial-account",
-    entity: "financialAccount",
-    name: "Add Account",
-    path: entities.financialAccount.routes.list,
-    search: { create: true },
-    icon: entities.financialAccount.lucideIcon,
-    surfaces: ["empty-state"],
-  },
-  {
-    id: "add-financial-transaction",
-    entity: "financialTransaction",
-    name: "Add Transaction",
-    path: entities.financialTransaction.routes.list,
-    search: { create: true },
-    icon: entities.financialTransaction.lucideIcon,
-    surfaces: ["empty-state"],
-  },
-  {
-    id: "add-wish",
-    entity: "wish",
-    name: "Add Wish",
-    path: entities.wish.routes.list,
-    search: { create: true },
-    icon: entities.wish.lucideIcon,
-    surfaces: ["empty-state"],
-  },
+  ...genericEntityCreateActions,
   {
     id: "bulk-move",
     name: "Bulk Move Inventory",
@@ -327,7 +202,6 @@ export const actionItems: ActionItem[] = [
   ),
   {
     id: "single-item",
-    entity: "inventory",
     name: "Single Item",
     path: entities.inventory.routes.list,
     search: { create: true },

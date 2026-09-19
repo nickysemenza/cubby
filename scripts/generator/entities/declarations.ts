@@ -345,7 +345,10 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
   validateRelationSections(entities);
   for (const entity of entities) {
     if (entity.descriptor.browserRoutes === false) continue;
-    for (const route of Object.values(browserRoutes(entity).routes)) {
+    for (const [routeName, route] of Object.entries(
+      browserRoutes(entity).routes,
+    )) {
+      if (routeName === "create") continue;
       if (routes.has(route))
         throw new EntityDeclarationError(`Duplicate browser route ${route}.`);
       routes.add(route);

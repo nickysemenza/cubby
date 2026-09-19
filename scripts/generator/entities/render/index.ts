@@ -1443,7 +1443,7 @@ export const renderEntityArtifacts = (
             }),
           ),
           satisfies:
-            "Partial<Record<Entity, { basePath: string; routes: { detail: string; list: string; new?: string } }>>",
+            'Partial<Record<Entity, { basePath: string; routes: { detail: string; list: string; create?: "dialog" | "page"; new?: string } }>>',
           comment: "// Generated routes stay one entity per line.",
         }) +
         "\n" +

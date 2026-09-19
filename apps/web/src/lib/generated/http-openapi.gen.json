@@ -43064,6 +43064,9 @@
                 },
                 "annotations": {
                   "$ref": "#/components/schemas/output_schema355"
+                },
+                "_meta": {
+                  "$ref": "#/components/schemas/output_schema353"
                 }
               },
               "required": [
