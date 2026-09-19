@@ -1,4 +1,8 @@
 import { generatedHeader } from "../../artifacts.ts";
+import {
+  photoCategories,
+  photoCategoryKeys,
+} from "../../../../packages/schemas/src/photo-categories.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 
 /**
@@ -206,6 +210,34 @@ export const renderImagePolicyArtifacts = (
       ];
     }),
   );
+  // Effective labels = each category's declared base vocabulary UNION every member entity's
+  // own `signals.classifierLabels` — computed once, here, and emitted as data to both TS and
+  // Swift so neither side recomputes (or can drift on) the union at runtime.
+  const categoryList = photoCategoryKeys.map((key) => {
+    const base = photoCategories[key];
+    const members = entities.filter(
+      (entity) => entity.imagePolicy.routing?.category === key,
+    );
+    const classifierLabels = [
+      ...new Set([
+        ...base.classifierLabels,
+        ...members.flatMap(
+          (entity) =>
+            entity.imagePolicy.routing?.signals.classifierLabels ?? [],
+        ),
+      ]),
+    ];
+    return {
+      key,
+      label: base.label,
+      emoji: base.emoji,
+      classifierLabels,
+      entities: members.map((entity) => entity.key),
+    };
+  });
+  const categoryCatalog = Object.fromEntries(
+    categoryList.map((category) => [category.key, category]),
+  );
   const policyCatalog = Object.fromEntries(
     entities.map((entity) => [
       entity.key,
@@ -219,16 +251,19 @@ export const renderImagePolicyArtifacts = (
   );
   const ts =
     generatedHeader +
-    'import type { Entity } from "../entity";\n\n' +
+    'import type { Entity } from "../entity";\n' +
+    'import type { PhotoCategoryKey } from "../photo-categories";\n\n' +
     `export type ImageStorage = false | ${unionType(IMAGE_STORAGE_VALUES)};\n` +
     'export type ImageIngressBinding = { readonly field: string; readonly from: "source-id" | "capture-date" } | { readonly field: string; readonly from: "source-field"; readonly sourceField: string } | { readonly field: string; readonly from: "constant"; readonly value: string | number | boolean | null } | { readonly field: string; readonly from: "relation-items"; readonly item: { readonly field: string; readonly from: "source-id" | "source-field" | "constant"; readonly sourceField?: string; readonly value?: string | number | boolean | null } };\n' +
     "type ImageRoutePredicate = { readonly field: string; readonly oneOf: readonly string[] };\n" +
     `export type ImageIngressRoute = { readonly routeId: string; readonly sourceEntity: Entity; readonly targetEntity: Entity; readonly kind: ${unionType(ROUTE_KINDS)}; readonly storage: ImageStorage; readonly relationPath: readonly string[]; readonly bindings: readonly ImageIngressBinding[]; readonly append: boolean; readonly requiresReplaceConfirmation: boolean; readonly choice: ${unionType(ROUTE_CHOICES)}; readonly primaryWhen: ImageRoutePredicate | null; readonly enabled: boolean; readonly disabledReason: string | null };\n` +
     `export type ImageDisplayBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: ${unionType(DISPLAY_ORDERINGS)}; readonly identityEvidence: false };\n\n` +
     `type ImageVisualEvidenceBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: ${unionType(DISPLAY_ORDERINGS)} };\n\n` +
-    "export type ImageRoutingPolicy = { readonly candidateFields: readonly string[]; readonly temporalFields: readonly string[]; readonly lifecycleFilters: readonly ({ readonly field: string; readonly equals: string | boolean } | { readonly field: string; readonly oneOf: readonly (string | boolean)[] })[]; readonly signals: { readonly ocrFields: readonly string[]; readonly classifierLabels: readonly string[] }; readonly visualEvidence: readonly ImageVisualEvidenceBinding[]; readonly abstention: { readonly minimumScore: number; readonly minimumMargin: number } };\n" +
+    "export type ImageRoutingPolicy = { readonly candidateFields: readonly string[]; readonly temporalFields: readonly string[]; readonly lifecycleFilters: readonly ({ readonly field: string; readonly equals: string | boolean } | { readonly field: string; readonly oneOf: readonly (string | boolean)[] })[]; readonly signals: { readonly ocrFields: readonly string[]; readonly classifierLabels: readonly string[] }; readonly visualEvidence: readonly ImageVisualEvidenceBinding[]; readonly abstention: { readonly minimumScore: number; readonly minimumMargin: number }; readonly category: PhotoCategoryKey };\n" +
     "export type ImagePolicy = { readonly storage: ImageStorage; readonly displaySources: readonly ImageDisplayBinding[]; readonly ingress: readonly ImageIngressRoute[]; readonly routing: ImageRoutingPolicy | null };\n\n" +
     `export const imagePolicyCatalog = ${JSON.stringify(policyCatalog)} as const satisfies Record<Entity, ImagePolicy>;\n\n` +
+    "export type PhotoCategory = { readonly key: PhotoCategoryKey; readonly label: string; readonly emoji: string; readonly classifierLabels: readonly string[]; readonly entities: readonly Entity[] };\n" +
+    `export const photoCategories = ${JSON.stringify(categoryCatalog)} as const satisfies Record<PhotoCategoryKey, PhotoCategory>;\n\n` +
     `export const imageOwners = ${JSON.stringify(owners)} as const;\n` +
     "export type ImageOwner = (typeof imageOwners)[number];\n\n" +
     `export const imageIngressRoutes = ${JSON.stringify(routes)} as const satisfies readonly ImageIngressRoute[];\n` +
@@ -293,9 +328,17 @@ export const renderImagePolicyArtifacts = (
       const routing = entity.imagePolicy.routing;
       if (routing === null) return [];
       return [
-        `    .${entity.key}: PhotoRoutingPolicy(candidateFields: ${JSON.stringify(routing.candidateFields)}, temporalFields: ${JSON.stringify(routing.temporalFields)}, lifecycleFilters: [${routing.lifecycleFilters.map((filter) => `PhotoLifecycleFilter(field: ${JSON.stringify(filter.field)}, equals: ${"equals" in filter ? JSON.stringify(String(filter.equals)) : "nil"}, oneOf: ${"oneOf" in filter ? JSON.stringify(filter.oneOf.map(String)) : "[]"})`).join(", ")}], ocrFields: ${JSON.stringify(routing.signals.ocrFields)}, classifierLabels: ${JSON.stringify(routing.signals.classifierLabels)}, minimumScore: ${routing.abstention.minimumScore}, minimumMargin: ${routing.abstention.minimumMargin})`,
+        `    .${entity.key}: PhotoRoutingPolicy(candidateFields: ${JSON.stringify(routing.candidateFields)}, temporalFields: ${JSON.stringify(routing.temporalFields)}, lifecycleFilters: [${routing.lifecycleFilters.map((filter) => `PhotoLifecycleFilter(field: ${JSON.stringify(filter.field)}, equals: ${"equals" in filter ? JSON.stringify(String(filter.equals)) : "nil"}, oneOf: ${"oneOf" in filter ? JSON.stringify(filter.oneOf.map(String)) : "[]"})`).join(", ")}], ocrFields: ${JSON.stringify(routing.signals.ocrFields)}, classifierLabels: ${JSON.stringify(routing.signals.classifierLabels)}, minimumScore: ${routing.abstention.minimumScore}, minimumMargin: ${routing.abstention.minimumMargin}, category: ${JSON.stringify(routing.category)})`,
       ];
     })
+    .join(",\n");
+  // One static array element per category, not a giant literal: each category is its own
+  // `PhotoCategory(...)` call, mirroring the one-static-per-route convention above.
+  const swiftCategories = categoryList
+    .map(
+      (category) =>
+        `    PhotoCategory(key: ${JSON.stringify(category.key)}, label: ${JSON.stringify(category.label)}, emoji: ${JSON.stringify(category.emoji)}, classifierLabels: ${JSON.stringify(category.classifierLabels)}, entities: [${category.entities.map((entity) => `.${entity}`).join(", ")}])`,
+    )
     .join(",\n");
   const swift =
     generatedHeader +
@@ -312,8 +355,11 @@ export const renderImagePolicyArtifacts = (
     "public struct PhotoDisplaySource: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: PhotoDisplayOrdering\n}\n\n" +
     "public struct PhotoVisualEvidence: Sendable, Hashable {\n  public let source: EntityKey\n  public let target: EntityKey\n  public let relationPath: [String]\n  public let priority: Int\n  public let ordering: PhotoDisplayOrdering\n}\n\n" +
     "public struct PhotoLifecycleFilter: Sendable, Hashable {\n  public let field: String\n  public let equals: String?\n  public let oneOf: [String]\n}\n\n" +
-    "public struct PhotoRoutingPolicy: Sendable, Hashable {\n  public let candidateFields: [String]\n  public let temporalFields: [String]\n  public let lifecycleFilters: [PhotoLifecycleFilter]\n  public let ocrFields: [String]\n  public let classifierLabels: [String]\n  public let minimumScore: Double\n  public let minimumMargin: Double\n}\n\n" +
-    "public enum PhotoImportCatalog {\n  public static let ingressRoutes: [PhotoIngressRoute] = [\n" +
+    "public struct PhotoRoutingPolicy: Sendable, Hashable {\n  public let candidateFields: [String]\n  public let temporalFields: [String]\n  public let lifecycleFilters: [PhotoLifecycleFilter]\n  public let ocrFields: [String]\n  public let classifierLabels: [String]\n  public let minimumScore: Double\n  public let minimumMargin: Double\n  public let category: String\n}\n\n" +
+    "public struct PhotoCategory: Sendable, Hashable {\n  public let key: String\n  public let label: String\n  public let emoji: String\n  /** Base labels UNION every member entity's own classifier labels — computed by the\n   * generator (scripts/generator/entities/render/image-policy.ts); never recompute here. */\n  public let classifierLabels: [String]\n  public let entities: [EntityKey]\n}\n\n" +
+    "public enum PhotoImportCatalog {\n  public static let categories: [PhotoCategory] = [\n" +
+    swiftCategories +
+    "\n  ]\n  public static let ingressRoutes: [PhotoIngressRoute] = [\n" +
     swiftRoutes +
     "\n  ]\n  public static let displaySources: [PhotoDisplaySource] = [\n" +
     swiftDisplaySources +

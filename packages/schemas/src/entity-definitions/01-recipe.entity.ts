@@ -826,10 +826,11 @@ export default defineEntity({
         { kind: "createSelf", routeId: "recipe-new", enabled: true },
       ],
       routing: {
+        category: "food",
         candidateFields: ["name"],
         temporalFields: [],
         lifecycleFilters: [],
-        signals: { ocrFields: ["name"], classifierLabels: ["recipe"] },
+        signals: { ocrFields: ["name"], classifierLabels: ["food"] },
         visualEvidence: [
           {
             relationPath: ["meals"],

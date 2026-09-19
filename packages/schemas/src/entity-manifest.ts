@@ -10,6 +10,7 @@ export {
   imageIngressRoutes,
   imageOwners,
   imagePolicyCatalog,
+  photoCategories,
   type ImageDisplayBinding,
   type ImageIngressBinding,
   type ImageIngressRoute,
@@ -18,7 +19,9 @@ export {
   type ImagePolicy,
   type ImageRoutingPolicy,
   type ImageStorage,
+  type PhotoCategory,
 } from "./generated/image-policy.gen";
+export type { PhotoCategoryKey } from "./photo-categories";
 import { generatedEntityManifest } from "./generated/entity-manifest-data.gen";
 import type { entitySummary } from "./generated/entity-summary.gen";
 import { relatednessSignalSchema } from "./relatedness";

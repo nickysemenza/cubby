@@ -2,6 +2,7 @@ import {
   FILTER_KINDS,
   parseEntityDeclarationMetadata,
 } from "../../../packages/schemas/src/entity-definitions/definition.ts";
+import { photoCategories } from "../../../packages/schemas/src/photo-categories.ts";
 import type {
   EntityDeclarationMetadata,
   EntityFieldModelMetadata,
@@ -1560,10 +1561,39 @@ const validateImageVisualEvidence = (
   }
 };
 
+/**
+ * No classifier label may belong to two categories' BASE lists: a label that did would make
+ * a photo hit ambiguous between categories before any entity ever contributes a member label.
+ * Runs once over the static category catalog (`packages/schemas/src/photo-categories.ts`),
+ * independent of which entities are compiled — exported so a fixture catalog can exercise the
+ * duplicate case directly, without needing a full entity declaration.
+ */
+export const validatePhotoCategoryLabels = (
+  categories: Readonly<Record<string, { classifierLabels: readonly string[] }>>,
+): void => {
+  const owner = new Map<string, string>();
+  for (const [key, category] of Object.entries(categories)) {
+    for (const label of category.classifierLabels) {
+      const existing = owner.get(label);
+      if (existing !== undefined)
+        throw new EntityDeclarationError(
+          `photoCategories.${key} classifierLabel "${label}" also appears in photoCategories.${existing}.`,
+        );
+      owner.set(label, key);
+    }
+  }
+};
+
 const validateImageRouting = (entity: CompiledEntity): void => {
   const { routing } = entity.imagePolicy;
   if (routing === null) return;
   const context = `${entity.key}.capabilities.images.routing`;
+  // `category` is schema-optional (`imageRoutingMetadataSchema`) purely so a missing value
+  // reaches here — with the entity's key in hand — instead of failing during the raw
+  // declaration parse, where only a declaration index is known. An unrecognized category
+  // value still fails at the schema's `z.enum`, before this ever runs.
+  if (routing.category === undefined)
+    throw new EntityDeclarationError(`${context}.category is required.`);
   const validateFields = (
     keys: readonly string[],
     allowed: readonly EntityField["kind"][],
@@ -1641,6 +1671,7 @@ export const compileEntityDeclarations = (
     throw new EntityDeclarationError("Entity declarations must not be empty.");
   const entities = declarations.map(compileEntity);
   validateEntityIdentities(entities);
+  validatePhotoCategoryLabels(photoCategories);
   validateImagePolicies(entities);
   validateRelationSections(entities);
   return entities;

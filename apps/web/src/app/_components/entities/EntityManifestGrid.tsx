@@ -6,6 +6,7 @@ import {
   entityInspectorMetadata,
   entityManifest,
   entityReferences,
+  photoCategories,
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { EntityPresentation } from "@cubby/schemas/entity-summary";
@@ -219,6 +220,40 @@ function EntityIndex({
         </button>
       ))}
     </nav>
+  );
+}
+
+function PhotoCategoriesSection() {
+  return (
+    <Section title="Photo categories">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Category</TableHead>
+            <TableHead>Entities</TableHead>
+            <TableHead>Classifier labels (effective)</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Object.values(photoCategories).map((category) => (
+            <TableRow key={category.key}>
+              <TableCell className="whitespace-nowrap">
+                <span aria-hidden className="mr-1">
+                  {category.emoji}
+                </span>
+                {category.label}
+              </TableCell>
+              <TableCell>
+                <Chips items={category.entities} />
+              </TableCell>
+              <TableCell>
+                <Chips items={category.classifierLabels} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Section>
   );
 }
 
@@ -958,6 +993,7 @@ export function EntityManifestGrid({
         count={countFor(selected, counts)}
         health={health?.search[selected]}
       />
+      <PhotoCategoriesSection />
       <Section title="Reference graph">
         <EntityReferenceGraph />
       </Section>

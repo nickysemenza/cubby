@@ -1135,6 +1135,7 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "home",
         candidateFields: ["name", "description", "notes"],
         temporalFields: ["startDate", "endDate"],
         lifecycleFilters: [
@@ -1145,7 +1146,7 @@ export default defineEntity({
         ],
         signals: {
           ocrFields: ["name", "description", "notes"],
-          classifierLabels: ["project"],
+          classifierLabels: ["toolbox"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },

@@ -439,6 +439,7 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "plants",
         candidateFields: ["note"],
         temporalFields: ["observedOn"],
         lifecycleFilters: [],

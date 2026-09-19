@@ -1143,12 +1143,13 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "documents",
         candidateFields: ["name", "notes"],
         temporalFields: ["date"],
         lifecycleFilters: [],
         signals: {
           ocrFields: ["name", "notes"],
-          classifierLabels: ["expense", "receipt"],
+          classifierLabels: ["receipt"],
         },
         abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
       },

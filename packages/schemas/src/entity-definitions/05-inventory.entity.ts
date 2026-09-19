@@ -492,10 +492,11 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "home",
         candidateFields: ["notes"],
         temporalFields: ["verifiedAt"],
         lifecycleFilters: [],
-        signals: { ocrFields: ["notes"], classifierLabels: ["inventory"] },
+        signals: { ocrFields: ["notes"], classifierLabels: ["crate"] },
         abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
       },
     },

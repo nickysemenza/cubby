@@ -632,12 +632,13 @@ export default defineEntity({
         },
       ],
       routing: {
+        category: "home",
         candidateFields: ["name", "website"],
         temporalFields: [],
         lifecycleFilters: [],
         signals: {
           ocrFields: ["name", "website"],
-          classifierLabels: ["vendor", "logo"],
+          classifierLabels: ["storefront", "sign"],
         },
         abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
       },
