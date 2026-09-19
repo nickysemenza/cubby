@@ -1,11 +1,11 @@
 # Purchase import redesign
 
 Status: implemented on `codex/purchase-import-redesign` (2026-09-19), after
-adversarial Fable and Astra reviews against the checkout. The database cutover
-is intentionally committed but unapplied; local deployment and operator
-validation remain the merge gate. Every decision was put to the operator and
-confirmed unless marked **assumption**. Review findings that changed the design
-are noted inline as *(review)*.
+adversarial Fable and Astra reviews against the checkout. The production
+database cutover was applied and verified on 2026-09-19; local deployment and
+operator validation remain the merge gate. Every decision was put to the
+operator and confirmed unless marked **assumption**. Review findings that
+changed the design are noted inline as *(review)*.
 
 ## 1. Summary
 
