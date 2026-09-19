@@ -431,14 +431,22 @@ struct PhotoDiagnosticsTests {
     /// `PhotoDiagnostics.report` is what both `suggestedSource`'s "Suggested: …" chip and the CLI's
     /// `routing` dump are built from (this folds the former standalone `policyMatches` table test
     /// in, so there's one table test, not two): a match at/above a policy's `minimumScore` must
-    /// flag only that entity — and win `suggestedSource` — while dropping just below must un-flag
-    /// it without touching any other entity's verdict, and the report always carries exactly one
-    /// verdict per routing policy.
+    /// flag its uniquely-labelled entity — and win `suggestedSource` — while dropping just below
+    /// must un-flag it without touching any other entity's verdict, and the report always carries
+    /// exactly one verdict per routing policy.
     @Test("routing verdict tracks minimumScore", arguments: [true, false])
     func routingVerdictTracksMinimumScore(above: Bool) async throws {
-        let (key, policy) = try #require(
-            PhotoImportCatalog.routingPolicies.first { !$0.value.classifierLabels.isEmpty })
-        let label = try #require(policy.classifierLabels.first)
+        let candidate = PhotoImportCatalog.routingPolicies
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .compactMap { key, policy in
+                policy.classifierLabels.first { label in
+                    PhotoImportCatalog.routingPolicies.values.allSatisfy { other in
+                        other == policy || !other.classifierLabels.contains(label)
+                    }
+                }.map { (key, policy, $0) }
+            }
+            .first
+        let (key, policy, label) = try #require(candidate)
         let identifier = "\(label)-detected"
         let confidence = above ? min(1, policy.minimumScore + 0.1) : max(0, policy.minimumScore - 0.1)
 
@@ -450,6 +458,7 @@ struct PhotoDiagnosticsTests {
         let verdict = try #require(report.routing.first { $0.entity == key })
         #expect(verdict.meetsMinimumScore == above)
         #expect(verdict.classifierIdentifier == identifier)
+        #expect(report.routing.filter(\.meetsMinimumScore).map(\.entity) == (above ? [key] : []))
         #expect(report.suggestedSource == (above ? key : nil))
     }
 }

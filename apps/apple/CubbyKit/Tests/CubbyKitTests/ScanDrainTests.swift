@@ -36,7 +36,9 @@ struct ScanDrainTests {
         drain.submit("b", at: .now + 5)
         drain.submit("c", at: .now + 10)
         #expect(drain.pendingCount == 3)
-        try await settle(drain)
+        // This case deliberately suspends three MainActor work items to prove serialized draining.
+        // Let a loaded hosted runner schedule those turns, while still failing a genuinely stuck drain.
+        try await settle(drain, timeout: .seconds(5))
         #expect(active.withLock { $0.peak } == 1)
         #expect(settled == ["a", "b", "c"])
     }
