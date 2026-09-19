@@ -78,7 +78,7 @@ store.
 | 31 | Run triggers | Browser runs: Mac app foreground with a browser available, a non-empty worklist (hunts from charges or Gmail), manual "Sync now". Gmail polling and charge matching run on an hourly cron *(review: Workflows do not self-schedule)*. |
 | 32 | Prompts | In-repo under `apps/web/src/server/agents/purchase-import/`, versioned like features, with an offline eval. |
 | 33 | Loop implementation | Flue, gated on a spike with the definition of done in §8.1. Fallback: Agents SDK primitives. |
-| 34 | Browser bridge tools | `navigate`, `evaluate`, `capture`, `screenshot`, `pdf`, `tabs`. |
+| 34 | Browser bridge tools | Read-only by construction: `navigate` (allow-listed to the VendorAccount's domains), `capture`, `click(selector)`, `paginate`, `screenshot`, `pdf`, `tabs`. No free-form `evaluate`, no tool that submits a form — page text reaches the agent as data, so a page must never be able to turn into an action in a signed-in session. |
 | 35 | Auditor batching | Per run; per ≤25 orders during backfill; input is the rendered import only. |
 | 36 | `ImportRun` | A plain table (not an entity): one row per run, `Purchase.importRunId`; cost is `SUM(AiUsage)` by job id, never stored. |
 | 37 | Pause semantics | As 30. Status lives on `VendorAccount` only. |
@@ -93,6 +93,11 @@ store.
 | 46 | Exception staleness | **All** data exceptions are fingerprinted on the inputs their check reads (live expense count, document set, `orderId`, …) instead of the row's `updatedAt`: an exception is valid while the check's inputs are unchanged. Reasons stay mandatory and typed as today. |
 | 47 | Hunt | A charge at an `online_account` vendor with no allocated Purchase opens a hunt: Gmail match (sender, date window, amount) → order id → targeted browser fetch. No email match → on the next run the browser walks the orders list bounded to the charge date ±7 days → still nothing → `expected order not found` Problem. |
 | 48 | Hunt routing | The charge routes by `FinancialAccount.ledgerPartyId` to that member's VendorAccount. The Gmail step runs server-side immediately, so the order id is known before the owner's Mac appears; only the fetch waits for their session. |
+| 49 | Shipment-level settlement | Amazon (and others) charge per **shipment**, so one order yields several charges that never equal the order total, and one charge sometimes covers several same-day orders. Extraction captures the order page's own transaction list (card, amount, date per shipment); the writer records one `FinancialTransaction` allocation per shipment charge; hunts match a charge against shipment amounts first, then subset-sum over order mails in the window for the N-orders-one-charge case. |
+| 50 | Receipt photos | `receipt_only` vendors use the same writer: a receipt photo (iOS photo import, or attached from the Purchase) → vision extract → `import_vendor_orders` → Jev → auditor. A `receipt_only` hunt asks "is there a receipt photo within ±3 days of the charge?" before filing "photograph the receipt". |
+| 51 | Mail attachments | An `OrderMail` with a PDF attachment attaches it to the matched Purchase as `invoice` (or `receipt` when the mail says so), which closes `primary_document` for utilities, contractors, and `not_expected` vendors without any browser work. |
+| 52 | Return windows and refunds | `OrderMail` refund events file a `refund_unbooked` finding with the proposed negative row; a delivered event plus the vendor's return policy (a per-Vendor `returnWindowDays`, null = none) files a `return_window` finding that surfaces only for lines above a threshold and expires itself. |
+| 53 | Later, enabled by this plan | Price history on the shopping list; recurring-order detection as consumption *rate* suggestions (never a decrement); an AI cost page by `jobKind`. §11. |
 
 ## 3. Domain model changes
 
@@ -129,6 +134,8 @@ adapter, incoming-edge dispositions for Vendor and LedgerParty,
 | `orderEvidence` | `online_account \| receipt_only \| not_expected \| null` |
 | `orderEmailSenders` | text[] used by discovery |
 | `agentHints` | JSON the agent writes: orders-list URL, pagination shape, order-link pattern, notes. Detail URLs come from the existing `Vendor.orderUrlTemplate`; hints never store a second template. |
+| `browserDomains` | text[] the bridge may navigate to for this vendor (decision 34); seeded from `website` |
+| `returnWindowDays` | nullable int (decision 52) |
 
 ### 3.4 `Purchase` additions
 
@@ -155,7 +162,7 @@ same row. Cost is `SUM(AiUsage.costUsd) WHERE jobKind = 'import_run' AND jobId =
 `productId`; CHECK exactly one non-null, same shape as
 `LedgerSourceClaim_owner_check`), `kind` (`wrong_product \| duplicate_product
 \| sum_mismatch \| duplicate_lines \| foreign_currency \| reversal_kind \|
-missing_line \| kit_double_booked \| variant_doubt \| arrived \| other`),
+missing_line \| kit_double_booked \| variant_doubt \| arrived \| refund_unbooked \| return_window \| other`),
 `summary`, `proposedFix` (entity-kernel commands, JSON), `autoApplied`,
 `probability`, `status` (`open \| applied \| dismissed`), `resolvedAt`,
 `resolvedByUserId`. Partial unique on `(purchaseId, kind)` where `status =
@@ -173,8 +180,9 @@ consumer in `repo/telemetry.ts`. Import runs are one `jobKind`.
 `lastPolledAt`. Tokens live in better-auth's `account` table.
 
 `OrderMail`: `ledgerPartyId`, `vendorId`, `orderId`, `amount`, `event`,
-`messageId` (unique), `receivedAt`. The parsed, deduplicated event stream
-that hunts and the delivered/refunded signals read; never money.
+`messageId` (unique), `receivedAt`, `attachmentImageId` (nullable; the PDF
+once attached). The parsed, deduplicated event stream that hunts and the
+delivered/refunded signals read; never money.
 
 ### 3.9 Documents
 
@@ -201,9 +209,14 @@ duplicate; the screenshot attaches as `other`.
   `{ partyId, vendorAccountId }` via `serializeAttachment` because in-memory
   state does not survive hibernation. Long-poll REST fallback on the OpenAPI
   client.
-- Executes six tools: `navigate(url)`, `evaluate(js)`, `capture()` →
-  `{ text, links[], images[] }` with text capped at 24 KB and links/images
-  limited to product-shaped hrefs, `screenshot()`, `pdf()`, `tabs()`.
+- Executes a fixed, versioned tool set — no free-form JavaScript reaches the
+  page: `navigate(url)` (refused unless the host is in
+  `Vendor.browserDomains`), `capture()` → `{ text, links[], images[],
+  transactions[] }` with text capped at 24 KB and links/images limited to
+  product-shaped hrefs, `click(selector)` and `paginate()` for "show more"
+  and next-page controls (never a submit button or a form), `screenshot()`,
+  `pdf()`, `tabs()`. The injected scripts ship with the app and are the
+  only code that runs in the tab; the agent chooses *which*, never *what*.
 - Paces requests; reports `auth_required` on a sign-in or challenge page,
   raises the window and posts a local notification.
 - UI: per-account status line, "Sync now", browser choice.
@@ -219,7 +232,7 @@ DOs do. Skill file = the judgment half of the current skill. Tools:
 
 | tool | executes | notes |
 |---|---|---|
-| `browser.*` (six) | on the Mac over the socket | blocking; the agent pauses when no socket is attached |
+| `browser.*` (§4.1) | on the Mac over the socket | blocking; the agent pauses when no socket is attached |
 | `cubby.import_order_page(orderId, capture)` | server | extract (+validate) → PDF attach → writer → Jev; returns one line |
 | `cubby.list_known_orders(vendorAccountId, since)` | server | so the agent stops at the cursor |
 | `cubby.save_hints(patch)` | server | writes `Vendor.agentHints` |
@@ -241,8 +254,13 @@ Two features *(review: `runStructuredFeature` cannot switch tier mid-run)*:
   structured output = the writer payload: header (`orderId`, date,
   `statedTotal`, currency as shown), lines (`name`, `qty`, `unitPrice`,
   `extended`, external ids from hrefs, `imageUrl`, `seller`), adjustments
-  (`lineKind`, amount), shipment states, refund/return events. The sum-check
-  runs as its `validate` hook, buying the one repair turn the runtime allows.
+  (`lineKind`, amount), shipment states, the page's **transaction list**
+  (card descriptor, amount, date per shipment charge — decision 49),
+  refund/return events. The sum-check runs as its `validate` hook, buying
+  the one repair turn the runtime allows.
+- `receipt-photo-extract` — vision batch tier, same output shape, fed by a
+  receipt photo for `receipt_only` vendors (decision 50). The sum-check
+  validates against the receipt's printed total.
 - `vendor-order-repair` — reasoning tier with the screenshot, invoked once
   when extraction still fails validation; its failure yields a `sum_mismatch`
   finding with the PDF.
@@ -273,6 +291,11 @@ A workflow service with its own `withTransaction`, also an MCP tool. Accepts
   labels → Jev; `probability ≥ 0.85` link, `< 0.6` create, between → create
   and file `variant_doubt`;
 - image: server-side `sourceUrl` attach with the idempotency key;
+- settlement: for each captured shipment charge, find the
+  `FinancialTransaction` by card + amount + date window and allocate it to
+  this Purchase (one transaction may end with several allocations across
+  same-day orders, per the skill's existing N:1 rule); unmatched charges are
+  left for the hunt cron;
 - `statedTotal` is stored as the header cue and never used to reject or scale.
 
 Returns per order:
@@ -320,14 +343,31 @@ parse order id + amount + event (`placed \| shipped \| delivered \| refunded
 `orderId`, `amount`, `event`, `messageId`, `receivedAt`). Unknown senders →
 Jev `order-mail-classify` → if order mail, a derived Problem "new vendor?".
 
+*Attachments.* An order mail carrying a PDF attaches it to the matched
+Purchase as `invoice` (`receipt` when the subject says so) through the
+existing document path with the idempotency key; `attachmentImageId` records
+it (decision 51).
+
 *Hunts.* For every unallocated `FinancialTransaction` at an `online_account`
 (or `null`) vendor: route to the card owner's VendorAccount
-(`FinancialAccount.ledgerPartyId`); find `OrderMail` rows for that vendor and
-party within the charge's date window; exact amount match wins, otherwise
-Jev `charge-mail-match`; push `{ orderId }` (matched) or `{ walkWindow }`
-(unmatched, charge date ±7 days) to the DO worklist; trigger a run if a
-socket is attached. A hunt whose walk found nothing files the
+(`FinancialAccount.ledgerPartyId`); match, in order: (1) a shipment charge
+already captured on an imported Purchase (decision 49); (2) an `OrderMail`
+for that vendor and party in the date window with the exact amount; (3) a
+subset of same-window order mails whose amounts sum to the charge; (4) Jev
+`charge-mail-match` as tie-break. Push `{ orderId }` per matched order or
+`{ walkWindow }` (charge date ±7 days) to the DO worklist; trigger a run if
+a socket is attached. A hunt whose walk found nothing files the
 `expected order not found` Problem.
+
+*Receipt hunts.* For a `receipt_only` vendor's charge: look for a receipt
+photo within ±3 days (the photo import's date index) → `receipt-photo-
+extract` → writer; none → Problem "photograph the receipt for Sloat
+$212.40 on Sep 12", which accepts a photo directly (decision 50).
+
+*Events.* `refunded` mail with no matching negative Expense → `refund_unbooked`
+finding with the proposed row; `delivered` on a Purchase whose Vendor has
+`returnWindowDays` → `return_window` finding for lines above $50 that
+auto-dismisses when the window closes (decision 52).
 
 ### 4.8 Server: expectation detectors
 
@@ -396,7 +436,18 @@ settlement half stays.
 11. **Vendor learning.** New vendor → the agent (or a Claude Code session)
     finds the orders page, saves hints; failure later invalidates hints →
     rediscover.
-12. **History expired.** Backfill reaches the last page the site offers →
+12. **Receipt photo.** A Sloat charge appears → no online account → a
+    receipt photo taken that day is found → vision extract → writer → lines,
+    Products, and the primary document (the photo) land; no photo → Problem
+    that accepts one.
+13. **Multi-shipment order.** One Amazon order ships as three boxes → three
+    charges → the order page's transaction list gives all three → the writer
+    allocates each to the Purchase; a fourth same-day charge that matches no
+    shipment falls to the hunt cron.
+14. **Mail attachment.** A contractor emails an invoice PDF → `OrderMail`
+    matches the Purchase (by vendor + amount, or the human links it) → PDF
+    attached as `invoice` → `primary_document` closes.
+15. **History expired.** Backfill reaches the last page the site offers →
     `mark_history_expired` → older line-less, document-less Purchases on that
     account stop counting as incomplete; their score reflects amount +
     project + date only. A `receipt_only` vendor's Purchases never expected
@@ -418,6 +469,9 @@ known outcomes for `product-line-identity`, 50 for `reversal-kind`, 50 for
 - The socket is the only new auth boundary: session resolved before upgrade,
   owner check against `VendorAccount.ledgerPartyId`, identity persisted with
   `serializeAttachment`; tested (§8.4).
+- Page content is untrusted input to the agent. The bridge is read-only by
+  construction (decision 34): fixed scripts, domain allow-list, no submit.
+  A prompt-injected page can at worst waste a run, never place an order.
 - Gmail refresh tokens sit in better-auth's `account` table with
   `gmail.readonly` only; one grant per member; revocable in settings.
 - Apple Events automation permission is per app pair and revocable.
@@ -467,8 +521,15 @@ build for the Mac app.
   "single unlinked aggregate → replaced with snapshot carried", "any other
   existing shape → no lines + `duplicate_lines`", "sum mismatch → one
   grand-total row + finding", and "non-owner session → refused".
-- Hunts: charge → exact-amount mail match; ambiguous → Jev; no mail → walk
-  window on the worklist; walk exhausted → Problem.
+- Hunts: charge → captured shipment charge; → exact-amount mail; → subset
+  sum; → Jev; no match → walk window on the worklist; walk exhausted →
+  Problem. Multi-shipment order allocates every charge; N-orders-one-charge
+  yields one transaction with N allocations.
+- Bridge: `navigate` to a host outside `browserDomains` is refused; no tool
+  can reach a submit control; the script set is versioned and the agent
+  cannot supply code.
+- Receipt photo → writer path validates against the printed total; mail PDF
+  attach is idempotent per `messageId`.
 - Exceptions: input-scoped fingerprint survives a notes/project edit and
   reopens on a new Expense or document, for every check in the catalog.
 - `AI_FEATURES` registry + `features.unit.test.ts` for every new feature;
@@ -559,6 +620,22 @@ first, as separate small PRs, in this order.
    vendor-order invariant paragraphs from `purchase-import/SKILL.md` and its
    references; keep judgment, settlement, and client mechanics; the war
    stories become writer test names.
+
+## 11. Later, enabled by this plan
+
+Not in scope; listed so the design keeps the door open.
+
+- **Price history on the shopping list.** With lines flowing per Product,
+  "last paid $X at Amazon, $Y at Costco" is a query over `Expense` joined to
+  `Purchase.vendorId`; the shopping list and wishlist read it, and the
+  enrichment worklist can capture a current price for wishlist items.
+- **Recurring-order detection.** Subscribe & Save and repeat purchases give a
+  consumption *rate* per Product; surfaced only as a shopping-list
+  suggestion ("you buy this every 34 days; last was 31 days ago"), never as
+  an inventory decrement (tenet 1).
+- **AI cost page.** `AiUsage` grouped by `jobKind`/`jobId` (§10 item 4) gives
+  per-run and per-feature spend for free; a small page under Problems or
+  settings.
 
 Reviewed and rejected as blockers: a kernel-level multi-command transaction
 (the writer is a workflow service with its own `withTransaction`); a
