@@ -41,7 +41,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 code: .deadlineExceeded, message: "The browser command deadline elapsed.",
                 retryable: false)
         }
-        guard !cancelled.remove(command.id) else {
+        guard cancelled.remove(command.id) == nil else {
             return .failed(code: .cancelled, message: "The browser command was cancelled.", retryable: false)
         }
         do {
@@ -66,7 +66,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 return .completed(capture: nil)
             case .scroll(let pageCount):
                 guard (1...20).contains(pageCount) else { throw ExecutionFailure.invalidCommand }
-                try runFixedJavaScript("window.scrollBy(0, window.innerHeight * \(pageCount)); true;")
+                _ = try runFixedJavaScript("window.scrollBy(0, window.innerHeight * \(pageCount)); true;")
                 return .completed(capture: nil)
             case .capture(let allowedHosts, let enhancedEvidence):
                 return .completed(
@@ -165,7 +165,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 readableText: payload.text))
         defer { try? FileManager.default.removeItem(at: normalized.url) }
         try Task.checkCancellation()
-        guard !cancelled.remove(command.id) else { throw ExecutionFailure.cancelled }
+        guard cancelled.remove(command.id) == nil else { throw ExecutionFailure.cancelled }
         var references: [BrowserEvidenceReference]
         do {
             references = [try await evidenceUploader.upload(normalized, runID: command.runID)]

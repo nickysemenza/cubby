@@ -34,7 +34,7 @@ struct MacBrowserPermissionSnapshot: Equatable {
             target.aeDesc, typeWildCard, typeWildCard, false)
         switch status {
         case noErr: return .granted
-        case errAEEventNotPermitted: return .denied
+        case OSStatus(errAEEventNotPermitted): return .denied
         default: return .unknown
         }
     }

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Copy, Mail, RefreshCw, Wrench } from "lucide-react";
 import { useState } from "react";
@@ -26,6 +26,7 @@ import {
 } from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
+import { NativeSelect } from "~/components/ui/native-select";
 import { StatusText } from "~/components/ui/status-text";
 import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
@@ -36,7 +37,14 @@ import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
-import { purchaseImportRunsResponse } from "~/routes/api/import/runs";
+import {
+  purchaseImportRunsError,
+  purchaseImportRunsResponse,
+} from "~/routes/api/import/runs";
+import {
+  memberLoginsError,
+  memberLoginsResponse,
+} from "~/routes/api/settings/member-logins";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -51,6 +59,7 @@ function SettingsPage() {
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
         <CalendarAccessCard />
         <GmailAccessCard />
+        <MemberLoginsCard />
         <PurchaseImportRunsCard />
 
         {/* Everything dev/debug/maintenance lives behind one collapsed
@@ -97,13 +106,136 @@ function SettingsPage() {
   );
 }
 
+function MemberLoginsCard() {
+  const queryClient = useQueryClient();
+  const roster = useQuery({
+    queryKey: ["settings", "member-logins"],
+    queryFn: async () => {
+      const response = await fetch("/api/settings/member-logins");
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const parsed = memberLoginsError.safeParse(body);
+        throw new Error(
+          parsed.success ? parsed.data.error : "Member logins could not load.",
+        );
+      }
+      return memberLoginsResponse.parse(body);
+    },
+  });
+  const update = useMutation({
+    mutationFn: async (input: {
+      userId: string;
+      ledgerParty: string | null;
+    }) => {
+      const response = await fetch("/api/settings/member-logins", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const parsed = memberLoginsError.safeParse(body);
+        throw new Error(
+          parsed.success
+            ? parsed.data.error
+            : "Member login could not be updated.",
+        );
+      }
+      return memberLoginsResponse.parse(body);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["settings", "member-logins"], data);
+      void queryClient.refetchQueries({
+        queryKey: ["purchase-import", "runs"],
+      });
+      toast.success("Member login updated");
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  return (
+    <Card className="max-md:border-x-0">
+      <CardHeader>
+        <CardTitle>Member logins</CardTitle>
+        <CardDescription>
+          Link each signed-in account to the household member it represents.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {roster.isLoading ? (
+          <StatusText>Loading member logins…</StatusText>
+        ) : roster.isError ? (
+          <StatusText tone="destructive">
+            {getErrorMessage(roster.error)}
+          </StatusText>
+        ) : roster.data?.users.length ? (
+          <Stack gap="sm">
+            {roster.data.users.map((authUser) => (
+              <div
+                key={authUser.id}
+                className="grid gap-2 border-b border-border pb-3 last:border-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.8fr)] md:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">
+                    {authUser.name}
+                  </div>
+                  <div className="truncate text-sm text-muted-foreground">
+                    {authUser.email}
+                  </div>
+                </div>
+                <NativeSelect
+                  aria-label={`Ledger party for ${authUser.name}`}
+                  value={authUser.ledgerParty?.shortcode ?? ""}
+                  disabled={update.isPending}
+                  onChange={(event) =>
+                    update.mutate({
+                      userId: authUser.id,
+                      ledgerParty: event.target.value || null,
+                    })
+                  }
+                >
+                  <option value="">Not linked</option>
+                  {roster.data.parties.map((party) => (
+                    <option
+                      key={party.shortcode}
+                      value={party.shortcode}
+                      disabled={
+                        party.userId !== null && party.userId !== authUser.id
+                      }
+                    >
+                      {party.name}
+                      {party.userId !== null && party.userId !== authUser.id
+                        ? " — linked"
+                        : ""}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+            ))}
+          </Stack>
+        ) : (
+          <StatusText>No Better Auth users exist yet.</StatusText>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PurchaseImportRunsCard() {
   const runs = useQuery({
     queryKey: ["purchase-import", "runs"],
     queryFn: async () => {
       const response = await fetch("/api/import/runs");
-      if (!response.ok) throw new Error("Purchase import runs could not load");
-      return purchaseImportRunsResponse.parse(await response.json()).runs;
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const parsed = purchaseImportRunsError.safeParse(body);
+        throw new Error(
+          parsed.success
+            ? parsed.data.error
+            : "Purchase import runs could not load.",
+        );
+      }
+      return purchaseImportRunsResponse.parse(body).runs;
     },
   });
   return (
@@ -119,9 +251,18 @@ function PurchaseImportRunsCard() {
         {runs.isLoading ? (
           <StatusText>Loading recent runs…</StatusText>
         ) : runs.isError ? (
-          <StatusText tone="destructive">
-            Recent runs could not load.
-          </StatusText>
+          <Stack gap="sm" className="items-start">
+            <StatusText tone="destructive">
+              {getErrorMessage(runs.error)}
+            </StatusText>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void runs.refetch()}
+            >
+              Try again
+            </Button>
+          </Stack>
         ) : runs.data?.length ? (
           <Stack gap="sm">
             {runs.data.map((run) => (

@@ -110,6 +110,7 @@ import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_auth
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiImportRunsRouteImport } from './routes/api/import/runs'
+import { Route as ApiSettingsMemberLoginsRouteImport } from './routes/api/settings/member-logins'
 import { Route as ApiV1ResourceRouteImport } from './routes/api/v1/$resource'
 import { Route as ApiV1DocsRouteImport } from './routes/api/v1/docs'
 import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
@@ -699,6 +700,11 @@ const ApiImportRunsRoute = ApiImportRunsRouteImport.update({
   path: '/api/import/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSettingsMemberLoginsRoute = ApiSettingsMemberLoginsRouteImport.update({
+  id: '/api/settings/member-logins',
+  path: '/api/settings/member-logins',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiV1ResourceRoute = ApiV1ResourceRouteImport.update({
   id: '/api/v1/$resource',
   path: '/api/v1/$resource',
@@ -858,6 +864,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/runs': typeof ApiImportRunsRoute
+  '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -974,6 +981,7 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/runs': typeof ApiImportRunsRoute
+  '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -1093,6 +1101,7 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/runs': typeof ApiImportRunsRoute
+  '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -1212,6 +1221,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/import/runs'
+    | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
@@ -1328,6 +1338,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/import/runs'
+    | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
@@ -1446,6 +1457,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/import/runs'
+    | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
@@ -1502,6 +1514,7 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
   ApiImportRunsRoute: typeof ApiImportRunsRoute
+  ApiSettingsMemberLoginsRoute: typeof ApiSettingsMemberLoginsRoute
   ApiV1ResourceRoute: typeof ApiV1ResourceRouteWithChildren
   ApiV1DocsRoute: typeof ApiV1DocsRoute
   ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
@@ -2221,6 +2234,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImportRunsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/settings/member-logins': {
+      id: '/api/settings/member-logins'
+      path: '/api/settings/member-logins'
+      fullPath: '/api/settings/member-logins'
+      preLoaderRoute: typeof ApiSettingsMemberLoginsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/$resource': {
       id: '/api/v1/$resource'
       path: '/api/v1/$resource'
@@ -2609,6 +2629,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
   ApiImportRunsRoute: ApiImportRunsRoute,
+  ApiSettingsMemberLoginsRoute: ApiSettingsMemberLoginsRoute,
   ApiV1ResourceRoute: ApiV1ResourceRouteWithChildren,
   ApiV1DocsRoute: ApiV1DocsRoute,
   ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,

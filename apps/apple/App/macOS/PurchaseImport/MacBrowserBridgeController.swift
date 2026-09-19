@@ -43,7 +43,7 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
     }
 
     func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
-        await replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
+        try await replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
     }
 
     func syncNow(browser: BrowserChoice, enhancedEvidence: Bool) async throws {

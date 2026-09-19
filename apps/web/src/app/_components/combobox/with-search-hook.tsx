@@ -1,6 +1,7 @@
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import type {
   IngredientShortcode,
+  LedgerPartyShortcode,
   LocationShortcode,
   ProductShortcode,
   ProjectShortcode,
@@ -8,6 +9,7 @@ import type {
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import { ingredientOut } from "@cubby/schemas/ingredient";
+import type { LedgerPartyOut } from "@cubby/schemas/ledger-party";
 import { infLocation } from "@cubby/schemas/location";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import type { SearchHit } from "@cubby/schemas/search";
@@ -104,6 +106,20 @@ function useIngredientListSource(searchQuery: string, enabled: boolean) {
       filters: {
         [ingredientBlankFilterKey]: searchQuery,
       } as EntityListParams<"ingredient">["filters"],
+      pagination,
+    }),
+    enabled,
+  });
+  return { data: data?.items, isLoading };
+}
+
+function useLedgerPartyListSource(searchQuery: string, enabled: boolean) {
+  const { data, isLoading } = useQuery({
+    ...entityListFor("ledgerParty").queryOptions({
+      filters: {
+        search: searchQuery,
+        kind: ["member"],
+      },
       pagination,
     }),
     enabled,
@@ -227,6 +243,32 @@ const ingredientConfig: UseEntitySearchConfig<
   useOnCreateNew: useDialogCreateNew,
   createNew: "dialog",
   parseCreatedResult: parseCreated(ingredientOut),
+};
+
+const buildLedgerPartyComboboxItem = (
+  party: LedgerPartyOut,
+): ComboboxItem<LedgerPartyShortcode> => ({
+  id: party.id,
+  shortcode: party.id,
+  name: party.name,
+});
+
+const ledgerPartyConfig: UseEntitySearchConfig<
+  LedgerPartyShortcode,
+  LedgerPartyOut,
+  LedgerPartyOut
+> = {
+  detailPlaceholder: detailPlaceholder("ledgerParty"),
+  splitBlankTyped: false,
+  supportsGlobalSearch: false,
+  useListSource: useLedgerPartyListSource,
+  build: buildLedgerPartyComboboxItem,
+  buildDetail: buildLedgerPartyComboboxItem,
+  buildSearchHit: () => {
+    throw new Error("Ledger parties use their list search, not global search");
+  },
+  useOnCreateNew: useNoCreateNew,
+  createNew: "none",
 };
 
 const recipeConfig: UseEntitySearchConfig<
@@ -530,6 +572,14 @@ function RecipeEntitySearch({
   return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
 }
 
+function LedgerPartyEntitySearch({
+  children,
+}: WithEntitySearchProps<LedgerPartyShortcode>) {
+  const { items, isLoading, onSearchChange, onOpenChange } =
+    useEntitySearchRows("ledgerParty", ledgerPartyConfig);
+  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
+}
+
 function ProjectEntitySearch({
   children,
 }: WithEntitySearchProps<ProjectShortcode>) {
@@ -560,6 +610,8 @@ function NonVendorEntitySearch({
   switch (entity) {
     case "ingredient":
       return <IngredientEntitySearch>{children}</IngredientEntitySearch>;
+    case "ledgerParty":
+      return <LedgerPartyEntitySearch>{children}</LedgerPartyEntitySearch>;
     case "location":
       return <LocationEntitySearch>{children}</LocationEntitySearch>;
     case "product":
@@ -620,15 +672,17 @@ function VendorEntitySearch<TId extends string>({
 type EntityIdFor<E extends Exclude<PickerSearchEntity, "vendor">> =
   E extends "ingredient"
     ? IngredientShortcode
-    : E extends "location"
-      ? LocationShortcode
-      : E extends "product"
-        ? ProductShortcode
-        : E extends "recipe"
-          ? RecipeShortcode
-          : E extends "project"
-            ? ProjectShortcode
-            : TaskShortcode;
+    : E extends "ledgerParty"
+      ? LedgerPartyShortcode
+      : E extends "location"
+        ? LocationShortcode
+        : E extends "product"
+          ? ProductShortcode
+          : E extends "recipe"
+            ? RecipeShortcode
+            : E extends "project"
+              ? ProjectShortcode
+              : TaskShortcode;
 
 /**
  * The shared entity combobox provider: search-query state, the deferred-open

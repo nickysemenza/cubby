@@ -25,6 +25,7 @@ export const purchaseImportRunSummary = z.object({
 export const purchaseImportRunsResponse = z.object({
   runs: z.array(purchaseImportRunSummary),
 });
+export const purchaseImportRunsError = z.object({ error: z.string() });
 
 export const Route = createFileRoute("/api/import/runs")({
   server: {
@@ -36,7 +37,9 @@ export const Route = createFileRoute("/api/import/runs")({
         const party = await context.currentParty();
         if (!party) {
           return Response.json(
-            { error: "Member identity is not configured" },
+            {
+              error: "This login is not linked to a member ledger party yet.",
+            },
             { status: 403 },
           );
         }

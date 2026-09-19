@@ -469,6 +469,22 @@ function ExpenseCaptureFields() {
   );
 }
 
+function VendorAccountCaptureFields() {
+  const form = useForm({
+    defaultValues: {
+      label: "",
+      vendorId: "",
+      ledgerPartyId: "",
+      browser: "chrome",
+    },
+  });
+  return (
+    <FormProvider {...form}>
+      <EntityIntentFields entity="vendorAccount" intent="capture" />
+    </FormProvider>
+  );
+}
+
 describe("EntityIntentFields", () => {
   let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -501,5 +517,14 @@ describe("EntityIntentFields", () => {
     expect(
       entitySelectOptionsFor("expense", "lineKind", "edit"),
     ).not.toContainEqual(expect.objectContaining({ value: "auto" }));
+  });
+
+  it("renders every required vendor-account ownership field", () => {
+    render(<VendorAccountCaptureFields />, { wrapper: harness.wrapper });
+
+    expect(screen.getByLabelText("Label")).toBeInTheDocument();
+    expect(screen.getByLabelText("Vendor")).toBeInTheDocument();
+    expect(screen.getByLabelText("Member")).toBeInTheDocument();
+    expect(screen.getByLabelText("Browser")).toBeInTheDocument();
   });
 });
