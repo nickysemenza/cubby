@@ -36,6 +36,9 @@ export const readRecordField = <TRecord extends object, TValue>(
 
 const referenceIds = z.union([z.string(), z.array(z.string())]).nullish();
 
+const referenceObjectValue = referenceObject.nullish();
+const referenceObjects = z.array(referenceObject).nullish();
+
 const multipleItems = (raw: unknown, nested: unknown): ReferenceItem[] => {
   const ids = z.array(z.string()).nullish().parse(raw) ?? [];
   const nestedItems = z.array(referenceObject).nullish().safeParse(nested);
@@ -86,11 +89,25 @@ export function readReferenceField<TRecord extends object>(
   // A reference whose read key carries a count (recipe `meals` reads
   // `mealCount`) names related records without listing them; it renders as
   // the scalar it is.
-  if (!referenceIds.safeParse(raw).success) return null;
+  const parsedIds = referenceIds.safeParse(raw);
+  const parsedObject = referenceObjectValue.safeParse(raw);
+  const parsedNested = referenceObjects.safeParse(raw);
+  // Some enriched detail projections put the linked record itself under the
+  // field's read key (for example location.product), while older projections
+  // put a shortcode there. Normalize both shapes before rendering so an
+  // expanded relation never falls through to the scalar identifier parser.
+  if (!parsedIds.success && !parsedObject.success && !parsedNested.success)
+    return null;
+  const normalizedRaw = parsedIds.success ? parsedIds.data : undefined;
+  const normalizedNested = parsedNested.success
+    ? parsedNested.data
+    : parsedObject.success
+      ? parsedObject.data
+      : nested;
   return {
     entity: reference.entity,
     items: reference.multiple
-      ? multipleItems(raw, nested)
-      : singleItem(raw, nested, nestedName),
+      ? multipleItems(normalizedRaw, normalizedNested)
+      : singleItem(normalizedRaw, normalizedNested, nestedName),
   };
 }

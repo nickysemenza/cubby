@@ -48,6 +48,11 @@ const FRIENDLY_MESSAGES = {
   generic: "Something went wrong",
 } satisfies Record<ErrorCategory, string>;
 
+const SENTRY_ORGANIZATION_ID = "83311";
+
+const sentryEventUrl = (eventId: string) =>
+  `https://sentry.io/organizations/${SENTRY_ORGANIZATION_ID}/issues/?query=${encodeURIComponent(`event.id:${eventId}`)}`;
+
 const categorizeError = (
   code: string | undefined,
   reason: string | undefined,
@@ -106,6 +111,7 @@ const getIcon = (category: ErrorCategory) => {
 export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [sentryEventId, setSentryEventId] = useState<string>();
 
   const { code, reason, message } = getAppErrorDetails(error);
   const rawMessage = getErrorMessage(error);
@@ -120,10 +126,11 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
       category === "network" ||
       category === "staleBuild"
     ) {
-      Sentry.captureException(
+      const eventId = Sentry.captureException(
         error,
         requestId ? { tags: { request_id: requestId } } : undefined,
       );
+      setSentryEventId(eventId);
     }
   }, [error, category, requestId]);
 
@@ -201,7 +208,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         <CollapsibleContent>
           <Stack
             gap="sm"
-            className="mt-2 w-[min(32rem,calc(100vw-3rem))] border border-[var(--border)] bg-muted/50 p-2 text-left font-mono text-xs break-words"
+            className="mt-2 w-[min(60rem,calc(100vw-2rem))] border border-[var(--border)] bg-muted/50 p-4 text-left font-mono text-sm leading-6 break-words"
           >
             {code && (
               <div>
@@ -228,12 +235,25 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
                 <span className="text-foreground">{requestId}</span>
               </div>
             )}
+            {sentryEventId && (
+              <div>
+                <span className="text-muted-foreground">Sentry: </span>
+                <a
+                  href={sentryEventUrl(sentryEventId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-cobalt hover:text-cobalt-hover underline underline-offset-2"
+                >
+                  View event {sentryEventId}
+                </a>
+              </div>
+            )}
             {stack && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
                   Stack trace
                 </summary>
-                <pre className="mt-1 max-h-48 overflow-auto text-2xs whitespace-pre-wrap text-muted-foreground">
+                <pre className="mt-1 max-h-96 overflow-auto text-xs whitespace-pre-wrap text-muted-foreground">
                   {stack}
                 </pre>
               </details>
