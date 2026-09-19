@@ -52,18 +52,25 @@ struct PhotoDestinationSheet: View {
         // pop back to the review list (see `PhotoImportManifest.isNavigating`).
         .onChange(of: path) { _, newPath in manifest.isNavigating = !newPath.isEmpty }
         .confirmationDialog(
-            "Replace the existing image?", item: $replacement,
+            "Replace the existing image?",
+            isPresented: Binding(
+                get: { replacement != nil },
+                set: { if !$0 { replacement = nil } }
+            ),
             titleVisibility: .visible
-        ) { confirmation in
+        ) {
             Button("Replace", role: .destructive) {
+                guard let confirmation = replacement else { return }
                 manifest.moveSelected(to: confirmation.option, row: confirmation.row, replace: true)
                 path.removeLast()
             }
             Button("Cancel", role: .cancel) {}
-        } message: { confirmation in
-            Text(
-                "\(confirmation.row.title) already has an image. This photo will replace it when the batch is added."
-            )
+        } message: {
+            if let confirmation = replacement {
+                Text(
+                    "\(confirmation.row.title) already has an image. This photo will replace it when the batch is added."
+                )
+            }
         }
         .sheet(item: $createContext) { context in
             PhotoRelatedCreateEditor(
