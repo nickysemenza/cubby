@@ -114,6 +114,14 @@ history is the archive. Permanent product constraints live in the
   - `EntityDetailView.swift:25` `body` sits at ~207 ms against the 200 ms
     type-check limit and flickers in and out of the warning; split it like
     `PhotoImportHero`/`PhotoLibraryCell`.
+  - The classification sweep and the review sheet's `LocalPhotoAnalyzer` share no Vision
+    gate (sweep 2 concurrent, analyzer 4); if a review-sheet analysis measurably slows while the
+    sweep runs, add a `PhotoVisionGate` actor both acquire, with the sheet yielding the sweep.
+  - `PhotoLibraryStore.refresh` reads analysis snapshots for the whole library on every
+    PHPhotoLibrary change; scope it to visible months (the `MonthCachingCoordinator` already
+    knows them) and load the rest lazily per section.
+  - `query(_:preloaded:)` still does one `hash(for:)` actor round trip per never-hashed asset
+    on first run; batch the misses once the batch read can say "looked up, absent".
   - The `createSelf` compile check verifies "target is creatable" via
     `contract.create !== null`, not the runtime kernel binding's
     `createInput` (the generator runs before that file exists); if the two
