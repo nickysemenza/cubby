@@ -129,7 +129,13 @@ export default defineEntity({
       {
         key: "contentType",
         kind: "text",
-        display: { list: true, detail: true },
+        label: "Type",
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: z.string(),
           create: null,

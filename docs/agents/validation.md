@@ -214,6 +214,3 @@ caused by the change; retain unrelated flakes or infrastructure failures as
 reported. Use an isolated worktree for PR maintenance when the configured
 checkout must stay untouched. Outward-facing GitHub text never contains real
 household data.
-
-For detailed test/CI exceptions, load the relevant heading in [the preserved
-root reference](root-rules-reference.md).

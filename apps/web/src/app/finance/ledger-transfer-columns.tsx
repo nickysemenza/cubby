@@ -1,6 +1,5 @@
 import type { LedgerTransferOut } from "@cubby/schemas/ledger-transfer";
 
-import { createPlainDateColumn } from "~/app/_components/data-table/columnHelpers";
 import type { CubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { TableLink } from "~/app/_components/table/TableLink";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -91,17 +90,6 @@ export function createLedgerTransferAmountColumn(
       mobile: { slot: "trailing", priority: 1 },
     },
     cell: (info) => formatCurrency(info.getValue()),
-  });
-}
-
-export function createLedgerTransferDateColumn(
-  helper: CubbyColumnHelper<LedgerTransferOut>,
-  className = "w-28",
-) {
-  return createPlainDateColumn(helper, "date", {
-    header: "Date",
-    className,
-    mobile: { slot: "meta", priority: 20 },
   });
 }
 

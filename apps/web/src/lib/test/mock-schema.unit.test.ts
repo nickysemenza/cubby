@@ -55,11 +55,6 @@ describe("mock() round-trip", () => {
     it(`generates data that parses for ${name}`, () => {
       const value = mock(schema, { seed: 1 });
       const result = schema.safeParse(value);
-      if (!result.success) {
-        throw new Error(
-          `mock(${name}) failed its own schema: ${JSON.stringify(result.error.issues, null, 2)}`,
-        );
-      }
       expect(result.success).toBe(true);
     });
   }

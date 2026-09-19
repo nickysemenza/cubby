@@ -125,7 +125,13 @@ export default defineEntity({
         key: "date",
         kind: "date",
         control: { kind: "date" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          format: "plainDate",
+          mobile: { slot: "meta", priority: 20 },
+        },
         validation: {
           read: plainDate,
           create: plainDate,

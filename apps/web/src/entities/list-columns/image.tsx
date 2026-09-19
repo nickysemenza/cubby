@@ -67,16 +67,6 @@ export const imageListOverride = defineListOverride<
             }),
           );
           add(
-            columnHelper.accessor("contentType", {
-              header: "Type",
-              meta: {
-                className: "w-28",
-                mobile: { slot: "subtitle", priority: 10 },
-              },
-              cell: ({ getValue }) => <span>{getValue()}</span>,
-            }),
-          );
-          add(
             columnHelper.accessor("size", {
               header: "Size",
               meta: {

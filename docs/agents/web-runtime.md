@@ -30,5 +30,19 @@ view is visible manifest-backed URL state; `scopeFilters` is only a visible
 contextual scope. Missing filters never widen a query; renderer omissions are
 server-enforced and disclosed.
 
-For the full helper catalogue and SSR rationale, load the relevant heading in
-[the preserved root reference](root-rules-reference.md).
+## Reuse before writing a helper
+
+Use `useDeletableConfig`, `useUpdateMutation`, `useActionMutation`,
+`getErrorMessage`, `copyText`, and the existing form-field helpers rather than
+recreating their normal UI behavior. Use the repository helpers
+`insertAndReturn`, `updateAndReturn`, `withTransaction`, `formatSearchTerm`,
+`notDeleted`, and `buildSearchConditions`; use the shortcode resolver and
+`finalizeMerge` for their named operations. Prefer `es-toolkit` collection
+helpers and exhaustive `ts-pattern` matches when they express the operation
+directly.
+
+Do not turn every raw mutation into `useActionMutation`: it has static
+invalidation and toast semantics. A raw mutation remains correct for shared
+multi-mutation invalidation, conditional query keys, caller-owned error UI, or
+variables-driven local state. `noUncheckedIndexedAccess` is on: guard a
+possibly absent array, record, or map entry instead of asserting it away.

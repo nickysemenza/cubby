@@ -1,7 +1,7 @@
 # apps/apple agent rules
 
-Native PoC: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI harness. Full plan:
-`/Users/nicky/.claude/plans/moonlit-juggling-finch.md`.
+Native app: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI
+harness. This document is the current native implementation guidance.
 
 ## Build order
 

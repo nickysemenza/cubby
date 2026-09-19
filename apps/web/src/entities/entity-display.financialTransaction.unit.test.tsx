@@ -275,15 +275,16 @@ describe("financial transaction list display columns", () => {
     expect(byId.notes?.mobile).toBeUndefined();
   });
 
-  it("renders the generic transactionDate column through the declared plainDate format", () => {
-    render(<>{renderTransactionCell("transactionDate", TRANSACTION_ROW)}</>);
-    expect(screen.getByText("Sep 10, 2026")).toBeVisible();
-  });
-
-  it("renders the generic merchant column as plain text", () => {
-    render(<>{renderTransactionCell("merchant", TRANSACTION_ROW)}</>);
-    expect(screen.getByText("Ace Hardware")).toBeVisible();
-  });
+  it.each([
+    ["transactionDate", "Sep 10, 2026"],
+    ["merchant", "Ace Hardware"],
+  ] as const)(
+    "renders the generic %s column from its declaration",
+    (id, text) => {
+      render(<>{renderTransactionCell(id, TRANSACTION_ROW)}</>);
+      expect(screen.getByText(text)).toBeVisible();
+    },
+  );
 
   it("renders the accountId override's own cell against the row", () => {
     render(<>{renderTransactionCell("accountId", TRANSACTION_ROW)}</>);

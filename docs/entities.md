@@ -345,8 +345,10 @@ matched by column id and takes the declared label and sort. An explicit
 `add()` outside the declaration is reserved for client-hydrated data, relation
 projections, a second projection that hosts a filter control, and the
 synthetic identity column. A `list: true` field with `readKey: null` needs an
-override; column compilation fails otherwise. Hidden-by-default columns use
-the page's `initialColumnVisibility`, not the declaration. Detail overrides may provide a dynamic
+override; column compilation fails otherwise. `display.listHidden` owns a
+declared column's hidden-by-default state; pages retain
+`initialColumnVisibility` only for computed or relation columns outside the
+field model. Detail overrides may provide a dynamic
 label when the value changes its meaning, such as ISBN versus UPC. Static labels
 remain declared. `EntityBasicInfo.afterFields` anchors computed facts after a
 declared detail field without inventing persisted fields or API contracts.
