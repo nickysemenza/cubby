@@ -5,15 +5,22 @@ import SwiftUI
 struct PhotosRootView: View {
     @Environment(AppModel.self) private var appModel
     @State private var destination: PhotoSelectionBatch?
+    @State private var analysisReady = false
+
     var body: some View {
-        PhotoLibraryBrowser(maxSelectionCount: nil, picker: false) { items in
+        PhotoLibraryBrowser(
+            maxSelectionCount: nil, picker: false,
+            analysisStore: analysisReady ? appModel.photoAnalysisStore : nil,
+            sweep: analysisReady ? appModel.photoClassificationSweep : nil
+        ) { items in
+            guard let analysisStore = appModel.photoAnalysisStore else { return }
             // Built here, once per batch, and owned by the batch rather than seeded into the
             // sheet's own @State: a re-presented `.sheet(item:)` is not guaranteed to reset
             // @State seeded from an init parameter when the item changes (apps/apple/AGENTS.md,
             // "Traps that cost real time"), which previously showed the prior batch's manifest.
             destination = PhotoSelectionBatch(
                 items: items,
-                manifest: PhotoImportManifest(items: items, analysisStore: appModel.photoAnalysisStore))
+                manifest: PhotoImportManifest(items: items, analysisStore: analysisStore))
         }
         .sheet(item: $destination) { batch in
             PhotoDestinationSheet(manifest: batch.manifest) { committedIDs in
@@ -22,6 +29,10 @@ struct PhotosRootView: View {
                 appModel.photoLibrary.selectedIDs.removeAll { committedIDs.contains($0) }
                 destination = nil
             }
+        }
+        .task {
+            await appModel.preparePhotoSubsystem()
+            analysisReady = true
         }
     }
 }
@@ -64,7 +75,20 @@ private struct PhotoLibraryBrowser: View {
     @Environment(\.developerOverlays) private var developerOverlays
     let maxSelectionCount: Int?
     let picker: Bool
+    let analysisStore: PhotoAnalysisStore?
+    let sweep: PhotoClassificationSweep?
     let onSelection: ([PhotoSelectionItem]) -> Void
+
+    init(
+        maxSelectionCount: Int?, picker: Bool, analysisStore: PhotoAnalysisStore? = nil,
+        sweep: PhotoClassificationSweep? = nil, onSelection: @escaping ([PhotoSelectionItem]) -> Void
+    ) {
+        self.maxSelectionCount = maxSelectionCount
+        self.picker = picker
+        self.analysisStore = analysisStore
+        self.sweep = sweep
+        self.onSelection = onSelection
+    }
     @State private var filter: Filter = .all
     @State private var pickerIDs: [String] = []
     @State private var preview: AssetPreview?
@@ -193,7 +217,7 @@ private struct PhotoLibraryBrowser: View {
                     } else {
                         Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
                             .buttonStyle(.borderedProminent)
-                            .disabled(ids.isEmpty)
+                            .disabled(ids.isEmpty || (!picker && analysisStore == nil))
                             .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
                     }
                 }
@@ -207,7 +231,7 @@ private struct PhotoLibraryBrowser: View {
             if phase == .active { Task { await library.refresh(matches: matches, client: appModel.client) } }
         }
         .photoSweepLifecycle(
-            active: !picker, sweep: appModel.photoClassificationSweep, scenePhase: scenePhase,
+            active: !picker, sweep: sweep, scenePhase: scenePhase,
             categoryFilterKey: CategoryFilterKey(
                 category: selectedCategory?.key, revision: matches.classifiedRevision)
         ) {
@@ -218,8 +242,8 @@ private struct PhotoLibraryBrowser: View {
             // populated, or library-changed) month list needs `reconcile()` re-run so a sweep
             // that started with zero candidates (Photos tab opened before the library loaded)
             // actually starts once photos exist, and a finished sweep re-arms for new photos.
-            guard !picker else { return }
-            appModel.photoClassificationSweep.reconcile()
+            guard !picker, let sweep else { return }
+            sweep.reconcile()
         }
         .photoPreviewPresentation(item: $preview) { selected in
             PhotoLibraryPreview(asset: selected.asset) {
@@ -264,6 +288,12 @@ private struct PhotoLibraryBrowser: View {
                 .accessibilityLabel("Refresh photo matches")
                 .accessibilityIdentifier("photos.refresh")
             }.foregroundStyle(.secondary)
+            if library.hasFullAccess {
+                Text(library.loadingDebugStatus)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("photos.loading.debug")
+            }
             if filter == .missing {
                 Text(
                     "Includes unchecked photos and possible matches. More matches may appear while checking continues."
@@ -280,7 +310,7 @@ private struct PhotoLibraryBrowser: View {
         VStack(alignment: .leading, spacing: 4) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    if let status = appModel.photoClassificationSweep.statusText {
+                    if let status = sweep?.statusText {
                         Text(status).font(.caption2).foregroundStyle(.secondary)
                     }
                     ForEach(PhotoImportCatalog.categories, id: \.key) { category in
@@ -371,22 +401,22 @@ private struct PhotoLibraryBrowser: View {
     }
 
     private func updateVisibleMonths() {
-        guard !picker else { return }
-        appModel.photoClassificationSweep.updateVisibleMonths(monthCaching.visibleMonthIDs)
+        guard !picker, let sweep else { return }
+        sweep.updateVisibleMonths(monthCaching.visibleMonthIDs)
     }
 
     /// Batch-loads `selectedCategory`'s matching ids plus the whole library's unanalysed count,
     /// memoized per `(category, matches.classifiedRevision)` by `.task(id:)` — a category switch
     /// or the sweep's coalesced classification signal both invalidate it, nothing else re-fetches.
     private func loadCategoryFilter() async {
-        guard let category = selectedCategory else {
+        guard let category = selectedCategory, let analysisStore else {
             categoryMatches = []
             unanalysedCount = 0
             return
         }
-        async let matched = appModel.photoAnalysisStore.ids(
+        async let matched = analysisStore.ids(
             in: category.key, newerThan: PhotoClassificationSweep.classifyVersion)
-        async let analysedTotal = appModel.photoAnalysisStore.classifiedCount(
+        async let analysedTotal = analysisStore.classifiedCount(
             newerThan: PhotoClassificationSweep.classifyVersion)
         categoryMatches = (try? await matched) ?? []
         unanalysedCount = max(0, library.count - ((try? await analysedTotal) ?? 0))
@@ -516,13 +546,16 @@ extension View {
     /// that property's type-check time stays under the 200ms budget. `active` is `false` for the
     /// picker sheet's browser instance, which never drives the sweep or shows the category chips.
     fileprivate func photoSweepLifecycle(
-        active: Bool, sweep: PhotoClassificationSweep, scenePhase: ScenePhase,
+        active: Bool, sweep: PhotoClassificationSweep?, scenePhase: ScenePhase,
         categoryFilterKey: CategoryFilterKey, loadCategoryFilter: @escaping () async -> Void
     ) -> some View {
-        onAppear { if active { sweep.setActive(true) } }
-            .onDisappear { if active { sweep.setActive(false) } }
-            .onChange(of: scenePhase) { _, phase in if active { sweep.setSceneActive(phase == .active) } }
-            .task(id: categoryFilterKey) { await loadCategoryFilter() }
+        onAppear { if active { sweep?.setActive(true) } }
+            .onDisappear { if active { sweep?.setActive(false) } }
+            .onChange(of: scenePhase) { _, phase in if active { sweep?.setSceneActive(phase == .active) } }
+            .task(id: categoryFilterKey) {
+                guard sweep != nil else { return }
+                await loadCategoryFilter()
+            }
     }
 }
 
