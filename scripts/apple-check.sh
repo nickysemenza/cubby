@@ -5,6 +5,15 @@
 # workspace root.
 set -euo pipefail
 
+mode="${1:-full}"
+case "$mode" in
+  full | app) ;;
+  *)
+    echo "usage: $0 [full|app]" >&2
+    exit 2
+    ;;
+esac
+
 if ! xcode-select -p >/dev/null 2>&1; then
   echo "Skipping apple checks: Xcode not installed (xcode-select -p failed)."
   exit 0
@@ -50,7 +59,9 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 # --force-resolved-versions: a bare `swift test` re-resolves and rewrites
 # CubbyKit/Package.resolved (only the originHash), leaving the tree dirty
 # after every run. Pins change only via a deliberate `swift package update`.
-swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+if [ "$mode" = "full" ]; then
+  swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+fi
 
 # Fails when the committed CubbyAPI client no longer matches the OpenAPI document.
 apps/apple/scripts/generate-openapi.sh --check
@@ -64,7 +75,10 @@ apps/apple/scripts/generate-openapi.sh --check
 # one primary file at a time there; keep the normal faster batch mode locally.
 build_settings=(COMPILER_INDEX_STORE_ENABLE=NO)
 if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-  build_settings+=(SWIFT_ENABLE_BATCH_MODE=NO)
+  # The macOS-26 hosted runner is Apple Silicon. Restrict the generic
+  # Simulator build to its native slice; a release artifact still builds its
+  # supported architectures outside this PR gate.
+  build_settings+=(SWIFT_ENABLE_BATCH_MODE=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
 fi
 
 xcodebuild \

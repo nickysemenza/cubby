@@ -143,7 +143,7 @@ private struct RelationshipDepthPicker: View {
             "Depth",
             selection: Binding(
                 get: { model.depth },
-                set: requestDepth
+                set: model.requestDepth
             )
         ) {
             Text("1 hop").tag(1)
@@ -155,13 +155,6 @@ private struct RelationshipDepthPicker: View {
         .disabled(model.activity != .idle)
     }
 
-    private func requestDepth(_ value: Int) {
-        // Xcode 26.6 can crash while IR-generating the inline Binding setter.
-        // A named MainActor action preserves the async update without that thunk.
-        Task { @MainActor [model] in
-            await model.setDepth(value)
-        }
-    }
 }
 
 private struct RelationshipRecommendationGroupView: View {

@@ -307,6 +307,15 @@ public final class EntityRelationshipsModel {
         await refresh()
     }
 
+    /// Starts the depth refresh from a synchronous SwiftUI control action.
+    /// Keeping the task here avoids an Xcode 26.6 IR-generation crash in the
+    /// large relationship view while retaining `setDepth` for awaited callers.
+    public func requestDepth(_ requestedDepth: Int) {
+        Task { @MainActor [self] in
+            await setDepth(requestedDepth)
+        }
+    }
+
     public func focus(on reference: EntityRef) async {
         guard let source, graph?.nodes.contains(where: { $0.reference == reference }) == true else {
             return
