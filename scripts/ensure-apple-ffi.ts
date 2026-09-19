@@ -31,12 +31,20 @@ const XCFRAMEWORK = join(
 const SHIM = join(ROOT, "apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift");
 const MARKER = join(XCFRAMEWORK, ".fingerprint");
 const PROFILE = process.env.CUBBY_FFI_PROFILE ?? "release";
+const TARGETS = process.env.CUBBY_FFI_TARGETS ?? "all";
+
+if (!["all", "sim", "device", "mac"].includes(TARGETS)) {
+  throw new Error(
+    `CUBBY_FFI_TARGETS must be one of all|sim|device|mac, got ${TARGETS}`,
+  );
+}
 
 const fingerprint = () =>
   rustFingerprint(resolve(ROOT, "cubby-ffi/Cargo.toml"), [
     command("xcodebuild", ["-version"]),
     command("uname", ["-m"]),
     `profile=${PROFILE}`,
+    `targets=${TARGETS}`,
   ]);
 
 const isCurrent = (key: string) =>
@@ -47,7 +55,7 @@ const isCurrent = (key: string) =>
 const build = (key: string) => {
   execFileSync(
     join(ROOT, "apps/apple/scripts/build-rust.sh"),
-    ["--profile", PROFILE],
+    ["--profile", PROFILE, "--targets", TARGETS],
     { cwd: ROOT, stdio: "inherit" },
   );
   writeFileSync(MARKER, `${key}\n`);

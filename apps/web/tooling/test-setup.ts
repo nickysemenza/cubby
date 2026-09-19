@@ -475,18 +475,21 @@ async function waitForLockWaiter(db: Database): Promise<void> {
  * tests used to force the race with a poll on real lock contention.
  *
  * `winner(releaseSignal)` must open a transaction, perform its INSERT (or
- * equivalent), await `releaseSignal` while still inside that transaction —
- * holding the row lock open — and only then return (which commits). `loser()`
- * starts immediately after `winner`, and is expected to block on the row lock
- * `winner` is holding. This polls `pg_stat_activity` for a session on this
- * test's database actually waiting on a lock (the loser having reached its
- * blocked INSERT) before resolving `releaseSignal`, instead of guessing with
- * a sleep on each side of the race.
+ * equivalent), call `markWinnerReady`, then await `releaseSignal` while still
+ * inside that transaction — holding the row lock open — and only then return
+ * (which commits). `loser()` starts only after that explicit handshake, so it
+ * is expected to block on the row lock `winner` is holding. This polls
+ * `pg_stat_activity` for a session on this test's database actually waiting on
+ * a lock (the loser having reached its blocked INSERT) before resolving
+ * `releaseSignal`, instead of guessing with scheduling or sleeps.
  */
 export async function raceUniqueInsert<TWinner, TLoser>(
   ctx: TestDbContext,
   args: {
-    winner: (releaseSignal: Promise<void>) => Promise<TWinner>;
+    winner: (controls: {
+      releaseSignal: Promise<void>;
+      markWinnerReady: () => void;
+    }) => Promise<TWinner>;
     loser: () => Promise<TLoser>;
   },
 ): Promise<{ winner: TWinner; loser: TLoser }> {
@@ -494,18 +497,43 @@ export async function raceUniqueInsert<TWinner, TLoser>(
   const releaseSignal = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let markWinnerReady!: () => void;
+  const winnerReady = new Promise<void>((resolve) => {
+    markWinnerReady = resolve;
+  });
 
-  const winnerPromise = args.winner(releaseSignal);
-  const loserPromise = args.loser();
+  const winnerPromise = args.winner({ releaseSignal, markWinnerReady });
+  let loserPromise: Promise<TLoser> | undefined;
 
-  await waitForLockWaiter(ctx.db);
-  release();
+  try {
+    await Promise.race([
+      winnerReady,
+      winnerPromise.then(() => {
+        throw new Error("raceUniqueInsert: winner completed before ready");
+      }),
+    ]);
+    loserPromise = args.loser();
+    await Promise.race([
+      waitForLockWaiter(ctx.db),
+      loserPromise.then(() => {
+        throw new Error("raceUniqueInsert: loser completed before blocking");
+      }),
+    ]);
+    release();
 
-  const [winnerResult, loserResult] = await Promise.all([
-    winnerPromise,
-    loserPromise,
-  ]);
-  return { winner: winnerResult, loser: loserResult };
+    const [winnerResult, loserResult] = await Promise.all([
+      winnerPromise,
+      loserPromise,
+    ]);
+    return { winner: winnerResult, loser: loserResult };
+  } finally {
+    // If either assertion above fails, unblock the live transaction before the
+    // file teardown returns its database to IntegreSQL.
+    release();
+    await Promise.allSettled(
+      loserPromise ? [winnerPromise, loserPromise] : [winnerPromise],
+    );
+  }
 }
 
 const remapDBConfig = (

@@ -483,6 +483,33 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 1
 
+  test-apple-package:
+    name: Apple package tests
+    needs: scope
+    if: |
+      !cancelled() && needs.scope.result == 'success' &&
+      needs.scope.outputs.verify == 'true'
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+        with:
+          cache: true
+          # Match CARGO_TARGET_DIR below. Keep the macOS-only FFI graph
+          # separate from the simulator lane: concurrent cargo processes must
+          # never share a target directory.
+          cache-workspaces: cubby-ffi -> target-macos
+          cache-key: apple-ffi-macos
+      - name: Build macOS CubbyFFI
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/cubby-ffi/target-macos
+        run: apps/apple/scripts/build-rust.sh --targets mac
+      - name: Check committed UniFFI bindings
+        run: git diff --exit-code -- apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
+      - name: Run CubbyKit Swift tests
+        run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+
   test-apple:
     name: Apple checks
     needs: scope
@@ -491,14 +518,20 @@ jobs:
       needs.scope.outputs.verify == 'true'
     runs-on: macos-26
     timeout-minutes: 40
+    env:
+      # The app lane needs a simulator-only framework; target-specific
+      # fingerprints prevent it from reusing an incompatible macOS framework.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/cubby-ffi/target-ios-sim
+      CUBBY_FFI_TARGETS: sim
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           cache: true
-          cache-workspaces: |
-            recipebridge -> target
-            cubby-ffi -> target
+          # Match CARGO_TARGET_DIR above. A separate cache also avoids
+          # restoring macOS-only Rust artifacts into the Simulator lane.
+          cache-workspaces: cubby-ffi -> target-ios-sim
+          cache-key: apple-ffi-ios-sim
       - name: Install iOS Rust targets
         run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
       - uses: ./.github/actions/setup-node-with-deps
@@ -506,10 +539,8 @@ jobs:
           wasm: "false"
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Run CubbyKit Swift tests
-        run: |
-          node scripts/ensure-apple-ffi.ts
-          swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+      - name: Run iOS app checks
+        run: sh scripts/apple-check.sh app
 
   report-coverage:
     name: Report scheduled coverage

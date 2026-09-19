@@ -33,7 +33,7 @@ struct EntityRelationshipsSection: View {
                             "Show empty relationships",
                             isOn: Binding(
                                 get: { model.showsEmptyBranches },
-                                set: model.setShowsEmptyBranches
+                                set: { model.setShowsEmptyBranches($0) }
                             )
                         )
                         .frame(minHeight: PorcelainTokens.touchTarget)
@@ -50,10 +50,10 @@ struct EntityRelationshipsSection: View {
             }
 
             if let error = model.graphError {
-                InlineRelationshipError(message: error) { Task { await model.refresh() } }
+                InlineRelationshipError(message: error) { model.requestRefresh() }
             }
             if let error = model.recommendationError {
-                InlineRelationshipError(message: error) { Task { await model.refresh() } }
+                InlineRelationshipError(message: error) { model.requestRefresh() }
             }
         }
         .onChange(of: model.graphError) { _, error in
@@ -135,35 +135,6 @@ struct EntityRelationshipsSection: View {
     }
 }
 
-private struct RelationshipDepthPicker: View {
-    let model: EntityRelationshipsModel
-
-    var body: some View {
-        Picker(
-            "Depth",
-            selection: Binding(
-                get: { model.depth },
-                set: requestDepth
-            )
-        ) {
-            Text("1 hop").tag(1)
-            Text("2 hops").tag(2)
-            Text("3 hops").tag(3)
-        }
-        .pickerStyle(.segmented)
-        .frame(minHeight: PorcelainTokens.touchTarget)
-        .disabled(model.activity != .idle)
-    }
-
-    private func requestDepth(_ value: Int) {
-        // Xcode 26.6 can crash while IR-generating the inline Binding setter.
-        // A named MainActor action preserves the async update without that thunk.
-        Task { @MainActor [model] in
-            await model.setDepth(value)
-        }
-    }
-}
-
 private struct RelationshipRecommendationGroupView: View {
     let group: EntityRecommendationGroup
     let basisKey: String
@@ -219,11 +190,12 @@ private struct RelationshipRecommendationGroupView: View {
     }
 
     private func accept(_ proposal: ActionableRelationshipRecommendation) {
-        Task {
-            if let acceptance = await model.accept(proposal, basisKey: basisKey) {
-                onAccepted(acceptance)
-            }
-        }
+        requestRelationshipAcceptance(
+            model: model,
+            proposal: proposal,
+            basisKey: basisKey,
+            onAccepted: onAccepted
+        )
     }
 }
 
@@ -345,11 +317,13 @@ struct RelationshipRecommendationReviewSheet: View {
     }
 
     private func accept() {
-        Task {
-            if let acceptance = await model.accept(review.proposal, basisKey: review.basisKey) {
-                onAccepted(acceptance)
-                dismiss()
-            }
+        requestRelationshipAcceptance(
+            model: model,
+            proposal: review.proposal,
+            basisKey: review.basisKey
+        ) { acceptance in
+            onAccepted(acceptance)
+            dismiss()
         }
     }
 }
@@ -574,7 +548,7 @@ private struct RelationshipBranchList: View {
                     }
                     if let nextOffset = branch.nextOffset {
                         Button {
-                            Task { await model.loadNextPage(for: branch) }
+                            model.requestNextPage(for: branch)
                         } label: {
                             if model.pagingBranchIDs.contains(branch.id) {
                                 LoadingIndicator(label: "Loading more \(branch.label.lowercased())")
@@ -590,7 +564,7 @@ private struct RelationshipBranchList: View {
                     }
                     if let error = model.pageErrors[branch.id] {
                         InlineRelationshipError(message: error) {
-                            Task { await model.loadNextPage(for: branch) }
+                            model.requestNextPage(for: branch)
                         }
                     }
                 } label: {
@@ -699,7 +673,7 @@ private struct RelationshipNodeDetailsSheet: View {
                             "Path",
                             selection: Binding(
                                 get: { model.selectedPathIndex },
-                                set: model.selectPath
+                                set: { model.selectPath(at: $0) }
                             )
                         ) {
                             ForEach(paths.indices, id: \.self) { index in
@@ -726,10 +700,7 @@ private struct RelationshipNodeDetailsSheet: View {
                 }
                 Section {
                     Button {
-                        Task {
-                            await model.focus(on: node.reference)
-                            if model.graph?.root == node.reference { dismiss() }
-                        }
+                        requestRelationshipFocus(model: model, on: node.reference) { dismiss() }
                     } label: {
                         Label("Focus graph here", systemImage: "scope")
                             .frame(maxWidth: .infinity, minHeight: PorcelainTokens.touchTarget)
