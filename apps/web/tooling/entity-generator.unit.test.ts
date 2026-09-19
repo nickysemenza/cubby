@@ -1514,6 +1514,14 @@ describe("typed entity compiler", () => {
     expect(artifact("entity-lists.gen.ts")).toContain(
       "ENTITY_LIST_FILTER_SCHEMAS",
     );
+    const entityColumns = artifact("entity-columns.gen.ts");
+    expect(entityColumns).toContain(
+      '"agentHints":jsonb("agentHints").notNull().default(sql`\'{"ordersListUrl":null,"pagination":null,"orderLinkPattern":null,"notes":[]}\'::jsonb`)',
+    );
+    expect(entityColumns).toContain(
+      '"cursor":jsonb("cursor").notNull().default(sql`\'{"newestOrderAt":null,"orderIdsOnNewestDate":[],"backfillBeforeOrderAt":null,"earliestAvailableOrderAt":null}\'::jsonb`)',
+    );
+    expect(entityColumns).toContain(".$type<VendorAccountId>()");
     expect(artifact("EntityCatalog.swift")).toContain("import CubbyAPISupport");
     // Icons emit both the SF Symbol and its emoji text fallback (definition.ts
     // `icons.emoji`) onto the same generated EntityDescriptor.

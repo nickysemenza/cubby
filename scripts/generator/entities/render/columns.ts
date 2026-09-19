@@ -25,6 +25,7 @@ const identifierTypeNames = {
   recipe: "RecipeId",
   task: "TaskId",
   vendor: "VendorId",
+  vendorAccount: "VendorAccountId",
   wish: "WishId",
 } as const satisfies Readonly<Record<string, string>>;
 
@@ -83,6 +84,11 @@ const literalDefaultExpression = (value: DeclarationValue): string => {
   if (typeof value === "string") {
     if (value === "'{}'::text[]") return "sql`'{}'::text[]`";
     if (value === "'[]'::jsonb") return "[]";
+    const jsonbLiteral = /^'(.*)'::jsonb$/su.exec(value);
+    if (jsonbLiteral) {
+      JSON.parse(jsonbLiteral[1]!.replaceAll("''", "'"));
+      return `sql\`${value}\``;
+    }
     if (value.startsWith("'") && value.endsWith("'"))
       return JSON.stringify(value.slice(1, -1));
   }

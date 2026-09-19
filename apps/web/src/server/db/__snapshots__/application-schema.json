@@ -12767,7 +12767,7 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "default": "'''{\"ordersListUrl\":null,\"pagination\":null,\"orderLinkPattern\":null,\"notes\":[]}''::jsonb'"
+          "default": "'{\"ordersListUrl\":null,\"pagination\":null,\"orderLinkPattern\":null,\"notes\":[]}'::jsonb"
         },
         "returnWindowDays": {
           "name": "returnWindowDays",
@@ -12934,7 +12934,7 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "default": "'''{\"newestOrderAt\":null,\"orderIdsOnNewestDate\":[],\"backfillBeforeOrderAt\":null,\"earliestAvailableOrderAt\":null}''::jsonb'"
+          "default": "'{\"newestOrderAt\":null,\"orderIdsOnNewestDate\":[],\"backfillBeforeOrderAt\":null,\"earliestAvailableOrderAt\":null}'::jsonb"
         },
         "lastRunAt": {
           "name": "lastRunAt",
