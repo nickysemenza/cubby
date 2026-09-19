@@ -5,8 +5,8 @@
 - Make the requested in-scope change; validate at the narrowest tier that can
   fail. `pnpm typecheck` is cheap. Run one file with `pnpm test:file src/…`
   (path relative to `apps/web`) — that is the spelling, not `vitest`/`npx
-  vitest`. At handoff, run `pnpm check` plus affected tests; before a PR, run
-  the existing full relevant gates.
+  vitest`. At handoff, the root agent runs `pnpm check` plus affected tests;
+  before a PR, run the existing full relevant gates.
 - A failing test run already lists what failed, at the end of its output and in
   `apps/web/.vitest-failures.txt`. Read those instead of re-running the tier —
   measured, 24% of all test runs were a re-run of one that had just failed.
@@ -44,6 +44,9 @@
   if it changed since you read it, and read a region of a large one. Never `cd`
   — use absolute paths, `git -C`, and `pnpm --dir`, which also survives the
   per-call working directory reset.
+- **Model, delegation, and context routing:** use the cheapest model that can
+  independently validate the task; load [model routing](docs/agents/model-routing.md)
+  when choosing a model, effort level, subagent, or context boundary.
 
 ## Product constraints
 
