@@ -88,8 +88,8 @@ OpenAPI, all orchestration tests, security validation, and the calendar
 Durable Object tests (`workers-tests`). Dependency deduplication
 (`pnpm dedupe:check`) is a separate manual step now — it does not run inside
 `verify:local`/`verify:push`; run it yourself after a package manifest,
-workspace file, patch, or lockfile change, or let hosted `pnpm run check:all`
-catch it.
+workspace file, patch, or lockfile change. Hosted CI runs it separately when
+those dependency inputs change.
 
 Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm verify:push`: it
 requires a clean tree before and after one sequential `nx affected` graph over
@@ -206,8 +206,8 @@ merges green and it breaks the first post-merge deploy. Verify deploy-path
 steps against the CI service token's scopes, never local credentials.
 Unresolved GitHub review threads on old PRs are stale bookkeeping, not a
 worklist — verify against HEAD before acting. Reusing a branch after its PR was
-squash-merged makes the follow-up PR show add/add conflicts; merge `origin/main`
-taking ours.
+squash-merged can create follow-up conflicts. Prefer a fresh branch from current
+main; inspect and resolve conflicts on a reused branch individually.
 
 Inspect failing check logs and annotations before editing. Fix only failures
 caused by the change; retain unrelated flakes or infrastructure failures as

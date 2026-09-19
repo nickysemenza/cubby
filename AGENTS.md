@@ -35,7 +35,8 @@
 - Git hooks are mandatory validation. Never use `--no-verify`; fix the failing
   pre-commit or scoped pre-push gate before committing or pushing.
 - Before merge, verify the exact final commit locally with `pnpm verify:local`.
-  High-risk changes select full verification; `pnpm verify:local:full` forces it.
+  It runs the full target list; use `pnpm verify:local:full` to bypass Nx caches
+  for high-risk or pre-release changes.
   Hosted verification and coverage are manual; main only builds and deploys.
   The pre-push hook is a scoped fast gate, not a substitute.
 - Spend tool calls on bytes that earn their place. Batch independent read-only
@@ -56,6 +57,31 @@ interactive; all money is `SUM(Expense.cost)`; the trusted household has no
 multi-user coordination, restore/undo, reservations, or locking. Read only the
 relevant README heading for architecture, commands, entities, deployment, or
 roadmap context.
+
+## Skill routing
+
+Use one owning skill for a matching workflow; add a narrower skill only when it
+owns a distinct concern.
+
+- **Uncertain plans or designs:** When the user explicitly says “grill me,” or
+  material product or design decisions remain after repository investigation,
+  use `grilling` to resolve them before implementation. An approved
+  implementation brief proceeds directly to implementation.
+- **Web UI:** For a UI change, redesign, or visual polish, use `impeccable`
+  with `apps/web/DESIGN.md`. For a broad cross-route audit or responsive
+  remediation, use `cubby-ui-design-audit`. Use `better-ui` or
+  `emil-design-eng` as focused refinement lenses.
+- **Apple UI:** For iOS/macOS visual or interaction work, use `axiom-design`
+  before implementation decisions and `axiom-swiftui` for SwiftUI. Add the
+  relevant Axiom skill for accessibility, performance, UIKit, media, data,
+  networking, security, or platform-specific work.
+- **Cubby workflows:** Use `cubby-adversarial-plan-review` for implementation
+  plans, `cubby-pr-ci-maintenance` for PR or CI work, and the focused meal,
+  garden-plan, product-enrichment, or purchase-import skill for those
+  household workflows.
+- **Engineering diagnosis:** Use `diagnosing-bugs` for hard regressions,
+  `domain-modeling` for terminology or durable model decisions, `tdd` when
+  test-first is requested, and `code-review` for a requested review.
 
 ## Load when triggered
 

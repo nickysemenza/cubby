@@ -16,8 +16,7 @@ The seven SVG layers use a 1024 × 1024 canvas: one shelf layer and six separate
 objects. Keep their artwork flat and unmasked. Icon Composer owns the material,
 highlights, shadows, and platform mask. Default uses porcelain `#f7f9fc`; dark
 uses charcoal `#171a21` with gray `#9aa7b8` shelves. A shared 85% gray annotation
-keeps objects legible in system clear and tinted appearances. Review both design
-generations 26 and 27 when changing the composition.
+keeps objects legible in system clear and tinted appearances.
 
 Regenerate `App/Assets.xcassets/AppIcon.appiconset` fallbacks from the same Icon
 Composer document. Export the iOS default at 1024 pixels and flatten transparency
@@ -45,9 +44,9 @@ standing rule, not a one-off for any single flow; other screens adopt it as they
 
 - Inline navigation titles by default; reserve `.large` display mode for a screen with no other
   competing content.
-- System spacing: omit `padding`/`spacing` lengths rather than hand-picking a number such as
-  `.padding(16)` — the system value adapts across platform, size class, and Dynamic Type. See
-  `axiom-design` (`skills/hig.md`, "What spacing, padding, or margin value should I use?").
+- System spacing: prefer system `padding`/`spacing` over arbitrary fixed values; use explicit
+  values when composition or compact density requires them. See `axiom-design` (`skills/hig.md`,
+  "What spacing, padding, or margin value should I use?").
 - Default control sizes; `.controlSize(.large)` only for a lone primary action on an otherwise
   empty screen, never mixed into a list or a busy footer.
 - Actions live in toolbar placements (`.bottomBar`, `.confirmationAction`, `.cancellationAction`,

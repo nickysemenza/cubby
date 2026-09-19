@@ -7,11 +7,15 @@ hook-result defaults use module-level constants (not `= []`/`{}`), and
 query-key, clipboard, form-field, database, merge, and shortcode helpers over
 hand-rolled equivalents; raw mutation is reserved for the documented dynamic
 invalidation/inline-error/multi-mutation cases.
+For hook-default and `useQueries` examples, load the relevant heading in the
+[web UI reference](web-ui-reference.md).
 
 The server render uses TanStack Start's local function execution, never an HTTP
 request to itself. Keep `~/server` imports behind the `.server()` branch of an
 isomorphic function. `ssr: false` is a measured cost choice, not a correctness
 workaround; a loader may await `ensureQueryData` when that latency is warranted.
+Workflow streams use typed JSONL server routes and an `AbortSignal`; the owning
+screen opens them explicitly rather than a generic dispatcher.
 
 Hydration: TanStack Start's SSR query stream lands in the client cache before
 React hydrates, so gate loading branches with `useHydratedLoading`/`useHydrated`,
