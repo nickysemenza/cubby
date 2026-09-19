@@ -36,6 +36,13 @@ const browserBasePath = (entity: string): string =>
         : `${singular}s`;
   })();
 
+interface BrowserRouteSet {
+  detail: string;
+  list: string;
+  create?: "dialog" | "page";
+  new?: string;
+}
+
 export const browserRoutes = (entity: CompiledEntity) => {
   const basePath = entity.route?.basePath ?? browserBasePath(entity.key);
   const detailParam =
@@ -46,10 +53,12 @@ export const browserRoutes = (entity: CompiledEntity) => {
   const list = `/${basePath}`;
   // `routes.new` exists exactly when a hand-written `<basePath>.new.tsx`
   // does; a dialog-created entity deep-links through `?create=true`.
-  const routes =
-    entity.route?.create === "page"
-      ? { detail, list, new: `/${basePath}/new` }
-      : { detail, list };
+  const routes: BrowserRouteSet = {
+    detail,
+    list,
+  };
+  if (entity.route?.create !== undefined) routes.create = entity.route.create;
+  if (entity.route?.create === "page") routes.new = `/${basePath}/new`;
   return { basePath, detailParam, routes };
 };
 

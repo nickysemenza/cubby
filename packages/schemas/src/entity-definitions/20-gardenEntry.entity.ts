@@ -14,7 +14,12 @@ const optionalText = z.string().trim().min(1).nullable();
 export default defineEntity({
   key: "gardenEntry",
   names: { singular: "Garden Entry", plural: "Garden Entries" },
-  route: { basePath: "garden-entries", list: true, detail: true },
+  route: {
+    basePath: "garden-entries",
+    create: "dialog",
+    list: true,
+    detail: true,
+  },
   table: "GardenEntry",
   identifiers: { brand: "GardenEntryId", shortcode: "GDE-" },
   presentation: {
@@ -25,6 +30,7 @@ export default defineEntity({
       title: "No garden entries yet",
       description:
         "Add a dated observation, harvest, or photo batch to keep a simple garden history.",
+      actionLabel: "New Garden Entry",
     },
     icons: { lucide: "CalendarDays", sfSymbol: "text.badge.plus", emoji: "📓" },
     detail: {

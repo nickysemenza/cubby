@@ -14,7 +14,12 @@ const optionalText = z.string().trim().min(1).nullable();
 export default defineEntity({
   key: "planting",
   names: { singular: "Planting", plural: "Plantings" },
-  route: { basePath: "plantings", list: true, detail: true },
+  route: {
+    basePath: "plantings",
+    create: "dialog",
+    list: true,
+    detail: true,
+  },
   table: "Planting",
   identifiers: { brand: "PlantingId", shortcode: "PLT-" },
   presentation: {
@@ -25,6 +30,7 @@ export default defineEntity({
       title: "No plantings yet",
       description:
         "Record what is growing now or plan the next crop for one of your garden locations.",
+      actionLabel: "New Planting",
     },
     icons: { lucide: "Sprout", sfSymbol: "leaf", emoji: "🌱" },
     detail: {

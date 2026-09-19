@@ -6,6 +6,7 @@ import type { ListQueryPlan } from "~/app/_components/hooks/usePaginatedTableCor
 interface EntityRoutes {
   detail: string;
   list: string;
+  create?: "dialog" | "page";
   new?: string;
 }
 

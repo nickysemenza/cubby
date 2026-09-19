@@ -137,6 +137,7 @@ const mcpCatalogToolSchema = z.strictObject({
   inputSchema: jsonValueObjectSchema,
   outputSchema: jsonValueObjectSchema.optional(),
   annotations: toolAnnotationsSchema.optional(),
+  _meta: jsonValueObjectSchema.optional(),
 });
 
 export const mcpToolCatalogOut = z.strictObject({
