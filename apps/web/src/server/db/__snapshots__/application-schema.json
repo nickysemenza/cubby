@@ -7424,6 +7424,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "pendingDataBase64Url": {
+          "name": "pendingDataBase64Url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "providerAttachmentId": {
           "name": "providerAttachmentId",
           "type": "text",
