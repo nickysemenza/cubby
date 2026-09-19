@@ -1432,24 +1432,34 @@ export const findUpcProblems = async (
 export const findProblemCounts = async (
   db: Database,
   upcLookupClient: UpcLookupBatchPort,
-): Promise<ProblemsCount> => {
+): Promise<ProblemsCount> =>
+  (await findProblemCountsSnapshot(db, upcLookupClient)).counts;
+
+export type ProblemCountsSnapshotResult = {
+  counts: ProblemsCount;
+  quality: "complete" | "degraded";
+};
+
+/** Count every Problem while preserving external-provider health for snapshots. */
+export const findProblemCountsSnapshot = async (
+  db: Database,
+  upcLookupClient: UpcLookupBatchPort,
+): Promise<ProblemCountsSnapshotResult> => {
   const declarations = problemQueryDeclarations();
-  const tasks: Record<string, () => Promise<number>> = {};
+  const tasks: Record<string, () => ReturnType<typeof executeProblem>> = {};
   for (const definition of declarations) {
     tasks[definition.key] = async () =>
-      (
-        await executeProblem(db, definition.key, {
-          mode: "count",
-          diagnostic: { upcLookupClient },
-        })
-      ).count;
+      executeProblem(db, definition.key, {
+        mode: "count",
+        diagnostic: { upcLookupClient },
+      });
   }
-  const counts = await traceAllBounded(tasks, 4);
+  const results = await traceAllBounded(tasks, 4);
   const byType = problemsCountSchema.shape.byType.parse(
     Object.fromEntries(
       declarations.map((definition) => [
         definition.key,
-        Number(counts[definition.key] ?? 0),
+        Number(results[definition.key]?.count ?? 0),
       ]),
     ),
   );
@@ -1462,9 +1472,15 @@ export const findProblemCounts = async (
       0,
     );
   return {
-    total: totalFor("defect"),
-    coverageTotal: totalFor("coverage"),
-    byType,
+    counts: {
+      total: totalFor("defect"),
+      coverageTotal: totalFor("coverage"),
+      byType,
+    },
+    quality:
+      results.productsWithBetterUpcData?.status.state === "unavailable"
+        ? "degraded"
+        : "complete",
   };
 };
 
