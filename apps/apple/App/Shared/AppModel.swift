@@ -35,9 +35,24 @@ final class AppModel {
     /// a new photo the moment it lands, so it matches before the next rebuild).
     let featurePrints = FeaturePrintIndex()
     let photoMatches = PhotoMatchStore()
-    let photoAnalysisStore: PhotoAnalysisStore
-    let photoLibrary: PhotoLibraryStore
-    let photoClassificationSweep: PhotoClassificationSweep
+    /// SwiftData model-container creation can block or fail while the app is still constructing
+    /// its root state on a device. Keep the photo subsystem cold until Photos or its settings are
+    /// opened so a bad persisted store cannot leave the whole app on a white launch screen.
+    @ObservationIgnored lazy var photoAnalysisStore: PhotoAnalysisStore = Self.makeAnalysisStore()
+    @ObservationIgnored lazy var photoLibrary: PhotoLibraryStore =
+        PhotoLibraryStore(analysisStore: photoAnalysisStore)
+    @ObservationIgnored lazy var photoClassificationSweep: PhotoClassificationSweep =
+        makePhotoClassificationSweep()
+
+    private func makePhotoClassificationSweep() -> PhotoClassificationSweep {
+        let sweep = PhotoClassificationSweep(
+            analysisStore: photoAnalysisStore, library: photoLibrary,
+            window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused)
+        let matches = photoMatches
+        sweep.onClassified = { id, snapshot in matches.markAnalysis([id: snapshot]) }
+        Task { try? await photoAnalysisStore.migrateLegacyHashCacheIfNeeded() }
+        return sweep
+    }
     /// Developer overlays layer 6: installed on every `CubbyClient` this model builds, so the
     /// request-timing strip reflects requests made through any of them (the base client and, after
     /// a base-URL change, its replacement).
@@ -82,16 +97,6 @@ final class AppModel {
         self.credentials = credentials
         self.client = CubbyClient(baseURL: url, credentials: credentials, requestObserver: requestTrace)
         self.auth = AuthFlow(baseURL: url, credentials: credentials)
-        let analysisStore = Self.makeAnalysisStore()
-        self.photoAnalysisStore = analysisStore
-        let library = PhotoLibraryStore(analysisStore: analysisStore)
-        self.photoLibrary = library
-        self.photoClassificationSweep = PhotoClassificationSweep(
-            analysisStore: analysisStore, library: library,
-            window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused)
-        let matches = photoMatches
-        photoClassificationSweep.onClassified = { id, snapshot in matches.markAnalysis([id: snapshot]) }
-        Task { try? await analysisStore.migrateLegacyHashCacheIfNeeded() }
     }
 
     /// The persistent store at `Application Support/Cubby/PhotoAnalysis.store`, falling back to an
