@@ -51,9 +51,11 @@ final class PhotoImportManifest {
     private let analysisStore: PhotoAnalysisStore
 
     /// `analysisStore` defaults to a throwaway in-memory store: every production call site
-    /// (`PhotosRootView`) passes `AppModel.photoAnalysisStore` explicitly, but the many existing
-    /// fixture-only tests and previews that build a manifest just to exercise assignment/commit
-    /// logic don't need — and shouldn't share — the persistent one.
+    /// (`PhotosRootView`) passes `AppModel.photoAnalysisStore` explicitly, and so does every test
+    /// fixture (`makeManifest(items:)` in `App/Tests/Photos/PhotoTestStores.swift`, which shares
+    /// one store across the target instead of racing a fresh `ModelContainer` per manifest). The
+    /// default remains only for `#Playground`/`#Preview` fixtures, which build a manifest just to
+    /// exercise assignment/commit logic and run one at a time, never concurrently.
     init(
         items: [PhotoSelectionItem],
         analysisStore: PhotoAnalysisStore = PhotoImportManifest.ephemeralAnalysisStore()
@@ -1007,7 +1009,8 @@ final class PhotoImportManifest {
         try? await analysisStore.upsertFullAnalysis(
             localIdentifier: localIdentifier, analysis: data, version: PhotoLocalAnalysis.currentVersion,
             categories: PhotoCategoryHit.matchedCategories(for: analysis.classifications),
-            topLabels: PhotoCategoryHit.topLabels(for: analysis.classifications))
+            topLabels: PhotoCategoryHit.topLabels(for: analysis.classifications),
+            classifyVersion: PhotoClassificationSweep.classifyVersion)
     }
 
     private func updateProgress(_ state: PhotoImportTransactionProgress) {

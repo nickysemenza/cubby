@@ -12,6 +12,12 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     }
     private(set) var authorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     private(set) var months: [Month] = []
+    /// Bumped every time `months` is replaced (a fresh load, an authorization change, or a
+    /// PhotoKit library-change refresh). `PhotoClassificationSweep`'s candidate provider reads
+    /// `months` but has no other way to know it changed — `PhotosRootView` reconciles the sweep
+    /// on this so a sweep that saw zero candidates (tab opened before the library finished
+    /// loading) actually starts once photos exist, and a finished sweep re-arms for new ones.
+    private(set) var monthsRevision = 0
     private(set) var count = 0
     private(set) var checked: Set<String> = []
     private(set) var isScanning = false
@@ -72,6 +78,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
         clients = [:]; checked = []
         selectedIDs = []; scrollID = nil; months = []; assetsByID = [:]
+        monthsRevision += 1
         thumbnails.removeAllObjects()
         count = 0; isScanning = false
     }
@@ -89,7 +96,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         await matches.refresh(client: client)
         guard generation == token, !Task.isCancelled else { return }
         guard hasFullAccess else {
-            months = []; count = 0; checked = []; selectedIDs = []; assetsByID = [:]
+            months = []; monthsRevision += 1
+            count = 0; checked = []; selectedIDs = []; assetsByID = [:]
             thumbnails.removeAllObjects()
             if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
             return
@@ -128,6 +136,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         checked.formIntersection(assetsByID.keys)
         selectedIDs.removeAll { assetsByID[$0] == nil }
         months = grouped.keys.sorted(by: >).map { Month(id: $0, assets: grouped[$0]!) }
+        monthsRevision += 1
         count = result.count
         isLoadingLibrary = false
         // One batch read for the whole library's dot status, rather than a fetch per cell; the

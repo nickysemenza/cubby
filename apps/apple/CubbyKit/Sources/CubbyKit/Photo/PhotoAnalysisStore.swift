@@ -175,16 +175,22 @@ public actor PhotoAnalysisStore {
 
     /// Written by `PhotoImportManifest.prepareIfNeeded` and the Diagnostics tab once the full
     /// (hash + classify + OCR + feature print) analysis has run, so a later Diagnostics open is
-    /// instant and the sweep treats this asset as already classified.
+    /// instant and the sweep treats this asset as already classified. `classifyVersion` is the
+    /// caller's current classification version (`PhotoClassificationSweep.classifyVersion`,
+    /// which this package cannot reference directly) — a full analysis is a superset of the
+    /// classification, so it must also satisfy `ids(in:newerThan:)`'s version filter, not just
+    /// `classifiedLocalIdentifiers`'s separate `fullAnalysisVersion != nil` check.
     public func upsertFullAnalysis(
         localIdentifier: String, analysis: Data, version: Int,
-        categories: [String], topLabels: [PhotoLabelScore]
+        categories: [String], topLabels: [PhotoLabelScore], classifyVersion: Int
     ) throws {
         let record = try fetchOrInsert(localIdentifier)
         record.fullAnalysis = analysis
         record.fullAnalysisVersion = version
         record.categories = categories
         record.topLabels = topLabels
+        record.classifyVersion = classifyVersion
+        record.classifiedAt = Date()
         try modelContext.save()
     }
 
@@ -199,7 +205,12 @@ public actor PhotoAnalysisStore {
     /// photo library is small enough that filtering the version-matched rows in Swift is cheap.
     public func ids(in category: String, newerThan classifyVersion: Int) throws -> Set<String> {
         let predicate = #Predicate<PhotoAssetRecord> { $0.classifyVersion >= classifyVersion }
-        let records = try modelContext.fetch(FetchDescriptor(predicate: predicate))
+        var descriptor = FetchDescriptor(predicate: predicate)
+        // Narrow projection: this query runs on every category-chip reload, and the default fetch
+        // would materialize every matching record's `fullAnalysis` blob and `topLabels` just to
+        // read an identifier and a category list.
+        descriptor.propertiesToFetch = [\.localIdentifier, \.categories, \.classifyVersion, \.fullAnalysisVersion]
+        let records = try modelContext.fetch(descriptor)
         return Set(records.filter { $0.categories.contains(category) }.map(\.localIdentifier))
     }
 
@@ -210,7 +221,10 @@ public actor PhotoAnalysisStore {
         let predicate = #Predicate<PhotoAssetRecord> {
             $0.classifyVersion >= classifyVersion || $0.fullAnalysisVersion != nil
         }
-        let records = try modelContext.fetch(FetchDescriptor(predicate: predicate))
+        var descriptor = FetchDescriptor(predicate: predicate)
+        // The sweep calls this once per pass to build its skip set — only the identifier matters.
+        descriptor.propertiesToFetch = [\.localIdentifier]
+        let records = try modelContext.fetch(descriptor)
         return Set(records.map(\.localIdentifier))
     }
 
@@ -225,7 +239,11 @@ public actor PhotoAnalysisStore {
     /// `LibraryHashCache.prune(to:)`.
     @discardableResult
     public func pruneMissing(_ assetIDs: Set<String>) throws -> Int {
-        let all = try modelContext.fetch(FetchDescriptor<PhotoAssetRecord>())
+        var descriptor = FetchDescriptor<PhotoAssetRecord>()
+        // Every launch's full-library refresh calls this; only the identifier is read below, so
+        // there is no reason to fault in every record's `fullAnalysis` blob just to delete some.
+        descriptor.propertiesToFetch = [\.localIdentifier]
+        let all = try modelContext.fetch(descriptor)
         var removed = 0
         for record in all where !assetIDs.contains(record.localIdentifier) {
             modelContext.delete(record)
@@ -322,7 +340,8 @@ extension PhotoAnalysisStore {
     /// usable; `upsertHash` alone rebuilds hashes from that point on.
     public func migrateLegacyHashCacheIfNeeded(fileURL: URL = PhotoAnalysisStore.legacyHashCacheURL) throws {
         guard let data = try? Data(contentsOf: fileURL) else { return }
-        defer { try? FileManager.default.removeItem(at: fileURL) }
+        // A corrupt legacy file still no-ops (the early `return` below) without deleting anything,
+        // so a future launch with a fixed decoder gets another chance at it.
         guard let document = try? JSONDecoder().decode(LegacyDocument.self, from: data) else { return }
         for entry in document.entries {
             let record = try fetchOrInsert(entry.key.localIdentifier)
@@ -330,6 +349,9 @@ extension PhotoAnalysisStore {
             record.perceptualHash = Int64(bitPattern: entry.hash.value)
             record.hashRevision = entry.key.algorithmRevision
         }
+        // Delete only once the migrated rows are durably saved — deleting first (the previous
+        // `defer`) would lose every hash in this file if `save()` threw partway through.
         try modelContext.save()
+        try? FileManager.default.removeItem(at: fileURL)
     }
 }

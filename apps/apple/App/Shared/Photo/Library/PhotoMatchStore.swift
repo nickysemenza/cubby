@@ -18,6 +18,11 @@ final class PhotoMatchStore {
     /// so rendering never issues one request per cell.
     private(set) var directOwnersByImageID: [String: [String]] = [:]
     private(set) var revision = 0
+    /// Bumped by `markAnalysis`, coalesced (at most once per second or per 50 photos, whichever
+    /// first) rather than once per photo like `revision` used to be. `.task(id:)` category-filter
+    /// reloads and the "N of M analysed" caption key off this instead, so a background sweep
+    /// classifying thousands of photos does not force those to refetch/re-render per photo.
+    private(set) var classifiedRevision = 0
 
     @ObservationIgnored private var entries: [ImageCode: ImageHashEntry] = [:]
     @ObservationIgnored private var queries: [String: HashQuery] = [:]
@@ -41,6 +46,8 @@ final class PhotoMatchStore {
     /// it finishes each photo (B4's grid dot; developer overlays layer 1's timing/label). Absent
     /// means "not looked at yet by either path".
     @ObservationIgnored private var analysisByID: [String: PhotoAssetSnapshot] = [:]
+    @ObservationIgnored private var uncoalescedClassifiedCount = 0
+    @ObservationIgnored private var lastClassifiedRevisionBump = Date.distantPast
 
     var coverage: String {
         if error != nil {
@@ -112,13 +119,24 @@ final class PhotoMatchStore {
     }
 
     /// Publishes a batch of analysis snapshots into the per-id cell state (B4's grid dot; developer
-    /// overlays layer 1's timing/label). Bumps `revision` so the category filter's memoized id set
-    /// (keyed on `revision`) invalidates too.
+    /// overlays layer 1's timing/label). Each cell's own box (`publishCellStates` below) updates
+    /// immediately regardless of batch size — this call site is the only observer that needs a
+    /// per-photo signal. `revision` itself is left untouched (a sweep classifying thousands of
+    /// photos one at a time must not force every observer keyed on it — the ownership filter cache,
+    /// the grid's `FilteredMonthAssetsCache` — to invalidate and re-render per photo); the coalesced
+    /// `classifiedRevision` below is what the category chip filter and "N of M analysed" caption
+    /// key off instead.
     func markAnalysis(_ snapshots: [String: PhotoAssetSnapshot]) {
         guard !snapshots.isEmpty else { return }
         for (id, snapshot) in snapshots { analysisByID[id] = snapshot }
-        revision += 1
         publishCellStates(for: snapshots.keys)
+        uncoalescedClassifiedCount += snapshots.count
+        let now = Date()
+        guard uncoalescedClassifiedCount >= 50 || now.timeIntervalSince(lastClassifiedRevisionBump) >= 1
+        else { return }
+        classifiedRevision += 1
+        uncoalescedClassifiedCount = 0
+        lastClassifiedRevisionBump = now
     }
 
     private func computeCellState(for id: String) -> PhotoGridCellState {
@@ -167,11 +185,13 @@ final class PhotoMatchStore {
         directOwnersByImageID = [:]
         checkedIDs = []; cellStateBoxes = [:]
         analysisByID = [:]
+        uncoalescedClassifiedCount = 0; lastClassifiedRevisionBump = .distantPast
         entriesRevision += 1
         hasIndex = false; isLoading = false; isRepairing = false
         totalCount = 0; remainingCount = 0; repairFailures = 0; error = nil
         observers = []
         revision += 1
+        classifiedRevision += 1
     }
 
     func refresh(client: CubbyClient, priorityIDs: Set<String>? = nil) async {

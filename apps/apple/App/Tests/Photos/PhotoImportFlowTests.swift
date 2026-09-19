@@ -12,7 +12,7 @@ struct PhotoImportFlowTests {
     @Test func manifestKeepsUnassignedPhotosOutOfCommitUntilMoved() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let manifest = PhotoImportManifest(items: [first, second])
+        let manifest = makeManifest(items: [first, second])
 
         #expect(manifest.needsDestination == [first.id, second.id])
         #expect(!manifest.canCommit)
@@ -36,7 +36,7 @@ struct PhotoImportFlowTests {
     @Test func defaultSelectionIsTheFocusedPhotoAndAdvancesAfterAssignment() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let manifest = PhotoImportManifest(items: [first, second])
+        let manifest = makeManifest(items: [first, second])
 
         #expect(manifest.focusedItemID == first.id)
         #expect(manifest.selectedIDs == [first.id])
@@ -59,7 +59,7 @@ struct PhotoImportFlowTests {
     @Test func editorPrefillStillCarriesThePhotoDayWhenSelectionIsEmptied() throws {
         let captured = Date(timeIntervalSince1970: 1_757_500_000)
         let item = try selection(filename: "dated.jpg", capturedAt: captured)
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         manifest.selectedIDs = []
 
         let option = try #require(
@@ -80,7 +80,7 @@ struct PhotoImportFlowTests {
     /// from under a photo the person had open in a chooser or editor.
     @Test func analyzerApplyNeverMutatesSelectedIDs() throws {
         let item = try selection(filename: "match.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         manifest.selectedIDs = [item.id]
         let option = try #require(
             manifest.destinationOptions.first { $0.route.kind == .`self` && $0.route.choice != .prompt })
@@ -106,7 +106,7 @@ struct PhotoImportFlowTests {
     /// `initial: "today"` — the editor must open and require a real date from the person.
     @Test func undatedPhotoLeavesObservedOnAbsentAndRequired() throws {
         let item = try selection(filename: "undated.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let option = try #require(
             manifest.destinationOptions.first {
                 $0.route.kind == .createRelated && $0.route.source == .planting
@@ -147,7 +147,7 @@ struct PhotoImportFlowTests {
     @Test func stageCreateKeysDraftsByRouteSourceRecordAndDay() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let manifest = PhotoImportManifest(items: [first, second])
+        let manifest = makeManifest(items: [first, second])
         let option = try #require(
             manifest.destinationOptions.first {
                 $0.route.kind == .createRelated && $0.route.source == .planting
@@ -169,7 +169,7 @@ struct PhotoImportFlowTests {
     @Test func stageCreateMergesTheSameSourceRecordOnTheSameDayIntoOneDraft() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
-        let manifest = PhotoImportManifest(items: [first, second])
+        let manifest = makeManifest(items: [first, second])
         let option = try #require(
             manifest.destinationOptions.first {
                 $0.route.kind == .createRelated && $0.route.source == .planting
@@ -188,7 +188,7 @@ struct PhotoImportFlowTests {
 
     @Test func chooseSourceRecordAutoResolvesASingleSameDayMatch() async throws {
         let item = try selection(filename: "match.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let row = EntityRow(
             id: "PLT-1234", title: "Santa Rosa", subtitle: nil, imageURL: nil,
@@ -215,7 +215,7 @@ struct PhotoImportFlowTests {
         // Dated on purpose: an undated photo leaves the required `observedOn` empty and opens the
         // editor instead (see `undatedPhotoLeavesObservedOnAbsentAndRequired`).
         let item = try selection(filename: "new.jpg", capturedAt: Date(timeIntervalSince1970: 1_789_000_000))
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let row = EntityRow(
             id: "PLT-5678", title: "Roma", subtitle: nil, imageURL: nil,
@@ -238,7 +238,7 @@ struct PhotoImportFlowTests {
 
     @Test func chooseSourceRecordOpensTheRelatedChooserForMultipleMatches() async throws {
         let item = try selection(filename: "ambiguous.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let row = EntityRow(
             id: "PLT-4321", title: "Cherokee", subtitle: nil, imageURL: nil,
@@ -261,7 +261,7 @@ struct PhotoImportFlowTests {
 
     @Test func chooseSourceRecordAlwaysPromptsWhenARouteIsMarkedPrompt() async throws {
         let item = try selection(filename: "inventory.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .inventory })
         let row = EntityRow(
             id: "INV-0001", title: "Flour", subtitle: nil, imageURL: nil, raw: ["id": "INV-0001"])
@@ -276,7 +276,7 @@ struct PhotoImportFlowTests {
     }
 
     @Test func destinationsIncludeEveryManifestIngressKind() throws {
-        let manifest = PhotoImportManifest(items: [try selection(filename: "first.jpg")])
+        let manifest = makeManifest(items: [try selection(filename: "first.jpg")])
         let routes = manifest.destinationOptions.map(\.route)
 
         #expect(!routes.isEmpty)
@@ -300,7 +300,7 @@ struct PhotoImportFlowTests {
     }
 
     @Test func naturalSourceTypesAreUniqueAndPlantingDefaultsToCreateRoute() throws {
-        let manifest = PhotoImportManifest(items: [try selection(filename: "first.jpg")])
+        let manifest = makeManifest(items: [try selection(filename: "first.jpg")])
         let types = manifest.sourceTypeOptions
 
         #expect(Set(types.map(\.source)).count == types.count)
@@ -328,8 +328,8 @@ struct PhotoImportFlowTests {
         let captured = Date(timeIntervalSince1970: 1_789_000_000)
         let bed = try selection(filename: "bed.jpg", capturedAt: captured)
         let shelf = try selection(filename: "shelf.jpg", capturedAt: captured)
-        let bedManifest = PhotoImportManifest(items: [bed])
-        let shelfManifest = PhotoImportManifest(items: [shelf])
+        let bedManifest = makeManifest(items: [bed])
+        let shelfManifest = makeManifest(items: [shelf])
         let type = try #require(bedManifest.sourceTypeOptions.first { $0.source == .location })
         let conditional = try #require(type.options.first { $0.route.primaryWhen != nil })
         let predicate = try #require(conditional.route.primaryWhen)
@@ -385,7 +385,7 @@ struct PhotoImportFlowTests {
     /// UI disabling its row is not the only guard.
     @Test func stageCreateNeverStagesADisabledRoute() throws {
         let item = try selection(filename: "disabled.jpg")
-        let manifest = PhotoImportManifest(items: [item])
+        let manifest = makeManifest(items: [item])
         let option = try #require(PhotoImportManifest.createSelfOption(for: .project))
         #expect(!option.route.enabled)
 

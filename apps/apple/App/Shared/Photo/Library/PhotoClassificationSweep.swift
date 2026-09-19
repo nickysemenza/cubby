@@ -129,6 +129,13 @@ final class PhotoClassificationSweep {
     @ObservationIgnored private var window: PhotoAnalysisWindow
     @ObservationIgnored private var visibleMonthIDs: Set<Date> = []
     @ObservationIgnored private var runTask: Task<Void, Never>?
+    /// Identifies the in-flight `run()` call. `reconcile(force:)` replaces `runTask` and mints a
+    /// new token whenever it force-restarts a run (a window change) while a previous run is still
+    /// winding down from cancellation; that previous run's completion handler checks this before
+    /// touching `isRunning`/`runTask` so it cannot clobber the state of the run that superseded it.
+    @ObservationIgnored private var runGeneration = UUID()
+    @ObservationIgnored private var uncoalescedAnalysedCount = 0
+    @ObservationIgnored private var lastAnalysedCountBump = Date.distantPast
     // `nonisolated(unsafe)`: `deinit` is not main-actor-isolated, and `NotificationCenter`'s
     // observer tokens are documented safe to pass to `removeObserver` from any thread, so reading
     // this array there (only to unregister, never mutated concurrently) is sound.
@@ -226,7 +233,12 @@ final class PhotoClassificationSweep {
             thermalState: thermal.thermalState, isLowPowerModeEnabled: power.isLowPowerModeEnabled)
     }
 
-    private func reconcile(force: Bool = false) {
+    /// Re-evaluates whether the sweep should be running against its current candidate source and
+    /// system conditions. Called by every setter above, and by `PhotosRootView` whenever
+    /// `PhotoLibraryStore.monthsRevision` changes (a fresh or newly-populated `library.months` —
+    /// `run()` reads candidates once at the top of its pass, so nothing else re-checks a candidate
+    /// source that changed after a run already started, or after one finished with none to do).
+    func reconcile(force: Bool = false) {
         guard shouldRunNow else {
             runTask?.cancel()
             runTask = nil
@@ -235,10 +247,12 @@ final class PhotoClassificationSweep {
         }
         guard runTask == nil || force else { return }
         runTask?.cancel()
-        runTask = Task { [weak self] in await self?.run() }
+        let token = UUID()
+        runGeneration = token
+        runTask = Task(priority: .utility) { [weak self] in await self?.run(token: token) }
     }
 
-    private func run() async {
+    private func run(token: UUID) async {
         let all = candidateProvider()
         totalCount = all.count
         let alreadyClassified =
@@ -248,9 +262,24 @@ final class PhotoClassificationSweep {
             alreadyClassified: alreadyClassified)
         let candidatesByID = Dictionary(uniqueKeysWithValues: all.map { ($0.localIdentifier, $0) })
         analysedCount = all.count - ordered.count
+        uncoalescedAnalysedCount = 0
+        lastAnalysedCountBump = .now
+        // However this run ends (candidates exhausted, cancelled by `reconcile()`, or simply
+        // nothing to do), clear `runTask`/`isRunning` so the *next* `reconcile()` can start a new
+        // run — leaving `runTask` set after completion was finding 1's bug: a sweep that started
+        // with zero candidates (Photos tab opened before the library finished loading) never ran
+        // again once photos appeared, because `reconcile()`'s `guard runTask == nil` never passed.
+        // Guarded by `runGeneration` so a run that a force-restart already superseded cannot stomp
+        // on the state of the run that replaced it.
+        defer {
+            if runGeneration == token {
+                isRunning = false
+                runTask = nil
+                if uncoalescedAnalysedCount > 0 { analysedCount += uncoalescedAnalysedCount }
+            }
+        }
         guard !ordered.isEmpty else { return }
         isRunning = true
-        defer { isRunning = false }
         var iterator = ordered.makeIterator()
         // `classify` is a value of a `@MainActor`-isolated function type — Sendable because
         // running it always hops back to this actor regardless of which executor called it — so
@@ -287,7 +316,17 @@ final class PhotoClassificationSweep {
                 localIdentifier: candidate.localIdentifier, categories: outcome.categories,
                 topLabels: outcome.topLabels, classifyVersion: Self.classifyVersion,
                 classifyMs: outcome.classifyMs)
-            analysedCount += 1
+            // `analysedCount` (and so `statusText`) only publishes at most once per second or per
+            // 50 photos, whichever comes first — matching `PhotoMatchStore.classifiedRevision`'s
+            // cadence — rather than once per photo, which re-rendered the "Analysing… N of M"
+            // caption on every classification in a sweep over thousands of photos.
+            uncoalescedAnalysedCount += 1
+            let now = Date()
+            if uncoalescedAnalysedCount >= 50 || now.timeIntervalSince(lastAnalysedCountBump) >= 1 {
+                analysedCount += uncoalescedAnalysedCount
+                uncoalescedAnalysedCount = 0
+                lastAnalysedCountBump = now
+            }
             cursor = candidate.creationDate
             onClassified?(
                 candidate.localIdentifier,

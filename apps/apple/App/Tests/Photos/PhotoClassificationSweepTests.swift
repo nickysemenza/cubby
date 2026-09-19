@@ -152,6 +152,40 @@ struct PhotoClassificationSweepTests {
         sweep.setPaused(true)
         #expect(!sweep.isRunning)
     }
+
+    // Regression: `setActive(true)` on the first Photos-tab visit ran with zero candidates
+    // (`library.months` still empty) and `run()` never cleared `runTask`, so `reconcile()`'s
+    // `guard runTask == nil` never passed again once real photos existed — the sweep silently
+    // never started. `PhotosRootView` now calls `reconcile()` on every
+    // `PhotoLibraryStore.monthsRevision` change; this reproduces that call directly against the
+    // scheduler, without a real `PhotoLibraryStore`.
+    @Test func sweepRearmsOnceCandidatesAppearAfterAnEmptyFirstRun() async throws {
+        let store = try PhotoAnalysisStore.make(inMemory: true)
+        final class CandidateBox: @unchecked Sendable { var candidates: [PhotoSweepScheduler.Candidate] = [] }
+        let box = CandidateBox()
+        let sweep = PhotoClassificationSweep(
+            analysisStore: store, window: .all,
+            thermal: StubThermalSource(state: .nominal), power: StubPowerSource(lowPower: false),
+            candidateProvider: { box.candidates },
+            classify: { _ in
+                PhotoClassificationSweep.Outcome(categories: ["home"], topLabels: [], classifyMs: 1)
+            })
+
+        sweep.setActive(true)  // months still empty: run() sees zero candidates, returns at once.
+        for _ in 0..<200 where sweep.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(!sweep.isRunning)
+
+        box.candidates = [candidate("late-arrival", day: 1)]
+        sweep.reconcile()  // what PhotosRootView calls on `library.monthsRevision` changing.
+
+        for _ in 0..<200 {
+            if try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 1 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 1)
+    }
 }
 
 private struct StubThermalSource: PhotoThermalSource {

@@ -16,6 +16,30 @@ struct PhotoMatchStoreTests {
         #expect(PhotoGridBadge.accessibilityDescription(for: ["LOC-4K7M"]) == "Owned by LOC-4K7M")
     }
 
+    // MARK: - markAnalysis revision coalescing
+
+    // Regression: a background sweep classifying thousands of photos one at a time used to bump
+    // `revision` per photo, forcing every observer keyed on it (the ownership filter cache, the
+    // grid's `FilteredMonthAssetsCache`) to invalidate and re-render on each one. `markAnalysis`
+    // must leave `revision` untouched and instead publish through the coalesced `classifiedRevision`
+    // (at most once per second or per 50 photos, whichever comes first).
+    @Test func markAnalysisNeverBumpsRevisionAndCoalescesClassifiedRevision() {
+        let store = PhotoMatchStore()
+        let photoCount = 130
+        for index in 0..<photoCount {
+            store.markAnalysis([
+                "asset-\(index)": PhotoAssetSnapshot(
+                    localIdentifier: "asset-\(index)", modificationDate: nil, perceptualHash: nil,
+                    hashRevision: 0, categories: [], topLabels: [], classifyVersion: 1, classifyMs: nil,
+                    classifiedAt: Date(), fullAnalysis: nil, fullAnalysisVersion: nil)
+            ])
+        }
+        #expect(store.revision == 0)
+        let expectedCountBumps = Int((Double(photoCount) / 50).rounded(.up))
+        #expect(store.classifiedRevision >= 1)
+        #expect(store.classifiedRevision <= expectedCountBumps + 1)
+    }
+
     // MARK: - PhotoGridCellState derivation
 
     @Test func cellStateRepresentsAStrongCandidateWithItsOwnerBadge() {

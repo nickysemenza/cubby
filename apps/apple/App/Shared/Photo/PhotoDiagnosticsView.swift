@@ -56,7 +56,8 @@ final class PhotoDiagnosticsModel {
                         localIdentifier: localIdentifier, analysis: data,
                         version: PhotoLocalAnalysis.currentVersion,
                         categories: PhotoCategoryHit.matchedCategories(for: analysis.classifications),
-                        topLabels: PhotoCategoryHit.topLabels(for: analysis.classifications))
+                        topLabels: PhotoCategoryHit.topLabels(for: analysis.classifications),
+                        classifyVersion: PhotoClassificationSweep.classifyVersion)
                 }
             } catch is CancellationError {
                 // A newer run (or the view disappearing) owns the visible state.

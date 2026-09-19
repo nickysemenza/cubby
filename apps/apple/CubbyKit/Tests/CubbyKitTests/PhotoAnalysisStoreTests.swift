@@ -63,12 +63,24 @@ struct PhotoAnalysisStoreTests {
         let store = try makeStore()
         try await store.upsertFullAnalysis(
             localIdentifier: "full-1", analysis: Data("{}".utf8), version: 1,
-            categories: ["home"], topLabels: [])
+            categories: ["home"], topLabels: [], classifyVersion: 0)
         #expect(try await store.classifiedLocalIdentifiers(classifyVersion: 1) == ["full-1"])
         #expect(try await store.classifiedCount(newerThan: 1) == 1)
         let record = try #require(try await store.record(for: "full-1"))
         #expect(record.status == .analysed(categories: ["home"]))
         #expect(record.fullAnalysis == Data("{}".utf8))
+    }
+
+    // Regression: `upsertFullAnalysis` used to leave `classifyVersion == 0`, which
+    // `ids(in:newerThan:)`'s scalar-column filter silently excluded — a photo imported by
+    // full-analysis path (not the classification sweep) never appeared in a chip filter even
+    // though its category was known.
+    @Test func upsertFullAnalysisIsDiscoverableByACategoryChipFilter() async throws {
+        let store = try makeStore()
+        try await store.upsertFullAnalysis(
+            localIdentifier: "full-plant", analysis: Data("{}".utf8), version: 1,
+            categories: ["plants"], topLabels: [], classifyVersion: 1)
+        #expect(try await store.ids(in: "plants", newerThan: 1) == ["full-plant"])
     }
 
     @Test func pruneMissingRemovesOnlyAssetsAbsentFromTheLatestScan() async throws {

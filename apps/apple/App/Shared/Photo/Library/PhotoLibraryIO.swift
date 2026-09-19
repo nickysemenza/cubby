@@ -155,6 +155,11 @@ actor PhotoLibraryIO {
     /// (B3). Deliberately its own request rather than reusing `thumbnail(for:)`'s 256px grid
     /// size — Vision's classifier does better on a larger frame, and this must never register a
     /// `PHImageResultIsDegradedKey` frame as final the way the grid's progressive stream can.
+    ///
+    /// `PHImageRequestOptions` has no QoS/priority knob of its own — `PHImageManager` services
+    /// every request on its own internal queue regardless of the calling `Task`'s priority, so
+    /// the sweep's `Task(priority: .utility)` (`PhotoClassificationSweep.reconcile()`) governs
+    /// only the Vision/actor work around this call, not the PhotoKit fetch itself.
     func classificationThumbnail(for asset: PHAsset) async throws -> CGImage {
         let options = PHImageRequestOptions()
         options.version = .current

@@ -81,6 +81,10 @@ private struct PhotoLibraryBrowser: View {
     @State private var selectedCategory: PhotoCategory?
     @State private var categoryMatches: Set<String> = []
     @State private var unanalysedCount = 0
+    /// Bumped every time `loadCategoryFilter()` replaces `categoryMatches`, so
+    /// `FilteredMonthAssetsCache` (keyed on this, not `matches.revision` — see B4/finding 2) knows
+    /// to re-run `includes()` for a category filter even though no ownership match changed.
+    @State private var categoryMatchesRevision = 0
     private let columns = [GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 3)]
     /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
     /// items fall back to the window toolbar there.
@@ -204,9 +208,18 @@ private struct PhotoLibraryBrowser: View {
         }
         .photoSweepLifecycle(
             active: !picker, sweep: appModel.photoClassificationSweep, scenePhase: scenePhase,
-            categoryFilterKey: CategoryFilterKey(category: selectedCategory?.key, revision: matches.revision)
+            categoryFilterKey: CategoryFilterKey(
+                category: selectedCategory?.key, revision: matches.classifiedRevision)
         ) {
             await loadCategoryFilter()
+        }
+        .onChange(of: library.monthsRevision) { _, _ in
+            // The sweep's own candidate provider reads `library.months`; a fresh (or newly
+            // populated, or library-changed) month list needs `reconcile()` re-run so a sweep
+            // that started with zero candidates (Photos tab opened before the library loaded)
+            // actually starts once photos exist, and a finished sweep re-arms for new photos.
+            guard !picker else { return }
+            appModel.photoClassificationSweep.reconcile()
         }
         .photoPreviewPresentation(item: $preview) { selected in
             PhotoLibraryPreview(asset: selected.asset) {
@@ -352,7 +365,8 @@ private struct PhotoLibraryBrowser: View {
 
     private func monthAssets(_ month: PhotoLibraryStore.Month) -> [PHAsset] {
         filteredAssets.assets(
-            for: month, filter: filter, category: selectedCategory?.key, revision: matches.revision
+            for: month, filter: filter, category: selectedCategory?.key, revision: matches.revision,
+            categoryRevision: categoryMatchesRevision
         ) { month.assets.filter(includes) }
     }
 
@@ -362,8 +376,8 @@ private struct PhotoLibraryBrowser: View {
     }
 
     /// Batch-loads `selectedCategory`'s matching ids plus the whole library's unanalysed count,
-    /// memoized per `(category, matches.revision)` by `.task(id:)` — a category switch or a fresh
-    /// analysis batch both invalidate it, nothing else re-fetches.
+    /// memoized per `(category, matches.classifiedRevision)` by `.task(id:)` — a category switch
+    /// or the sweep's coalesced classification signal both invalidate it, nothing else re-fetches.
     private func loadCategoryFilter() async {
         guard let category = selectedCategory else {
             categoryMatches = []
@@ -376,6 +390,7 @@ private struct PhotoLibraryBrowser: View {
             newerThan: PhotoClassificationSweep.classifyVersion)
         categoryMatches = (try? await matched) ?? []
         unanalysedCount = max(0, library.count - ((try? await analysedTotal) ?? 0))
+        categoryMatchesRevision += 1
     }
 
     private func toggle(_ id: String) {
@@ -413,24 +428,27 @@ private struct PhotoLibraryBrowser: View {
 
 /// `month.assets.filter(includes)` recomputed on every render was an O(library size) scan
 /// regardless of whether anything changed. Keyed by month id, invalidated only when the filter
-/// picker, the category chip selection, or `PhotoMatchStore.revision` (bumped once per published
-/// match batch or analysis batch, not once per asset) actually changes.
+/// picker, the category chip selection, `PhotoMatchStore.revision` (ownership matches — never
+/// bumped by a photo's classification, see `markAnalysis`), or `categoryMatchesRevision` (bumped
+/// once per `loadCategoryFilter()` batch load, not once per photo) actually changes.
 private final class FilteredMonthAssetsCache {
     private var entries:
-        [Date: (filter: PhotoLibraryBrowser.Filter, category: String?, revision: Int, assets: [PHAsset])] =
-            [:]
+        [Date: (
+            filter: PhotoLibraryBrowser.Filter, category: String?, revision: Int,
+            categoryRevision: Int, assets: [PHAsset]
+        )] = [:]
 
     func assets(
         for month: PhotoLibraryStore.Month, filter: PhotoLibraryBrowser.Filter, category: String?,
-        revision: Int, compute: () -> [PHAsset]
+        revision: Int, categoryRevision: Int, compute: () -> [PHAsset]
     ) -> [PHAsset] {
         if let cached = entries[month.id], cached.filter == filter, cached.category == category,
-            cached.revision == revision
+            cached.revision == revision, cached.categoryRevision == categoryRevision
         {
             return cached.assets
         }
         let result = compute()
-        entries[month.id] = (filter, category, revision, result)
+        entries[month.id] = (filter, category, revision, categoryRevision, result)
         return result
     }
 }
