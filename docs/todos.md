@@ -360,13 +360,23 @@ history is the archive. Permanent product constraints live in the
   `entityType + entityId` with no FK (search index, embeddings, AI analysis,
   `AiUsage`, audit log); `Image.targetType/targetId` plus eight per-entity
   join tables; and an exclusive-arc CHECK (`LedgerSourceClaim_owner_check`).
-  Decided (2026-09-19): one `Entity(id, kind, body, deletedAt,
-  mergedIntoId)` table populated by `insertWithShortcode`, composite FKs
-  `(id, kind)` from every polymorphic table, global shortcode allocation,
-  and merge redirects via `mergedIntoId` — which also fixes the link a merge
-  loses today. Design and migration in
-  [the purchase import redesign](plans/purchase-import-redesign.md) §10
-  item 7; it is that plan's first pre-work PR and becomes ADR-0004.
+  Rule to write into `docs/agents/domain-rules.md`: untyped pairs with a
+  kind CHECK for rows that describe an entity and may outlive it or be
+  rebuilt, plain FKs for one type, arcs only where they exist. An `Entity`
+  supertable was designed, adversarially reviewed, and tabled on 2026-09-19
+  (entities are hard-deleted on two paths; 623 cross-kind body collisions;
+  the edge registry cannot express per-kind generated edges) — read
+  [plans/entity-supertable.md](plans/entity-supertable.md) before reopening.
+
+- **Merge redirects.** A merged-away shortcode in a URL, note, or MCP
+  client resolves to nothing today; `finalizeMerge` records no forward.
+  Add `mergedIntoId` on the mergeable tables (path-compressed at merge
+  time), consult it on resolver miss for reads with a `redirectedFrom`
+  marker, and keep mutations on a non-redirecting resolver that refuses a
+  redirected code — otherwise merging `keep=A, loser=B` where B was earlier
+  absorbed into A resolves to a self-merge. Two tests assert the current
+  404 (`purchase.integration.test.ts`, `vendor.integration.test.ts`) and
+  become named regressions.
 
 - **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Vectorize's per-vector cost is model-agnostic, so a cheaper/faster

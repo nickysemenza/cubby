@@ -158,16 +158,18 @@ same row. Cost is `SUM(AiUsage.costUsd) WHERE jobKind = 'import_run' AND jobId =
 
 ### 3.6 `ImportFinding` (table)
 
-`id`, `importRunId`, target as an `entityRef` (`targetId`, `targetType`
-composite FK to `Entity(id, kind)`, §10 item 7; restricted by CHECK to
-`purchase | expense | product`), `kind` (`wrong_product \| duplicate_product
+`id`, `importRunId`, target as `targetType` + `targetId` (the existing
+untyped pair, CHECK `targetType IN ('purchase','expense','product')`, the
+`AiAnalysis` shape — §10 item 7), `kind` (`wrong_product \| duplicate_product
 \| sum_mismatch \| duplicate_lines \| foreign_currency \| reversal_kind \|
 missing_line \| kit_double_booked \| variant_doubt \| arrived \| refund_unbooked \| return_window \| other`),
 `summary`, `proposedFix` (entity-kernel commands, JSON), `autoApplied`,
 `probability`, `status` (`open \| applied \| dismissed`), `resolvedAt`,
 `resolvedByUserId`. Partial unique on `(targetId, kind)` where `status =
-'open'` so `arrived` and `sum_mismatch` file once, not once per run. The
-table's registry role is `attached` (reaped on delete, re-pointed on merge).
+'open'` so `arrived` and `sum_mismatch` file once, not once per run.
+Findings are reaped in `cascadeRemoval` when their target is deleted and
+re-pointed in `finalizeMerge` when it is merged, beside the search and
+embedding effects those paths already handle.
 
 ### 3.7 `AiUsage.jobKind` / `AiUsage.jobId`
 
@@ -557,9 +559,7 @@ build for the Mac app.
 ## 10. Pre-implementation improvements
 
 Each is a blocker for the above *and* a good change on its own. Land these
-first, as separate small PRs. Item 7 (the `Entity` supertable) goes first
-because every later schema item writes an `entityRef` or a shortcode; the
-rest follow in numeric order.
+first, as separate small PRs, in numeric order.
 
 0. **Shortcode prefixes of 2–5 letters.** The `XXX-` shape is asserted in
    `scripts/generator/entities/compile.ts` (`/^[A-Z]{3}-$/` on
@@ -611,59 +611,15 @@ rest follow in numeric order.
    `migrations` entry in `wrangler.jsonc`, documented in
    `docs/agents/domain-rules.md` next to the Workers section; the spike
    produces it.
-7. **`Entity` supertable and `entityRef`.** The first pre-work PR, as
-   ADR-0004. Why it works here and not in general: every entity table is
-   soft-deleted (`removeEntity` hard-deletes only non-entity rows), so an
-   `Entity` row is a permanent tombstone and a FK to it never blocks
-   history; and every create already passes through `insertWithShortcode`,
-   which is the one hook the supertable needs.
-
-   - **Table.** `Entity(id uuid PK, kind text, body text, createdAt,
-     deletedAt, mergedIntoId uuid → Entity.id)` with `UNIQUE (id, kind)`
-     (so FKs can carry the type) and `UNIQUE (kind, body)`. The shortcode is
-     rendered as `SHORTCODE_PREFIX[kind] + body`; the prefix is never
-     stored, so a prefix change (item 0) touches no rows. If the backfill
-     shows zero cross-kind body collisions, tighten to `UNIQUE (body)`.
-   - **Allocation.** `insertWithShortcode` inserts the `Entity` row first
-     and uses its id; `generateUniqueShortcode` checks `Entity` instead of
-     the per-kind table. Per-table `shortcode` columns and their unique
-     indexes stay as denormalised copies, so reads and the Swift/OpenAPI
-     surface do not change. No triggers.
-   - **`entityRef`.** A schema helper emitting `(<x>Id uuid, <x>Type text)`
-     with a composite FK `REFERENCES Entity(id, kind)` and an optional CHECK
-     narrowing `<x>Type` to the kinds a table admits. The five untyped
-     tables (`AuditLog`, `AiUsage`, `AiAnalysis`, `SearchDocument`,
-     `EntityEmbedding`) adopt it; `ImportFinding` and any future
-     "on anything" row use it; `LedgerSourceClaim` keeps its two typed FKs;
-     no new exclusive arcs.
-   - **Merge redirects.** `mergeEntity` sets `Entity.mergedIntoId` on each
-     loser. Shortcode resolution in the kernel follows the chain, so an
-     absorbed code in a URL, note, MCP client, or audit row forwards to the
-     survivor instead of a dead row — the link merges lose today.
-   - **Registry.** An `entityRef` table declares one role and the edge
-     registry generates that edge for every kind: `history` (keep on delete,
-     keep pointing at the tombstone on merge — audit, usage), `cache` (reap
-     on delete, re-point on merge — search, embeddings, analysis),
-     `attached` (reap on delete, re-point on merge, counted in merge
-     reports — findings). The 23 operations gain one disposition per role,
-     not per (table × kind); exhaustiveness stays a compile error.
-   - **Migration.** Create `Entity`; backfill from every entity table (`id`,
-     `kind`, `body`, `createdAt`, `deletedAt`); insert tombstones for any
-     history row whose subject no longer exists (kind from `entityType`);
-     add the composite FKs `NOT VALID`, then `VALIDATE`; the per-kind
-     shortcode pre-check is replaced. `schema-template-inputs.ts` and the
-     IntegreSQL templates updated.
-   - **Tests.** A `pnpm check` detector: per-kind row count equals `Entity`
-     count for that kind, and no `Entity` row lacks its entity row unless
-     `deletedAt` is set; a schema unit test that every `<x>Type/<x>Id` pair
-     in the schema is an `entityRef`; merge-redirect resolution, including
-     a two-step chain.
-   - **Rejected:** `BEFORE INSERT` triggers (invisible to drizzle and
-     `db:push`); shortcode as primary key (retypes every FK for no runtime
-     gain; the resolve step becomes one index lookup anyway); a body-only
-     unique before the collision check.
-   - **Enabled later (§11):** the eight image join tables collapse into one
-     `ImageAttachment(entityRef, imageId, sortOrder)`.
+7. **Polymorphic reference rule (doc only).** Write into
+   `docs/agents/domain-rules.md`: untyped `entityType + entityId` with a
+   kind CHECK for rows that describe an entity and may outlive it or be
+   rebuilt (history, caches, findings — the `AiAnalysis` shape); a plain FK
+   for exactly one type; exclusive-arc nullable FKs only where they already
+   exist. Cleanup for untyped rows lives in `cascadeRemoval` /
+   `finalizeMerge`, not in the edge registry. An `Entity` supertable with
+   composite FKs was designed, reviewed, and **tabled** — see
+   [entity-supertable.md](entity-supertable.md) before reopening it.
 8. **Mac app networking.** WebSocket client in `CubbyKit` with bearer auth and
    reconnect; the Apple Events entitlement and usage string in the macOS
    target; the `BrowserBridge` protocol.
@@ -687,10 +643,12 @@ Not in scope; listed so the design keeps the door open.
 - **AI cost page.** `AiUsage` grouped by `jobKind`/`jobId` (§10 item 4) gives
   per-run and per-feature spend for free; a small page under Problems or
   settings.
-- **One image attachment table.** With `entityRef` (§10 item 7) the eight
-  per-entity image join tables become `ImageAttachment(entityRef, imageId,
-  sortOrder)`; zero behaviour change, so it waits for a change that touches
-  attachments anyway.
+- **Merge redirects.** A `mergedIntoId` on the mergeable tables (or a
+  three-column redirect table) written by `finalizeMerge` and consulted on
+  resolver miss, with a `redirectedFrom` marker and a non-redirecting
+  resolver for mutations — the one piece of the tabled
+  [entity supertable](entity-supertable.md) a person would feel. About a
+  day; independent of this plan.
 
 Reviewed and rejected as blockers: a kernel-level multi-command transaction
 (the writer is a workflow service with its own `withTransaction`); a
