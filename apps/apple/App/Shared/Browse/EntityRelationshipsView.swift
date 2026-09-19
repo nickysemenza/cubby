@@ -143,7 +143,7 @@ private struct RelationshipDepthPicker: View {
             "Depth",
             selection: Binding(
                 get: { model.depth },
-                set: model.requestDepth
+                set: { model.requestDepth($0) }
             )
         ) {
             Text("1 hop").tag(1)
