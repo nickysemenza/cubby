@@ -53,7 +53,7 @@ describe("findOrCreateLocationByName", () => {
     const name = "Garage";
 
     const { winner: winnerId, loser: result } = await raceUniqueInsert(ctx, {
-      winner: (releaseSignal) =>
+      winner: ({ releaseSignal, markWinnerReady }) =>
         getDb(ctx.db).transaction(async (tx) => {
           const [row] = await tx
             .insert(location)
@@ -64,6 +64,7 @@ describe("findOrCreateLocationByName", () => {
               parentId: TEST_HOME_ID,
             })
             .returning();
+          markWinnerReady();
           await releaseSignal; // hold the txn (and its lock) open
           return row!.id;
         }),

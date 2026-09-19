@@ -89,7 +89,7 @@ describe("upsertRecipe", () => {
     const name = "Race Recipe";
 
     const { winner: winnerId, loser: result } = await raceUniqueInsert(ctx, {
-      winner: (releaseSignal) =>
+      winner: ({ releaseSignal, markWinnerReady }) =>
         getDb(ctx.db).transaction(async (tx) => {
           const [row] = await tx
             .insert(recipe)
@@ -100,6 +100,7 @@ describe("upsertRecipe", () => {
               SourceData: "https://example.com/winner",
             })
             .returning();
+          markWinnerReady();
           await releaseSignal; // hold the txn (and its lock) open
           return row!.id;
         }),

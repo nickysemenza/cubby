@@ -555,9 +555,10 @@ describe("ingredient", () => {
     // raceUniqueInsert confirms tx2 is blocked on it.
     // tx2 races the same name; its INSERT blocks on tx1's lock.
     const { winner: a, loser: b } = await raceUniqueInsert(ctx, {
-      winner: (releaseSignal) =>
+      winner: ({ releaseSignal, markWinnerReady }) =>
         withTransaction(ctx.db, async (tx) => {
           const row = await findOrCreateIngredient(tx, name);
+          markWinnerReady();
           await releaseSignal;
           return row;
         }),
