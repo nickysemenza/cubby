@@ -207,7 +207,9 @@ struct PhotoImportFlowTests {
     }
 
     @Test func chooseSourceRecordStagesACreateDraftWithThePrefilledBodyWhenNothingMatches() async throws {
-        let item = try selection(filename: "new.jpg")
+        // Dated on purpose: an undated photo leaves the required `observedOn` empty and opens the
+        // editor instead (see `undatedPhotoLeavesObservedOnAbsentAndRequired`).
+        let item = try selection(filename: "new.jpg", capturedAt: Date(timeIntervalSince1970: 1_789_000_000))
         let manifest = PhotoImportManifest(items: [item])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let row = EntityRow(
@@ -315,8 +317,9 @@ struct PhotoImportFlowTests {
     /// field matches. Picks the predicate route from the catalog by `primaryWhen != nil`, never by
     /// entity name, so this stays correct if the manifest's declared values ever change.
     @Test func conditionalPrimaryOutranksTheUnconditionalPrimaryWhenThePredicateMatches() async throws {
-        let bed = try selection(filename: "bed.jpg")
-        let shelf = try selection(filename: "shelf.jpg")
+        let captured = Date(timeIntervalSince1970: 1_789_000_000)
+        let bed = try selection(filename: "bed.jpg", capturedAt: captured)
+        let shelf = try selection(filename: "shelf.jpg", capturedAt: captured)
         let bedManifest = PhotoImportManifest(items: [bed])
         let shelfManifest = PhotoImportManifest(items: [shelf])
         let type = try #require(bedManifest.sourceTypeOptions.first { $0.source == .location })
