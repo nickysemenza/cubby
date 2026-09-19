@@ -35,22 +35,46 @@ final class AppModel {
     /// a new photo the moment it lands, so it matches before the next rebuild).
     let featurePrints = FeaturePrintIndex()
     let photoMatches = PhotoMatchStore()
-    /// SwiftData model-container creation can block or fail while the app is still constructing
-    /// its root state on a device. Keep the photo subsystem cold until Photos or its settings are
-    /// opened so a bad persisted store cannot leave the whole app on a white launch screen.
-    @ObservationIgnored lazy var photoAnalysisStore: PhotoAnalysisStore = Self.makeAnalysisStore()
-    @ObservationIgnored lazy var photoLibrary: PhotoLibraryStore =
-        PhotoLibraryStore(analysisStore: photoAnalysisStore)
-    @ObservationIgnored lazy var photoClassificationSweep: PhotoClassificationSweep =
-        makePhotoClassificationSweep()
+    /// Browsing the system library is independent from Cubby's persisted analysis index. Keep it
+    /// available immediately so opening persistent state cannot block the Photos tab.
+    let photoLibrary = PhotoLibraryStore()
+    /// The SQLite cache opens away from the UI actor and attaches matching/classification once
+    /// available. Local photo browsing never waits for it.
+    @ObservationIgnored private var storedPhotoAnalysisStore: PhotoAnalysisStore?
+    @ObservationIgnored private var storedPhotoClassificationSweep: PhotoClassificationSweep?
+    @ObservationIgnored private var photoSubsystemTask: Task<Void, Never>?
+
+    var photoAnalysisStore: PhotoAnalysisStore? { storedPhotoAnalysisStore }
+    var photoClassificationSweep: PhotoClassificationSweep? { storedPhotoClassificationSweep }
+
+    /// Opens the persisted SQLite index in the background after local browsing has started.
+    func preparePhotoSubsystem() async {
+        if storedPhotoAnalysisStore != nil { return }
+        if let photoSubsystemTask {
+            await photoSubsystemTask.value
+            return
+        }
+        let task = Task { [weak self] in
+            let analysisStore = await Task.detached(priority: .userInitiated) {
+                Self.makeAnalysisStore()
+            }.value
+            guard let self else { return }
+            storedPhotoAnalysisStore = analysisStore
+            storedPhotoClassificationSweep = makePhotoClassificationSweep()
+            photoLibrary.install(analysisStore: analysisStore)
+            photoSubsystemTask = nil
+        }
+        photoSubsystemTask = task
+        await task.value
+    }
 
     private func makePhotoClassificationSweep() -> PhotoClassificationSweep {
         let sweep = PhotoClassificationSweep(
-            analysisStore: photoAnalysisStore, library: photoLibrary,
+            analysisStore: storedPhotoAnalysisStore!, library: photoLibrary,
             window: Self.persistedAnalysisWindow, paused: Self.persistedAnalysisPaused)
         let matches = photoMatches
         sweep.onClassified = { id, snapshot in matches.markAnalysis([id: snapshot]) }
-        Task { try? await photoAnalysisStore.migrateLegacyHashCacheIfNeeded() }
+        Task { try? await storedPhotoAnalysisStore?.migrateLegacyHashCacheIfNeeded() }
         return sweep
     }
     /// Developer overlays layer 6: installed on every `CubbyClient` this model builds, so the
@@ -99,17 +123,14 @@ final class AppModel {
         self.auth = AuthFlow(baseURL: url, credentials: credentials)
     }
 
-    /// The persistent store at `Application Support/Cubby/PhotoAnalysis.store`, falling back to an
-    /// in-memory container (photo hashing/classification just resets for this launch) rather than
-    /// crashing the app if the on-disk store cannot be opened.
-    private static func makeAnalysisStore() -> PhotoAnalysisStore {
+    /// Opens the SQLite cache at `Application Support/Cubby/PhotoAnalysis.sqlite`, falling back
+    /// to an in-memory cache rather than making Photos unavailable if the file cannot be opened.
+    private nonisolated static func makeAnalysisStore() -> PhotoAnalysisStore {
         do {
             return try PhotoAnalysisStore.make()
         } catch {
             Diagnostics.report(error, context: "photos.analysisStore.container")
-            // The in-memory configuration has no file-system failure mode to hit; if it still
-            // throws, SwiftData itself is broken and there is nothing more graceful to fall back
-            // to than surfacing that at launch.
+            // An in-memory SQLite queue has no file-system failure mode to hit.
             return try! PhotoAnalysisStore.make(inMemory: true)
         }
     }

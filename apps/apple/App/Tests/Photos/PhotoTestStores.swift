@@ -4,13 +4,8 @@ import Foundation
 @testable import Cubby
 
 /// One shared in-memory `PhotoAnalysisStore` for every `PhotoImportManifest` test fixture in this
-/// target, instead of `PhotoImportManifest.init`'s own default (a fresh `ModelContainer` per
-/// manifest). SwiftData's `ModelContainer` construction has been observed to crash under
-/// concurrently-running tests — `CubbyKitTests.PhotoAnalysisStoreTests` documents the same failure
-/// and works around it with `.serialized`, which only orders tests *inside* one suite. Swift
-/// Testing still runs that suite in parallel with `PhotoImportFlowTests` and
-/// `PhotoDestinationOptionTests`, both of which build a manifest per test, so the race was still
-/// live for them. Sharing one store built once removes it instead of serializing more suites.
+/// target, rather than building a database per fixture. It keeps manifest tests fast while each
+/// test still gets isolated records through its unique fixture identifiers.
 enum PhotoTestStores {
     @MainActor static let shared: PhotoAnalysisStore = try! PhotoAnalysisStore.make(inMemory: true)
 }

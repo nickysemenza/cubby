@@ -11,6 +11,7 @@ struct SettingsView: View {
         .rawValue
     @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
     @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
+    @State private var photosReady = false
     #if os(macOS)
         @AppStorage(DockBadge.showInDockDefaultsKey) private var showProblemsInDock = true
     #endif
@@ -94,7 +95,7 @@ struct SettingsView: View {
                 }
             }
 
-            if model.phase == .signedIn { photosSection }
+            if model.phase == .signedIn, photosReady { photosSection }
 
             #if os(macOS)
                 Section {
@@ -109,9 +110,12 @@ struct SettingsView: View {
         .font(.porcelainBody)
         .porcelainScreen()
         .navigationTitle("Settings")
-        .onAppear(perform: synchronizeServerSelection)
+        .onAppear {
+            synchronizeServerSelection()
+            photosReady = model.photoAnalysisStore != nil
+        }
         .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
-        .photoAnalysisLifecycle(model: model, paused: photoAnalysisPaused) {
+        .photoAnalysisLifecycle(ready: photosReady, model: model, paused: photoAnalysisPaused) {
             await loadPhotoAnalysisSummary()
         }
         #if os(iOS)
@@ -151,7 +155,7 @@ struct SettingsView: View {
             get: { PhotoAnalysisWindow(rawValue: photoAnalysisWindowRaw) ?? .thisYear },
             set: { window in
                 photoAnalysisWindowRaw = window.rawValue
-                model.photoClassificationSweep.setWindow(window)
+                model.photoClassificationSweep?.setWindow(window)
             })
     }
 
@@ -161,9 +165,10 @@ struct SettingsView: View {
     }
 
     private func loadPhotoAnalysisSummary() async {
+        guard let analysisStore = model.photoAnalysisStore else { return }
         let total = model.photoLibrary.count
         let analysed =
-            (try? await model.photoAnalysisStore.classifiedCount(
+            (try? await analysisStore.classifiedCount(
                 newerThan: PhotoClassificationSweep.classifyVersion)) ?? 0
         photoAnalysisSummary = (analysed, total)
     }
@@ -203,10 +208,16 @@ extension View {
     /// Bundled into one modifier (rather than two more chained calls in `body`) so `SettingsView`'s
     /// `body` stays under the 200ms type-check budget.
     fileprivate func photoAnalysisLifecycle(
-        model: AppModel, paused: Bool, loadSummary: @escaping () async -> Void
+        ready: Bool, model: AppModel, paused: Bool, loadSummary: @escaping () async -> Void
     ) -> some View {
-        task(id: model.photoLibrary.count) { await loadSummary() }
-            .onChange(of: paused) { _, paused in model.photoClassificationSweep.setPaused(paused) }
+        task(id: ready ? model.photoLibrary.count : nil) {
+            guard ready else { return }
+            await loadSummary()
+        }
+        .onChange(of: paused) { _, paused in
+            guard ready else { return }
+            model.photoClassificationSweep?.setPaused(paused)
+        }
     }
 }
 

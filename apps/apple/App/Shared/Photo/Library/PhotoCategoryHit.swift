@@ -22,7 +22,7 @@ enum PhotoCategoryHit {
             .map(\.key)
     }
 
-    /// The highest-confidence `limit` labels, for `PhotoAssetRecord.topLabels`.
+    /// The highest-confidence `limit` labels, persisted with a photo-analysis snapshot.
     static func topLabels(for classifications: [PhotoClassification], limit: Int = 5) -> [PhotoLabelScore] {
         classifications.sorted { $0.confidence > $1.confidence }
             .prefix(limit)

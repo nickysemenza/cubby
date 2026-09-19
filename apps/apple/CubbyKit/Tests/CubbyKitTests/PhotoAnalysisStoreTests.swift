@@ -3,11 +3,7 @@ import Testing
 
 @testable import CubbyKit
 
-// SwiftData's `ModelContainer` construction is not safe to race across concurrently-running
-// tests (observed: an intermittent segfault when this suite's in-memory containers were built in
-// parallel with the rest of the target) — serialize this suite only, like `StubURLProtocol`'s
-// per-suite network stub convention (apps/apple/AGENTS.md's "Language and style").
-@Suite("PhotoAnalysisStore", .serialized)
+@Suite("PhotoAnalysisStore")
 struct PhotoAnalysisStoreTests {
     private func makeStore() throws -> PhotoAnalysisStore {
         try PhotoAnalysisStore.make(inMemory: true)

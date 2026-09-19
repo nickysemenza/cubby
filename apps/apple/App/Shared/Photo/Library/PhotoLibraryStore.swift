@@ -22,13 +22,18 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     private(set) var checked: Set<String> = []
     private(set) var isScanning = false
     private(set) var isLoadingLibrary = false
+    private(set) var loadedBatchCount = 0
+    private(set) var expectedBatchCount: Int?
+    private(set) var loadingStartedAt: Date?
+    private(set) var loadingStep = "Idle"
+    private(set) var completedLoadingSteps: [String] = []
     private(set) var scannedCount = 0
     private(set) var error: String?
     private(set) var selectionProgress: Double = 0
     var selectedIDs: [String] = []
     var scrollID: String?
 
-    @ObservationIgnored private let analysisStore: PhotoAnalysisStore
+    @ObservationIgnored private var analysisStore: PhotoAnalysisStore?
     @ObservationIgnored private let thumbnails = NSCache<NSString, ImageBox>()
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored private var libraryChangeTask: Task<Void, Never>?
@@ -48,7 +53,22 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             : "\(count) library photos checked"
     }
 
-    init(analysisStore: PhotoAnalysisStore) {
+    /// Kept in the normal Photos screen while it is loading so a field freeze has enough state to
+    /// identify the blocked operation without first navigating to Developer tools.
+    var loadingDebugStatus: String {
+        let elapsed = loadingStartedAt.map { Date.now.timeIntervalSince($0) } ?? 0
+        let analysis = analysisStore == nil ? "deferred (not opened)" : "attached"
+        return """
+            Step: \(loadingStep)
+            Elapsed: \(elapsed.formatted(.number.precision(.fractionLength(1)))) s
+            Completed: \(completedLoadingSteps.isEmpty ? "none" : completedLoadingSteps.joined(separator: " → "))
+            Batches published: \(loadedBatchCount)\(expectedBatchCount.map { " of \($0)" } ?? "")
+            Photos published: \(count)
+            Analysis index: \(analysis)
+            """
+    }
+
+    init(analysisStore: PhotoAnalysisStore? = nil) {
         self.analysisStore = analysisStore
         super.init()
         #if os(macOS)
@@ -56,6 +76,15 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         #else
             thumbnails.totalCostLimit = 24 * 1024 * 1024
         #endif
+    }
+
+    /// Attaches Cubby's persisted matching/classification index only after it is usable. Local
+    /// PhotoKit browsing does not depend on this store and stays available without it.
+    func install(analysisStore: PhotoAnalysisStore) {
+        guard self.analysisStore == nil else { return }
+        self.analysisStore = analysisStore
+        guard let (matches, client) = clients.values.first else { return }
+        Task { [weak self] in await self?.refresh(matches: matches, client: client) }
     }
 
     func activate(_ id: UUID, matches: PhotoMatchStore, client: CubbyClient) async {
@@ -81,6 +110,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         monthsRevision += 1
         thumbnails.removeAllObjects()
         count = 0; isScanning = false
+        loadedBatchCount = 0; expectedBatchCount = nil; loadingStartedAt = nil; loadingStep = "Idle"
+        completedLoadingSteps = []
     }
 
     func requestAccess(matches: PhotoMatchStore, client: CubbyClient) async {
@@ -97,6 +128,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         // index request otherwise leaves the authorized screen showing an empty grid and
         // "Cubby has not been checked" indefinitely, even though PhotoKit is ready to load.
         isLoadingLibrary = true
+        loadedBatchCount = 0
+        expectedBatchCount = nil
+        loadingStartedAt = .now
+        loadingStep = "Opening photo library"
+        completedLoadingSteps = ["Refresh started", "Photos access checked"]
         async let matchRefresh: Void = matches.refresh(client: client)
         guard generation == token, !Task.isCancelled else { return }
         guard hasFullAccess else {
@@ -107,29 +143,45 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             return
         }
         if !observing { PHPhotoLibrary.shared().register(self); observing = true }
-        let result = await Task.detached(priority: .userInitiated) {
-            let options = PHFetchOptions()
-            options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-            let fetched = PHAsset.fetchAssets(with: .image, options: options)
-            var assets: [PHAsset] = []
-            fetched.enumerateObjects { asset, _, _ in assets.append(asset) }
-            return assets
-        }.value
-        guard generation == token else { return }
+        completedLoadingSteps.append("Library observer active")
+        loadingStep = "Reading local photos"
+        let oldAssets = assetsByID
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = .current
         var grouped: [Date: [PHAsset]] = [:]
-        for asset in result {
-            let month =
-                asset.creationDate.flatMap { date in
-                    calendar.date(from: calendar.dateComponents([.year, .month], from: date))
-                } ?? .distantPast
-            grouped[month, default: []].append(asset)
-            if let old = assetsByID[asset.localIdentifier], old.modificationDate != asset.modificationDate {
-                thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
-                checked.remove(asset.localIdentifier)
+        var result: [PHAsset] = []
+        for await batch in Self.assetBatches() {
+            guard generation == token, !Task.isCancelled else { return }
+            if let total = batch.totalCount { expectedBatchCount = (total + 199) / 200 }
+            for asset in batch.assets {
+                let month =
+                    asset.creationDate.flatMap { date in
+                        calendar.date(from: calendar.dateComponents([.year, .month], from: date))
+                    } ?? .distantPast
+                grouped[month, default: []].append(asset)
+                result.append(asset)
+                if let old = oldAssets[asset.localIdentifier], old.modificationDate != asset.modificationDate
+                {
+                    thumbnails.removeObject(forKey: asset.localIdentifier as NSString)
+                    checked.remove(asset.localIdentifier)
+                }
             }
+            // Publish newest-first batches so the grid becomes useful before a large library has
+            // completely enumerated. Yield lets SwiftUI commit this update before the next batch.
+            assetsByID = Dictionary(uniqueKeysWithValues: result.map { ($0.localIdentifier, $0) })
+            months = grouped.keys.sorted(by: >).map { Month(id: $0, assets: grouped[$0]!) }
+            monthsRevision += 1
+            count = result.count
+            loadedBatchCount += 1
+            await Task.yield()
         }
-        assetsByID = Dictionary(uniqueKeysWithValues: result.map { ($0.localIdentifier, $0) })
+        guard generation == token, !Task.isCancelled else { return }
+        completedLoadingSteps.append("PhotoKit enumeration complete")
+        guard let analysisStore else {
+            selectedIDs.removeAll { assetsByID[$0] == nil }
+            loadingStep = "Local photos ready; Cubby analysis unavailable"
+            return
+        }
+        loadingStep = "Reconciling on-device analysis"
         do {
             try await analysisStore.pruneMissing(Set(assetsByID.keys))
         } catch {
@@ -142,6 +194,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         monthsRevision += 1
         count = result.count
         isLoadingLibrary = false
+        loadingStep = "Checking Cubby matches"
         await matchRefresh
         guard generation == token, !Task.isCancelled else { return }
         // One batch read for the whole library's dot status, rather than a fetch per cell; the
@@ -215,6 +268,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         thumbnails.setObject(
             ImageBox(image), forKey: asset.localIdentifier as NSString,
             cost: image.bytesPerRow * image.height)
+        guard analysisStore != nil else { return image }
         let hashed = try await query(asset)
         // A cell re-executes this `.task` every time it reappears (e.g. scrolled back into
         // view), but `query(_:)` only recomputes the hash the first time this asset's current
@@ -295,6 +349,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     ) async throws -> (query: HashQuery, isNew: Bool) {
         let token = generation
         let id = asset.localIdentifier
+        guard let analysisStore else { throw CancellationError() }
         let hash: PerceptualHash64
         let isNew: Bool
         if let preloaded, preloaded.hashRevision == PerceptualHash64.algorithmRevision,
@@ -337,6 +392,42 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         isScanning = false
         isLoadingLibrary = false
         scannedCount = 0
+    }
+
+    /// PhotoKit's fetch result is enumerated off the UI actor. The stream publishes 200 assets at
+    /// a time so the main actor can render between batches instead of receiving one giant array.
+    private struct AssetBatch {
+        let assets: [PHAsset]
+        let totalCount: Int?
+    }
+
+    private static func assetBatches() -> AsyncStream<AssetBatch> {
+        AsyncStream { continuation in
+            let producer = Task.detached(priority: .userInitiated) {
+                let options = PHFetchOptions()
+                options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+                let fetched = PHAsset.fetchAssets(with: .image, options: options)
+                let totalCount = fetched.count
+                var batch: [PHAsset] = []
+                var isFirstBatch = true
+                fetched.enumerateObjects { asset, _, stop in
+                    guard !Task.isCancelled else { stop.pointee = true; return }
+                    batch.append(asset)
+                    if batch.count == 200 {
+                        continuation.yield(
+                            AssetBatch(assets: batch, totalCount: isFirstBatch ? totalCount : nil))
+                        isFirstBatch = false
+                        batch.removeAll(keepingCapacity: true)
+                    }
+                }
+                if !batch.isEmpty, !Task.isCancelled {
+                    continuation.yield(
+                        AssetBatch(assets: batch, totalCount: isFirstBatch ? totalCount : nil))
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in producer.cancel() }
+        }
     }
 }
 
