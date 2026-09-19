@@ -267,6 +267,11 @@ const checkEdit = (edit: EntityPresentation["edit"], lookup: FieldLookup) => {
     }
     for (const key of rule.fields) lookup.edit(key, where);
   }
+  for (const [index, rule] of edit.hiddenWhen.entries()) {
+    const where = `edit.hiddenWhen[${index}]`;
+    lookup.read(rule.field, where);
+    for (const key of rule.fields) lookup.edit(key, where);
+  }
 };
 
 /**

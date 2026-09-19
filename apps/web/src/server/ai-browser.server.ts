@@ -9,10 +9,8 @@ import {
   identifyProductWorkflow,
   listAiUsageRecentWorkflow,
   precomputeEnrichmentProposalsWorkflow,
-  suggestCategoryWorkflow,
+  suggestFieldsWorkflow,
   suggestIngredientMergeBatchWorkflow,
-  suggestLocationTypeWorkflow,
-  suggestLocationWorkflow,
   suggestUsdaFoodBatchWorkflow,
   suggestUsdaFoodWorkflow,
   summarizeAiUsageWorkflow,
@@ -20,15 +18,6 @@ import {
 
 /** AI reads are authoritative: suggestions must see the row just written. */
 export const aiHandlers = implementOperationDomain(aiContract, {
-  suggestCategory: {
-    run: (context, input) => suggestCategoryWorkflow(context.db, input),
-  },
-  suggestLocationType: {
-    run: (context, input) => suggestLocationTypeWorkflow(context.db, input),
-  },
-  suggestLocation: {
-    run: (context, input) => suggestLocationWorkflow(context.db, input),
-  },
   describeLocation: (context, input) =>
     describeLocationWorkflow(context.db, input),
   detectInventoryItems: (context, input) =>
@@ -41,6 +30,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   suggestUsdaFoodBatch: suggestUsdaFoodBatchWorkflow,
   suggestIngredientMergeBatch: (context, input) =>
     suggestIngredientMergeBatchWorkflow(context.db, input),
+  suggestFields: (context, input) => suggestFieldsWorkflow(context.db, input),
   usageRecent: {
     run: (context, input) => listAiUsageRecentWorkflow(context.db, input),
   },

@@ -79,7 +79,11 @@ export default defineEntity({
         label: "Location",
         readKey: null,
         reference: { entity: "location" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: { basis: ["productId"] },
+        },
         display: { detail: true, detailOrder: 1 },
         validation: {
           read: null,

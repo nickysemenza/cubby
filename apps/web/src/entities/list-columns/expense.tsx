@@ -227,6 +227,7 @@ export const expenseListOverride = defineListOverride<
                     data: { projectId: newProjectId },
                   });
                 },
+                suggest: { entity: "expense", field: "projectId" },
               },
             }),
           );

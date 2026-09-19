@@ -86,6 +86,87 @@ const compileEditIntents = (
   };
 };
 
+/**
+ * `control.suggest` fields are decision-tier (Jev) auto-fill targets: the
+ * target's shape must be something the field-suggest registry can resolve,
+ * every `basis` key must be a real model field on the same entity (not an
+ * `editorFields` pseudo-field, since detail/table/bulk surfaces only have
+ * model data), and the basis -> target edges across an entity's suggest
+ * fields must stay acyclic so one request can resolve them in dependency
+ * order (see `docs/entities.md`).
+ */
+const isValidSuggestTarget = (field: EntityField): boolean =>
+  (field.kind === "enum" && field.control?.kind === "select") ||
+  (field.reference !== null && !field.reference.multiple) ||
+  (field.kind === "text" && field.nullable);
+
+const validateFieldSuggestions = (
+  fields: readonly EntityField[],
+  context: string,
+): void => {
+  const fieldKeys = new Set(fields.map((field) => field.key));
+  const suggestFields = fields.filter(
+    (field) => field.control?.suggest != null,
+  );
+  if (suggestFields.length === 0) return;
+  for (const field of suggestFields) {
+    const fieldContext = `${context}.${field.key}.control.suggest`;
+    if (!isValidSuggestTarget(field))
+      throw new EntityDeclarationError(
+        `${fieldContext} target must be a select-controlled enum, a singular (non-multiple) reference, or a nullable text field.`,
+      );
+    const basis = field.control?.suggest?.basis ?? [];
+    for (const key of basis) {
+      if (key === field.key)
+        throw new EntityDeclarationError(
+          `${fieldContext}.basis cannot name its own field (${key}).`,
+        );
+      if (!fieldKeys.has(key))
+        throw new EntityDeclarationError(
+          `${fieldContext}.basis references ${key}, which is not a model field on this entity.`,
+        );
+    }
+  }
+  // Edge basisKey -> targetKey only when basisKey is itself a suggest
+  // target: the server resolves that basis value from the same request, so
+  // it must be reachable before `field.key` resolves.
+  const suggestKeys = new Set(suggestFields.map((field) => field.key));
+  const adjacency = new Map<string, string[]>();
+  for (const field of suggestFields) {
+    for (const key of field.control?.suggest?.basis ?? []) {
+      if (!suggestKeys.has(key)) continue;
+      const edges = adjacency.get(key) ?? [];
+      edges.push(field.key);
+      adjacency.set(key, edges);
+    }
+  }
+  const UNVISITED = 0;
+  const IN_PROGRESS = 1;
+  const DONE = 2;
+  const state = new Map<string, 0 | 1 | 2>();
+  const path: string[] = [];
+  const visit = (key: string): void => {
+    state.set(key, IN_PROGRESS);
+    path.push(key);
+    for (const next of adjacency.get(key) ?? []) {
+      const nextState = state.get(next) ?? UNVISITED;
+      if (nextState === IN_PROGRESS) {
+        const cycleStart = path.indexOf(next);
+        const cycle = [...path.slice(cycleStart), next].join(" -> ");
+        throw new EntityDeclarationError(
+          `${context} control.suggest basis graph has a cycle: ${cycle}.`,
+        );
+      }
+      if (nextState === UNVISITED) visit(next);
+    }
+    path.pop();
+    state.set(key, DONE);
+  };
+  for (const key of suggestKeys) {
+    if ((state.get(key) ?? UNVISITED) === UNVISITED) visit(key);
+  }
+};
+
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
   context: string,
@@ -143,6 +224,7 @@ const compileFieldModel = (
       validation: field.validation,
     };
   });
+  validateFieldSuggestions(fields, context);
   const displayedColumnIds = new Set<string>();
   for (const field of fields) {
     const standard = field.display.standard;

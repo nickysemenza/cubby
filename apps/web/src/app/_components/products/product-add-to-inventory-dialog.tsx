@@ -1,10 +1,11 @@
 /**
  * ProductAddToInventoryDialog — stock a known product from its detail page.
  *
- * The product is fixed, so the only thing missing is where it goes: pick a
- * location — or let the AI suggester read the roster and propose one — then the
- * shared QuickInventoryAdd form (product prefilled) handles the amount and the
- * create.
+ * The product is fixed, so the only thing missing is where it goes: the
+ * location picker auto-suggests a put-away location from the manifest-driven
+ * `inventory.locationId` target (`FieldSuggestionProvider`, basis: `productId`)
+ * — then the shared QuickInventoryAdd form (product prefilled) handles the
+ * amount and the create.
  */
 
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
@@ -12,15 +13,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { type FC, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import {
   getOptionalLocationId,
   optionalLocationField,
 } from "~/app/_components/form-fields";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
-import { LocationFieldWithAI } from "~/app/_components/locations/location-field-with-ai";
 import { product as productOperations } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -148,34 +150,46 @@ export const ProductAddToInventoryDialog: FC<
         </Row>
       }
     >
-      <Stack gap="md">
-        {overAccounted && (
-          <Alert variant="destructive">
-            <TriangleAlert />
-            <AlertTitle>Already accounted for</AlertTitle>
-            <AlertDescription>
-              Its parts hold {overAccounted.accounted} of the{" "}
-              {overAccounted.expected} you bought. Adding one here counts a unit
-              you don't own — unless you have another still assembled or sealed.
-            </AlertDescription>
-          </Alert>
-        )}
-        <LocationFieldWithAI
-          form={form}
-          name="location"
-          productId={product.id}
-          acceptLocation={(location) => form.setValue("location", location)}
-        />
-        {locationId ? (
-          <QuickInventoryAdd
-            locationId={locationId}
-            initialProduct={initialProduct}
-            onSuccess={() => handleOpenChange(false)}
-          />
-        ) : (
-          <Description>Pick a location to stock this product.</Description>
-        )}
-      </Stack>
+      <FormProvider {...form}>
+        <FieldSuggestionProvider
+          entity="inventory"
+          mode="create"
+          staticBasis={{ productId: product.id }}
+          fieldKeys={["locationId"]}
+          paths={{ locationId: "location" }}
+        >
+          <Stack gap="md">
+            {overAccounted && (
+              <Alert variant="destructive">
+                <TriangleAlert />
+                <AlertTitle>Already accounted for</AlertTitle>
+                <AlertDescription>
+                  Its parts hold {overAccounted.accounted} of the{" "}
+                  {overAccounted.expected} you bought. Adding one here counts a
+                  unit you don't own — unless you have another still assembled
+                  or sealed.
+                </AlertDescription>
+              </Alert>
+            )}
+            <ComboboxFieldWithSearch
+              form={form}
+              name="location"
+              label="Location"
+              searchType="location"
+              suggestField="locationId"
+            />
+            {locationId ? (
+              <QuickInventoryAdd
+                locationId={locationId}
+                initialProduct={initialProduct}
+                onSuccess={() => handleOpenChange(false)}
+              />
+            ) : (
+              <Description>Pick a location to stock this product.</Description>
+            )}
+          </Stack>
+        </FieldSuggestionProvider>
+      </FormProvider>
     </ResponsiveDialog>
   );
 };

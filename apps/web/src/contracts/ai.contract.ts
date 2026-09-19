@@ -9,17 +9,13 @@ import {
   aiUsageSummaryOut,
   approveDetectedInventoryItemInput,
   approveDetectedInventoryItemOut,
-  categorySuggestionInput,
-  categorySuggestionSchema,
   detectedInventorySchema,
   enrichmentProposalPrecomputeInput,
+  fieldSuggestionsInput,
+  fieldSuggestionsOut,
   ingredientMergeSuggestionBatchInput,
   ingredientMergeSuggestionBatchOut,
   locationDescriptionSchema,
-  locationSuggestionInput,
-  locationSuggestionSchema,
-  locationTypeSuggestionInput,
-  locationTypeSuggestionSchema,
   productIdentificationInput,
   productIdentificationSchema,
   usdaFoodSuggestionBatchInput,
@@ -57,18 +53,6 @@ const detectedInventoryWithProvenance = detectedInventorySchema.extend({
 });
 
 export const aiContract = defineContract("ai", {
-  suggestCategory: query({
-    input: categorySuggestionInput,
-    output: categorySuggestionSchema,
-  }),
-  suggestLocationType: query({
-    input: locationTypeSuggestionInput,
-    output: locationTypeSuggestionSchema,
-  }),
-  suggestLocation: query({
-    input: locationSuggestionInput,
-    output: locationSuggestionSchema,
-  }),
   describeLocation: mutation({
     input: aiLocationIdInput,
     output: locationDescriptionWithProvenance,
@@ -96,6 +80,13 @@ export const aiContract = defineContract("ai", {
   suggestIngredientMergeBatch: mutation({
     input: ingredientMergeSuggestionBatchInput,
     output: ingredientMergeSuggestionBatchOut,
+  }),
+  // Nested `basis` can't ride the HTTP GET projection (precedent:
+  // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
+  suggestFields: query({
+    input: fieldSuggestionsInput,
+    output: fieldSuggestionsOut,
+    http: false,
   }),
   usageRecent: query({
     input: aiUsageRecentInput,

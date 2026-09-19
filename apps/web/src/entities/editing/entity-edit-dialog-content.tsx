@@ -1,7 +1,9 @@
 import { entityImageOf, type ImageEntity } from "@cubby/schemas/entity";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import { FormWrapper } from "~/app/_components/form-utils";
 import {
   PendingImageUpload,
@@ -109,11 +111,20 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         submitButtonText={presentation.submitLabel ?? "Create"}
         footerMode="dialog"
       >
-        <presentation.Fields
-          form={session.form}
-          context={context}
-          record={record}
-        />
+        <FieldSuggestionProvider
+          // SAFETY: `EditableEntity` (this dialog's `E`) excludes only
+          // image/usda-food/cookbook, and every entity with the standard
+          // create/update editing surface carries a shortcode prefix.
+          entity={request.entity as ShortcodeEntity}
+          mode={request.operation === "create" ? "create" : "edit"}
+          fieldKeys={intentFields}
+        >
+          <presentation.Fields
+            form={session.form}
+            context={context}
+            record={record}
+          />
+        </FieldSuggestionProvider>
         {showPendingImageUpload && (
           <PendingImageUpload
             // SAFETY: `showPendingImageUpload` only turns true when the

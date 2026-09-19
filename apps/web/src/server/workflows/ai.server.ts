@@ -3,11 +3,9 @@ import type {
   aiUsageRecentInput,
   aiUsageSummaryInput,
   approveDetectedInventoryItemInput,
-  categorySuggestionInput,
   enrichmentProposalPrecomputeInput,
+  fieldSuggestionsInput,
   ingredientMergeSuggestionBatchInput,
-  locationSuggestionInput,
-  locationTypeSuggestionInput,
   productIdentificationInput,
   usdaFoodSuggestionBatchInput,
   usdaFoodSuggestionInput,
@@ -19,6 +17,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
+import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
@@ -31,7 +30,6 @@ import {
   suggestIngredientMerge,
   suggestIngredientMergeBatch,
 } from "~/server/services/ai-enrichment/ingredient-merge";
-import { suggestLocationForProduct } from "~/server/services/ai-enrichment/location-suggest";
 import {
   approveDetectedInventoryItem,
   describeLocation,
@@ -55,36 +53,6 @@ import {
   type BulkWorkflowSummary,
   workflow,
 } from "~/server/workflow-runtime";
-export const suggestCategoryWorkflow = defineWorkflowOperation(
-  "ai.suggestCategory",
-  async (db: Database, input: z.output<typeof categorySuggestionInput>) =>
-    getAiClient().suggestCategory(input.productName, input.manufacturer, {
-      db,
-      operation: "suggestCategory",
-      cacheStatus: "none",
-    }),
-);
-export const suggestLocationTypeWorkflow = defineWorkflowOperation(
-  "ai.suggestLocationType",
-  async (db: Database, input: z.output<typeof locationTypeSuggestionInput>) =>
-    getAiClient().suggestLocationType(input.locationName, {
-      db,
-      operation: "suggestLocationType",
-      cacheStatus: "none",
-    }),
-);
-type LocationSuggestionInput = z.output<typeof locationSuggestionInput>;
-export const suggestLocationWorkflow = bindWorkflow(
-  workflow<Database, LocationSuggestionInput>("ai.suggestLocation")
-    .call("productId", async ({ context }, { input }) =>
-      resolveOrThrow(context, "product", input.productId),
-    )
-    .call("suggestion", async ({ context }, { productId }) =>
-      suggestLocationForProduct(context, productId),
-    )
-    .output(({ suggestion }) => suggestion),
-  (db: Database, input: LocationSuggestionInput) => ({ context: db, input }),
-);
 
 type LocationIdInput = z.output<typeof aiLocationIdInput>;
 export const describeLocationWorkflow = bindWorkflow(
@@ -337,4 +305,9 @@ export const summarizeAiUsageWorkflow = defineWorkflowOperation(
   "ai.usageSummary",
   async (db: Database, input: z.output<typeof aiUsageSummaryInput>) =>
     summarizeAiUsage(db, input.days),
+);
+export const suggestFieldsWorkflow = defineWorkflowOperation(
+  "ai.suggestFields",
+  (db: Database, input: z.output<typeof fieldSuggestionsInput>) =>
+    suggestFields(db, input),
 );

@@ -181,12 +181,10 @@ export default defineEntity({
         key: "type",
         kind: "enum",
         nullable: true,
-        // No editor `control`: `type` needs the AI-suggest widget and to
-        // disappear entirely once a product link supplies the form factor —
-        // hand-rendered in `LocationFields` (`entities/editing/
-        // editor-presentations.tsx`), same convention as meal's
-        // `pendingImageIds` below. Still a plain field the kernel resolves —
-        // see `intents.fields` below.
+        // Auto-suggest is manifest-driven (`control.suggest`) now, not the
+        // hand-rendered AI-suggest widget; `type` still disappears once a
+        // product link supplies the form factor — see `intents.fields` below.
+        control: { kind: "select", suggest: { basis: ["name"] } },
         display: { list: true, detail: true, detailOrder: 1 },
         validation: {
           read: locationType.nullable(),

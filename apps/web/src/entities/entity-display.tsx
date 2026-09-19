@@ -7,12 +7,17 @@ import {
 import {
   entityInspectorMetadata,
   type BrowserRoutedEntity,
+  type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
+import {
+  fieldSuggestionBasisFromRecord,
+  suggestTargetsFor,
+} from "~/app/_components/ai/field-suggestion";
 import {
   dateCellData,
   numberCellData,
@@ -45,6 +50,7 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
 
+import { entitySelectOptionsFor } from "./editing/select-options";
 import {
   entities,
   entityDetailParams,
@@ -498,11 +504,14 @@ const editableFieldValue = z.union([z.string(), z.number()]).nullish();
  * boolean (`checkbox`) has no `EditableCell` config, and `specialized`
  * controls are, by definition, hand-rendered.
  */
-function renderEditableField(
+function renderEditableField<TRecord extends object>(
+  entity: Entity,
+  key: string,
   control: NonNullable<DisplayField["control"]>,
   format: DisplayField["display"]["format"],
   value: EditableFieldValue,
   save: (next: EditableFieldValue) => Promise<void>,
+  record: TRecord,
 ): ReactNode {
   switch (control.kind) {
     case "text":
@@ -568,11 +577,27 @@ function renderEditableField(
         />
       );
     case "select": {
-      const options: FilterableComboboxItem[] = [...(control.options ?? [])];
+      const options: FilterableComboboxItem[] = [
+        ...(entitySelectOptionsFor(entity, key) ?? control.options ?? []),
+      ];
+      // SAFETY: a detail page only exists for a shortcode entity; `entity`'s
+      // broader `Entity` type here is this file's shared display-field plumbing.
+      const shortcodeEntity = entity as ShortcodeEntity;
+      const suggest = control.suggest
+        ? {
+            entity: shortcodeEntity,
+            targets: [key],
+            basis: fieldSuggestionBasisFromRecord(
+              shortcodeEntity,
+              suggestTargetsFor(shortcodeEntity, [key]),
+              record,
+            ),
+          }
+        : undefined;
       return (
         <EditableCell
           value={value === null ? null : String(value)}
-          config={{ type: "select", options }}
+          config={{ type: "select", options, suggest }}
           onSave={save}
           renderValue={(v) => renderOptionCell(v, options)}
         />
@@ -623,7 +648,15 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
         await mutate({ id: record.id, data: { [key]: next } });
       };
       const override = () => ({
-        value: renderEditableField(control, field.display.format, value, save),
+        value: renderEditableField(
+          entity,
+          key,
+          control,
+          field.display.format,
+          value,
+          save,
+          record,
+        ),
       });
       return [key, override] as const;
     }),

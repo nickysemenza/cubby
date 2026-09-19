@@ -98,6 +98,9 @@ export const AppErrors = {
   RELATION_QUANTITY_UNSUPPORTED: "BAD_REQUEST",
   LIST_SORT_FIELD_UNSUPPORTED: "BAD_REQUEST",
   LIST_GROUP_BY_FIELD_UNSUPPORTED: "BAD_REQUEST",
+  // `ai.suggestFields` was asked for a target that isn't declared
+  // `control.suggest` on the entity's manifest.
+  SUGGEST_FIELD_UNKNOWN: "BAD_REQUEST",
   // Caller tried to attach a product as a component of itself.
   PRODUCT_COMPONENT_SELF_REFERENCE: "BAD_REQUEST",
   // Attach-side counterpart of PRODUCT_MERGE_COMPONENT_CYCLE: the DB CHECK only

@@ -1,14 +1,18 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { type ComponentType, type ReactNode, useId } from "react";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import { type ComponentType, type ReactNode, useId, useMemo } from "react";
 import {
   Controller,
   useFormContext,
+  useWatch,
   type FieldValues,
   type UseFormReturn,
 } from "react-hook-form";
 
+import { basisValueOf } from "~/app/_components/ai/field-suggestion";
 import {
   WithEntitySearch,
   type WithEntitySearchProps,
@@ -23,14 +27,8 @@ import {
 } from "~/app/_components/form-utils";
 import { EntityMultiValueField } from "~/app/_components/form-utils/entity-multi-value-field";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
+import { VendorField } from "~/app/_components/form-utils/vendor-field";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
-import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
-import {
-  PROJECT_STATUS_OPTIONS,
-  projectKindOptions,
-} from "~/app/projects/project-options";
-import { tradeOptions } from "~/app/projects/trade-options";
-import { taskStatusOptions } from "~/app/tasks/task-options";
 import { AliasesField } from "~/components/forms/aliases-field";
 import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -42,16 +40,44 @@ import {
   type EditMode,
   type EntityFieldPresentation,
 } from "./entity-field-presentation";
+import {
+  entitySelectOptionsFor,
+  type EntitySelectOption,
+} from "./select-options";
 type PrimitiveFieldOptions = {
   placeholder?: string;
-  options?: { value: string; label: string }[];
+  options?: readonly EntitySelectOption[];
   focusOnMount?: boolean;
   step?: string;
   prefix?: string;
   rows?: number;
+  /** Select fields only — e.g. a category forced by a USDA/ISBN link. */
+  disabled?: boolean;
+  /** Select fields only — overrides `presentation.description` (e.g. why a
+   * forced field is disabled) rather than fighting it. */
+  description?: string;
 };
 
 type PrimitiveFieldModel = (typeof entityFieldModels)[Entity]["fields"][number];
+
+/** `undefined` for a field with no `control.suggest` — the primitives' own
+ * no-op convention (`AutoSuggestSlot`/`useAutoFieldSuggestion` treat a
+ * missing `suggestField` as "no provider needed"). A standalone function so
+ * the ternary doesn't count against `renderPrimitiveField`'s own complexity
+ * budget. */
+function suggestFieldFor(hasSuggest: boolean, key: string): string | undefined {
+  return hasSuggest ? key : undefined;
+}
+
+/** Same reasoning as `suggestFieldFor`: an override (e.g. a select field
+ * forced disabled with its own reason) beats the presentation's own
+ * description, kept out of `renderPrimitiveField`'s own complexity budget. */
+function selectDescriptionFor(
+  fieldOptions: PrimitiveFieldOptions,
+  presentation: EntityFieldPresentation,
+): string | undefined {
+  return fieldOptions.description ?? presentation.description ?? undefined;
+}
 
 /**
  * Renders one field's control given its presentation metadata. Shared by
@@ -201,7 +227,9 @@ function renderPrimitiveField({
         options={fieldOptions.options ?? control.options ?? []}
         placeholder={placeholder ?? undefined}
         nullable={field.nullable}
-        description={presentation.description ?? undefined}
+        disabled={fieldOptions.disabled}
+        description={selectDescriptionFor(fieldOptions, presentation)}
+        suggestField={suggestFieldFor(Boolean(control.suggest), field.key)}
       />
     );
   }
@@ -399,6 +427,22 @@ function AmountField({ field, form }: SpecializedIntentRendererProps) {
 }
 
 /**
+ * `expense.vendor`: a roster-backed **name** (see `VendorField`'s own doc
+ * comment for why this isn't a plain text box), wired to its `suggest` field
+ * the same way every other suggestable control is.
+ */
+function VendorNameField({ field, form }: SpecializedIntentRendererProps) {
+  return (
+    <VendorField
+      form={form}
+      name={field.key}
+      label={field.label}
+      suggestField={suggestFieldFor(Boolean(field.control?.suggest), field.key)}
+    />
+  );
+}
+
+/**
  * A multi-reference field (`blockedByIds`, `candidateProductIds`): the full
  * id set, edited as chips plus the target's search picker.
  */
@@ -434,6 +478,7 @@ const specializedIntentRenderers = {
   "tag-list": TagListField,
   amount: AmountField,
   "entity-multi-select": EntityMultiSelectField,
+  "vendor-name": VendorNameField,
   // The gallery block the dialog shell mounts owns reordering (it writes
   // `imageOrder` through `onExistingImagesReorder`); the field itself has no
   // control of its own to draw.
@@ -484,22 +529,6 @@ function referenceEntitySearch(
  * `${entity}.${fieldKey}`; every other select field's options come straight
  * off the manifest.
  */
-const richSelectOptions = {
-  "meal.mealType": mealTypeOptions,
-  "meal.mealKind": mealKindOptions,
-  "task.status": taskStatusOptions,
-  "task.trade": tradeOptions,
-  "project.status": PROJECT_STATUS_OPTIONS,
-  "project.kind": projectKindOptions,
-} satisfies Readonly<Record<string, PrimitiveFieldOptions["options"]>>;
-
-function richSelectOptionsFor(key: string): PrimitiveFieldOptions["options"] {
-  if (!Object.hasOwn(richSelectOptions, key)) return undefined;
-  // SAFETY: the `Object.hasOwn` check above proves `key` is one of
-  // `richSelectOptions`'s own declared keys, not an arbitrary string.
-  return richSelectOptions[key as keyof typeof richSelectOptions];
-}
-
 /**
  * Generic capture/intent fields: iterates one semantic intent's field roster
  * in model order (not a caller-chosen subset) and renders each field with no
@@ -534,8 +563,35 @@ export function EntityIntentFields({
   )[entity];
   const intentFieldKeys: readonly string[] =
     declaredIntents?.fields[intent] ?? [];
+  // SAFETY: indexed by the broad `Entity` union, every entity's literal
+  // `hiddenWhen` narrows to the same rule shape only when read through the
+  // schema-level type — see `declaredAccess` in `definitions.ts` for the
+  // identical `readOnlyWhen` narrowing trap.
+  const hiddenWhen: CompiledEntityPresentation["edit"]["hiddenWhen"] =
+    entitySummary[entity].edit.hiddenWhen;
+  const hiddenWhenFields = useMemo(
+    () => hiddenWhen.map((rule) => rule.field),
+    [hiddenWhen],
+  );
+  const hiddenWhenValues: unknown[] = useWatch({
+    control: form.control,
+    name: hiddenWhenFields,
+  });
+  const hiddenFieldKeys = useMemo(() => {
+    const hidden = new Set<string>();
+    hiddenWhen.forEach((rule, index) => {
+      const present = basisValueOf(hiddenWhenValues[index]) !== null;
+      if (present === rule.present) {
+        rule.fields.forEach((key) => hidden.add(key));
+      }
+    });
+    return hidden;
+  }, [hiddenWhen, hiddenWhenValues]);
   const fields = model.fields.filter(
-    (field) => intentFieldKeys.includes(field.key) && field.control !== null,
+    (field) =>
+      intentFieldKeys.includes(field.key) &&
+      field.control !== null &&
+      !hiddenFieldKeys.has(field.key),
   );
 
   return (
@@ -557,6 +613,10 @@ export function EntityIntentFields({
               label={field.label}
               clearable={field.nullable}
               SearchProvider={referenceEntitySearch(referenceEntity)}
+              suggestField={suggestFieldFor(
+                Boolean(field.control?.suggest),
+                field.key,
+              )}
             />
           );
         }
@@ -590,7 +650,11 @@ export function EntityIntentFields({
           fieldOptions.focusOnMount = true;
         }
         if (presentation.control.kind === "select") {
-          fieldOptions.options = richSelectOptionsFor(`${entity}.${field.key}`);
+          fieldOptions.options = entitySelectOptionsFor(
+            entity,
+            field.key,
+            mode,
+          );
         }
         return renderPrimitiveField({
           entity,

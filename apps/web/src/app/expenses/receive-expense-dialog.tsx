@@ -17,9 +17,10 @@ import type {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import {
   getOptionalLocationId,
   optionalLocationField,
@@ -129,6 +130,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
             name="location"
             label="Move to"
             searchType="location"
+            suggestField="locationId"
           />
           <Row justify="end">
             <Button
@@ -152,6 +154,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
           name="location"
           label="Location"
           searchType="location"
+          suggestField="locationId"
         />
         {!locationId ? (
           <Description>Pick where this one goes.</Description>
@@ -212,7 +215,17 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
             Put what "{expenseName}" bought onto a shelf.
           </DialogDescription>
         </DialogHeader>
-        {body()}
+        <FormProvider {...form}>
+          <FieldSuggestionProvider
+            entity="inventory"
+            mode="create"
+            staticBasis={{ productId }}
+            fieldKeys={["locationId"]}
+            paths={{ locationId: "location" }}
+          >
+            {body()}
+          </FieldSuggestionProvider>
+        </FormProvider>
       </DialogContent>
     </Dialog>
   );

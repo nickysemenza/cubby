@@ -6,9 +6,6 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 export const ai = defineOperationDomain(aiContract, {
-  suggestCategory: { tags: [["ai", "suggestCategory"]] },
-  suggestLocationType: { tags: [["ai", "suggestLocationType"]] },
-  suggestLocation: { tags: [["ai", "suggestLocation"]] },
   describeLocation: { invalidates: ripple.location },
   detectInventoryItems: { invalidates: ripple.inventory },
   approveDetectedInventoryItem: { invalidates: ripple.inventory },
@@ -16,6 +13,7 @@ export const ai = defineOperationDomain(aiContract, {
   suggestUsdaFood: { invalidates: ripple.none },
   suggestUsdaFoodBatch: { invalidates: ripple.ingredient },
   suggestIngredientMergeBatch: { invalidates: ripple.ingredient },
+  suggestFields: { tags: [["ai", "suggestFields"]], cache: "stable" },
   usageRecent: { tags: [["ai", "usage"]] },
   usageSummary: { tags: [["ai", "usage"]] },
 });
