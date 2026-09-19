@@ -93,7 +93,11 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         let token = generation
         defer { if generation == token { isLoadingLibrary = false } }
         authorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        await matches.refresh(client: client)
+        // Do not make the local Photos grid wait for the remote Cubby index. A stalled or slow
+        // index request otherwise leaves the authorized screen showing an empty grid and
+        // "Cubby has not been checked" indefinitely, even though PhotoKit is ready to load.
+        isLoadingLibrary = true
+        async let matchRefresh: Void = matches.refresh(client: client)
         guard generation == token, !Task.isCancelled else { return }
         guard hasFullAccess else {
             months = []; monthsRevision += 1
@@ -103,7 +107,6 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             return
         }
         if !observing { PHPhotoLibrary.shared().register(self); observing = true }
-        isLoadingLibrary = true
         let result = await Task.detached(priority: .userInitiated) {
             let options = PHFetchOptions()
             options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
@@ -139,6 +142,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         monthsRevision += 1
         count = result.count
         isLoadingLibrary = false
+        await matchRefresh
+        guard generation == token, !Task.isCancelled else { return }
         // One batch read for the whole library's dot status, rather than a fetch per cell; the
         // sweep republishes individual ids afterward as it classifies them.
         if let snapshots = try? await analysisStore.snapshots(for: Array(assetsByID.keys)) {
