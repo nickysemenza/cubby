@@ -44,12 +44,27 @@ final class PhotoImportManifest {
     private var transaction: PhotoImportTransaction?
     private var analysisTask: Task<Void, Never>?
     private var nextAnalysisLogID = 0
+    private let analysisStore: PhotoAnalysisStore
 
-    init(items: [PhotoSelectionItem]) {
+    /// `analysisStore` defaults to a throwaway in-memory store: every production call site
+    /// (`PhotosRootView`) passes `AppModel.photoAnalysisStore` explicitly, but the many existing
+    /// fixture-only tests and previews that build a manifest just to exercise assignment/commit
+    /// logic don't need — and shouldn't share — the persistent one.
+    init(
+        items: [PhotoSelectionItem],
+        analysisStore: PhotoAnalysisStore = PhotoImportManifest.ephemeralAnalysisStore()
+    ) {
         self.items = items
+        self.analysisStore = analysisStore
         let focused = items.first?.id
         focusedItemID = focused
         selectedIDs = focused.map { Set([$0]) } ?? []
+    }
+
+    private static func ephemeralAnalysisStore() -> PhotoAnalysisStore {
+        // An in-memory `ModelContainer` has no realistic failure mode on this codebase's target
+        // platforms; if this ever throws, the SwiftData runtime itself is broken.
+        try! PhotoAnalysisStore.make(inMemory: true)
     }
 
     /// The filmstrip header's Select all/Deselect all: the default single-photo scope above
@@ -943,8 +958,22 @@ final class PhotoImportManifest {
             }
         }
         for (index, item) in missing.enumerated() {
-            prepared[item.id] = (files[index], analyses[index])
+            let file = files[index]
+            let analysis = analyses[index]
+            prepared[item.id] = (file, analysis)
+            await persistFullAnalysis(analysis, for: item.id)
         }
+    }
+
+    /// Writes the full analysis (hash + classify + OCR + feature print) into the on-device store
+    /// so a later Diagnostics open is instant and the classification sweep skips this photo.
+    /// Best-effort: a store write failure never blocks the import itself.
+    private func persistFullAnalysis(_ analysis: PhotoLocalAnalysis, for localIdentifier: String) async {
+        guard let data = try? JSONEncoder.cubby().encode(analysis) else { return }
+        try? await analysisStore.upsertFullAnalysis(
+            localIdentifier: localIdentifier, analysis: data, version: PhotoLocalAnalysis.currentVersion,
+            categories: PhotoCategoryHit.matchedCategories(for: analysis.classifications),
+            topLabels: PhotoCategoryHit.topLabels(for: analysis.classifications))
     }
 
     private func updateProgress(_ state: PhotoImportTransactionProgress) {

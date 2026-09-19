@@ -35,7 +35,8 @@ final class AppModel {
     /// a new photo the moment it lands, so it matches before the next rebuild).
     let featurePrints = FeaturePrintIndex()
     let photoMatches = PhotoMatchStore()
-    let photoLibrary = PhotoLibraryStore()
+    let photoAnalysisStore: PhotoAnalysisStore
+    let photoLibrary: PhotoLibraryStore
     var lastError: String?
     /// Bumped by every write the app makes to an entity; a list or detail showing one of
     /// `entityMutationKeys` refreshes on the next revision (`.task(id:)` on the views).
@@ -76,6 +77,25 @@ final class AppModel {
         self.credentials = credentials
         self.client = CubbyClient(baseURL: url, credentials: credentials)
         self.auth = AuthFlow(baseURL: url, credentials: credentials)
+        let analysisStore = Self.makeAnalysisStore()
+        self.photoAnalysisStore = analysisStore
+        self.photoLibrary = PhotoLibraryStore(analysisStore: analysisStore)
+        Task { try? await analysisStore.migrateLegacyHashCacheIfNeeded() }
+    }
+
+    /// The persistent store at `Application Support/Cubby/PhotoAnalysis.store`, falling back to an
+    /// in-memory container (photo hashing/classification just resets for this launch) rather than
+    /// crashing the app if the on-disk store cannot be opened.
+    private static func makeAnalysisStore() -> PhotoAnalysisStore {
+        do {
+            return try PhotoAnalysisStore.make()
+        } catch {
+            Diagnostics.report(error, context: "photos.analysisStore.container")
+            // The in-memory configuration has no file-system failure mode to hit; if it still
+            // throws, SwiftData itself is broken and there is nothing more graceful to fall back
+            // to than surfacing that at launch.
+            return try! PhotoAnalysisStore.make(inMemory: true)
+        }
     }
 
     /// Preview state is fully established synchronously; constructing a canvas never starts work.

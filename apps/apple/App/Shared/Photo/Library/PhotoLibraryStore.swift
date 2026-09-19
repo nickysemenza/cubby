@@ -22,7 +22,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     var selectedIDs: [String] = []
     var scrollID: String?
 
-    @ObservationIgnored private let cache = LibraryHashCache()
+    @ObservationIgnored private let analysisStore: PhotoAnalysisStore
     @ObservationIgnored private let thumbnails = NSCache<NSString, ImageBox>()
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored private var libraryChangeTask: Task<Void, Never>?
@@ -42,7 +42,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             : "\(count) library photos checked"
     }
 
-    override init() {
+    init(analysisStore: PhotoAnalysisStore) {
+        self.analysisStore = analysisStore
         super.init()
         #if os(macOS)
             thumbnails.totalCostLimit = 64 * 1024 * 1024
@@ -62,7 +63,6 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         if clients.isEmpty {
             stopWork()
             if observing { PHPhotoLibrary.shared().unregisterChangeObserver(self); observing = false }
-            Task { await flush() }
         }
     }
 
@@ -120,9 +120,9 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
         assetsByID = Dictionary(uniqueKeysWithValues: result.map { ($0.localIdentifier, $0) })
         do {
-            try await cache.prune(to: Set(assetsByID.keys))
+            try await analysisStore.pruneMissing(Set(assetsByID.keys))
         } catch {
-            Diagnostics.report(error, context: "photos.cache.prune")
+            Diagnostics.report(error, context: "photos.analysisStore.prune")
         }
         guard generation == token, !Task.isCancelled else { return }
         checked.formIntersection(assetsByID.keys)
@@ -140,13 +140,19 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             defer { if generation == token { isScanning = false } }
             // Let visible cells enqueue their user-initiated requests before the utility scan.
             try? await Task.sleep(for: .milliseconds(150))
+            // One batch read for the whole remaining set instead of one actor round trip per
+            // asset — `query(_:preloaded:)` only falls back to a per-id store read when an asset
+            // is missing from this snapshot (e.g. newly added mid-scan).
+            let preloadedHashes =
+                (try? await analysisStore.hashes(for: remaining.map(\.localIdentifier))) ?? [:]
             var pending: [String: HashQuery] = [:]
             for (offset, asset) in remaining.enumerated() {
                 guard !Task.isCancelled, generation == token else { return }
                 // Visible cells may finish work after this scan's snapshot was taken.
                 if checked.contains(asset.localIdentifier) { continue }
                 do {
-                    pending[asset.localIdentifier] = try await query(asset).query
+                    pending[asset.localIdentifier] =
+                        try await query(asset, preloaded: preloadedHashes[asset.localIdentifier]).query
                 } catch is CancellationError {
                     return
                 } catch { /* Cloud-only assets remain unknown until explicitly selected. */  }
@@ -172,9 +178,12 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 guard generation == token else { return }
                 checked.formUnion(pending.keys)
             }
-            await flush()
         }
     }
+
+    /// The sweep looks up a `PHAsset` by the identifier its scheduler ordered, without owning a
+    /// second copy of `assetsByID`.
+    func asset(for localIdentifier: String) -> PHAsset? { assetsByID[localIdentifier] }
 
     /// `degraded` fires (possibly more than once) with a fast, low-resolution frame before the
     /// final image resolves, so a cell can show it immediately instead of a blank tile.
@@ -257,15 +266,26 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
 
-    /// `isNew` is false when `hash` came from the on-disk cache (this exact modification date
-    /// was already fingerprinted, in this session or an earlier one) rather than being computed
-    /// just now.
-    private func query(_ asset: PHAsset) async throws -> (query: HashQuery, isNew: Bool) {
+    /// `isNew` is false when `hash` came from the store (this exact modification date was already
+    /// fingerprinted, in this session or an earlier one) rather than being computed just now.
+    /// `preloaded` — from a batch `PhotoAnalysisStore.hashes(for:)` read — skips the per-id store
+    /// round trip entirely when it is present and still valid; the scan loop always supplies it,
+    /// the single-cell `thumbnail(_:matches:degraded:)` path never does.
+    private func query(
+        _ asset: PHAsset, preloaded: PhotoHashRecord? = nil
+    ) async throws -> (query: HashQuery, isNew: Bool) {
         let token = generation
         let id = asset.localIdentifier
         let hash: PerceptualHash64
         let isNew: Bool
-        if let cached = await cache.hash(forLocalIdentifier: id, modificationDate: asset.modificationDate) {
+        if let preloaded, preloaded.hashRevision == PerceptualHash64.algorithmRevision,
+            preloaded.modificationDate == asset.modificationDate
+        {
+            hash = preloaded.perceptualHash
+            isNew = false
+        } else if preloaded == nil,
+            let cached = try? await analysisStore.hash(for: id, modificationDate: asset.modificationDate)
+        {
             hash = cached
             isNew = false
         } else {
@@ -273,7 +293,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             // entries must never become canonical hashes if display sizing/cropping changes.
             let source = try await PhotoLibraryIO.shared.thumbnail(for: asset, network: false)
             hash = try await Task.detached(priority: .utility) { try PerceptualHash64.compute(source) }.value
-            try await cache.store(hash, forLocalIdentifier: id, modificationDate: asset.modificationDate)
+            try? await analysisStore.upsertHash(
+                localIdentifier: id, modificationDate: asset.modificationDate, perceptualHash: hash)
             isNew = true
         }
         guard !Task.isCancelled, generation == token else { throw CancellationError() }
@@ -297,10 +318,6 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         isScanning = false
         isLoadingLibrary = false
         scannedCount = 0
-    }
-
-    private func flush() async {
-        do { try await cache.flush() } catch { Diagnostics.report(error, context: "photos.cache.flush") }
     }
 }
 
