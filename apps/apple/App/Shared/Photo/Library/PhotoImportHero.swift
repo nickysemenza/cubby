@@ -21,14 +21,21 @@ struct PhotoImportHero: View {
     @State private var internalFocusedID = ""
     @State private var showingFullScreen = false
 
+    /// Cap on the hero's height as (points, fraction of the container). The stacked phone
+    /// layout keeps the photo to ~22% so the assignment list owns the screen; a side column
+    /// (regular width) has the height to spare and passes a larger cap.
+    let heightCap: (points: CGFloat, fraction: CGFloat)
+
     init(
         items: [PhotoSelectionItem], selectedIDs: Set<String> = [],
         focusedID: Binding<String>? = nil,
+        heightCap: (points: CGFloat, fraction: CGFloat) = (220, 0.22),
         onToggle: ((String) -> Void)? = nil
     ) {
         self.items = items
         self.selectedIDs = selectedIDs
         self.externalFocusedID = focusedID
+        self.heightCap = heightCap
         self.onToggle = onToggle
     }
 
@@ -71,7 +78,9 @@ struct PhotoImportHero: View {
             } label: {
                 PhotoImportProgressiveImage(item: item, maxPixelSize: 1_800)
                     .frame(maxWidth: .infinity)
-                    .containerRelativeFrame(.vertical) { length, _ in min(220, length * 0.22) }
+                    .containerRelativeFrame(.vertical) { length, _ in
+                        min(heightCap.points, length * heightCap.fraction)
+                    }
                     .background(.quaternary)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }

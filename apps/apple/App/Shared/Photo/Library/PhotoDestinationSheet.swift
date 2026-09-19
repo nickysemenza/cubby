@@ -5,6 +5,7 @@ import SwiftUI
 struct PhotoDestinationSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let manifest: PhotoImportManifest
     let onDone: ([String]) -> Void
     @State private var path: [PhotoImportNavigationDestination] = []
@@ -26,107 +27,17 @@ struct PhotoDestinationSheet: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack(alignment: .leading, spacing: 0) {
-                PhotoImportHero(
-                    items: manifest.items,
-                    selectedIDs: manifest.selectedIDs,
-                    focusedID: Binding(
-                        get: { manifest.focusedItemID ?? manifest.items.first?.id ?? "" },
-                        set: { manifest.focusedItemID = $0 }),
-                    onToggle: manifest.toggle
-                )
-                analysisStatus
-                destinationAction
-                List { manifestListContent }
-            }
-            .navigationTitle("Review photos")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .navigationSubtitle("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
-            .toolbar { reviewToolbar }
-            .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
-            .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
-                switch destination {
-                case .sourceTypes:
-                    List {
-                        PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
-                        PhotoAnalysisDisclosure(manifest: manifest)
-                        Section("Choose what is in the photo") {
-                            ForEach(manifest.sourceTypeOptions) { type in
-                                Button {
-                                    path.append(.sourceType(type.source))
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: entitySymbol(for: type.source))
-                                            .frame(width: 24)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(type.title)
-                                            Text(type.outcomeDescription)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                }
-                                .accessibilityIdentifier("photos.source-type.\(type.source.rawValue)")
-                            }
-                        }
-                    }
-                    .navigationTitle("Assign selected…")
-                    #if os(iOS)
-                        .navigationBarTitleDisplayMode(.inline)
-                    #endif
-                case .sourceType(let source):
-                    if let type = manifest.sourceTypeOptions.first(where: {
-                        $0.source == source
-                    }) {
-                        PhotoEntityChooser(
-                            key: source, captureDates: manifest.selectedItems.map(\.capturedAt),
-                            heroItems: manifest.items, importManifest: manifest,
-                            onCreateNew: handleCreateNew
-                        ) { row in
-                            chooseSourceRecord(type, row: row)
-                        }
-                    } else {
-                        ContentUnavailableView(
-                            "Destination unavailable",
-                            systemImage: "exclamationmark.triangle",
-                            description: Text(
-                                "Cubby couldn't resolve the photo routes for this type."
-                            ))
-                    }
-                case .routePicker(let source, let row):
-                    List {
-                        PhotoImportHero(items: manifest.items, selectedIDs: manifest.selectedIDs)
-                        PhotoAnalysisDisclosure(manifest: manifest)
-                        if let type = manifest.sourceTypeOptions.first(where: {
-                            $0.source == source
-                        }) {
-                            Section(
-                                "Where should this \(EntityCatalog[source].singular) store photos?"
-                            ) {
-                                ForEach(type.options) { option in
-                                    Button(option.menuTitle(for: row)) {
-                                        chooseRoute(option, source: row)
-                                    }
-                                    .accessibilityIdentifier("photos.route.\(option.id)")
-                                }
-                            }
-                        } else {
-                            ContentUnavailableView(
-                                "Destination unavailable",
-                                systemImage: "exclamationmark.triangle",
-                                description: Text(
-                                    "Cubby couldn't resolve the photo routes for \(row.id)."
-                                ))
-                        }
-                    }
-                    .navigationTitle("Choose storage")
-                    #if os(iOS)
-                        .navigationBarTitleDisplayMode(.inline)
-                    #endif
+            reviewLayout
+                .navigationTitle("Review photos")
+                #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .navigationSubtitle("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+                .toolbar { reviewToolbar }
+                .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
+                .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
+                    destinationScreen(destination)
                 }
-            }
         }
         .nativeSheet(.photo)
         .interactiveDismissDisabled(manifest.isCommitting)
@@ -151,7 +62,7 @@ struct PhotoDestinationSheet: View {
             PhotoRelatedCreateEditor(
                 mode: .createRelated(option: context.option, source: context.source),
                 captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
-                heroItems: manifest.items,
+                heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, sourceRow, body in
                 manifest.stageCreate(option: option, source: sourceRow, body: body)
@@ -163,7 +74,7 @@ struct PhotoDestinationSheet: View {
             PhotoRelatedCreateEditor(
                 mode: .createSelf(option: context.option),
                 captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
-                heroItems: manifest.items,
+                heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, _, body in
                 manifest.stageCreate(option: option, source: nil, body: body)
@@ -177,7 +88,7 @@ struct PhotoDestinationSheet: View {
                     descriptor: EntityCatalog[context.type], candidates: context.candidates,
                     fallback: context.fallback),
                 captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
-                heroItems: manifest.items,
+                heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, sourceRow, body in
                 manifest.stageCreate(option: option, source: sourceRow, body: body)
@@ -191,7 +102,7 @@ struct PhotoDestinationSheet: View {
                 context: context,
                 createOption: manifest.createAlternative(for: context.option),
                 captureDate: captureDate,
-                heroItems: manifest.items,
+                heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { row in
                 manifest.moveSelected(
@@ -274,13 +185,10 @@ struct PhotoDestinationSheet: View {
                 .accessibilityIdentifier("photos.manifest.undo")
             }
         }
-        ToolbarItem(placement: .primaryAction) {
-            Button(
-                manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all"
-            ) {
-                manifest.toggleSelectAll()
-            }
-            .accessibilityIdentifier("photos.manifest.selectAll")
+        // At regular width the button sits under the filmstrip in the side column (see
+        // `reviewLayout`); in the toolbar it would land beside Cancel in macOS's bottom bar.
+        if horizontalSizeClass != .regular {
+            ToolbarItem(placement: .primaryAction) { selectAllButton }
         }
         ToolbarItemGroup(placement: Self.commitBarPlacement) {
             Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
@@ -309,6 +217,146 @@ struct PhotoDestinationSheet: View {
                 .accessibilityIdentifier("photos.manifest.add")
             }
         }
+    }
+
+    /// Pushed screens for the review flow. Kept out of `body` so its expression stays under the
+    /// 200ms type-check budget.
+    @ViewBuilder
+    private func destinationScreen(_ destination: PhotoImportNavigationDestination) -> some View {
+        switch destination {
+        case .sourceTypes:
+            List {
+                PhotoImportHero(items: manifest.scopedHeroItems)
+                PhotoAnalysisDisclosure(manifest: manifest)
+                Section("Choose what is in the photo") {
+                    ForEach(manifest.sourceTypeOptions) { type in
+                        Button {
+                            path.append(.sourceType(type.source))
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: entitySymbol(for: type.source))
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(type.title)
+                                    Text(type.outcomeDescription)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("photos.source-type.\(type.source.rawValue)")
+                    }
+                }
+            }
+            .navigationTitle("Assign selected…")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+        case .sourceType(let source):
+            if let type = manifest.sourceTypeOptions.first(where: {
+                $0.source == source
+            }) {
+                PhotoEntityChooser(
+                    key: source, captureDates: manifest.selectedItems.map(\.capturedAt),
+                    heroItems: manifest.scopedHeroItems, importManifest: manifest,
+                    onCreateNew: handleCreateNew
+                ) { row in
+                    chooseSourceRecord(type, row: row)
+                }
+            } else {
+                ContentUnavailableView(
+                    "Destination unavailable",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(
+                        "Cubby couldn't resolve the photo routes for this type."
+                    ))
+            }
+        case .routePicker(let source, let row):
+            List {
+                PhotoImportHero(items: manifest.scopedHeroItems)
+                PhotoAnalysisDisclosure(manifest: manifest)
+                if let type = manifest.sourceTypeOptions.first(where: {
+                    $0.source == source
+                }) {
+                    Section(
+                        "Where should this \(EntityCatalog[source].singular) store photos?"
+                    ) {
+                        ForEach(type.options) { option in
+                            Button(option.menuTitle(for: row)) {
+                                chooseRoute(option, source: row)
+                            }
+                            .accessibilityIdentifier("photos.route.\(option.id)")
+                        }
+                    }
+                } else {
+                    ContentUnavailableView(
+                        "Destination unavailable",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(
+                            "Cubby couldn't resolve the photo routes for \(row.id)."
+                        ))
+                }
+            }
+            .navigationTitle("Choose storage")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+        }
+    }
+
+    /// Phones stack hero → status → list. At regular width (iPad, macOS sheet) the hero, filmstrip
+    /// and assign action form a fixed side column so the assignment list gets the full height —
+    /// stacked, a 960pt-wide Mac sheet left the list ~40% of the height with half the width empty.
+    @ViewBuilder private var reviewLayout: some View {
+        if horizontalSizeClass == .regular {
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    hero(heightCap: (360, 0.4))
+                    HStack {
+                        Text("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Spacer()
+                        selectAllButton.buttonStyle(.borderless)
+                    }
+                    .padding(.horizontal)
+                    analysisStatus
+                    destinationAction
+                    Spacer(minLength: 0)
+                }
+                .frame(width: 400)
+                Divider()
+                List { manifestListContent }
+            }
+            #if os(macOS)
+                .frame(minWidth: 960, minHeight: 620)
+            #endif
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                hero(heightCap: (220, 0.22))
+                analysisStatus
+                destinationAction
+                List { manifestListContent }
+            }
+        }
+    }
+
+    private var selectAllButton: some View {
+        Button(manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all") {
+            manifest.toggleSelectAll()
+        }
+        .accessibilityIdentifier("photos.manifest.selectAll")
+    }
+
+    private func hero(heightCap: (points: CGFloat, fraction: CGFloat)) -> some View {
+        PhotoImportHero(
+            items: manifest.items,
+            selectedIDs: manifest.selectedIDs,
+            focusedID: Binding(
+                get: { manifest.focusedItemID ?? manifest.items.first?.id ?? "" },
+                set: { manifest.focusedItemID = $0 }),
+            heightCap: heightCap,
+            onToggle: manifest.toggle
+        )
     }
 
     @ViewBuilder
