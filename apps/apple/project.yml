@@ -120,14 +120,6 @@ targetTemplates:
           # Xcode's Release default, pinned so Sentry symbolication cannot silently break.
           DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
     postBuildScripts:
-      # Stamp the exact checkout into the signed bundle. The resource is a build artifact, not a
-      # generated source file, so branch switches never leave tracked metadata stale.
-      - name: Embed build metadata
-        basedOnDependencyAnalysis: false
-        outputFiles:
-          - "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BuildMetadata.plist"
-        script: |
-          /bin/bash "$SRCROOT/scripts/embed-build-metadata.sh"
       # Archives only (`runOnlyWhenInstalling`): a Debug build has no dSYM to upload. Org + auth
       # come from the org token in ~/.sentryclirc — Xcode run scripts do not inherit the shell
       # env — so only the project is exported here.

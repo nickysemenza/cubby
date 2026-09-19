@@ -7,7 +7,6 @@ import SwiftUI
 /// screen — so it shows raw values, in the data voice, and formats nothing away.
 struct DevView: View {
     @Environment(AppModel.self) private var model
-    private let buildMetadata = AppBuildMetadata.current
     @State private var line = "2 cups flour"
     @State private var apiResult: String?
     @State private var checking = false
@@ -116,24 +115,6 @@ struct DevView: View {
                         .buttonStyle(.plain)
                         PanelDivider()
                         LabeledRow(label: "CubbyKit", value: CubbyKitInfo.version, mono: true)
-                        PanelDivider()
-                        LabeledRow(label: "Branch", value: buildMetadata.branch, mono: true)
-                        PanelDivider()
-                        LabeledContent("Commit") {
-                            if let url = buildMetadata.commitURL {
-                                Link(buildMetadata.commit, destination: url)
-                                    .font(.porcelainCode)
-                                    .textSelection(.enabled)
-                            } else {
-                                Text(buildMetadata.commit)
-                                    .font(.porcelainCode)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                        .padding(.horizontal, PorcelainTokens.Space.md)
-                        .padding(.vertical, PorcelainTokens.Space.sm)
-                        PanelDivider()
-                        LabeledRow(label: "Message", value: buildMetadata.subject)
                         PanelDivider()
                         LabeledRow(label: "Host", value: model.host, mono: true)
                     }

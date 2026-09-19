@@ -469,10 +469,9 @@ final class PhotoImportManifest {
         assignments[photoID]?.createDraft?.body
     }
 
-    /// Test-observable: exercises the analyzer's `apply` (using the manifest's own current
-    /// generation) without driving the full on-device pipeline (network, Vision, Foundation
-    /// Models). Regression seam for A1: `apply` may only write `assignments`/`suggestions`; it
-    /// must never touch `selectedIDs`.
+    /// Test-observable: exercises the analyzer's suggestion application (using the manifest's own
+    /// current generation) without driving the full pipeline. Analysis can offer a record, but a
+    /// person must tap it before any assignment is staged.
     func applyRoutingDecisions(_ decisions: [PhotoRoutingDecision], candidates: [String: Candidate]) {
         apply(decisions: decisions, candidates: candidates, generation: analysisGeneration)
     }
@@ -540,13 +539,13 @@ final class PhotoImportManifest {
             } catch {
                 Diagnostics.report(error, context: "photos.manifest.identity")
             }
-            analysisState = .running("Finding possible destinations…")
+            analysisState = .running("Searching Cubby records from recognized text…")
             let candidates = await loadCandidates(client: client)
             guard analysisGeneration == generation, !Task.isCancelled else { throw CancellationError() }
             guard !candidates.isEmpty else {
                 appendAnalysisLog(
-                    "No record candidates loaded",
-                    detail: "Vision results are preserved; choose a destination manually.",
+                    "No Cubby records matched recognized text",
+                    detail: "On-device Vision results are preserved; choose a destination manually.",
                     kind: .abstention)
                 analysisState = .complete
                 return
@@ -556,7 +555,7 @@ final class PhotoImportManifest {
                 .sorted()
                 .joined(separator: " · ")
             appendAnalysisLog(
-                "Loaded manifest-scoped candidates", detail: candidateCounts, kind: .progress)
+                "Loaded Cubby record candidates", detail: candidateCounts, kind: .progress)
             analysisState = .running("Comparing with existing photos…")
             let visualMatches = await PhotoVisualEvidenceMatcher().matches(
                 analyses: prepared.mapValues(\.1),
@@ -639,31 +638,12 @@ final class PhotoImportManifest {
                 let candidate = candidates[candidateID],
                 candidate.option.id == decision.routeID
             else { continue }
-            if candidate.option.route.choice == .prompt { continue }
+            suggestedSourceTypes[decision.photoID] = candidate.option.route.source
             suggestedSourceRecords[decision.photoID] = candidate.row
-            // Related routes still need a relationship resolver and an explicit existing-versus-
-            // create choice. Keep the natural source suggestion, but never create a destination
-            // merely because a classifier or Foundation Models ranked its source record.
-            guard candidate.option.route.kind == .`self` else {
-                suggestions[decision.photoID] =
-                    "\(candidate.row.title) · \(candidate.row.id) · \(decision.explanation)"
-                continue
-            }
-            assignments[decision.photoID] = PhotoDestinationAssignment(
-                route: candidate.option.route,
-                source: EntityRef(entity: candidate.option.route.source, id: candidate.row.id),
-                sourceRow: candidate.row,
-                recordID: candidate.row.id,
-                title: "\(candidate.row.title) · \(candidate.row.id)",
-                shortcode: candidate.row.id,
-                replaceConfirmed: false,
-                evidence: decision.explanation,
-                decision: Self.automaticDecision(route: candidate.option.route, row: candidate.row))
             suggestions[decision.photoID] =
                 "\(candidate.row.title) · \(candidate.row.id) · \(decision.explanation)"
-            // A1: the background analyzer only ever writes `assignments`/`suggestions`. It must
-            // never touch `selectedIDs` — doing so used to yank the selection out from under a
-            // photo the person had open in a chooser/editor, losing that photo's capture date.
+            // Suggestions deliberately stop here. A source/record tap is the authorization to
+            // resolve routes or attach a photo; model output never stages an assignment itself.
         }
     }
 
@@ -1092,18 +1072,6 @@ final class PhotoImportManifest {
         let routing: PhotoRoutingCandidate
     }
 
-    private struct CandidatePage: Sendable {
-        let index: Int
-        let option: PhotoDestinationOption
-        let rows: [EntityRow]
-        let failure: CandidateLoadFailure?
-    }
-
-    private struct CandidateLoadFailure: LocalizedError, Sendable {
-        let message: String
-        var errorDescription: String? { message }
-    }
-
     private var preparedHashQueries: [String: HashQuery] {
         Dictionary(
             uniqueKeysWithValues: prepared.compactMap { id, value in
@@ -1123,68 +1091,52 @@ final class PhotoImportManifest {
     }
 
     private func loadCandidates(client: CubbyClient) async -> [Candidate] {
-        // Catalogs are expensive and do not improve an abstention. Vision's fast classifier is
-        // the scope for automatic matching; manual assignment later loads only the chosen type.
-        let likelySources = Set(suggestedSourceTypes.values)
-        let options = sourceTypeOptions.filter { likelySources.contains($0.source) }.compactMap { type in
-            let routes = type.options
-            return routes.first(where: { $0.route.choice == .primary })
-                ?? routes.sorted { $0.id < $1.id }.first
-        }
-        let pages = await withTaskGroup(of: CandidatePage.self, returning: [CandidatePage].self) {
-            group in
-            var iterator = Array(options.enumerated()).makeIterator()
+        let optionsBySource = Dictionary(
+            uniqueKeysWithValues: sourceTypeOptions.compactMap {
+                type -> (EntityKey, PhotoDestinationOption)? in
+                let option =
+                    type.options.first(where: { $0.route.choice == .primary })
+                    ?? type.options.sorted { $0.id < $1.id }.first
+                return option.map { (type.source, $0) }
+            })
+        let allowedSources = Set(optionsBySource.keys)
+        var candidates: [Candidate] = []
+        var candidateIDs = Set<String>()
 
-            func enqueue(_ entry: (offset: Int, element: PhotoDestinationOption)) {
-                group.addTask {
-                    do {
-                        let page = try await client.list(
-                            EntityCatalog[entry.element.route.source], page: 1, pageSize: 25)
-                        return CandidatePage(
-                            index: entry.offset, option: entry.element, rows: page.items,
-                            failure: nil)
-                    } catch {
-                        return CandidatePage(
-                            index: entry.offset, option: entry.element, rows: [],
-                            failure: CandidateLoadFailure(message: error.localizedDescription))
+        for item in items {
+            guard let analysis = prepared[item.id]?.1 else { continue }
+            for query in PhotoRecordSearch.queries(for: analysis) {
+                do {
+                    let matches = try await PhotoRecordSearch.matches(
+                        query: query, allowedSources: allowedSources, client: client)
+                    for match in matches {
+                        guard let option = optionsBySource[match.key] else { continue }
+                        let policy = PhotoImportCatalog.routingPolicies[option.route.source]
+                        guard Self.matchesLifecycle(match.row, policy: policy),
+                            !(option.route.requiresReplaceConfirmation && match.row.imageURL != nil)
+                        else { continue }
+                        let candidateID = "\(option.id):\(match.row.id)"
+                        guard candidateIDs.insert(candidateID).inserted else { continue }
+                        let description =
+                            ([match.row.title, match.row.id]
+                            + PhotoEvidenceScorer.candidateFieldValues(match.row, policy: policy))
+                            .joined(separator: " · ")
+                        candidates.append(
+                            Candidate(
+                                option: option,
+                                row: match.row,
+                                routing: PhotoRoutingCandidate(
+                                    id: candidateID, routeID: option.id, description: description,
+                                    sourceEntity: option.route.source, sourceID: match.row.id)))
                     }
+                } catch is CancellationError {
+                    return []
+                } catch {
+                    Diagnostics.report(error, context: "photos.manifest.recordSearch")
+                    appendAnalysisLog(
+                        "Cubby record search failed", detail: error.localizedDescription,
+                        photoID: item.id, kind: .fallback)
                 }
-            }
-
-            for _ in 0..<min(4, options.count) {
-                if let entry = iterator.next() { enqueue(entry) }
-            }
-            var result: [CandidatePage] = []
-            for await page in group {
-                result.append(page)
-                if let entry = iterator.next() { enqueue(entry) }
-            }
-            return result.sorted { $0.index < $1.index }
-        }
-
-        let candidates = pages.flatMap { page -> [Candidate] in
-            if let failure = page.failure {
-                Diagnostics.report(
-                    failure, context: "photos.manifest.candidates.\(page.option.id)")
-            }
-            let policy = PhotoImportCatalog.routingPolicies[page.option.route.source]
-            return page.rows.compactMap { row in
-                guard Self.matchesLifecycle(row, policy: policy),
-                    !(page.option.route.requiresReplaceConfirmation && row.imageURL != nil)
-                else { return nil }
-                let description =
-                    ([row.title, row.id] + PhotoEvidenceScorer.candidateFieldValues(row, policy: policy))
-                    .joined(separator: " · ")
-                // Route identity is distinct from the natural source record. A source can expose
-                // existing and create-related routes, so a candidate key must not collide when
-                // those routes are loaded together.
-                let candidateID = "\(page.option.id):\(row.id)"
-                return Candidate(
-                    option: page.option,
-                    row: row,
-                    routing: PhotoRoutingCandidate(
-                        id: candidateID, routeID: page.option.id, description: description,
-                        sourceEntity: page.option.route.source, sourceID: row.id))
             }
         }
         return Array(candidates.prefix(FoundationModelsPhotoSemanticModel.maximumCandidates))

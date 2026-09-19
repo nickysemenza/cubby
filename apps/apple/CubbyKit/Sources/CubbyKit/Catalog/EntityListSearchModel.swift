@@ -73,6 +73,12 @@ public final class EntityListSearchModel {
             return
         }
 
+        // The screen identifies the visible list as this query's result. Do not leave an older
+        // query's rows visible during debounce/loading, especially for chooser flows where a tap
+        // has a side effect.
+        rows = []
+        meta = nil
+        page = 1
         startSearch(query: normalized)
     }
 
