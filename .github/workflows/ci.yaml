@@ -506,8 +506,10 @@ jobs:
           wasm: "false"
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Run Apple checks
-        run: pnpm apple check
+      - name: Run CubbyKit Swift tests
+        run: |
+          node scripts/ensure-apple-ffi.ts
+          swift test --package-path apps/apple/CubbyKit --force-resolved-versions
 
   report-coverage:
     name: Report scheduled coverage
