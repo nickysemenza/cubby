@@ -673,7 +673,7 @@ private struct RelationshipNodeDetailsSheet: View {
                             "Path",
                             selection: Binding(
                                 get: { model.selectedPathIndex },
-                                set: model.selectPath
+                                set: { model.selectPath(at: $0) }
                             )
                         ) {
                             ForEach(paths.indices, id: \.self) { index in
