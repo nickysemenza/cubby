@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import MapKit
 import Observation
 
 /// A photo's reverse-geocoded locality plus the time zone that placemark reported, for the
@@ -19,8 +20,6 @@ struct PhotoProvenanceLocality: Sendable, Equatable {
 final class PhotoCaptureProvenance {
     private var cache: [String: PhotoProvenanceLocality] = [:]
     private var inFlight: Set<String> = []
-    private let geocoder = CLGeocoder()
-
     /// The cached result for `id`, or nil while a lookup hasn't run (or finished) yet.
     func result(for id: String) -> PhotoProvenanceLocality? {
         cache[id]
@@ -38,8 +37,17 @@ final class PhotoCaptureProvenance {
         inFlight.insert(id)
         defer { inFlight.remove(id) }
         do {
-            let placemark = try await geocoder.reverseGeocodeLocation(location).first
-            cache[id] = PhotoProvenanceLocality(city: placemark?.locality, timeZone: placemark?.timeZone)
+            guard let request = MKReverseGeocodingRequest(location: location) else {
+                cache[id] = PhotoProvenanceLocality(city: nil, timeZone: nil)
+                return
+            }
+            let mapItem = try await request.mapItems.first
+            cache[id] = PhotoProvenanceLocality(
+                city: mapItem?.addressRepresentations?.cityName,
+                timeZone: mapItem?.timeZone)
+        } catch is CancellationError {
+            // A SwiftUI `.task(id:)` cancellation is not a failed lookup; leave it retryable.
+            return
         } catch {
             Diagnostics.report(error, context: "photos.provenance.reverseGeocode")
             cache[id] = PhotoProvenanceLocality(city: nil, timeZone: nil)

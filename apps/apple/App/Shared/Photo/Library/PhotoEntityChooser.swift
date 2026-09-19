@@ -32,7 +32,18 @@ struct PhotoEntityChooser: View {
         return .createSelf(selfOption)
     }
 
+    @ViewBuilder
     var body: some View {
+        if let search = descriptor.primarySearch {
+            content.searchable(
+                text: $searchText,
+                prompt: search.placeholder ?? "Search \(descriptor.plural.lowercased()) or shortcode")
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             if !heroItems.isEmpty {
                 PhotoImportHero(items: heroItems)
@@ -71,14 +82,6 @@ struct PhotoEntityChooser: View {
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
-        .modifier(
-            PhotoEntitySearchModifier(
-                enabled: descriptor.primarySearch != nil,
-                text: $searchText,
-                prompt: descriptor.primarySearch?.placeholder
-                    ?? "Search \(descriptor.plural.lowercased()) or shortcode"
-            )
-        )
         // Same shape as `EntityListView`: `.searchable` owns a plain `@State` string and the
         // model is told about changes. Binding the field straight to the observable model's
         // normalized `query` left the chooser showing unfiltered rows on macOS.
@@ -89,12 +92,13 @@ struct PhotoEntityChooser: View {
                 model = PhotoEntityChooserModel(
                     descriptor: descriptor, captureDates: captureDates,
                     loader: { filters, query, page, sort in
-                        var requestFilters = filters
                         if let query, !query.isEmpty {
-                            requestFilters.set(.single(query), for: "searchQuery")
+                            return try await PhotoRecordSearch.page(
+                                query: query, descriptor: descriptor, client: appModel.client,
+                                page: page, pageSize: 25)
                         }
                         return try await appModel.client.list(
-                            descriptor, page: page, pageSize: 25, sort: sort, filters: requestFilters)
+                            descriptor, page: page, pageSize: 25, sort: sort, filters: filters)
                     })
             }
             await model?.loadInitial()

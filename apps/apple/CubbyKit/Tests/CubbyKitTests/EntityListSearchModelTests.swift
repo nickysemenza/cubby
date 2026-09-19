@@ -50,6 +50,24 @@ struct EntityListSearchModelTests {
         #expect(model.phase == .idle)
     }
 
+    @Test func replacingAQueryImmediatelyHidesOlderRows() async {
+        let model = EntityListSearchModel(
+            debounceNanoseconds: 1,
+            sleeper: { _ in },
+            loader: { query, _ in Self.page(Self.row(query)) })
+
+        model.setQuery("old")
+        #expect(await waitUntil { model.phase == .loaded })
+        #expect(model.rows.map(\.title) == ["old"])
+
+        model.setQuery("PRD-2D6R")
+
+        #expect(model.rows.isEmpty)
+        #expect(model.phase == .debouncing || model.phase == .loading)
+        #expect(await waitUntil { model.phase == .loaded })
+        #expect(model.rows.map(\.title) == ["PRD-2D6R"])
+    }
+
     @Test func nextPageAppendsUniqueRowsAndKeepsPageOnFailure() async {
         let model = EntityListSearchModel(
             debounceNanoseconds: 1,

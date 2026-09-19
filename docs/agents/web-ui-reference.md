@@ -76,10 +76,10 @@ const { data, isLoading } = useQueries({
 
 ## Colors / Design Tokens
 
-- Avoid hardcoded colors (hex/oklch) in components. Use the tokens in `apps/web/src/styles.css` — the chart ramp (`--chart-1..8`) and semantic tokens (`--plum`, `--positive`, `--warning`, …). Map green→`positive`, red→`destructive`, amber/yellow→`warning`. Canvas paint, `theme-color`, and chart-library fallbacks are the usual exceptions; this is a design-review rule rather than a CI regex.
-- A new semantic color gets a `--token` in `:root` **and** a `--color-*` mirror in `@theme inline` (the `--plum` / `--color-plum` pattern), so both `var(--token)` and Tailwind utilities (`text-foo`) work. e.g. `--ingredient-amount/name/modifier`. **Composite shadow/text-shadow tokens** (`--shadow-chunky*`, `--shadow-inset-gloss`, `--shadow-scan-flash`, `--text-shadow-chart`) need **no** `@theme` mirror — use via `shadow-[var(--token)]` or `style={{ boxShadow: "var(--token)" }}`. Don't inline `rgba()` shadows in components; add a token.
+- Avoid hardcoded colors (hex/oklch) in components. Shared palette and semantic primitives (`--positive`, `--warning`, `--destructive`, …) live in `packages/design-tokens/brand.css`; web-only derivations such as the chart ramp (`--chart-1..8`) live in `apps/web/src/styles.css`. Map green→`positive`, red→`destructive`, amber/yellow→`warning`. Canvas paint, `theme-color`, and chart-library fallbacks are the usual exceptions; this is a design-review rule rather than a CI regex.
+- Add a shared semantic primitive in `packages/design-tokens/brand.css`; add its `--color-*` mirror in `apps/web/src/styles.css`'s `@theme inline` when Tailwind utilities (`text-foo`) need it. A genuinely web-only token starts in `styles.css`. **Composite shadow/text-shadow tokens** (`--shadow-chunky*`, `--shadow-inset-gloss`, `--shadow-scan-flash`, `--text-shadow-chart`) need **no** `@theme` mirror — use via `shadow-[var(--token)]` or `style={{ boxShadow: "var(--token)" }}`. Don't inline `rgba()` shadows in components; add a token.
 - **Icon sizes: `size-3.5` (14px) for inline/nav glyphs, `size-5` (20px) for card/tile/hero icons.** Use the `size-N` shorthand, never `h-N w-N` (guard-enforced, rule `hw-pair-shorthand`). Micro-indicators (sort arrows, dense badges) stay `size-3`; the interactive ui primitives (Button/DropdownMenu/Command/Tabs/Toggle) already default their icon slot to `size-3.5`, so an explicit size on a glyph inside them is an override — usually unwanted.
-- **Badge is the canonical categorical chip** — a mono-uppercase stamp (`font-mono uppercase tracking-wider`, the default). Free-form prose in a badge (product names, user text) opts out with `font-sans normal-case tracking-normal`. Don't hand-roll pill styling.
+- **Badge is the canonical categorical chip.** Sentence case is the default; use monospaced uppercase treatment explicitly for short codes or register labels. Don't hand-roll pill styling.
 
 ## Images
 
@@ -135,17 +135,3 @@ An embedded table must also reach **its own** rows' entity, not just their relat
 ## Page shell
 
 - Every list and detail page renders through one shell: `Page` from `~/components/page/Page` (`HydrateClient` + `PageWrapper` + unified `PageHeader` + `Suspense`). Props are a discriminated union — `variant="detail"` requires `entity` at compile time. List = eyebrow/title/actions/accent header; detail = the spec-plate placard. Don't reintroduce `EntityLayout`/`DetailPage` (deleted) or call `PageHero`/`PageWrapper` directly in pages — use `Page`. Detail bodies use `DetailSections` (`~/app/_components/data-table/detail-page`) as `Page`'s children.
-
-## SSR and the Start transport
-
-The server render executes authenticated Start functions locally and never makes
-an HTTP request to itself. Keep `~/server` imports behind the `.server()` branch
-of an isomorphic function so server-only dependencies stay out of browser
-bundles. `ssr: false` is a measured cost choice, not a correctness workaround.
-
-Route authors should prefer `ensureQueryData(...)` when the route needs data before
-rendering and accept the latency deliberately. Specialized long-running or
-upstream-bound routes may opt out with a comment explaining the measured cost.
-Workflow streams use typed JSONL server routes and an `AbortSignal`; they are
-explicitly opened by the owning screen rather than hidden behind a generic
-dispatcher.

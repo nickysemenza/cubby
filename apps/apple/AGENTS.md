@@ -1,7 +1,7 @@
 # apps/apple agent rules
 
-Native PoC: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI harness. Full plan:
-`/Users/nicky/.claude/plans/moonlit-juggling-finch.md`.
+Native app: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI
+harness. This document is the current native implementation guidance.
 
 ## Build order
 
@@ -122,7 +122,7 @@ generated shape.
 - `pnpm apple <cli|mac|ios|sim|gen|test>` from the repo root launches each product (README "Running").
 - `swift build --package-path apps/apple/CubbyKit`
 - `swift test --package-path apps/apple/CubbyKit`
-- `xcodegen generate --spec apps/apple/project.yml` (only once `project.yml` exists)
+- `xcodegen generate --spec apps/apple/project.yml` (when `project.yml` changes)
 - Full app build needs the xcframework from `ensure-apple-ffi.ts` first; that script and its inputs
   belong to W1.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see

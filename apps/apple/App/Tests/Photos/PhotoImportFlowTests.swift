@@ -75,10 +75,9 @@ struct PhotoImportFlowTests {
         #expect(body["observedOn"] == .string(PlainDate(captured).rawValue))
     }
 
-    /// A1 regression: the background analyzer's `apply` may only ever write `assignments`/
-    /// `suggestions` — it must never touch `selectedIDs`, which used to yank the selection out
-    /// from under a photo the person had open in a chooser or editor.
-    @Test func analyzerApplyNeverMutatesSelectedIDs() throws {
+    /// Routing analysis may offer a matching record but cannot attach a photo; the explicit
+    /// suggested-record tap is the authorization boundary.
+    @Test func analyzerSuggestionsNeverAttachPhotos() throws {
         let item = try selection(filename: "match.jpg")
         let manifest = makeManifest(items: [item])
         manifest.selectedIDs = [item.id]
@@ -95,10 +94,9 @@ struct PhotoImportFlowTests {
         manifest.applyRoutingDecisions([decision], candidates: [routing.id: candidate])
 
         #expect(manifest.selectedIDs == [item.id])
-        #expect(manifest.groups.count == 1)
-        // Developer overlays layer 2: the analyzer's automatic assignment records a route decision
-        // too, not only a manual pick's `.user`.
-        #expect(manifest.groups.first?.decision == .automaticPrimary)
+        #expect(manifest.groups.isEmpty)
+        #expect(manifest.needsDestination == [item.id])
+        #expect(manifest.selectedSuggestedSource?.row.id == "PRD-9999")
     }
 
     /// A1 (Q7b): an undated photo's capture-date-bound field never gets a value from `createPrefill`
@@ -122,8 +120,8 @@ struct PhotoImportFlowTests {
                 option: option, source: source, captureDate: nil))
     }
 
-    /// A2 (Q15c): the caption is a pure function of (time, zone, city) — no `CLGeocoder` in the
-    /// loop — and drops the " in …" clause entirely when there's no city.
+    /// A2 (Q15c): the caption is a pure function of (time, zone, city) and drops the " in …"
+    /// clause entirely when there's no city.
     @Test func captureProvenanceCaptionFormatsWithAndWithoutACity() throws {
         let capturedAt = Date(timeIntervalSince1970: 1_757_500_000)
         let zone = try #require(TimeZone(identifier: "America/Los_Angeles"))

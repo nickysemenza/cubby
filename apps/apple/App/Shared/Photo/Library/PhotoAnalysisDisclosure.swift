@@ -34,6 +34,7 @@ struct PhotoAnalysisDisclosure: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Vision image classification", systemImage: "eye")
                     Label("Vision text recognition", systemImage: "text.viewfinder")
+                    Label("Cubby record lookup", systemImage: "magnifyingglass")
                     Label(
                         "Vision feature print",
                         systemImage: "point.3.connected.trianglepath.dotted")
@@ -41,14 +42,16 @@ struct PhotoAnalysisDisclosure: View {
                     if let foundationModelSummary = manifest.foundationModelSummary {
                         Label(foundationModelSummary, systemImage: "apple.intelligence")
                     }
-                    Text("No cloud AI is used. Derived analysis data syncs to Cubby.")
-                        .foregroundStyle(.secondary)
+                    Text(
+                        "Vision and Foundation Models stay on-device. Cubby lookup finds existing records; no cloud AI is used."
+                    )
+                    .foregroundStyle(.secondary)
                 }
             }
             .padding(.top, 8)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text("On-device AI decision log")
+                Text("Photo routing decision log")
                 if let latest = manifest.analysisLog.last {
                     Text(latest.title)
                         .font(.caption2)

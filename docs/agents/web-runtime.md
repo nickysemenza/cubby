@@ -7,11 +7,15 @@ hook-result defaults use module-level constants (not `= []`/`{}`), and
 query-key, clipboard, form-field, database, merge, and shortcode helpers over
 hand-rolled equivalents; raw mutation is reserved for the documented dynamic
 invalidation/inline-error/multi-mutation cases.
+For hook-default and `useQueries` examples, load the relevant heading in the
+[web UI reference](web-ui-reference.md).
 
 The server render uses TanStack Start's local function execution, never an HTTP
 request to itself. Keep `~/server` imports behind the `.server()` branch of an
 isomorphic function. `ssr: false` is a measured cost choice, not a correctness
 workaround; a loader may await `ensureQueryData` when that latency is warranted.
+Workflow streams use typed JSONL server routes and an `AbortSignal`; the owning
+screen opens them explicitly rather than a generic dispatcher.
 
 Hydration: TanStack Start's SSR query stream lands in the client cache before
 React hydrates, so gate loading branches with `useHydratedLoading`/`useHydrated`,
@@ -30,5 +34,19 @@ view is visible manifest-backed URL state; `scopeFilters` is only a visible
 contextual scope. Missing filters never widen a query; renderer omissions are
 server-enforced and disclosed.
 
-For the full helper catalogue and SSR rationale, load the relevant heading in
-[the preserved root reference](root-rules-reference.md).
+## Reuse before writing a helper
+
+Use `useDeletableConfig`, `useUpdateMutation`, `useActionMutation`,
+`getErrorMessage`, `copyText`, and the existing form-field helpers rather than
+recreating their normal UI behavior. Use the repository helpers
+`insertAndReturn`, `updateAndReturn`, `withTransaction`, `formatSearchTerm`,
+`notDeleted`, and `buildSearchConditions`; use the shortcode resolver and
+`finalizeMerge` for their named operations. Prefer `es-toolkit` collection
+helpers and exhaustive `ts-pattern` matches when they express the operation
+directly.
+
+Do not turn every raw mutation into `useActionMutation`: it has static
+invalidation and toast semantics. A raw mutation remains correct for shared
+multi-mutation invalidation, conditional query keys, caller-owned error UI, or
+variables-driven local state. `noUncheckedIndexedAccess` is on: guard a
+possibly absent array, record, or map entry instead of asserting it away.

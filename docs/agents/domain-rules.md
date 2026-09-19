@@ -10,7 +10,7 @@ rename/drop prompts. It does not diff CHECK constraints or partial-index WHERE
 clauses; apply those deliberately and read the resulting schema back. Before a
 `DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the
 relational query builder selects every declared column, so the declaration is
-the read (see agent validation reference).
+the read.
 
 Traps around `db:push`, all seen for real:
 
@@ -109,13 +109,13 @@ an index is eligible but unexercised, not droppable — audit every call site wi
 
 ## Generated files
 
-TS generated output lives in a `generated/` directory and carries a `.gen.`
-suffix; Swift/Rust output lives in a `Generated/` directory instead.
-`.gitattributes` marks these paths `linguist-generated`. Never hand-edit one —
-edit its generator or input and regenerate; a missing one at its expected path
-means stub it, not fabricate the real shape.
+Generated output is identified by its generated header or `.gitattributes`, not
+by a directory or suffix: generated routes and Swift bindings have different
+paths. Never hand-edit one — edit its generator or input and regenerate. A
+missing expected output means run its owning generator and investigate the
+reported failure.
 
-One exception: the entity list/detail route modules the generator emits from
+Entity route modules: the generator emits the list/detail modules from
 `route.list` / `route.detail` (`apps/web/src/routes/_authenticated/<basePath>.index.tsx`
 and `.$shortcode.tsx`) sit beside the hand-written routes with no `.gen.`
 suffix, because TanStack's file router needs physical files there and a
@@ -123,6 +123,3 @@ suffix, because TanStack's file router needs physical files there and a
 header, so `generate:check` still catches a stale or hand-edited one, and each
 is listed explicitly in `.gitattributes`. To customize one, set that
 `route.list` / `route.detail` to `null` in the declaration and write the file.
-
-For the helper catalogue and exact edge-case rules, load the relevant heading in
-[the preserved root reference](root-rules-reference.md).

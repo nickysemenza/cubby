@@ -770,23 +770,16 @@ private struct ReplacementConfirmation: Identifiable {
     var id: String { "\(option.id):\(row.id)" }
 }
 
-struct PhotoEntitySearchModifier: ViewModifier {
-    let enabled: Bool
-    @Binding var text: String
-    let prompt: String
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if enabled {
-            content.searchable(text: $text, prompt: prompt)
-        } else {
-            content
-        }
-    }
+#Preview(traits: .modifier(SignedInPreview())) {
+    PhotoDestinationSheetPreview()
 }
 
-#Preview(traits: .modifier(SignedInPreview())) {
-    PhotoDestinationSheet(manifest: PhotoImportManifest(items: []), onDone: { _ in })
+private struct PhotoDestinationSheetPreview: View {
+    @State private var manifest = PhotoImportManifest(items: [])
+
+    var body: some View {
+        PhotoDestinationSheet(manifest: manifest, onDone: { _ in })
+    }
 }
 
 #Preview("Developer overlays on", traits: .modifier(SignedInPreview())) {
