@@ -48,7 +48,7 @@ store.
 | 1 | What "assigned to a user" means | The vendor **login** (`VendorAccount` owned by a `LedgerParty`). Purchaser is *derived on read*, never stored *(review: a third stored "who" beside `FinancialAccount.ledgerPartyId` and `ExpenseAttribution` was redundant)*. |
 | 2 | Device identity | Real member auth: better-auth user ↔ `LedgerParty.userId`. |
 | 3 | Rebecca's client | She runs the Mac app. |
-| 4 | Discovery | Server-side Gmail API pull per member mailbox, history-based, on an hourly cron. |
+| 4 | Discovery | Charge-driven: a statement charge at an `online_account` vendor is *something to hunt*; a server-side Gmail pull (per member mailbox, history-based, hourly cron) resolves its order id and event stream; the browser then fetches that one order by `orderUrlTemplate`. The orders-list walk is only for backfill and vendors with no email senders. |
 | 5 | Automation scope | Everything automatic except receiving. |
 | 6 | Auditor autonomy | Applies reversible relinks/reclassifies only, and only on rows written by the same run; everything else is an open finding with the fix attached. |
 | 7 | Exception surface | Problems page is the source of truth; the Mac app posts one local notification per run with a count. No APNs *(review: none exists)*. |
@@ -57,17 +57,17 @@ store.
 | 10 | Enrichment fetching | Same client, same worklist protocol, second phase. |
 | 11 | Vendor challenge | Human solves it in their real browser; agent pauses. |
 | 12 | Purchaser | Derived: account owner → card owner → null. No column. |
-| 13 | Session ownership | Strict for browser sessions: a VendorAccount is only driven from a Mac signed in as its owner. MCP writes name `vendorAccountId` explicitly and are not ownership-checked (trusted household). |
-| 14 | Vendor evidence flag | `orderEvidence: online_account \| receipt_only \| not_expected \| null`. Expectation checks are *derived* Problems detectors, not a workflow: card charge at an `online_account` vendor with no allocated Purchase after 3 days; `receipt_only` charge without a document; `null` vendor with a charge. |
+| 13 | Session ownership | Strict everywhere: a VendorAccount is only driven from a Mac signed in as its owner, and an MCP write naming a `vendorAccountId` must come from that owner's OAuth session (`@better-auth/oauth-provider` already ties every MCP call to a `user.id`). Rebecca runs her own one-off imports. |
+| 14 | Vendor evidence flag | `orderEvidence: online_account \| receipt_only \| not_expected \| null`; `null` behaves as `online_account` until classified. A one-time classification pass uses Jev `vendor-evidence-suggest` (name, website, charge descriptors, presence of order mail): high-probability values auto-apply, the rest are one batch review. Expectation checks are *derived* Problems detectors: an `online_account` charge whose hunt (decision 47) failed; a `receipt_only` charge without a document. |
 | 15 | Receiving | Never automatic. "All shipments delivered" (read off the order page) files an `arrived` finding once per Purchase; the human receives through the existing flow. No delivery column. |
-| 16 | Backfill conflicts | A Purchase that already has any live Expense gets **no lines written**; the extracted lines go into a `duplicate_lines` finding *(review: "fill gaps" would double-count hand-entered aggregates)*. Populated header fields are never overwritten. |
+| 16 | Existing lines | If the Purchase's live Expenses are exactly one unlinked `principal` row whose cost equals the extracted lines' sum, the writer replaces it with the lines, carrying the aggregate's title, `costType`, trade, and project onto them (the skill's snapshot rule). Any other shape — a linked row, a partial split, a sum that disagrees — writes **no lines** and files `duplicate_lines` with the extracted lines for review *(review: plain "fill gaps" would double-count)*. Populated header fields are never overwritten. |
 | 17 | Extraction | AI extraction (fast tier) from capped captured text + links + image srcs. No coded extractors. Navigation is agentic with cached hints. |
 | 18 | Mac app lifetime | Runs only while the app is open. |
 | 19 | Backfill pacing | ~20–30 orders/hour, newest first. |
 | 20 | The Markdown skill | Splits: invariants → code; judgment → agent skill + auditor prompt; mechanics → capture tool. The settlement/statement/Monarch half of the skill is untouched. |
 | 21 | Capture payload | Readable text (capped) + product links + image srcs. Screenshot always taken, only sent to the repair feature. |
 | 22 | Primary document | Order page rendered to PDF and attached with `documentKind: "order_confirmation"`, which *is* the primary document today. Screenshot attached as `other`. |
-| 23 | Sum mismatch | Lines must equal `statedTotal` to the cent **to be emitted by extraction**; a mismatch after one repair turn means the Purchase is created with its PDF and a `sum_mismatch` finding and **no Expense rows** — the writer itself never refuses on `statedTotal` *(review: tenet 5)*. |
+| 23 | Sum mismatch | Lines must equal the page's grand total to the cent **to be emitted by extraction**; after one repair turn still fails, the Purchase is created with its PDF, **one productless `principal` Expense at the page's printed grand total** (page evidence, not a rollup of `statedTotal`), and a `sum_mismatch` finding carrying the extracted lines. Spend is right immediately; lines arrive when the finding is applied. The writer never refuses on `statedTotal` *(review: tenet 5)*. |
 | 24 | Vendor learning | Agent caches hints on the Vendor; hints are advisory and rediscovered on failure. First-time learning may also be a Claude Code + Chrome MCP session. |
 | 25 | Delivered signal | Read from the order page; `arrived` finding only when all shipments show delivered. |
 | 26 | Agentic loop | Yes: a Flue agent per VendorAccount with coarse tools. |
@@ -75,7 +75,7 @@ store.
 | 28 | Agent granularity | Long-lived agent per VendorAccount, one run at a time; in-flight state in the DO, durable state in Postgres. |
 | 29 | Model tiers | Fast tier drives and extracts; Jev decides; reasoning tier at high effort audits and repairs. |
 | 30 | Browser offline | Pause instantly on socket drop, auto-resume on reconnect, nag after 24 h. |
-| 31 | Run triggers | Browser runs: Mac app foreground with a browser available, Gmail discovery, manual "Sync now". Gmail polling itself is an hourly cron *(review: Workflows do not self-schedule)*. |
+| 31 | Run triggers | Browser runs: Mac app foreground with a browser available, a non-empty worklist (hunts from charges or Gmail), manual "Sync now". Gmail polling and charge matching run on an hourly cron *(review: Workflows do not self-schedule)*. |
 | 32 | Prompts | In-repo under `apps/web/src/server/agents/purchase-import/`, versioned like features, with an offline eval. |
 | 33 | Loop implementation | Flue, gated on a spike with the definition of done in §8.1. Fallback: Agents SDK primitives. |
 | 34 | Browser bridge tools | `navigate`, `evaluate`, `capture`, `screenshot`, `pdf`, `tabs`. |
@@ -85,11 +85,14 @@ store.
 | 38 | Findings | `ImportFinding`, a plain table surfaced through a new `importFindings` Problems key *(review: Problems is a key registry with detectors; no abstraction needed)*. |
 | 39 | Gmail grant | Per member via better-auth's Google provider (`linkSocial`, `gmail.readonly`, offline access); refresh token in better-auth's `account` row; `historyId` on our side. |
 | 40 | UI split | Web: VendorAccounts, runs, hints, findings. Mac app: status line, "Sync now", browser choice. |
-| 41 | Currency | Lines are written at the USD figure the page shows; a page with no USD figure gets a `foreign_currency` finding and no lines. Nothing is scaled from `statedTotal` or held for settlement *(review: tenet 5)*. |
+| 41 | Currency | Lines are written at the USD figure the page shows; a page with no USD figure gets a `foreign_currency` finding and no lines. Nothing is scaled from `statedTotal` or held for settlement *(review: tenet 5)*. Further handling is deferred until the first such order exists. |
 | 42 | Dedupe key | The existing `Purchase.orderId` + `Purchase_vendorId_orderId_key`; `vendorAccountId` is an attribute *(review)*. |
 | 43 | Shortcode prefixes | 2–5 letters (§10 item 0). `VendorAccount` is `VACCT-`; `ImportRun`/`ImportFinding` have no shortcode. |
 | 44 | Completeness | Every entity gets a 0–100 completeness score derived from its data-quality checks, each check weighted and carrying an `expectedIf` predicate; a Purchase at a `receipt_only` vendor is complete at amount + project + date, one at an `online_account` vendor is not complete without lines. Generalises today's `complete \| needs_data \| defect` (§10 item 2). |
-| 45 | "Tried, not available" | A data exception with reason `history_expired` (or `unavailable`) on `empty_expenses` / `primary_document`, fingerprinted on the fields the check reads so unrelated edits (project, notes) do not reopen it. The agent sets it automatically for orders older than the earliest order the vendor still shows; a human can set it from the Purchase. |
+| 45 | "Tried, not available" | A data exception with reason `history_expired` (or `unavailable`) on `empty_expenses` / `primary_document`. The agent sets it automatically for orders older than the earliest order the vendor still shows; a human can set it from the Purchase. |
+| 46 | Exception staleness | **All** data exceptions are fingerprinted on the inputs their check reads (live expense count, document set, `orderId`, …) instead of the row's `updatedAt`: an exception is valid while the check's inputs are unchanged. Reasons stay mandatory and typed as today. |
+| 47 | Hunt | A charge at an `online_account` vendor with no allocated Purchase opens a hunt: Gmail match (sender, date window, amount) → order id → targeted browser fetch. No email match → on the next run the browser walks the orders list bounded to the charge date ±7 days → still nothing → `expected order not found` Problem. |
+| 48 | Hunt routing | The charge routes by `FinancialAccount.ledgerPartyId` to that member's VendorAccount. The Gmail step runs server-side immediately, so the order id is known before the owner's Mac appears; only the fetch waits for their session. |
 
 ## 3. Domain model changes
 
@@ -164,10 +167,14 @@ Untyped pair (telemetry may dangle), threaded through `AiRunContext`,
 `GatewayMetadata`, `jev.ts`, the versioned telemetry queue event, and the
 consumer in `repo/telemetry.ts`. Import runs are one `jobKind`.
 
-### 3.8 `MailboxCursor` (table)
+### 3.8 `MailboxCursor` and `OrderMail` (tables)
 
-`ledgerPartyId`, `provider = 'gmail'`, `historyId`, `lastPolledAt`. Tokens live
-in better-auth's `account` table.
+`MailboxCursor`: `ledgerPartyId`, `provider = 'gmail'`, `historyId`,
+`lastPolledAt`. Tokens live in better-auth's `account` table.
+
+`OrderMail`: `ledgerPartyId`, `vendorId`, `orderId`, `amount`, `event`,
+`messageId` (unique), `receivedAt`. The parsed, deduplicated event stream
+that hunts and the delivered/refunded signals read; never money.
 
 ### 3.9 Documents
 
@@ -219,9 +226,12 @@ DOs do. Skill file = the judgment half of the current skill. Tools:
 | `cubby.finish_run(summary)` | server | closes the `ImportRun` (idempotent), triggers the auditor |
 | `cubby.mark_history_expired(vendorAccountId, earliestAvailableOrderAt)` | server | records the bound on the cursor and sets `history_expired` exceptions on `empty_expenses` / `primary_document` for this account's Purchases dated before it that have neither; never touches a Purchase that has lines or a document |
 
-Discovered order ids from Gmail are pushed into the DO's worklist; they are
-not Purchases until lines exist, and the next Gmail poll re-derives them if
-the DO was evicted.
+The DO's worklist has three sources, in priority order: **hunts** (a charge
+resolved to an order id by Gmail, or an unresolved charge with a date window
+to walk), **events** (shipped/delivered/refunded emails for known orders),
+and the **cursor walk** (backfill, or vendors with no email senders). Items
+are not Purchases until lines exist; the hourly cron re-derives them if the
+DO was evicted.
 
 ### 4.3 Server: extraction features
 
@@ -242,10 +252,16 @@ Two features *(review: `runStructuredFeature` cannot switch tier mid-run)*:
 A workflow service with its own `withTransaction`, also an MCP tool. Accepts
 `{ vendorAccountId, orders: [...] }` from any client. Per order:
 
+- the caller's session must own `vendorAccountId` (agent socket or MCP
+  OAuth user → `LedgerParty.userId`);
 - `findOrCreatePurchase` on `(vendorId, orderId)`; set `vendorAccountId`,
   `importRunId`; never overwrite populated header fields;
-- if the Purchase already has any live Expense → write no lines, file
+- existing lines (decision 16): exactly one unlinked `principal` Expense
+  equal to the lines' sum → replace it, carrying its title, `costType`,
+  trade, and project onto every line; any other shape → write no lines, file
   `duplicate_lines` with the extracted lines in `proposedFix`;
+- sum mismatch (decision 23): one productless `principal` at the page's
+  printed grand total plus a `sum_mismatch` finding; no lines;
 - typed `lineKind` on every row; no inference;
 - signed `productQuantity`, direction from cost; `null` on concessions;
 - allocation rows never carry a `productId`;
@@ -274,6 +290,8 @@ Returns per order:
 | `product-image-pick` | candidate images as `#n WxH alt…` labels, never URLs | 12 |
 | `kit-detection` | `kit_with_components \| single \| n_pack` | |
 | `order-mail-classify` | `order_mail \| not_order_mail` | |
+| `charge-mail-match` | candidate order mails in the charge's date window ∪ `none` (tie-break after sender + amount filtering) | 20 labels |
+| `vendor-evidence-suggest` | `online_account \| receipt_only \| not_expected` | |
 | `product-category-suggestion` | existing | |
 
 Every request stays under Jev's 32 000-byte cap by construction (labels, not
@@ -293,21 +311,30 @@ renders a structured refusal if the targets have since merged or deleted.
 
 ### 4.7 Server: Gmail discovery
 
-Hourly cron (`"crons"` gains `0 * * * *`) → Workflow per connected mailbox:
-`users.history.list` since `historyId` → metadata `messages.get` → match
-`From` against `Vendor.orderEmailSenders` → parse order id + event (`placed
-\| shipped \| delivered \| refunded \| cancelled`) → push to the owner's
-VendorAccount DO worklist → trigger a run if a socket is attached. Unknown
-senders → Jev `order-mail-classify` → if order mail, a derived Problem "new
-vendor?" that also asks for `orderEvidence`.
+Hourly cron (`"crons"` gains `0 * * * *`) → one Workflow with two steps.
+
+*Mail.* Per connected mailbox: `users.history.list` since `historyId` →
+metadata `messages.get` → match `From` against `Vendor.orderEmailSenders` →
+parse order id + amount + event (`placed \| shipped \| delivered \| refunded
+\| cancelled`) into a small `OrderMail` table (`ledgerPartyId`, `vendorId`,
+`orderId`, `amount`, `event`, `messageId`, `receivedAt`). Unknown senders →
+Jev `order-mail-classify` → if order mail, a derived Problem "new vendor?".
+
+*Hunts.* For every unallocated `FinancialTransaction` at an `online_account`
+(or `null`) vendor: route to the card owner's VendorAccount
+(`FinancialAccount.ledgerPartyId`); find `OrderMail` rows for that vendor and
+party within the charge's date window; exact amount match wins, otherwise
+Jev `charge-mail-match`; push `{ orderId }` (matched) or `{ walkWindow }`
+(unmatched, charge date ±7 days) to the DO worklist; trigger a run if a
+socket is attached. A hunt whose walk found nothing files the
+`expected order not found` Problem.
 
 ### 4.8 Server: expectation detectors
 
 Derived Problems detectors beside the existing
-`purchasesNotReconciling` / `purchaseFinancialSettlementMismatches`: charge at
-an `online_account` vendor with no allocated Purchase after 3 days (naming the
-card owner's VendorAccount); `receipt_only` charge with no document;
-charge at a `null`-evidence vendor. No nightly workflow.
+`purchasesNotReconciling` / `purchaseFinancialSettlementMismatches`: a hunt
+that exhausted mail and walk (naming the card owner's VendorAccount);
+`receipt_only` charge with no document. No nightly workflow.
 
 ### 4.9 Problems page
 
@@ -325,8 +352,8 @@ derived cost, Vendor hints editor, findings on Problems.
 
 `purchase-import/SKILL.md` shrinks to: learn a new vendor (walk it once with
 the Chrome MCP, save hints), one-off imports (an export → payload →
-`import_vendor_orders` with an explicit `vendorAccountId`), and enrichment
-fallbacks. Invariant prose for vendor orders is deleted; the financial
+`import_vendor_orders` with an explicit `vendorAccountId` the caller's OAuth
+user owns), and enrichment fallbacks. Invariant prose for vendor orders is deleted; the financial
 settlement half stays.
 
 ## 5. Flows
@@ -337,8 +364,13 @@ settlement half stays.
    `orderIdsOnNewestDate`): `import_order_page` → cursor advances →
    `finish_run` → auditor → local notification "Amazon (Nicky): 6 imported,
    1 needs you".
-2. **Email-discovered order.** Discovery pushes the order id to the DO
-   worklist; the next run fetches it directly by `orderUrlTemplate`.
+2. **Charge-driven hunt.** Monarch syncs a $84.12 Amazon charge on
+   Rebecca's card → routed to her Amazon VendorAccount → the hourly cron
+   finds her order mail for $84.12 two days earlier → `{ orderId }` on her
+   worklist → her Mac's next run fetches that one order by
+   `orderUrlTemplate` → `import_order_page` → the charge is allocated. No
+   mail match → the run walks her orders list for the charge date ±7 days →
+   still nothing → `expected order not found` on Problems.
 3. **Backfill.** `trigger = backfill` walks older than
    `backfillBeforeOrderAt`, newest first, paced; auditor per 25.
 4. **Export jump-start.** Claude Code reads the Amazon export, posts the
@@ -350,8 +382,9 @@ settlement half stays.
 6. **Browser offline.** Socket drops → `paused_offline` → reconnect resumes
    at the same step → 24 h without reconnect → Problem.
 7. **Sum mismatch.** Extraction fails validate → repair feature with
-   screenshot → still off → Purchase created with PDF, no lines,
-   `sum_mismatch` finding carrying the extracted lines.
+   screenshot → still off → Purchase created with PDF and one productless
+   `principal` at the printed grand total; `sum_mismatch` finding carries the
+   extracted lines; applying it splits that row.
 8. **Finding lifecycle.** Filed → Problems → apply runs `proposedFix` through
    the kernel → `applied`; dismiss → `dismissed` (labelled data for evals).
 9. **Delivered.** Page shows all shipments delivered → `arrived` finding
@@ -431,8 +464,13 @@ build for the Mac app.
 ### 8.4 Tests the plan requires
 
 - Writer: one table-driven test with a row per §4.4 invariant, including
-  "existing live Expense → no lines + `duplicate_lines`" and "`statedTotal`
-  mismatch never refuses".
+  "single unlinked aggregate → replaced with snapshot carried", "any other
+  existing shape → no lines + `duplicate_lines`", "sum mismatch → one
+  grand-total row + finding", and "non-owner session → refused".
+- Hunts: charge → exact-amount mail match; ambiguous → Jev; no mail → walk
+  window on the worklist; walk exhausted → Problem.
+- Exceptions: input-scoped fingerprint survives a notes/project edit and
+  reopens on a new Expense or document, for every check in the catalog.
 - `AI_FEATURES` registry + `features.unit.test.ts` for every new feature;
   Jev raw-probability exposure; byte-cap assertion for each shortlist
   renderer.
@@ -480,12 +518,15 @@ first, as separate small PRs, in this order.
      online_account` (or `null`, which should nag once); a `receipt_only`
      vendor expects a document but not lines; `not_expected` expects
      neither. Unexpected checks do not count.
-   - *Exceptable `empty_expenses`.* Add it to `EXCEPTION_REASONS` with
-     `history_expired` and `unavailable`; add `history_expired` to
-     `primary_document`. Fingerprint these exceptions on the fields the
-     check reads (live expense count, document set) rather than
-     `updatedAt`, so assigning a project or editing notes does not reopen
-     them; adding a line or a document still does.
+   - *Exceptable `empty_expenses`, input-scoped fingerprints.* Add
+     `empty_expenses` to `EXCEPTION_REASONS` with `history_expired` and
+     `unavailable`; add `history_expired` to `primary_document`. Change the
+     fingerprint for **every** check from `<check>:<updatedAt>` to a hash of
+     the inputs that check reads (live expense count, document set,
+     `orderId`, …), so an exception stays valid until its evidence changes
+     and unrelated edits (project, notes) no longer reopen it. Each check
+     declares its `inputsFingerprint` beside its predicate; the
+     `domain-rules.md` paragraph on fingerprints is rewritten.
    - *Score.* Replace the three-valued status with a weighted 0–100 score
      per entity (each manifest declaration lists its checks with weights;
      excepted and unexpected checks count as satisfied), keep the status as
