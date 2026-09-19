@@ -33,7 +33,7 @@ struct EntityRelationshipsSection: View {
                             "Show empty relationships",
                             isOn: Binding(
                                 get: { model.showsEmptyBranches },
-                                set: model.setShowsEmptyBranches
+                                set: { model.setShowsEmptyBranches($0) }
                             )
                         )
                         .frame(minHeight: PorcelainTokens.touchTarget)
