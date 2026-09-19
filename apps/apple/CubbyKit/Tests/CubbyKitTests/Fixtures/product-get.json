@@ -26,6 +26,7 @@
   "stockTracked": null,
   "dataQuality": {
     "status": "complete",
+    "score": 100,
     "facets": [],
     "gaps": [],
     "exceptions": [],

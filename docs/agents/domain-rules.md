@@ -77,9 +77,12 @@ cannot see, on top of the exhaustive `Record<Entity, …>` registries.
 Inside the entity kernel's write transaction every DB touch must go through the
 transaction-bound context: a service still bound to the request pool that
 updates the row the transaction holds deadlocks silently, and only E2E on
-workerd exposes it. A Product/Purchase data exception is fingerprinted
-`<check>:<updatedAt-ms>`, so any later write to the row — even notes — stales
-it and re-opens the gap; set exceptions last.
+workerd exposes it. A Product/Purchase data exception fingerprints the inputs
+its check reads (for example, the live Expense count or primary-document set),
+not `updatedAt`: unrelated edits must not reopen it, while changed evidence
+must. SQL predicates and hydrated output share that contract; legacy
+`updatedAt` fingerprints remain stale until an explicit migration proves the
+old exception is still active.
 
 Unit vocabulary derives from `recipebridge`'s `size_unit_aliases()`; the TS
 title matcher and the Postgres prefilter both build from it — never hand-list

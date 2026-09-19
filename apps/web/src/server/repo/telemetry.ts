@@ -62,6 +62,8 @@ export async function persistTelemetryMessages(
             provider: event.provider,
             model: event.model,
             operation: event.operation,
+            jobKind: event.jobKind ?? null,
+            jobId: event.jobId ?? null,
             inputTokens: event.inputTokens,
             outputTokens: event.outputTokens,
             // The event's own figure wins (the cookbook extractor prices

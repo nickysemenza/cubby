@@ -15,12 +15,15 @@ import {
   problemsViewsSchema,
   recipeUsageByProductInput,
   recipeUsageByProductOut,
+  resolveImportFindingInput,
+  resolveImportFindingOut,
   PROBLEM_CLASS,
   type ProblemKey,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 
 import { readProblemCountsFromDurableObject } from "~/server/database-freshness/client";
+import { resolveImportFinding } from "~/server/purchase-import/findings";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
@@ -90,6 +93,10 @@ const problemsWorkflowSchemas = {
   deleteUnused: {
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
+  },
+  resolveImportFinding: {
+    input: resolveImportFindingInput,
+    output: resolveImportFindingOut,
   },
 };
 
@@ -203,6 +210,14 @@ export const deleteUnusedIngredientsWorkflow = bindWorkflow(
       };
     })
     .output(({ presented }) => presented),
+);
+
+export const resolveImportFindingWorkflow = defineWorkflowOperation(
+  "problems.resolveImportFinding",
+  (
+    c: ProblemsWorkflowContext,
+    input: z.output<typeof resolveImportFindingInput>,
+  ) => resolveImportFinding(c.db, input, c.actorContext),
 );
 
 const reparseStaleDefinition = defineCoordinatorStream({

@@ -79,6 +79,7 @@ export const expenseId = ENTITY_ID_SCHEMA.expense;
 export const financialAccountId = ENTITY_ID_SCHEMA.financialAccount;
 export const financialTransactionId = ENTITY_ID_SCHEMA.financialTransaction;
 export const vendorId = ENTITY_ID_SCHEMA.vendor;
+export const vendorAccountId = ENTITY_ID_SCHEMA.vendorAccount;
 export const purchaseId = ENTITY_ID_SCHEMA.purchase;
 export const wishId = ENTITY_ID_SCHEMA.wish;
 export const plantingId = ENTITY_ID_SCHEMA.planting;
@@ -100,6 +101,7 @@ export type ExpenseId = EntityId<"expense">;
 export type FinancialAccountId = EntityId<"financialAccount">;
 export type FinancialTransactionId = EntityId<"financialTransaction">;
 export type VendorId = EntityId<"vendor">;
+export type VendorAccountId = EntityId<"vendorAccount">;
 export type PurchaseId = EntityId<"purchase">;
 export type WishId = EntityId<"wish">;
 export type PlantingId = EntityId<"planting">;
@@ -175,6 +177,7 @@ const PARSE_ENTITY_REF = {
   recipe: entityRefParser("recipe"),
   task: entityRefParser("task"),
   vendor: entityRefParser("vendor"),
+  vendorAccount: entityRefParser("vendorAccount"),
   wish: entityRefParser("wish"),
 } as const satisfies { [E in ShortcodeEntity]: EntityRefParser<E> };
 
@@ -214,6 +217,7 @@ export {
   shortcodeSchema,
   taskShortcode,
   vendorShortcode,
+  vendorAccountShortcode,
   wishShortcode,
   plantingShortcode,
   gardenEntryShortcode,
@@ -237,5 +241,6 @@ export type {
   ShortcodeFor,
   TaskShortcode,
   VendorShortcode,
+  VendorAccountShortcode,
   WishShortcode,
 } from "@cubby/shared";

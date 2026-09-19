@@ -29,12 +29,20 @@ import {
   splitExpenseDelta,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
+import {
+  confirmMerchantVendorRuleInput,
+  confirmMerchantVendorRuleOut,
+  importVendorOrdersInput,
+  importVendorOrdersOut,
+} from "@cubby/schemas/purchase-import";
 import { vendorCoverageInput, vendorCoverageOut } from "@cubby/schemas/vendor";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { executeEntity } from "~/server/entity-kernel";
+import { confirmMerchantVendorRule } from "~/server/purchase-import/hunts";
+import { importVendorOrders } from "~/server/purchase-import/import-orders";
 import { getVendorCoverage } from "~/server/repo/vendor";
 
 import { getEntityKernelContext } from "../kernel-context";
@@ -89,6 +97,36 @@ const purchaseProductsMcpOut = mcpItemsEnvelope(
 );
 
 export function registerPurchaseTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "confirm_purchase_merchant_vendor",
+    description:
+      "Confirm that one exact statement merchant descriptor belongs to a Vendor for the authenticated household member. This durable mapping enables charge-driven purchase and receipt hunts; later calls replace the mapping for that exact normalized descriptor.",
+    inputSchema: confirmMerchantVendorRuleInput,
+    outputSchema: confirmMerchantVendorRuleOut,
+    annotations: WRITE_CLOSED,
+    handler: (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      return confirmMerchantVendorRule(
+        context.db,
+        params,
+        context.actorContext,
+      );
+    },
+  });
+
+  registerMcpTool(server, {
+    name: "import_vendor_orders",
+    description:
+      "Atomically import one to fifty extracted vendor orders for a Vendor Account owned by the authenticated member. Stable source keys make exact replays no-ops; existing itemized or linked Expenses are never overwritten and become Problems findings instead. Receiving remains a separate human action.",
+    inputSchema: importVendorOrdersInput,
+    outputSchema: importVendorOrdersOut,
+    annotations: WRITE_CLOSED,
+    handler: (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      return importVendorOrders(context.db, params, context.actorContext);
+    },
+  });
+
   registerMcpTool(server, {
     name: "get_vendor_coverage",
     description:

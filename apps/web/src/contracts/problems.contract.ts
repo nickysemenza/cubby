@@ -15,6 +15,8 @@ import {
   problemsViewsSchema,
   recipeUsageByProductInput,
   recipeUsageByProductOut,
+  resolveImportFindingInput,
+  resolveImportFindingOut,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 
@@ -76,6 +78,10 @@ export const problemsContract = defineContract("problems", {
   deleteUnused: mutation({
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
+  }),
+  resolveImportFinding: mutation({
+    input: resolveImportFindingInput,
+    output: resolveImportFindingOut,
   }),
 });
 

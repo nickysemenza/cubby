@@ -530,13 +530,6 @@ history is the archive. Permanent product constraints live in the
   make `resolve_products` search ingredient aliases, so "banana" resolves
   regardless of which storefront's ASIN the receipt carries.
 
-- **Marketplace seller on Amazon purchases.** `Sold by:` (YANTURION, MIYATCH
-  SHOP, Neighborhoodcircle) is lost except in Purchase notes; it decides
-  returns and warranty routing. A small `sellerName` on Purchase or Expense
-  is enough — do not mint a Vendor per marketplace seller. The
-  [purchase import redesign](plans/purchase-import-redesign.md) captures
-  `seller` per extracted line; land the column with that writer.
-
 - **Meal nutrition goals.** Let meal planning compare planned nutrition with
   explicit household goals using the existing recipe nutrition totals.
 
@@ -624,11 +617,6 @@ history is the archive. Permanent product constraints live in the
   dimensions, byte length and sha256 but never rasterizes, so `verify_product_images`
   reports `verified` for files that will not render. A subagent citing the verify tool
   is therefore not proof of a good image.
-
-- **Durable import checkpoints** — Promote when an import genuinely spans sessions
-  and cannot resume from source keys plus normal MCP queries. Superseded in
-  design by [the purchase import redesign](plans/purchase-import-redesign.md)
-  (per-account cursor, resumable agent runs).
 
 - **Entity relation runtime dispatch** — Promote when attach/detach genericization
   resumes. Generate dispatch only for declared runtime ports and make unsupported
@@ -944,18 +932,6 @@ history is the archive. Permanent product constraints live in the
   before/after photos, and an annual wrapped-style view over existing records.
   Build on the generic `resources.<entity>.timeline` capability rather than a
   bespoke aggregation.
-
-- **Receipt-shaped import.** Move the deterministic half of a vendor import
-  server-side: a `create_purchase_with_lines` (or `import_vendor_orders`)
-  call takes a header plus lines with per-order defaults, dedupes on
-  `orderId`, emits the typed tax/fee/tip/discount rows, and attaches the
-  line's image URL — returning only the lines whose Product identity is
-  ambiguous. Today the model spends ~150 tool calls per 16 orders on that
-  mechanical part and ~20 on the judgment part. (The original wording had
-  the writer refuse on `statedTotal`; tenet 5 forbids that — the check
-  belongs in extraction.) Designed in full, with the agent, Mac app browser
-  bridge, and Problems surface around it, in
-  [the purchase import redesign](plans/purchase-import-redesign.md).
 
 - **Recipe scaling extensions.** Explore pan-size targets, interactive parse
   clarification, and baker's-percentage comparison without replacing Product-owned

@@ -48,7 +48,7 @@ describe("test identifier factories", () => {
     for (const entity of shortcodeEntities) {
       const shortcode = testShortcode(entity, "coverage");
       expect(shortcode).toMatch(
-        /^[A-Z]{3}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/,
+        /^[A-Z]{2,5}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/,
       );
     }
   });

@@ -19,6 +19,8 @@ describe("recordAiUsage", () => {
         provider: "openai",
         model: "text-embedding-3-small",
         operation: "embed",
+        jobKind: "purchase_import",
+        jobId: "IMRUN-fixture",
         inputTokens: 12,
         outputTokens: 0,
         durationMs: 31,
@@ -36,6 +38,8 @@ describe("recordAiUsage", () => {
       expect.objectContaining({
         type: "ai_usage",
         feature: "embeddings",
+        jobKind: "purchase_import",
+        jobId: "IMRUN-fixture",
         inputTokens: 12,
         outputTokens: 0,
         entityType: "product",

@@ -292,6 +292,19 @@ public actor CubbyClient {
         }
     }
 
+    /// Presigns a PDF evidence upload. The returned image id remains pending until
+    /// `markUploaded(_:)` succeeds after the exact bytes have been PUT.
+    public func uploadDocument(filename: String, size: Int, folder: String? = nil) async throws
+        -> ImageUpload
+    {
+        try await perform {
+            let input = Components.Schemas.InitiateDocumentUpload(
+                filename: filename, size: size, contentType: .applicationPdf, folder: folder)
+            let output = try await api.image_uploadDocument(body: .json(input))
+            return try ImageUpload(try output.ok.body.json)
+        }
+    }
+
     /// The server's hash index, or `HashIndex.Failure.unsupportedRevision` when it was computed
     /// with a different algorithm than this build carries.
     public func imageHashIndex() async throws -> ImageHashIndex {

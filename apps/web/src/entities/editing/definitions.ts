@@ -817,6 +817,9 @@ export const entityEditRegistry: EntityEditRegistry = {
       full: { defaults: vendorCreateDefaults },
     },
   })),
+  vendorAccount: buildDefinition("vendorAccount", (f) => ({
+    fields: f.fieldsFrom(["full"]),
+  })),
   purchase: buildDefinition("purchase", (f) => ({
     fields: f.fieldsFrom(["full"]),
     create: {

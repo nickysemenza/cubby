@@ -13,6 +13,15 @@
 	<true/>
 	<key>com.apple.security.personal-information.photos-library</key>
 	<true/>
+	<!-- Browser purchase imports are restricted to Safari and Google Chrome. The automation
+	     entitlement enables TCC; the target-specific exception is the sandbox allowlist. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.apple-events</key>
+	<array>
+		<string>com.apple.Safari</string>
+		<string>com.google.Chrome</string>
+	</array>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:cubby.nickysemenza.com</string>

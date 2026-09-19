@@ -835,9 +835,9 @@ const compiledShortcode = (
   const value = descriptor.shortcodePrefix;
   if (value === undefined) return null;
   const shortcode = stringValue(value, `${context}.descriptor.shortcodePrefix`);
-  if (!/^[A-Z]{3}-$/.test(shortcode))
+  if (!/^[A-Z]{2,5}-$/.test(shortcode))
     throw new EntityDeclarationError(
-      `${context}.descriptor.shortcodePrefix must be an XXX- prefix.`,
+      `${context}.descriptor.shortcodePrefix must be a 2-5 letter uppercase prefix ending in a hyphen.`,
     );
   return shortcode;
 };

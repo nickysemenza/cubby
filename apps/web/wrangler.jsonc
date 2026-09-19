@@ -92,6 +92,10 @@
       {
         "name": "CALENDAR_FEED",
         "class_name": "CalendarFeedDurableObject"
+      },
+      {
+        "name": "PURCHASE_IMPORT",
+        "class_name": "PurchaseImportDurableObject"
       }
     ]
   },
@@ -101,6 +105,10 @@
       "storage": "sqlite"
     },
     "CalendarFeedDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "PurchaseImportDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
     }
@@ -192,7 +200,7 @@
     ]
   },
   "triggers": {
-    "crons": ["0 12 * * *"]
+    "crons": ["0 * * * *", "0 12 * * *"]
   },
   "vars": {
     "NODE_ENV": "production",
@@ -216,5 +224,6 @@
   //   R2_ACCESS_KEY_ID
   //   R2_SECRET_ACCESS_KEY
   //   AI_GATEWAY_API_KEY (optional)
+  //   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (optional; required for Gmail discovery)
   // Note: DATABASE_URL is provided by the Hyperdrive binding, not a secret.
 }

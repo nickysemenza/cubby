@@ -120,6 +120,16 @@ export const purchaseFinancialMismatchRawSql = (purchaseAlias: string) => `
     ) END
   ) * 100 + 0.5) IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
 
+/** Input-scoped snapshot for a settlement-mismatch exception. */
+export const purchaseFinancialMismatchFingerprintRawSql = (
+  purchaseAlias: string,
+) =>
+  `'settlement_mismatch:' || concat_ws('|',
+    COALESCE(to_jsonb(${purchaseFinancialMismatchRawSql(purchaseAlias)})::text, 'null'),
+    COALESCE(to_jsonb(${settleableExpenseTotalSql(purchaseAlias)})::text, 'null'),
+    COALESCE(to_jsonb(${settleableUnpricedExpenseCountSql(purchaseAlias)})::text, 'null')
+  )`;
+
 /**
  * The canonical worklist predicate. A settlement mismatch stays a raw financial
  * fact, but an active, evidence-bound exception removes it from the actionable
@@ -132,8 +142,7 @@ export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
   AND NOT EXISTS (
     SELECT 1 FROM jsonb_array_elements(${purchaseAlias}."dataExceptions") exception
     WHERE exception->>'check' = 'settlement_mismatch'
-      AND exception->>'fingerprint' = 'settlement_mismatch:'
-        || floor(extract(epoch FROM ${purchaseAlias}."updatedAt") * 1000)::bigint::text
+      AND exception->>'fingerprint' = ${purchaseFinancialMismatchFingerprintRawSql(purchaseAlias)}
   )`;
 
 /**

@@ -176,6 +176,7 @@ describe("getEntityNavGroup", () => {
       gardenEntry: "Records",
       expense: "Records",
       vendor: "Records",
+      vendorAccount: "Records",
       purchase: "Records",
       financialAccount: "Records",
       financialTransaction: "Records",

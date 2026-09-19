@@ -135,6 +135,7 @@ describe("suggestUsdaFood", () => {
         return {
           selected: args.candidates[0] ?? null,
           confidence: "high",
+          probability: 0.99,
           reasoning: "matched",
         };
       },
@@ -157,6 +158,7 @@ describe("suggestUsdaFood", () => {
       select: async () => ({
         selected: null,
         confidence: "low",
+        probability: 0.1,
         reasoning: "hallucinated an fdcId",
       }),
     };
@@ -177,7 +179,12 @@ describe("suggestUsdaFood", () => {
         renderedLines = args.candidates.map((candidate) =>
           spec.renderLine(candidate),
         );
-        return { selected: null, confidence: "low", reasoning: "n/a" };
+        return {
+          selected: null,
+          confidence: "low",
+          probability: 0.1,
+          reasoning: "n/a",
+        };
       },
     };
 
@@ -195,7 +202,12 @@ describe("suggestUsdaFood", () => {
     const ai: UsdaMatchAiPort = {
       select: async () => {
         calls += 1;
-        return { selected: null, confidence: "low", reasoning: "n/a" };
+        return {
+          selected: null,
+          confidence: "low",
+          probability: 0.1,
+          reasoning: "n/a",
+        };
       },
     };
 

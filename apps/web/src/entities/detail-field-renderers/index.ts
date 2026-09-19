@@ -10,6 +10,7 @@ import { financialTransactionDetailFields } from "./financial-transaction";
 import { ledgerTransferDetailFields } from "./ledger-transfer";
 import { productDetailFields } from "./product";
 import { recipeDetailFields } from "./recipe";
+import { vendorDetailFields } from "./vendor";
 import { wishDetailFields } from "./wish";
 
 export type EntityDetailFieldRenderers<E extends GenericDetailEntity> =
@@ -26,6 +27,7 @@ export const detailFieldRenderers = {
   expense: expenseDetailFields,
   product: productDetailFields,
   recipe: recipeDetailFields,
+  vendor: vendorDetailFields,
   financialAccount: financialAccountDetailFields,
   financialTransaction: financialTransactionDetailFields,
   ledgerTransfer: ledgerTransferDetailFields,

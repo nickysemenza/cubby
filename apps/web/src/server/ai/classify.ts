@@ -23,8 +23,13 @@ export async function classifyWithJev<Value extends string>(args: {
   describe: (value: Value) => string;
   usage: AiRunContext;
   port?: JevPort;
-}): Promise<{ value: Value; confidence: Confidence; reasoning: "" }> {
-  const { selectedIndex, confidence } = await runJevChoice({
+}): Promise<{
+  value: Value;
+  confidence: Confidence;
+  probability: number;
+  reasoning: "";
+}> {
+  const { selectedIndex, confidence, probability } = await runJevChoice({
     feature: args.feature,
     subject: args.subject,
     rules: args.rules,
@@ -37,5 +42,5 @@ export async function classifyWithJev<Value extends string>(args: {
   if (value === undefined) {
     throw new Error("Jev classification returned no value.");
   }
-  return { value, confidence, reasoning: "" };
+  return { value, confidence, probability, reasoning: "" };
 }

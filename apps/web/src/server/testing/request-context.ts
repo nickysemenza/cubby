@@ -3,7 +3,7 @@ import type { UserId } from "@cubby/schemas/identifiers";
 import type { JSONType } from "zod";
 
 import type { Database } from "~/server/db";
-import { buildCrudServices } from "~/server/request-context";
+import { buildCrudServices, currentParty } from "~/server/request-context";
 import type { RequestOrigin } from "~/server/workload";
 
 const jsonResponse = (status: number, body: JSONType) =>
@@ -42,6 +42,9 @@ export const createTestRequestContext = (
       reason: "single-database" as const,
     },
     auth,
+    currentParty: auth.userId
+      ? async () => await currentParty(db, auth.userId!)
+      : null,
     isSystemRequest: false,
     actorContext: auth.userId ? buildActorContext(auth.userId, "ui") : null,
     requestOrigin,

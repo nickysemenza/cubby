@@ -58,8 +58,10 @@ import type {
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
+import { importFinding } from "~/server/db/schema";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
@@ -95,6 +97,11 @@ const SEARCHABLE = new Set<string>(searchableEntities);
 /** Whether removing a row of this entity must cascade derived search state. */
 const isSearchable = (entity: Entity): entity is SearchableEntity =>
   SEARCHABLE.has(entity);
+
+const isImportFindingTarget = (
+  entity: Entity,
+): entity is "purchase" | "expense" | "product" =>
+  entity === "purchase" || entity === "expense" || entity === "product";
 
 /**
  * Delete audit entries for a batch of removed ids, attaching per-parent cascade
@@ -164,6 +171,17 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
   if (isSearchable(entity)) {
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
     await softDeleteSuggestionDismissalsTx(tx, entity, [...ids]);
+  }
+
+  if (isImportFindingTarget(entity)) {
+    await tx
+      .delete(importFinding)
+      .where(
+        and(
+          eq(importFinding.targetType, entity),
+          inArray(importFinding.targetId, [...ids]),
+        ),
+      );
   }
 
   const entries = buildCascadeAuditEntries(entity, ids, args.counts ?? {});

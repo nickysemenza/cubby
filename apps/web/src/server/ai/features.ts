@@ -25,6 +25,16 @@ import {
   productIdentificationSchema,
 } from "@cubby/schemas/ai";
 import {
+  type ImportAuditOutput,
+  type ImportExtractionOutcome,
+  type PurchaseImportNavigationDecision,
+  type OrderMailClassification,
+  importAuditOutput,
+  importExtractionOutcome,
+  purchaseImportNavigationDecision,
+  orderMailClassification,
+} from "@cubby/schemas/purchase-import";
+import {
   type RecipeFlowAiPlan,
   recipeFlowAiPlanSchema,
   type RecipeFlowArtifact,
@@ -179,6 +189,13 @@ export const FIELD_SUGGESTION_FEATURE = defineFeature({
   promptVersion: "2026-09-18.1",
 }) satisfies AiDecisionFeature;
 
+export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
+  feature: "purchase-import-product-identity",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-09-19.1",
+}) satisfies AiDecisionFeature;
+
 // ---------------------------------------------------------------------------
 // Fast tier — GPT-5.6 Luna. Identification, detection, and oversized
 // selection.
@@ -222,6 +239,45 @@ export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<DetectedInventoryAiResult> &
   AiAnalysisFeature<DetectedInventoryAiResult>;
 
+export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
+  feature: "purchase-import-extraction",
+  tier: "fast",
+  maxTokens: 4_000,
+  effort: "low",
+  cache: false,
+  promptVersion: "2026-09-19.1",
+  schema: importExtractionOutcome,
+}) satisfies AiStructuredFeature<ImportExtractionOutcome>;
+
+export const PURCHASE_IMPORT_NAVIGATION_FEATURE = defineFeature({
+  feature: "purchase-import-navigation",
+  tier: "fast",
+  maxTokens: 1_000,
+  effort: "low",
+  cache: false,
+  promptVersion: "2026-09-19.1",
+  schema: purchaseImportNavigationDecision,
+}) satisfies AiStructuredFeature<PurchaseImportNavigationDecision>;
+
+export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
+  feature: "purchase-import-receipt-extraction",
+  tier: "visionBatch",
+  maxTokens: 4_000,
+  cache: false,
+  promptVersion: "2026-09-19.1",
+  schema: importExtractionOutcome,
+}) satisfies AiStructuredFeature<ImportExtractionOutcome>;
+
+export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
+  feature: "purchase-import-mail-classification",
+  tier: "fast",
+  maxTokens: 1_000,
+  effort: "low",
+  cache: true,
+  promptVersion: "2026-09-19.1",
+  schema: orderMailClassification,
+}) satisfies AiStructuredFeature<OrderMailClassification>;
+
 // ---------------------------------------------------------------------------
 // Vision batch tier — Gemini 2.5 Flash. Cheap, accurate, ~14 s to first
 // token: backfill only. No `effort`: keep Gemini's own thinking on.
@@ -255,6 +311,26 @@ export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<RecipeFlowAiPlan> &
   AiAnalysisFeature<RecipeFlowArtifact>;
 
+export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
+  feature: "purchase-import-audit",
+  tier: "reasoning",
+  maxTokens: 8_000,
+  effort: "high",
+  cache: true,
+  promptVersion: "2026-09-19.1",
+  schema: importAuditOutput,
+}) satisfies AiStructuredFeature<ImportAuditOutput>;
+
+export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
+  feature: "purchase-import-repair",
+  tier: "reasoning",
+  maxTokens: 4_000,
+  effort: "high",
+  cache: false,
+  promptVersion: "2026-09-19.1",
+  schema: importExtractionOutcome,
+}) satisfies AiStructuredFeature<ImportExtractionOutcome>;
+
 /**
  * The agent is declared here for its tier/cap/effort, but it does NOT run
  * through {@link runStructuredFeature}: it streams, calls tools across
@@ -275,11 +351,18 @@ export const AI_FEATURES = [
   USDA_FOOD_SUGGEST_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   FIELD_SUGGESTION_FEATURE,
+  PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
   SELECTION_OVERFLOW_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
+  PURCHASE_IMPORT_EXTRACTION_FEATURE,
+  PURCHASE_IMPORT_NAVIGATION_FEATURE,
+  PURCHASE_IMPORT_RECEIPT_FEATURE,
+  PURCHASE_IMPORT_MAIL_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
+  PURCHASE_IMPORT_AUDIT_FEATURE,
+  PURCHASE_IMPORT_REPAIR_FEATURE,
   AGENT_ASK_FEATURE,
 ] as const satisfies readonly AiFeature[];
 

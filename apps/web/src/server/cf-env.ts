@@ -71,6 +71,8 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
 export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
   cfEnv?.CALENDAR_FEED;
 
+export const getPurchaseImportNamespace = () => cfEnv?.PURCHASE_IMPORT;
+
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
 // for the gateway binding (below) and the gateway-REST base URL built in
 // `~/server/clients/ai-gateway`.

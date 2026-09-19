@@ -251,6 +251,15 @@ export const actionItems: ActionItem[] = [
     surfaces: ["empty-state"],
   },
   {
+    id: "add-vendor-account",
+    entity: "vendorAccount",
+    name: "Add Vendor Account",
+    path: entities.vendorAccount.routes.list,
+    search: { create: true },
+    icon: entities.vendorAccount.lucideIcon,
+    surfaces: ["empty-state"],
+  },
+  {
     id: "add-purchase",
     entity: "purchase",
     name: "Add Purchase",

@@ -187,6 +187,7 @@ export const purchaseShortcode = SHORTCODE_SCHEMA.purchase;
 export const recipeShortcode = SHORTCODE_SCHEMA.recipe;
 export const taskShortcode = SHORTCODE_SCHEMA.task;
 export const vendorShortcode = SHORTCODE_SCHEMA.vendor;
+export const vendorAccountShortcode = SHORTCODE_SCHEMA.vendorAccount;
 export const wishShortcode = SHORTCODE_SCHEMA.wish;
 
 export type CookbookShortcode = ShortcodeFor<"cookbook">;
@@ -209,6 +210,7 @@ export type PurchaseShortcode = ShortcodeFor<"purchase">;
 export type RecipeShortcode = ShortcodeFor<"recipe">;
 export type TaskShortcode = ShortcodeFor<"task">;
 export type VendorShortcode = ShortcodeFor<"vendor">;
+export type VendorAccountShortcode = ShortcodeFor<"vendorAccount">;
 export type WishShortcode = ShortcodeFor<"wish">;
 
 /** Any entity's shortcode, for surfaces that hold a code before resolving it. */
@@ -288,6 +290,7 @@ const PARSE_CANONICAL_SHORTCODE = {
   recipe: shortcodeParser("recipe"),
   task: shortcodeParser("task"),
   vendor: shortcodeParser("vendor"),
+  vendorAccount: shortcodeParser("vendorAccount"),
   wish: shortcodeParser("wish"),
 } as const satisfies {
   [T in ShortcodeType]: (code: string) => ParsedShortcodeFor<T>;

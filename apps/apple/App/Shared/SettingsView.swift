@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedServer = SettingsServer.production
     @State private var draftURL = ""
     @AppStorage("photoAnalysisWindow") private var photoAnalysisWindowRaw = PhotoAnalysisWindow.thisYear
@@ -12,6 +13,8 @@ struct SettingsView: View {
     @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
     @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
     @State private var photosReady = false
+    @State private var receiptHunts: [ReceiptHuntSummary] = []
+    @State private var selectedReceiptHunt: ReceiptHuntSummary?
     /// On iOS Settings is a view-based `NavigationLink` destination. Pushing Dev through the
     /// tab's value path before popping Settings makes SwiftUI animate two independent stacks at
     /// once, which can leave the destination visually blank. Pop first, then append the route
@@ -19,6 +22,9 @@ struct SettingsView: View {
     @State private var opensDeveloperToolsAfterDismissal = false
     #if os(macOS)
         @AppStorage(DockBadge.showInDockDefaultsKey) private var showProblemsInDock = true
+        @AppStorage("purchaseImport.browser") private var purchaseImportBrowser = BrowserChoice.chrome
+        @AppStorage("purchaseImport.enhancedEvidence") private var enhancedEvidence = false
+        @State private var browserPermissions = MacBrowserPermissionSnapshot.current(browser: .chrome)
     #endif
 
     var body: some View {
@@ -106,7 +112,11 @@ struct SettingsView: View {
 
             if model.phase == .signedIn, photosReady { photosSection }
 
+            if model.phase == .signedIn, !receiptHunts.isEmpty { receiptHuntsSection }
+
             #if os(macOS)
+                if model.phase == .signedIn { purchaseImportSection }
+
                 Section {
                     Toggle("Show problem count in Dock", isOn: $showProblemsInDock)
                         .frame(minHeight: PorcelainTokens.touchTarget - 12)
@@ -122,6 +132,9 @@ struct SettingsView: View {
         .onAppear {
             synchronizeServerSelection()
             photosReady = model.photoAnalysisStore != nil
+            #if os(macOS)
+                browserPermissions = .current(browser: purchaseImportBrowser)
+            #endif
         }
         #if os(iOS)
             .onDisappear {
@@ -131,6 +144,29 @@ struct SettingsView: View {
             }
         #endif
         .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
+        .task(id: model.phase) {
+            guard model.phase == .signedIn else {
+                receiptHunts = []
+                return
+            }
+            await loadReceiptHunts()
+        }
+        .sheet(item: $selectedReceiptHunt) { hunt in
+            if let context = hunt.searchContext {
+                NavigationStack {
+                    NearbyReceiptSearchView(
+                        context: context,
+                        onConfirm: { file, context in
+                            let submitter = URLSessionConfirmedReceiptImportSubmitter(
+                                baseURL: model.baseURL, credentials: model.credentials,
+                                client: model.client)
+                            try await submitter.submitConfirmedReceipt(
+                                ConfirmedReceiptImport(context: context, file: file))
+                            await loadReceiptHunts()
+                        })
+                }
+            }
+        }
         .photoAnalysisLifecycle(ready: photosReady, model: model, paused: photoAnalysisPaused) {
             await loadPhotoAnalysisSummary()
         }
@@ -141,7 +177,124 @@ struct SettingsView: View {
             .onChange(of: showProblemsInDock) { _, enabled in
                 if !enabled { DockBadge.clear() }
             }
+            .onChange(of: purchaseImportBrowser) { _, browser in
+                browserPermissions = .current(browser: browser)
+                model.browserBridge.reconnect(
+                    browser: browser, enhancedEvidence: enhancedEvidence)
+            }
+            .onChange(of: enhancedEvidence) { _, enabled in
+                if enabled { _ = MacBrowserPermissionSnapshot.requestScreenRecording() }
+                browserPermissions = .current(browser: purchaseImportBrowser)
+                model.browserBridge.reconnect(
+                    browser: purchaseImportBrowser, enhancedEvidence: enabled)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    browserPermissions = .current(browser: purchaseImportBrowser)
+                }
+            }
         #endif
+    }
+
+    #if os(macOS)
+        private var purchaseImportSection: some View {
+            Section {
+                Picker("Browser", selection: $purchaseImportBrowser) {
+                    ForEach(BrowserChoice.allCases) { browser in
+                        Text(browser.title).tag(browser)
+                    }
+                }
+                .accessibilityIdentifier("settings.purchaseImport.browser")
+                LabeledContent("Status") {
+                    Text(model.browserBridge.statusLabel)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                }
+                Toggle("Enhanced evidence capture", isOn: $enhancedEvidence)
+                    .accessibilityIdentifier("settings.purchaseImport.enhancedEvidence")
+                if enhancedEvidence {
+                    permissionRow(
+                        "Screen Recording", status: browserPermissions.screenRecording,
+                        pane: .screenRecording)
+                }
+                permissionRow(
+                    "Browser control", status: browserPermissions.appleEvents, pane: .automation)
+                Button {
+                    model.browserBridge.syncNow(
+                        browser: purchaseImportBrowser, enhancedEvidence: enhancedEvidence)
+                } label: {
+                    if model.browserBridge.isSyncing {
+                        Label("Syncing", systemImage: "arrow.triangle.2.circlepath")
+                    } else {
+                        Label("Sync now", systemImage: "arrow.clockwise")
+                    }
+                }
+                .disabled(!model.browserBridge.isConfigured || model.browserBridge.isSyncing)
+                .accessibilityIdentifier("settings.purchaseImport.syncNow")
+                if let error = model.browserBridge.error {
+                    Text(error).foregroundStyle(PorcelainTokens.destructive)
+                }
+            } header: {
+                Eyebrow("Purchase imports")
+            } footer: {
+                Text(
+                    "Cubby controls only its own browser window. Page content stays untrusted, and browser sessions never leave this Mac. Enhanced capture falls back to a Cubby-generated PDF when permissions are unavailable."
+                )
+                .font(.porcelainLabel)
+                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            }
+        }
+
+        @ViewBuilder
+        private func permissionRow(
+            _ title: String, status: MacBrowserPermissionStatus, pane: MacBrowserPermissionSnapshot.Pane
+        ) -> some View {
+            LabeledContent(title) {
+                if status == .denied {
+                    Button(status.label) { MacBrowserPermissionSnapshot.openSettings(pane) }
+                } else {
+                    Text(status.label).foregroundStyle(PorcelainTokens.graphiteSecondary)
+                }
+            }
+        }
+    #endif
+
+    private var receiptHuntsSection: some View {
+        Section {
+            ForEach(receiptHunts) { hunt in
+                Button {
+                    selectedReceiptHunt = hunt
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(hunt.merchant ?? "Unidentified purchase")
+                            Text(hunt.transactionDate)
+                                .font(.porcelainLabel)
+                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        }
+                        Spacer()
+                        Text(Double(hunt.amountInCents) / 100, format: .currency(code: "USD"))
+                            .font(.porcelainData)
+                    }
+                }
+                .accessibilityIdentifier("settings.purchaseImport.receipt.\(hunt.id)")
+            }
+        } header: {
+            Eyebrow("Receipts needed")
+        } footer: {
+            Text("Choose a charge to find a nearby receipt photo. Nothing uploads until you confirm it.")
+                .font(.porcelainLabel)
+                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+        }
+    }
+
+    @MainActor private func loadReceiptHunts() async {
+        do {
+            receiptHunts = try await URLSessionReceiptHuntClient(
+                baseURL: model.baseURL, credentials: model.credentials
+            ).list()
+        } catch {
+            Diagnostics.report(error, context: "purchaseImport.receiptHunts")
+        }
     }
 
     /// Split out of `body` to keep its expression under the 200ms type-check budget

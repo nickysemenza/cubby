@@ -1,5 +1,12 @@
 import { type AuditSource, buildActorContext } from "@cubby/schemas/context";
-import { type UserId, userId } from "@cubby/schemas/identifiers";
+import {
+  type LedgerPartyId,
+  type LedgerPartyShortcode,
+  type UserId,
+  parseShortcodeFor,
+  userId,
+} from "@cubby/schemas/identifiers";
+import { and, eq } from "drizzle-orm";
 
 import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
@@ -10,11 +17,13 @@ import { USDAClient } from "~/server/clients/usda";
 import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
+import { ledgerParty } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   decideReadConsistency,
   type ReadConsistencyDecision,
 } from "~/server/read-consistency";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   findProductsByFoodIdentifier,
   getFoodLookupsForLinkedProducts,
@@ -69,6 +78,41 @@ export type RequestActor = {
   source: AuditSource;
 };
 
+export type CurrentParty = {
+  id: LedgerPartyId;
+  shortcode: LedgerPartyShortcode;
+  name: string;
+};
+
+/** Resolve the authenticated member's claimed ledger party at use time. */
+export const currentParty = async (
+  database: Database,
+  authenticatedUserId: UserId,
+): Promise<CurrentParty | null> => {
+  const [party] = await getDb(database)
+    .select({
+      id: ledgerParty.id,
+      shortcode: ledgerParty.shortcode,
+      name: ledgerParty.name,
+    })
+    .from(ledgerParty)
+    .where(
+      and(
+        eq(ledgerParty.userId, authenticatedUserId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .limit(1);
+  return party
+    ? {
+        id: party.id,
+        shortcode: parseShortcodeFor("ledgerParty", party.shortcode),
+        name: party.name,
+      }
+    : null;
+};
+
 interface ReadDatabaseSelection {
   readDb: Database;
   readConsistency: ReadConsistencyDecision;
@@ -100,6 +144,7 @@ export const createRequestContext = async (opts: {
         ...crudServices,
         ...readSelection,
         auth: { userId, sessionId },
+        currentParty: async () => await currentParty(crudServices.db, userId),
         actorContext: buildActorContext(userId, source),
         requestOrigin,
         ...opts,
@@ -121,6 +166,9 @@ export const createRequestContext = async (opts: {
         userId: authenticatedUserId,
         sessionId: betterSession?.session?.id ?? null,
       },
+      currentParty: authenticatedUserId
+        ? async () => await currentParty(crudServices.db, authenticatedUserId)
+        : null,
       actorContext: authenticatedUserId
         ? buildActorContext(authenticatedUserId, "ui")
         : null,
@@ -133,7 +181,7 @@ export const createRequestContext = async (opts: {
 type RequestContext = Awaited<ReturnType<typeof createRequestContext>>;
 
 export function requireActor(context: RequestContext) {
-  if (!context.auth.userId || !context.actorContext) {
+  if (!context.auth.userId || !context.actorContext || !context.currentParty) {
     throw createAppError("UNAUTHORIZED", "Actor context required");
   }
   const { userId: actorUserId } = context.auth;
@@ -141,6 +189,7 @@ export function requireActor(context: RequestContext) {
     ...context,
     auth: { ...context.auth, userId: actorUserId },
     actorContext: context.actorContext,
+    currentParty: context.currentParty,
   };
 }
 

@@ -134,6 +134,7 @@ describe("implementOperationDomain", () => {
     expect(seen.input).toEqual({ start: "2026-08-25" });
     expect(seen.context?.signal).toBe(request.signal);
     expect(seen.context?.db).toBe(baseContext.db);
+    expect(seen.context?.currentParty).toEqual(expect.any(Function));
   });
 
   it("derives mutation consistency centrally", async () => {

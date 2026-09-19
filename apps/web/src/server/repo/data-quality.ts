@@ -9,6 +9,7 @@ import {
   type DataQualityFacetName,
   type DataQualityGap,
   dataCheckFacet,
+  dataCheckWeight,
   isDefectDataCheck,
   type ProductDataCheck,
   type PurchaseDataCheck,
@@ -70,6 +71,7 @@ import {
   calculateFinancialReconciliation,
   postedRefundPredicate,
   postedRefundTotalSql,
+  purchaseFinancialMismatchFingerprintRawSql,
   purchaseFinancialMismatchRawSql,
   settlementReferenceAbsentSql,
   settlementReferencePredicate,
@@ -78,6 +80,7 @@ import {
   displayableImageRawSql,
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
+import { cents } from "~/server/repo/money";
 import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
@@ -110,11 +113,7 @@ const productDetailQualityEvidenceSchema = z.object({
   duplicateExternalId: z.boolean(),
 });
 
-/**
- * Exceptions snapshot the facts that justified them. Evidence also lives on
- * child rows, so child mutations advance the owning target's clock and make
- * an old exception visibly stale.
- */
+/** Keep the legacy touch hook for callers that also use it for cache freshness. */
 export const touchDataQualityTargets = async (
   tx: DrizzleTransaction,
   targets: {
@@ -142,7 +141,8 @@ export const touchDataQualityTargets = async (
 const EXCEPTION_REASONS = {
   order_id: ["not_issued", "unavailable"],
   stated_total: ["not_issued", "unavailable"],
-  primary_document: ["not_issued", "unavailable"],
+  primary_document: ["not_issued", "unavailable", "history_expired"],
+  empty_expenses: ["unavailable", "history_expired"],
   settlement_reference: ["not_applicable", "insufficient_detail"],
   // Settlement evidence and the expense ledger can both be correct while a
   // source leaves a small residual. This is never a tolerance: it requires a
@@ -175,22 +175,75 @@ const externalIdCollisionKey = (value: {
 }) =>
   `${value.source.trim().toLowerCase()}\u0000${value.kind}\u0000${value.externalId}`;
 
-// ⚠️ LOAD-BEARING: this fingerprint format (`<check>:<ms-since-epoch>`) must
-// stay byte-for-byte identical to `evidenceFingerprint` below and to the raw
-// SQL twin in `activeExceptionRaw`. It's how an exception is detected as
-// stale — `updatedAt` moved since the exception was recorded — without a
-// second stored column. `floor(extract(epoch FROM updatedAt) * 1000)`
-// reproduces JS's `Date#getTime()` only because Postgres timestamps here
-// don't carry sub-millisecond precision; if that ever changes, this silently
-// stops matching and staleness detection goes dark.
+type PurchaseOrderEvidence =
+  | "online_account"
+  | "receipt_only"
+  | "not_expected"
+  | null;
+
+/** The two import-driven checks apply only when the vendor can supply them. */
+const purchaseExpectedChecks = (
+  orderEvidence: PurchaseOrderEvidence,
+): readonly PurchaseDataCheck[] => {
+  const base = purchaseDataCheck.options.filter(
+    (check) => check !== "primary_document" && check !== "empty_expenses",
+  );
+  if (orderEvidence === "not_expected") return base;
+  if (orderEvidence === "receipt_only") return [...base, "primary_document"];
+  // Unclassified vendors remain visible until explicitly classified.
+  return [...base, "primary_document", "empty_expenses"];
+};
+
+const purchaseOrderEvidenceRaw = `(
+  SELECT v."orderEvidence" FROM "Vendor" v
+  WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL
+)`;
+
+const purchaseExpectsDocumentRaw = `(${purchaseOrderEvidenceRaw} IS NULL OR ${purchaseOrderEvidenceRaw} IN ('online_account', 'receipt_only'))`;
+const purchaseExpectsExpensesRaw = `(${purchaseOrderEvidenceRaw} IS NULL OR ${purchaseOrderEvidenceRaw} = 'online_account')`;
+
+type FingerprintInput = string | number | boolean | null;
+
+/**
+ * One canonical, input-scoped representation shared with the SQL helpers.
+ * JSON scalar spelling makes null, strings, numbers, and booleans unambiguous
+ * without coupling exception validity to an unrelated row timestamp.
+ */
+const evidenceFingerprint = (
+  check: DataCheck,
+  inputs: readonly FingerprintInput[],
+): string =>
+  `${check}:${inputs.map((input) => JSON.stringify(input)).join("|")}`;
+
+const fingerprintValueSql = (value: SQL): SQL =>
+  sql`COALESCE(to_jsonb(${value})::text, 'null')`;
+
+const evidenceFingerprintSql = (
+  check: DataCheck,
+  inputs: readonly SQL[],
+): SQL =>
+  sql`${check} || ':' || concat_ws('|', ${sql.join(
+    inputs.map(fingerprintValueSql),
+    sql`, `,
+  )})`;
+
+const fingerprintValueRaw = (value: string): string =>
+  `COALESCE(to_jsonb(${value})::text, 'null')`;
+
+const evidenceFingerprintRaw = (
+  check: DataCheck,
+  inputs: readonly string[],
+): string =>
+  `'${check}:' || concat_ws('|', ${inputs.map(fingerprintValueRaw).join(", ")})`;
+
 const activeException = (
   column: typeof product.dataExceptions | typeof purchase.dataExceptions,
-  updatedAt: typeof product.updatedAt | typeof purchase.updatedAt,
   check: DataCheck,
+  fingerprint: SQL,
 ): SQL => sql`EXISTS (
   SELECT 1 FROM jsonb_array_elements(${column}) dq_exception
   WHERE dq_exception->>'check' = ${check}
-    AND dq_exception->>'fingerprint' = ${check} || ':' || floor(extract(epoch FROM ${updatedAt}) * 1000)::bigint::text
+    AND dq_exception->>'fingerprint' = ${fingerprint}
 )`;
 
 const productHasExpenses = sql`EXISTS (
@@ -254,6 +307,32 @@ const productHasExternalIdCollision = sql`EXISTS (
     AND dq_mine."deletedAt" IS NULL
 )`;
 
+const productFingerprintSql = (check: ProductDataCheck): SQL => {
+  switch (check) {
+    case "product_manufacturer":
+      return evidenceFingerprintSql(check, [sql`${product.manufacturer}`]);
+    case "product_category":
+      return evidenceFingerprintSql(check, [sql`${product.category}`]);
+    case "product_model":
+      return evidenceFingerprintSql(check, [
+        sql`${product.category}`,
+        sql`${product.model}`,
+      ]);
+    case "product_image":
+      return evidenceFingerprintSql(check, [
+        productHasInventory,
+        productHasDisplayableImage,
+      ]);
+    case "amazon_asin":
+      return evidenceFingerprintSql(check, [
+        productHasAmazonPurchase,
+        productHasAmazonId,
+      ]);
+    case "duplicate_external_id":
+      return evidenceFingerprintSql(check, [productHasExternalIdCollision]);
+  }
+};
+
 /**
  * ⚠️ Exhaustive `switch`, deliberately — this used to be a ternary chain whose
  * final `else` was the `duplicate_external_id` predicate. A newly added check
@@ -307,7 +386,7 @@ export const productDataGapCondition = (check: ProductDataCheck): SQL => {
   // requires that same scope) that is a contradiction, and `dataStatus`
   // `needs_data` matched ZERO products unconditionally. Same class as the
   // `not()` note in `presenceCondition` and TAGS_ARE_EMPTY.
-  return sql`(${scope} AND ${missing} AND NOT ${activeException(product.dataExceptions, product.updatedAt, check)})`;
+  return sql`(${scope} AND ${missing} AND NOT ${activeException(product.dataExceptions, check, productFingerprintSql(check))})`;
 };
 
 const productMissingDataCondition = (): SQL =>
@@ -330,21 +409,73 @@ export const productNeedsDataCondition = (): SQL =>
 export const productAnyDataGapCondition = (): SQL =>
   sql`(${productMissingDataCondition()} OR ${productDefectCondition()})`;
 
-// ⚠️ LOAD-BEARING: same fingerprint format as `activeException` above (see its
-// comment) — keep the two, plus TS's `evidenceFingerprint`, byte-for-byte in
-// sync.
-const activeExceptionRaw = (alias: string, check: DataCheck) =>
+const productFingerprintRaw = (
+  check: ProductDataCheck,
+  alias: string,
+): string => {
+  const hasInventory = `EXISTS (SELECT 1 FROM "InventoryEntry" dq_inventory
+    WHERE dq_inventory."productId" = ${alias}."id" AND dq_inventory."deletedAt" IS NULL)`;
+  const hasDisplayableImage = `EXISTS (SELECT 1 FROM "ProductImage" dq_pimg
+    JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
+    WHERE dq_pimg."productId" = ${alias}."id" AND dq_pimg."deletedAt" IS NULL
+      AND ${displayableImageRawSql("dq_img")})`;
+  const hasAmazonPurchase = `EXISTS (SELECT 1 FROM "Expense" dq_ae
+    JOIN "Purchase" dq_ap ON dq_ap."id" = dq_ae."purchaseId" AND dq_ap."deletedAt" IS NULL
+    JOIN "Vendor" dq_av ON dq_av."id" = dq_ap."vendorId" AND dq_av."deletedAt" IS NULL
+    WHERE dq_ae."productId" = ${alias}."id" AND dq_ae."deletedAt" IS NULL
+      AND lower(dq_av."name") LIKE 'amazon%')`;
+  const hasAmazonId = `EXISTS (SELECT 1 FROM "ProductExternalId" dq_asin
+    WHERE dq_asin."productId" = ${alias}."id" AND dq_asin."deletedAt" IS NULL
+      AND dq_asin."source" = '${AMAZON_SOURCE}' AND dq_asin."kind" = 'asin')`;
+  const hasCollision = `EXISTS (SELECT 1 FROM "ProductExternalId" dq_mine
+    JOIN "ProductExternalId" dq_other ON dq_other."source" = dq_mine."source"
+      AND dq_other."kind" = dq_mine."kind" AND dq_other."externalId" = dq_mine."externalId"
+      AND dq_other."productId" <> dq_mine."productId" AND dq_other."deletedAt" IS NULL
+    JOIN "Product" dq_other_product ON dq_other_product."id" = dq_other."productId"
+      AND dq_other_product."deletedAt" IS NULL
+    WHERE dq_mine."productId" = ${alias}."id" AND dq_mine."deletedAt" IS NULL)`;
+  switch (check) {
+    case "product_manufacturer":
+      return evidenceFingerprintRaw(check, [`${alias}."manufacturer"`]);
+    case "product_category":
+      return evidenceFingerprintRaw(check, [`${alias}."category"`]);
+    case "product_model":
+      return evidenceFingerprintRaw(check, [
+        `${alias}."category"`,
+        `${alias}."model"`,
+      ]);
+    case "product_image":
+      return evidenceFingerprintRaw(check, [hasInventory, hasDisplayableImage]);
+    case "amazon_asin":
+      return evidenceFingerprintRaw(check, [hasAmazonPurchase, hasAmazonId]);
+    case "duplicate_external_id":
+      return evidenceFingerprintRaw(check, [hasCollision]);
+  }
+};
+
+const activeExceptionRaw = (
+  alias: string,
+  check: DataCheck,
+  fingerprint: string,
+) =>
   `EXISTS (
     SELECT 1 FROM jsonb_array_elements(${alias}."dataExceptions") dq_exception
     WHERE dq_exception->>'check' = '${check}'
-      AND dq_exception->>'fingerprint' = '${check}:' || floor(extract(epoch FROM ${alias}."updatedAt") * 1000)::bigint::text
+      AND dq_exception->>'fingerprint' = ${fingerprint}
   )`;
 
-const jsonExceptionAbsentRaw = (alias: string, check: DataCheck) =>
-  `NOT ${activeExceptionRaw(alias, check)}`;
+const jsonExceptionAbsentRaw = (
+  alias: string,
+  check: DataCheck,
+  fingerprint: string,
+) => `NOT ${activeExceptionRaw(alias, check, fingerprint)}`;
 
 const purchaseProductGapRaw = (check: ProductDataCheck): string => {
-  const exceptionAbsent = jsonExceptionAbsentRaw("dq_pr", check);
+  const exceptionAbsent = jsonExceptionAbsentRaw(
+    "dq_pr",
+    check,
+    productFingerprintRaw(check, "dq_pr"),
+  );
   const base = `
     EXISTS (
       SELECT 1 FROM "Expense" dq_pe
@@ -425,8 +556,75 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
   return `(${base} ${condition} AND ${exceptionAbsent}))`;
 };
 
+const purchaseExpenseCountRaw = (
+  alias: string,
+) => `(SELECT count(*)::int FROM "Expense" dq_e
+  WHERE dq_e."purchaseId" = ${alias}."id" AND dq_e."deletedAt" IS NULL)`;
+const purchaseUnpricedExpenseCountRaw = (
+  alias: string,
+) => `(SELECT count(*)::int FROM "Expense" dq_e
+  WHERE dq_e."purchaseId" = ${alias}."id" AND dq_e."deletedAt" IS NULL AND dq_e."cost" IS NULL)`;
+const purchaseExpenseCentsRaw = (
+  alias: string,
+) => `floor((COALESCE((SELECT sum(dq_e."cost") FROM "Expense" dq_e
+  WHERE dq_e."purchaseId" = ${alias}."id" AND dq_e."deletedAt" IS NULL), 0) * 100)::numeric + 0.5)`;
+const moneyCentsRaw = (value: string) =>
+  `CASE WHEN ${value} IS NULL THEN NULL ELSE floor((${value} * 100)::numeric + 0.5) END`;
+const primaryDocumentExistsRaw = (
+  alias: string,
+) => `EXISTS (SELECT 1 FROM "PurchaseImage" dq_pi
+  JOIN "Image" dq_i ON dq_i."id" = dq_pi."imageId" AND dq_i."deletedAt" IS NULL
+  WHERE dq_pi."purchaseId" = ${alias}."id" AND dq_pi."deletedAt" IS NULL
+    AND dq_pi."documentKind" IN (${primaryPurchaseDocumentKinds.map((kind) => `'${kind}'`).join(", ")}))`;
+
+const purchaseFingerprintRaw = (check: PurchaseDataCheck): string => {
+  const alias = '"Purchase"';
+  const expectedDocument = purchaseExpectsDocumentRaw;
+  const expectedExpenses = purchaseExpectsExpensesRaw;
+  const expenseCount = purchaseExpenseCountRaw(alias);
+  const unpricedCount = purchaseUnpricedExpenseCountRaw(alias);
+  const expenseCents = purchaseExpenseCentsRaw(alias);
+  const statedCents = moneyCentsRaw(`${alias}."statedTotal"`);
+  const refundCents = moneyCentsRaw(postedRefundTotalSql(alias));
+  switch (check) {
+    case "purchase_date":
+      return evidenceFingerprintRaw(check, [`${alias}."date"`]);
+    case "order_id":
+      return evidenceFingerprintRaw(check, [`${alias}."orderId"`]);
+    case "stated_total":
+      return evidenceFingerprintRaw(check, [statedCents]);
+    case "primary_document":
+      return evidenceFingerprintRaw(check, [
+        expectedDocument,
+        primaryDocumentExistsRaw(alias),
+      ]);
+    case "empty_expenses":
+      return evidenceFingerprintRaw(check, [expectedExpenses, expenseCount]);
+    case "unpriced_expense":
+      return evidenceFingerprintRaw(check, [unpricedCount]);
+    case "paperwork_mismatch":
+      return evidenceFingerprintRaw(check, [
+        statedCents,
+        expenseCents,
+        expenseCount,
+        unpricedCount,
+        refundCents,
+      ]);
+    case "settlement_reference":
+      return evidenceFingerprintRaw(check, [
+        `NOT (${settlementReferenceAbsentSql(alias)})`,
+      ]);
+    case "settlement_mismatch":
+      return purchaseFinancialMismatchFingerprintRawSql(alias);
+  }
+};
+
 const purchaseGapRaw = (check: PurchaseDataCheck): string => {
-  const exceptionAbsent = jsonExceptionAbsentRaw('"Purchase"', check);
+  const exceptionAbsent = jsonExceptionAbsentRaw(
+    '"Purchase"',
+    check,
+    purchaseFingerprintRaw(check),
+  );
   if (check === "purchase_date") {
     return `("Purchase"."date" IS NULL AND ${exceptionAbsent})`;
   }
@@ -440,7 +638,7 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
     const kinds = primaryPurchaseDocumentKinds
       .map((kind) => `'${kind}'`)
       .join(", ");
-    return `(NOT EXISTS (
+    return `(${purchaseExpectsDocumentRaw} AND NOT EXISTS (
       SELECT 1 FROM "PurchaseImage" dq_pi
       JOIN "Image" dq_i ON dq_i."id" = dq_pi."imageId" AND dq_i."deletedAt" IS NULL
       WHERE dq_pi."purchaseId" = "Purchase"."id" AND dq_pi."deletedAt" IS NULL
@@ -448,7 +646,7 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
     ) AND ${exceptionAbsent})`;
   }
   if (check === "empty_expenses") {
-    return `(NOT EXISTS (
+    return `(${purchaseExpectsExpensesRaw} AND NOT EXISTS (
       SELECT 1 FROM "Expense" dq_e
       WHERE dq_e."purchaseId" = "Purchase"."id" AND dq_e."deletedAt" IS NULL
     ) AND ${exceptionAbsent})`;
@@ -524,14 +722,6 @@ export const purchaseAnyDataGapCondition = (): SQL =>
 
 type FingerprintedGap = DataQualityGap & { fingerprint: string };
 
-// ⚠️ LOAD-BEARING: must match `activeException`/`activeExceptionRaw`'s SQL
-// fingerprint byte-for-byte — both sides serialize `updatedAt` as
-// milliseconds-since-epoch, and only round-trip identically because these
-// rows' timestamps carry no sub-millisecond precision. See the comment on
-// `activeException` above for the failure mode if that ever stops holding.
-const evidenceFingerprint = (check: DataCheck, updatedAt: Date): string =>
-  `${check}:${updatedAt.getTime()}`;
-
 type PurchaseQualityExpense = {
   cost: number | null;
   future: boolean;
@@ -541,6 +731,78 @@ type PurchaseQualityPurchase = {
   date: string | null;
   orderId: string | null;
   statedTotal: number | null;
+  orderEvidence: PurchaseOrderEvidence;
+};
+
+const moneyCents = (value: number | null): number | null =>
+  value === null ? null : cents(value);
+
+const purchaseFingerprint = (
+  check: PurchaseDataCheck,
+  row: PurchaseQualityPurchase,
+  expenses: readonly PurchaseQualityExpense[],
+  documents: readonly { documentKind: string }[],
+  postedRefundTotal: number,
+  settlementCovered: boolean,
+  financial: PurchaseFinancialAggregate,
+): string => {
+  const expectedChecks = purchaseExpectedChecks(row.orderEvidence);
+  const expenseCount = expenses.length;
+  const unpricedCount = expenses.filter((item) => item.cost === null).length;
+  const expenseCents = cents(sumBy(expenses, (item) => item.cost ?? 0));
+  const hasPrimaryDocument = documents.some((document) =>
+    primaryPurchaseDocumentKinds.some((kind) => kind === document.documentKind),
+  );
+  const settleableExpenses = expenses.filter((item) => !item.future);
+  const settleableTotal = cents(
+    sumBy(settleableExpenses, (item) => item.cost ?? 0),
+  );
+  const settleableUnpriced = settleableExpenses.filter(
+    (item) => item.cost === null,
+  ).length;
+  switch (check) {
+    case "purchase_date":
+      return evidenceFingerprint(check, [row.date]);
+    case "order_id":
+      return evidenceFingerprint(check, [row.orderId]);
+    case "stated_total":
+      return evidenceFingerprint(check, [moneyCents(row.statedTotal)]);
+    case "primary_document":
+      return evidenceFingerprint(check, [
+        expectedChecks.includes("primary_document"),
+        hasPrimaryDocument,
+      ]);
+    case "empty_expenses":
+      return evidenceFingerprint(check, [
+        expectedChecks.includes("empty_expenses"),
+        expenseCount,
+      ]);
+    case "unpriced_expense":
+      return evidenceFingerprint(check, [unpricedCount]);
+    case "paperwork_mismatch":
+      return evidenceFingerprint(check, [
+        moneyCents(row.statedTotal),
+        expenseCents,
+        expenseCount,
+        unpricedCount,
+        cents(postedRefundTotal),
+      ]);
+    case "settlement_reference":
+      return evidenceFingerprint(check, [settlementCovered]);
+    case "settlement_mismatch": {
+      const mismatch =
+        calculateFinancialReconciliation({
+          ...financial,
+          settleableExpenseTotal: settleableTotal / 100,
+          settleableUnpricedExpenseCount: settleableUnpriced,
+        }).status === "mismatch";
+      return evidenceFingerprint(check, [
+        mismatch,
+        settleableTotal / 100,
+        settleableUnpriced,
+      ]);
+    }
+  }
 };
 
 const purchaseBaseQualityGaps = (
@@ -557,6 +819,7 @@ const purchaseBaseQualityGaps = (
   if (row.statedTotal === null)
     gaps.push(["stated_total", "Literal vendor-stated total is not recorded."]);
   if (
+    purchaseExpectedChecks(row.orderEvidence).includes("primary_document") &&
     !documents.some((document) =>
       primaryPurchaseDocumentKinds.some(
         (kind) => kind === document.documentKind,
@@ -568,7 +831,10 @@ const purchaseBaseQualityGaps = (
       "No primary order confirmation, sales order, invoice, or receipt is attached.",
     ]);
   }
-  if (expenses.length === 0) {
+  if (
+    purchaseExpectedChecks(row.orderEvidence).includes("empty_expenses") &&
+    expenses.length === 0
+  ) {
     gaps.push(["empty_expenses", "Purchase has no live Expenses."]);
   }
   const unpriced = expenses.filter((item) => item.cost === null).length;
@@ -637,12 +903,39 @@ const qualityStatus = (gaps: DataQualityGap[]): DataQuality["status"] =>
       ? "needs_data"
       : "complete";
 
+/**
+ * A target's score is independent of related entities: a Purchase can be
+ * complete on its own evidence while a linked Product remains incomplete.
+ * Active exceptions are absent from `unresolvedGaps`, and therefore count as
+ * satisfied. No applicable checks is deliberately a perfect score.
+ */
+export const calculateDataQualityScore = (
+  expectedChecks: readonly DataCheck[],
+  unresolvedGaps: readonly DataQualityGap[],
+): number => {
+  const expected = new Set(expectedChecks);
+  const totalWeight = [...expected].reduce(
+    (total, check) => total + dataCheckWeight[check],
+    0,
+  );
+  if (totalWeight === 0) return 100;
+  const unresolvedWeight = unresolvedGaps.reduce(
+    (total, gap) =>
+      expected.has(gap.check) ? total + dataCheckWeight[gap.check] : total,
+    0,
+  );
+  const score =
+    Math.round(((totalWeight - unresolvedWeight) / totalWeight) * 10_000) / 100;
+  return Math.max(0, score);
+};
+
 const evaluateTargetQuality = (
   rawGaps: FingerprintedGap[],
   storedExceptions: DataException[],
   targetType: "purchase" | "product",
   targetId: string,
   facetOrder: readonly DataQualityFacetName[],
+  expectedChecks: readonly DataCheck[],
 ): Omit<DataQuality, "relatedGaps" | "relatedExceptions"> => {
   const rawByCheck = new Map(rawGaps.map((gap) => [gap.check, gap]));
   const exceptions: DataQualityException[] = storedExceptions.map(
@@ -669,7 +962,13 @@ const evaluateTargetQuality = (
     const facetGaps = gaps.filter((gap) => gap.facet === name);
     return { name, status: qualityStatus(facetGaps), gaps: facetGaps };
   });
-  return { status: qualityStatus(gaps), facets, gaps, exceptions };
+  return {
+    status: qualityStatus(gaps),
+    score: calculateDataQualityScore(expectedChecks, gaps),
+    facets,
+    gaps,
+    exceptions,
+  };
 };
 
 const uniqueTargetExceptions = (
@@ -683,31 +982,53 @@ const uniqueTargetExceptions = (
 
 type ProductQualityRow = Pick<
   typeof product.$inferSelect,
-  | "id"
-  | "shortcode"
-  | "manufacturer"
-  | "category"
-  | "model"
-  | "dataExceptions"
-  | "updatedAt"
+  "id" | "shortcode" | "manufacturer" | "category" | "model" | "dataExceptions"
 >;
+
+type ProductQualityEvidence = {
+  expenseLinked: boolean;
+  inventoryLinked: boolean;
+  imageLinked: boolean;
+  amazonLinked: boolean;
+  externalIds: Array<{ source: string; kind: string; externalId: string }>;
+  duplicateExternalId: boolean;
+};
+
+const productFingerprint = (
+  check: ProductDataCheck,
+  row: ProductQualityRow,
+  evidence: ProductQualityEvidence,
+): string => {
+  const hasAmazonAsin = evidence.externalIds.some(
+    (externalId) =>
+      externalId.source.toLowerCase() === AMAZON_SOURCE &&
+      externalId.kind === "asin",
+  );
+  switch (check) {
+    case "product_manufacturer":
+      return evidenceFingerprint(check, [row.manufacturer]);
+    case "product_category":
+      return evidenceFingerprint(check, [row.category]);
+    case "product_model":
+      return evidenceFingerprint(check, [row.category, row.model]);
+    case "product_image":
+      return evidenceFingerprint(check, [
+        evidence.inventoryLinked,
+        evidence.imageLinked,
+      ]);
+    case "amazon_asin":
+      return evidenceFingerprint(check, [evidence.amazonLinked, hasAmazonAsin]);
+    case "duplicate_external_id":
+      return evidenceFingerprint(check, [evidence.duplicateExternalId]);
+  }
+};
 
 const buildProductDataQuality = (
   row: ProductQualityRow,
-  evidence: {
-    expenseLinked: boolean;
-    inventoryLinked: boolean;
-    imageLinked: boolean;
-    amazonLinked: boolean;
-    externalIds: Array<{
-      source: string;
-      kind: string;
-      externalId: string;
-    }>;
-    duplicateExternalId: boolean;
-  },
+  evidence: ProductQualityEvidence,
 ): DataQuality => {
   const gaps: FingerprintedGap[] = [];
+  const expectedChecks: ProductDataCheck[] = [];
   const targetId = parseShortcodeFor("product", row.shortcode);
   const add = (check: ProductDataCheck, message: string) => {
     gaps.push({
@@ -717,10 +1038,11 @@ const buildProductDataQuality = (
       targetType: "product",
       targetId,
       message,
-      fingerprint: evidenceFingerprint(check, row.updatedAt),
+      fingerprint: productFingerprint(check, row, evidence),
     });
   };
   if (evidence.expenseLinked || evidence.inventoryLinked) {
+    expectedChecks.push("product_manufacturer", "product_category");
     if (
       row.manufacturer.trim() === "" ||
       row.manufacturer.trim().toLowerCase() ===
@@ -731,26 +1053,34 @@ const buildProductDataQuality = (
     if (row.category === null) {
       add("product_category", "Product category is not recorded.");
     }
-    if (
+    const modelRequired =
       row.category !== null &&
-      MODEL_REQUIRED_CATEGORIES.some((category) => category === row.category) &&
-      (row.model === null || row.model.trim() === "")
-    ) {
+      MODEL_REQUIRED_CATEGORIES.some((category) => category === row.category);
+    if (modelRequired) {
+      expectedChecks.push("product_model");
+    }
+    if (modelRequired && (row.model === null || row.model.trim() === "")) {
       add("product_model", "Manufacturer model is not recorded.");
     }
-    if (evidence.inventoryLinked && !evidence.imageLinked) {
-      add("product_image", "No product image is attached.");
+    if (evidence.inventoryLinked) {
+      expectedChecks.push("product_image");
+      if (!evidence.imageLinked) {
+        add("product_image", "No product image is attached.");
+      }
     }
-    if (
-      evidence.amazonLinked &&
-      !evidence.externalIds.some(
-        (externalId) =>
-          externalId.source.toLowerCase() === AMAZON_SOURCE &&
-          externalId.kind === "asin",
-      )
-    ) {
-      add("amazon_asin", "Amazon-linked product has no Amazon ASIN.");
+    if (evidence.amazonLinked) {
+      expectedChecks.push("amazon_asin");
+      if (
+        !evidence.externalIds.some(
+          (externalId) =>
+            externalId.source.toLowerCase() === AMAZON_SOURCE &&
+            externalId.kind === "asin",
+        )
+      ) {
+        add("amazon_asin", "Amazon-linked product has no Amazon ASIN.");
+      }
     }
+    expectedChecks.push("duplicate_external_id");
     if (evidence.duplicateExternalId) {
       add(
         "duplicate_external_id",
@@ -765,6 +1095,7 @@ const buildProductDataQuality = (
       "product",
       targetId,
       PRODUCT_FACETS,
+      expectedChecks,
     ),
     relatedGaps: [],
     relatedExceptions: [],
@@ -869,7 +1200,6 @@ export const loadProductDataQualities = async (
         category: product.category,
         model: product.model,
         dataExceptions: product.dataExceptions,
-        updatedAt: product.updatedAt,
       })
       .from(product)
       .where(and(inArray(product.id, uniqueIds), notDeleted(product))),
@@ -1076,10 +1406,14 @@ export const loadPurchaseDataQualities = async (
         date: purchase.date,
         orderId: purchase.orderId,
         statedTotal: purchase.statedTotal,
+        orderEvidence: sql<PurchaseOrderEvidence>`${vendor.orderEvidence}`,
         dataExceptions: purchase.dataExceptions,
-        updatedAt: purchase.updatedAt,
       })
       .from(purchase)
+      .innerJoin(
+        vendor,
+        and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
+      )
       .where(and(inArray(purchase.id, uniqueIds), notDeleted(purchase))),
     getDb(db)
       .select({
@@ -1172,6 +1506,11 @@ export const loadPurchaseDataQualities = async (
 
   const qualityForPurchase = (row: (typeof purchases)[number]): DataQuality => {
     const purchaseExpenses = expensesByPurchase[row.id] ?? [];
+    const purchaseDocuments = documentsByPurchase[row.id] ?? [];
+    const postedRefundTotal = postedRefundByPurchase.get(row.id) ?? 0;
+    const financial =
+      financialAggregates.get(row.id) ?? emptyPurchaseFinancialAggregate();
+    const hasSettlementReference = settlementCovered.has(row.id);
     const gaps: FingerprintedGap[] = [];
     const targetId = parseShortcodeFor("purchase", row.shortcode);
     const add = (check: PurchaseDataCheck, message: string) => {
@@ -1182,14 +1521,22 @@ export const loadPurchaseDataQualities = async (
         targetType: "purchase",
         targetId,
         message,
-        fingerprint: evidenceFingerprint(check, row.updatedAt),
+        fingerprint: purchaseFingerprint(
+          check,
+          row,
+          purchaseExpenses,
+          purchaseDocuments,
+          postedRefundTotal,
+          hasSettlementReference,
+          financial,
+        ),
       });
     };
     for (const [check, message] of purchaseBaseQualityGaps(
       row,
       purchaseExpenses,
-      documentsByPurchase[row.id] ?? [],
-      postedRefundByPurchase.get(row.id) ?? 0,
+      purchaseDocuments,
+      postedRefundTotal,
     )) {
       add(check, message);
     }
@@ -1197,7 +1544,7 @@ export const loadPurchaseDataQualities = async (
       row.id,
       purchaseExpenses,
       settlementCovered,
-      financialAggregates.get(row.id) ?? emptyPurchaseFinancialAggregate(),
+      financial,
     )) {
       add(check, message);
     }
@@ -1218,6 +1565,7 @@ export const loadPurchaseDataQualities = async (
         "purchase",
         targetId,
         PURCHASE_FACETS,
+        purchaseExpectedChecks(row.orderEvidence),
       ),
       relatedGaps: uniqBy(
         relatedGaps,
@@ -1293,7 +1641,9 @@ const mutateException = async (
             await tx
               .select({
                 dataExceptions: purchase.dataExceptions,
-                updatedAt: purchase.updatedAt,
+                fingerprint: sql<string>`${sql.raw(
+                  purchaseFingerprintRaw(purchaseDataCheck.parse(input.check)),
+                )}`,
               })
               .from(purchase)
               .where(
@@ -1308,7 +1658,9 @@ const mutateException = async (
             await tx
               .select({
                 dataExceptions: product.dataExceptions,
-                updatedAt: product.updatedAt,
+                fingerprint: productFingerprintSql(
+                  productDataCheck.parse(input.check),
+                ),
               })
               .from(product)
               .where(
@@ -1326,12 +1678,11 @@ const mutateException = async (
       );
     }
     const current = currentRow.dataExceptions;
+    const currentFingerprint = String(currentRow.fingerprint);
     if ("reason" in input) {
       const currentlyActive = current.some(
         (item) =>
-          item.check === input.check &&
-          item.fingerprint ===
-            evidenceFingerprint(input.check, currentRow.updatedAt),
+          item.check === input.check && item.fingerprint === currentFingerprint,
       );
       const applies = currentlyActive
         ? true
@@ -1376,14 +1727,9 @@ const mutateException = async (
       }
     }
     const now = new Date();
-    const retained = current
-      .filter((item) => item.check !== input.check)
-      .map((item) =>
-        item.fingerprint ===
-        evidenceFingerprint(item.check, currentRow.updatedAt)
-          ? { ...item, fingerprint: evidenceFingerprint(item.check, now) }
-          : item,
-      );
+    // Other exceptions retain their own evidence snapshot. Updating this row's
+    // exception metadata is not evidence changing for a different check.
+    const retained = current.filter((item) => item.check !== input.check);
     const next =
       "reason" in input
         ? [
@@ -1392,7 +1738,7 @@ const mutateException = async (
               check: input.check,
               reason: input.reason,
               note: input.note.trim(),
-              fingerprint: evidenceFingerprint(input.check, now),
+              fingerprint: currentFingerprint,
             },
           ]
         : retained;

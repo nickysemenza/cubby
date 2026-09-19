@@ -65,6 +65,46 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
+  "VendorAccount.ledgerPartyId": {
+    code: "block-vendor-accounts",
+    effect: "block",
+    description: "Member-owned vendor accounts retain their owner.",
+  },
+  "ImportRun.ledgerPartyId": {
+    code: "block-import-runs",
+    effect: "block",
+    description: "Import provenance retains the member scope.",
+  },
+  "ImportSourceClaim.ledgerPartyId": {
+    code: "block-import-claims",
+    effect: "block",
+    description: "Import source claims retain the member scope.",
+  },
+  "ImportFinding.ledgerPartyId": {
+    code: "block-import-findings",
+    effect: "block",
+    description: "Import findings retain the member scope.",
+  },
+  "ImportHunt.ledgerPartyId": {
+    code: "block-import-hunts",
+    effect: "block",
+    description: "Import hunts retain the member scope.",
+  },
+  "MerchantVendorRule.ledgerPartyId": {
+    code: "block-merchant-rules",
+    effect: "block",
+    description: "Merchant routing rules retain the member scope.",
+  },
+  "MailboxCursor.ledgerPartyId": {
+    code: "block-mailbox-cursor",
+    effect: "block",
+    description: "Mailbox cursors retain their member scope.",
+  },
+  "OrderMail.ledgerPartyId": {
+    code: "block-order-mail",
+    effect: "block",
+    description: "Order mail retains its member scope.",
+  },
   "ExpenseAttribution.ledgerPartyId": {
     code: "block-attributions",
     effect: "block",
@@ -98,6 +138,47 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
+  "VendorAccount.ledgerPartyId": {
+    code: "block-vendor-accounts",
+    effect: "block",
+    description:
+      "Vendor-account ownership must be reconciled before merging members.",
+  },
+  "ImportRun.ledgerPartyId": {
+    code: "block-import-runs",
+    effect: "block",
+    description: "Import provenance prevents member merges.",
+  },
+  "ImportSourceClaim.ledgerPartyId": {
+    code: "block-import-claims",
+    effect: "block",
+    description: "Import source identity prevents member merges.",
+  },
+  "ImportFinding.ledgerPartyId": {
+    code: "block-import-findings",
+    effect: "block",
+    description: "Import findings prevent member merges.",
+  },
+  "ImportHunt.ledgerPartyId": {
+    code: "block-import-hunts",
+    effect: "block",
+    description: "Import hunts prevent member merges.",
+  },
+  "MerchantVendorRule.ledgerPartyId": {
+    code: "block-merchant-rules",
+    effect: "block",
+    description: "Merchant routes prevent member merges.",
+  },
+  "MailboxCursor.ledgerPartyId": {
+    code: "block-mailbox-cursor",
+    effect: "block",
+    description: "Mailbox identity prevents member merges.",
+  },
+  "OrderMail.ledgerPartyId": {
+    code: "block-order-mail",
+    effect: "block",
+    description: "Order mail provenance prevents member merges.",
+  },
   "ExpenseAttribution.ledgerPartyId": {
     code: "merge-attributions",
     effect: "move-dedupe",

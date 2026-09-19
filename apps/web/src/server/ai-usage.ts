@@ -17,6 +17,8 @@ export type RecordAiUsageInput = {
   estimatedCost?: number | null;
   feature: string;
   operation: string;
+  jobKind?: string | null;
+  jobId?: string | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
   /** Prompt-cache tokens, when the adapter reports them: priced, not stored. */
@@ -45,6 +47,8 @@ export async function recordAiUsage(
       provider: input.provider,
       model: input.model,
       operation: input.operation,
+      jobKind: input.jobKind ?? null,
+      jobId: input.jobId ?? null,
       inputTokens: input.inputTokens ?? null,
       outputTokens: input.outputTokens ?? null,
       cacheReadTokens: input.cacheReadTokens ?? null,

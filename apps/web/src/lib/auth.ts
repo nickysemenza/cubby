@@ -188,5 +188,16 @@ export const auth = betterAuth({
         return isLocal ? [...base, origin] : base;
       }
     : ["cubby-mobile://", "https://*.nicky.workers.dev"],
-  socialProviders: {},
+  socialProviders:
+    env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: env.GOOGLE_CLIENT_ID,
+            clientSecret: env.GOOGLE_CLIENT_SECRET,
+            accessType: "offline",
+            scope: ["https://www.googleapis.com/auth/gmail.readonly"],
+            disableImplicitSignUp: true,
+          },
+        }
+      : {},
 });

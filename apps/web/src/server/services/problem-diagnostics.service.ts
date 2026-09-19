@@ -35,6 +35,7 @@ import {
   findIncompleteStatementImports,
   findInvalidFinancialJson,
   findManufacturerSpellingVariants,
+  findOpenImportFindings,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findPartiallyImportedCookbooks,
@@ -218,6 +219,12 @@ async function runUpcProposals(
 
 /** Exhaustive adapter registry: a new DiagnosticKey cannot be silently raw. */
 export const diagnosticAdapters = {
+  "import-findings": {
+    sample: (db, _options, limit) =>
+      healthySample(findOpenImportFindings(db), limit),
+    count: async (db) =>
+      healthyCount((await findOpenImportFindings(db)).length),
+  },
   "duplicate-product-identities": {
     sample: (db, _options, limit) =>
       healthySample(findDuplicateProductIdentities(db), limit),

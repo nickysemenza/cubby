@@ -84,7 +84,11 @@ describe("runJevChoice", () => {
         },
       }),
     );
-    expect(result).toEqual({ selectedIndex: null, confidence: "medium" });
+    expect(result).toEqual({
+      selectedIndex: null,
+      confidence: "medium",
+      probability: 0.8,
+    });
   });
 
   it("omits none for an exhaustive vocabulary and rejects a none answer", async () => {
@@ -106,7 +110,11 @@ describe("runJevChoice", () => {
         },
       }),
     );
-    expect(result).toEqual({ selectedIndex: 1, confidence: "high" });
+    expect(result).toEqual({
+      selectedIndex: 1,
+      confidence: "high",
+      probability: 0.9,
+    });
 
     await expect(
       runJevChoice({
@@ -162,7 +170,11 @@ describe("runJevChoice", () => {
       choices: ["red", "blue"],
     });
 
-    expect(result).toEqual({ selectedIndex: 0, confidence: "high" });
+    expect(result).toEqual({
+      selectedIndex: 0,
+      confidence: "high",
+      probability: 0.9,
+    });
     const [call] = sent;
     expect(call?.url).toBe(
       "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby/workers-ai/run/typesafe/jev",

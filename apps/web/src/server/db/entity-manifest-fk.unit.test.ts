@@ -78,6 +78,9 @@ const NON_ENTITY_FK_TARGETS = {
   // statement line by public id.
   StatementImport: "provider export bookkeeping, not a domain entity",
   StatementRow: "verbatim statement evidence, not a domain entity",
+  ImportRun: "purchase-import execution bookkeeping, not a domain entity",
+  ImportSourceClaim: "idempotency provenance for imported evidence",
+  OrderMail: "normalized mailbox evidence, not a domain entity",
 };
 
 /**
@@ -89,6 +92,78 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "ImportRun.ledgerPartyId": {
+    classification: "metadata",
+    reason: "scopes operational import execution to a household member",
+  },
+  "ImportRun.vendorAccountId": {
+    classification: "metadata",
+    reason: "records the vendor login used by an operational import run",
+  },
+  "ImportSourceClaim.ledgerPartyId": {
+    classification: "metadata",
+    reason: "scopes import provenance to a household member",
+  },
+  "ImportSourceClaim.vendorAccountId": {
+    classification: "metadata",
+    reason: "records which vendor login supplied the evidence",
+  },
+  "ImportSourceClaim.purchaseId": {
+    classification: "metadata",
+    reason: "idempotency provenance for the purchase created from evidence",
+  },
+  "ImportFinding.ledgerPartyId": {
+    classification: "metadata",
+    reason: "scopes an operational review finding to a household member",
+  },
+  "ImportHunt.ledgerPartyId": {
+    classification: "metadata",
+    reason: "scopes receipt discovery work to a household member",
+  },
+  "ImportHunt.financialTransactionId": {
+    classification: "metadata",
+    reason: "receipt-discovery work keyed by its triggering transaction",
+  },
+  "ImportHunt.vendorId": {
+    classification: "metadata",
+    reason: "candidate vendor metadata for receipt discovery",
+  },
+  "ImportHunt.vendorAccountId": {
+    classification: "metadata",
+    reason: "vendor login selected for receipt discovery",
+  },
+  "ImportHunt.receiptImageId": {
+    classification: "metadata",
+    reason: "submitted evidence retained by receipt-discovery work",
+  },
+  "MerchantVendorRule.ledgerPartyId": {
+    classification: "metadata",
+    reason: "member-scoped merchant classification rule",
+  },
+  "MerchantVendorRule.vendorId": {
+    classification: "metadata",
+    reason: "merchant classification rule output",
+  },
+  "MailboxCursor.ledgerPartyId": {
+    classification: "metadata",
+    reason: "member-scoped mailbox synchronization checkpoint",
+  },
+  "OrderMail.ledgerPartyId": {
+    classification: "metadata",
+    reason: "member-scoped normalized mailbox evidence",
+  },
+  "OrderMail.vendorId": {
+    classification: "metadata",
+    reason: "classified vendor for normalized mailbox evidence",
+  },
+  "OrderMailAttachment.imageId": {
+    classification: "metadata",
+    reason: "normalized mail attachment stored as image evidence",
+  },
+  "PurchasePaymentEvidence.purchaseId": {
+    classification: "metadata",
+    reason: "payment matching evidence owned by a purchase",
+  },
   "LedgerSourceClaim.expenseId": {
     classification: "metadata",
     reason: "ledger reconciliation provenance, not a navigable domain record",

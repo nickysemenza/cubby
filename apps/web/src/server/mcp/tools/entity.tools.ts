@@ -162,10 +162,13 @@ const summarizeItem = (
 ): z.infer<typeof summaryItemSchema> | null => {
   const record = projectionItemSchema.nullable().parse(item);
   if (record === null) return null;
-  const title = record[entitySummary[entity].titleField];
+  const title = z
+    .string()
+    .catch(record.id)
+    .parse(record[entitySummary[entity].titleField]);
   const summary: z.infer<typeof summaryItemSchema> = {
     id: record.id,
-    name: title ?? record.id,
+    name: title,
   };
   if (entity === "product" && record.externalIds) {
     summary.externalIds = record.externalIds;

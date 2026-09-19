@@ -83,6 +83,7 @@ describe("runAiSelection", () => {
     expect(outcome).toEqual({
       selected: { id: "a", label: "red" },
       confidence: "high",
+      probability: 0.9,
       reasoning: "",
     });
   });
@@ -175,6 +176,7 @@ describe("runAiSelection overflow", () => {
     expect(outcome).toEqual({
       selected: { id: "w7", label: "widget 7" },
       confidence: "medium",
+      probability: null,
       reasoning: "closer match",
     });
   });
@@ -196,6 +198,7 @@ describe("runAiSelection overflow", () => {
     expect(outcome).toEqual({
       selected: null,
       confidence: "low",
+      probability: null,
       reasoning: "hallucinated an id",
     });
   });

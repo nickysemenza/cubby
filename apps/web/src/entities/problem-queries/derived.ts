@@ -11,6 +11,30 @@ import { defineProblem, type ProblemQuery } from "~/entities/problem-query";
  */
 export const derivedProblemQueries = [
   defineProblem({
+    key: "importFindings",
+    problemClass: PROBLEM_CLASS.importFindings,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason: "Each result is a durable import review finding.",
+    },
+    freshness: { kind: "live" },
+    title: "Purchase imports needing review",
+    description:
+      "Import decisions that require a person before Cubby changes more data.",
+    emptyMessage: "No purchase import needs review.",
+    source: {
+      kind: "derived",
+      diagnostic: "import-findings",
+      grain: "proposal",
+      inputs: [{ entity: "purchase", filters: [] }],
+      operations: [
+        { label: "Load open import findings" },
+        { label: "Preserve proposed fixes for explicit review" },
+      ],
+    },
+  }),
+  defineProblem({
     key: "duplicateProductIdentities",
     problemClass: PROBLEM_CLASS.duplicateProductIdentities,
     executionLane: "fast",

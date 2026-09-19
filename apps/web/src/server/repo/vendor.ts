@@ -21,6 +21,10 @@ import type {
   VendorUpdateData,
 } from "@cubby/schemas/vendor";
 import {
+  vendorAgentHints,
+  vendorOrderEvidence,
+} from "@cubby/schemas/vendor-import-fields";
+import {
   and,
   asc,
   desc,
@@ -77,6 +81,26 @@ import {
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
+  "VendorAccount.vendorId": {
+    code: "block-vendor-accounts",
+    effect: "block",
+    description: "Vendor accounts retain their configured vendor.",
+  },
+  "ImportHunt.vendorId": {
+    code: "block-import-hunts",
+    effect: "block",
+    description: "Import hunts retain their routed vendor.",
+  },
+  "MerchantVendorRule.vendorId": {
+    code: "block-merchant-rules",
+    effect: "block",
+    description: "Confirmed merchant rules retain their vendor.",
+  },
+  "OrderMail.vendorId": {
+    code: "block-order-mail",
+    effect: "block",
+    description: "Normalized order mail retains its classified vendor.",
+  },
   "Purchase.vendorId": {
     code: "block-live-purchase",
     effect: "block",
@@ -86,6 +110,28 @@ export const VENDOR_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 export const VENDOR_MERGE_EDGE_POLICY = {
+  "VendorAccount.vendorId": {
+    code: "block-vendor-accounts",
+    effect: "block",
+    description:
+      "Vendor accounts must be reassigned explicitly before merging vendors.",
+  },
+  "ImportHunt.vendorId": {
+    code: "block-import-hunts",
+    effect: "block",
+    description: "Historical import hunts prevent an ambiguous vendor merge.",
+  },
+  "MerchantVendorRule.vendorId": {
+    code: "block-merchant-rules",
+    effect: "block",
+    description:
+      "Confirmed merchant rules must be reconciled before merging vendors.",
+  },
+  "OrderMail.vendorId": {
+    code: "block-order-mail",
+    effect: "block",
+    description: "Classified order mail prevents an ambiguous vendor merge.",
+  },
   "Purchase.vendorId": {
     code: "repoint-or-fold-by-order",
     effect: "move-dedupe",
@@ -178,6 +224,11 @@ const vendorColumns = {
   name: vendor.name,
   website: vendor.website,
   orderUrlTemplate: vendor.orderUrlTemplate,
+  orderEvidence: vendor.orderEvidence,
+  orderEmailSenders: vendor.orderEmailSenders,
+  browserDomains: vendor.browserDomains,
+  returnWindowDays: vendor.returnWindowDays,
+  agentHints: vendor.agentHints,
   notes: vendor.notes,
   createdAt: vendor.createdAt,
   updatedAt: vendor.updatedAt,
@@ -209,6 +260,11 @@ type VendorRow = {
   name: string;
   website: string | null;
   orderUrlTemplate: string | null;
+  orderEvidence: string | null;
+  orderEmailSenders: string[];
+  browserDomains: string[];
+  returnWindowDays: number | null;
+  agentHints: unknown;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -244,6 +300,11 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   name: row.name,
   website: row.website,
   orderUrlTemplate: row.orderUrlTemplate,
+  orderEvidence: vendorOrderEvidence.nullable().parse(row.orderEvidence),
+  orderEmailSenders: row.orderEmailSenders,
+  browserDomains: row.browserDomains,
+  returnWindowDays: row.returnWindowDays,
+  agentHints: vendorAgentHints.parse(row.agentHints),
   notes: row.notes,
   purchaseCount: Number(row.purchaseCount),
   spend: Number(row.spend),
@@ -445,6 +506,11 @@ export const createVendor = async (
       name: data.name.trim(),
       website: data.website,
       orderUrlTemplate: data.orderUrlTemplate,
+      orderEvidence: data.orderEvidence,
+      orderEmailSenders: data.orderEmailSenders,
+      browserDomains: data.browserDomains,
+      returnWindowDays: data.returnWindowDays,
+      agentHints: data.agentHints,
       notes: data.notes,
     });
     await logAuditEntry(tx, actor, {

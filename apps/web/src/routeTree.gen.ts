@@ -101,12 +101,15 @@ import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedTasksShortcodeRouteImport } from './routes/_authenticated/tasks.$shortcode'
 import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
+import { Route as AuthenticatedVendorAccountsIndexRouteImport } from './routes/_authenticated/vendor-accounts.index'
+import { Route as AuthenticatedVendorAccountsShortcodeRouteImport } from './routes/_authenticated/vendor-accounts.$shortcode'
 import { Route as AuthenticatedVendorsIndexRouteImport } from './routes/_authenticated/vendors.index'
 import { Route as AuthenticatedVendorsShortcodeRouteImport } from './routes/_authenticated/vendors.$shortcode'
 import { Route as AuthenticatedWishesIndexRouteImport } from './routes/_authenticated/wishes.index'
 import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_authenticated/wishes.$shortcode'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
+import { Route as ApiImportRunsRouteImport } from './routes/api/import/runs'
 import { Route as ApiV1ResourceRouteImport } from './routes/api/v1/$resource'
 import { Route as ApiV1DocsRouteImport } from './routes/api/v1/docs'
 import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
@@ -118,6 +121,9 @@ import { Route as AuthenticatedRecipesShortcodeExportRouteImport } from './route
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
 import { Route as ApiCalendarTokenFeedRouteImport } from './routes/api/calendar.$token.$feed'
+import { Route as ApiImportAgentAccountsRouteImport } from './routes/api/import/agent/accounts'
+import { Route as ApiImportAgentSocketRouteImport } from './routes/api/import/agent/socket'
+import { Route as ApiImportAgentSyncRouteImport } from './routes/api/import/agent/sync'
 import { Route as ApiV1ResourceOperationRouteImport } from './routes/api/v1/$resource/$operation'
 
 const IndexRoute = IndexRouteImport.update({
@@ -642,6 +648,18 @@ const AuthenticatedUsdaIdRoute = AuthenticatedUsdaIdRouteImport.update({
   path: '/usda/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedVendorAccountsIndexRoute =
+  AuthenticatedVendorAccountsIndexRouteImport.update({
+    id: '/vendor-accounts/',
+    path: '/vendor-accounts/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedVendorAccountsShortcodeRoute =
+  AuthenticatedVendorAccountsShortcodeRouteImport.update({
+    id: '/vendor-accounts/$shortcode',
+    path: '/vendor-accounts/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedVendorsIndexRoute =
   AuthenticatedVendorsIndexRouteImport.update({
     id: '/vendors/',
@@ -674,6 +692,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
   id: '/api/debug/timing',
   path: '/api/debug/timing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiImportRunsRoute = ApiImportRunsRouteImport.update({
+  id: '/api/import/runs',
+  path: '/api/import/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1ResourceRoute = ApiV1ResourceRouteImport.update({
@@ -736,6 +759,21 @@ const AuthenticatedUsdaUpcCodeRoute =
 const ApiCalendarTokenFeedRoute = ApiCalendarTokenFeedRouteImport.update({
   id: '/api/calendar/$token/$feed',
   path: '/api/calendar/$token/$feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiImportAgentAccountsRoute = ApiImportAgentAccountsRouteImport.update({
+  id: '/api/import/agent/accounts',
+  path: '/api/import/agent/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiImportAgentSocketRoute = ApiImportAgentSocketRouteImport.update({
+  id: '/api/import/agent/socket',
+  path: '/api/import/agent/socket',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiImportAgentSyncRoute = ApiImportAgentSyncRouteImport.update({
+  id: '/api/import/agent/sync',
+  path: '/api/import/agent/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1ResourceOperationRoute = ApiV1ResourceOperationRouteImport.update({
@@ -814,10 +852,12 @@ export interface FileRoutesByFullPath {
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
+  '/vendor-accounts/$shortcode': typeof AuthenticatedVendorAccountsShortcodeRoute
   '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/import/runs': typeof ApiImportRunsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -844,6 +884,7 @@ export interface FileRoutesByFullPath {
   '/statement-rows/': typeof AuthenticatedStatementRowsIndexRoute
   '/tasks/': typeof AuthenticatedTasksIndexRoute
   '/usda/': typeof AuthenticatedUsdaIndexRoute
+  '/vendor-accounts/': typeof AuthenticatedVendorAccountsIndexRoute
   '/vendors/': typeof AuthenticatedVendorsIndexRoute
   '/wishes/': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
@@ -853,6 +894,9 @@ export interface FileRoutesByFullPath {
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
+  '/api/import/agent/accounts': typeof ApiImportAgentAccountsRoute
+  '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
+  '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
 }
 export interface FileRoutesByTo {
@@ -924,10 +968,12 @@ export interface FileRoutesByTo {
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
+  '/vendor-accounts/$shortcode': typeof AuthenticatedVendorAccountsShortcodeRoute
   '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/import/runs': typeof ApiImportRunsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -954,6 +1000,7 @@ export interface FileRoutesByTo {
   '/statement-rows': typeof AuthenticatedStatementRowsIndexRoute
   '/tasks': typeof AuthenticatedTasksIndexRoute
   '/usda': typeof AuthenticatedUsdaIndexRoute
+  '/vendor-accounts': typeof AuthenticatedVendorAccountsIndexRoute
   '/vendors': typeof AuthenticatedVendorsIndexRoute
   '/wishes': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
@@ -963,6 +1010,9 @@ export interface FileRoutesByTo {
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
+  '/api/import/agent/accounts': typeof ApiImportAgentAccountsRoute
+  '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
+  '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
 }
 export interface FileRoutesById {
@@ -1037,10 +1087,12 @@ export interface FileRoutesById {
   '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
   '/_authenticated/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
+  '/_authenticated/vendor-accounts/$shortcode': typeof AuthenticatedVendorAccountsShortcodeRoute
   '/_authenticated/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/_authenticated/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/import/runs': typeof ApiImportRunsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -1067,6 +1119,7 @@ export interface FileRoutesById {
   '/_authenticated/statement-rows/': typeof AuthenticatedStatementRowsIndexRoute
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
   '/_authenticated/usda/': typeof AuthenticatedUsdaIndexRoute
+  '/_authenticated/vendor-accounts/': typeof AuthenticatedVendorAccountsIndexRoute
   '/_authenticated/vendors/': typeof AuthenticatedVendorsIndexRoute
   '/_authenticated/wishes/': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
@@ -1076,6 +1129,9 @@ export interface FileRoutesById {
   '/_authenticated/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
+  '/api/import/agent/accounts': typeof ApiImportAgentAccountsRoute
+  '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
+  '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
 }
 export interface FileRouteTypes {
@@ -1150,10 +1206,12 @@ export interface FileRouteTypes {
     | '/search/debug'
     | '/tasks/$shortcode'
     | '/usda/$id'
+    | '/vendor-accounts/$shortcode'
     | '/vendors/$shortcode'
     | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/import/runs'
     | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
@@ -1180,6 +1238,7 @@ export interface FileRouteTypes {
     | '/statement-rows/'
     | '/tasks/'
     | '/usda/'
+    | '/vendor-accounts/'
     | '/vendors/'
     | '/wishes/'
     | '/.well-known/oauth-authorization-server/api/auth'
@@ -1189,6 +1248,9 @@ export interface FileRouteTypes {
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
     | '/api/calendar/$token/$feed'
+    | '/api/import/agent/accounts'
+    | '/api/import/agent/socket'
+    | '/api/import/agent/sync'
     | '/api/v1/$resource/$operation'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1260,10 +1322,12 @@ export interface FileRouteTypes {
     | '/search/debug'
     | '/tasks/$shortcode'
     | '/usda/$id'
+    | '/vendor-accounts/$shortcode'
     | '/vendors/$shortcode'
     | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/import/runs'
     | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
@@ -1290,6 +1354,7 @@ export interface FileRouteTypes {
     | '/statement-rows'
     | '/tasks'
     | '/usda'
+    | '/vendor-accounts'
     | '/vendors'
     | '/wishes'
     | '/.well-known/oauth-authorization-server/api/auth'
@@ -1299,6 +1364,9 @@ export interface FileRouteTypes {
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
     | '/api/calendar/$token/$feed'
+    | '/api/import/agent/accounts'
+    | '/api/import/agent/socket'
+    | '/api/import/agent/sync'
     | '/api/v1/$resource/$operation'
   id:
     | '__root__'
@@ -1372,10 +1440,12 @@ export interface FileRouteTypes {
     | '/_authenticated/search/debug'
     | '/_authenticated/tasks/$shortcode'
     | '/_authenticated/usda/$id'
+    | '/_authenticated/vendor-accounts/$shortcode'
     | '/_authenticated/vendors/$shortcode'
     | '/_authenticated/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/import/runs'
     | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
@@ -1402,6 +1472,7 @@ export interface FileRouteTypes {
     | '/_authenticated/statement-rows/'
     | '/_authenticated/tasks/'
     | '/_authenticated/usda/'
+    | '/_authenticated/vendor-accounts/'
     | '/_authenticated/vendors/'
     | '/_authenticated/wishes/'
     | '/.well-known/oauth-authorization-server/api/auth'
@@ -1411,6 +1482,9 @@ export interface FileRouteTypes {
     | '/_authenticated/usda/ndb/$code'
     | '/_authenticated/usda/upc/$code'
     | '/api/calendar/$token/$feed'
+    | '/api/import/agent/accounts'
+    | '/api/import/agent/socket'
+    | '/api/import/agent/sync'
     | '/api/v1/$resource/$operation'
   fileRoutesById: FileRoutesById
 }
@@ -1427,11 +1501,15 @@ export interface RootRouteChildren {
   OauthConsentRoute: typeof OauthConsentRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
+  ApiImportRunsRoute: typeof ApiImportRunsRoute
   ApiV1ResourceRoute: typeof ApiV1ResourceRouteWithChildren
   ApiV1DocsRoute: typeof ApiV1DocsRoute
   ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
   ApiWorkflowStreamOperationRoute: typeof ApiWorkflowStreamOperationRoute
   ApiCalendarTokenFeedRoute: typeof ApiCalendarTokenFeedRoute
+  ApiImportAgentAccountsRoute: typeof ApiImportAgentAccountsRoute
+  ApiImportAgentSocketRoute: typeof ApiImportAgentSocketRoute
+  ApiImportAgentSyncRoute: typeof ApiImportAgentSyncRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -2080,6 +2158,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsdaIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/vendor-accounts/': {
+      id: '/_authenticated/vendor-accounts/'
+      path: '/vendor-accounts'
+      fullPath: '/vendor-accounts/'
+      preLoaderRoute: typeof AuthenticatedVendorAccountsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/vendor-accounts/$shortcode': {
+      id: '/_authenticated/vendor-accounts/$shortcode'
+      path: '/vendor-accounts/$shortcode'
+      fullPath: '/vendor-accounts/$shortcode'
+      preLoaderRoute: typeof AuthenticatedVendorAccountsShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/vendors/': {
       id: '/_authenticated/vendors/'
       path: '/vendors'
@@ -2120,6 +2212,13 @@ declare module '@tanstack/react-router' {
       path: '/api/debug/timing'
       fullPath: '/api/debug/timing'
       preLoaderRoute: typeof ApiDebugTimingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import/runs': {
+      id: '/api/import/runs'
+      path: '/api/import/runs'
+      fullPath: '/api/import/runs'
+      preLoaderRoute: typeof ApiImportRunsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/v1/$resource': {
@@ -2199,6 +2298,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCalendarTokenFeedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/import/agent/accounts': {
+      id: '/api/import/agent/accounts'
+      path: '/api/import/agent/accounts'
+      fullPath: '/api/import/agent/accounts'
+      preLoaderRoute: typeof ApiImportAgentAccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import/agent/socket': {
+      id: '/api/import/agent/socket'
+      path: '/api/import/agent/socket'
+      fullPath: '/api/import/agent/socket'
+      preLoaderRoute: typeof ApiImportAgentSocketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import/agent/sync': {
+      id: '/api/import/agent/sync'
+      path: '/api/import/agent/sync'
+      fullPath: '/api/import/agent/sync'
+      preLoaderRoute: typeof ApiImportAgentSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/$resource/$operation': {
       id: '/api/v1/$resource/$operation'
       path: '/$operation'
@@ -2268,6 +2388,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
   AuthenticatedTasksShortcodeRoute: typeof AuthenticatedTasksShortcodeRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
+  AuthenticatedVendorAccountsShortcodeRoute: typeof AuthenticatedVendorAccountsShortcodeRoute
   AuthenticatedVendorsShortcodeRoute: typeof AuthenticatedVendorsShortcodeRoute
   AuthenticatedWishesShortcodeRoute: typeof AuthenticatedWishesShortcodeRoute
   AuthenticatedCollectionsIndexRoute: typeof AuthenticatedCollectionsIndexRoute
@@ -2292,6 +2413,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedStatementRowsIndexRoute: typeof AuthenticatedStatementRowsIndexRoute
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
   AuthenticatedUsdaIndexRoute: typeof AuthenticatedUsdaIndexRoute
+  AuthenticatedVendorAccountsIndexRoute: typeof AuthenticatedVendorAccountsIndexRoute
   AuthenticatedVendorsIndexRoute: typeof AuthenticatedVendorsIndexRoute
   AuthenticatedWishesIndexRoute: typeof AuthenticatedWishesIndexRoute
   AuthenticatedCollectionsSmartStarterRoute: typeof AuthenticatedCollectionsSmartStarterRoute
@@ -2372,6 +2494,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
   AuthenticatedTasksShortcodeRoute: AuthenticatedTasksShortcodeRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
+  AuthenticatedVendorAccountsShortcodeRoute:
+    AuthenticatedVendorAccountsShortcodeRoute,
   AuthenticatedVendorsShortcodeRoute: AuthenticatedVendorsShortcodeRoute,
   AuthenticatedWishesShortcodeRoute: AuthenticatedWishesShortcodeRoute,
   AuthenticatedCollectionsIndexRoute: AuthenticatedCollectionsIndexRoute,
@@ -2399,6 +2523,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedStatementRowsIndexRoute: AuthenticatedStatementRowsIndexRoute,
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedUsdaIndexRoute: AuthenticatedUsdaIndexRoute,
+  AuthenticatedVendorAccountsIndexRoute: AuthenticatedVendorAccountsIndexRoute,
   AuthenticatedVendorsIndexRoute: AuthenticatedVendorsIndexRoute,
   AuthenticatedWishesIndexRoute: AuthenticatedWishesIndexRoute,
   AuthenticatedCollectionsSmartStarterRoute:
@@ -2483,11 +2608,15 @@ const rootRouteChildren: RootRouteChildren = {
   OauthConsentRoute: OauthConsentRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
+  ApiImportRunsRoute: ApiImportRunsRoute,
   ApiV1ResourceRoute: ApiV1ResourceRouteWithChildren,
   ApiV1DocsRoute: ApiV1DocsRoute,
   ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,
   ApiWorkflowStreamOperationRoute: ApiWorkflowStreamOperationRoute,
   ApiCalendarTokenFeedRoute: ApiCalendarTokenFeedRoute,
+  ApiImportAgentAccountsRoute: ApiImportAgentAccountsRoute,
+  ApiImportAgentSocketRoute: ApiImportAgentSocketRoute,
+  ApiImportAgentSyncRoute: ApiImportAgentSyncRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

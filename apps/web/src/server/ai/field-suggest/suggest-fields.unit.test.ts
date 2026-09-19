@@ -115,6 +115,7 @@ describe("suggestFields", () => {
           label: TRADE_LABELS.electrical,
           detail: null,
           confidence: "high",
+          probability: 0.9,
           reasoning: "",
         });
       },
@@ -132,6 +133,7 @@ describe("suggestFields", () => {
           label: "Kitchen Remodel",
           detail: null,
           confidence: "high",
+          probability: 0.9,
           reasoning: "",
         });
       },

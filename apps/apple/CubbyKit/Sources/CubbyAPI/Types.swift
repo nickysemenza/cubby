@@ -101,6 +101,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/image/setPerceptualHashes`.
     /// - Remark: Generated from `#/paths//api/v1/image/setPerceptualHashes/post(image.setPerceptualHashes)`.
     func image_setPerceptualHashes(_ input: Operations.Image_setPerceptualHashes.Input) async throws -> Operations.Image_setPerceptualHashes.Output
+    /// - Remark: HTTP `POST /api/v1/image/uploadDocument`.
+    /// - Remark: Generated from `#/paths//api/v1/image/uploadDocument/post(image.uploadDocument)`.
+    func image_uploadDocument(_ input: Operations.Image_uploadDocument.Input) async throws -> Operations.Image_uploadDocument.Output
     /// - Remark: HTTP `POST /api/v1/image/uploadImage`.
     /// - Remark: Generated from `#/paths//api/v1/image/uploadImage/post(image.uploadImage)`.
     func image_uploadImage(_ input: Operations.Image_uploadImage.Input) async throws -> Operations.Image_uploadImage.Output
@@ -287,6 +290,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/projects/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/projects/{id}/patch(resources.project.update)`.
     func resources_project_update(_ input: Operations.Resources_project_update.Input) async throws -> Operations.Resources_project_update.Output
+    /// - Remark: HTTP `GET /api/v1/purchaseImport/listReceiptHunts`.
+    /// - Remark: Generated from `#/paths//api/v1/purchaseImport/listReceiptHunts/get(purchaseImport.listReceiptHunts)`.
+    func purchaseImport_listReceiptHunts(_ input: Operations.PurchaseImport_listReceiptHunts.Input) async throws -> Operations.PurchaseImport_listReceiptHunts.Output
+    /// - Remark: HTTP `POST /api/v1/purchaseImport/submitReceiptEvidence`.
+    /// - Remark: Generated from `#/paths//api/v1/purchaseImport/submitReceiptEvidence/post(purchaseImport.submitReceiptEvidence)`.
+    func purchaseImport_submitReceiptEvidence(_ input: Operations.PurchaseImport_submitReceiptEvidence.Input) async throws -> Operations.PurchaseImport_submitReceiptEvidence.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/purchases`.
@@ -344,6 +353,20 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/upc/lookup`.
     /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)`.
     func upc_lookup(_ input: Operations.Upc_lookup.Input) async throws -> Operations.Upc_lookup.Output
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/vendor-accounts`.
+    /// - Remark: Generated from `#/paths//api/v1/vendor-accounts/get(resources.vendorAccount.list)`.
+    func resources_vendorAccount_list(_ input: Operations.Resources_vendorAccount_list.Input) async throws -> Operations.Resources_vendorAccount_list.Output
+    /// - Remark: HTTP `POST /api/v1/vendor-accounts`.
+    /// - Remark: Generated from `#/paths//api/v1/vendor-accounts/post(resources.vendorAccount.create)`.
+    func resources_vendorAccount_create(_ input: Operations.Resources_vendorAccount_create.Input) async throws -> Operations.Resources_vendorAccount_create.Output
+    /// - Remark: HTTP `GET /api/v1/vendor-accounts/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/vendor-accounts/{id}/get(resources.vendorAccount.get)`.
+    func resources_vendorAccount_get(_ input: Operations.Resources_vendorAccount_get.Input) async throws -> Operations.Resources_vendorAccount_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/vendor-accounts/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/vendor-accounts/{id}/patch(resources.vendorAccount.update)`.
+    func resources_vendorAccount_update(_ input: Operations.Resources_vendorAccount_update.Input) async throws -> Operations.Resources_vendorAccount_update.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/vendors`.
@@ -673,6 +696,17 @@ extension APIProtocol {
         body: Operations.Image_setPerceptualHashes.Input.Body? = nil
     ) async throws -> Operations.Image_setPerceptualHashes.Output {
         try await image_setPerceptualHashes(Operations.Image_setPerceptualHashes.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/image/uploadDocument`.
+    /// - Remark: Generated from `#/paths//api/v1/image/uploadDocument/post(image.uploadDocument)`.
+    public func image_uploadDocument(
+        headers: Operations.Image_uploadDocument.Input.Headers = .init(),
+        body: Operations.Image_uploadDocument.Input.Body? = nil
+    ) async throws -> Operations.Image_uploadDocument.Output {
+        try await image_uploadDocument(Operations.Image_uploadDocument.Input(
             headers: headers,
             body: body
         ))
@@ -1319,6 +1353,22 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// - Remark: HTTP `GET /api/v1/purchaseImport/listReceiptHunts`.
+    /// - Remark: Generated from `#/paths//api/v1/purchaseImport/listReceiptHunts/get(purchaseImport.listReceiptHunts)`.
+    public func purchaseImport_listReceiptHunts(headers: Operations.PurchaseImport_listReceiptHunts.Input.Headers = .init()) async throws -> Operations.PurchaseImport_listReceiptHunts.Output {
+        try await purchaseImport_listReceiptHunts(Operations.PurchaseImport_listReceiptHunts.Input(headers: headers))
+    }
+    /// - Remark: HTTP `POST /api/v1/purchaseImport/submitReceiptEvidence`.
+    /// - Remark: Generated from `#/paths//api/v1/purchaseImport/submitReceiptEvidence/post(purchaseImport.submitReceiptEvidence)`.
+    public func purchaseImport_submitReceiptEvidence(
+        headers: Operations.PurchaseImport_submitReceiptEvidence.Input.Headers = .init(),
+        body: Operations.PurchaseImport_submitReceiptEvidence.Input.Body? = nil
+    ) async throws -> Operations.PurchaseImport_submitReceiptEvidence.Output {
+        try await purchaseImport_submitReceiptEvidence(Operations.PurchaseImport_submitReceiptEvidence.Input(
+            headers: headers,
+            body: body
+        ))
+    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/purchases`.
@@ -1510,6 +1560,54 @@ extension APIProtocol {
         try await upc_lookup(Operations.Upc_lookup.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/vendor-accounts`.
+    /// - Remark: Generated from `#/paths//api/v1/vendor-accounts/get(resources.vendorAccount.list)`.
+    public func resources_vendorAccount_list(
+        query: Operations.Resources_vendorAccount_list.Input.Query = .init(),
+        headers: Operations.Resources_vendorAccount_list.Input.Headers = .init()
+    ) async throws -> Operations.Resources_vendorAccount_list.Output {
+        try await resources_vendorAccount_list(Operations.Resources_vendorAccount_list.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/vendor-accounts`.
+    /// - Remark: Generated from `#/paths//api/v1/vendor-accounts/post(resources.vendorAccount.create)`.
+    public func resources_vendorAccount_create(
+        headers: Operations.Resources_vendorAccount_create.Input.Headers = .init(),
+        body: Operations.Resources_vendorAccount_create.Input.Body? = nil
+    ) async throws -> Operations.Resources_vendorAccount_create.Output {
+        try await resources_vendorAccount_create(Operations.Resources_vendorAccount_create.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/vendor-accounts/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/vendor-accounts/{id}/get(resources.vendorAccount.get)`.
+    public func resources_vendorAccount_get(
+        path: Operations.Resources_vendorAccount_get.Input.Path,
+        headers: Operations.Resources_vendorAccount_get.Input.Headers = .init()
+    ) async throws -> Operations.Resources_vendorAccount_get.Output {
+        try await resources_vendorAccount_get(Operations.Resources_vendorAccount_get.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/vendor-accounts/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/vendor-accounts/{id}/patch(resources.vendorAccount.update)`.
+    public func resources_vendorAccount_update(
+        path: Operations.Resources_vendorAccount_update.Input.Path,
+        headers: Operations.Resources_vendorAccount_update.Input.Headers = .init(),
+        body: Operations.Resources_vendorAccount_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_vendorAccount_update.Output {
+        try await resources_vendorAccount_update(Operations.Resources_vendorAccount_update.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronDown, Copy, RefreshCw, Wrench } from "lucide-react";
+import { ChevronDown, Copy, Mail, RefreshCw, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -27,13 +27,16 @@ import {
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { StatusText } from "~/components/ui/status-text";
+import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import { pageTitle } from "~/lib/page-title";
+import { formatCurrency } from "~/lib/utils";
 import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
+import { purchaseImportRunsResponse } from "~/routes/api/import/runs";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -47,6 +50,8 @@ function SettingsPage() {
       <Stack gap="md" className="max-w-2xl pb-6 md:gap-6">
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
         <CalendarAccessCard />
+        <GmailAccessCard />
+        <PurchaseImportRunsCard />
 
         {/* Everything dev/debug/maintenance lives behind one collapsed
             disclosure so the user-facing prefs above aren't drowned in flags. */}
@@ -89,6 +94,140 @@ function SettingsPage() {
         </Collapsible>
       </Stack>
     </Page>
+  );
+}
+
+function PurchaseImportRunsCard() {
+  const runs = useQuery({
+    queryKey: ["purchase-import", "runs"],
+    queryFn: async () => {
+      const response = await fetch("/api/import/runs");
+      if (!response.ok) throw new Error("Purchase import runs could not load");
+      return purchaseImportRunsResponse.parse(await response.json()).runs;
+    },
+  });
+  return (
+    <Card className="max-md:border-x-0">
+      <CardHeader>
+        <CardTitle>Purchase imports</CardTitle>
+        <CardDescription>
+          Recent runs for your vendor accounts. Cost is derived from recorded AI
+          usage for each run.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {runs.isLoading ? (
+          <StatusText>Loading recent runs…</StatusText>
+        ) : runs.isError ? (
+          <StatusText tone="destructive">
+            Recent runs could not load.
+          </StatusText>
+        ) : runs.data?.length ? (
+          <Stack gap="sm">
+            {runs.data.map((run) => (
+              <div
+                key={run.id}
+                className="grid gap-1 border-b border-border pb-2 text-sm last:border-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_auto]"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-medium">
+                    {run.vendorName ??
+                      run.vendorAccountLabel ??
+                      "Vendor import"}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {new Date(run.startedAt).toLocaleString()} · {run.trigger} ·{" "}
+                    {run.status}
+                  </div>
+                  {run.failureCode ? (
+                    <div className="text-destructive">{run.failureCode}</div>
+                  ) : null}
+                </div>
+                <div className="text-muted-foreground md:text-right">
+                  <div>
+                    {run.imported} imported · {run.updated} updated ·{" "}
+                    {run.skipped} skipped
+                  </div>
+                  <div>{formatCurrency(run.estimatedCost)}</div>
+                </div>
+              </div>
+            ))}
+          </Stack>
+        ) : (
+          <StatusText>No purchase imports have run yet.</StatusText>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function GmailAccessCard() {
+  const accounts = useQuery({
+    queryKey: ["auth", "accounts"],
+    queryFn: async () => {
+      const result = await authClient.listAccounts();
+      if (result.error) throw new Error(result.error.message);
+      return result.data ?? [];
+    },
+  });
+  const connected = accounts.data?.some(
+    (account) => account.providerId === "google",
+  );
+  const [busy, setBusy] = useState(false);
+
+  const connect = async () => {
+    setBusy(true);
+    const result = await authClient.linkSocial({
+      provider: "google",
+      callbackURL: "/settings",
+      scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    });
+    if (result.error) {
+      toast.error(result.error.message || "Gmail could not be connected.");
+      setBusy(false);
+    }
+  };
+  const disconnect = async () => {
+    setBusy(true);
+    const result = await authClient.unlinkAccount({ providerId: "google" });
+    if (result.error) {
+      toast.error(result.error.message || "Gmail could not be disconnected.");
+    } else {
+      toast.success("Gmail disconnected");
+      await accounts.refetch();
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Card className="max-md:border-x-0">
+      <CardHeader>
+        <Row
+          align="start"
+          justify="between"
+          gap="md"
+          className="max-md:flex-col"
+        >
+          <Stack gap="tight">
+            <CardTitle>Purchase email</CardTitle>
+            <CardDescription>
+              {connected
+                ? "Gmail is connected read-only for order discovery and receipt attachments."
+                : "Connect Gmail read-only so Cubby can match order mail to statement charges."}
+            </CardDescription>
+          </Stack>
+          <Button
+            type="button"
+            variant={connected ? "outline" : "default"}
+            disabled={busy || accounts.isLoading}
+            onClick={() => void (connected ? disconnect() : connect())}
+          >
+            <Mail className="size-4" />
+            {busy ? "Working…" : connected ? "Disconnect" : "Connect Gmail"}
+          </Button>
+        </Row>
+      </CardHeader>
+    </Card>
   );
 }
 

@@ -33,6 +33,7 @@ extension EntityKey {
         case .recipe: [.create, .delete, .get, .list, .update]
         case .task: [.create, .delete, .get, .list, .timeline, .update]
         case .vendor: [.create, .delete, .get, .list, .update]
+        case .vendorAccount: [.create, .delete, .get, .list, .update]
         case .wish: [.create, .delete, .get, .list, .update]
         default: []
         }
@@ -60,6 +61,7 @@ extension EntityKey {
         case .recipe: [.create, .get, .list, .update]
         case .task: [.create, .get, .list, .timeline, .update]
         case .vendor: [.create, .get, .list, .update]
+        case .vendorAccount: [.create, .get, .list, .update]
         case .wish: [.create, .get, .list, .update]
         default: []
         }
@@ -780,6 +782,28 @@ extension EntityDescriptor {
                 items: try page.items.map(JSONValue.init(encoding:)),
                 meta: page.meta
             )
+        case .vendorAccount:
+            var query = Operations.Resources_vendorAccount_list.Input.Query(page: page, pageSize: pageSize, sort: sort)
+            for name in filters.names {
+                guard let value = filters[name] else { continue }
+                switch name {
+                case "createdFrom": query.createdFrom = try value.string(name)
+                case "createdTo": query.createdTo = try value.string(name)
+                case "updatedFrom": query.updatedFrom = try value.string(name)
+                case "updatedTo": query.updatedTo = try value.string(name)
+                case "search": query.search = try value.string(name)
+                case "status": query.status = try value.enumCases(name)
+                case "vendorId": query.vendorId = value.strings.map { .init(value1: $0) }
+                case "ledgerPartyId": query.ledgerPartyId = value.strings.map { .init(value1: $0) }
+                case "groupBy": query.groupBy = try value.enumCase(name)
+                default: throw EntityFilterError.unknownParameter(.vendorAccount, name)
+                }
+            }
+            let page = try await client.resources_vendorAccount_list(query: query).ok.body.json
+            return ListPage(
+                items: try page.items.map(JSONValue.init(encoding:)),
+                meta: page.meta
+            )
         case .wish:
             var query = Operations.Resources_wish_list.Input.Query(page: page, pageSize: pageSize, sort: sort)
             for name in filters.names {
@@ -1046,6 +1070,12 @@ extension EntityDescriptor {
                 case "groupBy": ["name", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"]
                 default: nil
             }
+        case .vendorAccount:
+            switch wireKey {
+                case "status": ["active", "paused_auth", "paused_offline", "disabled"]
+                case "groupBy": ["label", "status", "lastRunAt", "updatedAt"]
+                default: nil
+            }
         case .wish:
             switch wireKey {
                 case "productPresenceFilter": ["has", "none"]
@@ -1292,6 +1322,8 @@ extension EntityDescriptor {
             return try JSONValue(encoding: try await client.resources_task_get(path: .init(id: id)).ok.body.json)
         case .vendor:
             return try JSONValue(encoding: try await client.resources_vendor_get(path: .init(id: id)).ok.body.json)
+        case .vendorAccount:
+            return try JSONValue(encoding: try await client.resources_vendorAccount_get(path: .init(id: id)).ok.body.json)
         case .wish:
             return try JSONValue(encoding: try await client.resources_wish_get(path: .init(id: id)).ok.body.json)
         default: throw EntityOperationError.unsupported(key, .get)
@@ -1354,6 +1386,9 @@ extension EntityDescriptor {
         case .vendor:
             let created = try await client.resources_vendor_create(body: .json(try body.decoded())).created.body.json
             return try createdID(created.item)
+        case .vendorAccount:
+            let created = try await client.resources_vendorAccount_create(body: .json(try body.decoded())).created.body.json
+            return try createdID(created.item)
         case .wish:
             let created = try await client.resources_wish_create(body: .json(try body.decoded())).created.body.json
             return try createdID(created.item)
@@ -1400,6 +1435,8 @@ extension EntityDescriptor {
             _ = try await client.resources_task_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .vendor:
             _ = try await client.resources_vendor_update(path: .init(id: id), body: .json(try body.decoded())).ok
+        case .vendorAccount:
+            _ = try await client.resources_vendorAccount_update(path: .init(id: id), body: .json(try body.decoded())).ok
         case .wish:
             _ = try await client.resources_wish_update(path: .init(id: id), body: .json(try body.decoded())).ok
         default: throw EntityOperationError.unsupported(key, .update)

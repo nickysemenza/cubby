@@ -53,10 +53,12 @@ import {
   gardenEntry,
   gardenEntryImage,
   image,
+  importHunt,
   location,
   locationImage,
   meal,
   mealImage,
+  orderMailAttachment,
   product,
   productImage,
   project,
@@ -630,6 +632,18 @@ const imageReferenceCondition = (
       liveness === "active" ? activeWhere : undefined,
     );
   const byEdge = {
+    "ImportHunt.receiptImageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(importHunt)
+        .where(eq(importHunt.receiptImageId, outerImage.id)),
+    ),
+    "OrderMailAttachment.imageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(orderMailAttachment)
+        .where(joinReferenceWhere(orderMailAttachment.imageId, sql`TRUE`)),
+    ),
     // includes-deleted: direct FKs remain live constraints after their parent
     // is tombstoned, so reference membership must match hard-delete safety.
     "Cookbook.coverImageId": exists(
@@ -998,6 +1012,18 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
+  "ImportHunt.receiptImageId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "The receipt hunt remains while its optional submitted image is cleared.",
+  },
+  "OrderMailAttachment.imageId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "The normalized mail attachment remains while its optional stored image is cleared.",
+  },
   "Cookbook.coverImageId": {
     code: "clearFk",
     effect: "detach",
@@ -1070,6 +1096,50 @@ type ImageEdgeOperation = {
 };
 
 const IMAGE_EDGE_OPERATIONS = {
+  "ImportHunt.receiptImageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .update(importHunt)
+        .set({ receiptImageId: null })
+        .where(inArray(importHunt.receiptImageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: importHunt.receiptImageId })
+        .from(importHunt)
+        .where(
+          and(
+            isNotNull(importHunt.receiptImageId),
+            imageIds ? inArray(importHunt.receiptImageId, imageIds) : undefined,
+          ),
+        );
+      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+    },
+    joinColumn: undefined,
+  },
+  "OrderMailAttachment.imageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .update(orderMailAttachment)
+        .set({ imageId: null })
+        .where(inArray(orderMailAttachment.imageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: orderMailAttachment.imageId })
+        .from(orderMailAttachment)
+        .where(
+          and(
+            isNotNull(orderMailAttachment.imageId),
+            imageIds
+              ? inArray(orderMailAttachment.imageId, imageIds)
+              : undefined,
+          ),
+        );
+      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+    },
+    joinColumn: undefined,
+  },
   "Cookbook.coverImageId": {
     clear: async (tx, imageIds) => {
       await tx

@@ -8,6 +8,8 @@ export type AiGatewayUsageContext = SupportedAiModelRef & {
   db: Database;
   feature: string;
   operation: string;
+  jobKind?: string | null;
+  jobId?: string | null;
   cacheStatus?: "hit" | "miss" | "none";
   entity?: { entityType: string; entityId: string } | null;
 };

@@ -226,6 +226,7 @@ describe("EntityPrimitiveFields", () => {
             label: "Room",
             detail: null,
             confidence: "high",
+            probability: 0.95,
             reasoning: "",
           },
         },

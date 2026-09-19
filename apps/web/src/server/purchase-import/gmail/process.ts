@@ -1,0 +1,321 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+
+import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
+import type { Database } from "~/server/db";
+import {
+  financialTransaction,
+  expense,
+  importFinding,
+  importHunt,
+  orderMail,
+  orderMailAttachment,
+  orderMailEvent,
+  purchase,
+  vendor,
+} from "~/server/db/schema";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { attachFileToEntity } from "~/server/services/image-storage.service";
+
+import { uniqueOrderSubsetForCharge } from "../writer-policy";
+import type { GmailOrderMailAttachment } from "./types";
+
+const sha256 = async (value: string) => {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+};
+
+const cents = (value: number) => Math.round(value * 100);
+
+export async function attachPendingOrderMailEvidence(
+  db: Database,
+  input: { vendorId: string; orderId: string; purchaseShortcode: string },
+) {
+  const database = getDb(db);
+  const rows = await database
+    .select({
+      id: orderMailAttachment.id,
+      messageId: orderMail.messageId,
+      subject: orderMail.subject,
+      providerAttachmentId: orderMailAttachment.providerAttachmentId,
+      filename: orderMailAttachment.filename,
+      data: orderMailAttachment.pendingDataBase64Url,
+    })
+    .from(orderMailAttachment)
+    .innerJoin(orderMail, eq(orderMail.id, orderMailAttachment.orderMailId))
+    .innerJoin(orderMailEvent, eq(orderMailEvent.orderMailId, orderMail.id))
+    .where(
+      and(
+        eq(orderMail.vendorId, parseEntityId("vendor", input.vendorId)),
+        eq(orderMailEvent.orderId, input.orderId),
+        eq(orderMailAttachment.mimeType, "application/pdf"),
+        isNull(orderMailAttachment.imageId),
+        isNotNull(orderMailAttachment.pendingDataBase64Url),
+      ),
+    );
+  for (const row of rows) {
+    if (!row.data) continue;
+    const stored = await attachFileToEntity(db, {
+      entityType: "purchase",
+      entityId: input.purchaseShortcode,
+      data: row.data,
+      contentType: "application/pdf",
+      filename: row.filename,
+      documentKind: row.subject.toLowerCase().includes("receipt")
+        ? "receipt"
+        : "invoice",
+      idempotencyKey: `gmail:${row.messageId}:${row.providerAttachmentId}`,
+    });
+    await database
+      .update(orderMailAttachment)
+      .set({
+        imageId: await resolveOrThrow(db, "image", stored.imageId),
+        pendingDataBase64Url: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(orderMailAttachment.id, row.id));
+  }
+  return rows.length;
+}
+
+// This is the ordered mail pipeline: classify, match a hunt, attach evidence,
+// then derive event findings. Keeping that sequence visible prevents cursor
+// advancement from outrunning a partially processed message.
+// eslint-disable-next-line complexity
+export async function processOrderMails(
+  db: Database,
+  messageIds: readonly string[],
+  _attachments: readonly GmailOrderMailAttachment[] = [],
+): Promise<number> {
+  if (messageIds.length === 0) return 0;
+  const database = getDb(db);
+  const [mails, vendors] = await Promise.all([
+    database
+      .select()
+      .from(orderMail)
+      .where(inArray(orderMail.messageId, [...messageIds])),
+    database
+      .select({
+        id: vendor.id,
+        senders: vendor.orderEmailSenders,
+      })
+      .from(vendor)
+      .where(notDeleted(vendor)),
+  ]);
+  let processed = 0;
+  for (const mail of mails) {
+    const sender = mail.sender.toLowerCase();
+    const matchedVendors = vendors.filter((candidate) =>
+      candidate.senders.some((value) => sender.includes(value.toLowerCase())),
+    );
+    if (matchedVendors.length !== 1) continue;
+    const matchedVendor = matchedVendors[0];
+    if (!matchedVendor) continue;
+    await database
+      .update(orderMail)
+      .set({ vendorId: matchedVendor.id, updatedAt: new Date() })
+      .where(eq(orderMail.id, mail.id));
+
+    const classification = await classifyOrderMail({
+      db,
+      messageId: mail.messageId,
+      sender: mail.sender,
+      subject: mail.subject,
+      receivedAt: mail.receivedAt.toISOString(),
+      content: mail.content,
+    });
+    const sourceKey = `classified:${mail.rawChecksum}`;
+    await database
+      .insert(orderMailEvent)
+      .values({
+        orderMailId: mail.id,
+        event: classification.event,
+        orderId: classification.orderId,
+        amount: classification.amount,
+        currency: classification.currency,
+        occurredAt: classification.occurredAt
+          ? new Date(classification.occurredAt)
+          : mail.receivedAt,
+        sourceKey,
+        payload: classification,
+      })
+      .onConflictDoNothing();
+
+    if (classification.orderId) {
+      const date = mail.receivedAt.toISOString().slice(0, 10);
+      const candidates = await database
+        .select({
+          id: importHunt.id,
+          amount: financialTransaction.amount,
+          dateFrom: importHunt.dateFrom,
+          dateTo: importHunt.dateTo,
+        })
+        .from(importHunt)
+        .innerJoin(
+          financialTransaction,
+          eq(financialTransaction.id, importHunt.financialTransactionId),
+        )
+        .where(
+          and(
+            eq(importHunt.ledgerPartyId, mail.ledgerPartyId),
+            eq(importHunt.vendorId, matchedVendor.id),
+            eq(importHunt.state, "pending_mail"),
+            lte(importHunt.dateFrom, date),
+            gte(importHunt.dateTo, date),
+          ),
+        );
+      const exact =
+        classification.amount === null
+          ? []
+          : candidates.filter(
+              (candidate) =>
+                cents(Math.abs(candidate.amount)) ===
+                cents(Math.abs(classification.amount ?? 0)),
+            );
+      let matchedHunt =
+        exact.length === 1
+          ? { id: exact[0]?.id ?? "", orderIds: [classification.orderId] }
+          : null;
+      if (!matchedHunt) {
+        const subsetMatches: { id: string; orderIds: string[] }[] = [];
+        for (const candidate of candidates) {
+          const events = await database
+            .select({
+              orderId: orderMailEvent.orderId,
+              amount: orderMailEvent.amount,
+            })
+            .from(orderMailEvent)
+            .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
+            .where(
+              and(
+                eq(orderMail.ledgerPartyId, mail.ledgerPartyId),
+                eq(orderMail.vendorId, matchedVendor.id),
+                isNotNull(orderMailEvent.orderId),
+                isNotNull(orderMailEvent.amount),
+                gte(
+                  orderMailEvent.occurredAt,
+                  new Date(`${candidate.dateFrom}T00:00:00.000Z`),
+                ),
+                lte(
+                  orderMailEvent.occurredAt,
+                  new Date(`${candidate.dateTo}T23:59:59.999Z`),
+                ),
+              ),
+            );
+          const byOrder = new Map<string, number>();
+          for (const event of events) {
+            if (event.orderId && event.amount !== null)
+              byOrder.set(event.orderId, Math.abs(event.amount));
+          }
+          const subset = uniqueOrderSubsetForCharge(
+            Math.abs(candidate.amount),
+            [...byOrder].map(([id, amount]) => ({ id, amount })),
+          );
+          if (subset)
+            subsetMatches.push({
+              id: candidate.id,
+              orderIds: subset.map(({ id }) => id),
+            });
+        }
+        if (subsetMatches.length === 1) matchedHunt = subsetMatches[0] ?? null;
+      }
+      if (matchedHunt) {
+        await database
+          .update(importHunt)
+          .set({
+            state: "pending_browser",
+            matchedOrderIds: matchedHunt.orderIds,
+            updatedAt: new Date(),
+          })
+          .where(eq(importHunt.id, matchedHunt.id));
+      }
+    }
+
+    const [target] = classification.orderId
+      ? await database
+          .select({ id: purchase.id, shortcode: purchase.shortcode })
+          .from(purchase)
+          .where(
+            and(
+              eq(purchase.vendorId, matchedVendor.id),
+              eq(purchase.orderId, classification.orderId),
+              notDeleted(purchase),
+            ),
+          )
+          .limit(1)
+      : [];
+
+    if (target && classification.orderId) {
+      await attachPendingOrderMailEvidence(db, {
+        vendorId: matchedVendor.id,
+        orderId: classification.orderId,
+        purchaseShortcode: target.shortcode,
+      });
+    }
+
+    if (
+      target &&
+      (classification.event === "delivered" ||
+        classification.event === "refunded")
+    ) {
+      if (
+        classification.event === "refunded" &&
+        classification.amount !== null
+      ) {
+        const [existingRefund] = await database
+          .select({ id: expense.id })
+          .from(expense)
+          .where(
+            and(
+              eq(expense.purchaseId, target.id),
+              eq(expense.cost, -Math.abs(classification.amount)),
+              notDeleted(expense),
+            ),
+          )
+          .limit(1);
+        if (existingRefund) {
+          processed += 1;
+          continue;
+        }
+      }
+      const kind =
+        classification.event === "delivered" ? "arrived" : "refund_unbooked";
+      const proposedFix =
+        classification.event === "delivered"
+          ? { kind: "receive_purchase" as const, purchaseId: target.id }
+          : classification.amount !== null
+            ? {
+                kind: "create_refund" as const,
+                purchaseId: target.id,
+                amount: -Math.abs(classification.amount),
+                title: `Refund for order ${classification.orderId}`,
+              }
+            : null;
+      await database
+        .insert(importFinding)
+        .values({
+          ledgerPartyId: mail.ledgerPartyId,
+          targetType: "purchase",
+          targetId: target.id,
+          kind,
+          summary:
+            classification.event === "delivered"
+              ? "Vendor mail says all items were delivered. Review and receive this purchase."
+              : "Vendor mail reports a refund that is not yet booked in the expense ledger.",
+          proposedFix,
+          evidenceFingerprint: await sha256(
+            JSON.stringify({ sourceKey, classification, target: target.id }),
+          ),
+        })
+        .onConflictDoNothing();
+    }
+    processed += 1;
+  }
+  return processed;
+}

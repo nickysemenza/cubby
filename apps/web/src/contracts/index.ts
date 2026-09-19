@@ -42,6 +42,7 @@ export { photoImportContract } from "./photo-import.contract";
 export { productContract, productStreamsContract } from "./product.contract";
 export { projectContract } from "./project.contract";
 export { purchaseContract } from "./purchase.contract";
+export { purchaseImportContract } from "./purchase-import.contract";
 export {
   recipeContract,
   suggestionsContract,

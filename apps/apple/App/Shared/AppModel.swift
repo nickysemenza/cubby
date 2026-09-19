@@ -38,6 +38,10 @@ final class AppModel {
     /// Browsing the system library is independent from Cubby's persisted analysis index. Keep it
     /// available immediately so opening persistent state cannot block the Photos tab.
     let photoLibrary = PhotoLibraryStore()
+    #if os(macOS)
+        let browserBridge = BrowserBridgeSettingsModel()
+        @ObservationIgnored private var browserBridgeController: MacBrowserBridgeController?
+    #endif
     /// The SQLite cache opens away from the UI actor and attaches matching/classification once
     /// available. Local photo browsing never waits for it.
     @ObservationIgnored private var storedPhotoAnalysisStore: PhotoAnalysisStore?
@@ -121,6 +125,9 @@ final class AppModel {
         self.credentials = credentials
         self.client = CubbyClient(baseURL: url, credentials: credentials, requestObserver: requestTrace)
         self.auth = AuthFlow(baseURL: url, credentials: credentials)
+        #if os(macOS)
+            configureBrowserBridge()
+        #endif
     }
 
     /// Opens the SQLite cache at `Application Support/Cubby/PhotoAnalysis.sqlite`, falling back
@@ -154,6 +161,9 @@ final class AppModel {
         model.client = CubbyClient(
             baseURL: baseURL, credentials: model.credentials, session: PreviewURLProtocol.session(),
             requestObserver: model.requestTrace)
+        #if os(macOS)
+            model.configureBrowserBridge()
+        #endif
         model.credential = signedIn ? credential : nil
         model.phase = signedIn ? .signedIn : .signedOut
         return model
@@ -168,7 +178,12 @@ final class AppModel {
         guard credentials === provider, !Task.isCancelled else { return }
         credential = current
         phase = current == nil ? .signedOut : .signedIn
-        if current != nil { warmBrowseCounts() }
+        if current != nil {
+            warmBrowseCounts()
+            #if os(macOS)
+                await browserBridge.connectConfigured()
+            #endif
+        }
     }
 
     func signIn(email: String, password: String) async {
@@ -177,6 +192,9 @@ final class AppModel {
             credential = try await auth.signIn(email: email, password: password)
             phase = .signedIn
             warmBrowseCounts()
+            #if os(macOS)
+                await browserBridge.connectConfigured()
+            #endif
         } catch let error as AuthError {
             lastError = error.message
             Diagnostics.report(error, context: "auth.signIn")
@@ -187,6 +205,9 @@ final class AppModel {
     }
 
     func signOut() async {
+        #if os(macOS)
+            await browserBridge.disconnect()
+        #endif
         do {
             try await auth.signOut()
         } catch {
@@ -218,6 +239,9 @@ final class AppModel {
                 photoLibrary.reset()
                 credential = nil
                 phase = .signedOut
+                #if os(macOS)
+                    Task { await browserBridge.disconnect() }
+                #endif
             }
         } else {
             lastError = String(describing: error)
@@ -258,7 +282,21 @@ final class AppModel {
         self.credentials = credentials
         client = CubbyClient(baseURL: baseURL, credentials: credentials, requestObserver: requestTrace)
         auth = AuthFlow(baseURL: baseURL, credentials: credentials)
+        #if os(macOS)
+            configureBrowserBridge()
+        #endif
     }
+
+    #if os(macOS)
+        private func configureBrowserBridge() {
+            let previous = browserBridgeController
+            let controller = MacBrowserBridgeController(
+                baseURL: baseURL, client: client, credentials: credentials, settings: browserBridge)
+            browserBridgeController = controller
+            browserBridge.install(controller: controller)
+            if let previous { Task { await previous.retire() } }
+        }
+    #endif
 
     /// Starts the one cheap dashboard-count request without delaying authentication UI.
     private func warmBrowseCounts() {

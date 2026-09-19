@@ -26,6 +26,7 @@ public typealias Project = Components.Schemas.ProjectOut
 public typealias Purchase = Components.Schemas.PurchaseOut
 public typealias TaskRecord = Components.Schemas.TaskOut
 public typealias Vendor = Components.Schemas.VendorOut
+public typealias VendorAccount = Components.Schemas.VendorAccountOut
 public typealias Wish = Components.Schemas.WishOut
 
 // MARK: - Components
@@ -172,6 +173,7 @@ public typealias GeneratedEntityMutationCreateResultPurchase = Components.Schema
 public typealias GeneratedEntityMutationCreateResultRecipe = Components.Schemas.GeneratedEntityMutationCreateResultRecipe
 public typealias GeneratedEntityMutationCreateResultTask = Components.Schemas.GeneratedEntityMutationCreateResultTask
 public typealias GeneratedEntityMutationCreateResultVendor = Components.Schemas.GeneratedEntityMutationCreateResultVendor
+public typealias GeneratedEntityMutationCreateResultVendorAccount = Components.Schemas.GeneratedEntityMutationCreateResultVendorAccount
 public typealias GeneratedEntityMutationCreateResultWish = Components.Schemas.GeneratedEntityMutationCreateResultWish
 public typealias GeneratedEntityMutationUpdateResultExpense = Components.Schemas.GeneratedEntityMutationUpdateResultExpense
 public typealias GeneratedEntityMutationUpdateResultFinancialAccount = Components.Schemas.GeneratedEntityMutationUpdateResultFinancialAccount
@@ -191,6 +193,7 @@ public typealias GeneratedEntityMutationUpdateResultPurchase = Components.Schema
 public typealias GeneratedEntityMutationUpdateResultRecipe = Components.Schemas.GeneratedEntityMutationUpdateResultRecipe
 public typealias GeneratedEntityMutationUpdateResultTask = Components.Schemas.GeneratedEntityMutationUpdateResultTask
 public typealias GeneratedEntityMutationUpdateResultVendor = Components.Schemas.GeneratedEntityMutationUpdateResultVendor
+public typealias GeneratedEntityMutationUpdateResultVendorAccount = Components.Schemas.GeneratedEntityMutationUpdateResultVendorAccount
 public typealias GeneratedEntityMutationUpdateResultWish = Components.Schemas.GeneratedEntityMutationUpdateResultWish
 public typealias GetImageById = Components.Schemas.GetImageById
 public typealias Gtin = Components.Schemas.Gtin
@@ -224,6 +227,7 @@ public typealias IngredientListPage = Components.Schemas.IngredientListPage
 public typealias IngredientOut = Components.Schemas.IngredientOut
 public typealias IngredientShortcode = Components.Schemas.IngredientShortcode
 public typealias IngredientUpdateData = Components.Schemas.IngredientUpdateData
+public typealias InitiateDocumentUpload = Components.Schemas.InitiateDocumentUpload
 public typealias InitiateUploadWithoutEntity = Components.Schemas.InitiateUploadWithoutEntity
 public typealias InitiateUploadWithoutEntityResponse = Components.Schemas.InitiateUploadWithoutEntityResponse
 public typealias InventoryCreatePayloadData = Components.Schemas.InventoryCreatePayloadData
@@ -285,6 +289,7 @@ public typealias LedgerTransferShortcode = Components.Schemas.LedgerTransferShor
 public typealias LedgerTransferUpdateData = Components.Schemas.LedgerTransferUpdateData
 public typealias LegacyFoodInfo = Components.Schemas.LegacyFoodInfo
 public typealias ListPageMeta = Components.Schemas.ListPageMeta
+public typealias ListReceiptHuntsOut = Components.Schemas.ListReceiptHuntsOut
 public typealias LocationBulkUpdateParentInput = Components.Schemas.LocationBulkUpdateParentInput
 public typealias LocationBulkUpdateParentOut = Components.Schemas.LocationBulkUpdateParentOut
 public typealias LocationCreateInput = Components.Schemas.LocationCreateInput
@@ -468,6 +473,8 @@ public typealias SearchMatchKind = Components.Schemas.SearchMatchKind
 public typealias SetPerceptualHashesInput = Components.Schemas.SetPerceptualHashesInput
 public typealias SetPerceptualHashesOutput = Components.Schemas.SetPerceptualHashesOutput
 public typealias SignedProductQuantity = Components.Schemas.SignedProductQuantity
+public typealias SubmitReceiptEvidenceInput = Components.Schemas.SubmitReceiptEvidenceInput
+public typealias SubmitReceiptEvidenceOut = Components.Schemas.SubmitReceiptEvidenceOut
 public typealias TaskCreateInput = Components.Schemas.TaskCreateInput
 public typealias TaskDetail = Components.Schemas.TaskDetail
 public typealias TaskListItem = Components.Schemas.TaskListItem
@@ -486,8 +493,25 @@ public typealias UnitMappingWithMetadataManual = Components.Schemas.UnitMappingW
 public typealias UnitMappingWithMetadataProduct = Components.Schemas.UnitMappingWithMetadataProduct
 public typealias Upc = Components.Schemas.Upc
 public typealias UpcLookupOutput = Components.Schemas.UpcLookupOutput
+public typealias VendorAccountBrowser = Components.Schemas.VendorAccountBrowser
+public typealias VendorAccountCreateInput = Components.Schemas.VendorAccountCreateInput
+public typealias VendorAccountCursor = Components.Schemas.VendorAccountCursor
+public typealias VendorAccountDetail = Components.Schemas.VendorAccountDetail
+public typealias VendorAccountListItem = Components.Schemas.VendorAccountListItem
+public typealias VendorAccountListPage = Components.Schemas.VendorAccountListPage
+public typealias VendorAccountOut = Components.Schemas.VendorAccountOut
+public typealias VendorAccountShortcode = Components.Schemas.VendorAccountShortcode
+public typealias VendorAccountStatus = Components.Schemas.VendorAccountStatus
+public typealias VendorAccountUpdateData = Components.Schemas.VendorAccountUpdateData
+public typealias VendorAgentHints = Components.Schemas.VendorAgentHints
+public typealias VendorAgentHintsInput = Components.Schemas.VendorAgentHintsInput
 public typealias VendorCreateInput = Components.Schemas.VendorCreateInput
 public typealias VendorDetail = Components.Schemas.VendorDetail
+public typealias VendorDomainList = Components.Schemas.VendorDomainList
+public typealias VendorDomainListInput = Components.Schemas.VendorDomainListInput
+public typealias VendorEmailSenderList = Components.Schemas.VendorEmailSenderList
+public typealias VendorEmailSenderListInput = Components.Schemas.VendorEmailSenderListInput
+public typealias VendorImportFieldsVendorOrderEvidence = Components.Schemas.VendorImportFieldsVendorOrderEvidence
 public typealias VendorListItem = Components.Schemas.VendorListItem
 public typealias VendorListPage = Components.Schemas.VendorListPage
 public typealias VendorOut = Components.Schemas.VendorOut
@@ -622,6 +646,9 @@ extension Components.Schemas.TaskOut: Identifiable {}
 extension Components.Schemas.TaskTodayBriefingItemOut: Identifiable {}
 extension Components.Schemas.UnitMappingInput: Identifiable {}
 extension Components.Schemas.UnitMappingOut: Identifiable {}
+extension Components.Schemas.VendorAccountDetail: Identifiable {}
+extension Components.Schemas.VendorAccountListItem: Identifiable {}
+extension Components.Schemas.VendorAccountOut: Identifiable {}
 extension Components.Schemas.VendorDetail: Identifiable {}
 extension Components.Schemas.VendorListItem: Identifiable {}
 extension Components.Schemas.VendorOut: Identifiable {}
