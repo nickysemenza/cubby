@@ -723,6 +723,12 @@ export async function updateFinancialTransaction(
 }
 
 export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
+  "ImportHunt.financialTransactionId": {
+    code: "block-import-hunt",
+    effect: "block",
+    description:
+      "An active or historical import hunt retains its source transaction.",
+  },
   "FinancialTransactionAllocation.transactionId": {
     code: "soft-delete-association",
     effect: "soft-delete",

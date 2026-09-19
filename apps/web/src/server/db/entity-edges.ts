@@ -82,6 +82,10 @@ import {
   financialTransactionAllocation,
   gardenEntry,
   gardenEntryImage,
+  importFinding,
+  importHunt,
+  importRun,
+  importSourceClaim,
   ingredient,
   inventoryEntry,
   ledgerSourceClaim,
@@ -92,6 +96,10 @@ import {
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
+  mailboxCursor,
+  merchantVendorRule,
+  orderMail,
+  orderMailAttachment,
   product,
   productComponent,
   productConversionCoverage,
@@ -104,6 +112,7 @@ import {
   projectToolUsage,
   purchase,
   purchaseImage,
+  purchasePaymentEvidence,
   purchaseProduct,
   recipe,
   recipeImage,
@@ -115,6 +124,7 @@ import {
   taskDependency,
   taskImage,
   vendor,
+  vendorAccount,
   wishCandidate,
 } from "./schema";
 
@@ -178,6 +188,20 @@ export const ENTITY_EDGES = {
     },
   }),
   image: edges({
+    "ImportHunt.receiptImageId": {
+      column: importHunt.receiptImageId,
+      role: "media",
+      label: "receipt hunt evidence",
+      description: "A receipt photo submitted to resolve an import hunt.",
+      liveness: { kind: "must-target-live" },
+    },
+    "OrderMailAttachment.imageId": {
+      column: orderMailAttachment.imageId,
+      role: "media",
+      label: "mail attachments",
+      description: "A normalized document captured from an order email.",
+      liveness: { kind: "must-target-live" },
+    },
     "Cookbook.coverImageId": {
       column: cookbook.coverImageId,
       role: "media",
@@ -379,6 +403,62 @@ export const ENTITY_EDGES = {
     },
   }),
   ledgerParty: edges({
+    "VendorAccount.ledgerPartyId": {
+      column: vendorAccount.ledgerPartyId,
+      role: "reference",
+      label: "vendor accounts",
+      description: "A member-owned login used for vendor import automation.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRun.ledgerPartyId": {
+      column: importRun.ledgerPartyId,
+      role: "history",
+      label: "import runs",
+      description: "The member whose evidence was processed by an import run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportSourceClaim.ledgerPartyId": {
+      column: importSourceClaim.ledgerPartyId,
+      role: "history",
+      label: "import source claims",
+      description: "The member scope for an idempotent imported source.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportFinding.ledgerPartyId": {
+      column: importFinding.ledgerPartyId,
+      role: "history",
+      label: "import findings",
+      description: "The member whose import requires review.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportHunt.ledgerPartyId": {
+      column: importHunt.ledgerPartyId,
+      role: "history",
+      label: "import hunts",
+      description: "The member whose evidence is being sought.",
+      liveness: { kind: "must-target-live" },
+    },
+    "MerchantVendorRule.ledgerPartyId": {
+      column: merchantVendorRule.ledgerPartyId,
+      role: "metadata",
+      label: "merchant routing rules",
+      description: "A member-scoped confirmed merchant-to-vendor route.",
+      liveness: { kind: "must-target-live" },
+    },
+    "MailboxCursor.ledgerPartyId": {
+      column: mailboxCursor.ledgerPartyId,
+      role: "metadata",
+      label: "mailbox cursors",
+      description: "A member mailbox's durable Gmail history cursor.",
+      liveness: { kind: "must-target-live" },
+    },
+    "OrderMail.ledgerPartyId": {
+      column: orderMail.ledgerPartyId,
+      role: "history",
+      label: "order mail",
+      description: "Normalized order evidence from a member mailbox.",
+      liveness: { kind: "must-target-live" },
+    },
     "MealFoodEntry.ledgerPartyId": {
       column: mealFoodEntry.ledgerPartyId,
       role: "association",
@@ -694,6 +774,34 @@ export const ENTITY_EDGES = {
     },
   }),
   vendor: edges({
+    "VendorAccount.vendorId": {
+      column: vendorAccount.vendorId,
+      role: "reference",
+      label: "vendor accounts",
+      description: "A member-owned login for this vendor.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportHunt.vendorId": {
+      column: importHunt.vendorId,
+      role: "history",
+      label: "import hunts",
+      description: "A charge-side evidence search routed to this vendor.",
+      liveness: { kind: "must-target-live" },
+    },
+    "MerchantVendorRule.vendorId": {
+      column: merchantVendorRule.vendorId,
+      role: "metadata",
+      label: "merchant routing rules",
+      description: "A confirmed normalized merchant route to this vendor.",
+      liveness: { kind: "must-target-live" },
+    },
+    "OrderMail.vendorId": {
+      column: orderMail.vendorId,
+      role: "history",
+      label: "order mail",
+      description: "Normalized mailbox evidence classified to this vendor.",
+      liveness: { kind: "must-target-live" },
+    },
     "Purchase.vendorId": {
       column: purchase.vendorId,
       role: "transaction",
@@ -704,6 +812,21 @@ export const ENTITY_EDGES = {
     },
   }),
   purchase: edges({
+    "ImportSourceClaim.purchaseId": {
+      column: importSourceClaim.purchaseId,
+      role: "history",
+      label: "import source claims",
+      description: "The idempotency claim that produced this purchase.",
+      liveness: { kind: "must-target-live" },
+    },
+    "PurchasePaymentEvidence.purchaseId": {
+      column: purchasePaymentEvidence.purchaseId,
+      role: "transaction",
+      label: "payment evidence",
+      description:
+        "A captured shipment or order payment tied to this purchase.",
+      liveness: { kind: "must-target-live" },
+    },
     "Expense.purchaseId": {
       column: expense.purchaseId,
       role: "ledger",
@@ -756,6 +879,13 @@ export const ENTITY_EDGES = {
     },
   }),
   financialTransaction: edges({
+    "ImportHunt.financialTransactionId": {
+      column: importHunt.financialTransactionId,
+      role: "history",
+      label: "import hunts",
+      description: "An evidence hunt opened for an unallocated transaction.",
+      liveness: { kind: "must-target-live" },
+    },
     "FinancialTransactionAllocation.transactionId": {
       column: financialTransactionAllocation.transactionId,
       role: "composition",
@@ -834,5 +964,35 @@ export const ENTITY_EDGES = {
   // `product.fdc_id`, a cross-system id link rather than a DB FK — see
   // usda-link-resolved-at-query-time).
   inventory: edges({}),
+  vendorAccount: edges({
+    "Purchase.vendorAccountId": {
+      column: purchase.vendorAccountId,
+      role: "reference",
+      label: "purchases",
+      description: "A purchase fetched through this member-owned vendor login.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportRun.vendorAccountId": {
+      column: importRun.vendorAccountId,
+      role: "history",
+      label: "import runs",
+      description: "A durable run executed for this vendor account.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportSourceClaim.vendorAccountId": {
+      column: importSourceClaim.vendorAccountId,
+      role: "history",
+      label: "import source claims",
+      description: "An idempotent source claim scoped to this vendor account.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportHunt.vendorAccountId": {
+      column: importHunt.vendorAccountId,
+      role: "history",
+      label: "import hunts",
+      description: "An evidence hunt assigned to this vendor account.",
+      liveness: { kind: "must-target-live" },
+    },
+  }),
   "usda-food": edges({}),
 } as const satisfies Record<Entity, Record<string, EntityEdge>>;

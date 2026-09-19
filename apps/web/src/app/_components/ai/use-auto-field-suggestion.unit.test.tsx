@@ -157,6 +157,7 @@ const tradeSuggestion = {
   label: "Cabinetry",
   detail: null,
   confidence: "high",
+  probability: 0.95,
   reasoning: "",
 } as const;
 
@@ -382,6 +383,7 @@ describe("useAutoFieldSuggestion", () => {
           label: "Kitchen remodel",
           detail: null,
           confidence: "high",
+          probability: 0.95,
           reasoning: "",
         },
         trade: null,
@@ -429,6 +431,7 @@ describe("useAutoFieldSuggestion", () => {
           label: "Garage shelf",
           detail: null,
           confidence: "high",
+          probability: 0.95,
           reasoning: "",
         },
       },

@@ -959,6 +959,12 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   const [r, exact] = await Promise.all([
     traceAllBounded(
       {
+        importFindings: () =>
+          diagnosticItems(
+            db,
+            "import-findings",
+            allProblemsSchema.shape.importFindings,
+          ),
         duplicateProductIdentities: () =>
           diagnosticItems(
             db,
@@ -1061,6 +1067,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     runExactProblemPages(db, exactKeys, { concurrency: 2 }),
   ]);
   const legacy = {
+    importFindings: r.importFindings.items,
     duplicateProductIdentities: r.duplicateProductIdentities.items,
     orphanedProducts: r.orphanedProducts.items,
     partiallyImportedCookbooks: r.partiallyImportedCookbooks.items,

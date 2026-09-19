@@ -1,0 +1,291 @@
+# Infrastructure dependencies
+
+This file is Cubby's infrastructure-as-documentation source of truth. It is
+the reconstruction checklist in lieu of Terraform: every production dependency
+should have an owner, a stable identifier, a creation or configuration path,
+and a verification command here. Secret **names** belong here; secret values do
+not.
+
+The provider remains authoritative for live state. When this file and a
+provider disagree, investigate the drift before changing or deleting anything.
+Update this file in the same pull request that adds or removes an infrastructure
+dependency.
+
+## Production topology
+
+| Concern | Provider | Production resource |
+|---|---|---|
+| Web application and APIs | Cloudflare Workers | Worker `cubby`, custom domain `cubby.nickysemenza.com` |
+| PostgreSQL | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations |
+| Images and documents | Cloudflare R2 | Bucket `foo`, public origin `https://media.nickysemenza.com` |
+| Product lookup | Cloudflare Workers | Worker `upc-lookup`, D1 `upc-lookup-db`, R2 `upc-images` |
+| USDA food data | Cloudflare Workers | Worker `usda-api`, D1 `usda-api-index`, R2 `usda-api-bundles` |
+| AI routing | Cloudflare AI Gateway | Gateway `cubby`, Workers AI binding `AI` |
+| Semantic vectors | Cloudflare Vectorize | `cubby-openai-text-embedding-3-small-1536` |
+| Gmail discovery | Google Cloud | Project `cubby-481519`, Gmail API, OAuth web client |
+| Errors | Sentry | Web/Workers project represented by the checked-in DSN; separate `cubby-apple` project |
+| Worker logs and traces | Grafana Cloud | Cloudflare OTLP destinations `grafana-logs` and `grafana-traces` |
+| Deployment | GitHub Actions | `.github/workflows/deploy.yaml` on `main` |
+| Native clients | Apple Developer/Xcode | Associated domain `cubby.nickysemenza.com`; locally installed iOS/macOS apps |
+
+The checked-in provider configurations are:
+
+- [`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc)
+- [`apps/upc-lookup/wrangler.jsonc`](../apps/upc-lookup/wrangler.jsonc)
+- [`apps/usda-api/wrangler.jsonc`](../apps/usda-api/wrangler.jsonc)
+- [`.github/workflows/deploy.yaml`](../.github/workflows/deploy.yaml)
+
+## Cloudflare
+
+Account ID: `9f10f078d35d86c78dedece2300a6b88`.
+
+### Main Worker
+
+`apps/web/wrangler.jsonc` declares the reproducible part of Worker `cubby`:
+
+- Custom domain `cubby.nickysemenza.com`; `workers.dev` production routing is
+  disabled and preview URLs are enabled.
+- Smart Placement and static assets.
+- Service bindings `USDA_API` -> `usda-api` and `UPC_LOOKUP` -> `upc-lookup`.
+- SQLite Durable Objects `DatabaseFreshnessDurableObject`,
+  `CalendarFeedDurableObject`, and `PurchaseImportDurableObject`.
+- Workflow `cubby-search-index-repair`.
+- Queues `cubby-background` and `cubby-telemetry`, with producer and consumer
+  settings in the Wrangler file.
+- Hourly and daily cron triggers.
+- Workers AI binding `AI` and AI Gateway `cubby`.
+- Vectorize binding `VECTORIZE` ->
+  `cubby-openai-text-embedding-3-small-1536`, dimensions `1536`, cosine metric,
+  with string metadata index `entityType`.
+- Version metadata and the two Hyperdrive bindings below.
+
+One-time creation commands that cannot be inferred or safely rerun by deploy:
+
+```bash
+pnpm --dir apps/web exec wrangler queues create cubby-background
+pnpm --dir apps/web exec wrangler queues create cubby-telemetry
+pnpm --dir apps/web exec wrangler vectorize create \
+  cubby-openai-text-embedding-3-small-1536 \
+  --dimensions=1536 --metric=cosine
+pnpm --dir apps/web exec wrangler vectorize create-metadata-index \
+  cubby-openai-text-embedding-3-small-1536 \
+  --property-name=entityType --type=string
+```
+
+The Workflow, Durable Object namespaces, bindings, consumers, crons, and route
+are created or updated by `wrangler deploy` from the checked-in configuration.
+
+### PostgreSQL and Hyperdrive
+
+Neon owns the PostgreSQL database. Cloudflare has two Hyperdrive configurations
+pointing at the same direct Neon connection string:
+
+| Binding | Hyperdrive ID | Contract |
+|---|---|---|
+| `HYPERDRIVE` | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 12 |
+| `HYPERDRIVE_CACHED` | `427dd7a2876c4dccbe056d37fa7374ff` | Cache-eligible reads; 60-second max age, 15-second stale-while-revalidate; origin connection limit 5 |
+
+The IDs are checked into `apps/web/wrangler.jsonc`; the origin connection
+string and cache/connection-limit settings are provider-side state. Recreate
+with a direct Neon URL, never a pooled URL:
+
+```bash
+pnpm --dir apps/web exec wrangler hyperdrive create cubby-db \
+  --connection-string="postgres://REDACTED"
+pnpm --dir apps/web exec wrangler hyperdrive create cubby-db-cached \
+  --connection-string="postgres://REDACTED"
+```
+
+After recreation, update the checked-in IDs and reapply the connection limits
+and cached binding policy. Inspect live state before deployment:
+
+```bash
+pnpm --dir apps/web exec wrangler hyperdrive get \
+  adc9757dfffd45bc94d5c2a66b2ad410
+pnpm --dir apps/web exec wrangler hyperdrive get \
+  427dd7a2876c4dccbe056d37fa7374ff
+```
+
+Local `.env` and CI use `DATABASE_URL`. Deployed Worker code receives the
+database URLs from Hyperdrive and does not have a `DATABASE_URL` secret.
+
+### R2 and media domain
+
+The main app uses the S3-compatible R2 endpoint for account
+`9f10f078d35d86c78dedece2300a6b88`, bucket `foo`, key prefix `cubby`, and
+public origin `https://media.nickysemenza.com`. The R2 access-key pair is scoped
+for that bucket and stored only as Worker secrets.
+
+The auxiliary Workers use native R2 bindings:
+
+- `upc-lookup`: binding `IMAGES`, bucket `upc-images`.
+- `usda-api`: binding `USDA_BUNDLES`, bucket `usda-api-bundles`.
+
+Cloudflare DNS and the R2 custom-domain configuration must route
+`media.nickysemenza.com` to the main bucket. Image delivery depends on
+Cloudflare Image Resizing at that origin.
+
+### D1 and auxiliary Workers
+
+| Worker | D1 database | Database ID | Other state |
+|---|---|---|---|
+| `upc-lookup` | `upc-lookup-db` | `6c1f2074-2017-48d1-ae37-bc7002d47c64` | R2 `upc-images`; Worker secret `API_KEY` |
+| `usda-api` | `usda-api-index` | `e2e0037c-6046-4b66-85d9-03ceb0770db6` | R2 `usda-api-bundles` |
+
+D1 migrations live beside each Worker and are an explicit operator step; the
+package deploy scripts do not apply them:
+
+```bash
+pnpm --filter @cubby/upc-lookup run db:migrate:remote
+pnpm --filter @cubby/usda-api run edge:d1:migrate:remote
+```
+
+Apply a compatible migration before deploying code that requires it. The main
+Worker uses service bindings in production and checked-in public URLs as
+development fallbacks.
+
+### Secrets and plaintext variables
+
+Set deployed Worker secrets interactively so their values do not enter shell
+history:
+
+```bash
+pnpm --dir apps/web exec wrangler secret put NAME --config wrangler.jsonc
+pnpm --dir apps/web exec wrangler secret list --config wrangler.jsonc
+```
+
+| Name | Storage | Purpose |
+|---|---|---|
+| `BETTER_AUTH_SECRET` | `cubby` Worker secret | Better Auth signing/encryption |
+| `R2_ACCESS_KEY_ID` | `cubby` Worker secret | Main R2 S3 credential |
+| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret | Main R2 S3 credential |
+| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret | Google OAuth confidential credential |
+| `GOOGLE_CLIENT_ID` | Checked-in Worker `vars` value | Public Google OAuth client identifier |
+| `AI_GATEWAY_API_KEY` | Optional Worker/local secret | REST fallback outside the production Workers AI binding |
+| `NOTION_API_KEY` | Optional Worker/local secret | Optional Notion integration |
+| `API_KEY` | `upc-lookup` Worker secret | Direct access to the UPC lookup Worker |
+
+OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
+Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
+client secrets, R2 secret keys, auth secrets, API tokens, and provider keys must
+not be committed.
+
+## Google Cloud and Gmail OAuth
+
+Project:
+
+- Name: `cubby`
+- Project ID: `cubby-481519`
+- Project number: `183601884678`
+
+The production dependency is intentionally small:
+
+1. `gmail.googleapis.com` is enabled.
+2. Google Auth Platform has an External application named `Cubby`.
+3. Data Access includes
+   `https://www.googleapis.com/auth/gmail.readonly`.
+4. A Web application OAuth client named `Cubby production` has:
+   - Authorized JavaScript origin `https://cubby.nickysemenza.com`
+   - Authorized redirect URI
+     `https://cubby.nickysemenza.com/api/auth/callback/google`
+5. Its client ID is committed in `apps/web/wrangler.jsonc` as
+   `GOOGLE_CLIENT_ID`; its client secret is stored in the `cubby` Worker.
+
+Enable and verify the API with `gcloud`:
+
+```bash
+gcloud services enable gmail.googleapis.com --project=cubby-481519
+gcloud services list --enabled --project=cubby-481519 \
+  --filter='config.name:gmail.googleapis.com' \
+  --format='value(config.name)'
+```
+
+The standard `gcloud` CLI does not create general Google Auth Platform OAuth
+clients. Configure the consent screen and client in the
+[Google Auth Platform console](https://console.cloud.google.com/auth/overview?project=cubby-481519).
+The redirect URI is exact, including scheme and absence of a trailing slash.
+
+For initial validation, an External app may remain in Testing with household
+Google accounts listed as test users. Google expires Testing-mode grants after
+seven days, so unattended hourly Gmail discovery requires publishing the app
+to Production. A private personal-use app may remain unverified and display
+Google's warning; do not expand its audience without revisiting Google's
+restricted-scope verification and data-handling requirements.
+
+Better Auth stores the resulting per-member access and refresh tokens encrypted
+in its `account` table. Cubby requests read-only Gmail access and does not store
+Google passwords.
+
+## AI providers
+
+Production calls use the Workers AI Gateway binding and gateway `cubby`.
+Provider routing and model identifiers live in
+`apps/web/src/server/ai/models.ts`. Provider credentials or unified-billing
+configuration are Cloudflare AI Gateway state; no provider key belongs in this
+repository. Verify that every model in the checked-in registry is enabled in
+the gateway before relying on a feature that selects it.
+
+The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
+fallback used outside Cloudflare Workers. It is optional in the deployed Worker
+because the `AI` binding supplies Worker-identity authentication.
+
+## Observability
+
+The web/Workers Sentry DSN is intentionally public and checked into
+`apps/web/src/lib/sentry-dsn.ts`. The native app uses a separate `cubby-apple`
+Sentry project. Authentication and ownership for both projects remain
+provider-side state.
+
+Cloudflare must have two account-level Workers Observability destinations:
+
+- `grafana-logs` -> Grafana Cloud Loki OTLP endpoint.
+- `grafana-traces` -> Grafana Cloud Tempo OTLP endpoint.
+
+All three Wrangler configurations reference those exact names. Destination
+credentials live in Cloudflare, not GitHub or this repository.
+
+## GitHub and deployment
+
+`main` is deployed by `.github/workflows/deploy.yaml`. The `cloudflare` GitHub
+Environment serializes and scopes production deployment. Required repository
+or environment secrets are:
+
+| Secret | Purpose |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Deploy all three Workers and manage their declared bindings |
+| `CODECOV_TOKEN` | Optional coverage upload workflow |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime |
+
+The Cloudflare token should be scoped to the checked-in account and only the
+resource types the deployment workflow manages. Production deploys always
+build before invoking Wrangler; previews upload a completed CI build and reuse
+production bindings without routing production traffic.
+
+## Apple platform
+
+The native targets use Xcode-managed signing and the associated domain
+`cubby.nickysemenza.com`. The web Worker serves the Apple App Site Association
+file. Purchase-import browser control additionally requires the checked-in
+Apple Events entitlement and usage description; macOS grants Automation and
+optional Screen Recording permission per local installation. There is no
+hosted native deployment in this repository.
+
+## Reconstruction and drift check
+
+For a new account or disaster recovery:
+
+1. Restore PostgreSQL and R2 before accepting writes.
+2. Recreate auxiliary D1/R2 resources and deploy `usda-api` and `upc-lookup`.
+3. Recreate Hyperdrive, queues, Vectorize, AI Gateway/provider access, and
+   observability destinations; update checked-in IDs if they changed.
+4. Restore Worker and GitHub secrets through their providers.
+5. Recreate Google Auth Platform configuration and rotate the Google client
+   secret rather than copying it through documentation.
+6. Deploy `cubby`, verify its exact source revision, and run authenticated
+   database, media, AI, Gmail, and auxiliary-service smoke tests.
+7. Reconnect native clients and regrant local macOS permissions.
+
+Before deleting apparently unused provider state, search the repository, check
+provider usage/audit logs, and confirm that it is absent from current deployed
+bindings. A resource being absent from this file is evidence of drift, not by
+itself authorization to delete it.

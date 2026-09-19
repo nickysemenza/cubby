@@ -28,6 +28,7 @@ import {
   projectAttentionItemSchema,
 } from "./project";
 import { searchableEntityRefFields } from "./search";
+import { proposedImportFix } from "./purchase-import";
 
 const publicEntityIdSchema = anyShortcodeSchema(
   nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
@@ -693,7 +694,32 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 export const sectionTotalsSchema = z.record(z.string(), z.number().int());
 export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
 
+export const importFindingProblemSchema = z.object({
+  id: z.uuid(),
+  purchaseId: purchaseShortcode.nullable(),
+  kind: z.string(),
+  summary: z.string(),
+  probability: z.number().nullable(),
+  proposedFix: proposedImportFix.nullable(),
+  createdAt: z.date(),
+});
+export type ImportFindingProblem = z.infer<typeof importFindingProblemSchema>;
+
+export const resolveImportFindingInput = z.object({
+  id: z.uuid(),
+  action: z.enum(["apply", "dismiss"]),
+});
+export type ResolveImportFindingInput = z.infer<
+  typeof resolveImportFindingInput
+>;
+
+export const resolveImportFindingOut = z.object({
+  id: z.uuid(),
+  status: z.enum(["applied", "dismissed"]),
+});
+
 const problemsFastFields = {
+  importFindings: z.array(importFindingProblemSchema),
   duplicateInventory: z.array(duplicateUniqueProductSchema),
   duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
   orphanedProducts: z.array(orphanedProductSchema),
@@ -937,6 +963,7 @@ export const EMPTY_PROBLEM_ARRAYS: ProblemArrays = Object.freeze(
 );
 
 export const PROBLEM_CLASS = {
+  importFindings: "defect",
   duplicateInventory: "defect",
   // Two rows for one SKU is unambiguously wrong — spend, stock, and identifiers
   // are split across both — and it converges to zero: `mergeProducts` folds the

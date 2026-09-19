@@ -62,6 +62,8 @@ const jevGatewayEnvelopeSchema = z.object({ result: jevChoiceResponseSchema });
 export interface JevChoiceResult {
   selectedIndex: number | null;
   confidence: Confidence;
+  /** Jev's calibrated probability for the selected choice, before bucketing. */
+  probability: number;
 }
 
 /**
@@ -218,7 +220,13 @@ export async function runJevChoice(args: {
   }
   const confidence = decisionConfidence(selectedProbability);
 
-  if (answer.choice === NONE_KEY) return { selectedIndex: null, confidence };
+  if (answer.choice === NONE_KEY) {
+    return {
+      selectedIndex: null,
+      confidence,
+      probability: selectedProbability,
+    };
+  }
   const selectedIndex = Number(answer.choice.slice(1));
   if (
     !Number.isInteger(selectedIndex) ||
@@ -226,5 +234,5 @@ export async function runJevChoice(args: {
   ) {
     throw new Error("Jev selected an unknown candidate key.");
   }
-  return { selectedIndex, confidence };
+  return { selectedIndex, confidence, probability: selectedProbability };
 }

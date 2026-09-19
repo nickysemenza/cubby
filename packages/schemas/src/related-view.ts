@@ -529,6 +529,8 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   planting:
     "its cross-entity relationships (ingredient, location, source product, task) are already reachable from those entities' own declared relation sections",
   gardenEntry: "garden timelines render entries directly",
+  vendorAccount:
+    "vendor account ownership and vendor links are rendered as detail fields",
   // Not a local entity — remote USDA search results, no local edges.
   "usda-food": "remote USDA records have no local relationships",
 } as const satisfies Record<Exclude<Entity, RelatedViewSource>, string>;

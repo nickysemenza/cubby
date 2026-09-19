@@ -21,6 +21,7 @@ import type {
   RecipeId,
   TaskId,
   UserId,
+  VendorId,
   WishId,
 } from "@cubby/schemas/identifiers";
 import type { ContributionRole } from "@cubby/schemas/ledger-party";
@@ -89,6 +90,7 @@ import {
   generatedRecipeColumns,
   generatedTaskColumns,
   generatedVendorColumns,
+  generatedVendorAccountColumns,
   generatedWishColumns,
   imageRenderStatusEnum,
   imageStatusEnum,
@@ -1178,22 +1180,44 @@ export const vendor = pgTable(
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
     index("Vendor_logoImageId_idx").on(table.logoImageId),
+    check(
+      "Vendor_orderEvidence_check",
+      sql`${table.orderEvidence} IS NULL OR ${table.orderEvidence} IN ('online_account', 'receipt_only', 'not_expected')`,
+    ),
+    check(
+      "Vendor_returnWindowDays_check",
+      sql`${table.returnWindowDays} IS NULL OR ${table.returnWindowDays} >= 0`,
+    ),
   ],
 );
 
 /** A durable economic participant in the household ledger. */
 export const ledgerParty = pgTable(
   "LedgerParty",
-  generatedLedgerPartyColumns(),
+  {
+    ...generatedLedgerPartyColumns(),
+    // Auth ownership is intentionally storage-only: a member claims it from
+    // Settings, never through generic ledger-party create/update forms.
+    userId: text("userId")
+      .$type<UserId>()
+      .references(() => user.id),
+  },
   (table) => [
     shortcodeUnique("LedgerParty", table.shortcode),
     index("LedgerParty_kind_idx").on(table.kind),
     uniqueIndex("LedgerParty_household_singleton_key")
       .on(table.kind)
       .where(sql`${table.deletedAt} IS NULL AND ${table.kind} = 'household'`),
+    uniqueIndex("LedgerParty_member_user_key")
+      .on(table.userId)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.userId} IS NOT NULL`),
     check(
       "LedgerParty_kind_check",
       sql`${table.kind} IN ('member', 'guest', 'household')`,
+    ),
+    check(
+      "LedgerParty_user_member_check",
+      sql`${table.userId} IS NULL OR ${table.kind} = 'member'`,
     ),
   ],
 );
@@ -1211,6 +1235,30 @@ export const financialAccount = pgTable(
   ],
 );
 
+export const vendorAccount = pgTable(
+  "VendorAccount",
+  generatedVendorAccountColumns({
+    vendor: (): AnyPgColumn => vendor.id,
+    ledgerParty: (): AnyPgColumn => ledgerParty.id,
+  }),
+  (table) => [
+    shortcodeUnique("VendorAccount", table.shortcode),
+    uniqueIndex("VendorAccount_vendor_member_key")
+      .on(table.vendorId, table.ledgerPartyId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("VendorAccount_vendorId_idx").on(table.vendorId),
+    index("VendorAccount_ledgerPartyId_idx").on(table.ledgerPartyId),
+    check(
+      "VendorAccount_status_check",
+      sql`${table.status} IN ('active', 'paused_auth', 'paused_offline', 'disabled')`,
+    ),
+    check(
+      "VendorAccount_browser_check",
+      sql`${table.browser} IN ('chrome', 'safari')`,
+    ),
+  ],
+);
+
 /**
  * One vendor order, receipt, or deliberately separate purchase event — the home
  * for vendor-side truth (literal stated total, documents, and identity).
@@ -1219,7 +1267,15 @@ export const financialAccount = pgTable(
  */
 export const purchase = pgTable(
   "Purchase",
-  generatedPurchaseColumns({ vendor: (): AnyPgColumn => vendor.id }),
+  {
+    ...generatedPurchaseColumns({
+      vendor: (): AnyPgColumn => vendor.id,
+      vendorAccount: (): AnyPgColumn => vendorAccount.id,
+    }),
+    importRunId: uuid("importRunId").references(
+      (): AnyPgColumn => importRun.id,
+    ),
+  },
   (table) => [
     shortcodeUnique("Purchase", table.shortcode),
     // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is what
@@ -1231,6 +1287,8 @@ export const purchase = pgTable(
       .on(table.vendorId, table.orderId)
       .where(sql`${table.orderId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     index("Purchase_vendorId_idx").on(table.vendorId),
+    index("Purchase_vendorAccountId_idx").on(table.vendorAccountId),
+    index("Purchase_importRunId_idx").on(table.importRunId),
     index("Purchase_date_idx").on(table.date),
     check(
       "Purchase_statedTotal_whole_cent_check",
@@ -1298,6 +1356,359 @@ export const purchaseProduct = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("PurchaseProduct_purchaseId_idx").on(table.purchaseId),
     index("PurchaseProduct_productId_idx").on(table.productId),
+  ],
+);
+
+/** One durable attempt to discover, fetch, extract, write, and audit evidence. */
+export const importRun = pgTable(
+  "ImportRun",
+  {
+    id: pkUuid(),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    vendorAccountId: uuid("vendorAccountId").references(() => vendorAccount.id),
+    trigger: text("trigger").notNull(),
+    status: text("status").notNull().default("running"),
+    startedAt: timestamp("startedAt", { mode: "date" }).notNull().defaultNow(),
+    endedAt: timestamp("endedAt", { mode: "date" }),
+    ordersSeen: integer("ordersSeen").notNull().default(0),
+    imported: integer("imported").notNull().default(0),
+    updated: integer("updated").notNull().default(0),
+    skipped: integer("skipped").notNull().default(0),
+    failureCode: text("failureCode"),
+    agentSessionId: text("agentSessionId"),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    index("ImportRun_party_started_idx").on(
+      table.ledgerPartyId,
+      table.startedAt.desc(),
+    ),
+    index("ImportRun_vendorAccount_started_idx").on(
+      table.vendorAccountId,
+      table.startedAt.desc(),
+    ),
+    check(
+      "ImportRun_trigger_check",
+      sql`${table.trigger} IN ('foreground', 'discovery', 'manual', 'backfill')`,
+    ),
+    check(
+      "ImportRun_status_check",
+      sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'completed', 'failed')`,
+    ),
+  ],
+);
+
+/** Stable source ownership makes browser pages, email, exports, and orderless receipts replay-safe. */
+export const importSourceClaim = pgTable(
+  "ImportSourceClaim",
+  {
+    id: pkUuid(),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    vendorAccountId: uuid("vendorAccountId").references(() => vendorAccount.id),
+    kind: text("kind").notNull(),
+    externalKey: text("externalKey").notNull(),
+    checksum: text("checksum").notNull(),
+    purchaseId: uuid("purchaseId")
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
+    firstRunId: uuid("firstRunId")
+      .notNull()
+      .references(() => importRun.id),
+    lastRunId: uuid("lastRunId")
+      .notNull()
+      .references(() => importRun.id),
+    outputFingerprint: text("outputFingerprint").notNull(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("ImportSourceClaim_source_key").on(
+      table.ledgerPartyId,
+      table.kind,
+      table.externalKey,
+    ),
+    index("ImportSourceClaim_purchase_idx").on(table.purchaseId),
+    check(
+      "ImportSourceClaim_kind_check",
+      sql`${table.kind} IN ('browser_order', 'mail_message', 'mail_attachment', 'receipt_photo', 'vendor_export')`,
+    ),
+  ],
+);
+
+/** Explicit run provenance for every row mutation, independent of AuditLog's actor shape. */
+export const importRunMutation = pgTable(
+  "ImportRunMutation",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    targetType: text("targetType").notNull(),
+    targetId: uuid("targetId").notNull(),
+    mutationKind: text("mutationKind").notNull(),
+    fields: jsonb("fields")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    postFingerprint: text("postFingerprint").notNull(),
+    auditLogId: uuid("auditLogId"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("ImportRunMutation_run_idx").on(table.runId),
+    index("ImportRunMutation_target_idx").on(table.targetType, table.targetId),
+  ],
+);
+
+export const importFinding = pgTable(
+  "ImportFinding",
+  {
+    id: pkUuid(),
+    importRunId: uuid("importRunId").references(() => importRun.id),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    targetType: text("targetType").notNull(),
+    targetId: uuid("targetId").notNull(),
+    kind: text("kind").notNull(),
+    summary: text("summary").notNull(),
+    proposedFix: jsonb("proposedFix"),
+    evidenceFingerprint: text("evidenceFingerprint").notNull(),
+    autoApplied: boolean("autoApplied").notNull().default(false),
+    probability: real("probability"),
+    status: text("status").notNull().default("open"),
+    resolvedAt: timestamp("resolvedAt", { mode: "date" }),
+    resolvedByUserId: text("resolvedByUserId").references(() => user.id),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("ImportFinding_open_evidence_key")
+      .on(
+        table.ledgerPartyId,
+        table.targetType,
+        table.targetId,
+        table.kind,
+        table.evidenceFingerprint,
+      )
+      .where(sql`${table.status} = 'open'`),
+    index("ImportFinding_status_idx").on(table.status, table.createdAt.desc()),
+    check(
+      "ImportFinding_status_check",
+      sql`${table.status} IN ('open', 'applied', 'dismissed')`,
+    ),
+    check(
+      "ImportFinding_target_check",
+      sql`${table.targetType} IN ('purchase', 'expense', 'product')`,
+    ),
+  ],
+);
+
+export const importHunt = pgTable(
+  "ImportHunt",
+  {
+    id: pkUuid(),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    financialTransactionId: uuid("financialTransactionId")
+      .notNull()
+      .$type<FinancialTransactionId>()
+      .references(() => financialTransaction.id),
+    vendorId: uuid("vendorId")
+      .$type<VendorId>()
+      .references(() => vendor.id),
+    vendorAccountId: uuid("vendorAccountId").references(() => vendorAccount.id),
+    state: text("state").notNull().default("pending_mail"),
+    dateFrom: date("dateFrom", { mode: "string" }).notNull(),
+    dateTo: date("dateTo", { mode: "string" }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    matchedOrderIds: jsonb("matchedOrderIds")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    error: text("error"),
+    receiptImageId: uuid("receiptImageId").references(() => image.id),
+    receiptQueuedAt: timestamp("receiptQueuedAt", { mode: "date" }),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("ImportHunt_transaction_key").on(table.financialTransactionId),
+    index("ImportHunt_worklist_idx").on(table.state, table.updatedAt),
+    uniqueIndex("ImportHunt_receipt_image_key")
+      .on(table.id, table.receiptImageId)
+      .where(sql`${table.receiptImageId} IS NOT NULL`),
+  ],
+);
+
+/** Human-confirmed merchant routing; never inferred repeatedly at write time. */
+export const merchantVendorRule = pgTable(
+  "MerchantVendorRule",
+  {
+    id: pkUuid(),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    normalizedMerchant: text("normalizedMerchant").notNull(),
+    vendorId: uuid("vendorId")
+      .notNull()
+      .$type<VendorId>()
+      .references(() => vendor.id),
+    confirmedByUserId: text("confirmedByUserId")
+      .notNull()
+      .references(() => user.id),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("MerchantVendorRule_party_merchant_key").on(
+      table.ledgerPartyId,
+      table.normalizedMerchant,
+    ),
+  ],
+);
+
+export const mailboxCursor = pgTable(
+  "MailboxCursor",
+  {
+    id: pkUuid(),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    provider: text("provider").notNull().default("gmail"),
+    historyId: text("historyId"),
+    lastPolledAt: timestamp("lastPolledAt", { mode: "date" }),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("MailboxCursor_party_provider_key").on(
+      table.ledgerPartyId,
+      table.provider,
+    ),
+  ],
+);
+
+export const orderMail = pgTable(
+  "OrderMail",
+  {
+    id: pkUuid(),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    vendorId: uuid("vendorId")
+      .$type<VendorId>()
+      .references(() => vendor.id),
+    messageId: text("messageId").notNull(),
+    threadId: text("threadId"),
+    historyId: text("historyId"),
+    sender: text("sender").notNull(),
+    subject: text("subject").notNull(),
+    receivedAt: timestamp("receivedAt", { mode: "date" }).notNull(),
+    rawChecksum: text("rawChecksum").notNull(),
+    content: jsonb("content")
+      .$type<{
+        snippet: string | null;
+        bodyText: string | null;
+        bodyHtml: string | null;
+      }>()
+      .notNull()
+      .default(sql`'{"snippet":null,"bodyText":null,"bodyHtml":null}'::jsonb`),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("OrderMail_party_message_key").on(
+      table.ledgerPartyId,
+      table.messageId,
+    ),
+    index("OrderMail_party_received_idx").on(
+      table.ledgerPartyId,
+      table.receivedAt.desc(),
+    ),
+  ],
+);
+
+export const orderMailEvent = pgTable(
+  "OrderMailEvent",
+  {
+    id: pkUuid(),
+    orderMailId: uuid("orderMailId")
+      .notNull()
+      .references(() => orderMail.id),
+    event: text("event").notNull(),
+    orderId: text("orderId"),
+    amount: doublePrecision("amount"),
+    currency: text("currency"),
+    occurredAt: timestamp("occurredAt", { mode: "date" }),
+    sourceKey: text("sourceKey").notNull(),
+    payload: jsonb("payload")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("OrderMailEvent_source_key").on(
+      table.orderMailId,
+      table.sourceKey,
+    ),
+    index("OrderMailEvent_order_idx").on(table.orderId),
+  ],
+);
+
+export const orderMailAttachment = pgTable(
+  "OrderMailAttachment",
+  {
+    id: pkUuid(),
+    orderMailId: uuid("orderMailId")
+      .notNull()
+      .references(() => orderMail.id),
+    providerAttachmentId: text("providerAttachmentId").notNull(),
+    filename: text("filename").notNull(),
+    mimeType: text("mimeType").notNull(),
+    checksum: text("checksum").notNull(),
+    pendingDataBase64Url: text("pendingDataBase64Url"),
+    imageId: uuid("imageId").references(() => image.id),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("OrderMailAttachment_provider_key").on(
+      table.orderMailId,
+      table.providerAttachmentId,
+    ),
+  ],
+);
+
+export const purchasePaymentEvidence = pgTable(
+  "PurchasePaymentEvidence",
+  {
+    id: pkUuid(),
+    purchaseId: uuid("purchaseId")
+      .notNull()
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
+    sourceClaimId: uuid("sourceClaimId")
+      .notNull()
+      .references(() => importSourceClaim.id),
+    amount: doublePrecision("amount").notNull(),
+    chargedAt: timestamp("chargedAt", { mode: "date" }),
+    cardLastFour: text("cardLastFour"),
+    description: text("description"),
+    evidenceIndex: integer("evidenceIndex").notNull(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("PurchasePaymentEvidence_source_index_key").on(
+      table.sourceClaimId,
+      table.evidenceIndex,
+    ),
+    index("PurchasePaymentEvidence_purchase_idx").on(table.purchaseId),
   ],
 );
 
@@ -2460,6 +2871,8 @@ export const aiUsage = pgTable(
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     operation: text("operation").notNull(),
+    jobKind: text("jobKind"),
+    jobId: text("jobId"),
     inputTokens: integer("inputTokens"),
     outputTokens: integer("outputTokens"),
     estimatedCost: real("estimatedCost"),
@@ -2480,6 +2893,7 @@ export const aiUsage = pgTable(
       table.createdAt.desc(),
     ),
     index("AiUsage_entity_idx").on(table.entityType, table.entityId),
+    index("AiUsage_job_idx").on(table.jobKind, table.jobId),
   ],
 );
 

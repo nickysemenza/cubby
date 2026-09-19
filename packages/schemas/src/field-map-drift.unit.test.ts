@@ -622,6 +622,12 @@ const INTENTIONAL_RESPELLINGS = {
   "purchase::purchaseUpdateData::imageOrder": HAND_WRITTEN_IMAGE_ID_ARRAY,
   "purchase::purchaseUpdateData::removeImageIds": HAND_WRITTEN_IMAGE_ID_ARRAY,
 
+  // --- vendor account -----------------------------------------------------
+  "vendorAccount::vendorAccountFilters::vendorId":
+    "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
+  "vendorAccount::vendorAccountFilters::ledgerPartyId":
+    "shortcode-list filter spelled as entityFilterList(ledgerPartyShortcode) over the generated scalar ledgerPartyId field",
+
   // --- recipe: recipeTopLevelFields (recipe-shared.ts) is a hand-declared
   // shared map predating the generator, reused across many exports (one
   // root cause); section/usage/instruction sub-rows have their own ids

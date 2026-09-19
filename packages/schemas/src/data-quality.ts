@@ -30,6 +30,7 @@ export type DataCheck = z.infer<typeof dataCheck>;
 export const dataExceptionReason = z.enum([
   "not_issued",
   "unavailable",
+  "history_expired",
   "not_applicable",
   "insufficient_detail",
   "expected_mismatch",
@@ -101,6 +102,29 @@ export const defectDataChecks = [
   "duplicate_external_id",
 ] as const satisfies readonly DataCheck[];
 
+/**
+ * Central weights make quality score arithmetic explicit and extensible. A
+ * score divides satisfied expected weight by expected weight; every currently
+ * defined check has equal weight until product policy deliberately changes it.
+ */
+export const dataCheckWeight = {
+  purchase_date: 1,
+  order_id: 1,
+  stated_total: 1,
+  primary_document: 1,
+  empty_expenses: 1,
+  unpriced_expense: 1,
+  paperwork_mismatch: 1,
+  settlement_reference: 1,
+  settlement_mismatch: 1,
+  product_manufacturer: 1,
+  product_category: 1,
+  product_model: 1,
+  product_image: 1,
+  amazon_asin: 1,
+  duplicate_external_id: 1,
+} as const satisfies Record<DataCheck, number>;
+
 export const isDefectDataCheck = (
   check: DataCheck,
 ): check is (typeof defectDataChecks)[number] =>
@@ -125,6 +149,7 @@ export type DataQualityFacet = z.infer<typeof dataQualityFacet>;
 
 export const dataQuality = z.object({
   status: dataQualityStatus,
+  score: z.number().min(0).max(100).default(100),
   facets: z.array(dataQualityFacet),
   gaps: z.array(dataQualityGap),
   exceptions: z.array(dataQualityException),

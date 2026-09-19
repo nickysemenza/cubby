@@ -1,9 +1,11 @@
 # Purchase import redesign
 
-Status: plan, revised after one adversarial Fable review against the checkout
-(2026-09-18). Every decision was put to the operator and confirmed unless
-marked **assumption**. Review findings that changed the design are noted
-inline as *(review)*.
+Status: implemented on `codex/purchase-import-redesign` (2026-09-19), after
+adversarial Fable and Astra reviews against the checkout. The production
+database cutover was applied and verified on 2026-09-19; local deployment and
+operator validation remain the merge gate. Every decision was put to the
+operator and confirmed unless marked **assumption**. Review findings that
+changed the design are noted inline as *(review)*.
 
 ## 1. Summary
 
@@ -480,7 +482,7 @@ known outcomes for `product-line-identity`, 50 for `reversal-kind`, 50 for
 - Apple Events automation permission is per app pair and revocable.
 - No real household data in fixtures.
 
-## 8. Implementation sequence
+## 8. Implementation sequence (historical)
 
 ### 8.1 Flue spike — definition of done
 
@@ -494,7 +496,10 @@ does not lose the attached identity.
 
 ### 8.2 Order
 
-0. Pre-implementation work (§10), as separate PRs.
+The operator approved one disruptive PR, so these dependency-ordered stages
+were consolidated into this branch instead of separate PRs.
+
+0. Pre-implementation work (§10).
 1. Spike (§8.1).
 2. Schema (§3): `LedgerParty.userId`, `VendorAccount` (full entity work),
    `Vendor` columns, `Purchase` columns, `ImportRun`, `ImportFinding`,

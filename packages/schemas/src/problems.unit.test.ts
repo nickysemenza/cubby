@@ -31,6 +31,7 @@ describe("PROBLEM_CLASS", () => {
     dependencyCycles: "defect",
     entitiesMissingEmbeddings: "defect",
     financialTransactionAllocationDefects: "defect",
+    importFindings: "defect",
     incompleteStatementImports: "defect",
     ingredientsWithPartialCoverage: "defect",
     inventoryWithoutPricePath: "defect",

@@ -46,6 +46,8 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Cubby opens a dedicated browser window to capture signed-in order evidence you request.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Cubby scans barcodes to add items to a location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

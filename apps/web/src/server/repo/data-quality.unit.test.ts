@@ -1,4 +1,5 @@
 import {
+  dataExceptionReason,
   productDataCheck,
   purchaseDataCheck,
 } from "@cubby/schemas/data-quality";
@@ -15,6 +16,7 @@ import {
   purchaseDataGapCondition,
   purchaseDefectCondition,
   purchaseNeedsDataCondition,
+  calculateDataQualityScore,
 } from "./data-quality";
 
 const dialect = new PgDialect();
@@ -87,4 +89,58 @@ describe("data-quality predicate grouping", () => {
       expect(isSingleGroup(purchaseDataGapCondition(check))).toBe(true);
     },
   );
+});
+
+describe("calculateDataQualityScore", () => {
+  const purchaseGap = {
+    check: "order_id" as const,
+    facet: "paperwork" as const,
+    kind: "missing" as const,
+    targetType: "purchase" as const,
+    targetId: "PUR-4K7M",
+    message: "missing",
+  };
+
+  it("uses applicable expected checks and treats no checks as complete", () => {
+    expect(calculateDataQualityScore([], [])).toBe(100);
+    expect(
+      calculateDataQualityScore(["order_id", "stated_total"], [purchaseGap]),
+    ).toBe(50);
+  });
+});
+
+describe("purchase import expectations", () => {
+  it("gates receipt and line checks by the vendor's order-evidence policy", () => {
+    const documentSql = dialect.sqlToQuery(
+      purchaseDataGapCondition("primary_document"),
+    ).sql;
+    const expenseSql = dialect.sqlToQuery(
+      purchaseDataGapCondition("empty_expenses"),
+    ).sql;
+    expect(documentSql).toContain('"orderEvidence"');
+    expect(documentSql).toContain("receipt_only");
+    expect(expenseSql).toContain('"orderEvidence"');
+    expect(expenseSql).toContain("online_account");
+    expect(expenseSql).not.toContain("receipt_only");
+  });
+
+  it("uses check inputs, not target timestamps, to keep an exception active", () => {
+    const productSql = dialect.sqlToQuery(
+      productDataGapCondition("product_manufacturer"),
+    ).sql;
+    const purchaseSql = dialect.sqlToQuery(
+      purchaseDataGapCondition("paperwork_mismatch"),
+    ).sql;
+
+    expect(productSql).toContain("to_jsonb");
+    expect(purchaseSql).toContain("to_jsonb");
+    expect(productSql).not.toContain('"updatedAt"');
+    expect(purchaseSql).not.toContain('"updatedAt"');
+  });
+
+  it("preserves typed unavailable-history exceptions", () => {
+    expect(dataExceptionReason.parse("history_expired")).toBe(
+      "history_expired",
+    );
+  });
 });

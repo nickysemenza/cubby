@@ -274,6 +274,8 @@ const aiUsageGroupFields = {
   provider: z.string(),
   model: z.string(),
   operation: z.string(),
+  jobKind: z.string().nullable(),
+  jobId: z.string().nullable(),
   cacheStatus: aiUsageCacheStatus.nullable(),
 };
 
@@ -337,6 +339,8 @@ export const fieldSuggestionSchema = z.object({
   label: z.string().nullable(),
   detail: z.string().nullable(),
   confidence,
+  /** Calibrated Jev probability; null for non-Jev/absent suggestions. */
+  probability: z.number().min(0).max(1).nullable().default(null),
   reasoning: z.string(),
 });
 export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;

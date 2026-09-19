@@ -24,6 +24,7 @@ export const imageUploadContract = defineContract("image", {
     output: initiateUploadWithoutEntityResponseSchema,
   }),
   uploadDocument: mutation({
+    native: "Purchase import receipt evidence",
     input: initiateDocumentUploadSchema,
     output: initiateUploadWithoutEntityResponseSchema,
   }),

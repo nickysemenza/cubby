@@ -18,6 +18,7 @@ import {
   Hammer,
   Heart,
   Image,
+  KeyRound,
   ListChecks,
   type LucideIcon,
   type LucideProps,
@@ -195,6 +196,7 @@ const LUCIDE_ICONS = {
   Hammer,
   Heart,
   Image,
+  KeyRound,
   ListChecks,
   MapPin,
   Package,
@@ -378,6 +380,10 @@ const entityDefinitions = withEntityNames({
         emptyDescription: "No other vendors are on file.",
       },
     }),
+  },
+  vendorAccount: {
+    ...generatedBrowserRoutes.vendorAccount,
+    color: INK.slate,
   },
   purchase: {
     ...generatedBrowserRoutes.purchase,

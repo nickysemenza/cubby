@@ -378,6 +378,68 @@ const handler = {
     env: Env,
   ) {
     setCfEnv(env);
+    if (controller.cron === "0 * * * *") {
+      // SAFETY: Worker secrets are runtime bindings intentionally absent from
+      // generated Wrangler types; both values are checked before use.
+      const google = env as Env & {
+        GOOGLE_CLIENT_ID?: string;
+        GOOGLE_CLIENT_SECRET?: string;
+      };
+      if (!google.GOOGLE_CLIENT_ID || !google.GOOGLE_CLIENT_SECRET) {
+        console.log(
+          "[scheduled] Gmail discovery skipped: Google OAuth is not configured",
+        );
+        return;
+      }
+      await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+        const [
+          { db },
+          { runGmailHourlySync },
+          { createBetterAuthGmailAccountStore },
+          { createGmailProviderFactory },
+          { listGmailSyncTargets },
+          { discoverImportHunts, dispatchImportHunts },
+          { processOrderMails },
+        ] = await Promise.all([
+          import("./server/db"),
+          import("./server/purchase-import/gmail/hourly"),
+          import("./server/purchase-import/gmail/persistence"),
+          import("./server/purchase-import/gmail/tokens"),
+          import("./server/purchase-import/gmail/targets"),
+          import("./server/purchase-import/hunts"),
+          import("./server/purchase-import/gmail/process"),
+        ]);
+        const store = createBetterAuthGmailAccountStore(db);
+        const huntsCreated = await discoverImportHunts(db);
+        console.log("[scheduled] Purchase hunts created", { huntsCreated });
+        const summary = await runGmailHourlySync({
+          db,
+          listTargets: () => listGmailSyncTargets(db),
+          providerForUser: createGmailProviderFactory({
+            store,
+            clientId: google.GOOGLE_CLIENT_ID!,
+            clientSecret: google.GOOGLE_CLIENT_SECRET!,
+          }),
+          includeAttachmentData: true,
+          processMessages: processOrderMails,
+        });
+        console.log("[scheduled] Gmail purchase discovery", summary);
+        const namespace = env.PURCHASE_IMPORT;
+        if (namespace) {
+          const huntsDispatched = await dispatchImportHunts(db, namespace);
+          console.log("[scheduled] Purchase hunts dispatched", {
+            huntsDispatched,
+          });
+        }
+        for (const failure of summary.failures) {
+          Sentry.captureMessage(
+            `Gmail purchase discovery failed for ${failure.ledgerPartyId}: ${failure.error}`,
+            "warning",
+          );
+        }
+      });
+      return;
+    }
     await withTrace(
       "cf.scheduled",
       async () => {
@@ -507,6 +569,7 @@ const handler = {
 };
 
 export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
+export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
 export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
 
 export default Sentry.withSentry(

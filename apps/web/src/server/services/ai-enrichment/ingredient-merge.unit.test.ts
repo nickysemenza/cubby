@@ -49,6 +49,7 @@ describe("suggestIngredientMerge", () => {
         return {
           selected: args.candidates[0] ?? null,
           confidence: "high",
+          probability: 0.99,
           reasoning: "synonym",
         };
       },
@@ -69,6 +70,7 @@ describe("suggestIngredientMerge", () => {
       select: async () => ({
         selected: null,
         confidence: "low",
+        probability: 0.1,
         reasoning: "hallucinated an id",
       }),
     };
@@ -87,7 +89,12 @@ describe("suggestIngredientMerge", () => {
     const ai: IngredientMergeAiPort = {
       select: async (spec, args) => {
         renderedLines = args.candidates.map((c) => spec.renderLine(c));
-        return { selected: null, confidence: "low", reasoning: "n/a" };
+        return {
+          selected: null,
+          confidence: "low",
+          probability: 0.1,
+          reasoning: "n/a",
+        };
       },
     };
 
@@ -102,7 +109,12 @@ describe("suggestIngredientMerge", () => {
     const ai: IngredientMergeAiPort = {
       select: async () => {
         calls += 1;
-        return { selected: null, confidence: "low", reasoning: "n/a" };
+        return {
+          selected: null,
+          confidence: "low",
+          probability: 0.1,
+          reasoning: "n/a",
+        };
       },
     };
 

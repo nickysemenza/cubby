@@ -6,6 +6,7 @@ import {
   imageShortcode,
   purchaseShortcode,
   vendorShortcode,
+  vendorAccountShortcode,
 } from "../identifier-fields.js";
 import { imageUrlSummary } from "@cubby/schemas/image-summary";
 import { money, wholeCentAmount } from "@cubby/schemas/money";
@@ -60,6 +61,7 @@ export default defineEntity({
           placement: "supporting",
           fields: [
             "vendorId",
+            "vendorAccountId",
             "orderId",
             "displayLabel",
             "date",
@@ -118,6 +120,24 @@ export default defineEntity({
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
           update: z.string().nullable().optional(),
+        },
+      },
+      {
+        key: "vendorAccountId",
+        kind: "identifier",
+        nullable: true,
+        label: "Vendor account",
+        reference: { entity: "vendorAccount" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          section: "identity",
+        },
+        display: { detail: true },
+        validation: {
+          read: vendorAccountShortcode.nullable(),
+          create: vendorAccountShortcode.nullable().default(null),
+          update: vendorAccountShortcode.nullable().optional(),
         },
       },
       {
@@ -396,6 +416,7 @@ export default defineEntity({
       },
       { key: "shortcode", specialized: "shortcode" },
       { key: "vendorId", reference: "vendor" },
+      { key: "vendorAccountId", reference: "vendorAccount" },
       "orderId",
       "displayLabel",
       "date",
@@ -413,6 +434,7 @@ export default defineEntity({
     ],
     create: [
       "vendorId",
+      "vendorAccountId",
       "orderId",
       "displayLabel",
       "date",
@@ -422,6 +444,7 @@ export default defineEntity({
     ],
     update: [
       "vendorId",
+      "vendorAccountId",
       "orderId",
       "displayLabel",
       "date",
@@ -434,6 +457,7 @@ export default defineEntity({
     bulk: [],
     audit: [
       "vendorId",
+      "vendorAccountId",
       "orderId",
       "displayLabel",
       "date",
@@ -461,6 +485,7 @@ export default defineEntity({
       fields: {
         capture: [
           "vendorId",
+          "vendorAccountId",
           "date",
           "orderId",
           "displayLabel",
@@ -469,6 +494,7 @@ export default defineEntity({
         ],
         full: [
           "vendorId",
+          "vendorAccountId",
           "date",
           "orderId",
           "displayLabel",
@@ -484,6 +510,7 @@ export default defineEntity({
     output: [
       "id",
       "vendorId",
+      "vendorAccountId",
       "orderId",
       "displayLabel",
       "date",
@@ -797,6 +824,19 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Purchase.vendorId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "vendor-account",
+      label: "Vendor account",
+      target: "vendorAccount",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Purchase.vendorAccountId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Purchase.vendorAccountId", direction: "incoming" }],
       },
     },
     {

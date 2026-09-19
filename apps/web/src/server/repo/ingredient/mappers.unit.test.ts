@@ -125,6 +125,7 @@ const deletedUnitMapping = {
 // explicitly, same as a real caller must.
 const completeDataQuality = {
   status: "complete" as const,
+  score: 100,
   facets: [
     { name: "identity" as const, status: "complete" as const, gaps: [] },
     { name: "provenance" as const, status: "complete" as const, gaps: [] },

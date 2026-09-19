@@ -92,6 +92,10 @@
       {
         "name": "CALENDAR_FEED",
         "class_name": "CalendarFeedDurableObject"
+      },
+      {
+        "name": "PURCHASE_IMPORT",
+        "class_name": "PurchaseImportDurableObject"
       }
     ]
   },
@@ -101,6 +105,10 @@
       "storage": "sqlite"
     },
     "CalendarFeedDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "PurchaseImportDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
     }
@@ -192,7 +200,7 @@
     ]
   },
   "triggers": {
-    "crons": ["0 12 * * *"]
+    "crons": ["0 * * * *", "0 12 * * *"]
   },
   "vars": {
     "NODE_ENV": "production",
@@ -208,6 +216,9 @@
     "R2_BUCKET_NAME": "foo",
     "R2_PUBLIC_URL": "https://media.nickysemenza.com",
     "R2_KEY_PREFIX": "cubby",
+    // OAuth client IDs are public identifiers. The paired client secret is a
+    // Worker secret and must never be committed.
+    "GOOGLE_CLIENT_ID": "183601884678-9rddrge4anct24rnbvqb5jm5q9fb8oqg.apps.googleusercontent.com",
     "USDA_API_URL": "https://usda-api.nicky.workers.dev/",
     "UPC_LOOKUP_API_URL": "https://upc-lookup.nicky.workers.dev"
   }
@@ -216,5 +227,6 @@
   //   R2_ACCESS_KEY_ID
   //   R2_SECRET_ACCESS_KEY
   //   AI_GATEWAY_API_KEY (optional)
+  //   GOOGLE_CLIENT_SECRET (optional; required for Gmail discovery)
   // Note: DATABASE_URL is provided by the Hyperdrive binding, not a secret.
 }

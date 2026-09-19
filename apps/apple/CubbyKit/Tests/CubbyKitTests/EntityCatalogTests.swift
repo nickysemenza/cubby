@@ -22,7 +22,7 @@ struct EntityCatalogTests {
 
     @Test func shortcodePrefixesAreUniqueAndWellFormed() {
         let prefixes = EntityCatalog.all.compactMap(\.shortcodePrefix)
-        let pattern = /^[A-Z]{3}-$/
+        let pattern = /^[A-Z]{2,5}-$/
         for prefix in prefixes {
             #expect(prefix.wholeMatch(of: pattern) != nil, "unexpected shortcode prefix shape: \(prefix)")
         }

@@ -80,6 +80,35 @@ export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
        AND se_e."future" = false)`;
 
 /**
+ * The settlement total compared with incurred expenses. Outstanding expected
+ * or pending rows make the projected total authoritative; otherwise only
+ * posted rows count. Keep this fragment shared by the verdict and exception
+ * fingerprint so a changed charge amount cannot inherit an exception for a
+ * different financial delta.
+ */
+const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
+  `(CASE WHEN (
+    SELECT count(DISTINCT a."transactionId")
+    FROM "FinancialTransactionAllocation" a
+    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND ft."status" IN ('expected', 'pending')
+  ) > 0 THEN (
+    SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
+    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND ft."status" <> 'void'
+  ) ELSE (
+    SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
+    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND ft."status" = 'posted'
+  ) END)`;
+
+/**
  * Correlated SQL form of `calculateFinancialReconciliation(...).status ===
  * "mismatch"`, before a reasoned `settlement_mismatch` exception is applied.
  * The raw verdict remains available to data quality and detail reads: accepting
@@ -97,28 +126,19 @@ export const purchaseFinancialMismatchRawSql = (purchaseAlias: string) => `
       AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
       AND ft."status" <> 'void'
   ) > 0
-  AND floor((
-    CASE WHEN (
-      SELECT count(DISTINCT a."transactionId")
-      FROM "FinancialTransactionAllocation" a
-      JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-      WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-        AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-        AND ft."status" IN ('expected', 'pending')
-    ) > 0 THEN (
-      SELECT COALESCE(sum(a."amount"), 0) FROM "FinancialTransactionAllocation" a
-      JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-      WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-        AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-        AND ft."status" <> 'void'
-    ) ELSE (
-      SELECT COALESCE(sum(a."amount"), 0) FROM "FinancialTransactionAllocation" a
-      JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-      WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-        AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-        AND ft."status" = 'posted'
-    ) END
-  ) * 100 + 0.5) IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
+  AND floor(${purchaseFinancialComparisonTotalSql(purchaseAlias)} * 100 + 0.5)
+    IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
+
+/** Input-scoped snapshot for a settlement-mismatch exception. */
+export const purchaseFinancialMismatchFingerprintRawSql = (
+  purchaseAlias: string,
+) =>
+  `'settlement_mismatch:' || concat_ws('|',
+    COALESCE(to_jsonb(${purchaseFinancialMismatchRawSql(purchaseAlias)})::text, 'null'),
+    COALESCE(to_jsonb(${purchaseFinancialComparisonTotalSql(purchaseAlias)})::text, 'null'),
+    COALESCE(to_jsonb(${settleableExpenseTotalSql(purchaseAlias)})::text, 'null'),
+    COALESCE(to_jsonb(${settleableUnpricedExpenseCountSql(purchaseAlias)})::text, 'null')
+  )`;
 
 /**
  * The canonical worklist predicate. A settlement mismatch stays a raw financial
@@ -132,8 +152,7 @@ export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
   AND NOT EXISTS (
     SELECT 1 FROM jsonb_array_elements(${purchaseAlias}."dataExceptions") exception
     WHERE exception->>'check' = 'settlement_mismatch'
-      AND exception->>'fingerprint' = 'settlement_mismatch:'
-        || floor(extract(epoch FROM ${purchaseAlias}."updatedAt") * 1000)::bigint::text
+      AND exception->>'fingerprint' = ${purchaseFinancialMismatchFingerprintRawSql(purchaseAlias)}
   )`;
 
 /**

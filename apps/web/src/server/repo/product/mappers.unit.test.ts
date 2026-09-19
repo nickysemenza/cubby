@@ -55,6 +55,7 @@ const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
 // explicitly, same as a real caller must.
 const completeDataQuality = {
   status: "complete" as const,
+  score: 100,
   facets: [
     { name: "identity" as const, status: "complete" as const, gaps: [] },
     { name: "provenance" as const, status: "complete" as const, gaps: [] },
@@ -451,6 +452,7 @@ describe("product mappers", () => {
 
     const dataQuality = {
       status: "needs_data" as const,
+      score: 80,
       gaps: [
         {
           check: "product_model" as const,

@@ -1,4 +1,4 @@
-import type { SearchHit } from "@cubby/schemas/search";
+import { searchableEntitySchema, type SearchHit } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
@@ -17,6 +17,7 @@ export const pagination = {
 /** The entities `WithEntitySearch` drives end-to-end (list + typed + exact-code + optional create). */
 export type PickerSearchEntity =
   | "ingredient"
+  | "ledgerParty"
   | "location"
   | "product"
   | "recipe"
@@ -46,6 +47,8 @@ export interface UseEntitySearchConfig<TId extends string, TRow, TDetail> {
    * (product: one `product.search` call for every query, typed or not).
    */
   splitBlankTyped: boolean;
+  /** False for list-backed entities that are intentionally absent from global search. */
+  supportsGlobalSearch?: boolean;
   /** Hook-shaped row source for the blank-query (or, when `splitBlankTyped`
    * is false, every) branch. */
   useListSource: EntitySearchRowSource<TRow>;
@@ -190,6 +193,7 @@ function useEntitySearchWithDialog<TId extends string = string>() {
  */
 const FALLBACK_BLANK_FILTER_KEY = {
   ingredient: "nameFilter",
+  ledgerParty: "nameFilter",
   location: "nameFilter",
   product: "nameFilter",
   recipe: "nameFilter",
@@ -235,7 +239,14 @@ export function useEntitySearchRows<
   const exactCode = parsedCode?.type === entity ? parsedCode.shortcode : null;
   const searchingByCode = parsedCode != null;
   const hasTypedText = searchQuery.trim() !== "";
-  const useBlankPath = !config.splitBlankTyped || !hasTypedText;
+  const useBlankPath =
+    config.supportsGlobalSearch === false ||
+    !config.splitBlankTyped ||
+    !hasTypedText;
+  const globalSearchEntity =
+    config.supportsGlobalSearch === false
+      ? "product"
+      : searchableEntitySchema.parse(entity);
 
   const { data: rows, isLoading: isRowsLoading } = config.useListSource(
     searchQuery,
@@ -244,7 +255,7 @@ export function useEntitySearchRows<
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
     ...search.find.queryOptions({
       query: searchQuery || entity,
-      entityTypes: [entity],
+      entityTypes: [globalSearchEntity],
       limit: 20,
     }),
     enabled:

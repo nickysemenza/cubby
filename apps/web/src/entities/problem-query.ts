@@ -29,6 +29,7 @@ type ProblemGrain =
   | "proposal";
 
 export type DiagnosticKey =
+  | "import-findings"
   | "duplicate-product-identities"
   | "orphaned-products"
   | "partially-imported-cookbooks"

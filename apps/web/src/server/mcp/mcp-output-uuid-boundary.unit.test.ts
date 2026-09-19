@@ -38,6 +38,13 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "get_entities.items[].product[].unitMappings[].id",
   "get_entities.items[].unitMappings[].id",
   "get_meal_preparations.preparations[].mealRecipeId",
+  // Import findings are internal review proposals. Their own id is the write
+  // handle for apply/dismiss, while proposed fixes retain the exact internal
+  // rows the audited transaction would mutate; neither is an entity link.
+  "list_problems.importFindings[].id",
+  "list_problems.importFindings[].proposedFix.expenseId",
+  "list_problems.importFindings[].proposedFix.productId",
+  "list_problems.importFindings[].proposedFix.purchaseId",
   "remove_meal_recipe.recipes[].id",
   "save_meal_recipe_preparation.mealRecipeId",
   "update_meal_recipe.recipes[].id",

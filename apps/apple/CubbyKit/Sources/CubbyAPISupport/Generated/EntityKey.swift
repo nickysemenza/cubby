@@ -26,4 +26,5 @@ public enum EntityKey: String, CaseIterable, Codable, Sendable {
   case image = "image"
   case planting = "planting"
   case gardenEntry = "gardenEntry"
+  case vendorAccount = "vendorAccount"
 }

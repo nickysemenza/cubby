@@ -8,13 +8,14 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntityId } from "@cubby/schemas/identifiers";
-import { type AnyColumn, and, getTableColumns, inArray } from "drizzle-orm";
+import { type AnyColumn, and, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
+import { importFinding } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
@@ -150,6 +151,54 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   const { entity, table, keepId, loserIds, removal, actor } = args;
   if (loserIds.length === 0) return { removed: 0 };
   const ids = [...loserIds];
+
+  if (entity === "purchase" || entity === "expense" || entity === "product") {
+    const findings = await tx
+      .select({
+        id: importFinding.id,
+        ledgerPartyId: importFinding.ledgerPartyId,
+        kind: importFinding.kind,
+        evidenceFingerprint: importFinding.evidenceFingerprint,
+        status: importFinding.status,
+      })
+      .from(importFinding)
+      .where(
+        and(
+          eq(importFinding.targetType, entity),
+          inArray(importFinding.targetId, ids),
+        ),
+      );
+    for (const finding of findings) {
+      const [collision] =
+        finding.status === "open"
+          ? await tx
+              .select({ id: importFinding.id })
+              .from(importFinding)
+              .where(
+                and(
+                  eq(importFinding.ledgerPartyId, finding.ledgerPartyId),
+                  eq(importFinding.targetType, entity),
+                  eq(importFinding.targetId, keepId),
+                  eq(importFinding.kind, finding.kind),
+                  eq(
+                    importFinding.evidenceFingerprint,
+                    finding.evidenceFingerprint,
+                  ),
+                  eq(importFinding.status, "open"),
+                ),
+              )
+              .limit(1)
+          : [];
+      if (collision) {
+        await tx.delete(importFinding).where(eq(importFinding.id, finding.id));
+      } else {
+        await tx
+          .update(importFinding)
+          .set({ targetId: keepId, updatedAt: new Date() })
+          .where(eq(importFinding.id, finding.id));
+      }
+    }
+  }
 
   // The row removal stays here rather than moving into `cascadeRemoval`:
   // removal differs per entity (soft for products/purchases/vendors, hard for

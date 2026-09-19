@@ -55,6 +55,8 @@ export interface AiRunContext<T = unknown> {
   db?: Database;
   /** The code path placing the call — `suggestCategory`, `select`, … */
   operation: string;
+  /** Correlates calls emitted while one durable job is executing. */
+  job?: { kind: string; id: string } | null;
   entity?: { entityType: string; entityId: string } | null;
   /** Whether the *caller's* own cache (AiAnalysis) hit, for the usage row. */
   cacheStatus?: "hit" | "miss" | "none";
@@ -120,6 +122,8 @@ export function planStructuredRun<T = unknown>(
           db: ctx.db,
           feature: spec.feature,
           operation: ctx.operation,
+          jobKind: ctx.job?.kind ?? null,
+          jobId: ctx.job?.id ?? null,
           cacheStatus: ctx.cacheStatus ?? "none",
           entity: ctx.entity ?? null,
         })

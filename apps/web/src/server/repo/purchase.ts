@@ -60,10 +60,12 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   image,
+  importSourceClaim,
   ledgerSourceClaim,
   purchase,
   purchaseImage,
   purchaseProduct,
+  purchasePaymentEvidence,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -149,6 +151,18 @@ import {
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
+  "ImportSourceClaim.purchaseId": {
+    code: "preserve-import-claim",
+    effect: "preserve",
+    description:
+      "Source claims remain as replay tombstones when an imported purchase is removed.",
+  },
+  "PurchasePaymentEvidence.purchaseId": {
+    code: "delete-payment-evidence",
+    effect: "hard-delete",
+    description:
+      "Captured payment evidence has no meaning without its purchase.",
+  },
   "Expense.purchaseId": {
     code: "clear-live-fk-with-audit",
     effect: "detach",
@@ -176,6 +190,16 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
+  "ImportSourceClaim.purchaseId": {
+    code: "repoint-import-claim",
+    effect: "repoint",
+    description: "Source claims follow the surviving purchase.",
+  },
+  "PurchasePaymentEvidence.purchaseId": {
+    code: "repoint-payment-evidence",
+    effect: "repoint",
+    description: "Captured payment evidence follows the surviving purchase.",
+  },
   "Expense.purchaseId": {
     code: "repoint-live-fk-with-audit",
     effect: "repoint",
@@ -251,6 +275,10 @@ const purchaseVendorShortcode = correlated<string>(
   `(SELECT v."shortcode" FROM "Vendor" v WHERE v."id" = "Purchase"."vendorId")`,
 );
 
+const purchaseVendorAccountShortcode = correlated<string | null>(
+  `(SELECT va."shortcode" FROM "VendorAccount" va WHERE va."id" = "Purchase"."vendorAccountId" AND va."deletedAt" IS NULL)`,
+);
+
 const purchaseVendorOrderUrlTemplate = correlated<string | null>(
   `(SELECT v."orderUrlTemplate" FROM "Vendor" v
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
@@ -277,6 +305,7 @@ const purchaseColumns = {
   updatedAt: purchase.updatedAt,
   vendorName: purchaseVendorName,
   vendorShortcode: purchaseVendorShortcode,
+  vendorAccountShortcode: purchaseVendorAccountShortcode,
   vendorOrderUrlTemplate: purchaseVendorOrderUrlTemplate,
   vendorLogoKey: purchaseVendorLogoKey,
   expenseCount: purchaseExpenseCount,
@@ -299,6 +328,7 @@ type PurchaseRow = {
   updatedAt: Date;
   vendorName: string | null;
   vendorShortcode: string;
+  vendorAccountShortcode: string | null;
   vendorOrderUrlTemplate: string | null;
   vendorLogoKey: string | null;
   expenseCount: number;
@@ -317,6 +347,9 @@ const dbPurchaseToAPI = (
 ): PurchaseOut => ({
   id: parseShortcodeFor("purchase", row.shortcode),
   vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
+  vendorAccountId: row.vendorAccountShortcode
+    ? parseShortcodeFor("vendorAccount", row.vendorAccountShortcode)
+    : null,
   orderId: row.orderId,
   displayLabel: row.displayLabel,
   date: row.date,
@@ -770,8 +803,12 @@ export const createPurchase = async (
 ): Promise<{ output: PurchaseOut; entityId: PurchaseId }> => {
   const id = await withTransaction(db, async (tx) => {
     const vendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
+    const vendorAccountId = data.vendorAccountId
+      ? await resolveOrThrow(tx, "vendorAccount", data.vendorAccountId)
+      : null;
     const created = await insertWithShortcode(tx, "purchase", {
       vendorId,
+      vendorAccountId,
       orderId: data.orderId?.trim() || null,
       displayLabel: data.displayLabel?.trim() || null,
       date: data.date,
@@ -822,6 +859,12 @@ export const updatePurchase = async (
     if (data.vendorId !== undefined) {
       resolvedVendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
     }
+    const resolvedVendorAccountId =
+      data.vendorAccountId === undefined
+        ? undefined
+        : data.vendorAccountId === null
+          ? null
+          : await resolveOrThrow(tx, "vendorAccount", data.vendorAccountId);
 
     // This is the one writer that can move BOTH halves of the partial-unique
     // `(vendorId, orderId)` key, so it is the one that can collide. Two charges
@@ -873,6 +916,7 @@ export const updatePurchase = async (
       purchase,
       buildPartialUpdateValues({
         vendorId: resolvedVendorId,
+        vendorAccountId: resolvedVendorAccountId,
         orderId:
           data.orderId === undefined ? undefined : data.orderId?.trim() || null,
         displayLabel:
@@ -1548,22 +1592,22 @@ export const foldChargeInto = async (
   // Duplicate document/product links collapse instead of aborting the merge.
   await moveChargeImages(tx, deadId, survivorId);
   await moveChargeProducts(tx, deadId, survivorId);
+  await tx
+    .update(importSourceClaim)
+    .set({ purchaseId: survivorId, updatedAt: new Date() })
+    .where(eq(importSourceClaim.purchaseId, deadId));
+  await tx
+    .update(purchasePaymentEvidence)
+    .set({ purchaseId: survivorId, updatedAt: new Date() })
+    .where(eq(purchasePaymentEvidence.purchaseId, deadId));
 
-  // Evidence-changing invariant: this fold just re-pointed Expenses,
-  // FinancialTransactions, and documents onto the survivor — the exact class
-  // of change `linkExpensesToPurchase` and `splitExpense` already invalidate
-  // stored exceptions for. Bumping `updatedAt` makes an exception's
-  // `check:updatedAt` fingerprint stop matching, so a stale
-  // `paperwork_mismatch`/`settlement_reference`/etc. exception reports STALE
-  // instead of silently staying "active" against evidence that moved out from
-  // under it. Unconditional — even when `carried` above was empty (both
-  // purchases already fully populated, so no column changed on the survivor
-  // row itself), the lines still moved, which is real evidence movement on its
-  // own and must still invalidate the survivor's exceptions. Also touches the
-  // products behind any moved expense: a purchase-level check can read through
-  // to a product (`amazon_asin`'s vendor lookup), and a product-level
-  // exception is fingerprinted against `Product.updatedAt`, not
-  // `Purchase.updatedAt`, so it needs its own bump.
+  // Evidence-changing invariant: this fold re-points Expenses,
+  // FinancialTransactions, and documents onto the survivor. The next quality
+  // read recomputes each affected check's input fingerprint, so its exception
+  // becomes stale even though the survivor's own scalar fields may not change.
+  // Retain this touch for cache freshness and the existing mutation contract;
+  // it is no longer the invalidation mechanism. The linked Products also need
+  // the touch because their quality evidence can read through moved Expenses.
   const movedExpenseProducts =
     moved.length > 0
       ? await tx.query.expense.findMany({
@@ -1884,6 +1928,11 @@ const deletePurchasesWithPolicy = async (
       }
     }
 
+    await tx
+      .update(importSourceClaim)
+      .set({ purchaseId: null, updatedAt: new Date() })
+      .where(inArray(importSourceClaim.purchaseId, ids));
+
     // `{actor}`, not a caller-owned buffer: the detach `update` entries above
     // were already flushed, and the delete entries must follow them.
     const { detachedImageKeys, deletedImageShortcodes, deleted } =
@@ -1893,6 +1942,11 @@ const deletePurchasesWithPolicy = async (
         removal: "soft",
         actor,
         children: [
+          {
+            table: purchasePaymentEvidence,
+            parentColumns: [purchasePaymentEvidence.purchaseId],
+            mode: "hard",
+          },
           {
             table: purchaseProduct,
             parentColumns: [purchaseProduct.purchaseId],

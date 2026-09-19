@@ -31,6 +31,7 @@ filter:
     - image.markUploaded
     - image.recordAnalysis
     - image.setPerceptualHashes
+    - image.uploadDocument
     - image.uploadImage
     - inventory.findDuplicates
     - inventory.getByLocationIds
@@ -48,6 +49,8 @@ filter:
     - problems.getCounts
     - product.findOrCreateByCode
     - product.findOrCreateByUPC
+    - purchaseImport.listReceiptHunts
+    - purchaseImport.submitReceiptEvidence
     - recommendations.forEntity
     - resources.expense.create
     - resources.expense.get
@@ -122,6 +125,10 @@ filter:
     - resources.vendor.get
     - resources.vendor.list
     - resources.vendor.update
+    - resources.vendorAccount.create
+    - resources.vendorAccount.get
+    - resources.vendorAccount.list
+    - resources.vendorAccount.update
     - resources.wish.create
     - resources.wish.get
     - resources.wish.list

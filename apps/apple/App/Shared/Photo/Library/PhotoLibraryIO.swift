@@ -212,11 +212,14 @@ actor PhotoLibraryIO {
             for: assets, targetSize: Self.targetSize, contentMode: .aspectFit, options: nil)
     }
 
-    func file(for asset: PHAsset, progress: (@Sendable (Double) -> Void)? = nil) async throws -> PhotoFile {
+    func file(
+        for asset: PHAsset, network: Bool = true,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> PhotoFile {
         let options = PHImageRequestOptions()
         options.version = .current
         options.deliveryMode = .highQualityFormat
-        options.isNetworkAccessAllowed = true
+        options.isNetworkAccessAllowed = network
         options.progressHandler = { value, _, _, _ in progress?(value) }
         let request = PhotoRequest<PhotoFile>()
         return try await withTaskCancellationHandler {

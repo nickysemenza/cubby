@@ -77,6 +77,7 @@ export const makeProduct = (
   externalIds: [],
   dataQuality: {
     status: "complete",
+    score: 100,
     facets: [
       { name: "identity", status: "complete", gaps: [] },
       { name: "provenance", status: "complete", gaps: [] },

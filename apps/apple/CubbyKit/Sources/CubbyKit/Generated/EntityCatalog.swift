@@ -1341,6 +1341,11 @@ public enum EntityCatalog {
       FieldDescriptor(key: "website", columnId: nil, label: "Website", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: "https://…", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: "external-link", mobileSlot: "meta", mobilePriority: 30),
       FieldDescriptor(key: "orderUrlTemplate", columnId: nil, label: "Order URL", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "notes", columnId: nil, label: "Notes", kind: .text, nullable: true, reference: nil, controlKind: .textarea, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "orderEvidence", columnId: nil, label: "Order evidence", kind: .`enum`, nullable: true, reference: nil, controlKind: .select, controlSection: "details", controlOptions: [LabeledOption(value: "online_account", label: "Online account"), LabeledOption(value: "receipt_only", label: "Receipt only"), LabeledOption(value: "not_expected", label: "Not expected")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "orderEmailSenders", columnId: nil, label: "Order email senders", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "browserDomains", columnId: nil, label: "Browser domains", kind: .textArray, nullable: false, reference: nil, controlKind: .specialized, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "agentHints", columnId: nil, label: "Import hints", kind: .json, nullable: false, reference: nil, controlKind: .specialized, controlSection: "details", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "returnWindowDays", columnId: nil, label: "Return window", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "details", controlOptions: nil, placeholder: "Days", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "id", columnId: nil, label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "purchaseCount", columnId: nil, label: "Purchases", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: "meta", mobilePriority: 20),
       FieldDescriptor(key: "spend", columnId: nil, label: "Spend", kind: .number, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: "signedCurrency", mobileSlot: "trailing", mobilePriority: 5),
@@ -1392,7 +1397,7 @@ public enum EntityCatalog {
       heroImages: false,
       heroActions: ["edit"],
       detailSections: [
-        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "website", "orderUrlTemplate", "notes", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"])),
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["name", "website", "orderUrlTemplate", "orderEvidence", "orderEmailSenders", "browserDomains", "returnWindowDays", "agentHints", "notes", "purchaseCount", "spend", "latestPurchaseDate", "createdAt", "updatedAt"])),
         DetailSection(id: "purchases", title: "Purchases", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "purchases", filterDescriptor: "vendor", columns: ["displayLabel", "orderId", "date", "statedTotal", "expenseCount"], sort: SectionSort(field: "date", direction: .desc), limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "purchased-products", title: "Purchased products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.vendors", columns: ["name", "manufacturer", "category", "expenseTotal"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "projects", title: "Projects", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "projects", filterDescriptor: "vendorId", columns: ["name", "status", "kind"], sort: nil, limit: nil, hideWhenEmpty: false))),
@@ -1426,6 +1431,7 @@ public enum EntityCatalog {
     fields: [
       FieldDescriptor(key: "vendorId", columnId: "vendor", label: "Vendor", kind: .identifier, nullable: false, reference: FieldReference(entity: .vendor, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 0, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "orderId", columnId: nil, label: "Order #", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "identity", controlOptions: nil, placeholder: "Vendor order / receipt #", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 1, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendorAccountId", columnId: nil, label: "Vendor account", kind: .identifier, nullable: true, reference: FieldReference(entity: .vendorAccount, multiple: false), controlKind: .specialized, controlSection: "identity", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "displayLabel", columnId: nil, label: "Display label", kind: .text, nullable: true, reference: nil, controlKind: .text, controlSection: "identity", controlOptions: nil, placeholder: "e.g. pocket hole jig + bits", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 2, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "date", columnId: nil, label: "Date", kind: .date, nullable: false, reference: nil, controlKind: .date, controlSection: "schedule", controlOptions: nil, placeholder: nil, initial: "today", inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 3, format: "plainDate", mobileSlot: "meta", mobilePriority: 30),
       FieldDescriptor(key: "statedTotal", columnId: nil, label: "Stated total", kind: .number, nullable: true, reference: nil, controlKind: .number, controlSection: "main", controlOptions: nil, placeholder: "What the receipt says", initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: 4, format: "currency", mobileSlot: "trailing", mobilePriority: 1),
@@ -1486,6 +1492,7 @@ public enum EntityCatalog {
     ],
     relations: [
       RelationDescriptor(key: "vendor", label: "Vendor", target: .vendor, cardinality: .one),
+      RelationDescriptor(key: "vendor-account", label: "Vendor account", target: .vendorAccount, cardinality: .one),
       RelationDescriptor(key: "images", label: "Images", target: .image, cardinality: .many),
       RelationDescriptor(key: "financial-transactions", label: "Financial transactions", target: .financialTransaction, cardinality: .many),
       RelationDescriptor(key: "expenses", label: "Expenses", target: .expense, cardinality: .many),
@@ -1503,7 +1510,7 @@ public enum EntityCatalog {
         DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "purchaseId", columns: ["name", "cost", "date", "lineKind", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.purchases", columns: ["name", "manufacturer", "category", "price"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "project-allocation", title: "Project allocation", placement: .primary, collapsed: false, kind: .slot),
-        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["vendorId", "orderId", "displayLabel", "date", "statedTotal", "notes"])),
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["vendorId", "vendorAccountId", "orderId", "displayLabel", "date", "statedTotal", "notes"])),
         DetailSection(id: "reconciliation", title: "Reconciliation", placement: .supporting, collapsed: false, kind: .slot),
         DetailSection(id: "financial-settlement", title: "Financial settlement", placement: .supporting, collapsed: false, kind: .slot)
       ],
@@ -2133,6 +2140,70 @@ public enum EntityCatalog {
     )
   )
 
+  private static let vendorAccountDescriptor: EntityDescriptor =
+  EntityDescriptor(
+    key: .vendorAccount,
+    singular: "Vendor Account",
+    plural: "Vendor Accounts",
+    basePath: "vendor-accounts",
+    shortcodePrefix: "VACCT-",
+    titleField: "label",
+    domain: .finance,
+    sfSymbol: "person.badge.key",
+    emoji: "🔑",
+    searchable: false,
+    primarySearch: nil,
+    timeline: nil,
+    fields: [
+      FieldDescriptor(key: "label", columnId: nil, label: "Label", kind: .text, nullable: false, reference: nil, controlKind: .text, controlSection: "main", controlOptions: nil, placeholder: "Household vendor login", initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendorId", columnId: "vendorName", label: "Vendor", kind: .identifier, nullable: false, reference: FieldReference(entity: .vendor, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "ledgerPartyId", columnId: "ledgerPartyName", label: "Member", kind: .identifier, nullable: false, reference: FieldReference(entity: .ledgerParty, multiple: false), controlKind: .specialized, controlSection: "main", controlOptions: nil, placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: true, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "status", columnId: nil, label: "Status", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "active", label: "Active"), LabeledOption(value: "paused_auth", label: "Sign-in needed"), LabeledOption(value: "paused_offline", label: "Mac offline"), LabeledOption(value: "disabled", label: "Disabled")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "browser", columnId: nil, label: "Browser", kind: .`enum`, nullable: false, reference: nil, controlKind: .select, controlSection: "main", controlOptions: [LabeledOption(value: "chrome", label: "Chrome"), LabeledOption(value: "safari", label: "Safari")], placeholder: nil, initial: nil, inCreate: true, requiredOnCreate: false, inUpdate: true, showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "cursor", columnId: nil, label: "Cursor", kind: .json, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "lastRunAt", columnId: nil, label: "Last Run At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: "timestamp", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "lastSuccessAt", columnId: nil, label: "Last Success At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: true, showInDetail: true, detailOrder: nil, format: "timestamp", mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "vendorName", columnId: nil, label: "Vendor Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "ledgerPartyName", columnId: nil, label: "Ledger Party Name", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "id", columnId: nil, label: "Id", kind: .identifier, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "createdAt", columnId: nil, label: "Created At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "updatedAt", columnId: nil, label: "Updated At", kind: .timestamp, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "shortcode", columnId: nil, label: "Shortcode", kind: .text, nullable: false, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "deletedAt", columnId: nil, label: "Deleted At", kind: .timestamp, nullable: true, reference: nil, controlKind: nil, controlSection: nil, controlOptions: nil, placeholder: nil, initial: nil, inCreate: false, requiredOnCreate: false, inUpdate: false, showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil)
+    ],
+    filters: [
+      FilterDescriptor(columnId: "label", urlKey: "q", kind: .text, placeholder: "Search vendor accounts...", label: nil, options: nil, wire: .param(name: "search"), targetEntity: nil),
+      FilterDescriptor(columnId: "vendorId", urlKey: "vendorId", kind: .idMulti, placeholder: "Filter by vendor...", label: nil, options: nil, wire: .param(name: "vendorId"), targetEntity: .vendor),
+      FilterDescriptor(columnId: "ledgerPartyId", urlKey: "ledgerPartyId", kind: .idMulti, placeholder: "Filter by member...", label: nil, options: nil, wire: .param(name: "ledgerPartyId"), targetEntity: .ledgerParty),
+      FilterDescriptor(columnId: "status", urlKey: "status", kind: .multiselect, placeholder: "Filter by status...", label: nil, options: [LabeledOption(value: "active", label: "Active"), LabeledOption(value: "paused_auth", label: "Sign-in needed"), LabeledOption(value: "paused_offline", label: "Mac offline"), LabeledOption(value: "disabled", label: "Disabled")], wire: .param(name: "status"), targetEntity: nil),
+      FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "createdFrom", to: "createdTo", presence: nil), targetEntity: nil),
+      FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [LabeledOption(value: "30d", label: "Last 30 days"), LabeledOption(value: "90d", label: "Last 90 days"), LabeledOption(value: "ytd", label: "Year to date"), LabeledOption(value: "1y", label: "Last 12 months")], wire: .range(from: "updatedFrom", to: "updatedTo", presence: nil), targetEntity: nil)
+    ],
+    relations: [
+      RelationDescriptor(key: "vendor", label: "Vendor", target: .vendor, cardinality: .one),
+      RelationDescriptor(key: "ledger-party", label: "Member", target: .ledgerParty, cardinality: .one)
+    ],
+    presentation: EntityPresentation(
+      detailVariant: .standard,
+      heroChip: nil,
+      heroStats: [],
+      heroBreadcrumb: nil,
+      heroImages: false,
+      heroActions: ["edit"],
+      detailSections: [
+        DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["label", "vendorId", "ledgerPartyId", "status", "browser", "lastRunAt", "lastSuccessAt", "createdAt", "updatedAt"]))
+      ],
+      listViews: [.table],
+      shelfSubtitle: [],
+      listActions: ["delete"],
+      timelineFields: [],
+      lifecycle: nil,
+      editSections: nil,
+      readOnlyOnUpdate: [],
+      readOnlyWhen: []
+    )
+  )
+
   public static let all: [EntityDescriptor] = [
     productDescriptor,
     recipeDescriptor,
@@ -2155,6 +2226,7 @@ public enum EntityCatalog {
     imageDescriptor,
     plantingDescriptor,
     gardenEntryDescriptor,
+    vendorAccountDescriptor,
   ]
 
   private static let byKey: [EntityKey: EntityDescriptor] = Dictionary(

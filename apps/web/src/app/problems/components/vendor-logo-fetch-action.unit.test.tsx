@@ -20,6 +20,16 @@ const vendor = {
 const fetchedVendor = vendorOut.parse({
   ...vendor,
   orderUrlTemplate: null,
+  orderEvidence: null,
+  orderEmailSenders: [],
+  browserDomains: [],
+  agentHints: {
+    ordersListUrl: null,
+    pagination: null,
+    orderLinkPattern: null,
+    notes: [],
+  },
+  returnWindowDays: null,
   notes: null,
   purchaseCount: 0,
   spend: 0,

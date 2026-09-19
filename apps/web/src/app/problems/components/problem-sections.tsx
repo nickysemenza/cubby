@@ -8,6 +8,7 @@ import {
   type CoverageTotals,
   type FinancialTransactionAllocationDefect,
   type KitCountedTwice,
+  type ImportFindingProblem,
   type LabelVariant,
   type NegativeExpectedQuantity,
   type ProblemKey,
@@ -70,6 +71,7 @@ import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
 import { maintenance } from "~/lib/maintenance.functions";
 import { countLabel } from "~/lib/pluralize";
+import { problems as problemOperations } from "~/lib/problems.functions";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 
@@ -363,6 +365,40 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
       <Download className="mr-1 size-3" />
       {apply.isPending ? "Applying…" : "Apply"}
     </Button>
+  );
+}
+
+function ImportFindingActions({ finding }: { finding: ImportFindingProblem }) {
+  const resolve = useActionMutation({
+    mutationFn: problemOperations.resolveImportFinding.mutationOptions,
+    success: (result) =>
+      result.status === "applied"
+        ? "Applied import correction"
+        : "Dismissed import finding",
+  });
+  const canApply =
+    finding.proposedFix !== null &&
+    finding.proposedFix.kind !== "receive_purchase";
+  return (
+    <Row className="gap-2">
+      {canApply ? (
+        <Button
+          size="sm"
+          onClick={() => resolve.mutate({ id: finding.id, action: "apply" })}
+          disabled={resolve.isPending}
+        >
+          {resolve.isPending ? "Applying…" : "Apply fix"}
+        </Button>
+      ) : null}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => resolve.mutate({ id: finding.id, action: "dismiss" })}
+        disabled={resolve.isPending}
+      >
+        Dismiss
+      </Button>
+    </Row>
   );
 }
 
@@ -808,6 +844,22 @@ type SectionsClaimingEveryCoverageKey<
  * the weld below reads back out of it.
  */
 const DECLARED_SECTIONS = [
+  section({
+    id: "import-findings",
+    label: "Purchase imports",
+    select: (p) => p.importFindings,
+    problemKeys: ["importFindings"],
+    icon: AlertTriangle,
+    renderItem: (finding) => ({
+      key: finding.id,
+      title: finding.summary,
+      subtitle: `${finding.kind.replaceAll("_", " ")} · ${formatDateWithYear(finding.createdAt.toISOString().slice(0, 10))}`,
+      route: finding.purchaseId
+        ? entityDetailLink("purchase", finding.purchaseId)
+        : undefined,
+      customActions: <ImportFindingActions finding={finding} />,
+    }),
+  }),
   section({
     id: "duplicates",
     label: "Duplicates",

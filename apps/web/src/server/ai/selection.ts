@@ -87,6 +87,8 @@ const productionAiSelectionPort: AiSelectionPort = {
 export interface AiSelectionOutcome<C> {
   selected: C | null;
   confidence: Confidence;
+  /** Jev's calibrated probability, unavailable for overflow chat picks. */
+  probability: number | null;
   /** Empty for a decision-tier pick, which writes no prose. */
   reasoning: string;
 }
@@ -117,6 +119,7 @@ export async function runAiSelection<C>(
     return {
       selected: null,
       confidence: "low",
+      probability: null,
       reasoning: "No candidates were available to choose from.",
     };
   }
@@ -137,6 +140,7 @@ export async function runAiSelection<C>(
           ? null
           : (shown.find((c) => normalizeId(spec.idOf(c)) === wanted) ?? null),
       confidence: result.confidence,
+      probability: null,
       reasoning: result.reasoning,
     };
   }
@@ -155,6 +159,7 @@ export async function runAiSelection<C>(
         ? null
         : (shown[result.selectedIndex] ?? null),
     confidence: result.confidence,
+    probability: result.probability,
     reasoning: "",
   };
 }

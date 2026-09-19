@@ -32,6 +32,8 @@ export const env = createEnv({
     E2E_AUTH_TEST_MODE: z.enum(["true", "false"]).default("false"),
     AI_GATEWAY_API_KEY: z.string().min(1).optional(),
     NOTION_API_KEY: z.string().min(1).optional(),
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     PORT: z.coerce.number().int().positive().optional(),
   },
 
@@ -60,6 +62,8 @@ export const env = createEnv({
     E2E_AUTH_TEST_MODE: process.env.E2E_AUTH_TEST_MODE,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
     NOTION_API_KEY: process.env.NOTION_API_KEY,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     PORT: process.env.PORT,
   },
 

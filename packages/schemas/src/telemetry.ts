@@ -44,6 +44,11 @@ export const aiUsageTelemetrySchema = z.strictObject({
   provider: z.string().min(1),
   model: z.string().min(1),
   operation: z.string().min(1),
+  // A durable import/audit job can issue several model calls. Keep the
+  // correlation optional so queue messages from the preceding deployment
+  // continue to validate and land as ungrouped historical telemetry.
+  jobKind: z.string().min(1).nullable().optional(),
+  jobId: z.string().min(1).nullable().optional(),
   inputTokens: z.number().int().nonnegative().nullable(),
   outputTokens: z.number().int().nonnegative().nullable(),
   // Prompt-cache token counts, when the provider reports them. They are
