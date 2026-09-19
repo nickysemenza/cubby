@@ -493,6 +493,8 @@ jobs:
           cache-workspaces: |
             recipebridge -> target
             cubby-ffi -> target
+      - name: Install iOS Rust targets
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "false"
