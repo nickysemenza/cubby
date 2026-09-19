@@ -36,6 +36,20 @@ describe("readReferenceField", () => {
     });
   });
 
+  it("links a nested reference when the storage field has no read key", () => {
+    expect(
+      readReferenceField(
+        {
+          location: { id: "LOC-WORK", name: "Workshop" },
+        },
+        field("inventory", "locationId"),
+      ),
+    ).toEqual({
+      entity: "location",
+      items: [{ id: "LOC-WORK", name: "Workshop" }],
+    });
+  });
+
   // Regression: recipe `meals` references meal but reads `mealCount`; parsing
   // that number as shortcodes crashed every ingredient page listing a recipe.
   it("yields no reference for a count-bearing read key so it renders as a scalar", () => {

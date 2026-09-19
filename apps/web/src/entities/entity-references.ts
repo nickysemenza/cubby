@@ -98,11 +98,14 @@ export function readReferenceField<TRecord extends object>(
   // expanded relation never falls through to the scalar identifier parser.
   if (!parsedIds.success && !parsedObject.success && !parsedNested.success)
     return null;
-  const normalizedRaw = parsedIds.success ? parsedIds.data : undefined;
+  const normalizedRaw =
+    parsedIds.success && parsedIds.data !== undefined
+      ? parsedIds.data
+      : undefined;
   const normalizedNested = parsedNested.success
-    ? parsedNested.data
+    ? (parsedNested.data ?? nested)
     : parsedObject.success
-      ? parsedObject.data
+      ? (parsedObject.data ?? nested)
       : nested;
   return {
     entity: reference.entity,
