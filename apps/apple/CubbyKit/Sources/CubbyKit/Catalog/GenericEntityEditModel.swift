@@ -36,13 +36,20 @@ public final class GenericEntityEditModel {
     public private(set) var originalImageOrder: [ImageCode] = []
 
     private let client: CubbyClient
+    /// Create-mode keys to leave unseeded even when `FieldDescriptor.initial` names a default —
+    /// a caller that supplies its own binding for a key (e.g. a photo's capture date) needs the
+    /// field to come up empty when that binding has no value, not silently fall back to the
+    /// field's generic default. Keyed by the caller, never by field or entity name.
+    private let suppressDefaultKeys: Set<String>
 
     public init(
-        descriptor: EntityDescriptor, mode: Mode, client: CubbyClient, original: JSONValue? = nil
+        descriptor: EntityDescriptor, mode: Mode, client: CubbyClient, original: JSONValue? = nil,
+        suppressDefaultKeys: Set<String> = []
     ) {
         self.descriptor = descriptor
         self.mode = mode
         self.client = client
+        self.suppressDefaultKeys = suppressDefaultKeys
         self.draft = [:]
         switch mode {
         case .create(let prefill):
@@ -255,7 +262,9 @@ public final class GenericEntityEditModel {
         for field in visibleFields {
             if let value = prefill[field.key] {
                 seeded[field.key] = value
-            } else if field.initial == "today", field.kind == .date {
+            } else if field.initial == "today", field.kind == .date,
+                !suppressDefaultKeys.contains(field.key)
+            {
                 seeded[field.key] = .string(PlainDate(.now).rawValue)
             } else {
                 seeded[field.key] = .null

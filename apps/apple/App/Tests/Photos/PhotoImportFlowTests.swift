@@ -52,6 +52,73 @@ struct PhotoImportFlowTests {
         #expect(manifest.selectedIDs == [second.id])
     }
 
+    /// A1 regression: `scopedCaptureDate` (and therefore every editor/stage prefill) falls back to
+    /// the whole batch when the selection is empty, exactly like `scopedHeroItems` — the original
+    /// bug read `selectedItems.compactMap(\.capturedAt).min()` directly with no such fallback, so
+    /// deselecting (or an auto-assign, or the analyzer) silently lost the photo's date.
+    @Test func editorPrefillStillCarriesThePhotoDayWhenSelectionIsEmptied() throws {
+        let captured = Date(timeIntervalSince1970: 1_757_500_000)
+        let item = try selection(filename: "dated.jpg", capturedAt: captured)
+        let manifest = PhotoImportManifest(items: [item])
+        manifest.selectedIDs = []
+
+        let option = try #require(
+            manifest.destinationOptions.first {
+                $0.route.kind == .createRelated && $0.route.source == .planting
+            })
+        let source = EntityRow(
+            id: "PLT-0001", title: "Roma", subtitle: nil, imageURL: nil, raw: ["id": "PLT-0001"])
+
+        #expect(manifest.scopedCaptureDate == captured)
+        let body = PhotoRelatedCreateEditor.createPrefill(
+            option: option, source: source, captureDate: manifest.scopedCaptureDate)
+        #expect(body["observedOn"] == .string(PlainDate(captured).rawValue))
+    }
+
+    /// A1 regression: the background analyzer's `apply` may only ever write `assignments`/
+    /// `suggestions` — it must never touch `selectedIDs`, which used to yank the selection out
+    /// from under a photo the person had open in a chooser or editor.
+    @Test func analyzerApplyNeverMutatesSelectedIDs() throws {
+        let item = try selection(filename: "match.jpg")
+        let manifest = PhotoImportManifest(items: [item])
+        manifest.selectedIDs = [item.id]
+        let option = try #require(
+            manifest.destinationOptions.first { $0.route.kind == .`self` && $0.route.choice != .prompt })
+        let row = EntityRow(
+            id: "PRD-9999", title: "Example", subtitle: nil, imageURL: nil,
+            raw: ["id": "PRD-9999", "name": "Example"])
+        let routing = PhotoRoutingCandidate(id: "candidate-1", routeID: option.id, description: row.title)
+        let candidate = PhotoImportManifest.Candidate(option: option, row: row, routing: routing)
+        let decision = PhotoRoutingDecision(
+            photoID: item.id, routeID: option.id, candidateID: routing.id, explanation: "Matched by test")
+
+        manifest.applyRoutingDecisions([decision], candidates: [routing.id: candidate])
+
+        #expect(manifest.selectedIDs == [item.id])
+        #expect(manifest.groups.count == 1)
+    }
+
+    /// A1 (Q7b): an undated photo's capture-date-bound field never gets a value from `createPrefill`
+    /// and `hasOnlyOptionalFields` must not treat it as optional just because its schema default is
+    /// `initial: "today"` — the editor must open and require a real date from the person.
+    @Test func undatedPhotoLeavesObservedOnAbsentAndRequired() throws {
+        let item = try selection(filename: "undated.jpg")
+        let manifest = PhotoImportManifest(items: [item])
+        let option = try #require(
+            manifest.destinationOptions.first {
+                $0.route.kind == .createRelated && $0.route.source == .planting
+            })
+        let source = EntityRow(
+            id: "PLT-0002", title: "Cherokee", subtitle: nil, imageURL: nil, raw: ["id": "PLT-0002"])
+
+        let body = PhotoRelatedCreateEditor.createPrefill(option: option, source: source, captureDate: nil)
+
+        #expect(body["observedOn"] == nil)
+        #expect(
+            !PhotoRelatedCreateEditor.hasOnlyOptionalFields(
+                option: option, source: source, captureDate: nil))
+    }
+
     @Test func stageCreateKeysDraftsByRouteSourceRecordAndDay() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
@@ -325,7 +392,7 @@ struct PhotoImportFlowTests {
         #expect(groups[1].photoIDs == ["meal-1"])
     }
 
-    private func selection(filename: String) throws -> PhotoSelectionItem {
+    private func selection(filename: String, capturedAt: Date? = nil) throws -> PhotoSelectionItem {
         let image = try #require(
             CGContext(
                 data: nil, width: 2, height: 2, bitsPerComponent: 8,
@@ -333,7 +400,7 @@ struct PhotoImportFlowTests {
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage())
         let file = try PhotoFile(
             url: URL(fileURLWithPath: "/unused-\(filename)"), filename: filename,
-            contentType: "image/jpeg", size: 1, width: 2, height: 2)
+            contentType: "image/jpeg", size: 1, width: 2, height: 2, capturedAt: capturedAt)
         return PhotoSelectionItem(file: file, preview: image)
     }
 

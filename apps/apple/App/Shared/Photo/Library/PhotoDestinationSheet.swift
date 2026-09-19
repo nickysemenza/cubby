@@ -44,6 +44,9 @@ struct PhotoDestinationSheet: View {
         .task {
             manifest.startAnalysis(client: appModel.client, matches: appModel.photoMatches)
         }
+        // A1: a pushed chooser/editor defers the manifest's focus/selection advance until the
+        // pop back to the review list (see `PhotoImportManifest.isNavigating`).
+        .onChange(of: path) { _, newPath in manifest.isNavigating = !newPath.isEmpty }
         .confirmationDialog(
             "Replace the existing image?", item: $replacement,
             titleVisibility: .visible
@@ -61,7 +64,7 @@ struct PhotoDestinationSheet: View {
         .sheet(item: $createContext) { context in
             PhotoRelatedCreateEditor(
                 mode: .createRelated(option: context.option, source: context.source),
-                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
+                captureDate: manifest.scopedCaptureDate,
                 heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, sourceRow, body in
@@ -73,7 +76,7 @@ struct PhotoDestinationSheet: View {
         .sheet(item: $createSelfContext) { context in
             PhotoRelatedCreateEditor(
                 mode: .createSelf(option: context.option),
-                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
+                captureDate: manifest.scopedCaptureDate,
                 heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, _, body in
@@ -87,7 +90,7 @@ struct PhotoDestinationSheet: View {
                 mode: .createTarget(
                     descriptor: EntityCatalog[context.type], candidates: context.candidates,
                     fallback: context.fallback),
-                captureDate: manifest.selectedItems.compactMap(\.capturedAt).min(),
+                captureDate: manifest.scopedCaptureDate,
                 heroItems: manifest.scopedHeroItems,
                 importManifest: manifest
             ) { option, sourceRow, body in
@@ -97,7 +100,7 @@ struct PhotoDestinationSheet: View {
             }
         }
         .sheet(item: $relatedContext) { context in
-            let captureDate = manifest.selectedItems.compactMap(\.capturedAt).min()
+            let captureDate = manifest.scopedCaptureDate
             PhotoRelatedDestinationChooser(
                 context: context,
                 createOption: manifest.createAlternative(for: context.option),
@@ -531,7 +534,7 @@ struct PhotoDestinationSheet: View {
     /// record and no candidate routes to choose between.
     private func stageOrOpenCreateSelfEditor(_ option: PhotoDestinationOption) {
         guard option.route.enabled else { return }
-        let captureDate = manifest.selectedItems.compactMap(\.capturedAt).min()
+        let captureDate = manifest.scopedCaptureDate
         if PhotoRelatedCreateEditor.hasOnlyOptionalFields(
             option: option, source: nil, captureDate: captureDate)
         {

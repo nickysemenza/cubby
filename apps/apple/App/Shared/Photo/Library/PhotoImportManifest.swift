@@ -10,6 +10,18 @@ final class PhotoImportManifest {
     /// The hero's current item. Drives the default single-photo selection scope (`init`,
     /// `advanceFocusAfterAssignment`); the filmstrip's own focus binding keeps this in sync.
     var focusedItemID: String?
+    /// Set by the sheet from `path.isEmpty` (A1): true while a chooser/editor is pushed on top of
+    /// the review list. Advancing focus/selection while one is open would move the selection out
+    /// from under the photo the person is currently editing there, losing its capture date —
+    /// the advance is deferred until the sheet pops back and drains `pendingFocusAdvance`.
+    var isNavigating = false {
+        didSet {
+            guard !isNavigating, pendingFocusAdvance else { return }
+            pendingFocusAdvance = false
+            advanceFocusAfterAssignment()
+        }
+    }
+    private var pendingFocusAdvance = false
     private var assignments: [String: PhotoDestinationAssignment] = [:]
     private(set) var isCommitting = false
     private(set) var isResolvingSourceRecord = false
@@ -117,6 +129,15 @@ final class PhotoImportManifest {
         var ordered = scoped
         ordered.insert(ordered.remove(at: index), at: 0)
         return ordered
+    }
+
+    /// The capture date every editor/stage call site prefills from — `scopedHeroItems`, not
+    /// `selectedItems`, so an emptied selection (deselect, an auto-assign, the analyzer) still
+    /// falls back to the whole batch instead of losing the date entirely (A1: the observed-date
+    /// bug was every call site reading `selectedItems.compactMap(\.capturedAt).min()` with no
+    /// such fallback).
+    var scopedCaptureDate: Date? {
+        scopedHeroItems.compactMap(\.capturedAt).min()
     }
 
     var needsDestination: [String] {
@@ -339,7 +360,7 @@ final class PhotoImportManifest {
                 ?? type.options.sorted(by: { $0.id < $1.id }).first
         else { return .routePicker }
 
-        let captureDate = selectedItems.compactMap(\.capturedAt).min()
+        let captureDate = scopedCaptureDate
 
         if let pair = relatedPair(for: primary) {
             isResolvingSourceRecord = true
@@ -402,6 +423,14 @@ final class PhotoImportManifest {
     /// only through `makeBatch()` at commit time.
     func createDraftBody(for photoID: String) -> [String: JSONValue]? {
         assignments[photoID]?.createDraft?.body
+    }
+
+    /// Test-observable: exercises the analyzer's `apply` (using the manifest's own current
+    /// generation) without driving the full on-device pipeline (network, Vision, Foundation
+    /// Models). Regression seam for A1: `apply` may only write `assignments`/`suggestions`; it
+    /// must never touch `selectedIDs`.
+    func applyRoutingDecisions(_ decisions: [PhotoRoutingDecision], candidates: [String: Candidate]) {
+        apply(decisions: decisions, candidates: candidates, generation: analysisGeneration)
     }
 
     func analyze(client: CubbyClient, matches: PhotoMatchStore) async {
@@ -587,7 +616,9 @@ final class PhotoImportManifest {
                 evidence: decision.explanation)
             suggestions[decision.photoID] =
                 "\(candidate.row.title) · \(candidate.row.id) · \(decision.explanation)"
-            selectedIDs.remove(decision.photoID)
+            // A1: the background analyzer only ever writes `assignments`/`suggestions`. It must
+            // never touch `selectedIDs` — doing so used to yank the selection out from under a
+            // photo the person had open in a chooser/editor, losing that photo's capture date.
         }
     }
 
@@ -698,11 +729,23 @@ final class PhotoImportManifest {
             advanceFocusAfterAssignment()
             return
         }
+        // A1: re-derive the capture-date binding from the photos actually being staged, exactly
+        // like `stageCreate`'s per-day grouping — `body` may have been prefilled earlier (e.g.
+        // against a since-changed selection) and must not be trusted for this field.
+        var body = body
+        let captureDate = itemsToStage.compactMap(\.capturedAt).min()
+        if let binding = option.route.bindings.first(where: { $0.source == .captureDate }) {
+            if let captureDate {
+                body[binding.field] = .string(PlainDate(captureDate).rawValue)
+            } else {
+                body.removeValue(forKey: binding.field)
+            }
+        }
         let title = "New \(option.descriptor.singular)"
         let draft = PhotoCreateDraft(
             id: "\(option.id):new:\(UUID().uuidString)", route: option.route,
             source: nil, body: body, title: title,
-            captureDate: itemsToStage.compactMap(\.capturedAt).min())
+            captureDate: captureDate)
         let assignment = PhotoDestinationAssignment(
             route: option.route, source: nil, sourceRow: nil, recordID: nil,
             title: title, shortcode: "New", replaceConfirmed: false, evidence: title,
@@ -713,7 +756,12 @@ final class PhotoImportManifest {
 
     /// After every successful move/stage, hand focus and selection to the next unassigned photo
     /// so the following pick applies there instead of re-touching the just-assigned photo(s).
+    /// Deferred while a chooser/editor is pushed (`isNavigating`) — see that property's doc.
     private func advanceFocusAfterAssignment() {
+        guard !isNavigating else {
+            pendingFocusAdvance = true
+            return
+        }
         let next = needsDestination.first
         focusedItemID = next
         selectedIDs = next.map { Set([$0]) } ?? []
@@ -971,7 +1019,8 @@ final class PhotoImportManifest {
         return (best.0, "Suggested: \(EntityCatalog[best.0].plural) · \(best.2)")
     }
 
-    private struct Candidate: Sendable {
+    /// Internal (not `private`) so `applyRoutingDecisions` can build one from a test target.
+    struct Candidate: Sendable {
         let option: PhotoDestinationOption
         let row: EntityRow
         let routing: PhotoRoutingCandidate

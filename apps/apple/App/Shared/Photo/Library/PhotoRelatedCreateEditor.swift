@@ -178,7 +178,8 @@ struct PhotoRelatedCreateEditor: View {
             let created = GenericEntityEditModel(
                 descriptor: descriptor,
                 mode: .create(prefill: createPrefill()),
-                client: appModel.client)
+                client: appModel.client,
+                suppressDefaultKeys: captureDateBoundKeys)
             model = created
         }
     }
@@ -221,6 +222,13 @@ struct PhotoRelatedCreateEditor: View {
 
     private func createPrefill() -> [String: JSONValue] {
         Self.createPrefill(bindings: effectiveBindings, source: source, captureDate: captureDate)
+    }
+
+    /// Fields a `capture-date` binding controls (A1): when `captureDate` is nil, `createPrefill`
+    /// leaves these unset and the field must come up genuinely empty, never silently defaulted
+    /// to today via `FieldDescriptor.initial` — the person must supply a real date.
+    private var captureDateBoundKeys: Set<String> {
+        Set(effectiveBindings.filter { $0.source == .captureDate }.map(\.field))
     }
 
     static func createPrefill(
@@ -272,9 +280,20 @@ struct PhotoRelatedCreateEditor: View {
     static func hasOnlyOptionalFields(
         option: PhotoDestinationOption, source: EntityRow?, captureDate: Date?
     ) -> Bool {
-        option.descriptor.fields
+        let bindings = option.route.bindings
+        return option.descriptor.fields
             .filter { $0.controlKind != nil && $0.inCreate }
-            .filter { renders($0, bindings: option.route.bindings, source: source, captureDate: captureDate) }
-            .allSatisfy { $0.nullable || $0.initial != nil }
+            .filter { renders($0, bindings: bindings, source: source, captureDate: captureDate) }
+            .allSatisfy { field in
+                // A capture-date-bound field renders (i.e. shows in the form) only when there is
+                // no capture date to prefill it with (A1) — that field is never "optional" just
+                // because its schema default is `initial: "today"`; it needs a real photo date.
+                if captureDate == nil,
+                    bindings.contains(where: { $0.field == field.key && $0.source == .captureDate })
+                {
+                    return false
+                }
+                return field.nullable || field.initial != nil
+            }
     }
 }
