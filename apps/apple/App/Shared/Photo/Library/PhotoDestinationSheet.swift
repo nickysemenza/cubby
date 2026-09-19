@@ -331,23 +331,16 @@ struct PhotoDestinationSheet: View {
     /// stacked, a 960pt-wide Mac sheet left the list ~40% of the height with half the width empty.
     @ViewBuilder private var reviewLayout: some View {
         if horizontalSizeClass == .regular {
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    hero(heightCap: (360, 0.4))
-                    HStack {
-                        Text("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        Spacer()
-                        selectAllButton.buttonStyle(.borderless)
-                    }
-                    .padding(.horizontal)
-                    analysisStatus
-                    destinationAction
-                    Spacer(minLength: 0)
+            // A3: a `GeometryReader` at the sheet root gives the column a share of the actual
+            // sheet width instead of a fixed 400pt that was cramped once the Mac sheet started
+            // tracking the (larger) window; `.padding()` keeps the title clear of the top safe
+            // area and the hero clear of the divider, both of which used to run edge-to-edge.
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    sideColumn(width: max(400, geometry.size.width * 0.36))
+                    Divider()
+                    List { manifestListContent }
                 }
-                .frame(width: 400)
-                Divider()
-                List { manifestListContent }
             }
             #if os(macOS)
                 .frame(minWidth: 960, minHeight: 620)
@@ -360,6 +353,25 @@ struct PhotoDestinationSheet: View {
                 List { manifestListContent }
             }
         }
+    }
+
+    /// The regular-width hero/filmstrip/assign-action column, extracted so `reviewLayout` stays
+    /// under the project's type-check budget (apps/apple/AGENTS.md).
+    private func sideColumn(width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            hero(heightCap: (480, 0.5))
+            HStack {
+                Text("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                selectAllButton.buttonStyle(.borderless)
+            }
+            analysisStatus
+            destinationAction
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .frame(width: width)
     }
 
     private var selectAllButton: some View {
