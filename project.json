@@ -66,41 +66,12 @@
       // packages/*) run through their own cached `test` target
       // (targetDefaults above) instead of `pnpm -r --workspace-concurrency=2
       // test`: an aux-untouched run replays from cache instead of competing
-      // with the (uncached, heavier) web Vitest run for CPU.
-      "command": "nx run-many -t test --exclude=cubby-checks --output-style=stream && touch apps/web/.vitest-failures.txt",
-      "cache": true,
-      "dependsOn": ["wasm"],
-      "inputs": [
-        "repo",
-        {
-          "runtime": "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths"
-        },
-        {
-          "dependentTasksOutputFiles": "packages/wasm/**/*"
-        },
-        {
-          "env": "NODE_ENV"
-        },
-        {
-          "env": "TZ"
-        },
-        {
-          "env": "LANG"
-        },
-        {
-          "env": "CUBBY_TEST_SHUFFLE_SEED"
-        },
-        {
-          "env": "CUBBY_TEST_INTEGRATION"
-        },
-        {
-          "env": "VITEST_MAX_WORKERS"
-        }
-      ],
-      "outputs": [
-        "{workspaceRoot}/apps/mcp-apps/dist",
-        "{workspaceRoot}/apps/web/.vitest-failures.txt"
-      ]
+      // with the heavier web Vitest run for CPU. This orchestration target is
+      // deliberately uncached: child targets own their complete cache keys and
+      // output restoration, so an outer replay can never bypass them.
+      "command": "nx run-many -t test --exclude=cubby-checks --output-style=static-failures-only",
+      "cache": false,
+      "dependsOn": ["wasm"]
     },
     "wasm": {
       "command": "pnpm run wasm",

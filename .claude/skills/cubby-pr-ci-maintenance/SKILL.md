@@ -29,16 +29,19 @@ for current commands, mandatory hooks, and local versus hosted gates.
    artifacts as application failures.
 5. Run the failed gate and affected checks according to the validation guide.
    Distinguish fixed failures from unrelated failures and unavailable checks.
-   Refresh against the requested base before the final proof.
+   Read `apps/web/.vitest-failures.txt` instead of repeating a failed tier, run
+   broad validation once per logical revision, and refresh against the
+   requested base before the final proof.
 6. When publication is requested, commit and push the scoped changes through
    the mandatory hooks. Follow the guide's clean-final-commit merge gate; if
    hosted verification is requested, wait for results on that exact commit.
    Report local and hosted evidence separately.
 7. When monitoring is requested, use the host's supported automation and update
    an existing matching monitor where possible. Keep it quiet while the state
-   is unchanged; notify on a meaningful result or required action. Verify the
-   requested completion condition before closing the matching monitor. Merge
-   only when the user has requested it.
+   is unchanged; otherwise use one bounded wait instead of repeatedly streaming
+   the same check state. Notify on a meaningful result or required action.
+   Verify the requested completion condition before closing the matching
+   monitor. Merge only when the user has requested it.
 
 ## Handoff
 

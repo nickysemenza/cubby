@@ -3,17 +3,49 @@
   "name": "@cubby/web",
   "implicitDependencies": ["recipebridge"],
   "targets": {
-    // Package.json infers a "test" target for the fast Vitest projects
-    // (unit/mcp-contract/ui); it spans multiple projects and isn't
-    // scoped narrowly enough for the repo-wide `{projectRoot}` cache default
-    // (targetDefaults in nx.json) to be safe here, so opt back out.
+    // Package.json infers a "test" target for the fast Vitest projects. Its
+    // cache key is intentionally broader than the project-scoped default:
+    // these tests import shared workspace code, generated WASM, ignored env
+    // files, and runtime-sensitive configuration.
     "test": {
-      "cache": false,
+      "cache": true,
       "dependsOn": [
         {
           "projects": ["cubby-checks"],
           "target": "wasm"
         }
+      ],
+      "inputs": [
+        "repo",
+        "sharedGlobals",
+        {
+          "runtime": "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths"
+        },
+        {
+          "dependentTasksOutputFiles": "packages/wasm/**/*"
+        },
+        {
+          "env": "NODE_ENV"
+        },
+        {
+          "env": "TZ"
+        },
+        {
+          "env": "LANG"
+        },
+        {
+          "env": "CUBBY_TEST_SHUFFLE_SEED"
+        },
+        {
+          "env": "CUBBY_TEST_INTEGRATION"
+        },
+        {
+          "env": "VITEST_MAX_WORKERS"
+        }
+      ],
+      "outputs": [
+        "{workspaceRoot}/apps/mcp-apps/dist",
+        "{projectRoot}/.vitest-failures.txt"
       ]
     },
     "postgres": {

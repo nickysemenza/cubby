@@ -182,7 +182,7 @@ jobs:
       matrix:
         include:
           - tier: node
-            args: --project unit --project unit-pure --project mcp-contract
+            args: --project unit --project mcp-contract --project worker-safety
           - tier: ui
             args: --project ui
     steps:

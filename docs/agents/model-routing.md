@@ -22,6 +22,12 @@ explicit user model selection.
   whole-file dumps or screenshots.
 - Have delegated work return the result, commands, duration, relevant output,
   and limitations rather than a transcript.
+- Start a fresh task after a completed PR or deliverable, or when the work
+  changes to a materially different scope. Replaying a day-long history across
+  unrelated follow-up work costs more than a compact handoff.
+- Bound routine shell output to the smallest useful summary (about 4,000 tokens
+  unless the evidence itself requires more), and use one bounded CI wait rather
+  than repeatedly streaming unchanged check state.
 
 ## Cubby application models
 
