@@ -1,4 +1,3 @@
-import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { parseShortcode } from "@cubby/shared";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
@@ -22,6 +21,7 @@ import { columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
 import type { CubbyRow as Row } from "./table-features";
+import type { CubbyColumnMeta } from "./table-meta";
 
 const NUMERIC_CELL = "text-right font-mono tabular-nums";
 const MONO_CELL = "font-mono";
@@ -30,10 +30,16 @@ const dataRowIdentitySchema = z.object({ id: z.string() });
 function relationWorkbenchContent(
   row: RowData,
   rendered: ReactNode,
-  provenance: EntityFieldProvenance | null | undefined,
-  handled: boolean | undefined,
+  meta: CubbyColumnMeta | undefined,
 ): ReactNode {
-  if (handled || !isInspectableFieldProvenance(provenance)) return rendered;
+  const provenance = meta?.provenance;
+  if (
+    meta?.mobile?.slot === "image" ||
+    meta?.provenanceWorkbenchHandled ||
+    !isInspectableFieldProvenance(provenance)
+  ) {
+    return rendered;
+  }
   const rowIdentity = dataRowIdentitySchema.safeParse(row);
   if (!rowIdentity.success) return rendered;
   const parsed = parseShortcode(rowIdentity.data.id);
@@ -90,12 +96,10 @@ function DesktopDataCell<TItem extends RowData>({
         ? { insetInlineEnd: cell.column.getAfter("end") }
         : {};
   const rendered = flexRender(cell.column.columnDef.cell, cell.getContext());
-  const provenance = cell.column.columnDef.meta?.provenance;
   const content = relationWorkbenchContent(
     cell.row.original,
     rendered,
-    provenance,
-    cell.column.columnDef.meta?.provenanceWorkbenchHandled,
+    cell.column.columnDef.meta,
   );
   return (
     <TableCell
