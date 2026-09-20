@@ -10,6 +10,8 @@ import {
   setPerceptualHashesOutputSchema,
   projectImageSummariesInput,
   projectImageSummariesOut,
+  imageAttachExistingInput,
+  imageAttachExistingOutput,
 } from "@cubby/schemas/image";
 import { z } from "zod";
 
@@ -49,6 +51,10 @@ export const imageContract = defineContract("image", {
   update: mutation({
     input: imageBrowserUpdateInput,
     output: imageWithEntitySchema,
+  }),
+  attachExisting: mutation({
+    input: imageAttachExistingInput,
+    output: imageAttachExistingOutput,
   }),
   delete: mutation({
     input: imageBrowserDeleteInput,

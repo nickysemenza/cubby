@@ -33,6 +33,7 @@ import {
 } from "~/server/workflows/household-contribution.server";
 import {
   attachFileWorkflow,
+  attachExistingImageWorkflow,
   createFileUploadWorkflow,
 } from "~/server/workflows/image.server";
 import {
@@ -174,6 +175,10 @@ const callerDomains = {
       (context: CallerContext) =>
       (input: Parameters<typeof attachFileWorkflow>[1]) =>
         attachFileWorkflow(context.db, input),
+    attachExisting:
+      (context: CallerContext) =>
+      (input: Parameters<typeof attachExistingImageWorkflow>[2]) =>
+        attachExistingImageWorkflow(context.db, context.actorContext, input),
     createFileUpload:
       (context: CallerContext) =>
       (input: Parameters<typeof createFileUploadWorkflow>[1]) =>

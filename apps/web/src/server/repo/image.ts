@@ -1,5 +1,6 @@
 /** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
 
+import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type {
@@ -38,6 +39,7 @@ import {
   not,
   or,
   type SQL,
+  type GetColumnData,
   sql,
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -72,6 +74,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
@@ -82,6 +85,8 @@ import {
   executeListQueryWithCount,
   getDb,
   imageJoinBindings,
+  type ImageJoinBinding,
+  type ImageJoinTable,
   isNotDeleted,
   type ListReadIntent,
   nextImageSortOrder,
@@ -91,7 +96,11 @@ import {
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
+import {
+  resolveAllPresent,
+  resolveOrThrow,
+  resolveShortcode,
+} from "~/server/repo/shortcode-resolver";
 import {
   generateUniqueShortcode,
   insertWithShortcode,
@@ -103,6 +112,185 @@ export type AttachableImageRef = Extract<
   EntityRef,
   { entity: AttachableImageEntity }
 >;
+
+const attachExistingWithBinding = async <
+  TTable extends ImageJoinTable,
+  TParentColumn extends PgColumn,
+>(
+  tx: DrizzleTransaction,
+  binding: ImageJoinBinding<TTable, TParentColumn>,
+  parentId: GetColumnData<TParentColumn>,
+  imageId: ImageId,
+  sortOrder: number | undefined,
+): Promise<boolean> => {
+  const joinTable: ImageJoinTable = binding.table;
+  const existing = await tx
+    .select({ deletedAt: sql<Date | null>`${joinTable.deletedAt}` })
+    .from(joinTable)
+    .where(
+      and(eq(binding.parentIdColumn, parentId), eq(joinTable.imageId, imageId)),
+    );
+  if (existing.some((row) => row.deletedAt === null)) return true;
+  const now = new Date();
+  const order = sortOrder ?? (await nextImageSortOrder(tx, binding, parentId));
+  if (sortOrder !== undefined) {
+    // SAFETY: the manifest binding guarantees these dynamic columns exist on every gallery join table.
+    await tx
+      .update(joinTable)
+      .set({ sortOrder: sql`${joinTable.sortOrder} + 1` } as never)
+      .where(
+        and(
+          eq(binding.parentIdColumn, parentId),
+          sql`${joinTable.sortOrder} >= ${order}`,
+          sql`${joinTable.deletedAt} IS NULL`,
+        ),
+      );
+  }
+  if (existing.some((row) => row.deletedAt !== null)) {
+    // SAFETY: the manifest binding guarantees these dynamic columns exist on every gallery join table.
+    await tx
+      .update(joinTable)
+      .set({ deletedAt: null, updatedAt: now, sortOrder: order } as never)
+      .where(
+        and(
+          eq(binding.parentIdColumn, parentId),
+          eq(joinTable.imageId, imageId),
+          isNotNull(joinTable.deletedAt),
+        ),
+      );
+  } else {
+    await tx
+      .insert(binding.table)
+      .values(binding.insertRow(parentId, imageId, order));
+  }
+  return false;
+};
+
+/** Attach an existing uploaded image without moving or re-uploading its bytes. */
+export const attachExistingImageToEntity = async (
+  db: Database,
+  input: {
+    imageId: ImageShortcode;
+    targetId: string;
+    sortOrder?: number;
+  },
+  actor: ActorContext,
+): Promise<{ reused: boolean }> => {
+  const imageId = await resolveOrThrow(db, "image", input.imageId);
+  const target = await resolveShortcode(db, input.targetId);
+  if (!target || !attachableImageEntityId.safeParse(input.targetId).success) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `Target ${input.targetId} is not a live gallery record`,
+    );
+  }
+  // SAFETY: target shortcode validation restricts the resolved live ref to the gallery roster.
+  const entity = target as AttachableImageRef;
+
+  return await withTransaction(db, async (tx) => {
+    await lockAttachableEntity(tx, entity);
+    const [source] = await tx
+      .select({ status: image.status })
+      .from(image)
+      .where(and(eq(image.id, imageId), notDeleted(image)))
+      .for("update");
+    if (!source || source.status !== "UPLOADED") {
+      throw createAppError(
+        "IMAGE_ATTACH_FAILED",
+        `Image ${input.imageId} is not a live uploaded image`,
+      );
+    }
+
+    const now = new Date();
+    const reused = await match(entity)
+      .with({ entity: "product" }, ({ id }) =>
+        attachExistingWithBinding(
+          tx,
+          imageJoinBindings.product,
+          id,
+          imageId,
+          input.sortOrder,
+        ),
+      )
+      .with({ entity: "location" }, ({ id }) =>
+        attachExistingWithBinding(
+          tx,
+          imageJoinBindings.location,
+          id,
+          imageId,
+          input.sortOrder,
+        ),
+      )
+      .with({ entity: "recipe" }, ({ id }) =>
+        attachExistingWithBinding(
+          tx,
+          imageJoinBindings.recipe,
+          id,
+          imageId,
+          input.sortOrder,
+        ),
+      )
+      .with({ entity: "project" }, ({ id }) =>
+        attachExistingWithBinding(
+          tx,
+          imageJoinBindings.project,
+          id,
+          imageId,
+          input.sortOrder,
+        ),
+      )
+      .with({ entity: "purchase" }, ({ id }) =>
+        attachExistingWithBinding(
+          tx,
+          imageJoinBindings.purchase,
+          id,
+          imageId,
+          input.sortOrder,
+        ),
+      )
+      .with({ entity: "gardenEntry" }, ({ id }) =>
+        attachExistingWithBinding(
+          tx,
+          imageJoinBindings.gardenEntry,
+          id,
+          imageId,
+          input.sortOrder,
+        ),
+      )
+      .with({ entity: "meal" }, ({ id }) =>
+        attachExistingWithBinding(
+          tx,
+          imageJoinBindings.meal,
+          id,
+          imageId,
+          input.sortOrder,
+        ),
+      )
+      .with({ entity: "task" }, ({ id }) =>
+        attachExistingWithBinding(
+          tx,
+          imageJoinBindings.task,
+          id,
+          imageId,
+          input.sortOrder,
+        ),
+      )
+      .exhaustive();
+
+    if (!reused) {
+      await touchAttachableEntity(tx, entity, now);
+      await logAuditEntry(tx, actor, {
+        entityType: entity.entity,
+        entityId: entity.id,
+        action: "update",
+        changes: {
+          images: { from: [], to: [input.imageId] },
+        },
+      });
+    }
+    return { reused };
+  });
+};
 
 export const createPendingImageRecord = async (
   db: Database,
@@ -2107,6 +2295,39 @@ const lockAttachableEntity = async (
       `${entity.entity} ${entity.id} not found`,
     );
   }
+};
+
+const touchAttachableEntity = async (
+  tx: DrizzleTransaction,
+  entity: AttachableImageRef,
+  updatedAt: Date,
+): Promise<void> => {
+  await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
+      tx.update(product).set({ updatedAt }).where(eq(product.id, id)),
+    )
+    .with({ entity: "recipe" }, ({ id }) =>
+      tx.update(recipe).set({ updatedAt }).where(eq(recipe.id, id)),
+    )
+    .with({ entity: "location" }, ({ id }) =>
+      tx.update(location).set({ updatedAt }).where(eq(location.id, id)),
+    )
+    .with({ entity: "project" }, ({ id }) =>
+      tx.update(project).set({ updatedAt }).where(eq(project.id, id)),
+    )
+    .with({ entity: "purchase" }, ({ id }) =>
+      tx.update(purchase).set({ updatedAt }).where(eq(purchase.id, id)),
+    )
+    .with({ entity: "gardenEntry" }, ({ id }) =>
+      tx.update(gardenEntry).set({ updatedAt }).where(eq(gardenEntry.id, id)),
+    )
+    .with({ entity: "meal" }, ({ id }) =>
+      tx.update(meal).set({ updatedAt }).where(eq(meal.id, id)),
+    )
+    .with({ entity: "task" }, ({ id }) =>
+      tx.update(task).set({ updatedAt }).where(eq(task.id, id)),
+    )
+    .exhaustive();
 };
 
 const countDisplayableAttachedImages = async (

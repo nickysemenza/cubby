@@ -4,6 +4,8 @@ import {
   attachFileResponse,
   createFileUploadInput,
   createFileUploadResponse,
+  imageAttachExistingInput,
+  imageAttachExistingOutput,
 } from "@cubby/schemas/image";
 import { parseShortcode } from "@cubby/shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -29,6 +31,8 @@ const attachFileInputFields = {
 
 const attachFileItem = z.object(attachFileInputFields);
 type AttachFileItem = z.infer<typeof attachFileItem>;
+
+const attachExistingItem = imageAttachExistingInput;
 
 const ATTACH_FILE_SOURCE_PROSE =
   "Provide the file exactly one of three ways: `url` (an http(s) link the server " +
@@ -87,15 +91,36 @@ export function registerImageTools(server: McpServer) {
   });
 
   registerMcpTool(server, {
+    name: "attach_existing_image",
+    description:
+      `Attach an existing uploaded image to a live gallery record. The image is not re-uploaded; ` +
+      `the target shortcode prefix must name one of ${attachableImageEntity.options.join(", ")}. ` +
+      "Repeated requests are idempotent and restore a previously soft-deleted link.",
+    inputSchema: attachExistingItem,
+    outputSchema: imageAttachExistingOutput,
+    annotations: WRITE_CLOSED,
+    telemetryEntity: (params) => parseShortcode(params.targetId)?.type,
+    handler: async (params, extra) => {
+      const parsed = parseShortcode(params.targetId);
+      const attachable = attachableImageEntity.safeParse(parsed?.type);
+      if (!attachable.success) {
+        throw new Error(
+          `${params.targetId} is not a gallery attachment target; expected ${attachableImageEntity.options.join(", ")}.`,
+        );
+      }
+      return await getCaller(extra).image.attachExisting(params);
+    },
+  });
+
+  registerMcpTool(server, {
     name: "attach_file",
     description:
-      "Attach an image or PDF to a product, recipe, location, project, or " +
+      `Attach an image or PDF to one of ${attachableImageEntity.options.join(", ")} or ` +
       "purchase (one vendor order/receipt event — this is how a receipt or an emailed PDF " +
       "invoice gets filed against the vendor event it documents). Purchase attachments require " +
       "documentKind; order_confirmation, sales_order, invoice, and receipt count as primary evidence. " +
       `${ATTACH_FILE_SOURCE_PROSE} Resolve the ` +
-      "target shortcode first via product, recipe, inventory, ingredient, or location tools; " +
-      "use entity list/get for a project or purchase, or read `purchaseId` from entity get(expense). " +
+      "target shortcode first using the corresponding entity tools. " +
       "`reused: true` in the response means the idempotencyKey matched a file that is " +
       "still attached and nothing was uploaded; `false` means this call stored bytes.",
     // `entityType` is dropped on purpose: a shortcode's prefix already names
@@ -115,8 +140,8 @@ export function registerImageTools(server: McpServer) {
   registerBatchTool(server, {
     name: "attach_files",
     description:
-      "Attach up to 50 files in request order. Each item carries its own entityId, so one call can " +
-      "cover many different products/recipes/locations/projects/purchases — this is the cover-image " +
+      `Attach up to 50 files in request order. Each item carries its own entityId, so one call can ` +
+      `cover many different ${attachableImageEntity.options.join("/")} records — this is the cover-image ` +
       `pass of an enrichment sweep. ${ATTACH_FILE_SOURCE_PROSE} A failed item does not roll back ` +
       "successful items; set idempotencyKey per item so a retry of a partially-failed batch cannot " +
       "double-attach the files that already landed.",

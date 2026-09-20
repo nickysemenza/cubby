@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  attachableImageEntity,
   imageOut,
   initiateUploadWithoutEntitySchema,
   setPerceptualHashesInputSchema,
 } from "./image";
+import { galleryEntities } from "./entity-manifest";
 
 describe("native image metadata", () => {
+  it("derives existing-image targets from the gallery manifest", () => {
+    expect(attachableImageEntity.options).toEqual(galleryEntities);
+    expect(attachableImageEntity.options).toContain("gardenEntry");
+  });
   it("accepts revision-one upload metadata and rejects noncanonical hashes", () => {
     expect(
       initiateUploadWithoutEntitySchema.safeParse({

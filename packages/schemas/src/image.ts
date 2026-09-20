@@ -241,6 +241,24 @@ export const attachableImageEntityId = anyShortcodeSchema(
   attachableImageEntities,
 );
 
+export const imageAttachExistingInput = z.object({
+  imageId: imageShortcode.describe("Existing uploaded image shortcode"),
+  targetId: attachableImageEntityId.describe(
+    "Shortcode of a live gallery record to attach the image to",
+  ),
+  sortOrder: z.number().int().nonnegative().optional(),
+});
+export type ImageAttachExistingInput = z.infer<typeof imageAttachExistingInput>;
+
+export const imageAttachExistingOutput = z.object({
+  imageId: imageShortcode,
+  targetId: attachableImageEntityId,
+  reused: z.boolean(),
+});
+export type ImageAttachExistingOutput = z.infer<
+  typeof imageAttachExistingOutput
+>;
+
 // Field map (not a z.object) so the MCP tool can consume `.shape` directly; the
 // cross-field "exactly one of url/data/uploadId" rule — which JSON Schema can't
 // express — lives in `mcpAttachFileInput`'s refine at the workflow boundary.
