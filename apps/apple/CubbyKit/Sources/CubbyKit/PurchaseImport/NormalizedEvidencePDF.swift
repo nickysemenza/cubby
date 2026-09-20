@@ -54,7 +54,8 @@ public enum NormalizedEvidencePDF {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             "CubbyBrowserEvidence", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent(UUID().uuidString + ".pdf")
+        let url = directory.appendingPathComponent(
+            "normalized-evidence-\(UUID().uuidString).pdf")
         try data.write(to: url, options: .atomic)
         return BrowserLocalEvidence(
             url: url, kind: .normalizedPdf, checksum: sha256(data), contentType: "application/pdf")
@@ -132,7 +133,8 @@ public enum RenderedBrowserEvidencePDF {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             "CubbyBrowserEvidence", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent(UUID().uuidString + ".pdf")
+        let url = directory.appendingPathComponent(
+            "browser-view-\(UUID().uuidString).pdf")
         let width = CGFloat(image.width)
         let height = CGFloat(image.height)
         var mediaBox = CGRect(x: 0, y: 0, width: width, height: height)

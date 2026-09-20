@@ -1,9 +1,11 @@
+import type { EntityId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
-import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { aiUsage, importRun, vendor, vendorAccount } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  listPurchaseImportRuns,
+  resolvePurchaseImportTarget,
+} from "~/server/purchase-import/run-target";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
 export const purchaseImportRunSummary = z.object({
@@ -21,6 +23,7 @@ export const purchaseImportRunSummary = z.object({
   failureCode: z.string().nullable(),
   estimatedCost: z.number(),
 });
+export type PurchaseImportRunSummary = z.infer<typeof purchaseImportRunSummary>;
 
 export const purchaseImportRunsResponse = z.object({
   runs: z.array(purchaseImportRunSummary),
@@ -43,46 +46,28 @@ export const Route = createFileRoute("/api/import/runs")({
             { status: 403 },
           );
         }
-        const runs = await getDb(context.db)
-          .select({
-            id: importRun.id,
-            vendorAccountLabel: vendorAccount.label,
-            vendorName: vendor.name,
-            trigger: importRun.trigger,
-            status: importRun.status,
-            startedAt: importRun.startedAt,
-            endedAt: importRun.endedAt,
-            ordersSeen: importRun.ordersSeen,
-            imported: importRun.imported,
-            updated: importRun.updated,
-            skipped: importRun.skipped,
-            failureCode: importRun.failureCode,
-            estimatedCost: sql<number>`coalesce(sum(${aiUsage.estimatedCost}), 0)`,
-          })
-          .from(importRun)
-          .leftJoin(
-            vendorAccount,
-            and(
-              eq(vendorAccount.id, importRun.vendorAccountId),
-              notDeleted(vendorAccount),
-            ),
-          )
-          .leftJoin(
-            vendor,
-            and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
-          )
-          .leftJoin(
-            aiUsage,
-            and(
-              eq(aiUsage.jobKind, "purchase_import_run"),
-              eq(aiUsage.jobId, sql<string>`${importRun.id}::text`),
-              notDeleted(aiUsage),
-            ),
-          )
-          .where(eq(importRun.ledgerPartyId, party.id))
-          .groupBy(importRun.id, vendorAccount.label, vendor.name)
-          .orderBy(desc(importRun.startedAt))
-          .limit(20);
+        const purchaseShortcode = new URL(request.url).searchParams.get(
+          "purchaseId",
+        );
+        let purchaseId: EntityId<"purchase"> | undefined;
+        if (purchaseShortcode) {
+          purchaseId =
+            (await resolvePurchaseImportTarget(
+              context.db,
+              purchaseShortcode,
+            )) ?? undefined;
+          if (!purchaseId) {
+            return Response.json(
+              { error: "Purchase was not found" },
+              { status: 404 },
+            );
+          }
+        }
+        const runs = await listPurchaseImportRuns(
+          context.db,
+          party.id,
+          purchaseId,
+        );
         return Response.json(
           purchaseImportRunsResponse.parse({
             runs: runs.map((run) => ({

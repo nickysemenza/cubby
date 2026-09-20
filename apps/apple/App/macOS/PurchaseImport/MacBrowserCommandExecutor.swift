@@ -55,6 +55,8 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             script = """
                 tell application "Safari"
                 activate
+                set visible of window id \(ownedWindowID) to true
+                set minimized of window id \(ownedWindowID) to false
                 set index of window id \(ownedWindowID) to 1
                 end tell
                 """
@@ -62,6 +64,8 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             script = """
                 tell application "Google Chrome"
                 activate
+                set visible of window id \(ownedWindowID) to true
+                set minimized of window id \(ownedWindowID) to false
                 set index of window id \(ownedWindowID) to 1
                 end tell
                 """
@@ -71,6 +75,54 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             let bundleIdentifier = browser == .safari ? "com.apple.Safari" : "com.google.Chrome"
             NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first?
                 .activate(options: [.activateAllWindows])
+        }
+    }
+
+    /// Keep the owned browser available to ScreenCaptureKit without stealing focus from the
+    /// user's current app. A minimized window cannot be captured by the on-screen-only path.
+    private func returnOwnedWindowToBackground() async {
+        guard let ownedWindowID else { return }
+        let script: String
+        switch browser {
+        case .safari:
+            script = """
+                tell application "Safari"
+                set visible of window id \(ownedWindowID) to true
+                set minimized of window id \(ownedWindowID) to false
+                set index of window id \(ownedWindowID) to (count of windows)
+                end tell
+                """
+        case .chrome:
+            script = """
+                tell application "Google Chrome"
+                set visible of window id \(ownedWindowID) to true
+                set minimized of window id \(ownedWindowID) to false
+                set index of window id \(ownedWindowID) to (count of windows)
+                end tell
+                """
+        }
+        do {
+            _ = try await appleScript.execute(script, action: "background_window")
+            BrowserBridgeDebugLog.emit(.windowBackgrounded, browser: browser)
+        } catch {
+            BrowserBridgeDebugLog.emit(.windowBackgroundFailed, browser: browser, error: error)
+        }
+    }
+
+    /// Minimize only after the server declares the run terminal.
+    func minimizeOwnedWindow() {
+        guard let ownedWindowID else { return }
+        let script =
+            browser == .safari
+            ? "tell application \"Safari\" to set minimized of window id \(ownedWindowID) to true"
+            : "tell application \"Google Chrome\" to set minimized of window id \(ownedWindowID) to true"
+        Task { [appleScript, browser] in
+            do {
+                _ = try await appleScript.execute(script, action: "minimize_window")
+                BrowserBridgeDebugLog.emit(.windowMinimized, browser: browser)
+            } catch {
+                BrowserBridgeDebugLog.emit(.windowMinimizeFailed, browser: browser, error: error)
+            }
         }
     }
 
@@ -115,17 +167,18 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 guard (1...20).contains(payload.pageCount) else { throw ExecutionFailure.invalidCommand }
                 _ = try await runFixedJavaScript(
                     "window.scrollBy(0, window.innerHeight * \(payload.pageCount)); true;")
+                await returnOwnedWindowToBackground()
                 return .completed(capture: nil)
             case .capture(let payload):
                 let allowedHosts = Set(payload.allowedHosts)
                 let recoveryURL = payload.recoveryURL.flatMap(URL.init(string:))
                 let targetURL = try await prepareCaptureWindow(
                     recoveryURL: recoveryURL, allowedHosts: allowedHosts)
-                return .completed(
-                    capture: try await capture(
-                        command: command, allowedHosts: allowedHosts,
-                        enhancedEvidence: payload.enhancedEvidence,
-                        targetURL: targetURL))
+                let result = try await capture(
+                    command: command, allowedHosts: allowedHosts,
+                    enhancedEvidence: payload.enhancedEvidence, targetURL: targetURL)
+                await returnOwnedWindowToBackground()
+                return .completed(capture: result)
             }
         } catch let failure as BrowserBridgeURLPolicy.Failure {
             return .failed(code: .disallowedURL, message: failure.message, retryable: false)
@@ -140,27 +193,37 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     }
 
     private func navigate(_ url: URL) async throws -> Int {
+        let foregroundApplicationBeforeBrowserWork = NSWorkspace.shared.frontmostApplication
         let target = Self.appleScriptLiteral(url.absoluteString)
+        let windowID: Int
         switch (browser, ownedWindowID) {
-        case (.safari, .some(let windowID)):
+        case (.safari, .some(let existingWindowID)):
             let script =
-                "tell application \"Safari\" to set URL of current tab of window id \(windowID) to \(target)\nreturn \(windowID)"
-            return try await browserWindowID(from: script, action: "navigate")
+                "tell application \"Safari\" to set URL of current tab of window id \(existingWindowID) to \(target)\nreturn \(existingWindowID)"
+            windowID = try await browserWindowID(from: script, action: "navigate")
         case (.safari, .none):
             let script =
                 "tell application \"Safari\"\nmake new document with properties {URL:\(target)}\nreturn id of front window\nend tell"
-            return try await browserWindowID(from: script, action: "navigate")
-        case (.chrome, .some(let windowID)):
+            windowID = try await browserWindowID(from: script, action: "navigate")
+        case (.chrome, .some(let existingWindowID)):
             let script =
-                "tell application \"Google Chrome\" to set URL of active tab of window id \(windowID) to \(target)\nreturn \(windowID)"
-            return try await browserWindowID(from: script, action: "navigate")
+                "tell application \"Google Chrome\" to set URL of active tab of window id \(existingWindowID) to \(target)\nreturn \(existingWindowID)"
+            windowID = try await browserWindowID(from: script, action: "navigate")
         case (.chrome, .none):
-            let windowID = try await createChromeWindow()
-            ownedWindowID = windowID
+            let newWindowID = try await createChromeWindow()
+            ownedWindowID = newWindowID
             let navigateScript =
-                "tell application \"Google Chrome\" to set URL of active tab of window id \(windowID) to \(target)\nreturn \(windowID)"
-            return try await browserWindowID(from: navigateScript, action: "navigate")
+                "tell application \"Google Chrome\" to set URL of active tab of window id \(newWindowID) to \(target)\nreturn \(newWindowID)"
+            windowID = try await browserWindowID(from: navigateScript, action: "navigate")
         }
+        await returnOwnedWindowToBackground()
+        if let foregroundApplicationBeforeBrowserWork,
+            foregroundApplicationBeforeBrowserWork.bundleIdentifier
+                != (browser == .safari ? "com.apple.Safari" : "com.google.Chrome")
+        {
+            foregroundApplicationBeforeBrowserWork.activate()
+        }
+        return windowID
     }
 
     private func browserWindowID(
@@ -304,26 +367,46 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         guard let commandID = command.commandUUID, cancelled.remove(commandID) == nil else {
             throw ExecutionFailure.cancelled
         }
-        var references: [BrowserEvidenceReference]
-        do {
-            references = [try await evidenceUploader.upload(normalized, runID: command.runID)]
-        } catch {
-            throw ExecutionFailure.uploadFailed
+        guard Self.supportsRenderedPDF else {
+            let references: [BrowserEvidenceReference]
+            do {
+                references = [try await evidenceUploader.upload(normalized, runID: command.runID)]
+            } catch {
+                throw ExecutionFailure.uploadFailed
+            }
+            return BrowserPageCapture(
+                sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt, captureVersion: 1,
+                readableText: payload.text, links: Array(links), images: images,
+                evidence: references)
         }
-        if Self.supportsRenderedPDF, let screenshot = try? await captureBrowserScreenshot() {
-            defer { try? FileManager.default.removeItem(at: screenshot.evidence.url) }
-            if enhancedEvidence,
-                let reference = try? await evidenceUploader.upload(
-                    screenshot.evidence, runID: command.runID)
-            {
-                references.append(reference)
+
+        BrowserBridgeDebugLog.emit(.visualCaptureStarted, command: command)
+        let screenshot: BrowserScreenshot
+        let rendered: BrowserLocalEvidence
+        do {
+            screenshot = try await captureBrowserScreenshot()
+            rendered = try RenderedBrowserEvidencePDF.makeFile(from: screenshot.image)
+        } catch {
+            BrowserBridgeDebugLog.emit(.visualCaptureFailed, command: command, error: error)
+            throw ExecutionFailure.captureUnavailable
+        }
+        defer {
+            try? FileManager.default.removeItem(at: screenshot.evidence.url)
+            try? FileManager.default.removeItem(at: rendered.url)
+        }
+
+        var references: [BrowserEvidenceReference] = []
+        do {
+            references.append(try await evidenceUploader.upload(normalized, runID: command.runID))
+            if enhancedEvidence {
+                references.append(
+                    try await evidenceUploader.upload(screenshot.evidence, runID: command.runID))
             }
-            if let rendered = try? RenderedBrowserEvidencePDF.makeFile(from: screenshot.image) {
-                defer { try? FileManager.default.removeItem(at: rendered.url) }
-                if let reference = try? await evidenceUploader.upload(rendered, runID: command.runID) {
-                    references.append(reference)
-                }
-            }
+            references.append(try await evidenceUploader.upload(rendered, runID: command.runID))
+            BrowserBridgeDebugLog.emit(.visualCaptureFinished, command: command)
+        } catch {
+            BrowserBridgeDebugLog.emit(.visualCaptureFailed, command: command, error: error)
+            throw ExecutionFailure.uploadFailed
         }
         return BrowserPageCapture(
             sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt, captureVersion: 1,
@@ -360,7 +443,8 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             "CubbyBrowserEvidence", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent(UUID().uuidString + ".png")
+        let url = directory.appendingPathComponent(
+            "browser-view-\(UUID().uuidString).png")
         try (data as Data).write(to: url, options: .atomic)
         return BrowserScreenshot(
             evidence: BrowserLocalEvidence(
@@ -371,19 +455,26 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
 
     /// ScreenCaptureKit uses CGWindowIDs, while browser Apple Events expose a different window
     /// identifier. Cubby correlates them only when creating its dedicated window: exactly one new
-    /// on-screen window from the selected browser must appear. Ambiguity disables screenshots and
-    /// leaves the normalized PDF as the evidence source.
+    /// on-screen window from the selected browser must appear. Ambiguity disables screenshots.
     private func identifyCreatedCaptureWindow(
         excluding previous: Set<CGWindowID>?
     ) async -> CGWindowID? {
         guard let previous else { return nil }
-        for _ in 0..<3 {
+        for _ in 0..<40 {
             guard let current = await browserCaptureWindowIDs() else { return nil }
             let candidates = current.subtracting(previous)
-            if candidates.count == 1 { return candidates.first }
-            if candidates.count > 1 { return nil }
-            await Task.yield()
+            if candidates.count == 1 {
+                BrowserBridgeDebugLog.emit(.captureWindowCorrelated, browser: browser, count: 1)
+                return candidates.first
+            }
+            if candidates.count > 1 {
+                BrowserBridgeDebugLog.emit(
+                    .captureWindowCorrelationFailed, browser: browser, count: candidates.count)
+                return nil
+            }
+            try? await Task.sleep(for: .milliseconds(250))
         }
+        BrowserBridgeDebugLog.emit(.captureWindowCorrelationFailed, browser: browser, count: 0)
         return nil
     }
 

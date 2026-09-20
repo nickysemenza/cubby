@@ -54,6 +54,7 @@ export default defineEntity({
           columns: ["name", "manufacturer", "category", "price"],
         },
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
+        { kind: "slot", id: "import-runs", title: "Import runs" },
         {
           kind: "fields",
           id: "overview",

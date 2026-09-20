@@ -69,11 +69,14 @@ import {
 } from "~/server/repo/financial-transaction-allocations";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
   decideLineWrite,
   matchCompletePaymentSet,
   type ExistingExpenseSnapshot,
 } from "./writer-policy";
+
+const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 
 const sha256 = async (value: string): Promise<string> => {
   const bytes = new TextEncoder().encode(value);
@@ -425,7 +428,7 @@ async function decideLineIdentities(
           .where(
             and(
               eq(productExternalId.source, source),
-              eq(productExternalId.kind, "sku"),
+              eq(productExternalId.kind, PURCHASE_EXTERNAL_ID_KIND),
               eq(productExternalId.externalId, line.sku),
               notDeleted(productExternalId),
             ),
@@ -538,16 +541,13 @@ async function resolveLineProduct(
   if (decision.productId) {
     const productId = parseEntityId("product", decision.productId);
     if (line.sku) {
-      await tx
-        .insert(productExternalId)
-        .values({
-          productId,
-          source: externalSource(line.productUrl, vendorId),
-          kind: "sku",
-          externalId: line.sku,
-          url: line.productUrl,
-        })
-        .onConflictDoNothing();
+      await learnPurchaseProductExternalId(tx, {
+        productId,
+        source: externalSource(line.productUrl, vendorId),
+        kind: PURCHASE_EXTERNAL_ID_KIND,
+        externalId: line.sku,
+        url: line.productUrl,
+      });
     }
     if (externalIdentity)
       productsByExternalIdentity.set(externalIdentity, productId);
@@ -559,10 +559,10 @@ async function resolveLineProduct(
     manufacturer: "",
   });
   if (line.sku) {
-    await tx.insert(productExternalId).values({
+    await learnPurchaseProductExternalId(tx, {
       productId: created.id,
       source,
-      kind: "sku",
+      kind: PURCHASE_EXTERNAL_ID_KIND,
       externalId: line.sku,
       url: line.productUrl,
     });

@@ -8,11 +8,18 @@ import { RelationshipSummaryTable } from "~/app/_components/relationships/relati
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
+import { StatusText } from "~/components/ui/status-text";
 import { formatCurrency } from "~/lib/utils";
+import {
+  purchaseImportRunsError,
+  purchaseImportRunsResponse,
+  type PurchaseImportRunSummary,
+} from "~/routes/api/import/runs";
 
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
+import { purchaseImportRunDebugHref } from "./purchase-import-links";
 import {
   purchaseReconciliationStatus,
   ReconciliationBadge,
@@ -21,6 +28,76 @@ import {
 import { purchase as purchaseOperations } from "./purchase.functions";
 
 const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
+
+/** Runs are linked through ImportRunMutation, so replay-only source claims do not appear here. */
+export const PurchaseImportRuns: DetailSlotComponent<"purchase"> = ({
+  record: purchase,
+}) => {
+  const runs = useQuery({
+    queryKey: ["purchase-import", "purchase-runs", purchase.id],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/import/runs?purchaseId=${encodeURIComponent(purchase.id)}`,
+      );
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const parsed = purchaseImportRunsError.safeParse(body);
+        throw new Error(
+          parsed.success
+            ? parsed.data.error
+            : "Purchase import runs could not load.",
+        );
+      }
+      return purchaseImportRunsResponse.parse(body).runs;
+    },
+  });
+
+  if (runs.isLoading) return <StatusText>Loading import runs…</StatusText>;
+  if (runs.isError)
+    return <StatusText tone="destructive">{runs.error.message}</StatusText>;
+  const importRuns = runs.data ?? [];
+  if (importRuns.length === 0) {
+    return (
+      <StatusText>
+        No import run has recorded a mutation for this purchase.
+      </StatusText>
+    );
+  }
+  return (
+    <div className="grid gap-3">
+      {importRuns.map((run) => (
+        <PurchaseImportRunSummary key={run.id} run={run} />
+      ))}
+    </div>
+  );
+};
+
+function PurchaseImportRunSummary({ run }: { run: PurchaseImportRunSummary }) {
+  return (
+    <div className="grid gap-1 border-b border-border pb-3 text-sm last:border-0 last:pb-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="font-medium">
+          {run.vendorName ?? run.vendorAccountLabel ?? "Purchase import"}
+        </span>
+        <span className="text-muted-foreground">{run.status}</span>
+      </div>
+      <div className="text-muted-foreground">
+        {new Date(run.startedAt).toLocaleString()} · {run.trigger} ·{" "}
+        {run.ordersSeen} seen · {run.imported} imported · {run.updated} updated
+        · {run.skipped} skipped
+      </div>
+      {run.failureCode ? (
+        <div className="text-destructive">{run.failureCode}</div>
+      ) : null}
+      <a
+        className="w-fit text-xs font-medium text-primary hover:underline"
+        href={purchaseImportRunDebugHref(run.id)}
+      >
+        Open run debug log
+      </a>
+    </div>
+  );
+}
 
 /** Spend on this purchase's lines, rolled up by the project they belong to. */
 export const PurchaseProjectAllocation: DetailSlotComponent<"purchase"> = ({

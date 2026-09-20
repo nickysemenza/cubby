@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Copy, Mail, RefreshCw, Wrench } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -341,6 +341,16 @@ function MemberLoginsCard() {
 }
 
 function PurchaseImportRunsCard() {
+  const [requestedRunId, setRequestedRunId] = useState<string | null>(null);
+  useEffect(() => {
+    const prefix = "#purchase-import-run-";
+    const hash = window.location.hash;
+    setRequestedRunId(
+      hash.startsWith(prefix)
+        ? decodeURIComponent(hash.slice(prefix.length))
+        : null,
+    );
+  }, []);
   const runs = useQuery({
     queryKey: ["purchase-import", "runs"],
     queryFn: async () => {
@@ -358,7 +368,7 @@ function PurchaseImportRunsCard() {
     },
   });
   return (
-    <Card className="max-md:border-x-0">
+    <Card id="purchase-import-runs" className="max-md:border-x-0">
       <CardHeader>
         <CardTitle>Purchase imports</CardTitle>
         <CardDescription>
@@ -413,7 +423,10 @@ function PurchaseImportRunsCard() {
                     <div>{formatCurrency(run.estimatedCost)}</div>
                   </div>
                 </div>
-                <PurchaseImportRunLog runId={run.id} />
+                <PurchaseImportRunLog
+                  runId={run.id}
+                  initialOpen={requestedRunId === run.id}
+                />
               </div>
             ))}
           </Stack>
@@ -425,8 +438,21 @@ function PurchaseImportRunsCard() {
   );
 }
 
-function PurchaseImportRunLog({ runId }: { runId: string }) {
-  const [open, setOpen] = useState(false);
+function PurchaseImportRunLog({
+  runId,
+  initialOpen = false,
+}: {
+  runId: string;
+  initialOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(initialOpen);
+  useEffect(() => {
+    if (!initialOpen) return;
+    setOpen(true);
+    document
+      .getElementById(`purchase-import-run-${runId}`)
+      ?.scrollIntoView({ block: "center" });
+  }, [initialOpen, runId]);
   const log = useQuery({
     queryKey: ["purchase-import", "run-log", runId],
     enabled: open,
@@ -448,53 +474,55 @@ function PurchaseImportRunLog({ runId }: { runId: string }) {
   });
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger
-        render={
-          <button
-            type="button"
-            aria-label={open ? "Close run log" : "Open run log"}
-            className="mt-1 flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    <div id={`purchase-import-run-${runId}`}>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger
+          render={
+            <button
+              type="button"
+              aria-label={open ? "Close run log" : "Open run log"}
+              className="mt-1 flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            />
+          }
+        >
+          <ChevronDown
+            className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`}
           />
-        }
-      >
-        <ChevronDown
-          className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-        Run log
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="mb-1 border border-border bg-muted/40 p-2">
-          <p className="mb-2 text-xs text-muted-foreground">
-            Structured metadata only. Credentials, page text, evidence, and full
-            URLs are never recorded.
-          </p>
-          {log.isLoading ? (
-            <StatusText>Loading run log…</StatusText>
-          ) : log.isError ? (
-            <StatusText tone="destructive">
-              {getErrorMessage(log.error)}
-            </StatusText>
-          ) : log.data?.entries.length ? (
-            <div
-              className="max-h-80 overflow-auto"
-              aria-label="Purchase import run log"
-            >
-              {log.data.entries.map((entry) => (
-                <PurchaseImportRunLogRow key={entry.id} entry={entry} />
-              ))}
-              {log.data.truncated ? (
-                <p className="border-t border-border pt-2 text-xs text-warning">
-                  This view is limited to the first 2,000 events.
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <StatusText>No events were recorded for this run.</StatusText>
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+          Run log
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mb-1 border border-border bg-muted/40 p-2">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Structured metadata only. Credentials, page text, evidence, and
+              full URLs are never recorded.
+            </p>
+            {log.isLoading ? (
+              <StatusText>Loading run log…</StatusText>
+            ) : log.isError ? (
+              <StatusText tone="destructive">
+                {getErrorMessage(log.error)}
+              </StatusText>
+            ) : log.data?.entries.length ? (
+              <div
+                className="max-h-80 overflow-auto"
+                aria-label="Purchase import run log"
+              >
+                {log.data.entries.map((entry) => (
+                  <PurchaseImportRunLogRow key={entry.id} entry={entry} />
+                ))}
+                {log.data.truncated ? (
+                  <p className="border-t border-border pt-2 text-xs text-warning">
+                    This view is limited to the first 2,000 events.
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <StatusText>No events were recorded for this run.</StatusText>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
 

@@ -142,6 +142,15 @@ public enum BrowserBridgeDebugLog {
         case controllerRoster = "controller.roster"
         case controllerStatus = "controller.status"
         case syncRequested = "sync.requested"
+        case windowBackgrounded = "window.backgrounded"
+        case windowBackgroundFailed = "window.background_failed"
+        case windowMinimized = "window.minimized"
+        case windowMinimizeFailed = "window.minimize_failed"
+        case captureWindowCorrelated = "capture.window_correlated"
+        case captureWindowCorrelationFailed = "capture.window_correlation_failed"
+        case visualCaptureStarted = "capture.visual_started"
+        case visualCaptureFinished = "capture.visual_finished"
+        case visualCaptureFailed = "capture.visual_failed"
     }
 
     #if DEBUG

@@ -230,6 +230,7 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         _ completion: BrowserBridgeRunCompletion, accountID: String, generation: UUID
     ) {
         guard generation == self.generation, bridges[accountID] != nil else { return }
+        executors[accountID]?.minimizeOwnedWindow()
         settings?.markRunCompleted(accountID: accountID, runID: completion.runID)
         Task { [notifier = self.notifier] in await notifier.notifyRunCompleted(completion) }
     }
