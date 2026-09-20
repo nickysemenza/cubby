@@ -6,7 +6,7 @@ import type {
   PurchaseImportServiceResult,
 } from "./service";
 
-const operationId = v.pipe(v.string(), v.minLength(1), v.maxLength(256));
+const operationId = v.pipe(v.string(), v.minLength(1), v.maxLength(200));
 const commandId = v.pipe(v.string(), v.minLength(1), v.maxLength(256));
 const earliestAvailableOrderAt = v.pipe(
   v.string(),
@@ -21,6 +21,10 @@ const serviceResult = v.nullable(v.looseObject({}));
 export type PurchaseImportServiceResolver = () => PurchaseImportService;
 
 function stepName(toolName: string, id: string): string {
+  return `${toolName}:${id}`;
+}
+
+function serviceOperationId(toolName: string, id: string): string {
   return `${toolName}:${id}`;
 }
 
@@ -72,7 +76,10 @@ export function purchaseImportTools(
           () =>
             serviceForRun().claimNextWork({
               runId,
-              operationId: data.operationId,
+              operationId: serviceOperationId(
+                "claim-next-work",
+                data.operationId,
+              ),
             }),
         ),
       }),
@@ -101,7 +108,10 @@ export function purchaseImportTools(
           () =>
             serviceForRun().issueBrowserCommand({
               runId,
-              operationId: data.operationId,
+              operationId: serviceOperationId(
+                "browser-command",
+                data.operationId,
+              ),
               command: data.command,
             }),
         );
@@ -117,7 +127,7 @@ export function purchaseImportTools(
       run: async ({ data }) => {
         const output = await serviceForRun().readBrowserCommandResult({
           runId,
-          operationId: data.operationId,
+          operationId: serviceOperationId("browser-command", data.operationId),
         });
         return { output, terminate: pendingResult(output) };
       },
@@ -135,7 +145,10 @@ export function purchaseImportTools(
           () =>
             serviceForRun().importOrderEvidence({
               runId,
-              operationId: data.operationId,
+              operationId: serviceOperationId(
+                "import-order-evidence",
+                data.operationId,
+              ),
               commandId: data.commandId,
             }),
         ),
@@ -162,7 +175,10 @@ export function purchaseImportTools(
           () =>
             serviceForRun().saveNavigationHints({
               runId,
-              operationId: data.operationId,
+              operationId: serviceOperationId(
+                "save-navigation-hints",
+                data.operationId,
+              ),
               hints: data.hints,
             }),
         ),
@@ -180,7 +196,10 @@ export function purchaseImportTools(
           () =>
             serviceForRun().markHistoryExpired({
               runId,
-              operationId: data.operationId,
+              operationId: serviceOperationId(
+                "mark-history-expired",
+                data.operationId,
+              ),
               earliestAvailableOrderAt: data.earliestAvailableOrderAt,
             }),
         ),
@@ -197,7 +216,7 @@ export function purchaseImportTools(
         output: await step.do(stepName("audit-batch", data.operationId), () =>
           serviceForRun().auditBatch({
             runId,
-            operationId: data.operationId,
+            operationId: serviceOperationId("audit-batch", data.operationId),
             offset: data.offset,
           }),
         ),
@@ -211,7 +230,10 @@ export function purchaseImportTools(
       durable: true,
       run: async ({ data, step }) => ({
         output: await step.do(stepName("finish-run", data.operationId), () =>
-          serviceForRun().finishRun({ runId, operationId: data.operationId }),
+          serviceForRun().finishRun({
+            runId,
+            operationId: serviceOperationId("finish-run", data.operationId),
+          }),
         ),
         terminate: true,
       }),
@@ -238,7 +260,10 @@ export function purchaseImportTools(
           () =>
             serviceForRun().stopForReview({
               runId,
-              operationId: data.operationId,
+              operationId: serviceOperationId(
+                "stop-for-review",
+                data.operationId,
+              ),
               reason: data.reason,
               detail: data.detail,
             }),
