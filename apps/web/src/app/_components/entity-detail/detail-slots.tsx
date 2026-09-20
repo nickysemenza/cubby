@@ -128,6 +128,11 @@ export const detailSlots = {
     ),
   },
   purchase: {
+    "import-runs": slot(() =>
+      import("~/app/purchases/slots").then((m) => ({
+        default: m.PurchaseImportRuns,
+      })),
+    ),
     "project-allocation": slot(() =>
       import("~/app/purchases/slots").then((m) => ({
         default: m.PurchaseProjectAllocation,

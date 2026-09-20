@@ -1510,6 +1510,7 @@ public enum EntityCatalog {
         DetailSection(id: "expenses", title: "Expenses", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "expenses", filterDescriptor: "purchaseId", columns: ["name", "cost", "date", "lineKind", "product", "project"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "products", title: "Products", placement: .primary, collapsed: false, kind: .relation(RelationSectionSpec(relation: "products", filterDescriptor: "related:product.purchases", columns: ["name", "manufacturer", "category", "price"], sort: nil, limit: nil, hideWhenEmpty: false))),
         DetailSection(id: "project-allocation", title: "Project allocation", placement: .primary, collapsed: false, kind: .slot),
+        DetailSection(id: "import-runs", title: "Import runs", placement: .primary, collapsed: false, kind: .slot),
         DetailSection(id: "overview", title: "Overview", placement: .supporting, collapsed: false, kind: .fields(["vendorId", "vendorAccountId", "orderId", "displayLabel", "date", "statedTotal", "notes"])),
         DetailSection(id: "reconciliation", title: "Reconciliation", placement: .supporting, collapsed: false, kind: .slot),
         DetailSection(id: "financial-settlement", title: "Financial settlement", placement: .supporting, collapsed: false, kind: .slot)

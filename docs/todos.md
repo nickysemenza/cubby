@@ -412,6 +412,35 @@ history is the archive. Permanent product constraints live in the
   explicit audit and idempotency contract; do not add generic entity mutation,
   SQL, shell, arbitrary browser evaluation, or unrestricted finding resolution.
 
+- **Conditional purchase-import browser extension.** Promote only if the
+  Apple-event browser bridge repeatedly fails to background its owned window,
+  cannot avoid Chrome's JavaScript-from-Apple-Events setting, or otherwise
+  cannot provide reliable capture plumbing. Tab grouping alone does not justify
+  the extension. Keep it thin: window ownership and capture plumbing only; it
+  must not gain Cubby credentials or business-write access.
+
+- **True full-page image-rich browser evidence.** The shipped rendered PDF is
+  an honest snapshot of Cubby's dedicated browser viewport, paired with the
+  searchable normalized PDF. Promote a stitched/print-quality full-page capture
+  only when the viewport misses evidence needed for a real import; do not label
+  viewport capture as full-page in the meantime.
+
+- **Gmail discovery re-authentication.** Promote when a production Gmail
+  request returns 401/403 after a refresh-token expiry or consent revocation.
+  Show an actionable reconnect path, preserve the resumable Problem, and avoid
+  silently treating authorization failure as an empty mailbox.
+
+- **Drain queued browser work after terminal runs.** Promote when production
+  logs show browser commands surviving a completed, failed, or needs-review run.
+  Terminalize or reject queued commands by run generation and surface the
+  discarded work in the run log without touching a successor run.
+
+- **Typed pagination and final grocery evidence.** Promote when a real vendor
+  exposes pagination or grocery pages whose last page is not represented by
+  the current hints. Add typed pagination state and an explicit exhausted
+  result, then capture final item/settlement evidence rather than relying on
+  an intermediate list response.
+
 ### Needs a decision or investigation
 
 - **Durable Entity identity and shared files.** Three patterns
