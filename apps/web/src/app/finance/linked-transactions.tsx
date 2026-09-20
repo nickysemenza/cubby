@@ -3,6 +3,7 @@ import type {
   FinancialTransactionOut,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { Pencil, Plus } from "lucide-react";
 import { useCallback, useMemo } from "react";
 
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
@@ -12,7 +13,11 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
+import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
 
@@ -76,11 +81,19 @@ export function LinkedTransactions({
   accountId,
   purchaseId,
   operations = productionOperations,
+  onAddTransaction,
+  onEditTransaction,
 }: {
   accountId?: string;
   purchaseId?: string;
   operations?: LinkedTransactionsOperations;
+  onAddTransaction?: () => void;
+  onEditTransaction?: (transaction: FinancialTransactionOut) => void;
 }) {
+  const update = useUpdateMutation({
+    mutationFn: entityMutationOptionsFactory("financialTransaction", "update"),
+    entity: "financialTransaction",
+  });
   const listQueryOptions = useCallback(
     (params: Parameters<LinkedTransactionsOperations["list"]>[0]) =>
       operations.list(params),
@@ -107,7 +120,16 @@ export function LinkedTransactions({
         if (!accountId) {
           add(createFinancialTransactionAccountColumn(helper, "w-32"));
         }
-        add(createFinancialTransactionStatusColumn(helper));
+        add(
+          createFinancialTransactionStatusColumn(helper, {
+            onSave: async (status, transaction) => {
+              await update.mutateAsync({
+                id: transaction.id,
+                data: { status },
+              });
+            },
+          }),
+        );
         add(createFinancialTransactionPostedDateColumn(helper, "w-24"));
         add(
           createFinancialTransactionAmountColumn(helper, {
@@ -116,8 +138,35 @@ export function LinkedTransactions({
               linkedTransactionAmount(transaction, purchaseId),
           }),
         );
+        if (onEditTransaction) {
+          add(
+            helper.display({
+              id: "editTransaction",
+              header: "",
+              enableSorting: false,
+              meta: {
+                className: "w-12",
+                mobile: { slot: "actions", interactive: true },
+              },
+              cell: ({ row }) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Edit ${row.original.displayName}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onEditTransaction(row.original);
+                  }}
+                >
+                  <Pencil />
+                </Button>
+              ),
+            }),
+          );
+        }
       }),
-    [accountId, helper, purchaseId],
+    [accountId, helper, onEditTransaction, purchaseId, update],
   );
   const list = useEntityList<
     FinancialTransactionOut,
@@ -135,20 +184,30 @@ export function LinkedTransactions({
   });
 
   return (
-    <ListWorkbench
-      model={list.workbench}
-      ariaLabel="Linked transactions"
-      mode="embedded"
-      showColumnMenu
-      emptyState={
-        <Empty>
-          <EmptyTitle>No linked transactions</EmptyTitle>
-          <EmptyDescription>
-            Settlement evidence can remain unmatched until there is one truthful
-            Purchase to link.
-          </EmptyDescription>
-        </Empty>
-      }
-    />
+    <Stack gap="xs">
+      {onAddTransaction ? (
+        <Row justify="end">
+          <Button type="button" size="sm" onClick={onAddTransaction}>
+            <Plus />
+            Add transaction
+          </Button>
+        </Row>
+      ) : null}
+      <ListWorkbench
+        model={list.workbench}
+        ariaLabel="Linked transactions"
+        mode="embedded"
+        showColumnMenu
+        emptyState={
+          <Empty>
+            <EmptyTitle>No linked transactions</EmptyTitle>
+            <EmptyDescription>
+              Settlement evidence can remain unmatched until there is one
+              truthful Purchase to link.
+            </EmptyDescription>
+          </Empty>
+        }
+      />
+    </Stack>
   );
 }

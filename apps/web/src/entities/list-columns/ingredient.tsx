@@ -39,6 +39,7 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 
 import { useStableIds } from "./stable-ids";
@@ -228,6 +229,10 @@ export const ingredientListOverride = defineListOverride<
               id: "appearsInRecipes",
               header: "Recipes",
               meta: attachCubbyColumnMeta<IngredientListItem>({
+                provenance: relationshipFieldProvenance(
+                  "ingredient",
+                  "recipes",
+                ),
                 className: "w-56 overflow-hidden",
                 mobile: { slot: "meta", priority: 30 },
                 entityRefs: (row) =>
@@ -246,6 +251,10 @@ export const ingredientListOverride = defineListOverride<
               id: "product",
               header: "Product",
               meta: {
+                provenance: relationshipFieldProvenance(
+                  "ingredient",
+                  "products",
+                ),
                 className: "w-72 overflow-hidden",
                 mobile: { slot: "subtitle", priority: 10 },
               },

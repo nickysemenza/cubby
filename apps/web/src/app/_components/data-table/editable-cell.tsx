@@ -769,6 +769,7 @@ function EditableSelectEditor({
           openOnMount
           compact
           clearable={clearable}
+          widthMode="intrinsic"
         />
         <Button
           size="icon"

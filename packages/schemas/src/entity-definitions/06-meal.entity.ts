@@ -162,6 +162,10 @@ export default defineEntity({
         key: "recipes",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
+        provenance: {
+          kind: "relation",
+          sources: [{ entity: "recipe", relation: "recipes" }],
+        },
         // Rendered by the `composition` detail slot.
         validation: {
           read: z.array(mealRecipeOut),
@@ -205,6 +209,10 @@ export default defineEntity({
         key: "images",
         kind: "json",
         display: { list: true, standard: "image", columnId: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {

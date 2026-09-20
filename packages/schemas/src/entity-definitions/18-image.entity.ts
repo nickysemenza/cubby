@@ -100,6 +100,7 @@ export default defineEntity({
         key: "url",
         kind: "text",
         display: { list: true, detail: true, listHidden: true },
+        provenance: { kind: "derived", sources: [{ label: "Image storage" }] },
         validation: {
           read: z.url(),
           create: null,

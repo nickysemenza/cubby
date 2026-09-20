@@ -515,9 +515,10 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
-  description?: string;
+  description?: ReactNode;
 }) {
   const controlId = useId();
+  const descriptionId = `${controlId}-description`;
   return (
     <Controller
       control={form.control}
@@ -527,6 +528,7 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
           htmlFor={controlId}
           label={label}
           description={description}
+          descriptionId={descriptionId}
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
@@ -539,6 +541,7 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
             clearable
             aria-label={label}
             aria-invalid={fieldState.invalid}
+            aria-describedby={description ? descriptionId : undefined}
           />
         </FormFieldGroup>
       )}
@@ -825,13 +828,14 @@ export function UnifiedTextField<
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
-  description?: string;
+  description?: ReactNode;
   placeholder: string;
   nullable?: boolean;
   getIcon?: (value: string | null) => ReactNode;
   /** Focus this field on mount — e.g. a quick-add dialog's name field. */
   focusOnMount?: boolean;
 }) {
+  const descriptionId = useId();
   return (
     <Controller
       control={form.control}
@@ -844,6 +848,7 @@ export function UnifiedTextField<
             htmlFor={name}
             label={label}
             description={description}
+            descriptionId={descriptionId}
             invalid={fieldState.invalid}
             error={fieldState.error}
           >
@@ -862,6 +867,7 @@ export function UnifiedTextField<
                   icon ? "pr-10" /* tight: clears absolute icon */ : undefined
                 }
                 aria-invalid={fieldState.invalid}
+                aria-describedby={description ? descriptionId : undefined}
                 autoFocus={focusOnMount}
               />
               {/* oxlint-enable jsx-a11y/no-autofocus */}
@@ -911,13 +917,14 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   placeholder?: string;
   nullable?: boolean;
   disabled?: boolean;
-  description?: string;
+  description?: ReactNode;
   /** The manifest target key this field suggests (e.g. `"trade"`) — mounts an
    * `AutoSuggestSlot` under the picker. Omit for a field with no
    * `control.suggest`. */
   suggestField?: string;
 }) {
   const controlId = useId();
+  const descriptionId = `${controlId}-description`;
   // Build items list, prepending "None" option if nullable
   const items = nullable
     ? [{ value: "__none__", label: "None" }, ...options]
@@ -932,6 +939,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
           htmlFor={controlId}
           label={label}
           description={description}
+          descriptionId={descriptionId}
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
@@ -944,6 +952,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
             }
             placeholder={placeholder || `Select ${label.toLowerCase()}`}
             label={label.toLowerCase()}
+            aria-describedby={description ? descriptionId : undefined}
             disabled={disabled}
           />
           {suggestField && (

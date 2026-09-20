@@ -19,6 +19,18 @@ const columns = helper.columns([
     size: 180,
     minSize: 80,
     maxSize: 400,
+    meta: {
+      provenance: {
+        kind: "derived",
+        sources: [
+          {
+            entity: "financialTransaction",
+            label: null,
+            relation: "financial-transactions",
+          },
+        ],
+      },
+    },
   }),
   helper.display({ id: "actions", header: "Actions" }),
 ]);
@@ -75,6 +87,17 @@ describe("TableHeaderLayout", () => {
     expect(
       screen.getByRole("button", { name: "Reorder name column" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows provenance without replacing the sortable header label", () => {
+    render(<Harness />);
+
+    expect(
+      screen.getByRole("note", { name: "From Transactions" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Sort by Name" }),
+    ).toHaveTextContent("Name");
   });
 
   it("commits a native mouse resize without starting column ordering", () => {

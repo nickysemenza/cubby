@@ -1,4 +1,8 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
+import {
+  financialTransactionStatus,
+  type FinancialTransactionOut,
+  type FinancialTransactionStatus,
+} from "@cubby/schemas/financial-transaction";
 import type { ReactNode } from "react";
 
 import {
@@ -70,15 +74,31 @@ export function createFinancialTransactionAccountColumn(
 
 export function createFinancialTransactionStatusColumn(
   helper: CubbyColumnHelper<FinancialTransactionOut>,
-  className = "w-24",
+  options: {
+    className?: string;
+    onSave?: (
+      status: FinancialTransactionStatus,
+      transaction: FinancialTransactionOut,
+    ) => Promise<void>;
+  } = {},
 ) {
   return createFilterableSelectColumn(helper, "status", {
     header: "Status",
     placeholder: "Filter by status...",
     selectOptions: financialTransactionStatusOptions,
-    className,
-    mobile: { slot: "meta", priority: 20 },
+    className: options.className ?? "w-24",
+    mobile: {
+      slot: "meta",
+      priority: 20,
+      interactive: options.onSave !== undefined,
+    },
     filterConfig: null,
+    editable: options.onSave
+      ? {
+          parseValue: (value) => financialTransactionStatus.parse(value),
+          onSave: options.onSave,
+        }
+      : undefined,
   });
 }
 

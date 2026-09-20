@@ -1168,6 +1168,10 @@ describe("typed entity compiler", () => {
               kind: "select",
               options: [{ value: "open", label: "Open" }],
             },
+            provenance: {
+              kind: "derived",
+              sources: [{ label: "Workflow state" }],
+            },
             display: { detail: true },
             validation: { read: z.enum(["open"]), create: null, update: null },
           },

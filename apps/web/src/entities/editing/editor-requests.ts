@@ -142,7 +142,7 @@ const financialAccountEditRequest = (
   },
 });
 
-const financialTransactionEditRequest = (
+export const financialTransactionEditRequest = (
   transaction: FinancialTransactionOut,
 ): Omit<
   EntityEditRequest<"financialTransaction", "update", "full">,

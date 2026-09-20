@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { humanize } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";
@@ -7,9 +8,11 @@ import { z } from "zod";
 
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
+import { FieldProvenance } from "~/entities/field-provenance";
 import { extractEntityTitle } from "~/lib/entity-utils";
 
 import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
+import { RelationFieldWorkbench } from "./relation-field-workbench";
 import type {
   CubbyColumn as Column,
   CubbyTable as ITable,
@@ -225,6 +228,8 @@ function getPriority(
   return meta?.mobile?.priority ?? fallback;
 }
 
+// Slot routing stays centralized so desktop-only columns cannot leak into cards.
+// eslint-disable-next-line complexity
 function collectMobileSlots<TItem extends RowData>(
   row: Row<TItem>,
   entity: Entity | undefined,
@@ -264,10 +269,40 @@ function collectMobileSlots<TItem extends RowData>(
       continue;
     }
 
+    const rowId = mobileShortcode(row.original);
+    const parsed = rowId ? parseShortcode(rowId) : null;
+    const inspectable = meta?.provenance?.sources.some(
+      (source) => source.relation !== null,
+    );
+    const inspectedValue =
+      meta?.provenance &&
+      inspectable &&
+      parsed &&
+      !meta.provenanceWorkbenchHandled ? (
+        <RelationFieldWorkbench
+          sourceEntity={parsed.type}
+          sourceId={parsed.shortcode}
+          provenance={meta.provenance}
+          summary={rendered}
+        />
+      ) : (
+        rendered
+      );
+    const mobileValue = meta?.provenance ? (
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+        <span className="min-w-0 truncate">{inspectedValue}</span>
+        <FieldProvenance
+          provenance={meta.provenance}
+          className="inline-flex max-w-36 shrink text-[0.625rem]"
+        />
+      </span>
+    ) : (
+      inspectedValue
+    );
     const entry: SlotValue = {
       priority: getPriority(meta, 50),
-      value: rendered,
-      interactive: meta?.mobile?.interactive,
+      value: mobileValue,
+      interactive: meta?.mobile?.interactive || inspectable,
       id: colId,
       label: mobileColumnLabel(cell.column),
     };

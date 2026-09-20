@@ -32,6 +32,7 @@ import { locationTypeOptionsWithTheme } from "~/app/_components/locations/locati
 import { LocationTypeLabel } from "~/app/_components/locations/LocationTypeLabel";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
+import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import type { EntityListParamsByEntity } from "~/entities/generated/entity-lists.gen";
 
 import { defineListOverride } from "./types";
@@ -192,6 +193,7 @@ export const locationListOverride = defineListOverride<
               header: "Children",
               className: "w-40",
               mobile: { slot: "meta", priority: 55 },
+              provenance: relationshipFieldProvenance("location", "children"),
             }),
           );
           add(
@@ -203,6 +205,11 @@ export const locationListOverride = defineListOverride<
                 header: "Parent",
                 className: "w-56",
                 mobile: { slot: "subtitle", priority: 20 },
+                provenance: relationshipFieldProvenance(
+                  "location",
+                  "parent",
+                  "reference",
+                ),
                 editable: {
                   onSave: async (newParentId, location) => {
                     await updateLocationMutation.mutateAsync({
@@ -226,6 +233,10 @@ export const locationListOverride = defineListOverride<
                 layout: "inline",
                 enableSorting: true,
                 mobile: { slot: "meta", priority: 80 },
+                provenance: relationshipFieldProvenance(
+                  "location",
+                  "inventory",
+                ),
               },
             ),
           );

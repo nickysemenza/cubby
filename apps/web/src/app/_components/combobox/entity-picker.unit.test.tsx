@@ -80,6 +80,29 @@ describe("matchesPickerItem", () => {
 });
 
 describe("EntityPicker", () => {
+  it("sizes an intrinsic picker to its options while retaining the trigger minimum", () => {
+    render(
+      <EntityPicker
+        label="cost type"
+        items={[
+          { id: "short", name: "Materials" },
+          { id: "long", name: "Services and recurring maintenance" },
+        ]}
+        value={null}
+        setValue={vi.fn()}
+        widthMode="intrinsic"
+      />,
+    );
+
+    openPicker(screen.getByRole("combobox", { name: "cost type" }));
+    const popup = screen.getByRole("listbox").parentElement;
+    expect(popup).toHaveClass("w-max");
+    expect(popup).toHaveClass("min-w-[var(--anchor-width)]");
+    expect(popup).toHaveClass(
+      "max-w-[min(24rem,var(--available-width),calc(100vw-16px))]",
+    );
+  });
+
   it("selects a replacement planting and can clear it", async () => {
     render(<PlantingHarness />);
     const input = screen.getByRole("combobox", { name: "Planting" });

@@ -150,6 +150,15 @@ function LocationMainFields() {
   );
 }
 
+function WishAcquisitionFields() {
+  const form = useForm({ defaultValues: { acquired: false } });
+  return (
+    <FormProvider {...form}>
+      <EntityIntentFields entity="wish" intent="acquisition" mode="edit" />
+    </FormProvider>
+  );
+}
+
 /** Same section, wrapped in the provider a real edit dialog mounts — proves
  * `renderPrimitiveField`'s select branch actually wires `suggestField` off
  * `control.suggest` (`location.type`, see `04-location.entity.ts`) through to
@@ -200,6 +209,20 @@ function RecipeNotesForm({
 }
 
 describe("EntityPrimitiveFields", () => {
+  it("composes relationship provenance into editor help and accessibility", () => {
+    render(<WishAcquisitionFields />);
+
+    const checkbox = screen.getByRole("checkbox", { name: "Acquired" });
+    const source = screen.getByRole("note", {
+      name: "Managed through Products",
+    });
+    expect(source).toBeVisible();
+    expect(checkbox).toHaveAttribute(
+      "aria-describedby",
+      source.closest("p")?.id,
+    );
+  });
+
   it("keeps serialized image ordering in the specialized image editor", () => {
     render(<LocationMainFields />);
     expect(screen.getByRole("textbox", { name: "Name" })).toBeVisible();

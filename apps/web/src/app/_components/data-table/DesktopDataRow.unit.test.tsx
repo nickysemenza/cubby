@@ -1,4 +1,5 @@
 import { fireEvent, render, renderHook, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DesktopDataRow, type DesktopDataRowProps } from "./DesktopDataRow";
@@ -16,7 +17,7 @@ interface TestRow {
 
 const columnHelper = createCubbyColumnHelper<TestRow>();
 
-function useTestTable(cell?: () => string) {
+function useTestTable(cell?: () => ReactNode) {
   const columns = createCubbyColumnCollection<TestRow>((add) => {
     add(
       columnHelper.accessor("id", {
@@ -111,6 +112,62 @@ describe("DesktopDataRow", () => {
     expect(onRowHover).toHaveBeenCalledTimes(2);
     expect(onRowHoverEnd).toHaveBeenCalledTimes(2);
     expect(onRowClick).toHaveBeenCalledOnce();
+  });
+
+  it("does not open the row inspector from an interactive cell control", () => {
+    const onRowClick = vi.fn();
+    const buttonClick = vi.fn();
+    const { result } = renderHook(() =>
+      useTestTable(() => (
+        <button type="button" onClick={buttonClick}>
+          Inspect settlement
+        </button>
+      )),
+    );
+    const row = result.current.getRow("PRD-TEST");
+
+    render(
+      <table>
+        <tbody>
+          <DesktopDataRow
+            {...desktopRowProps(row, {
+              onRowClick,
+            })}
+          />
+        </tbody>
+      </table>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Inspect settlement" }));
+
+    expect(buttonClick).toHaveBeenCalledOnce();
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it("does not replace an interactive control with a hover inspector", () => {
+    const onRowHover = vi.fn();
+    const { result } = renderHook(() =>
+      useTestTable(() => <button type="button">Inspect settlement</button>),
+    );
+    const row = result.current.getRow("PRD-TEST");
+
+    render(
+      <table>
+        <tbody>
+          <DesktopDataRow
+            {...desktopRowProps(row, {
+              onRowHover,
+            })}
+          />
+        </tbody>
+      </table>,
+    );
+
+    const button = screen.getByRole("button", { name: "Inspect settlement" });
+    fireEvent.pointerEnter(button, { pointerType: "mouse" });
+    fireEvent.focus(button);
+
+    expect(onRowHover).not.toHaveBeenCalled();
   });
 
   it("marks the inspector's current record without changing bulk selection", () => {

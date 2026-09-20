@@ -1,3 +1,5 @@
+import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
+import { parseShortcode } from "@cubby/shared";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
@@ -6,7 +8,9 @@ import {
   type MouseEvent,
   memo,
   type PointerEvent,
+  type ReactNode,
 } from "react";
+import { z } from "zod";
 
 import { Button } from "~/components/ui/button";
 import { TableCell, TableRow } from "~/components/ui/table";
@@ -15,10 +19,35 @@ import { cn } from "~/lib/utils";
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
 import { columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
+import { RelationFieldWorkbench } from "./relation-field-workbench";
 import type { CubbyRow as Row } from "./table-features";
 
 const NUMERIC_CELL = "text-right font-mono tabular-nums";
 const MONO_CELL = "font-mono";
+const dataRowIdentitySchema = z.object({ id: z.string() });
+
+function relationWorkbenchContent(
+  row: RowData,
+  rendered: ReactNode,
+  provenance: EntityFieldProvenance | undefined,
+  handled: boolean | undefined,
+): ReactNode {
+  if (!provenance || handled) return rendered;
+  if (!provenance.sources.some((source) => source.relation !== null))
+    return rendered;
+  const rowIdentity = dataRowIdentitySchema.safeParse(row);
+  if (!rowIdentity.success) return rendered;
+  const parsed = parseShortcode(rowIdentity.data.id);
+  if (!parsed) return rendered;
+  return (
+    <RelationFieldWorkbench
+      sourceEntity={parsed.type}
+      sourceId={parsed.shortcode}
+      provenance={provenance}
+      summary={rendered}
+    />
+  );
+}
 
 function cellPresentation<TItem extends RowData>(
   cell: ReturnType<Row<TItem>["getVisibleCells"]>[number],
@@ -61,6 +90,14 @@ function DesktopDataCell<TItem extends RowData>({
       : pinned === "end"
         ? { insetInlineEnd: cell.column.getAfter("end") }
         : {};
+  const rendered = flexRender(cell.column.columnDef.cell, cell.getContext());
+  const provenance = cell.column.columnDef.meta?.provenance;
+  const content = relationWorkbenchContent(
+    cell.row.original,
+    rendered,
+    provenance,
+    cell.column.columnDef.meta?.provenanceWorkbenchHandled,
+  );
   return (
     <TableCell
       key={cell.id}
@@ -82,7 +119,7 @@ function DesktopDataCell<TItem extends RowData>({
       )}
       style={{ width, minWidth: width, maxWidth: width, ...inset }}
     >
-      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+      {content}
     </TableCell>
   );
 }
@@ -127,6 +164,15 @@ export interface DesktopDataRowProps<TItem extends RowData> {
   suppressCellRowClick?: boolean;
 }
 
+function isInteractiveEventTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    target.closest(
+      "a, button, input, select, textarea, [role=button], [role=link]",
+    ) !== null
+  );
+}
+
 function DesktopDataRowInner<TItem extends RowData>({
   row,
   rowIndex,
@@ -144,6 +190,8 @@ function DesktopDataRowInner<TItem extends RowData>({
 }: DesktopDataRowProps<TItem>) {
   const handleRowClick = onRowClick
     ? (e: MouseEvent<HTMLTableRowElement>) => {
+        if (isInteractiveEventTarget(e.target)) return;
+
         // In cell-selection mode a click on an editable cell selects it (via the
         // container's mousedown delegation); don't also navigate/open the row.
         if (suppressCellRowClick) {
@@ -177,7 +225,12 @@ function DesktopDataRowInner<TItem extends RowData>({
       onPointerEnter={
         onRowHover
           ? (event: PointerEvent<HTMLTableRowElement>) => {
-              if (event.pointerType !== "touch") onRowHover(row);
+              if (
+                event.pointerType !== "touch" &&
+                !isInteractiveEventTarget(event.target)
+              ) {
+                onRowHover(row);
+              }
             }
           : undefined
       }
@@ -188,7 +241,13 @@ function DesktopDataRowInner<TItem extends RowData>({
             }
           : undefined
       }
-      onFocus={onRowHover ? () => onRowHover(row) : undefined}
+      onFocus={
+        onRowHover
+          ? (event) => {
+              if (!isInteractiveEventTarget(event.target)) onRowHover(row);
+            }
+          : undefined
+      }
       onBlur={
         onRowHoverEnd
           ? (event: FocusEvent<HTMLTableRowElement>) => {

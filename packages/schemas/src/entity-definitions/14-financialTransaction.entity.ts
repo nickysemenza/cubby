@@ -326,6 +326,10 @@ export default defineEntity({
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true, detailOrder: 70 },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Financial allocations" }],
+        },
         validation: {
           read: financialTransactionAllocations,
           create: financialTransactionAllocations.default([]),
@@ -375,6 +379,10 @@ export default defineEntity({
           columnId: "possibleVendor",
           listOrder: 90,
           listHidden: true,
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "vendor", relation: "vendor" }],
         },
         validation: {
           read: merchantVendorInference

@@ -168,9 +168,53 @@ const validateFieldSuggestions = (
   }
 };
 
+const compileFieldProvenance = (
+  field: EntityFieldModelMetadata["fields"][number],
+  fieldContext: string,
+  relations: EntityDeclarationMetadata["relations"],
+): EntityField["provenance"] => {
+  if (field.reference !== null) {
+    return {
+      kind: "reference",
+      sources: [
+        { entity: field.reference.entity, label: null, relation: null },
+      ],
+    };
+  }
+  if (field.provenance === null) return null;
+  return {
+    kind: field.provenance.kind,
+    sources: field.provenance.sources.map((source) => {
+      if ("label" in source) {
+        return { entity: null, label: source.label, relation: null };
+      }
+      const relation =
+        source.relation === null
+          ? null
+          : relations.find((candidate) => candidate.key === source.relation);
+      if (source.relation !== null && relation === undefined)
+        throw new EntityDeclarationError(
+          `${fieldContext}.provenance source names undeclared relation ${source.relation}.`,
+        );
+      if (relation != null && relation.target !== source.entity)
+        throw new EntityDeclarationError(
+          `${fieldContext}.provenance relation ${source.relation} targets ${relation.target}, not ${source.entity}.`,
+        );
+      return {
+        entity: source.entity,
+        label: null,
+        relation: source.relation,
+      };
+    }),
+  };
+};
+
+// Field compilation deliberately keeps cross-property invariants in one pass.
+// eslint-disable-next-line complexity
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
   context: string,
+  relations: EntityDeclarationMetadata["relations"],
 ): EntityFieldModel => {
   if (value === undefined) {
     return {
@@ -197,6 +241,11 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${fieldContext}.display.columnId must not be blank.`,
       );
+    if (field.reference !== null && field.provenance !== null)
+      throw new EntityDeclarationError(
+        `${fieldContext} cannot declare provenance for a reference field.`,
+      );
+    const provenance = compileFieldProvenance(field, fieldContext, relations);
     return {
       key,
       kind: field.kind,
@@ -209,6 +258,7 @@ const compileFieldModel = (
       description: field.description,
       readKey: field.readKey === undefined ? key : field.readKey,
       reference: field.reference,
+      provenance,
       control: field.control,
       display: {
         columnId: field.display.columnId,
@@ -356,6 +406,22 @@ const compileFieldModel = (
     sort,
     intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
   };
+  const storedFields = new Set(storageKeys);
+  for (const field of fields) {
+    const exposed = field.display.list || field.control !== null;
+    if (exposed && !storedFields.has(field.key) && field.provenance === null)
+      throw new EntityDeclarationError(
+        `${context}.${field.key} is exposed without storage, a reference, or declared provenance.`,
+      );
+    if (
+      field.provenance?.kind === "derived" &&
+      (compiled.create.includes(field.key) ||
+        compiled.update.includes(field.key))
+    )
+      throw new EntityDeclarationError(
+        `${context}.${field.key} is derived and cannot be directly createable or updateable.`,
+      );
+  }
   for (const field of compiled.bulk) {
     if (!compiled.update.includes(field))
       throw new EntityDeclarationError(
@@ -990,7 +1056,11 @@ export const compileEntity = (
   validateDeclarationCapabilities(declaration, context);
   normalizedDeclarationRelations(declaration.relations, context);
   const descriptor = declarationDescriptor(declaration, context);
-  const fieldModel = compileFieldModel(declaration.model, `${context}.model`);
+  const fieldModel = compileFieldModel(
+    declaration.model,
+    `${context}.model`,
+    declaration.relations,
+  );
   const operationOwners = {
     delete: declaration.capabilities.operationOwners.delete,
     merge: declaration.capabilities.operationOwners.merge,
@@ -1231,6 +1301,17 @@ export const validateEntityIdentities = (
         );
       }
       prefixes.set(entity.shortcode, `${entity.key} canonical prefix`);
+    }
+  }
+  for (const entity of entities) {
+    for (const field of entity.fieldModel.fields) {
+      for (const source of field.provenance?.sources ?? []) {
+        if (source.entity !== null && !keys.has(source.entity)) {
+          throw new EntityDeclarationError(
+            `${entity.key}.${field.key} provenance names undeclared entity ${source.entity}.`,
+          );
+        }
+      }
     }
   }
 };

@@ -138,6 +138,10 @@ export default defineEntity({
         kind: "number",
         label: "Recipes",
         display: { list: true, detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "recipe", relation: "recipes" }],
+        },
         validation: {
           read: z.number().int().min(0),
           create: null,
@@ -150,6 +154,10 @@ export default defineEntity({
         nullable: true,
         label: "Cover",
         display: { list: true, detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "cover" }],
+        },
         validation: {
           read: z.string().nullable(),
           create: null,

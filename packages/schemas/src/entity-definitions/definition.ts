@@ -261,6 +261,23 @@ const metadataSchemas = () => {
     })
     .strict();
 
+  const entityFieldProvenanceSourceMetadataSchema = z.union([
+    z
+      .object({
+        entity: nonEmptyString(),
+        relation: nonEmptyString().nullable().optional().default(null),
+      })
+      .strict(),
+    z.object({ label: nonEmptyString() }).strict(),
+  ]);
+
+  const entityFieldProvenanceMetadataSchema = z
+    .object({
+      kind: z.enum(["relation", "derived"]),
+      sources: z.array(entityFieldProvenanceSourceMetadataSchema).min(1),
+    })
+    .strict();
+
   const entityFieldMetadataSchema = z
     .object({
       key: nonEmptyString(),
@@ -273,6 +290,10 @@ const metadataSchemas = () => {
       description: nonEmptyString().nullable().optional().default(null),
       readKey: nonEmptyString().nullable().optional(),
       reference: entityFieldReferenceMetadataSchema
+        .nullable()
+        .optional()
+        .default(null),
+      provenance: entityFieldProvenanceMetadataSchema
         .nullable()
         .optional()
         .default(null),

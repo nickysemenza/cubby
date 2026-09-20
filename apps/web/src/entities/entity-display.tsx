@@ -60,7 +60,7 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
 
-import { entitySelectOptionsFor } from "./editing/select-options";
+import { presentEntitySelectOptions } from "./editing/select-options";
 import {
   entities,
   entityDetailParams,
@@ -587,9 +587,12 @@ function renderEditableField<TRecord extends object>(
         />
       );
     case "select": {
-      const options: FilterableComboboxItem[] = [
-        ...(entitySelectOptionsFor(entity, key) ?? control.options ?? []),
-      ];
+      const options: FilterableComboboxItem[] = presentEntitySelectOptions(
+        entity,
+        key,
+        control.options ?? [],
+        "edit",
+      );
       // SAFETY: a detail page only exists for a shortcode entity; `entity`'s
       // broader `Entity` type here is this file's shared display-field plumbing.
       const shortcodeEntity = entity as ShortcodeEntity;
@@ -778,6 +781,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
         add({
           ...column,
           id: columnId,
+          meta: attachCubbyColumnMeta({
+            ...column.meta,
+            provenance: field.provenance ?? undefined,
+          }),
           header:
             column.header === undefined ||
             z.string().safeParse(column.header).success
@@ -822,6 +829,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -866,6 +874,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
             }),
@@ -903,6 +912,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -934,6 +944,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -979,6 +990,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               numeric: true,
@@ -1023,11 +1035,12 @@ export function createEntityDisplayColumns<TRecord extends object>(
         continue;
       }
       if (editable && control?.kind === "select") {
-        const selectOptions = [
-          ...(entitySelectOptionsFor(entity, field.key, "edit") ??
-            control.options ??
-            []),
-        ];
+        const selectOptions = presentEntitySelectOptions(
+          entity,
+          field.key,
+          control.options ?? [],
+          "edit",
+        );
         const cellData = selectCellData<TRecord>(
           (row) => copyScalarField(row, field),
           selectOptions,
@@ -1039,6 +1052,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -1070,6 +1084,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -1097,6 +1112,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
           header: field.label,
           enableSorting: defaultEnableSorting,
           meta: attachCubbyColumnMeta({
+            provenance: field.provenance ?? undefined,
             className: widthClassName(field.display.width),
             numeric:
               format === "currency" || format === "signedCurrency"

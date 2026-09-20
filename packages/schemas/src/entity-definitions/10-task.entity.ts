@@ -303,6 +303,10 @@ export default defineEntity({
         key: "images",
         kind: "json",
         display: { list: true, standard: "image", columnId: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {

@@ -115,6 +115,14 @@ type EntityFieldControl = Readonly<{
   initial: "today" | null;
   suggest: Readonly<{ basis: readonly string[] }> | null;
 }>;
+type EntityFieldProvenance = Readonly<{
+  kind: "reference" | "relation" | "derived";
+  sources: readonly Readonly<{
+    entity: string | null;
+    label: string | null;
+    relation: string | null;
+  }>[];
+}>;
 export type EntityField = Readonly<{
   key: string;
   kind: EntityFieldKind;
@@ -123,6 +131,7 @@ export type EntityField = Readonly<{
   description: string | null;
   readKey: string | null;
   reference: Readonly<{ entity: string; multiple: boolean }> | null;
+  provenance: EntityFieldProvenance | null;
   control: EntityFieldControl | null;
   display: Readonly<{
     list: boolean;

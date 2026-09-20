@@ -1,5 +1,5 @@
 import { financialTransactionListResponse } from "@cubby/schemas/financial-transaction";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityListFor } from "~/entities/entity-list.functions";
@@ -134,5 +134,40 @@ describe("LinkedTransactions", () => {
     ).toHaveAttribute("href", "/financial-accounts/FAC-2345");
     expect(screen.getByText("$20.00")).toBeInTheDocument();
     expect(screen.getByText("of $42.50")).toBeInTheDocument();
+  });
+
+  it("offers add and edit actions for a purchase settlement", async () => {
+    const onAddTransaction = vi.fn();
+    const onEditTransaction = vi.fn();
+    render(
+      <LinkedTransactions
+        purchaseId="PUR-2345"
+        operations={operationsFor(transactionResponse())}
+        onAddTransaction={onAddTransaction}
+        onEditTransaction={onEditTransaction}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Add transaction" }),
+    );
+    expect(onAddTransaction).toHaveBeenCalledOnce();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Edit Neighborhood Market",
+      }),
+    );
+    expect(onEditTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "FTX-2345" }),
+    );
+
+    const postedCell = screen
+      .getAllByText("Posted")
+      .map((element) => element.closest("td"))
+      .find((element) => element !== null);
+    expect(postedCell).toBeDefined();
+    expect(within(postedCell!).getByRole("button")).toBeInTheDocument();
   });
 });

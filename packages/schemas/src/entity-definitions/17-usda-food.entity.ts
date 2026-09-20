@@ -52,6 +52,10 @@ export default defineEntity({
         kind: "identifier",
         label: "FDC ID",
         display: { list: true, detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "USDA identifiers" }],
+        },
         validation: {
           read: fdcId,
           create: null,
@@ -88,6 +92,10 @@ export default defineEntity({
         kind: "json",
         label: "Food information",
         display: { list: true, detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "USDA food record" }],
+        },
         validation: {
           read: foodInfo,
           create: null,

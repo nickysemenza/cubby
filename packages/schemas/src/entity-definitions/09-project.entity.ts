@@ -393,6 +393,10 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         display: { list: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "project", relation: "parent" }],
+        },
         validation: {
           read: z.string().nullable(),
           create: null,

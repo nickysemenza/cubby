@@ -344,6 +344,7 @@ export default defineEntity({
           suggest: { basis: ["name", "notes", "orderId"] },
         },
         display: { detail: true, detailOrder: 100 },
+        provenance: { kind: "relation", sources: [{ entity: "vendor" }] },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -361,6 +362,10 @@ export default defineEntity({
           detail: true,
           detailOrder: 110,
           listHidden: true,
+        },
+        provenance: {
+          kind: "relation",
+          sources: [{ entity: "purchase", relation: "purchase" }],
         },
         validation: {
           read: z.string().nullable(),
@@ -391,6 +396,10 @@ export default defineEntity({
         key: "beneficiaries",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Ledger attributions" }],
+        },
         validation: {
           read: ledgerAttributions,
           create: ledgerAttributions.nullable().default([]),
@@ -401,6 +410,10 @@ export default defineEntity({
         key: "funders",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Ledger attributions" }],
+        },
         validation: {
           read: ledgerAttributions,
           create: ledgerAttributions.nullable().default([]),
@@ -411,6 +424,7 @@ export default defineEntity({
         key: "sourceClaims",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
+        provenance: { kind: "relation", sources: [{ label: "Source claims" }] },
         validation: {
           read: ledgerSourceClaimsOut,
           create: ledgerSourceClaims.nullable().default([]),

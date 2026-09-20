@@ -860,6 +860,10 @@ describe("enum/boolean columns stay in the copy/paste range", () => {
     // `filterConfig: null` must leave meta.filterConfig undefined so the
     // manifest's control is the one that attaches.
     expect(column.meta?.filterConfig).toBeUndefined();
+
+    renderColumn<EnumRow, string | null>(column, { kind: "purchase" });
+    const dot = document.querySelector("td span[aria-hidden]");
+    expect(dot).toHaveStyle({ backgroundColor: "var(--chart-1)" });
   });
 });
 

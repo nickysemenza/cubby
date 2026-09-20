@@ -32,9 +32,10 @@ import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { entityFieldPresentation } from "~/entities/editing/entity-field-presentation";
-import { entitySelectOptionsFor } from "~/entities/editing/select-options";
+import { presentEntitySelectOptions } from "~/entities/editing/select-options";
 import { entityLabel } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { FieldProvenance } from "~/entities/field-provenance";
 import {
   generatedBrowserCrudEntities,
   type GeneratedBrowserCrudEntity,
@@ -113,8 +114,25 @@ const asBulkEditRow = (row: EntityActionRow): BulkEditRow => ({
  * form) — the shared table still covers them.
  */
 function selectOptionsFor(entity: Entity, field: BulkEditFieldModel) {
+  return presentEntitySelectOptions(
+    entity,
+    field.key,
+    field.control?.options ?? [],
+    "edit",
+  );
+}
+
+function bulkFieldDescription(
+  presentation: ReturnType<typeof entityFieldPresentation>,
+) {
+  if (!presentation.description && !presentation.provenance) return undefined;
   return (
-    entitySelectOptionsFor(entity, field.key) ?? field.control?.options ?? []
+    <span className="space-y-0.5">
+      {presentation.description ? (
+        <span className="block">{presentation.description}</span>
+      ) : null}
+      <FieldProvenance provenance={presentation.provenance} />
+    </span>
   );
 }
 
@@ -154,6 +172,7 @@ function renderBulkEditField(
   const presentation = entityFieldPresentation(entity, field.key, "edit");
   const control = presentation.control;
   const controlId = `bulk-edit-${entity}-${field.key}`;
+  const description = bulkFieldDescription(presentation);
 
   if (control.kind === "checkbox") {
     return (
@@ -165,7 +184,7 @@ function renderBulkEditField(
           <FormFieldGroup
             htmlFor={controlId}
             label={presentation.label}
-            description={presentation.description ?? undefined}
+            description={description}
             invalid={fieldState.invalid}
             error={fieldState.error}
           >
@@ -196,7 +215,7 @@ function renderBulkEditField(
         label={presentation.label}
         options={selectOptionsFor(entity, field)}
         nullable={field.nullable}
-        description={presentation.description ?? undefined}
+        description={description}
         suggestField={control.suggest ? field.key : undefined}
       />
     );
@@ -211,6 +230,7 @@ function renderBulkEditField(
         form={form}
         name={field.key as never}
         label={presentation.label}
+        description={description}
       />
     );
   }
@@ -266,6 +286,7 @@ function BulkEditFields({
               entity={field.reference.entity as never}
               label={field.label}
               clearable={field.nullable}
+              description={<FieldProvenance provenance={field.provenance} />}
               SearchProvider={searchProviderFor(field.reference.entity)}
               suggestField={field.control?.suggest ? field.key : undefined}
             />

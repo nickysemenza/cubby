@@ -244,6 +244,10 @@ export default defineEntity({
         kind: "text",
         readKey: null,
         control: { kind: "specialized", renderer: "image-order" },
+        provenance: {
+          kind: "relation",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: null,
           create: null,
@@ -301,6 +305,10 @@ export default defineEntity({
         key: "expenseCount",
         kind: "number",
         display: { list: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
         validation: {
           read: z.number().int(),
           create: null,
@@ -324,6 +332,10 @@ export default defineEntity({
         key: "expenseTotal",
         kind: "number",
         display: { list: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
         validation: {
           read: money,
           create: null,
@@ -334,6 +346,10 @@ export default defineEntity({
         key: "reconciliation",
         kind: "json",
         display: { list: true, columnId: "reconciliation" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
         validation: {
           read: purchaseReconciliation,
           create: null,
@@ -344,6 +360,16 @@ export default defineEntity({
         // Settlement evidence only; never participates in spend rollups.
         key: "financialReconciliation",
         kind: "json",
+        display: { list: true, columnId: "financialSettlement" },
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              entity: "financialTransaction",
+              relation: "financial-transactions",
+            },
+          ],
+        },
         validation: {
           read: financialReconciliationSummary,
           create: null,
@@ -354,6 +380,10 @@ export default defineEntity({
         key: "documentCount",
         kind: "number",
         display: { list: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: z.number().int(),
           create: null,
@@ -363,6 +393,10 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: purchaseImages,
           create: null,
@@ -373,6 +407,7 @@ export default defineEntity({
         key: "dataQuality",
         kind: "json",
         display: { list: true, columnId: "dataQuality", listHidden: true },
+        provenance: { kind: "derived", sources: [{ entity: "purchase" }] },
         validation: {
           read: dataQuality,
           create: null,

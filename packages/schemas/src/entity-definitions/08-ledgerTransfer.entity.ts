@@ -154,6 +154,10 @@ export default defineEntity({
         key: "sourceClaims",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Source claims" }],
+        },
         validation: {
           read: ledgerSourceClaimsOut,
           create: ledgerSourceClaims.nullable().default([]),

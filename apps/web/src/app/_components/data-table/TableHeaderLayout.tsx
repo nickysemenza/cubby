@@ -1,3 +1,4 @@
+import { humanize } from "@cubby/shared";
 import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import {
@@ -18,6 +19,7 @@ import {
 import { useCubbyDndSensors } from "~/components/dnd/sensors";
 import { Button } from "~/components/ui/button";
 import { TableHead, TableRow } from "~/components/ui/table";
+import { FieldProvenance } from "~/entities/field-provenance";
 import { cn } from "~/lib/utils";
 
 import { columnWidthValue, isLockedColumnId } from "./column-layout";
@@ -90,19 +92,29 @@ function SortableHeader<TData extends RowData>({
   const pinned = header.column.getIsPinned();
   const width = columnWidthValue(header.column.id);
   const sortingArrows = sortIcon(sortDirection, canSort, styles);
+  const provenance = header.column.columnDef.meta?.provenance;
+  const headerLabel = humanize(header.column.id);
 
   const title = (
-    <>
-      {header.isPlaceholder
-        ? null
-        : flexRender(header.column.columnDef.header, header.getContext())}
-      {sortingArrows}
-      {sortDirection && table.state.sorting.length > 1 && (
-        <span className="text-3xs text-muted-foreground tabular-nums">
-          {header.column.getSortIndex() + 1}
-        </span>
-      )}
-    </>
+    <span className="flex min-w-0 flex-1 flex-col items-start leading-tight">
+      <span className="inline-flex min-w-0 items-center gap-1">
+        {header.isPlaceholder
+          ? null
+          : flexRender(header.column.columnDef.header, header.getContext())}
+        {sortingArrows}
+        {sortDirection && table.state.sorting.length > 1 && (
+          <span className="text-3xs text-muted-foreground tabular-nums">
+            {header.column.getSortIndex() + 1}
+          </span>
+        )}
+      </span>
+      {provenance ? (
+        <FieldProvenance
+          provenance={provenance}
+          className="max-w-full text-[0.625rem] font-normal tracking-normal normal-case"
+        />
+      ) : null}
+    </span>
   );
 
   return (
@@ -151,8 +163,9 @@ function SortableHeader<TData extends RowData>({
           <Button
             variant="ghost"
             size="sm"
+            aria-label={`Sort by ${headerLabel}`}
             className={cn(
-              "group h-6 min-w-0 flex-1 gap-1 px-1 text-2xs font-semibold tracking-wider uppercase select-none hover:bg-muted/60",
+              "group h-auto min-h-6 min-w-0 flex-1 gap-1 px-1 py-1 text-2xs font-semibold tracking-wider uppercase select-none hover:bg-muted/60",
               numeric ? "justify-end" : "justify-start",
             )}
             onClick={header.column.getToggleSortingHandler()}
@@ -160,7 +173,7 @@ function SortableHeader<TData extends RowData>({
             {title}
           </Button>
         ) : (
-          <span className="inline-flex min-w-0 flex-1 items-center gap-1">
+          <span className="inline-flex min-w-0 flex-1 items-start gap-1 py-1">
             {title}
           </span>
         )}

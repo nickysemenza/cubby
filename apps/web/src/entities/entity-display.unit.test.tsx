@@ -365,6 +365,17 @@ describe("declared entity displays", () => {
     expect(columns.visit((column) => column.id)).not.toContain(
       "evidenceTransactionIds",
     );
+    const evidenceProvenance = columns
+      .visit((column) =>
+        column.id === "evidenceCount" ? column.meta?.provenance : undefined,
+      )
+      .find((provenance) => provenance !== undefined);
+    expect(evidenceProvenance).toEqual({
+      kind: "reference",
+      sources: [
+        { entity: "financialTransaction", label: null, relation: null },
+      ],
+    });
   });
 
   describe("declared width/format/mobile/sorting", () => {
