@@ -626,6 +626,38 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
+  acquireMcpAccess(input: { runId: string }) {
+    return this.withDatabase(async (db, service) => {
+      const scope = await service.loadRunScope(db, input.runId);
+      const { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation } =
+        await import("./server/purchase-import/agent-auth");
+      const grant = await findActivePurchaseAgentGrant(db, scope.actorUserId);
+      if (!grant) {
+        await service.pauseImportRunForAuthorization(db, input.runId);
+        throw new Error("Purchase Agent authorization is required");
+      }
+      const token = await issuePurchaseAgentDelegation({
+        runId: input.runId,
+        userId: scope.actorUserId,
+        grantId: grant.id,
+        secret: this.env.BETTER_AUTH_SECRET,
+      });
+      return {
+        token,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1_000).toISOString(),
+        mcpUrl: "https://cubby.internal/api/mcp",
+      };
+    });
+  }
+
+  mcpFetch(request: Request) {
+    return this.withDatabase(async () => {
+      const { handleMcpHttpRequest } =
+        await import("./server/mcp/http-handler");
+      return await handleMcpHttpRequest(request);
+    });
+  }
+
   claimNextWork(input: { runId: string; operationId: string }) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
@@ -637,6 +669,43 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
             this.env.PURCHASE_IMPORT,
             input.runId,
           ),
+      ),
+    );
+  }
+
+  extractReceiptEvidence(input: { runId: string; operationId: string }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "extract_receipt_evidence", payload: input },
+        async () => {
+          const [{ extractPurchaseReceipt }, { loadReceiptEvidenceForRun }] =
+            await Promise.all([
+              import("./server/agents/purchase-import/extract"),
+              import("./server/purchase-import/receipt-evidence"),
+            ]);
+          const evidence = await loadReceiptEvidenceForRun(db, input.runId);
+          if (!evidence)
+            throw new Error("This run has no pending receipt evidence");
+          const extraction = await extractPurchaseReceipt({
+            db,
+            runId: input.runId,
+            imageUrl: evidence.imageUrl,
+          });
+          return {
+            stableOrderId: `receipt:${evidence.huntId}`,
+            itemOperationId: `receipt:${evidence.huntId}`,
+            source: evidence.source,
+            evidenceChecksum: evidence.evidenceChecksum,
+            extractionRevision: "receipt@1",
+            extraction,
+            lineIds: (extraction.candidate?.lines ?? []).map(
+              (_line, index) => `receipt:${evidence.huntId}:line:${index}`,
+            ),
+            primaryDocumentImageId: evidence.imageId,
+            screenshotImageId: null,
+          };
+        },
       ),
     );
   }
@@ -672,6 +741,65 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
   readBrowserCommandResult(input: { runId: string; operationId: string }) {
     return this.withDatabase((db, service) =>
       service.readBrowserCommandResult(db, this.env.PURCHASE_IMPORT, input),
+    );
+  }
+
+  recordAgentUsage(input: {
+    runId: string;
+    eventId: string;
+    provider: string;
+    model: string;
+    feature: "purchase_import_agent";
+    operation: string;
+    attempt: number;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    durationMs: number;
+    status: "succeeded" | "failed";
+    gatewayLogId?: string;
+    estimatedCost?: number;
+  }) {
+    return this.withDatabase(async (db) => {
+      const { recordAiUsage } = await import("./server/ai-usage");
+      const digest = new Uint8Array(
+        await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(
+            `purchase-agent:${input.runId}:${input.eventId}`,
+          ),
+        ),
+      );
+      digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x50;
+      digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
+      const hex = Array.from(digest.slice(0, 16), (byte) =>
+        byte.toString(16).padStart(2, "0"),
+      ).join("");
+      const eventId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+      await recordAiUsage(db, {
+        ...input,
+        eventId,
+        jobKind: "purchase_import_run",
+        jobId: input.runId,
+        cacheStatus:
+          input.cacheReadTokens > 0 || input.cacheWriteTokens > 0
+            ? "hit"
+            : "none",
+      });
+    });
+  }
+
+  updateAgentProgress(input: {
+    runId: string;
+    eventId: string;
+    phase: string;
+    currentItem?: string;
+    awaitingApproval?: boolean;
+    detail?: string;
+  }) {
+    return this.withDatabase((db, service) =>
+      service.updateAgentProgress(db, input),
     );
   }
 
@@ -777,24 +905,6 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
             kind,
             summary: input.detail ?? input.reason.replaceAll("_", " "),
           }),
-      ),
-    );
-  }
-
-  recordOrchestrationUsage(input: {
-    runId: string;
-    operationId: string;
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
-    estimatedCost: number;
-  }) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "record_orchestration_usage", payload: input },
-        () => service.recordOrchestrationUsage(db, input),
       ),
     );
   }

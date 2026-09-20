@@ -29,6 +29,7 @@ export function listPurchaseImportRuns(
   const query = getDb(db)
     .select({
       id: importRun.id,
+      publicId: importRun.publicId,
       vendorAccountLabel: vendorAccount.label,
       vendorName: vendor.name,
       trigger: importRun.trigger,

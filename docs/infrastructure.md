@@ -48,7 +48,10 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 - Custom domain `cubby.nickysemenza.com`; `workers.dev` production routing is
   disabled and preview URLs are enabled.
 - Smart Placement and static assets.
-- Service bindings `USDA_API` -> `usda-api` and `UPC_LOOKUP` -> `upc-lookup`.
+- Service bindings `USDA_API` -> `usda-api`, `UPC_LOOKUP` -> `upc-lookup`, and
+  `PURCHASE_AGENT` -> the private `purchase-agent` Worker. The reverse named
+  `CUBBY_PURCHASE_SERVICE` binding carries database-authoritative MCP and import
+  operations; neither direction uses a public Worker URL.
 - SQLite Durable Objects `DatabaseFreshnessDurableObject`,
   `CalendarFeedDurableObject`, and `PurchaseImportDurableObject`.
 - Workflow `cubby-search-index-repair`.
@@ -88,9 +91,25 @@ authority. Its checked-in Wrangler configuration declares:
 - SQLite Durable Object class `FluePurchaseImportRunAgent`, one instance named
   `import-run:<ImportRun.id>` per run;
 - direct named service binding `CUBBY_PURCHASE_SERVICE` to the web Worker's
-  `PurchaseImportService` entrypoint;
+  `PurchaseImportService` entrypoint, including run-bound MCP token issuance
+  and private MCP request forwarding;
 - Workers AI binding `AI`, with every orchestration call routed through AI
   Gateway `cubby` by the Flue provider adapter.
+
+The web Worker has the reverse `PURCHASE_AGENT` service binding solely to proxy
+authenticated conversation history, live updates, prompts, and aborts. This is
+a bounded circular service topology, not a recursive request loop: queue events
+start agent work, agent MCP calls return through `PurchaseImportService`, and
+browser users reach the agent only through an authenticated web route.
+
+The fixed public OAuth client id is `cubby-purchase-agent`. It uses authorization
+code + PKCE, `offline_access`, no client secret, and the callback
+`https://cubby.nickysemenza.com/api/import/agent/oauth/callback`. The web Worker
+provisions the client idempotently when authorization begins. Better Auth's
+existing `oauth_refresh_token` row is the revocable grant; its value is never
+copied to Flue. The web Worker mints five-minute, run-bound delegation tokens
+for MCP calls and rechecks the live grant and LedgerParty ownership on every
+request.
 
 Create and verify the non-route resource before the first deploy:
 
@@ -101,6 +120,22 @@ pnpm --dir apps/purchase-agent run build
 pnpm --dir apps/purchase-agent exec wrangler deploy --dry-run
 ```
 
+For the shared-agent cutover, apply the temporary identity/backfill SQL before
+the ordinary schema push. The first command fences pre-cutover active runs and
+creates linked paused successors; the schema push then installs the additive
+progress, preparation, approval, controller-history, and usage columns/tables:
+
+```bash
+pgcli "$DATABASE_URL"
+\i scripts/cutovers/shared-flue-purchase-agent.sql
+pnpm --dir apps/web db:push
+```
+
+The SQL prints the run-status counts, missing-identity count (which must be
+zero), and both required `ImportRun` indexes. Re-run those verification queries
+after `db:push`. Delete the temporary SQL only after the operator confirms the
+production schema; it must not remain in the merged PR.
+
 Deploy `cubby` first whenever `PurchaseImportService` changes, then deploy
 `purchase-agent`. The GitHub workflow preserves that order; agent-only changes
 skip the web deploy. Verify the private Worker and bindings with:
@@ -109,6 +144,35 @@ skip the web deploy. Verify the private Worker and bindings with:
 pnpm --dir apps/purchase-agent exec wrangler deployments list
 pnpm --dir apps/purchase-agent exec wrangler tail
 ```
+
+After deployment, authorize each member once from Settings and verify the
+client/grant without printing token values:
+
+```sql
+SELECT c.client_id, c.public, c.require_pkce, count(r.id) AS active_grants
+FROM oauth_client c
+LEFT JOIN oauth_refresh_token r
+  ON r.client_id = c.client_id AND r.revoked IS NULL
+WHERE c.client_id = 'cubby-purchase-agent'
+GROUP BY c.client_id, c.public, c.require_pkce;
+```
+
+The deterministic fixture suite is local and free. The live Terra gate drives
+the deployed authenticated Flue conversation itself, then reads the fixture
+result endpoint and applies the same prohibited-call, Product-reuse,
+idempotency, and final-state assertions:
+
+```bash
+pnpm --dir apps/purchase-agent eval:fixture
+PURCHASE_AGENT_EVAL_AGENT_URL='https://cubby.nickysemenza.com/api/import/runs/PIR-XXXXXXXXXX/agent' \
+PURCHASE_AGENT_EVAL_RESULT_URL='<authenticated-fixture-result-url>' \
+PURCHASE_AGENT_EVAL_SESSION_COOKIE='REDACTED' \
+  pnpm --dir apps/purchase-agent eval:live
+```
+
+The live gate requires a deliberately provisioned fixture run and an
+authenticated household session. Never save the session cookie in shell
+history, CI logs, repository files, or Flue messages.
 
 Rollback is additive: pause the `cubby-purchase-agent` consumer and deploy the
 previous web and Apple versions. Postgres import rows and the retained

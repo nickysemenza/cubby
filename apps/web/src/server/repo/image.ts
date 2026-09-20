@@ -56,6 +56,7 @@ import {
   gardenEntryImage,
   image,
   importHunt,
+  importPreparedOrder,
   location,
   locationImage,
   meal,
@@ -820,6 +821,18 @@ const imageReferenceCondition = (
       liveness === "active" ? activeWhere : undefined,
     );
   const byEdge = {
+    "ImportPreparedOrder.primaryDocumentImageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(importPreparedOrder)
+        .where(eq(importPreparedOrder.primaryDocumentImageId, outerImage.id)),
+    ),
+    "ImportPreparedOrder.screenshotImageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(importPreparedOrder)
+        .where(eq(importPreparedOrder.screenshotImageId, outerImage.id)),
+    ),
     "ImportHunt.receiptImageId": exists(
       dbc
         .select({ one: sql`1` })
@@ -1200,6 +1213,18 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
+  "ImportPreparedOrder.primaryDocumentImageId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "Prepared import evidence remains while its deleted primary document link is cleared.",
+  },
+  "ImportPreparedOrder.screenshotImageId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "Prepared import evidence remains while its deleted screenshot link is cleared.",
+  },
   "ImportHunt.receiptImageId": {
     code: "clearFk",
     effect: "detach",
@@ -1284,6 +1309,52 @@ type ImageEdgeOperation = {
 };
 
 const IMAGE_EDGE_OPERATIONS = {
+  "ImportPreparedOrder.primaryDocumentImageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .update(importPreparedOrder)
+        .set({ primaryDocumentImageId: null })
+        .where(inArray(importPreparedOrder.primaryDocumentImageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: importPreparedOrder.primaryDocumentImageId })
+        .from(importPreparedOrder)
+        .where(
+          and(
+            isNotNull(importPreparedOrder.primaryDocumentImageId),
+            imageIds
+              ? inArray(importPreparedOrder.primaryDocumentImageId, imageIds)
+              : undefined,
+          ),
+        );
+      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+    },
+    joinColumn: undefined,
+  },
+  "ImportPreparedOrder.screenshotImageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .update(importPreparedOrder)
+        .set({ screenshotImageId: null })
+        .where(inArray(importPreparedOrder.screenshotImageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: importPreparedOrder.screenshotImageId })
+        .from(importPreparedOrder)
+        .where(
+          and(
+            isNotNull(importPreparedOrder.screenshotImageId),
+            imageIds
+              ? inArray(importPreparedOrder.screenshotImageId, imageIds)
+              : undefined,
+          ),
+        );
+      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+    },
+    joinColumn: undefined,
+  },
   "ImportHunt.receiptImageId": {
     clear: async (tx, imageIds) => {
       await tx

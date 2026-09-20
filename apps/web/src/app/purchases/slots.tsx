@@ -9,17 +9,17 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
-import { formatCurrency } from "~/lib/utils";
 import {
   purchaseImportRunsError,
   purchaseImportRunsResponse,
   type PurchaseImportRunSummary,
-} from "~/routes/api/import/runs";
+} from "~/lib/purchase-import-run-detail";
+import { formatCurrency } from "~/lib/utils";
 
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
-import { purchaseImportRunDebugHref } from "./purchase-import-links";
+import { purchaseImportRunHref } from "./purchase-import-links";
 import {
   purchaseReconciliationStatus,
   ReconciliationStatus,
@@ -66,7 +66,7 @@ export const PurchaseImportRuns: DetailSlotComponent<"purchase"> = ({
   return (
     <div className="grid gap-3">
       {importRuns.map((run) => (
-        <PurchaseImportRunSummary key={run.id} run={run} />
+        <PurchaseImportRunSummary key={run.publicId} run={run} />
       ))}
     </div>
   );
@@ -91,9 +91,9 @@ function PurchaseImportRunSummary({ run }: { run: PurchaseImportRunSummary }) {
       ) : null}
       <a
         className="w-fit text-xs font-medium text-primary hover:underline"
-        href={purchaseImportRunDebugHref(run.id)}
+        href={purchaseImportRunHref(run.publicId)}
       >
-        Open run debug log
+        Open import run
       </a>
     </div>
   );

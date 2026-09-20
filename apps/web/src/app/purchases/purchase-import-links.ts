@@ -1,3 +1,3 @@
-export function purchaseImportRunDebugHref(runId: string): string {
-  return `/settings#purchase-import-run-${encodeURIComponent(runId)}`;
+export function purchaseImportRunHref(publicId: string): string {
+  return `/purchase-imports/${encodeURIComponent(publicId)}`;
 }

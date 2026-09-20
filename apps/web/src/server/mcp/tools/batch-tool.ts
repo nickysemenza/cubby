@@ -1,3 +1,4 @@
+import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
@@ -6,11 +7,17 @@ import {
   type EntityKernelContext,
   entityKernelContextSchema,
 } from "~/server/entity-kernel";
+import { getEntityKernelContext } from "~/server/mcp/kernel-context";
+import {
+  executePurchaseAgentMutation,
+  trustedPurchaseAgent,
+} from "~/server/mcp/purchase-agent-protocol";
 
 import {
   type Caller,
   describeToolError,
   getCaller,
+  operationContextFromExtra,
   registerMcpTool,
   type McpToolRegistrationRuntime,
   type ToolErrorDetail,
@@ -116,6 +123,7 @@ export function registerBatchTool<
   const baseInputSchema = z.strictObject({
     items,
     resultDetail: batchResultDetailParam(defaultDetail),
+    _runExecution: purchaseImportRunExecution.optional(),
   });
   const inputSchema = config.refineItems
     ? baseInputSchema.superRefine((input, ctx) =>
@@ -132,22 +140,77 @@ export function registerBatchTool<
       inputSchema,
       outputSchema,
       annotations: config.annotations,
+      purchaseAgentMutationHandled: true,
       telemetryEntity: config.telemetryEntity,
       handler: async (params, extra) => {
-        const caller = getCaller(extra);
-        const context =
-          extra.authInfo?.extra?.entityKernel === undefined
-            ? undefined
-            : entityKernelContextSchema.parse(
-                extra.authInfo.extra.entityKernel,
-              );
+        const trusted = trustedPurchaseAgent(extra);
+        const execution = params._runExecution;
+        if (trusted && !execution)
+          throw new Error(
+            "Purchase-agent batch execution envelope is required",
+          );
+        if (trusted) {
+          const itemOperationIds = execution?.itemOperationIds;
+          if (
+            !itemOperationIds ||
+            itemOperationIds.length !== params.items.length ||
+            new Set(itemOperationIds).size !== itemOperationIds.length ||
+            itemOperationIds.includes(execution.operationId)
+          ) {
+            throw new Error(
+              "Purchase-agent batches require one distinct stable operation id per item",
+            );
+          }
+        }
         const results: Array<BatchResult<z.output<TItemOutput>>> = [];
 
         for (const [index, item] of params.items.entries()) {
           try {
-            const produced = config.itemOutputSchema.parse(
-              await config.run(caller, item, context),
-            );
+            const producedValue = trusted
+              ? await executePurchaseAgentMutation({
+                  db: getEntityKernelContext(extra).db,
+                  actor: getEntityKernelContext(extra).actorContext,
+                  operationContext: (() => {
+                    const context = operationContextFromExtra(extra);
+                    if (!context)
+                      throw new Error(
+                        "Purchase-agent operation context is missing",
+                      );
+                    return context;
+                  })(),
+                  trusted,
+                  toolName: config.name,
+                  args: { index, item },
+                  execution: {
+                    runPublicId: execution!.runPublicId,
+                    operationId: execution!.itemOperationIds![index]!,
+                  },
+                  run: async (transactionExtra) => {
+                    const context =
+                      transactionExtra.authInfo?.extra?.entityKernel ===
+                      undefined
+                        ? undefined
+                        : entityKernelContextSchema.parse(
+                            transactionExtra.authInfo.extra.entityKernel,
+                          );
+                    return config.run(
+                      getCaller(transactionExtra),
+                      item,
+                      context,
+                    );
+                  },
+                  baseExtra: extra,
+                })
+              : await config.run(
+                  getCaller(extra),
+                  item,
+                  extra.authInfo?.extra?.entityKernel === undefined
+                    ? undefined
+                    : entityKernelContextSchema.parse(
+                        extra.authInfo.extra.entityKernel,
+                      ),
+                );
+            const produced = config.itemOutputSchema.parse(producedValue);
             const success: BatchSuccess<z.output<TItemOutput>> = {
               index,
               status: "succeeded",

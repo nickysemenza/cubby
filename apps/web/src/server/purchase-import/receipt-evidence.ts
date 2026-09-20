@@ -7,7 +7,6 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { and, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 
-import { extractPurchaseReceipt } from "~/server/agents/purchase-import/extract";
 import type { Database } from "~/server/db";
 import {
   financialTransaction,
@@ -15,7 +14,9 @@ import {
   importHunt,
   importRun,
   ledgerParty,
+  user,
 } from "~/server/db/schema";
+import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import {
   getDb,
   notDeleted,
@@ -24,8 +25,7 @@ import {
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
-import { auditAllImportBatches } from "./run-service";
-import { importVendorOrder } from "./writer";
+import { mintImportRunPublicId } from "./run-identifiers";
 
 /**
  * A hunt—not a particular upload—is the durable receipt source. A retry may
@@ -40,6 +40,44 @@ export const receiptHuntSourceIdentity = (input: {
   externalKey: `hunt:${input.huntId}`,
   checksum: input.checksum,
 });
+
+export async function loadReceiptEvidenceForRun(db: Database, runId: string) {
+  const [row] = await getDb(db)
+    .select({
+      huntId: importHunt.id,
+      imageId: image.shortcode,
+      imageKey: image.key,
+      checksum: image.sha256,
+    })
+    .from(importHunt)
+    .innerJoin(
+      image,
+      and(
+        eq(image.id, importHunt.receiptImageId),
+        eq(image.status, "UPLOADED"),
+        isNotNull(image.sha256),
+        notDeleted(image),
+      ),
+    )
+    .where(
+      and(
+        eq(importHunt.receiptRunId, runId),
+        eq(importHunt.state, "processing_receipt"),
+      ),
+    )
+    .limit(1);
+  if (!row?.checksum) return null;
+  return {
+    huntId: row.huntId,
+    imageId: row.imageId,
+    imageUrl: getR2PublicUrl(row.imageKey),
+    source: receiptHuntSourceIdentity({
+      huntId: row.huntId,
+      checksum: row.checksum,
+    }),
+    evidenceChecksum: row.checksum,
+  };
+}
 
 export async function listReceiptHunts(db: Database, actor: ActorContext) {
   const rows = await getDb(db)
@@ -90,6 +128,7 @@ export async function submitReceiptEvidence(
   db: Database,
   rawInput: SubmitReceiptEvidenceInput,
   actor: ActorContext,
+  queue: PurchaseAgentQueueProducer,
 ) {
   const input = submitReceiptEvidenceInput.parse(rawInput);
   const imageId = await resolveOrThrow(db, "image", input.imageId);
@@ -101,10 +140,16 @@ export async function submitReceiptEvidence(
         vendorId: importHunt.vendorId,
         vendorAccountId: importHunt.vendorAccountId,
         receiptImageId: importHunt.receiptImageId,
+        receiptRunId: importHunt.receiptRunId,
         state: importHunt.state,
         updatedAt: importHunt.updatedAt,
-        imageKey: image.key,
         imageChecksum: image.sha256,
+        actorUserId: ledgerParty.userId,
+        actorName: user.name,
+        actorEmail: user.email,
+        actorLedgerPartyShortcode: ledgerParty.shortcode,
+        actorLedgerPartyName: ledgerParty.name,
+        actorLedgerPartyKind: ledgerParty.kind,
       })
       .from(importHunt)
       .innerJoin(
@@ -124,6 +169,7 @@ export async function submitReceiptEvidence(
           notDeleted(image),
         ),
       )
+      .innerJoin(user, eq(user.id, ledgerParty.userId))
       .where(eq(importHunt.id, input.huntId))
       .limit(1)
       .for("update");
@@ -133,6 +179,8 @@ export async function submitReceiptEvidence(
       );
     if (!row.vendorId)
       throw new Error("Classify the receipt vendor before importing it.");
+    if (!row.actorUserId)
+      throw new Error("Receipt party has no controlling member.");
     if (row.receiptImageId) {
       const retryable =
         row.state === "receipt_failed" ||
@@ -142,7 +190,23 @@ export async function submitReceiptEvidence(
         throw new Error("This receipt hunt already has different evidence.");
       }
       if (!retryable) {
-        return { ...row, runId: null, newlyQueued: false };
+        if (!row.receiptRunId)
+          throw new Error(
+            "Receipt evidence is processing without an import run.",
+          );
+        const [existingRun] = await tx
+          .select({ id: importRun.id, publicId: importRun.publicId })
+          .from(importRun)
+          .where(eq(importRun.id, row.receiptRunId))
+          .limit(1);
+        if (!existingRun)
+          throw new Error("Receipt import run could not be resumed.");
+        return {
+          ...row,
+          runId: existingRun.id,
+          publicId: existingRun.publicId,
+          shouldEnqueue: true,
+        };
       }
     }
     const runId = crypto.randomUUID();
@@ -150,8 +214,17 @@ export async function submitReceiptEvidence(
       .insert(importRun)
       .values({
         id: runId,
+        publicId: mintImportRunPublicId(),
         ledgerPartyId: row.ledgerPartyId,
+        actorUserId: row.actorUserId,
+        actorName: row.actorName,
+        actorEmail: row.actorEmail,
+        actorLedgerPartyShortcode: row.actorLedgerPartyShortcode,
+        actorLedgerPartyName: row.actorLedgerPartyName,
+        actorLedgerPartyKind: row.actorLedgerPartyKind,
         vendorAccountId: row.vendorAccountId,
+        vendorId: row.vendorId,
+        predecessorRunId: row.receiptRunId,
         trigger: "discovery",
         agentSessionId: `import-run:${runId}`,
       })
@@ -161,16 +234,28 @@ export async function submitReceiptEvidence(
       .update(importHunt)
       .set({
         receiptImageId: imageId,
+        receiptRunId: run.id,
         receiptQueuedAt: new Date(),
         state: "processing_receipt",
         error: null,
         updatedAt: new Date(),
       })
       .where(eq(importHunt.id, row.id));
-    return { ...row, runId: run.id, newlyQueued: true };
+    const [createdRun] = await tx
+      .select({ publicId: importRun.publicId })
+      .from(importRun)
+      .where(eq(importRun.id, run.id))
+      .limit(1);
+    if (!createdRun) throw new Error("Receipt import run was not found.");
+    return {
+      ...row,
+      runId: run.id,
+      publicId: createdRun.publicId,
+      shouldEnqueue: true,
+    };
   });
 
-  if (!claimed.newlyQueued || !claimed.runId) {
+  if (!claimed.shouldEnqueue || !claimed.runId || !claimed.publicId) {
     return submitReceiptEvidenceOut.parse({
       huntId: input.huntId,
       imageId: input.imageId,
@@ -181,69 +266,13 @@ export async function submitReceiptEvidence(
     throw new Error("Finalized receipt image is missing its checksum.");
   if (!claimed.vendorId)
     throw new Error("Classify the receipt vendor before importing it.");
-  const vendorId = claimed.vendorId;
-
-  try {
-    const extraction = await extractPurchaseReceipt({
-      db,
-      runId: claimed.runId,
-      imageUrl: getR2PublicUrl(claimed.imageKey),
-    });
-    await importVendorOrder(
-      db,
-      {
-        runId: claimed.runId,
-        ledgerPartyId: claimed.ledgerPartyId,
-        vendorId,
-        vendorAccountId: claimed.vendorAccountId,
-        source: receiptHuntSourceIdentity({
-          huntId: input.huntId,
-          checksum: claimed.imageChecksum,
-        }),
-        extraction,
-        primaryDocumentImageId: imageId,
-        screenshotImageId: null,
-      },
-      actor.userId,
-    );
-    await auditAllImportBatches(db, {
-      runId: claimed.runId,
-      operationId: "receipt-final-audit",
-    });
-    await withTransaction(db, async (tx) => {
-      await tx
-        .update(importHunt)
-        .set({ state: "resolved", updatedAt: new Date() })
-        .where(eq(importHunt.id, input.huntId));
-      await tx
-        .update(importRun)
-        .set({
-          status: "completed",
-          endedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(importRun.id, claimed.runId));
-    });
-  } catch (error) {
-    await withTransaction(db, async (tx) => {
-      await tx
-        .update(importHunt)
-        .set({
-          state: "receipt_failed",
-          error:
-            error instanceof Error
-              ? error.message.slice(0, 2_000)
-              : "Receipt import failed",
-          updatedAt: new Date(),
-        })
-        .where(eq(importHunt.id, input.huntId));
-      await tx
-        .update(importRun)
-        .set({ status: "failed", endedAt: new Date(), updatedAt: new Date() })
-        .where(eq(importRun.id, claimed.runId));
-    });
-    throw error;
-  }
+  await queue.send({
+    version: 1,
+    runId: claimed.runId,
+    publicId: claimed.publicId,
+    eventId: `receipt:${input.huntId}:${claimed.imageChecksum}`,
+    type: "start_or_resume",
+  });
 
   return submitReceiptEvidenceOut.parse({
     huntId: input.huntId,

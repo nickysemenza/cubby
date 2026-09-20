@@ -61,7 +61,8 @@
   // public *_API_URL vars below since vite dev runs plain Node).
   "services": [
     { "binding": "USDA_API", "service": "usda-api" },
-    { "binding": "UPC_LOOKUP", "service": "upc-lookup" }
+    { "binding": "UPC_LOOKUP", "service": "upc-lookup" },
+    { "binding": "PURCHASE_AGENT", "service": "purchase-agent" }
   ],
   // Workers AI binding — exposes `env.AI.gateway("cubby")`, the Universal
   // endpoint every AI call rides: the provider SDKs and the cookbook

@@ -13,6 +13,8 @@ const queueBody: z.ZodType<PurchaseAgentEventCandidate> = z.union([
   z.object({
     version: z.literal(1).optional(),
     runId: z.string().optional(),
+    publicId: z.string().optional(),
+    coordinatorModel: z.enum(["gpt-5.6-terra", "gpt-5.6-sol"]).optional(),
     eventId: z.string().optional(),
     type: z.string().optional(),
     connectionId: z.string().optional(),

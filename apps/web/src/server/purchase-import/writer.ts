@@ -43,6 +43,7 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   importFinding,
+  importRun,
   importRunMutation,
   importSourceClaim,
   image,
@@ -99,6 +100,14 @@ async function assertImportOwnership(
   const [owned] = await database
     .select({ id: ledgerParty.id })
     .from(ledgerParty)
+    .innerJoin(
+      importRun,
+      and(
+        eq(importRun.id, input.runId),
+        eq(importRun.ledgerPartyId, ledgerParty.id),
+        eq(importRun.actorUserId, userIdSchema.parse(actorUserId)),
+      ),
+    )
     .leftJoin(
       vendorAccount,
       input.vendorAccountId
@@ -116,7 +125,6 @@ async function assertImportOwnership(
     .where(
       and(
         eq(ledgerParty.id, partyId),
-        eq(ledgerParty.userId, userIdSchema.parse(actorUserId)),
         eq(ledgerParty.kind, "member"),
         notDeleted(ledgerParty),
         input.vendorAccountId
@@ -269,19 +277,42 @@ const externalSource = (url: string | undefined, vendorId: string): string => {
   );
 };
 
+const amazonAsin = (url: string | undefined): string | null => {
+  if (!url) return null;
+  const parsed = new URL(url);
+  if (!/(^|\.)amazon\./u.test(parsed.hostname.toLowerCase())) return null;
+  return (
+    /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:[/?]|$)/iu
+      .exec(parsed.pathname)?.[1]
+      ?.toUpperCase() ?? null
+  );
+};
+
+const lineIdentifiers = (
+  line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,
+) => [
+  ...(line.sku
+    ? [{ kind: PURCHASE_EXTERNAL_ID_KIND, externalId: line.sku }]
+    : []),
+  ...(amazonAsin(line.productUrl)
+    ? [{ kind: "asin" as const, externalId: amazonAsin(line.productUrl)! }]
+    : []),
+];
+
 /** The same vendor SKU in one order must resolve to one Product decision. */
 export const lineExternalIdentity = (
   line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,
   vendorId: string,
 ): string | null =>
-  line.sku
-    ? `${externalSource(line.productUrl, vendorId)}:sku:${line.sku}`
+  lineIdentifiers(line)[0]
+    ? `${externalSource(line.productUrl, vendorId)}:${lineIdentifiers(line)[0]?.kind}:${lineIdentifiers(line)[0]?.externalId}`
     : null;
 
 type LineIdentityDecision = {
   productId: string | null;
   promote: boolean;
   variantDoubt: boolean;
+  unresolvedReason: string | null;
   probability: number;
   lineKind: ExpenseLineKind;
   kitKind: "kit_with_components" | "single" | "n_pack";
@@ -401,6 +432,7 @@ async function decideLineIdentities(
         promote: false,
         variantDoubt: false,
         probability: 1,
+        unresolvedReason: null,
         ...baseDecision,
       });
       continue;
@@ -414,7 +446,8 @@ async function decideLineIdentities(
       decisions.push(decidedEarlier);
       continue;
     }
-    const [externalMatch] = line.sku
+    const identifiers = lineIdentifiers(line);
+    const [externalMatch] = identifiers.length
       ? await database
           .select({ productId: productExternalId.productId })
           .from(productExternalId)
@@ -428,8 +461,14 @@ async function decideLineIdentities(
           .where(
             and(
               eq(productExternalId.source, source),
-              eq(productExternalId.kind, PURCHASE_EXTERNAL_ID_KIND),
-              eq(productExternalId.externalId, line.sku),
+              or(
+                ...identifiers.map((identifier) =>
+                  and(
+                    eq(productExternalId.kind, identifier.kind),
+                    eq(productExternalId.externalId, identifier.externalId),
+                  ),
+                ),
+              ),
               notDeleted(productExternalId),
             ),
           )
@@ -441,6 +480,7 @@ async function decideLineIdentities(
         promote: true,
         variantDoubt: false,
         probability: 1,
+        unresolvedReason: null,
         ...baseDecision,
       };
       decisions.push(decision);
@@ -472,6 +512,7 @@ async function decideLineIdentities(
         promote,
         variantDoubt: false,
         probability: 1,
+        unresolvedReason: null,
         ...baseDecision,
       };
       decisions.push(decision);
@@ -506,6 +547,7 @@ async function decideLineIdentities(
         promote: true,
         variantDoubt: false,
         probability: choice.probability,
+        unresolvedReason: null,
         ...baseDecision,
       };
       decisions.push(decision);
@@ -516,6 +558,7 @@ async function decideLineIdentities(
         promote,
         variantDoubt: choice.probability >= 0.6,
         probability: choice.probability,
+        unresolvedReason: null,
         ...baseDecision,
       };
       decisions.push(decision);
@@ -540,12 +583,12 @@ async function resolveLineProduct(
   if (resolvedEarlier) return parseEntityId("product", resolvedEarlier);
   if (decision.productId) {
     const productId = parseEntityId("product", decision.productId);
-    if (line.sku) {
+    for (const identifier of lineIdentifiers(line)) {
       await learnPurchaseProductExternalId(tx, {
         productId,
         source: externalSource(line.productUrl, vendorId),
-        kind: PURCHASE_EXTERNAL_ID_KIND,
-        externalId: line.sku,
+        kind: identifier.kind,
+        externalId: identifier.externalId,
         url: line.productUrl,
       });
     }
@@ -558,12 +601,12 @@ async function resolveLineProduct(
     name: line.title,
     manufacturer: "",
   });
-  if (line.sku) {
+  for (const identifier of lineIdentifiers(line)) {
     await learnPurchaseProductExternalId(tx, {
       productId: created.id,
       source,
-      kind: PURCHASE_EXTERNAL_ID_KIND,
-      externalId: line.sku,
+      kind: identifier.kind,
+      externalId: identifier.externalId,
       url: line.productUrl,
     });
   }
@@ -583,6 +626,7 @@ async function fileFinding(
     | "reversal_kind"
     | "kit_double_booked"
     | "variant_doubt"
+    | "product_unresolved"
     | "arrived"
     | "other",
   summary: string,
@@ -680,9 +724,30 @@ export async function importVendorOrder(
       ["sum_mismatch", "foreign_currency", "missing_total"].includes(
         input.extraction.reason,
       ));
+  const explicitResolutions = input.productResolutions;
   const identityDecisions = skipsLineWrites
     ? []
-    : await decideLineIdentities(db, input);
+    : explicitResolutions
+      ? (input.extraction.candidate?.lines ?? []).map((line, lineIndex) => {
+          const resolution = explicitResolutions.find(
+            (item) => item.lineIndex === lineIndex,
+          );
+          if (!resolution)
+            throw new Error(`Missing product resolution for line ${lineIndex}`);
+          return {
+            productId:
+              resolution.kind === "existing" ? resolution.productId : null,
+            promote: resolution.kind === "new",
+            variantDoubt: false,
+            unresolvedReason:
+              resolution.kind === "unresolved" ? resolution.reason : null,
+            probability: 1,
+            lineKind: line.lineKind,
+            kitKind: "single" as const,
+            reversalKind: null,
+          };
+        })
+      : await decideLineIdentities(db, input);
   // The callback is the transaction's explicit policy matrix; splitting it
   // would hide the all-or-nothing write boundary.
   // eslint-disable-next-line complexity
@@ -691,6 +756,14 @@ export async function importVendorOrder(
     const [ownedScope] = await tx
       .select({ partyId: ledgerParty.id })
       .from(ledgerParty)
+      .innerJoin(
+        importRun,
+        and(
+          eq(importRun.id, input.runId),
+          eq(importRun.ledgerPartyId, ledgerParty.id),
+          eq(importRun.actorUserId, userIdSchema.parse(actorUserId)),
+        ),
+      )
       .leftJoin(
         vendorAccount,
         input.vendorAccountId
@@ -711,7 +784,6 @@ export async function importVendorOrder(
       .where(
         and(
           eq(ledgerParty.id, partyId),
-          eq(ledgerParty.userId, userIdSchema.parse(actorUserId)),
           eq(ledgerParty.kind, "member"),
           notDeleted(ledgerParty),
           input.vendorAccountId
@@ -892,6 +964,7 @@ export async function importVendorOrder(
             productId: null,
             promote: false,
             variantDoubt: false,
+            unresolvedReason: null,
             probability: 0,
             lineKind: line.lineKind,
             kitKind: "single" as const,
@@ -943,6 +1016,18 @@ export async function importVendorOrder(
               "purchaseId",
             ],
           });
+          if (identity.unresolvedReason && identity.lineKind === "principal") {
+            findingIds.push(
+              await fileFinding(
+                tx,
+                input,
+                purchaseId,
+                "product_unresolved",
+                `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+                null,
+              ),
+            );
+          }
           if (identity.variantDoubt) {
             findingIds.push(
               await fileFinding(

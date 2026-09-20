@@ -5,6 +5,24 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
+  // Export platform/runtime metadata only. Agent message, tool, and evidence
+  // content belongs to the authenticated Flue transcript, never console logs
+  // or custom trace attributes.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "destinations": ["grafana-logs"]
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "destinations": ["grafana-traces"]
+    }
+  },
   "queues": {
     "consumers": [
       {

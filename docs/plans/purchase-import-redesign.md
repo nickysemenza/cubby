@@ -1,30 +1,27 @@
 # Purchase import redesign
 
-Status: shipped architecture, updated by the Flue follow-up on 2026-09-19.
-The original database cutover was applied and verified; the additive Flue
-cutover is operator-applied from the follow-up branch before merge. Every
-decision was put to the operator and confirmed unless marked **assumption**.
+Status: shipped architecture, updated by the shared-agent follow-up on
+2026-09-20. The numbered decision log preserves the design history; the current
+runtime contract in §1.1 supersedes older entries that describe the bounded
+Luna tool loop or `import_vendor_orders`.
 
 ## 1. Summary
 
-Today a purchase import is a Claude Code / Codex session driving Chrome page by
-page, reading each order page into model context, hand-writing ~10 MCP
-mutations per order, then opening product pages one at a time for images.
-Measured in `docs/todos.md`: ~150 tool calls per 16 orders are mechanical, ~20
-are judgment. The redesign moves everything without a decision into code, makes
-every remaining line-level decision a closed-set choice on the decision tier
-(Jev), spends one high-effort reasoning call per batch on *auditing* the
-assembled result, and reaches a human only for corrections.
+Routine imports and unusual Claude/Codex sessions now use the same packaged
+skills, Cubby MCP catalog, immutable preparation, and transactional commit.
+Flue supplies durable conversation and recovery; Postgres remains authoritative
+for authorization, business state, approvals, provenance, and replay results.
 
 ```text
 Gmail (per member, hourly cron) ─discovers order ids──────────┐
 Mac app (drives the member's own Chrome/Safari) ─fetches──────┤
+Receipt photo ─bounded vision extraction──────────────────────┤
                                                               ▼
-   Flue agent, one per ImportRun (private Worker, SQLite Durable Object)
-     └─ tool: cubby.import_order_page
-          capture → fast-tier extract (+ sum-check as validate) →
-          PDF attach → import_vendor_orders (writer) → Jev identity
-     └─ auditor (reasoning tier, high effort, ≤25 orders) → ImportFinding
+   Terra Flue agent, one per ImportRun (private Worker, SQLite Durable Object)
+     └─ packaged purchase-import + product-enrichment skills
+     └─ complete Cubby MCP catalog through a run-bound OAuth delegation
+          capture → prepare_purchase_import → catalog investigation →
+          commit_purchase_import → bounded Jev/Sonnet decisions and audit
                                                               ▼
    Problems page (`importFindings` key): wrong product, sum mismatch,
    arrived — receive?, sign-in needed, unclassified vendor.
@@ -40,6 +37,34 @@ sessions or cookies (never); rejecting or back-computing anything from
 `statedTotal` (tenet 5); multi-user coordination beyond per-member ownership;
 shipment modelling; push notification infrastructure; a generic AI-proposal
 store.
+
+### 1.1 Current shared-agent contract
+
+- An `ImportRun` has a public `PIR-*` handle, snapshotted actor, fixed
+  coordinator/model and skill/runtime revisions, and optional predecessor.
+  `paused_auth`, `paused_offline`, and `paused_approval` are resumable;
+  `needs_review`, `completed`, and `failed` are terminal.
+- Browser runs act as the VendorAccount owner, Gmail runs as the mailbox owner,
+  and manual/export runs as the submitter. A trusted household member may steer,
+  abort, or approve without changing the effect actor.
+- The first-party `cubby-purchase-agent` OAuth client uses authorization code,
+  PKCE, and a revocable refresh grant. The web Worker mints only short-lived,
+  run-bound MCP delegation tokens; credentials never enter Flue storage.
+- `prepare_purchase_import` persists immutable source/evidence identity and
+  stable lines. The coordinator resolves each principal line to an existing
+  Product shortcode, explicit `new`, or `unresolved`; only
+  `commit_purchase_import` may write imported Products and Expenses.
+- Every MCP mutation carries a stable run operation id. Generic/open-world
+  mutations pause on a typed, fingerprinted approval. Business effects,
+  provenance, and replay results are recorded transactionally; unknown external
+  outcomes reconcile rather than retry blindly.
+- Terra coordinates one run without mid-run model switching. Jev handles closed
+  choices and Sonnet handles bounded repair/audit. Sol is an explicit successor
+  run. All provider traffic uses AI Gateway `cubby`.
+- `/purchase-imports/PIR-*` is the operational record: durable transcript and
+  live controls, structured browser/server logs, approvals, affected Purchases,
+  and every `AiUsage` row. Its cost header sums all priced rows and reports an
+  unpriced count; pagination never changes the total.
 
 ## 2. Decision log
 
@@ -87,14 +112,14 @@ store.
 | 40 | UI split | Web: VendorAccounts, runs, hints, findings. Mac app: status line, "Sync now", browser choice. |
 | 41 | Currency | Lines are written at the USD figure the page shows; a page with no USD figure gets a `foreign_currency` finding and no lines. Nothing is scaled from `statedTotal` or held for settlement *(review: tenet 5)*. Further handling is deferred until the first such order exists. |
 | 42 | Dedupe key | The existing `Purchase.orderId` + `Purchase_vendorId_orderId_key`; `vendorAccountId` is an attribute *(review)*. |
-| 43 | Shortcode prefixes | 2–5 letters (§10 item 0). `VendorAccount` is `VACCT-`; `ImportRun`/`ImportFinding` have no shortcode. |
+| 43 | Public prefixes | `VendorAccount` is `VACCT-`; `ImportRun` has the public `PIR-` handle used by agents and URLs while retaining an internal UUID; `ImportFinding` remains internal to its run/Problem surface. |
 | 44 | Completeness | Every entity gets a 0–100 completeness score derived from its data-quality checks, each check weighted and carrying an `expectedIf` predicate; a Purchase at a `receipt_only` vendor is complete at amount + project + date, one at an `online_account` vendor is not complete without lines. Generalises today's `complete \| needs_data \| defect` (§10 item 2). |
 | 45 | "Tried, not available" | A data exception with reason `history_expired` (or `unavailable`) on `empty_expenses` / `primary_document`. The agent sets it automatically for orders older than the earliest order the vendor still shows; a human can set it from the Purchase. |
 | 46 | Exception staleness | **All** data exceptions are fingerprinted on the inputs their check reads (live expense count, document set, `orderId`, …) instead of the row's `updatedAt`: an exception is valid while the check's inputs are unchanged. Reasons stay mandatory and typed as today. |
 | 47 | Hunt | A charge at an `online_account` vendor with no allocated Purchase opens a hunt: Gmail match (sender, date window, amount) → order id → targeted browser fetch. No email match → on the next run the browser walks the orders list bounded to the charge date ±7 days → still nothing → `expected order not found` Problem. |
 | 48 | Hunt routing | The charge routes by `FinancialAccount.ledgerPartyId` to that member's VendorAccount. The Gmail step runs server-side immediately, so the order id is known before the owner's Mac appears; only the fetch waits for their session. |
 | 49 | Shipment-level settlement | Amazon (and others) charge per **shipment**, so one order yields several charges that never equal the order total, and one charge sometimes covers several same-day orders. Extraction captures the order page's own transaction list (card, amount, date per shipment); the writer records one `FinancialTransaction` allocation per shipment charge; hunts match a charge against shipment amounts first, then subset-sum over order mails in the window for the N-orders-one-charge case. |
-| 50 | Receipt photos | `receipt_only` vendors use the same writer: a receipt photo (iOS photo import, or attached from the Purchase) → vision extract → `import_vendor_orders` → Jev → auditor. A `receipt_only` hunt asks "is there a receipt photo within ±3 days of the charge?" before filing "photograph the receipt". |
+| 50 | Receipt photos | `receipt_only` vendors use the same writer: a receipt photo (iOS photo import, or attached from the Purchase) → vision extract → `prepare_purchase_import` → identity investigation → `commit_purchase_import` → Jev → auditor. A `receipt_only` hunt asks "is there a receipt photo within ±3 days of the charge?" before filing "photograph the receipt". |
 | 51 | Mail attachments | An `OrderMail` with a PDF attachment attaches it to the matched Purchase as `invoice` (or `receipt` when the mail says so), which closes `primary_document` for utilities, contractors, and `not_expected` vendors without any browser work. |
 | 52 | Return windows and refunds | `OrderMail` refund events file a `refund_unbooked` finding with the proposed negative row; a delivered event plus the vendor's return policy (a per-Vendor `returnWindowDays`, null = none) files a `return_window` finding that surfaces only for lines above a threshold and expires itself. |
 | 53 | Later, enabled by this plan | Price history on the shopping list; recurring-order detection as consumption *rate* suggestions (never a decrement); an AI cost page by `jobKind`. §11. |
@@ -118,7 +143,7 @@ is `(): AnyPgColumn =>` across modules), unique, CHECK `userId IS NULL OR kind
 | `ledgerPartyId` | FK LedgerParty (member); the owner |
 | `label` | e.g. "Nicky's Amazon" |
 | `cursor` | JSON `{ newestOrderAt, orderIdsOnNewestDate[], backfillBeforeOrderAt, earliestAvailableOrderAt }` — order ids are not monotonic, so the cursor is a date plus the ids already seen on it; `earliestAvailableOrderAt` is the oldest order the site still shows, which bounds what backfill can ever recover |
-| `status` | `active \| paused_auth \| paused_offline \| disabled` — the only run status |
+| `status` | `active \| paused_auth \| paused_offline \| disabled` — the vendor-account connection state; run lifecycle is recorded separately on `ImportRun` |
 | `lastRunAt`, `lastSuccessAt` | |
 
 Unique on `(vendorId, ledgerPartyId)` where not deleted. Full entity work per
@@ -226,21 +251,31 @@ duplicate; the screenshot attaches as `other`.
 - Shared code in `CubbyKit` (`BrowserBridge` protocol; Apple Events executor
   on macOS, `WKWebView` executor stub for iOS later).
 
-### 4.2 Server: per-run agent and account browser broker (Flue)
+### 4.2 Server: per-run shared agent and account browser broker (Flue)
 
-The shipped topology avoids a circular binding. The web Worker transactionally
-admits every trigger through `startOrResume`, then publishes a typed event to
-`cubby-purchase-agent`. The private agent Worker consumes it and calls the web
-Worker's named `PurchaseImportService` entrypoint through a service binding.
-Only the web Worker holds Postgres, document, authentication, and browser
-authority.
+The web Worker transactionally admits every trigger through the shared run
+admission boundary, then publishes a typed event to `cubby-purchase-agent`.
+The private agent calls
+the web Worker's named `PurchaseImportService` for run-bound MCP tokens and MCP
+transport. The reverse `PURCHASE_AGENT` service binding lets authenticated web
+sessions read and control Flue conversations. This circular service topology
+has no recursive request path: queue events enter the agent, MCP effects return
+to web, and UI conversation requests terminate at the agent.
 
-Flue owns one SQLite Durable Object conversation per `ImportRun`. Its tools are
-bounded run-scoped RPCs; each durable step also carries a stable operation id
-through `ImportRunOperation`, so queue redelivery, Flue replay, and a crash
-around an external effect converge on the original typed result. The agent has
-no SQL, shell, arbitrary browser evaluation, generic mutation, or unrestricted
-finding-resolution tool.
+Receipt-only hunts use the same conversation and writer: the upload is linked
+to its run, `claim_next_import_work` returns `receipt_evidence`, and the bounded
+receipt extractor returns immutable evidence for Terra to prepare, investigate,
+commit, and audit. A failed or reviewed receipt retry creates a linked
+successor; it cannot bypass Product resolution through a direct writer path.
+
+Flue owns one SQLite Durable Object conversation per `ImportRun`. Terra mounts
+the full MCP catalog and progressively loads the purchase-import and
+product-enrichment skills. MCP reads are ordinary catalog reads; every mutation
+requires a stable run operation envelope. The server classifies the parsed
+action, auto-allows only the bounded prepare/commit workflow, and pauses generic
+creates, updates, deletes, merges, and receiving on an exact approval. The
+agent still has no SQL, shell, arbitrary browser evaluation, or authority to
+expand browser domains.
 
 `PurchaseImportDurableObject` remains bound by VendorAccount solely as the thin
 Mac/browser broker. It serializes one command stream, persists results before
@@ -248,11 +283,12 @@ acknowledgement, fences stale protocol generations, and emits continuation
 events. A submission settles while a browser result is pending; reconnect or a
 result resumes the same conversation without waiting against Flue's deadline.
 
-Authentication and offline conditions pause the run. Ambiguous evidence
-atomically creates an `import_run` finding and terminalizes the run as
-`needs_review`; retrying is an explicit new run. Orchestration uses the existing
-fast model through AI Gateway `cubby`, and aggregate Flue usage—including
-retries and compaction—is recorded under `jobKind=purchase_import_run`.
+Authentication, offline, and approval conditions pause the run. Ambiguous
+evidence atomically creates an `import_run` finding and terminalizes the run as
+`needs_review`; retrying is an explicit linked successor. Terra remains fixed
+within one run. Every coordinator, extraction, decision, repair, audit, retry,
+and compaction provider attempt is recorded separately under
+`jobKind=purchase_import_run`; aggregate Flue events are not double-counted.
 
 The previous custom loop and broker SQL orchestration were removed. Legacy
 SQLite tables are intentionally left untouched inside the retained namespace
@@ -300,10 +336,13 @@ Two features *(review: `runStructuredFeature` cannot switch tier mid-run)*:
   when extraction still fails validation; its failure yields a `sum_mismatch`
   finding with the PDF.
 
-### 4.4 Server: `import_vendor_orders` (writer)
+### 4.4 Server: prepare/commit purchase writer
 
-A workflow service with its own `withTransaction`, also an MCP tool. Accepts
-`{ vendorAccountId, orders: [...] }` from any client. Per order:
+`prepare_purchase_import` persists the source checksum, extraction revision,
+evidence fingerprint, and stable order/line ids without creating Products or
+Expenses. The coordinator investigates the catalog, then calls
+`commit_purchase_import` with one explicit existing/new/unresolved resolution
+per principal line. The commit service owns one transaction per order:
 
 - the caller's session must own `vendorAccountId` (agent socket or MCP
   OAuth user → `LedgerParty.userId`);
@@ -318,13 +357,13 @@ A workflow service with its own `withTransaction`, also an MCP tool. Accepts
 - typed `lineKind` on every row; no inference;
 - signed `productQuantity`, direction from cost; `null` on concessions;
 - allocation rows never carry a `productId`;
-- Jev order per line: `expense-line-role` → `kit-detection` →
+- bounded decision order per line: `expense-line-role` → `kit-detection` →
   `product-line-identity` → `product-promotion` → `reversal-kind` (negative
   lines only);
-- identity: exact external-id hit → link; else shortlist of ≤20
-  (`resolve_products` + collisions + name/model search) rendered as short
-  labels → Jev; `probability ≥ 0.85` link, `< 0.6` create, between → create
-  and file `variant_doubt`;
+- identity: exact retailer SKU/ASIN/GTIN/model hit → link; otherwise the
+  coordinator uses ordinary Product search/detail tools and the enrichment
+  skill. Only explicit `new` creates; `unresolved` files a run finding and
+  stops for review without speculative Product creation;
 - image: server-side `sourceUrl` attach with the idempotency key;
 - settlement: for each captured shipment charge, find the
   `FinancialTransaction` by card + amount + date window and allocate it to
@@ -333,7 +372,7 @@ A workflow service with its own `withTransaction`, also an MCP tool. Accepts
   left for the hunt cron;
 - `statedTotal` is stored as the header cue and never used to reject or scale.
 
-Returns per order:
+Commit returns per order:
 `{ purchaseId, wroteLines, findings[], lines: [{ expenseId, productId, decision, probability }] }`.
 
 ### 4.5 Jev features
@@ -425,11 +464,11 @@ derived cost, Vendor hints editor, findings on Problems.
 
 ### 4.11 MCP client (Claude Code / Codex)
 
-`purchase-import/SKILL.md` shrinks to: learn a new vendor (walk it once with
-the Chrome MCP, save hints), one-off imports (an export → payload →
-`import_vendor_orders` with an explicit `vendorAccountId` the caller's OAuth
-user owns), and enrichment fallbacks. Invariant prose for vendor orders is deleted; the financial
-settlement half stays.
+`purchase-import/SKILL.md` is the shared Flue/Claude/Codex procedure: learn a
+new vendor, prepare immutable evidence, investigate Product identity, commit
+explicit resolutions, and handle enrichment or settlement fallbacks. Its MCP
+calls carry the run's public identifier and the caller's OAuth delegation; the
+transactional writer resolves the owned VendorAccount from that run scope.
 
 ## 5. Flows
 

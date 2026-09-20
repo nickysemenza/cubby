@@ -85,6 +85,7 @@ import {
   gardenEntryPlanting,
   importFinding,
   importHunt,
+  importPreparedOrder,
   importRun,
   importSourceClaim,
   ingredient,
@@ -189,6 +190,22 @@ export const ENTITY_EDGES = {
     },
   }),
   image: edges({
+    "ImportPreparedOrder.primaryDocumentImageId": {
+      column: importPreparedOrder.primaryDocumentImageId,
+      role: "media",
+      label: "prepared primary documents",
+      description:
+        "The primary source document retained by an immutable prepared import order.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImportPreparedOrder.screenshotImageId": {
+      column: importPreparedOrder.screenshotImageId,
+      role: "media",
+      label: "prepared screenshots",
+      description:
+        "The browser screenshot retained by an immutable prepared import order.",
+      liveness: { kind: "must-target-live" },
+    },
     "ImportHunt.receiptImageId": {
       column: importHunt.receiptImageId,
       role: "media",
@@ -775,6 +792,14 @@ export const ENTITY_EDGES = {
     },
   }),
   vendor: edges({
+    "ImportRun.vendorId": {
+      column: importRun.vendorId,
+      role: "history",
+      label: "import runs",
+      description:
+        "A durable import run tied directly to its vendor when no vendor account supplies that scope.",
+      liveness: { kind: "must-target-live" },
+    },
     "VendorAccount.vendorId": {
       column: vendorAccount.vendorId,
       role: "reference",

@@ -81,6 +81,11 @@ import {
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
+  "ImportRun.vendorId": {
+    code: "block-import-runs",
+    effect: "block",
+    description: "Import history retains the vendor it processed.",
+  },
   "VendorAccount.vendorId": {
     code: "block-vendor-accounts",
     effect: "block",
@@ -110,6 +115,11 @@ export const VENDOR_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 export const VENDOR_MERGE_EDGE_POLICY = {
+  "ImportRun.vendorId": {
+    code: "block-import-runs",
+    effect: "block",
+    description: "Historical import runs prevent an ambiguous vendor merge.",
+  },
   "VendorAccount.vendorId": {
     code: "block-vendor-accounts",
     effect: "block",

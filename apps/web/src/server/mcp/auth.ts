@@ -1,6 +1,12 @@
+import { userId } from "@cubby/schemas/identifiers";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 
+import { env } from "~/env";
 import { auth, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
+import {
+  PURCHASE_AGENT_OAUTH_CLIENT_ID,
+  verifyPurchaseAgentDelegation,
+} from "~/server/purchase-import/agent-auth";
 
 import {
   createMcpTokenVerifier,
@@ -52,7 +58,7 @@ const JWKS_CACHE_KEY = {};
 const verifyAccessToken: VerifyMcpAccessToken = async (token, options) =>
   verifyJwsAccessToken(token, options);
 
-export const verifyMcpToken = createMcpTokenVerifier({
+const verifyStandardMcpToken = createMcpTokenVerifier({
   verifyAccessToken,
   verificationOptions: {
     jwksFetch: fetchJwks,
@@ -61,6 +67,27 @@ export const verifyMcpToken = createMcpTokenVerifier({
   },
   reportRejection: (message, detail) => console.error(message, detail),
 });
+
+/** Verify either a normal OAuth access token or a private, run-bound delegation. */
+export const verifyMcpToken = async (request: Request) => {
+  const authorization = request.headers.get("authorization");
+  if (authorization?.startsWith("Bearer ")) {
+    const token = authorization.slice("Bearer ".length).trim();
+    const delegation = token
+      ? await verifyPurchaseAgentDelegation(token, env.BETTER_AUTH_SECRET)
+      : null;
+    if (delegation) {
+      return {
+        userId: userId.parse(delegation.sub),
+        sessionId: null,
+        clientId: PURCHASE_AGENT_OAUTH_CLIENT_ID,
+        purchaseAgentRunId: delegation.run_id,
+        purchaseAgentGrantId: delegation.grant_id,
+      };
+    }
+  }
+  return await verifyStandardMcpToken(request);
+};
 
 /**
  * 401 that tells an MCP client where to start the OAuth flow. Without the

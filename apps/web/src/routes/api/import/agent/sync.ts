@@ -49,10 +49,11 @@ export const Route = createFileRoute("/api/import/agent/sync")({
         await queue.send({
           version: 1,
           runId: run.id,
+          publicId: run.publicId,
           eventId: crypto.randomUUID(),
           type: "start_or_resume",
         });
-        return Response.json({ runId: run.id, resumed: !run.created });
+        return Response.json({ runId: run.publicId, resumed: !run.created });
       },
     },
   },

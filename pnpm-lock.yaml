@@ -289,6 +289,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20260719.1
         version: 5.20260917.1
+      '@flue/sdk':
+        specifier: 2.1.0
+        version: 2.1.0
       '@flue/vite':
         specifier: 2.1.0
         version: 2.1.0(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.0)(zod@4.5.4))(hono@4.13.0)(react@19.3.0)(rolldown@1.2.9)(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(ws@8.21.2)(zod@4.5.4)
@@ -501,6 +504,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(@types/react@19.3.0)(react@19.3.0)
+      '@flue/sdk':
+        specifier: 2.1.0
+        version: 2.1.0
       '@fontsource-variable/inter':
         specifier: ^5.3.0
         version: 5.3.0
@@ -1784,6 +1790,11 @@ packages:
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
 
+  '@durable-streams/client@0.2.7':
+    resolution: {integrity: sha512-oxWbPEo8NO1Ruv9UgUVu3OswdE2z5ERhjccaujlpwe4tWuVd+Y/kdx+HtrkOnwN+bnRHTlxKYUNY8JTyrnhKew==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
   '@earendil-works/pi-agent-core@0.83.0':
     resolution: {integrity: sha512-RorGp9OH5l3ElpuC5a5ZQ2eWcchZGXflXRzVGkV99y3y6tT+LLNyxoYIdVKvTKWEObwhExeQbTH0fI2tE4iX4g==}
     engines: {node: '>=22.19.0'}
@@ -2078,6 +2089,9 @@ packages:
   '@flue/runtime@2.1.0':
     resolution: {integrity: sha512-wFvvoPqtDx8qdtQ2IBkqPiXULpV9C9ZxmY36qnrogbaSJq9u8jrsldAYveMvqpmFpE0AHIe6Iez81/3lmTtiSw==}
     engines: {node: '>=22.19.0'}
+
+  '@flue/sdk@2.1.0':
+    resolution: {integrity: sha512-SZTrvxn9pqflPphZ18Lc3YV3GINK42WiHu06/Ndue+eWmzmhu0AwWNrwk7pmGFW/a6AWl1M2l3gKbQBHJQHOQA==}
 
   '@flue/vite@2.1.0':
     resolution: {integrity: sha512-WOv3JG8sECSosD1QhveycJOfC8HuPEbxuewoYOAz2LKlEA2X/pxuSmXuvMOPJHpDvKXj9IwtdlSOWqj255HEkg==}
@@ -2472,6 +2486,9 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
+
+  '@microsoft/fetch-event-source@2.0.1':
+    resolution: {integrity: sha512-W6CLUJ2eBMw3Rec70qrsEW0jOm/3twwJv21mrmj2yORiaVmVYGS4sSS5yUwvQc1ZlDLYGPnClVWmUUMagKNsfA==}
 
   '@mistralai/mistralai@2.2.6':
     resolution: {integrity: sha512-W8pX7zHxjJvMIpw8JMxeJEleapXX0Q9NPszdNzqkM3MIEoIGPObdodujj+WHteXEvGfaP/AMwlNyRfEzSY6dQQ==}
@@ -12081,6 +12098,10 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
+  '@durable-streams/client@0.2.7':
+    dependencies:
+      '@microsoft/fetch-event-source': 2.0.1
+
   '@earendil-works/pi-agent-core@0.83.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(supports-color@10.2.2)(ws@8.21.2)(zod@4.5.4)':
     dependencies:
       '@earendil-works/pi-ai': 0.83.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(supports-color@10.2.2)(ws@8.21.2)(zod@4.5.4)
@@ -12374,6 +12395,10 @@ snapshots:
       - utf-8-validate
       - ws
       - zod
+
+  '@flue/sdk@2.1.0':
+    dependencies:
+      '@durable-streams/client': 0.2.7
 
   '@flue/vite@2.1.0(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.0)(zod@4.5.4))(hono@4.13.0)(react@19.3.0)(rolldown@1.2.9)(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(ws@8.21.2)(zod@4.5.4)':
     dependencies:
@@ -12701,6 +12726,8 @@ snapshots:
       react-dom: 19.3.0(@types/react@19.3.0)(react@19.3.0)
     optionalDependencies:
       '@types/react': 19.3.0
+
+  '@microsoft/fetch-event-source@2.0.1': {}
 
   '@mistralai/mistralai@2.2.6(@opentelemetry/api@1.9.0)':
     dependencies:
