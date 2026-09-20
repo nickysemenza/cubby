@@ -42,7 +42,8 @@ Both print static actionable diagnostics and step timings.
 **Pre-push.** `.husky/pre-push` runs `pnpm verify:push`, which requires a clean
 tree before and after an affected graph over
 `generate,types,lint,format,knip,test`. It explicitly compares `origin/main`
-to `HEAD`, runs sequentially with `--nxBail --outputStyle=static`, and omits
+to `HEAD`, runs sequentially with `--nxBail
+--outputStyle=static-failures-only`, and omits
 database, Worker-build, browser, Rust, and Apple work. Those full lanes run in
 GitHub Actions before a PR can merge. Refresh the local base first when needed
 (`git fetch origin main`); the local `origin/main` ref must represent the
@@ -271,23 +272,26 @@ did not surface a cross-file dependency in this run. **Decision: kept
 vitest-native** — median wall and duration were ≤ the family baseline despite
 higher load during the after-runs.
 
-`mcp-contract` moved from `sequence.groupOrder: 1` (a serial tail after
-group 0) to `groupOrder: 0` (runs alongside `unit`/`ui`), and the former
-`unit-pure` project's 2 files folded into `unit`. This requires `mcp-contract`
-to share `unit`/`ui`'s `maxWorkers: 5` — Vitest rejects mismatched
-`maxWorkers` within one `groupOrder` — so the project's old dedicated
-`fileParallelism: false` (a single shared worker) was dropped in favor of
-`isolate: false` alone. Fast-tier (`pnpm test`, root `NX_SKIP_NX_CACHE=true`)
-before/after, interleaved on the same host: before 29s/30s/32s wall
-(`@cubby/web` Vitest duration 25.09/25.97/27.98s), after 31s/28s/28s wall
-(duration 26.62/24.38/24.41s) — a modest, consistent improvement, smaller than
-hoped for because this host's aux-package Nx overhead and general load
-dominate the wrapper's wall time more than the ~15s `@cubby/web` Vitest run
-itself. One run of the combined `unit`+`mcp-contract`+`ui` group hit a 15s
-timeout in `worker-validation.unit.test.ts` under a load spike (the group can
-now run up to 15 threads across 3 projects on 8 cores); it passed cleanly on
-every other run, including standalone, so this looks like host contention
-rather than a correctness regression — worth watching on a shared CI runner.
+All tests that directly import the complete MCP server now live in the
+`mcp-contract` project with `isolate: false`; test-owned server instances are
+still constructed per contract. `worker-validation.unit.test.ts`, which
+temporarily replaces globals, is the sole member of the isolated
+`worker-safety` project. Both the package fast-test script and hosted Node lane
+select `worker-safety`, while the obsolete hosted `unit-pure` selector is gone.
+Every group-0 project shares the same worker cap because Vitest rejects mixed
+`maxWorkers` values within one `groupOrder`.
+
+Four versus five workers was measured with the fingerprinted MCP bundle already
+built and actual, uncached Vitest execution. Five interleaved solo runs per
+setting produced medians of **54.17s** (4) and **65.24s** (5), with maxima of
+54.85s and 70.32s. Five simultaneous cross-worktree pairs per setting produced
+medians of **103.33s** (4) and **99.10s** (5), with maxima of **124.83s** and
+**147.24s**. Starting load averages ranged from 12.75 to 173.83; these are busy
+host observations, not an idle-machine guarantee. All 30 suite executions
+passed with no discovery, teardown, assertion, or shuffle-order failure. Four
+workers is retained because its solo median was not slower and its paired
+maximum improved; the slightly slower paired median is recorded rather than
+hidden. This sample does not establish a formal flake probability.
 
 ### Apple container worker measurements (2026-09-15)
 

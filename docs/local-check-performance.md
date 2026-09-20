@@ -112,9 +112,11 @@ inferred `test` target that a repo-wide `targetDefaults` entry makes cached with
 `nx run-many -t test` so those aux tests replay from cache on a web-only
 change instead of running via `pnpm -r --workspace-concurrency=2 test`, which
 had every aux package's Vitest process competing with the (uncached, heavier)
-web run for the same CPU budget. `fast-tests`' own cache key dropped a
-`git rev-parse HEAD` runtime input that invalidated on every commit regardless
-of relevance (measured 17% hit rate) — it hashes only file content now.
+web run for the same CPU budget. The `fast-tests` orchestration target is
+uncached and always asks Nx to evaluate every child target; the child targets
+own their narrower cache keys, so an outer replay cannot bypass corrected
+inputs. Successful and cached tasks collapse to one output line, avoiding a
+large stale-log replay in agent context.
 `packages/wasm` does not appear in `nx show projects`: its entire directory is
 `.gitignore`d (`packages/wasm/.gitignore` is `*`, since its contents —
 including `package.json` — are `wasm-pack` build output), and Nx's project

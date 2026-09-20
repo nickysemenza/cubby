@@ -37,6 +37,8 @@ is no family resolver or entrypoint indirection; every `*.integration.test.ts`
 file under `apps/web/src` is its own Vitest test file.
 
 `pnpm test` runs all fast unit, UI, contract, and auxiliary-package tests;
+successful and cached tasks collapse to one line so replay does not flood agent
+context;
 `pnpm test:postgres` runs the retained PostgreSQL contracts; and
 `pnpm test:e2e` runs the PostgreSQL-backed browser contracts. The legacy
 `test:integration:postgres` and `test:e2e:postgres` names are aliases. On macOS these commands start disposable Apple PostgreSQL
@@ -55,9 +57,18 @@ Those authoritative tiers still use distinct IntegreSQL template hashes so a
 later template initialization cannot reset an earlier tier's checked-out
 databases.
 
-`pnpm test:changed` is likewise Docker-free and registers neither database
-project. Use `pnpm test:changed:postgres <ref>` when changed integration
-coverage needs the real backend.
+The root fast-test target is uncached orchestration over independently cached
+package targets. The web target's key includes shared workspace inputs, runtime
+configuration, ignored environment files, and generated WASM, so a successful
+`pnpm test` can satisfy the same target during pre-push without an outer cache
+entry bypassing child invalidation. Successful web runs cache an explicitly
+empty `.vitest-failures.txt`; failed runs are never cached.
+
+`pnpm test:file`, `pnpm test:changed`, and watch mode prepare the fingerprinted
+MCP Apps bundle before Vitest starts. `pnpm test:changed` is otherwise
+Docker-free and registers neither database project. Use
+`pnpm test:changed:postgres <ref>` when changed integration coverage needs the
+real backend.
 
 Tier-specific traps: target a browser file as `pnpm test:e2e <spec>` without an
 extra `--`; the E2E reporter rejects an empty test run. Local E2E serves whatever
@@ -78,6 +89,9 @@ Vitest suites — `pnpm -r --filter '!@cubby/web' run test` after touching
 list of the failing tests, and writes the same list to
 `apps/web/.vitest-failures.txt`, so a `| tail` or a later turn can both recover
 it. Measured: 24% of all test runs were a re-run of one that had just failed.
+Run a broad tier at most once per logical revision; when its inputs are
+unchanged, let the cache satisfy the following push rather than manually
+proving the same revision twice.
 
 Narrow the other gates too: `pnpm typecheck:web` is useful when only the web app
 is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
@@ -119,6 +133,13 @@ previews are manually dispatched.
 These changes reduce duplicate work and stale generated-artifact cache paths,
 but do not promise that two simultaneous full verifications are resource-safe
 on one machine.
+
+Verifier entrypoints disable the Nx daemon so hooks and one-off diagnostics do
+not leave worktree-specific daemon processes behind. Interactive Nx use can
+still start one; after an interrupted task, `pnpm exec nx reset` stops that
+worktree's daemon and clears its workspace cache. A task also stops any Vite,
+Playwright test-server, or other long-lived process it started. Do not kill
+processes merely because another worktree owns them.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. Subagents run `pnpm

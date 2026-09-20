@@ -75,19 +75,29 @@ function explicitlySelectsProject(name: string): boolean {
 }
 
 const mcpContractTests = [
+  "src/server/mcp/caller-contract.unit.test.ts",
   "src/server/mcp/catalog-schema.unit.test.ts",
   "src/server/mcp/mcp-apps.unit.test.ts",
   "src/server/mcp/mcp-output-uuid-boundary.unit.test.ts",
   "src/server/mcp/mcp-protocol.unit.test.ts",
   "src/server/mcp/mcp-workflow-tools.unit.test.ts",
-  "src/server/mcp/worker-validation.unit.test.ts",
+  "src/server/mcp/tools/contract-envelope.unit.test.ts",
+  "src/server/mcp/tools/tool-json-schema.unit.test.ts",
 ];
+const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
 const sharedIsolationSeed = Number.parseInt(
   process.env.CUBBY_TEST_SHUFFLE_SEED ?? "20260831",
   10,
 );
 if (!Number.isSafeInteger(sharedIsolationSeed)) {
   throw new Error("CUBBY_TEST_SHUFFLE_SEED must be an integer");
+}
+const groupZeroMaxWorkers = Number.parseInt(
+  process.env.VITEST_MAX_WORKERS ?? "4",
+  10,
+);
+if (!Number.isSafeInteger(groupZeroMaxWorkers) || groupZeroMaxWorkers < 1) {
+  throw new Error("VITEST_MAX_WORKERS must be a positive integer");
 }
 export default defineConfig({
   define: {
@@ -139,15 +149,20 @@ export default defineConfig({
             // exactly as safe as their old dedicated one, without a second
             // isolation startup tax.
             include: ["**/*.unit.test.ts"],
-            exclude: ["**/node_modules/**", ...mcpContractTests],
+            exclude: [
+              "**/node_modules/**",
+              ...mcpContractTests,
+              ...workerSafetyTests,
+            ],
             // Unit files are order-independent and clean up their mutable state.
             // Sharing the module graph removes the dominant per-file startup cost.
             pool: "threads",
             isolate: false,
-            // Unit and UI share group 0. Five workers is the measured
-            // memory-efficient ceiling; keep the cap aligned across the group
-            // so one project cannot starve the others.
-            maxWorkers: 5,
+            // Four workers reduced the paired-run maximum without slowing the
+            // solo median. Keep the cap aligned across group 0 so one project
+            // cannot starve the others. The environment override supports
+            // uncached tuning measurements and participates in the Nx cache key.
+            maxWorkers: groupZeroMaxWorkers,
             sequence: {
               groupOrder: 0,
               shuffle: { files: true, tests: false },
@@ -161,15 +176,26 @@ export default defineConfig({
             name: "mcp-contract",
             include: mcpContractTests,
             pool: "threads",
-            // worker-validation temporarily replaces Zod and Function globals
-            // to assert the Worker-safe MCP path. It therefore cannot share a
-            // module graph with catalog tests, even though those tests do not
-            // themselves mutate state.
+            // These files all import the complete MCP server. Sharing each
+            // worker's module graph avoids repeating that import setup when a
+            // worker receives more than one file; server instances remain
+            // test-owned and are still constructed as needed.
+            isolate: false,
+            maxWorkers: groupZeroMaxWorkers,
+            sequence: { groupOrder: 0 },
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: "worker-safety",
+            include: workerSafetyTests,
+            pool: "threads",
+            // This contract temporarily replaces Zod and Function globals.
+            // A dedicated isolated project keeps that mutation out of the
+            // shared unit and MCP module graphs.
             isolate: true,
-            maxWorkers: 5,
-            // Keep this compact catalog group parallel with unit/UI rather
-            // than turning one global-state regression check into a serial CI
-            // tail.
+            maxWorkers: groupZeroMaxWorkers,
             sequence: { groupOrder: 0 },
           },
         },
@@ -186,7 +212,7 @@ export default defineConfig({
             // and env between tests, so workers can share one jsdom graph.
             pool: "threads",
             isolate: false,
-            maxWorkers: 5,
+            maxWorkers: groupZeroMaxWorkers,
             clearMocks: true,
             unstubGlobals: true,
             unstubEnvs: true,
