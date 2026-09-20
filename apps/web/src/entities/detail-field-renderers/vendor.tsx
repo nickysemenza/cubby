@@ -3,7 +3,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import type { EntityDetailFieldRenderers } from "./index";
 
 export const vendorDetailFields = {
-  agentHints: (vendor) => {
+  "vendor-agent-hints": (vendor) => {
     const hints = vendor.agentHints;
     const parts = [
       hints.ordersListUrl && `Orders: ${hints.ordersListUrl}`,

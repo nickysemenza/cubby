@@ -79,7 +79,11 @@ export default defineEntity({
         key: "identity",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          renderer: { detail: "financial-account-identity" },
+        },
         validation: {
           read: financialAccountIdentity,
           create: financialAccountIdentity,
@@ -102,7 +106,12 @@ export default defineEntity({
         kind: "json",
         label: "Aliases",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { list: true, detail: true, columnId: "aliases" },
+        display: {
+          list: true,
+          detail: true,
+          columnId: "aliases",
+          renderer: { detail: "financial-account-source-aliases" },
+        },
         validation: {
           read: financialAccountSourceAliases,
           create: financialAccountSourceAliases.default([]),

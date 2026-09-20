@@ -868,6 +868,57 @@ describe("typed entity compiler", () => {
     expect(() => compile({ standard: "name" }, "number")).toThrow(/./u);
   });
 
+  it.each([
+    [
+      "list",
+      { list: "alpha-list" },
+      "display.renderer.list requires display.list",
+    ],
+    [
+      "detail",
+      { detail: "alpha-detail" },
+      "display.renderer.detail requires display.detail",
+    ],
+  ])(
+    "rejects a %s renderer on an inactive display surface",
+    (_, renderer, message) => {
+      expect(() =>
+        compileEntityDeclarations([
+          {
+            ...base,
+            model: {
+              ...model,
+              fields: [{ ...model.fields[0], display: { renderer } }],
+            },
+          },
+        ]),
+      ).toThrow(message);
+    },
+  );
+
+  it("keeps list renderers valid when the list column is initially hidden", () => {
+    expect(() =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            fields: [
+              {
+                ...model.fields[0],
+                display: {
+                  list: true,
+                  listHidden: true,
+                  renderer: { list: "alpha-list" },
+                },
+              },
+            ],
+          },
+        },
+      ]),
+    ).not.toThrow();
+  });
+
   it("validates titleField against the read projection, not model field keys", () => {
     // `readKey` renames a field for output; `titleField` must resolve through
     // that rename (cookbook's `name` field reads out as `book`, so

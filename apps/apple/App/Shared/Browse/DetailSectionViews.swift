@@ -158,39 +158,70 @@ struct FieldsSectionView<Inline: View>: View {
 
     var body: some View {
         let rows = rows
-        ForEach(rows, id: \.field.key) { entry in
-            fieldRow(entry.field, value: entry.value)
-            if entry.field.key == inlineFieldKey { inline }
+        ForEach(rows, id: \.key) { field in
+            fieldRow(field)
+            if field.key == inlineFieldKey { inline }
         }
         if rows.isEmpty { Text("Nothing recorded").foregroundStyle(.secondary) }
     }
 
-    private var rows: [(field: FieldDescriptor, value: String)] {
+    private var rows: [FieldDescriptor] {
         keys.compactMap { key in
             // The hero is the title's and the id's home; repeating them here is a form, not a record.
             guard let field = descriptor.field(key), key != descriptor.titleField, key != "id" else {
                 return nil
             }
-            if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
-                return (field, reference.name ?? reference.id)
+            if NativePresentationCoverage.unsupportedDetail(field) != nil { return nil }
+            if field.detailRenderer == .recipeSource {
+                return RecipeSourcePresentation.parse(row.raw[field.key]) == nil ? nil : field
             }
-            guard let value = EntityFieldValue.text(row.raw[key], field: field) else { return nil }
-            return (field, value)
+            if EntityFieldValue.reference(in: row.raw, field: field) != nil {
+                return field
+            }
+            guard EntityFieldValue.text(row.raw[key], field: field) != nil else { return nil }
+            return field
         }
     }
 
     @ViewBuilder
-    private func fieldRow(_ field: FieldDescriptor, value: String) -> some View {
-        if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
+    private func fieldRow(_ field: FieldDescriptor) -> some View {
+        if field.detailRenderer == .recipeSource,
+            let source = RecipeSourcePresentation.parse(row.raw[field.key])
+        {
+            recipeSourceRow(field, source: source)
+        } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
+            let value = reference.name ?? reference.id
             NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
                 LabeledContent(field.label, value: value)
             }
-        } else {
+        } else if let value = EntityFieldValue.text(row.raw[field.key], field: field) {
             LabeledContent(field.label) {
                 Text(value)
                     .font(field.kind == .identifier ? .porcelainCode : .porcelainBody)
                     .textSelection(.enabled)
                     .multilineTextAlignment(.trailing)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func recipeSourceRow(
+        _ field: FieldDescriptor, source: RecipeSourcePresentation
+    ) -> some View {
+        LabeledContent(field.label) {
+            switch source {
+            case .book(let title, let cookbookID):
+                if let cookbookID {
+                    NavigationLink(value: Route.entityDetail(.cookbook, id: cookbookID)) {
+                        Label(title, systemImage: "book.closed")
+                    }
+                } else {
+                    Label(title, systemImage: "book.closed")
+                }
+            case .external(let host, let url):
+                Link(destination: url) {
+                    Label(host, systemImage: "arrow.up.right.square")
+                }
             }
         }
     }

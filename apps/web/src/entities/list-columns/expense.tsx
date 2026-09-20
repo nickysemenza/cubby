@@ -16,7 +16,6 @@ import {
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ExpenseSummaryStrip } from "~/app/expenses/expense-summary-strip";
 import { expense } from "~/app/expenses/expense.functions";
@@ -134,10 +133,6 @@ export const expenseListOverride = defineListOverride<
       mutationFn: entityMutationOptionsFactory("expense", "update"),
       entity: "expense",
     });
-    const nameEditable = useNameEditable<ExpenseOut>(
-      updateExpenseMutation.mutateAsync,
-    );
-
     // The cost / date / costType / trade / future columns come from the
     // shared factories also used by the embedded expenses table on the
     // project detail page, so the two can't drift. `signedTone`: this list
@@ -353,10 +348,9 @@ export const expenseListOverride = defineListOverride<
       () => ({
         deletable: true as const,
         filterOptions,
-        nameEditable,
         initialColumnVisibility: EXPENSE_INITIAL_COLUMN_VISIBILITY,
       }),
-      [filterOptions, nameEditable],
+      [filterOptions],
     );
 
     return {

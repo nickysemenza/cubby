@@ -333,9 +333,17 @@ presentation defaults never grant mutation capabilities or introduce columns.
 
 The `model.fields` roster owns field kinds, read keys, labels, validation,
 controls, and display membership. `EntityBasicInfo` reads `display.detail`;
-`createEntityDisplayColumns` reads `display.list`. Specialized overrides supply
-rendering and table metadata, while the declaration still owns membership and
-labels. `display.columnId` preserves an existing computed column identity when
+`createEntityDisplayColumns` reads `display.list`. A field's
+`display.renderer.list` or `display.renderer.detail` selects a semantic
+renderer while the declaration continues to own membership, labels, ordering,
+and widths. The generator emits narrowed TypeScript renderer IDs and Swift
+renderer enums. Each platform keeps an exhaustive registry that marks every
+declared renderer and slot as implemented, generic, owned by its container, or
+unsupported with a reason. Executable queries, runtime option providers,
+trees, dialogs, and workflows remain handwritten. A legacy field override and
+a manifest renderer may not claim the same surface; the compiler or registry
+test fails instead of choosing one silently. `control.renderer` follows the
+same contract for form controls. `display.columnId` preserves an existing computed column identity when
 it differs from the field key (for example an evidence count); active list
 column IDs must be unique. An override must match a declared list field; an
 unmatched override fails instead of silently hiding the column. Computed
@@ -344,8 +352,13 @@ alongside the compiled collection. Composite cells suppress their supporting
 fields in list metadata so IDs, names, and logos are not displayed twice.
 Standard name and image columns are declared by `display.standard` on their
 fields. The shared table renders them once, preserving its name editing, image,
-and tree controls; scalar column compilation skips those fields. There is no
-second standard-column roster in the browser registry.
+and tree controls; scalar column compilation skips those fields. Flat generated
+CRUD lists derive identity editing only when `presentation.titleField` is the
+same readable, updateable, non-null text field. Trees, transformed or custom
+data sources, and explicit editors opt out automatically. The identity column
+uses the title field's declared width and otherwise keeps the canonical
+`w-64`; contextual `nameClassName` remains the low-level escape hatch. There is
+no second standard-column roster in the browser registry.
 
 `display.detailOrder` optionally orders detail facts independently of model and
 list order; it must be a nonnegative integer. Unspecified facts retain model
@@ -357,9 +370,10 @@ saved-view keys, so a rename is never free.
 
 Every list column falls in one of three buckets. A generic column is a
 declared `list: true` scalar rendered by `createEntityDisplayColumns` with no
-code. A declared column with an override is one the entity declares but a
-page renders specially (a badge, a link, a relation label); the override is
-matched by column id and takes the declared label and sort. An explicit
+code. A declared column with a named renderer is rendered by the platform's
+manifest registry (a badge, a link, or a relation label) and retains the
+declared label and sort. A legacy override remains only as a migration seam for
+specialist columns not yet manifest-owned. An explicit
 `add()` outside the declaration is reserved for client-hydrated data, relation
 projections, a second projection that hosts a filter control, and the
 synthetic identity column. A `list: true` field with `readKey: null` needs an

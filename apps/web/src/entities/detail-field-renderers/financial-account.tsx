@@ -6,7 +6,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import type { EntityDetailFieldRenderers } from "./index";
 
 export const financialAccountDetailFields = {
-  identity: (account) => ({
+  "financial-account-identity": (account) => ({
     value: renderOptionCell(account.identity.kind, accountIdentityKindOptions),
     filterAction: (
       <EntityFilterLink
@@ -16,7 +16,7 @@ export const financialAccountDetailFields = {
       />
     ),
   }),
-  sourceAliases: (account) => ({
+  "financial-account-source-aliases": (account) => ({
     value:
       account.sourceAliases.length > 0 ? (
         <span className="font-mono text-xs">

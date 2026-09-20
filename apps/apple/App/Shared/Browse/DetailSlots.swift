@@ -9,7 +9,7 @@ enum DetailSlotRegistry {
     @MainActor
     static func view(for key: EntityKey, slot: String, row: EntityRow, appModel: AppModel) -> AnyView? {
         switch (key, slot) {
-        case (.meal, "nutrition"):
+        case (.meal, "meal.nutrition"):
             AnyView(MealNutritionSlot(mealID: row.id))
         default:
             nil

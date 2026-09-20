@@ -189,7 +189,10 @@ export default defineEntity({
       {
         key: "classification",
         kind: "json",
-        display: { detail: true },
+        display: {
+          detail: true,
+          renderer: { detail: "ledger-transfer-classification" },
+        },
         validation: {
           read: ledgerTransferClassification,
           create: null,

@@ -9,7 +9,7 @@ import { formatCurrency } from "~/lib/utils";
 import type { EntityDetailFieldRenderers } from "./index";
 
 export const financialTransactionDetailFields = {
-  vendorInference: (transaction) => ({
+  "financial-transaction-vendor-inference": (transaction) => ({
     value:
       transaction.vendorInference?.status === "suggested" ||
       transaction.vendorInference?.status === "ambiguous" ? (
@@ -19,7 +19,7 @@ export const financialTransactionDetailFields = {
   // One card line can settle several Purchases, so this shows the
   // allocation set rather than the single derived mirror — which is NULL
   // precisely when the answer is interesting.
-  allocations: (transaction) => ({
+  "financial-transaction-allocations": (transaction) => ({
     label: transaction.allocations.length > 1 ? "Settles" : "Purchase",
     value:
       transaction.allocations.length === 0 ? (
@@ -52,7 +52,7 @@ export const financialTransactionDetailFields = {
         </Stack>
       ),
   }),
-  sourceRefs: (transaction) => ({
+  "financial-transaction-source-refs": (transaction) => ({
     value:
       transaction.sourceRefs.length > 0 ? (
         <span className="font-mono text-xs">

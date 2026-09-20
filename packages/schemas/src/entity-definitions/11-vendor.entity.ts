@@ -230,7 +230,7 @@ export default defineEntity({
           renderer: "structured-field",
           section: "details",
         },
-        display: { detail: true },
+        display: { detail: true, renderer: { detail: "vendor-agent-hints" } },
         validation: {
           read: vendorAgentHints,
           create: vendorAgentHints.default({

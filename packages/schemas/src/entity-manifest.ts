@@ -23,7 +23,12 @@ export {
 } from "./generated/image-policy.gen";
 export type { PhotoCategoryKey } from "./photo-categories";
 import { generatedEntityManifest } from "./generated/entity-manifest-data.gen";
-import type { entitySummary } from "./generated/entity-summary.gen";
+export type {
+  DetailRendererId,
+  ListRendererId,
+  ControlRendererId,
+} from "./generated/entity-field-model.gen";
+export type { DetailSlotId, ListSlotId } from "./generated/entity-summary.gen";
 import { relatednessSignalSchema } from "./relatedness";
 import {
   type EntityRelationship,
@@ -295,18 +300,3 @@ export const isAuditableEntity = (entity: Entity): entity is AuditableEntity =>
 
 export const isGalleryEntity = (entity: Entity): entity is GalleryEntity =>
   entityManifest[entity].imageStorage === "gallery";
-
-/**
- * The slot ids an entity's `presentation` declares, as literal unions from
- * the generated summary: a renderer's slot registry is typed by these, so a
- * registry entry for an undeclared slot (or a declared slot spelled
- * differently) fails to compile.
- */
-export type DetailSlotId<E extends Entity> = Extract<
-  (typeof entitySummary)[E]["detail"]["sections"][number],
-  { kind: "slot" }
->["id"];
-export type ListSlotId<E extends Entity> = Extract<
-  (typeof entitySummary)[E]["list"]["views"][number],
-  { kind: "slot" }
->["id"];

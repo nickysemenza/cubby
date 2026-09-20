@@ -15,27 +15,27 @@ const count = (value: number, noun: string) =>
   `${value} ${noun}${value === 1 ? "" : "s"}`;
 
 export const recipeDetailFields = {
-  meta: (recipe) => ({
+  "recipe-meta": (recipe) => ({
     label: "Source URL",
     value: recipe.meta?.url ? (
       <ExternalLinkText href={recipe.meta.url} truncate />
     ) : undefined,
   }),
-  yield: (recipe) => ({
+  "recipe-yield": (recipe) => ({
     value: recipe.yield ? (
       <span className="font-mono tabular-nums">
         {tryFormatAmount(recipe.yield)}
       </span>
     ) : undefined,
   }),
-  source: (recipe) => ({
+  "recipe-source": (recipe) => ({
     value: sourceLabel(recipe.source) ? (
       <RecipeSourceLink source={recipe.source} />
     ) : undefined,
   }),
   // The body itself renders in the workflow slot; here the row is the
   // composition summary a reader scans before opening it.
-  sections: (recipe) => ({
+  "recipe-sections": (recipe) => ({
     label: "Composition",
     value: (
       <span>
@@ -58,7 +58,7 @@ export const recipeDetailFields = {
       </span>
     ),
   }),
-  totals: (recipe) => ({
+  "recipe-totals": (recipe) => ({
     value: recipe.totals ? (
       <Row gap="sm" wrap>
         <span>{formatEstimate(recipe.totals.cost, formatCurrency)}</span>

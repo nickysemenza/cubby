@@ -64,7 +64,7 @@ export const wishDetailFields = {
   // are fetched independently of the Wish detail record, so an
   // unillustrated Tool stays an honest placeholder rather than making every
   // wish response heavier.
-  candidates: (wish) => ({
+  "wish-candidates": (wish) => ({
     value:
       wish.candidates.length === 0 ? (
         <span className="text-muted-foreground">

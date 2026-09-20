@@ -13,7 +13,6 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
   taskDueColumn,
@@ -58,10 +57,6 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
       mutationFn: entityMutationOptionsFactory("task", "update"),
       entity: "task",
     });
-    const nameEditable = useNameEditable<TaskOut>(
-      updateTaskMutation.mutateAsync,
-    );
-
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<TaskOut>((add) => {
@@ -152,11 +147,10 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
       () => ({
         deletable: true as const,
         filterOptions,
-        nameEditable,
         nameSuffix: subtaskCountSuffix,
         initialColumnVisibility: TASK_INITIAL_COLUMN_VISIBILITY,
       }),
-      [filterOptions, nameEditable],
+      [filterOptions],
     );
     return { overrides, list };
   },

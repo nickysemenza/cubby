@@ -1043,7 +1043,14 @@ export const renderEntityArtifacts = (
           ),
           satisfies: "Record<Entity, EntitySummary>",
           comment: "// Generated summary stays one entity per line.",
-        }),
+        }) +
+        "\n" +
+        'type GeneratedDetailSection<E extends Entity> = (typeof entitySummary)[E]["detail"]["sections"][number];\n' +
+        'type GeneratedListView<E extends Entity> = (typeof entitySummary)[E]["list"]["views"][number];\n' +
+        "/** Literal detail slot ids declared by one entity. */\n" +
+        'export type DetailSlotId<E extends Entity> = Extract<GeneratedDetailSection<E>, { kind: "slot" }>["id"];\n' +
+        "/** Literal list slot ids declared by one entity. */\n" +
+        'export type ListSlotId<E extends Entity> = Extract<GeneratedListView<E>, { kind: "slot" }>["id"];\n',
     },
     {
       relativePath: "packages/schemas/src/generated/entity-field-model.gen.ts",
@@ -1069,6 +1076,17 @@ export const renderEntityArtifacts = (
           comment: "// One authoritative field model per compiled entity.",
         }) +
         "\n" +
+        'type GeneratedEntityField<E extends Entity> = (typeof generatedEntityFieldModels)[E]["fields"][number];\n' +
+        "type RendererValue<T> = T extends { renderer: infer R } ? Exclude<R, null> : never;\n" +
+        'type ControlRendererIdFor<E extends Entity> = RendererValue<NonNullable<GeneratedEntityField<E>["control"]>>;\n' +
+        'type DisplayRendererIdFor<E extends Entity, K extends "list" | "detail"> = GeneratedEntityField<E>["display"]["renderer"] extends infer R ? R extends Record<K, infer V> ? Exclude<V, null> : never : never;\n' +
+        "\n" +
+        "/** Every specialized control renderer declared by an entity field. */\n" +
+        "export type ControlRendererId = { [E in Entity]: ControlRendererIdFor<E> }[Entity];\n" +
+        "/** Specialized list renderers declared for one entity's fields. */\n" +
+        'export type ListRendererId<E extends Entity> = DisplayRendererIdFor<E, "list">;\n' +
+        "/** Specialized detail renderers declared for one entity's fields. */\n" +
+        'export type DetailRendererId<E extends Entity> = DisplayRendererIdFor<E, "detail">;\n\n' +
         '// Every `"entity.field"` whose control declares `suggest` (the\n' +
         "// decision-tier auto-fill target list), across all entities.\n" +
         `export const suggestFieldKeys = ${compactLiteral(suggestFieldKeys)} as const;\n` +

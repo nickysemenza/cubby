@@ -38,7 +38,7 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
 }
 
 export const expenseDetailFields = {
-  projectId: (expense) => ({
+  "expense-project": (expense) => ({
     value: <ExpenseProjectField expense={expense} />,
   }),
 } satisfies EntityDetailFieldRenderers<"expense">;

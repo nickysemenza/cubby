@@ -119,21 +119,53 @@ struct EntityFieldControl: View {
 
     // MARK: - Specialized
 
-    /// `entity-select` (a `reference` field), `amount` (`format: "amount"`), and `text-array`
-    /// render natively; the catalog's other specialized renderers do not (see
-    /// `EntityEditorSheet`'s doc comment), so their fields are left out of the form.
+    /// Dispatches the generated semantic renderer first. Generic entity-select/money/url
+    /// renderers still use the same primitive controls as their `controlKind`; specialized
+    /// amount, multi-select, tags, and vendor-name controls keep their typed behavior.
     @ViewBuilder
     private var specialized: some View {
-        if let reference = field.reference {
-            if reference.multiple {
-                multiReference(reference)
-            } else {
-                singleReference(reference)
+        if let renderer = field.controlRenderer {
+            switch renderer {
+            case .entitySelect:
+                if let reference = field.reference {
+                    if reference.multiple { multiReference(reference) } else { singleReference(reference) }
+                }
+            case .entityMultiSelect:
+                if let reference = field.reference { multiReference(reference) }
+            case .amount:
+                amountControl
+            case .tagList:
+                tokenControl
+            case .vendorName, .url:
+                textControl
+            case .money:
+                moneyControl
+            case .imageOrder, .structuredField:
+                EmptyView()
             }
-        } else if field.format == "amount" {
-            amountControl
-        } else if field.kind == .textArray {
-            tokenControl
+        } else {
+            EmptyView()
+        }
+    }
+
+    private var textControl: some View {
+        LabeledContent(label) {
+            TextField(label, text: stringBinding, prompt: Text(field.placeholder ?? "None"))
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+        }
+    }
+
+    private var moneyControl: some View {
+        LabeledContent(label) {
+            TextField(
+                field.placeholder ?? "0",
+                value: Binding(
+                    get: { value.doubleValue },
+                    set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
+                format: .currency(code: "USD")
+            )
+            .multilineTextAlignment(.trailing)
         }
     }
 

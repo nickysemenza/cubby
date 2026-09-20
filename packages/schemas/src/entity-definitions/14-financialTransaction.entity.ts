@@ -298,6 +298,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          renderer: { detail: "financial-transaction-source-refs" },
           detailOrder: 90,
           columnId: "source",
           listOrder: 100,
@@ -325,7 +326,11 @@ export default defineEntity({
         key: "allocations",
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true, detailOrder: 70 },
+        display: {
+          detail: true,
+          detailOrder: 70,
+          renderer: { detail: "financial-transaction-allocations" },
+        },
         provenance: {
           kind: "relation",
           sources: [{ label: "Financial allocations" }],
@@ -375,6 +380,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          renderer: { detail: "financial-transaction-vendor-inference" },
           detailOrder: 20,
           columnId: "possibleVendor",
           listOrder: 90,

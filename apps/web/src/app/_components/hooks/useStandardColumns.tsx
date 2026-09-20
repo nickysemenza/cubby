@@ -9,6 +9,7 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 import type { EntityActionSubject } from "~/app/_components/actions/entity-actions";
+import { identityWidthClassName } from "~/app/_components/entity-list/identity-list-config";
 import {
   browserEntityDefinition,
   getSortableFields,
@@ -203,6 +204,12 @@ export function useStandardColumns<TData extends BaseListRow>({
       titleField: resolvedTitleField,
     };
   }, [entity, hasUnitMappings]);
+  const identityWidth = useMemo(() => {
+    const titleFieldModel = entityFieldModels[entity].fields.find(
+      (field) => field.key === titleField,
+    );
+    return identityWidthClassName(titleFieldModel?.display.width ?? null);
+  }, [entity, titleField]);
 
   // Build columns array with standard columns - memoized to prevent infinite re-renders
   return useMemo(
@@ -295,7 +302,7 @@ export function useStandardColumns<TData extends BaseListRow>({
             header: entitySummary[entity].singular,
             filterConfig: identityFilterConfig,
             enableSorting: getSortableFields(entity).includes(titleField),
-            className: nameClassName,
+            className: nameClassName ?? identityWidth,
             // Computed titles stay read-only unless the list explicitly maps
             // the edit gesture to an underlying stored field (Meal name is the
             // canonical example).
@@ -411,6 +418,7 @@ export function useStandardColumns<TData extends BaseListRow>({
       rowLink,
       subject,
       nameClassName,
+      identityWidth,
       nameEditable,
       nameSuffix,
       namePrefix,

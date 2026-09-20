@@ -98,7 +98,7 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true },
+        display: { detail: true, renderer: { detail: "recipe-meta" } },
         validation: {
           read: recipeMeta,
           create: recipeMeta,
@@ -110,7 +110,7 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true },
+        display: { detail: true, renderer: { detail: "recipe-yield" } },
         validation: {
           read: recipeYieldSchema.nullable().optional(),
           create: recipeYieldSchema.nullable().optional(),
@@ -205,7 +205,7 @@ export default defineEntity({
         key: "sections",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true },
+        display: { detail: true, renderer: { detail: "recipe-sections" } },
         provenance: {
           kind: "relation",
           sources: [{ label: "Recipe sections" }],
@@ -293,7 +293,12 @@ export default defineEntity({
         // through recipelist.tsx's override (cookbook link or external URL).
         kind: "json",
         nullable: true,
-        display: { list: true, detail: true, listOrder: 5 },
+        display: {
+          list: true,
+          detail: true,
+          listOrder: 5,
+          renderer: { list: "recipe-source", detail: "recipe-source" },
+        },
         provenance: { kind: "derived", sources: [{ label: "Recipe source" }] },
         validation: {
           read: recipeSource.nullable().optional(),
@@ -305,7 +310,7 @@ export default defineEntity({
         key: "totals",
         kind: "json",
         nullable: true,
-        display: { detail: true },
+        display: { detail: true, renderer: { detail: "recipe-totals" } },
         validation: {
           read: recipeTotals.nullable().optional(),
           create: null,

@@ -122,6 +122,9 @@ const swiftStringArray = (values: readonly string[]): string =>
 const swiftOptionalStringArray = (values: readonly string[] | null): string =>
   values === null ? "nil" : swiftStringArray(values);
 
+const swiftOptionalRenderer = (value: string | null): string =>
+  value === null ? "nil" : `.${swiftCaseName(value)}`;
+
 /** Canonical `EntityAction` ordering; also the enum's declaration order, so
  * a `Set<EntityAction>` literal built from this order matches case order. */
 const ACTION_ORDER = [
@@ -220,7 +223,7 @@ const renderFieldDescriptorLiteral = (
     `nullable: ${swiftBool(field.nullable)}, ` +
     `reference: ${reference}, ` +
     `controlKind: ${controlKind}, ` +
-    `controlRenderer: ${swiftOptionalString(rendererMetadata.control)}, ` +
+    `controlRenderer: ${swiftOptionalRenderer(rendererMetadata.control)}, ` +
     `controlSection: ${swiftOptionalString(field.control?.section ?? null)}, ` +
     `controlOptions: ${renderOptionsLiteral(field.control?.options ?? null)}, ` +
     `placeholder: ${swiftOptionalString(field.control?.placeholder ?? null)}, ` +
@@ -240,8 +243,8 @@ const renderFieldDescriptorLiteral = (
     `listHidden: ${swiftBool(field.display.listHidden)}, ` +
     `width: ${swiftOptionalString(field.display.width)}, ` +
     `format: ${swiftOptionalString(field.display.format)}, ` +
-    `listRenderer: ${swiftOptionalString(rendererMetadata.list)}, ` +
-    `detailRenderer: ${swiftOptionalString(rendererMetadata.detail)}, ` +
+    `listRenderer: ${swiftOptionalRenderer(rendererMetadata.list)}, ` +
+    `detailRenderer: ${swiftOptionalRenderer(rendererMetadata.detail)}, ` +
     `mobileSlot: ${swiftOptionalString(field.display.mobile?.slot ?? null)}, ` +
     `mobilePriority: ${swiftOptionalInt(field.display.mobile?.priority ?? null)}, ` +
     `mobileInteractive: ${swiftBool(rendererMetadata.mobileInteractive)})`
@@ -250,9 +253,13 @@ const renderFieldDescriptorLiteral = (
 
 type DetailSection = CompiledEntity["inspector"]["detail"]["sections"][number];
 
-const renderDetailSectionLiteral = (section: DetailSection): string => {
+const renderDetailSectionLiteral = (
+  entity: string,
+  section: DetailSection,
+): string => {
+  const id = section.kind === "slot" ? `${entity}.${section.id}` : section.id;
   const common =
-    `id: ${swiftString(section.id)}, ` +
+    `id: ${swiftString(id)}, ` +
     `title: ${swiftOptionalString(section.title)}, ` +
     `placement: .${section.placement}, ` +
     `collapsed: ${swiftBool(section.collapsed)}`;
@@ -284,9 +291,9 @@ const renderDetailSectionLiteral = (section: DetailSection): string => {
 
 type ListView = CompiledEntity["inspector"]["list"]["views"][number];
 
-const renderListViewLiteral = (view: ListView): string =>
+const renderListViewLiteral = (entity: string, view: ListView): string =>
   isSlotListView(view)
-    ? `.slot(id: ${swiftString(view.id)}, label: ${swiftString(view.label)}, searchKeys: ${swiftStringArray(view.searchKeys)})`
+    ? `.slot(id: ${swiftString(`${entity}.${view.id}`)}, label: ${swiftString(view.label)}, searchKeys: ${swiftStringArray(view.searchKeys)})`
     : `.${view}`;
 
 const renderReadOnlyMatch = (value: string | boolean): string =>
@@ -295,6 +302,7 @@ const renderReadOnlyMatch = (value: string | boolean): string =>
     : `.string(${swiftString(value)})`;
 
 const renderPresentationLiteral = (
+  entity: string,
   presentation: CompiledEntity["inspector"],
   indent: string,
 ): string => {
@@ -303,7 +311,7 @@ const renderPresentationLiteral = (
   const sections =
     detail.sections.length === 0
       ? "[]"
-      : `[\n${detail.sections.map((section) => `${inner}  ${renderDetailSectionLiteral(section)}`).join(",\n")}\n${inner}]`;
+      : `[\n${detail.sections.map((section) => `${inner}  ${renderDetailSectionLiteral(entity, section)}`).join(",\n")}\n${inner}]`;
   const lifecycle =
     list.timeline?.lifecycle == null
       ? "nil"
@@ -325,7 +333,7 @@ const renderPresentationLiteral = (
     `${inner}heroImages: ${swiftBool(detail.hero.images)},\n` +
     `${inner}heroActions: ${swiftStringArray(detail.hero.actions)},\n` +
     `${inner}detailSections: ${sections},\n` +
-    `${inner}listViews: [${list.views.map(renderListViewLiteral).join(", ")}],\n` +
+    `${inner}listViews: [${list.views.map((view) => renderListViewLiteral(entity, view)).join(", ")}],\n` +
     `${inner}shelfSubtitle: ${swiftStringArray(list.shelf?.subtitle ?? [])},\n` +
     `${inner}listActions: ${swiftStringArray(list.actions)},\n` +
     `${inner}timelineFields: ${swiftStringArray(list.timeline?.fields ?? [])},\n` +
@@ -401,7 +409,7 @@ const renderEntityDescriptorLiteral = (
     `    fields: ${fields.length === 0 ? "[]" : `[\n      ${fields}\n    ]`},\n` +
     `    filters: ${filters.length === 0 ? "[]" : `[\n      ${filters}\n    ]`},\n` +
     `    relations: ${relations.length === 0 ? "[]" : `[\n      ${relations}\n    ]`},\n` +
-    `    presentation: ${renderPresentationLiteral(entity.inspector, "    ")}\n` +
+    `    presentation: ${renderPresentationLiteral(entity.key, entity.inspector, "    ")}\n` +
     `  )`
   );
 };
@@ -447,6 +455,34 @@ export const renderSwiftEntityCatalog = (
     "EntityFilterKind",
     FILTER_KINDS,
   );
+  const rendererIds = (surface: "control" | "list" | "detail") =>
+    [
+      ...new Set(
+        entities.flatMap((entity) =>
+          entity.fieldModel.fields.flatMap((field) => {
+            const renderer =
+              surface === "control"
+                ? field.control?.renderer
+                : field.display.renderer?.[surface];
+            return renderer === null || renderer === undefined
+              ? []
+              : [renderer];
+          }),
+        ),
+      ),
+    ].sort();
+  const controlRendererEnum = renderStringEnum(
+    "ControlRendererID",
+    rendererIds("control"),
+  );
+  const listRendererEnum = renderStringEnum(
+    "ListRendererID",
+    rendererIds("list"),
+  );
+  const detailRendererEnum = renderStringEnum(
+    "DetailRendererID",
+    rendererIds("detail"),
+  );
   // One static per entity rather than a single ~900-line array literal:
   // Release/WMO spent ~650 s inside the SIL optimizer's COWArrayOpt pass
   // (ColdBlockInfo::analyze) on the one-time initializer of `all` when the
@@ -476,6 +512,12 @@ export const renderSwiftEntityCatalog = (
     "\n" +
     entityFilterKindEnum +
     "\n" +
+    controlRendererEnum +
+    "\n" +
+    listRendererEnum +
+    "\n" +
+    detailRendererEnum +
+    "\n" +
     "/// A `{value, label}` choice: a filter's options or a select control's options.\n" +
     "public struct LabeledOption: Codable, Sendable, Hashable {\n" +
     "  public let value: String\n" +
@@ -502,7 +544,7 @@ export const renderSwiftEntityCatalog = (
     "  public let reference: FieldReference?\n" +
     "  public let controlKind: EntityControlKind?\n" +
     "  /// Semantic specialized-control id; the platform registry owns its implementation.\n" +
-    "  public let controlRenderer: String?\n" +
+    "  public let controlRenderer: ControlRendererID?\n" +
     "  /// The editor section the field groups under when `presentation.editSections` is nil.\n" +
     "  public let controlSection: String?\n" +
     "  /// A select control's choices; nil for every other control.\n" +
@@ -523,8 +565,8 @@ export const renderSwiftEntityCatalog = (
     "  public let width: String?\n" +
     "  /// Cell formatter (`currency`, `signedCurrency`, `plainDate`, `timestamp`, `external-link`, `amount`).\n" +
     "  public let format: String?\n" +
-    "  public let listRenderer: String?\n" +
-    "  public let detailRenderer: String?\n" +
+    "  public let listRenderer: ListRendererID?\n" +
+    "  public let detailRenderer: DetailRendererID?\n" +
     "  /// Mobile card placement of the list column, when declared.\n" +
     "  public let mobileSlot: String?\n" +
     "  public let mobilePriority: Int?\n" +
