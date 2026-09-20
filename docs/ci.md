@@ -131,6 +131,51 @@ from a partial or stale run.
 | --- | ---: | --- | --- | --- | ---: |
 | [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no | 82s |
 
+### 2026-09-20 serial experiment record
+
+The rows below are GitHub job wall times for five successful reruns of each
+unchanged public PR head. `queue` is the `Apple checks` job's
+`created_at`-to-`started_at` wait; the individual lane figures exclude that
+wait. `S`, `V`, `A`, `R`, `N`, `U`, `P`, `C`, `W`, `I`, and `K` mean Scope,
+Validation, Auxiliary, Rust, web Node, web UI, PostgreSQL, Chromium, WebKit,
+Apple checks, and Apple package tests. All runs completed without cancellation.
+
+| Exact head / attempt | Queue | Required lane walls (seconds) | Cache policy | Cancelled | Merge to Cloudflare |
+| --- | ---: | --- | --- | --- | ---: |
+| [#1105](https://github.com/nickysemenza/cubby/pull/1105) `46a920e4` / 1 | 238s | S 3; V 191; A 52; R 36; N 84; U 48; P 123; C 296; W 199; I 514; K 266 | macOS pnpm store hit | no | 79s |
+| `46a920e4` / 2 | 9s | S 3; V 188; A 54; R 36; N 75; U 59; P 97; C 328; W 197; I 560; K 261 | macOS pnpm store hit | no | 79s |
+| `46a920e4` / 3 | 7s | S 2; V 143; A 48; R 30; N 70; U 73; P 118; C 346; W 196; I 471; K 255 | macOS pnpm store hit | no | 79s |
+| `46a920e4` / 4 | 7s | S 4; V 199; A 48; R 37; N 88; U 59; P 110; C 329; W 185; I 630; K 271 | macOS pnpm store hit | no | 79s |
+| `46a920e4` / 5 | 6s | S 3; V 191; A 53; R 32; N 97; U 59; P 121; C 345; W 197; I 606; K 204 | macOS pnpm store hit | no | 79s |
+| [#1107](https://github.com/nickysemenza/cubby/pull/1107) `a5a2586a` / 1 | 11s | S 5; V 198; A 47; R 22; N 99; U 67; P 155; C 320; W 213; I 551; K 324 | iOS pnpm store disabled; Linux store hit | no | 98s |
+| `a5a2586a` / 2 | 15s | S 4; V 211; A 43; R 24; N 96; U 71; P 109; C 344; W 185; I 503; K 236 | iOS pnpm store disabled; Linux store hit | no | 98s |
+| `a5a2586a` / 3 | 6s | S 3; V 196; A 49; R 34; N 91; U 62; P 137; C 290; W 183; I 428; K 316 | iOS pnpm store disabled; Linux store hit | no | 98s |
+| `a5a2586a` / 4 | 227s | S 3; V 196; A 47; R 24; N 80; U 67; P 117; C 339; W 173; I 540; K 230 | iOS pnpm store disabled; Linux store hit | no | 98s |
+| `a5a2586a` / 5 | 7s | S 4; V 208; A 48; R 23; N 89; U 59; P 118; C 332; W 197; I 443; K 297 | iOS pnpm store disabled; Linux store hit | no | 98s |
+
+**Decisions.** Hosted Swift batch compilation's iOS app-check step was
+425/433/370/526/493s (p50 **433s**, 19.5% below the 538s pre-experiment
+baseline); its Apple-job p50 was 560s, 13.4% below the 647s baseline. It was
+retained in [#1105](https://github.com/nickysemenza/cubby/pull/1105). With
+that configuration retained, skipping the 732 MiB macOS pnpm-store restore in
+only the iOS job reduced dependency setup from a 68s p50 to **41s** (39.7%)
+and Apple-job p50 from 560s to **503s** (10.2%), without changing the critical
+path topology. It was retained in
+[#1107](https://github.com/nickysemenza/cubby/pull/1107).
+
+The target-specific FFI output cache then ran five green exact-head samples on
+`55a03282`: simulator FFI setup was 8/45/7/8/12s (p50 **8s** versus about 55s
+of FFI preparation before this cache), and iOS app checks were
+271/421/299/389/376s (p50 **376s**). The macOS package target had one normal
+207s cold build, then warm output-cache restores; simulator and macOS keys are
+disjoint. Apple-job walls were 340/531/368/466/484s (p50 **466s**, below the
+503s retained-store control), so there was no required critical-path
+regression. The cache was retained in
+[#1108](https://github.com/nickysemenza/cubby/pull/1108); its merged commit
+reached the completed Cloudflare deployment in **79s**. No runner-size,
+node_modules-cache, E2E-shard, artifact-handoff, or deployment-serialization
+change was made.
+
 Cloudflare Workers Builds was piloted and rejected: native PostgreSQL/pgvector/
 IntegreSQL and both browser engines worked, but no run reached a complete
 hosted pass with a cold-plus-two-warm timing result, so the pilot was
