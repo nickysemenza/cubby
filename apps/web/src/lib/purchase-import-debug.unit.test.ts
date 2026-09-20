@@ -54,6 +54,7 @@ describe("purchase import debug contract", () => {
           outcome: null,
           messageType: null,
           errorType: null,
+          errorCode: null,
           error: null,
           result: { pageText: "private" },
         },

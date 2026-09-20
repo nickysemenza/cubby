@@ -77,10 +77,10 @@ public enum BrowserBridgeOperation: Codable, Hashable, Sendable {
     case navigate(url: URL, allowedHosts: Set<String>)
     case followCapturedLink(linkID: String, allowedHosts: Set<String>)
     case scroll(pageCount: Int)
-    case capture(allowedHosts: Set<String>, enhancedEvidence: Bool)
+    case capture(allowedHosts: Set<String>, enhancedEvidence: Bool, recoveryURL: URL? = nil)
 
     private enum CodingKeys: String, CodingKey {
-        case type, url, allowedHosts, linkID, pageCount, enhancedEvidence
+        case type, url, allowedHosts, linkID, pageCount, enhancedEvidence, recoveryURL
     }
 
     private enum Kind: String, Codable {
@@ -106,7 +106,8 @@ public enum BrowserBridgeOperation: Codable, Hashable, Sendable {
         case .capture:
             self = try .capture(
                 allowedHosts: values.decode(Set<String>.self, forKey: .allowedHosts),
-                enhancedEvidence: values.decode(Bool.self, forKey: .enhancedEvidence))
+                enhancedEvidence: values.decode(Bool.self, forKey: .enhancedEvidence),
+                recoveryURL: values.decodeIfPresent(URL.self, forKey: .recoveryURL))
         }
     }
 
@@ -124,10 +125,11 @@ public enum BrowserBridgeOperation: Codable, Hashable, Sendable {
         case .scroll(let pageCount):
             try values.encode(Kind.scroll, forKey: .type)
             try values.encode(pageCount, forKey: .pageCount)
-        case .capture(let allowedHosts, let enhancedEvidence):
+        case .capture(let allowedHosts, let enhancedEvidence, let recoveryURL):
             try values.encode(Kind.capture, forKey: .type)
             try values.encode(allowedHosts, forKey: .allowedHosts)
             try values.encode(enhancedEvidence, forKey: .enhancedEvidence)
+            try values.encodeIfPresent(recoveryURL, forKey: .recoveryURL)
         }
     }
 }

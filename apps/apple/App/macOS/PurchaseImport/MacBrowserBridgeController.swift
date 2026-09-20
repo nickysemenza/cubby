@@ -206,11 +206,17 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         _ result: BrowserBridgeCommandResult, accountID: String, generation: UUID
     ) {
         guard generation == self.generation, bridges[accountID] != nil else { return }
-        guard case .failed(let code, let message, _) = result.outcome,
-            code == .authenticationRequired
-        else { return }
-        executors[accountID]?.raiseAuthenticationWindow()
-        settings?.requireAuthentication(accountID: accountID, message: message)
+        switch result.outcome {
+        case .completed:
+            settings?.setAccountError(nil, accountID: accountID)
+        case .failed(let code, let message, _):
+            if code == .authenticationRequired {
+                executors[accountID]?.raiseAuthenticationWindow()
+                settings?.requireAuthentication(accountID: accountID, message: message)
+            } else {
+                settings?.setAccountError(message, accountID: accountID)
+            }
+        }
     }
 
     private func didRequestAuthentication(runID: String, accountID: String, generation: UUID) {

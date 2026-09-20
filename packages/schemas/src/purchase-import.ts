@@ -228,6 +228,10 @@ export const browserBridgeOperation = z.discriminatedUnion("type", [
     type: z.literal("capture"),
     allowedHosts: allowedBrowserHosts,
     enhancedEvidence: z.boolean(),
+    // A capture remains restart-safe without giving the client broader browser authority. The
+    // web service derives this URL from the run's claimed work; the Mac may use it only when its
+    // dedicated window disappeared across an app/browser restart.
+    recoveryURL: z.url().optional(),
   }),
 ]);
 export type BrowserBridgeOperation = z.infer<typeof browserBridgeOperation>;

@@ -25,9 +25,11 @@ public struct BrowserBridgeDebugRecord: Codable, Sendable, Equatable {
     public let outcome: String?
     public let messageType: String?
     public let errorType: String?
+    public let errorCode: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case id, occurredAt, event, host, browser, attempt, count, outcome, messageType, errorType
+        case id, occurredAt, event, host, browser, attempt, count, outcome, messageType, errorType,
+            errorCode
         case runID = "runId"
         case commandID = "commandId"
         case operationID = "operationId"
@@ -130,6 +132,7 @@ public enum BrowserBridgeDebugLog {
         case appleEventStarted = "apple_event.started"
         case appleEventFinished = "apple_event.finished"
         case appleEventRejected = "apple_event.rejected"
+        case appleEventFailed = "apple_event.failed"
         case resultPersisted = "result.persisted"
         case resultSent = "result.sent"
         case resultSendDeferred = "result.send_deferred"
@@ -165,7 +168,8 @@ public enum BrowserBridgeDebugLog {
         count: Int? = nil,
         outcome: BrowserBridgeCommandOutcome? = nil,
         messageType: String? = nil,
-        error: (any Error)? = nil
+        error: (any Error)? = nil,
+        errorCode: Int? = nil
     ) {
         #if DEBUG
             let resolvedRunID = command?.runID ?? runID
@@ -194,13 +198,14 @@ public enum BrowserBridgeDebugLog {
             if let messageType { fields.append("message=\(messageType)") }
             if let outcome { fields.append("outcome=\(outcomeLabel(outcome))") }
             if let error { fields.append("error=\(String(reflecting: type(of: error)))") }
+            if let errorCode { fields.append("errorCode=\(errorCode)") }
             logger.debug("\(fields.joined(separator: " "), privacy: .public)")
             let record = BrowserBridgeDebugRecord(
                 id: UUID(), occurredAt: .now, event: event, runID: resolvedRunID,
                 commandID: resolvedCommandID, operationID: resolvedOperationID,
                 operationKind: resolvedOperationKind, host: host, browser: browser?.rawValue,
                 accountID: accountID, attempt: attempt, count: count, outcome: resolvedOutcome,
-                messageType: messageType, errorType: errorType)
+                messageType: messageType, errorType: errorType, errorCode: errorCode)
             Task { await BrowserBridgeDebugHub.shared.report(record) }
         #endif
     }
@@ -217,7 +222,8 @@ public enum BrowserBridgeDebugLog {
     private static func operationHost(_ operation: BrowserBridgeOperation) -> String? {
         switch operation {
         case .navigate(let url, _): url.host()?.lowercased()
-        case .followCapturedLink, .scroll, .capture: nil
+        case .followCapturedLink, .scroll: nil
+        case .capture(_, _, let recoveryURL): recoveryURL?.host()?.lowercased()
         }
     }
 
