@@ -281,7 +281,9 @@ struct BrowserBridgeTests {
         .navigate(url: URL(string: "https://orders.example.com/order/1")!, allowedHosts: ["example.com"]),
         .followCapturedLink(linkID: "opaque-link", allowedHosts: ["example.com"]),
         .scroll(pageCount: 2),
-        .capture(allowedHosts: ["example.com"], enhancedEvidence: true),
+        .capture(
+            allowedHosts: ["example.com"], enhancedEvidence: true,
+            recoveryURL: URL(string: "https://orders.example.com/history")!),
     ]
 }
 

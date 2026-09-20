@@ -108,7 +108,9 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 _ = try await runFixedJavaScript(
                     "window.scrollBy(0, window.innerHeight * \(pageCount)); true;")
                 return .completed(capture: nil)
-            case .capture(let allowedHosts, let enhancedEvidence):
+            case .capture(let allowedHosts, let enhancedEvidence, let recoveryURL):
+                try await prepareCaptureWindow(
+                    recoveryURL: recoveryURL, allowedHosts: allowedHosts)
                 return .completed(
                     capture: try await capture(
                         command: command, allowedHosts: allowedHosts,
@@ -152,6 +154,29 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         guard let ownedWindowID else { throw ExecutionFailure.browserUnavailable }
         _ = try await navigate(url)
         self.ownedWindowID = ownedWindowID
+    }
+
+    /// Browser commands outlive both the WebSocket and the Mac process. A resumed Flue run may
+    /// therefore deliver `capture` after the in-memory window handle disappeared. Recreate only
+    /// from the server-provided, allowlisted recovery URL; never adopt an arbitrary user window.
+    private func prepareCaptureWindow(recoveryURL: URL?, allowedHosts: Set<String>) async throws {
+        if ownedWindowID != nil {
+            do {
+                _ = try await runFixedJavaScript("location.href")
+                return
+            } catch ExecutionFailure.browserUnavailable {
+                ownedWindowID = nil
+                ownedCaptureWindowID = nil
+            }
+        }
+        guard let recoveryURL else { throw ExecutionFailure.browserUnavailable }
+        let validated = try BrowserBridgeURLPolicy.validate(
+            recoveryURL, allowedHosts: allowedHosts)
+        let previousCaptureWindows = await browserCaptureWindowIDs()
+        ownedWindowID = try await navigate(validated)
+        ownedCaptureWindowID = await identifyCreatedCaptureWindow(
+            excluding: previousCaptureWindows)
+        capturedLinks = [:]
     }
 
     private func runFixedJavaScript(_ javascript: String) async throws -> String {
@@ -372,6 +397,9 @@ private actor SerializedAppleScriptExecutor {
             if number == -1743 {
                 BrowserBridgeDebugLog.emit(.appleEventRejected, messageType: action)
                 throw ExecutionFailure.permissionDenied
+            }
+            if number == -1728 {
+                throw ExecutionFailure.browserUnavailable
             }
             throw ExecutionFailure.executionFailed
         }

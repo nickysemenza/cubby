@@ -168,6 +168,41 @@ describe("purchase import run admission", () => {
     expect(commands[1]).toEqual(commands[0]);
   });
 
+  it("rejects a capture recovery URL outside the vendor allowlist", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const broker = {
+      enqueue: async () => undefined,
+      result: async () => null,
+      cancel: async () => undefined,
+      connected: async () => true,
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+
+    await expect(
+      issueBrowserCommand(
+        ctx.db,
+        { getByName: () => broker },
+        {
+          runId: run.id,
+          operationId: "browser:disallowed-recovery",
+          operation: {
+            type: "capture",
+            allowedHosts: ["shop.example.test"],
+            enhancedEvidence: false,
+            recoveryURL: "https://attacker.example/orders",
+          },
+        },
+      ),
+    ).rejects.toThrow("outside the vendor allowlist");
+  });
+
   it("replays terminal completion after the run status already committed", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);

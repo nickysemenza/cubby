@@ -217,7 +217,8 @@ public enum BrowserBridgeDebugLog {
     private static func operationHost(_ operation: BrowserBridgeOperation) -> String? {
         switch operation {
         case .navigate(let url, _): url.host()?.lowercased()
-        case .followCapturedLink, .scroll, .capture: nil
+        case .followCapturedLink, .scroll: nil
+        case .capture(_, _, let recoveryURL): recoveryURL?.host()?.lowercased()
         }
     }
 

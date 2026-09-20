@@ -58,6 +58,27 @@ describe("purchase import contracts", () => {
     ).toThrow("Invalid input");
   });
 
+  it("preserves the bounded recovery URL for a restart-safe capture", () => {
+    const request = browserBridgeRequest.parse({
+      protocolVersion: 2,
+      id: crypto.randomUUID(),
+      operationId: "capture-after-restart",
+      runID: crypto.randomUUID(),
+      deadline: "2026-09-21T12:00:00.000Z",
+      operation: {
+        type: "capture",
+        allowedHosts: ["orders.example.test"],
+        enhancedEvidence: false,
+        recoveryURL: "https://orders.example.test/history",
+      },
+    });
+
+    expect(request.operation).toMatchObject({
+      type: "capture",
+      recoveryURL: "https://orders.example.test/history",
+    });
+  });
+
   it("allows only a negative refund proposal", () => {
     const base = {
       kind: "create_refund" as const,
