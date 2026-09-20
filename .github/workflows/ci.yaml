@@ -537,6 +537,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "false"
+          cache-pnpm-store: "false"
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Run iOS app checks
