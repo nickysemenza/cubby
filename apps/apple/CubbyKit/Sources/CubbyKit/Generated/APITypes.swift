@@ -37,6 +37,38 @@ public typealias AttachableImageEntityId = Components.Schemas.AttachableImageEnt
 public typealias BackgroundBatchRef = Components.Schemas.BackgroundBatchRef
 public typealias BaseKind = Components.Schemas.BaseKind
 public typealias BrandedFoodInfo = Components.Schemas.BrandedFoodInfo
+public typealias BrowserBridgeCapabilities = Components.Schemas.BrowserBridgeCapabilities
+public typealias BrowserBridgeClientMessage = Components.Schemas.BrowserBridgeClientMessage
+public typealias BrowserBridgeClientMessageHello = Components.Schemas.BrowserBridgeClientMessageHello
+public typealias BrowserBridgeClientMessagePong = Components.Schemas.BrowserBridgeClientMessagePong
+public typealias BrowserBridgeClientMessageResult = Components.Schemas.BrowserBridgeClientMessageResult
+public typealias BrowserBridgeClientMessageRunCompletedAck = Components.Schemas.BrowserBridgeClientMessageRunCompletedAck
+public typealias BrowserBridgeCommandOutcome = Components.Schemas.BrowserBridgeCommandOutcome
+public typealias BrowserBridgeCommandOutcomeCompleted = Components.Schemas.BrowserBridgeCommandOutcomeCompleted
+public typealias BrowserBridgeCommandOutcomeFailed = Components.Schemas.BrowserBridgeCommandOutcomeFailed
+public typealias BrowserBridgeFailureCode = Components.Schemas.BrowserBridgeFailureCode
+public typealias BrowserBridgeOperation = Components.Schemas.BrowserBridgeOperation
+public typealias BrowserBridgeOperationCapture = Components.Schemas.BrowserBridgeOperationCapture
+public typealias BrowserBridgeOperationFollowCapturedLink = Components.Schemas.BrowserBridgeOperationFollowCapturedLink
+public typealias BrowserBridgeOperationNavigate = Components.Schemas.BrowserBridgeOperationNavigate
+public typealias BrowserBridgeOperationScroll = Components.Schemas.BrowserBridgeOperationScroll
+public typealias BrowserBridgeRequest = Components.Schemas.BrowserBridgeRequest
+public typealias BrowserBridgeResult = Components.Schemas.BrowserBridgeResult
+public typealias BrowserBridgeRunCompletion = Components.Schemas.BrowserBridgeRunCompletion
+public typealias BrowserBridgeServerMessage = Components.Schemas.BrowserBridgeServerMessage
+public typealias BrowserBridgeServerMessageAcknowledge = Components.Schemas.BrowserBridgeServerMessageAcknowledge
+public typealias BrowserBridgeServerMessageCancel = Components.Schemas.BrowserBridgeServerMessageCancel
+public typealias BrowserBridgeServerMessageCommand = Components.Schemas.BrowserBridgeServerMessageCommand
+public typealias BrowserBridgeServerMessagePing = Components.Schemas.BrowserBridgeServerMessagePing
+public typealias BrowserBridgeServerMessageRaiseAuthWindow = Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow
+public typealias BrowserBridgeServerMessageRunCompleted = Components.Schemas.BrowserBridgeServerMessageRunCompleted
+public typealias BrowserCapturedImage = Components.Schemas.BrowserCapturedImage
+public typealias BrowserCapturedLink = Components.Schemas.BrowserCapturedLink
+public typealias BrowserChoice = Components.Schemas.BrowserChoice
+public typealias BrowserEvidenceKind = Components.Schemas.BrowserEvidenceKind
+public typealias BrowserEvidenceReference = Components.Schemas.BrowserEvidenceReference
+public typealias BrowserPageCapture = Components.Schemas.BrowserPageCapture
+public typealias BrowserPaymentEvidence = Components.Schemas.BrowserPaymentEvidence
 public typealias CookbookShortcode = Components.Schemas.CookbookShortcode
 public typealias CostType = Components.Schemas.CostType
 public typealias DashboardCountsOut = Components.Schemas.DashboardCountsOut
@@ -550,6 +582,9 @@ public typealias PhotoImportCreateBody = Components.Schemas.PhotoImportCommitInp
 // MARK: - Identifiable
 
 extension Components.Schemas.BackgroundBatchRef: Identifiable {}
+extension Components.Schemas.BrowserBridgeRequest: Identifiable {}
+extension Components.Schemas.BrowserCapturedLink: Identifiable {}
+extension Components.Schemas.BrowserEvidenceReference: Identifiable {}
 extension Components.Schemas.DisplayImageSummary: Identifiable {}
 extension Components.Schemas.DuplicateUniqueProduct: Identifiable {}
 extension Components.Schemas.EntityAttachmentRead: Identifiable {}

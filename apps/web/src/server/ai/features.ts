@@ -26,10 +26,10 @@ import {
 } from "@cubby/schemas/ai";
 import {
   type ImportAuditOutput,
-  type ImportExtractionOutcome,
+  type ImportExtractionModelOutput,
   type OrderMailClassification,
   importAuditOutput,
-  importExtractionOutcome,
+  importExtractionModelOutput,
   orderMailClassification,
 } from "@cubby/schemas/purchase-import";
 import {
@@ -272,8 +272,8 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   effort: "low",
   cache: false,
   promptVersion: "2026-09-19.1",
-  schema: importExtractionOutcome,
-}) satisfies AiStructuredFeature<ImportExtractionOutcome>;
+  schema: importExtractionModelOutput,
+}) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   feature: "purchase-import-receipt-extraction",
@@ -281,8 +281,8 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   maxTokens: 4_000,
   cache: false,
   promptVersion: "2026-09-19.1",
-  schema: importExtractionOutcome,
-}) satisfies AiStructuredFeature<ImportExtractionOutcome>;
+  schema: importExtractionModelOutput,
+}) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
   feature: "purchase-import-mail-classification",
@@ -344,8 +344,8 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
   effort: "high",
   cache: false,
   promptVersion: "2026-09-19.1",
-  schema: importExtractionOutcome,
-}) satisfies AiStructuredFeature<ImportExtractionOutcome>;
+  schema: importExtractionModelOutput,
+}) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 /**
  * The agent is declared here for its tier/cap/effort, but it does NOT run

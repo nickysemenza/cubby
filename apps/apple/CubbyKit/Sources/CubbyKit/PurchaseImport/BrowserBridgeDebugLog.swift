@@ -173,7 +173,7 @@ public enum BrowserBridgeDebugLog {
     ) {
         #if DEBUG
             let resolvedRunID = command?.runID ?? runID
-            let resolvedCommandID = command?.id ?? commandID
+            let resolvedCommandID = command?.commandUUID ?? commandID
             let resolvedOperationID = command?.operationID ?? operationID
             let resolvedOperationKind = command.map { operationKind($0.operation) }
             let host = command.flatMap { operationHost($0.operation) }
@@ -181,7 +181,7 @@ public enum BrowserBridgeDebugLog {
             let errorType = error.map { String(reflecting: type(of: $0)) }
             var fields = ["event=\(event.rawValue)"]
             if let command {
-                fields.append("command=\(command.id.uuidString)")
+                fields.append("command=\(command.id)")
                 fields.append("run=\(command.runID)")
                 fields.append("operation=\(command.operationID)")
                 fields.append("kind=\(operationKind(command.operation))")
@@ -221,17 +221,18 @@ public enum BrowserBridgeDebugLog {
 
     private static func operationHost(_ operation: BrowserBridgeOperation) -> String? {
         switch operation {
-        case .navigate(let url, _): url.host()?.lowercased()
+        case .navigate(let payload): URL(string: payload.url)?.host()?.lowercased()
         case .followCapturedLink, .scroll: nil
-        case .capture(_, _, let recoveryURL): recoveryURL?.host()?.lowercased()
+        case .capture(let payload): URL(string: payload.recoveryURL ?? "")?.host()?.lowercased()
         }
     }
 
     private static func outcomeLabel(_ outcome: BrowserBridgeCommandOutcome) -> String {
         switch outcome {
-        case .completed(let capture): capture == nil ? "completed" : "completed_with_capture"
-        case .failed(let code, _, let retryable):
-            "failed:\(code.rawValue):retryable=\(retryable)"
+        case .completed(let payload):
+            payload.capture == nil ? "completed" : "completed_with_capture"
+        case .failed(let payload):
+            "failed:\(payload.code.rawValue):retryable=\(payload.retryable)"
         }
     }
 }

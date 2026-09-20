@@ -30,3 +30,24 @@ public enum BrowserBridgeURLPolicy {
         return url
     }
 }
+
+public enum BrowserCaptureNavigationPolicy {
+    /// A capture target is authoritative. Reusing an already-owned window is safe only when it
+    /// is still showing that exact target; navigating to an unchanged target would reload the
+    /// page and can turn a replayed capture command into a refresh loop.
+    public static func shouldNavigate(currentURL: URL?, targetURL: URL?) -> Bool {
+        guard let targetURL else { return false }
+        guard let currentURL else { return true }
+        return currentURL.absoluteString != targetURL.absoluteString
+    }
+
+    /// Setting a browser tab URL returns before the new document necessarily starts loading. A
+    /// stale document can therefore still report `complete`; require both the requested URL and
+    /// the new document's ready state before capture associates evidence with that target.
+    public static func isReady(
+        currentURL: URL?, targetURL: URL?, documentReadyState: String
+    ) -> Bool {
+        guard documentReadyState == "complete" else { return false }
+        return !shouldNavigate(currentURL: currentURL, targetURL: targetURL)
+    }
+}

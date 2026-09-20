@@ -10,6 +10,7 @@ import type { HttpResources } from "../entities/render/index.ts";
 import type { HttpMetadata } from "../../../apps/web/src/lib/http-api/router.ts";
 import {
   discriminatorOf,
+  toWire,
   wireProjection,
   wireRegistry,
 } from "../../../apps/web/src/lib/http-api/wire.ts";
@@ -33,7 +34,7 @@ import {
   residualNullPointers,
 } from "./document-passes.ts";
 import type { EntityOutputs } from "./api-types.ts";
-import { renderNativeArtifacts } from "./native.ts";
+import { NATIVE_COMPONENT_ROOTS, renderNativeArtifacts } from "./native.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
 import { TYPE_OVERRIDES } from "./type-overrides.ts";
 
@@ -70,12 +71,17 @@ const buildOpenApiDocument = async (): Promise<{
     input: z.registry<{ id: string }>(),
     output: z.registry<{ id: string }>(),
   };
+  const nativeComponentRoots = new Set<string>(NATIVE_COMPONENT_ROOTS);
 
   // A named domain schema's wire projections are components under the export
   // name, so a nested reference resolves to `#/components/schemas/<Name>`
   // directly. A scalar projects to the same instance on both sides and keeps
   // one name; an object that serves both sides gets an `Input` twin.
   for (const [name, domain] of named) {
+    if (nativeComponentRoots.has(name)) {
+      toWire(domain, "input");
+      toWire(domain, "output");
+    }
     const output = wireProjection(domain, "output");
     const input = wireProjection(domain, "input");
     // A pass-through projection is the domain instance itself; it can be
@@ -355,6 +361,7 @@ const buildOpenApiDocument = async (): Promise<{
   const components = pruneUnreachableComponents(
     document,
     passes.reduce((current, pass) => pass(current), emitted),
+    NATIVE_COMPONENT_ROOTS,
   );
   /**
    * Nullability the passes above could not express in a form a generated
@@ -445,9 +452,15 @@ const refsIn = (value: OpenApiDocument["paths"] | JsonSchema | undefined) =>
 const pruneUnreachableComponents = (
   document: OpenApiDocument,
   components: Record<string, JsonSchema>,
+  additionalRoots: readonly string[] = [],
 ): Record<string, JsonSchema> => {
   const reachable = new Set<string>();
-  const queue = refsIn(document.paths);
+  const missingRoots = additionalRoots.filter((name) => !(name in components));
+  if (missingRoots.length > 0)
+    throw new Error(
+      `Native OpenAPI component roots do not exist: ${missingRoots.join(", ")}`,
+    );
+  const queue = [...refsIn(document.paths), ...additionalRoots];
   for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
     if (reachable.has(name)) continue;
     reachable.add(name);

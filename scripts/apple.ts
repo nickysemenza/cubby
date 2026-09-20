@@ -197,9 +197,11 @@ const mac = (options: Options) => {
   xcodebuild("Cubby-macOS", "platform=macOS,arch=arm64", options);
   const app = productPath("Debug");
   // `open` on a running app only activates it, so the old binary would keep
-  // running; pkill exits 1 when nothing matched, which is fine.
+  // running; pkill exits 1 when nothing matched, which is fine. Launch a new
+  // instance explicitly because LaunchServices may still consider the
+  // terminating process active for a short time after pkill.
   spawnSync("pkill", ["-x", "Cubby"], { stdio: "ignore" });
-  run("open", [app]);
+  run("open", ["-n", app]);
 };
 
 // `devicectl` only writes JSON to a file, never stdout.

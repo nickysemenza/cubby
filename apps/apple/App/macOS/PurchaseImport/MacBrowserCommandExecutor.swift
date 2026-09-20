@@ -80,12 +80,19 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 code: .deadlineExceeded, message: "The browser command deadline elapsed.",
                 retryable: false)
         }
-        guard cancelled.remove(command.id) == nil else {
+        guard let commandID = command.commandUUID else {
+            return .failed(
+                code: .invalidCommand, message: "The browser command identifier was invalid.",
+                retryable: false)
+        }
+        guard cancelled.remove(commandID) == nil else {
             return .failed(code: .cancelled, message: "The browser command was cancelled.", retryable: false)
         }
         do {
             switch command.operation {
-            case .navigate(let url, let allowedHosts):
+            case .navigate(let payload):
+                guard let url = URL(string: payload.url) else { throw ExecutionFailure.invalidCommand }
+                let allowedHosts = Set(payload.allowedHosts)
                 let validated = try BrowserBridgeURLPolicy.validate(url, allowedHosts: allowedHosts)
                 let isCreatingWindow = ownedWindowID == nil
                 let previousCaptureWindows =
@@ -97,24 +104,28 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 }
                 capturedLinks = [:]
                 return .completed(capture: nil)
-            case .followCapturedLink(let linkID, let allowedHosts):
-                guard let url = capturedLinks[linkID] else { throw ExecutionFailure.unknownLink }
+            case .followCapturedLink(let payload):
+                guard let url = capturedLinks[payload.linkID] else { throw ExecutionFailure.unknownLink }
+                let allowedHosts = Set(payload.allowedHosts)
                 let validated = try BrowserBridgeURLPolicy.validate(url, allowedHosts: allowedHosts)
                 try await setOwnedWindowURL(validated)
                 capturedLinks = [:]
                 return .completed(capture: nil)
-            case .scroll(let pageCount):
-                guard (1...20).contains(pageCount) else { throw ExecutionFailure.invalidCommand }
+            case .scroll(let payload):
+                guard (1...20).contains(payload.pageCount) else { throw ExecutionFailure.invalidCommand }
                 _ = try await runFixedJavaScript(
-                    "window.scrollBy(0, window.innerHeight * \(pageCount)); true;")
+                    "window.scrollBy(0, window.innerHeight * \(payload.pageCount)); true;")
                 return .completed(capture: nil)
-            case .capture(let allowedHosts, let enhancedEvidence, let recoveryURL):
-                try await prepareCaptureWindow(
+            case .capture(let payload):
+                let allowedHosts = Set(payload.allowedHosts)
+                let recoveryURL = payload.recoveryURL.flatMap(URL.init(string:))
+                let targetURL = try await prepareCaptureWindow(
                     recoveryURL: recoveryURL, allowedHosts: allowedHosts)
                 return .completed(
                     capture: try await capture(
                         command: command, allowedHosts: allowedHosts,
-                        enhancedEvidence: enhancedEvidence))
+                        enhancedEvidence: payload.enhancedEvidence,
+                        targetURL: targetURL))
             }
         } catch let failure as BrowserBridgeURLPolicy.Failure {
             return .failed(code: .disallowedURL, message: failure.message, retryable: false)
@@ -202,27 +213,39 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         self.ownedWindowID = ownedWindowID
     }
 
-    /// Browser commands outlive both the WebSocket and the Mac process. A resumed Flue run may
-    /// therefore deliver `capture` after the in-memory window handle disappeared. Recreate only
-    /// from the server-provided, allowlisted recovery URL; never adopt an arbitrary user window.
-    private func prepareCaptureWindow(recoveryURL: URL?, allowedHosts: Set<String>) async throws {
+    /// Browser commands outlive both the WebSocket and the Mac process. A capture target is the
+    /// page the command asks us to capture, and also the safe recovery location when the owned
+    /// window disappeared. Never adopt an arbitrary user window, and never reload an owned window
+    /// that is already at the target during command replay.
+    private func prepareCaptureWindow(
+        recoveryURL: URL?, allowedHosts: Set<String>
+    ) async throws -> URL? {
+        let targetURL = try recoveryURL.map {
+            try BrowserBridgeURLPolicy.validate($0, allowedHosts: allowedHosts)
+        }
         if ownedWindowID != nil {
             do {
-                _ = try await runFixedJavaScript("location.href")
-                return
+                let currentURL = URL(string: try await runFixedJavaScript("location.href"))
+                if let targetURL,
+                    BrowserCaptureNavigationPolicy.shouldNavigate(
+                        currentURL: currentURL, targetURL: targetURL)
+                {
+                    try await setOwnedWindowURL(targetURL)
+                    capturedLinks = [:]
+                }
+                return targetURL
             } catch ExecutionFailure.browserUnavailable {
                 ownedWindowID = nil
                 ownedCaptureWindowID = nil
             }
         }
-        guard let recoveryURL else { throw ExecutionFailure.browserUnavailable }
-        let validated = try BrowserBridgeURLPolicy.validate(
-            recoveryURL, allowedHosts: allowedHosts)
+        guard let targetURL else { throw ExecutionFailure.browserUnavailable }
         let previousCaptureWindows = await browserCaptureWindowIDs()
-        ownedWindowID = try await navigate(validated)
+        ownedWindowID = try await navigate(targetURL)
         ownedCaptureWindowID = await identifyCreatedCaptureWindow(
             excluding: previousCaptureWindows)
         capturedLinks = [:]
+        return targetURL
     }
 
     private func runFixedJavaScript(_ javascript: String) async throws -> String {
@@ -241,9 +264,10 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     }
 
     private func capture(
-        command: BrowserBridgeCommand, allowedHosts: Set<String>, enhancedEvidence: Bool
+        command: BrowserBridgeCommand, allowedHosts: Set<String>, enhancedEvidence: Bool,
+        targetURL: URL?
     ) async throws -> BrowserPageCapture {
-        try await waitForPageReady()
+        try await waitForPageReady(targetURL: targetURL)
         let raw = try await runFixedJavaScript(Self.captureScript)
         try Task.checkCancellation()
         guard let data = raw.data(using: .utf8) else { throw ExecutionFailure.captureUnavailable }
@@ -277,7 +301,9 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 readableText: payload.text))
         defer { try? FileManager.default.removeItem(at: normalized.url) }
         try Task.checkCancellation()
-        guard cancelled.remove(command.id) == nil else { throw ExecutionFailure.cancelled }
+        guard let commandID = command.commandUUID, cancelled.remove(commandID) == nil else {
+            throw ExecutionFailure.cancelled
+        }
         var references: [BrowserEvidenceReference]
         do {
             references = [try await evidenceUploader.upload(normalized, runID: command.runID)]
@@ -374,10 +400,18 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         }
     }
 
-    private func waitForPageReady() async throws {
+    private func waitForPageReady(targetURL: URL?) async throws {
         for _ in 0..<40 {
             try Task.checkCancellation()
-            if (try? await runFixedJavaScript("document.readyState")) == "complete" { return }
+            let currentURLString = try? await runFixedJavaScript("location.href")
+            let currentURL = currentURLString.flatMap(URL.init(string:))
+            let readyState = try? await runFixedJavaScript("document.readyState")
+            if BrowserCaptureNavigationPolicy.isReady(
+                currentURL: currentURL, targetURL: targetURL,
+                documentReadyState: readyState ?? "")
+            {
+                return
+            }
             try await Task.sleep(for: .milliseconds(250))
         }
         throw ExecutionFailure.captureUnavailable

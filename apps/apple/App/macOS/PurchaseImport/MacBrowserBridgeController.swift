@@ -209,12 +209,12 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         switch result.outcome {
         case .completed:
             settings?.setAccountError(nil, accountID: accountID)
-        case .failed(let code, let message, _):
-            if code == .authenticationRequired {
+        case .failed(let payload):
+            if payload.code == .authenticationRequired {
                 executors[accountID]?.raiseAuthenticationWindow()
-                settings?.requireAuthentication(accountID: accountID, message: message)
+                settings?.requireAuthentication(accountID: accountID, message: payload.message)
             } else {
-                settings?.setAccountError(message, accountID: accountID)
+                settings?.setAccountError(payload.message, accountID: accountID)
             }
         }
     }

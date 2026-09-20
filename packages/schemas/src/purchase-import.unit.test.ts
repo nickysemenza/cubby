@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   browserBridgeRequest,
+  importExtractionModelOutput,
   importExtractionOutcome,
   importSourceIdentity,
+  normalizeImportExtractionModelOutput,
   proposedImportFix,
 } from "./purchase-import";
 
@@ -29,6 +32,69 @@ describe("purchase import contracts", () => {
     if (outcome.status !== "needs_review")
       throw new Error("Expected review outcome");
     expect(outcome.candidate.lines).toHaveLength(1);
+  });
+
+  it("uses an OpenAI-compatible flat schema for extraction output", () => {
+    expect(
+      JSON.stringify(z.toJSONSchema(importExtractionModelOutput)),
+    ).not.toContain('"oneOf"');
+  });
+
+  it("normalizes OpenAI null placeholders into optional domain fields", () => {
+    const wire = importExtractionModelOutput.parse({
+      status: "ready",
+      reason: null,
+      detail: null,
+      candidate: {
+        orderId: "ORDER-101",
+        orderedAt: "2026-09-20T12:00:00.000Z",
+        merchant: "Example Supply",
+        currency: "USD",
+        printedGrandTotal: 24,
+        lines: [
+          {
+            title: "Replacement filter",
+            amount: 24,
+            lineKind: null,
+            quantity: null,
+            productUrl: null,
+            imageUrl: null,
+            sku: null,
+            seller: null,
+          },
+        ],
+        payments: [
+          {
+            amount: 24,
+            chargedAt: null,
+            cardLastFour: null,
+            description: null,
+          },
+        ],
+        allShipmentsDelivered: null,
+      },
+    });
+
+    const normalized = normalizeImportExtractionModelOutput(wire);
+    expect(normalized).toEqual({
+      status: "ready",
+      candidate: {
+        orderId: "ORDER-101",
+        orderedAt: "2026-09-20T12:00:00.000Z",
+        merchant: "Example Supply",
+        currency: "USD",
+        printedGrandTotal: 24,
+        lines: [
+          {
+            title: "Replacement filter",
+            amount: 24,
+            lineKind: "principal",
+          },
+        ],
+        payments: [{ amount: 24 }],
+        allShipmentsDelivered: null,
+      },
+    });
   });
 
   it("requires stable source identity for orderless receipts", () => {

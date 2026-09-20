@@ -115,6 +115,12 @@ export class PurchaseImportDurableObject
   ): Promise<void> {
     const parsed = decodeBrowserBridgeMessage(message);
     if (!parsed.success) {
+      console.error("purchase-import.bridge.invalid-message", {
+        issues: parsed.error.issues.map((issue) => ({
+          code: issue.code,
+          path: issue.path.join("."),
+        })),
+      });
       socket.close(1008, "Invalid or obsolete bridge protocol");
       return;
     }

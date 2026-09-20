@@ -12,7 +12,7 @@ actor CubbyBrowserEvidenceUploader: BrowserEvidenceUploading {
         -> BrowserEvidenceReference
     {
         switch evidence.kind {
-        case .normalizedPDF, .renderedPDF:
+        case .normalizedPdf, .renderedPdf:
             return try await uploadPDF(evidence, runID: runID)
         case .screenshot:
             return try await uploadScreenshot(evidence)

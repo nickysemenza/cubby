@@ -66,6 +66,17 @@ const operations = Object.entries(paths).flatMap(([path, methods]) =>
   })),
 );
 const text = JSON.stringify(document);
+const nativeProtocolRoots = [
+  "BrowserBridgeClientMessage",
+  "BrowserBridgeRunCompletion",
+  "BrowserBridgeServerMessage",
+] as const;
+
+it("retains native WebSocket protocol components without fake HTTP routes", () => {
+  expect(schemas.BrowserBridgeClientMessage).toBeDefined();
+  expect(schemas.BrowserBridgeServerMessage).toBeDefined();
+  expect(JSON.stringify(document.paths)).not.toContain("BrowserBridge");
+});
 
 const COMPONENT = "#/components/schemas/";
 const componentName = (ref: string | undefined) =>
@@ -191,15 +202,18 @@ describe("generated HTTP OpenAPI document", () => {
   });
 
   it("carries no component unreachable from a path", () => {
-    // Every named export is registered as a component whether or not a
-    // route uses it; each orphan is a type the generated client would carry.
+    // Every component belongs either to an HTTP path or an explicit native
+    // protocol root; anything else is dead weight in generated clients.
     const reachable = new Set<string>();
     const refsIn = (serialized: string): string[] =>
       [...serialized.matchAll(/"\$ref":"([^"]+)"/gu)].flatMap((match) => {
         const name = componentName(match[1]);
         return name === undefined ? [] : [name];
       });
-    const queue = refsIn(JSON.stringify(document.paths));
+    const queue = [
+      ...refsIn(JSON.stringify(document.paths)),
+      ...nativeProtocolRoots,
+    ];
     for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
       if (reachable.has(name)) continue;
       reachable.add(name);

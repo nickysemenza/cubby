@@ -20,6 +20,23 @@ typeOverrides:
     ProductShortcode: CubbyAPISupport.ProductCode
     SearchableEntity: Swift.String
 filter:
+  schemas:
+    - BrowserBridgeCapabilities
+    - BrowserBridgeClientMessage
+    - BrowserBridgeCommandOutcome
+    - BrowserBridgeFailureCode
+    - BrowserBridgeOperation
+    - BrowserBridgeRequest
+    - BrowserBridgeResult
+    - BrowserBridgeRunCompletion
+    - BrowserBridgeServerMessage
+    - BrowserCapturedImage
+    - BrowserCapturedLink
+    - BrowserEvidenceReference
+    - BrowserEvidenceKind
+    - BrowserPageCapture
+    - BrowserPaymentEvidence
+    - BrowserChoice
   operations:
     - dashboard.counts
     - entity.explore
