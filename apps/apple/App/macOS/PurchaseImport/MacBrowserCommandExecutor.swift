@@ -451,7 +451,9 @@ private enum ExecutionFailure: Error, Sendable {
             .executionFailed:
             true
         case .invalidCommand, .unknownLink, .authenticationRequired,
-            .javascriptAutomationDisabled, .cancelled: false
+            .javascriptAutomationDisabled,
+            .cancelled:
+            false
         }
     }
 
