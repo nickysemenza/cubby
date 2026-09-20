@@ -22,6 +22,7 @@ struct BrowserBridgeAccountState: Identifiable, Equatable {
 
     var statusLabel: String {
         if needsAuthentication { return "Sign-in required" }
+        if error != nil { return "Needs attention" }
         return switch connection {
         case .disconnected: "Disconnected"
         case .connecting: "Connecting"
@@ -77,6 +78,12 @@ final class BrowserBridgeSettingsModel {
     func requireAuthentication(accountID: String, message: String) {
         guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
         accountStates[index].needsAuthentication = true
+        accountStates[index].error = message
+    }
+
+    func setAccountError(_ message: String?, accountID: String) {
+        guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
+        accountStates[index].needsAuthentication = false
         accountStates[index].error = message
     }
 
