@@ -1,5 +1,3 @@
-\set ON_ERROR_STOP on
-
 BEGIN;
 
 -- The previous runtime cannot safely resume in the per-run Flue transcript.
