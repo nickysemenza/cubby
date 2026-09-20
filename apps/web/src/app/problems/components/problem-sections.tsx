@@ -52,7 +52,7 @@ import { product as productOperations } from "~/app/products/product.functions";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
 import { formatDateWithYear } from "~/app/projects/project-formatting";
 import {
-  ReconciliationBadge,
+  ReconciliationStatus,
   reconciliationDelta,
 } from "~/app/purchases/purchase-reconciliation";
 import { Row } from "~/components/layout";
@@ -1717,7 +1717,7 @@ const DECLARED_SECTIONS = [
         badges: [
           // The same soft `warning`-tone verdict the ledger column and the purchase
           // page show, from the same classifier — never a defect red.
-          <ReconciliationBadge key="reconciliation" purchase={purchase} />,
+          <ReconciliationStatus key="reconciliation" purchase={purchase} />,
           ...(purchase.orderId
             ? [
                 <Row key="order" align="center" gap="xs">

@@ -14,7 +14,7 @@ import { entities, entityDetailParams } from "~/entities/entities";
  * ledger's own label) with the roster shape `renderOptionCell` needs, rather
  * than re-declaring the three labels here.
  */
-const ledgerPartyKindOptions: FilterableComboboxItem[] =
+export const ledgerPartyKindOptions: FilterableComboboxItem[] =
   ledgerPartyKindValues.map((value) => ({
     value,
     label: ledgerPartyLabel(value),

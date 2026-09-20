@@ -9,6 +9,7 @@ import { ListTodo } from "lucide-react";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
 
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import {
   entityDisplayImageKey,
   type EntityDisplayImageMap,
@@ -38,7 +39,7 @@ import {
 } from "~/components/ui/table";
 import { getErrorMessage } from "~/lib/error-utils";
 
-import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "./task-options";
+import { taskStatusOptions } from "./task-options";
 import { task } from "./task.functions";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
@@ -152,9 +153,7 @@ function TaskRows({
               </Row>
             </TableCell>
             <TableCell>
-              <Badge variant={taskStatusBadgeVariant[t.status]}>
-                {TASK_STATUS_LABELS[t.status]}
-              </Badge>
+              {renderOptionCell(t.status, taskStatusOptions)}
             </TableCell>
             <TableCell>
               {t.projectId && t.projectName && t.projectId ? (
@@ -307,9 +306,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                       name: bt.task.name,
                     }}
                   />
-                  <Badge variant={taskStatusBadgeVariant[bt.task.status]}>
-                    {TASK_STATUS_LABELS[bt.task.status]}
-                  </Badge>
+                  {renderOptionCell(bt.task.status, taskStatusOptions)}
                   {bt.task.subtaskCount > 0 && (
                     <Badge variant="outline">
                       {bt.task.doneSubtaskCount}/{bt.task.subtaskCount}

@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import {
   ContributionGapTargets,
   contributionGapLabels,
-  ledgerPartyLabel,
   MoneyCell,
 } from "~/app/_components/household-contribution-format";
 import { Row, Stack } from "~/components/layout";
@@ -34,6 +34,7 @@ import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 
 import { householdContribution } from "./household-contribution.functions";
+import { ledgerPartyKindOptions } from "./ledger-party-columns";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (
@@ -179,13 +180,7 @@ export function HouseholdContributionLedgerReport({
                     >
                       {row.party.name}
                     </span>
-                    <Badge
-                      variant={
-                        row.party.kind === "household" ? "slate" : "outline"
-                      }
-                    >
-                      {ledgerPartyLabel(row.party.kind)}
-                    </Badge>
+                    {renderOptionCell(row.party.kind, ledgerPartyKindOptions)}
                   </Stack>
                 </TableCell>
                 <MoneyCell value={row.consumed} />

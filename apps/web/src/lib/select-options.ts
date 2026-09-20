@@ -61,7 +61,7 @@ export function colorizeSelectOptions<T extends FilterableComboboxItem>(
 export function buildSelectOptions<T extends string>(
   values: readonly T[],
   labels: Record<T, string>,
-): FilterableComboboxItem[] {
+): Array<FilterableComboboxItem & { value: T }> {
   return values.map((value) => ({ value, label: labels[value] }));
 }
 

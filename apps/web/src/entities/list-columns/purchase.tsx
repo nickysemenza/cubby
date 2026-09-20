@@ -19,7 +19,7 @@ import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
 import { FinancialSettlementCell } from "~/app/purchases/financial-settlement";
-import { ReconciliationBadge } from "~/app/purchases/purchase-reconciliation";
+import { ReconciliationStatus } from "~/app/purchases/purchase-reconciliation";
 import { VendorCell } from "~/components/entity/vendor-cell";
 import { Grid, Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -245,7 +245,7 @@ export const purchaseListOverride = defineListOverride<
                 mobile: { slot: "meta", priority: 60 },
               },
               cell: (info) => (
-                <ReconciliationBadge purchase={info.row.original} />
+                <ReconciliationStatus purchase={info.row.original} />
               ),
             }),
           );

@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  createBooleanColumn,
   createImageColumn,
   createNameColumn,
 } from "~/app/_components/data-table/columnHelpers";
@@ -30,7 +31,6 @@ import {
 } from "~/app/_components/products/product-food-summaries";
 import { TruncatedList } from "~/app/_components/TruncatedList";
 import { Row } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import {
   Tooltip,
@@ -40,6 +40,7 @@ import {
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
+import { booleanCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 
 import { useStableIds } from "./stable-ids";
@@ -48,6 +49,11 @@ import { defineListOverride } from "./types";
 type IngredientProduct = IngredientListItem["product"][number];
 
 const columnHelper = createCubbyColumnHelper<IngredientListItem>();
+
+const USUALLY_ON_HAND_OPTIONS = booleanCellOptions({
+  true: "Usually on hand",
+  false: "Not usually on hand",
+});
 
 /**
  * The product pill plus a small USDA adornment when the product resolved to
@@ -200,18 +206,14 @@ export const ingredientListOverride = defineListOverride<
             }),
           );
           add(
-            columnHelper.accessor("usuallyOnHand", {
+            createBooleanColumn(columnHelper, "usuallyOnHand", {
               header: "Usually on hand",
-              meta: {
-                className: "w-36",
-                mobile: { slot: "meta", priority: 25 },
-              },
-              cell: (info) =>
-                info.getValue() ? (
-                  <Badge variant="secondary">Usually on hand</Badge>
-                ) : (
-                  <NoneValue />
-                ),
+              className: "w-36",
+              mobile: { slot: "meta", priority: 25 },
+              trueFalseOptions: USUALLY_ON_HAND_OPTIONS,
+              // The manifest owns the boolean filter; avoid deriving a second
+              // client-side filter for this declared column.
+              filterConfig: null,
             }),
           );
         }),

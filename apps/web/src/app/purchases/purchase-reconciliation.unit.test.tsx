@@ -3,23 +3,24 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import {
-  FinancialSettlementBadge,
+  FinancialSettlementStatus,
   financialTransactionCaptureRequestForPurchase,
 } from "./financial-settlement";
 import { purchaseReconciliationOptions } from "./purchase-options";
-import { ReconciliationBadge } from "./purchase-reconciliation";
+import { ReconciliationStatus } from "./purchase-reconciliation";
 
-describe("purchase reconciliation badges", () => {
+describe("purchase reconciliation statuses", () => {
   it("offers refund-adjusted as a distinct filter cohort", () => {
     expect(purchaseReconciliationOptions).toContainEqual({
       value: "refund_adjusted",
       label: "Refund-adjusted",
+      color: "var(--slate)",
     });
   });
 
   it("renders a posted-refund-explained difference neutrally", () => {
     render(
-      <ReconciliationBadge
+      <ReconciliationStatus
         purchase={{
           statedTotal: 326.36,
           expenseTotal: 199.26,
@@ -29,14 +30,16 @@ describe("purchase reconciliation badges", () => {
       />,
     );
 
-    const badge = screen.getByText("Refund-adjusted -$127.10");
-    expect(badge.className).toContain("text-slate");
-    expect(badge.className).not.toContain("text-warning-ink");
+    const label = screen.getByText("Refund-adjusted -$127.10");
+    expect(label.parentElement).toHaveClass("inline-flex", "rounded-full");
+    expect(label.parentElement).toHaveStyle({
+      "--enum-pill-color": "var(--slate)",
+    });
   });
 
   it("reserves the warning tone and Needs review label for unexplained gaps", () => {
     render(
-      <ReconciliationBadge
+      <ReconciliationStatus
         purchase={{
           statedTotal: 326.36,
           expenseTotal: 199.26,
@@ -46,15 +49,17 @@ describe("purchase reconciliation badges", () => {
       />,
     );
 
-    const badge = screen.getByText("Needs review -$127.10");
-    expect(badge.className).toContain("text-warning-ink");
+    const label = screen.getByText("Needs review -$127.10");
+    expect(label.parentElement).toHaveStyle({
+      "--enum-pill-color": "var(--warning)",
+    });
   });
 
   it("keeps a matched financial settlement green", () => {
     render(
-      <FinancialSettlementBadge
+      <FinancialSettlementStatus
         purchase={fromPartial<
-          Parameters<typeof FinancialSettlementBadge>[0]["purchase"]
+          Parameters<typeof FinancialSettlementStatus>[0]["purchase"]
         >({
           financialReconciliation: {
             status: "match",
@@ -64,9 +69,12 @@ describe("purchase reconciliation badges", () => {
       />,
     );
 
-    // "Settled", not the raw `match` enum this badge used to interpolate.
-    const badge = screen.getByText("Settled · 2");
-    expect(badge.className).toContain("text-positive");
+    // "Settled", not the raw `match` enum this status used to interpolate.
+    const label = screen.getByText("Settled · 2");
+    expect(label.parentElement).toHaveClass("rounded-full");
+    expect(label.parentElement).toHaveStyle({
+      "--enum-pill-color": "var(--positive)",
+    });
   });
 
   it("pre-associates a new settlement transaction with its purchase", () => {

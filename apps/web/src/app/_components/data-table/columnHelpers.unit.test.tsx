@@ -849,7 +849,7 @@ describe("createCurrencyColumn zero handling", () => {
 // Range copy/paste reads `meta.cellData`, never the rendered cell — so a column
 // that renders correctly can still be silently absent from the copy range. That
 // is exactly what happened when two `createTextColumn` enum columns were
-// hand-rolled into bare accessors to get the new dot+label render (PR #766
+// hand-rolled into bare accessors to get a custom enum render (PR #766
 // review): the cells looked right and dropped out of the range engine.
 describe("enum/boolean columns stay in the copy/paste range", () => {
   type EnumRow = { kind: string | null };
@@ -880,8 +880,9 @@ describe("enum/boolean columns stay in the copy/paste range", () => {
     expect(column.meta?.filterConfig).toBeUndefined();
 
     renderColumn<EnumRow, string | null>(column, { kind: "purchase" });
-    const dot = document.querySelector("td span[aria-hidden]");
-    expect(dot).toHaveStyle({ backgroundColor: "var(--chart-1)" });
+    expect(screen.getByText("Purchase").parentElement).toHaveStyle({
+      "--enum-pill-color": "var(--chart-1)",
+    });
   });
 });
 
@@ -895,7 +896,7 @@ describe("boolean tones come from the roster, not the factory", () => {
       { trueFalseOptions: provisionalOptions },
     );
 
-    // The dot the table cell paints must be the same ink the detail page's
+    // The pill the table cell paints must use the same tint the detail page's
     // `renderOptionCell(…, provisionalOptions)` paints for the same value.
     const inkFor = (value: string) =>
       provisionalOptions.find((o) => o.value === value)?.color;
@@ -903,10 +904,11 @@ describe("boolean tones come from the roster, not the factory", () => {
     expect(inkFor("false")).toBe("var(--positive)");
 
     renderColumn<ProvisionalRow, string | null>(column, { provisional: true });
-    const dot = document.querySelector("td span[aria-hidden]");
-    expect(dot).not.toBeNull();
-    if (!(dot instanceof HTMLElement)) throw new Error("expected a color dot");
-    expect(dot.style.backgroundColor).toBe("var(--warning)");
+    const pill = screen.getByText("Provisional").parentElement;
+    expect(pill).toHaveClass("rounded-full");
+    expect(pill).toHaveStyle({
+      "--enum-pill-color": "var(--warning)",
+    });
   });
 });
 

@@ -22,7 +22,7 @@ import { LinkProductsDialog } from "./link-products-dialog";
 import { purchaseImportRunDebugHref } from "./purchase-import-links";
 import {
   purchaseReconciliationStatus,
-  ReconciliationBadge,
+  ReconciliationStatus,
   ReconciliationNote,
 } from "./purchase-reconciliation";
 import { purchase as purchaseOperations } from "./purchase.functions";
@@ -165,7 +165,7 @@ export const PurchaseReconciliation: DetailSlotComponent<"purchase"> = ({
         gap="sm"
         className="border-t border-border pt-2"
       >
-        <ReconciliationBadge purchase={purchase} />
+        <ReconciliationStatus purchase={purchase} />
       </Row>
       <ReconciliationNote status={status} />
       <Row gap="sm" wrap>

@@ -6,8 +6,8 @@ import { useState } from "react";
 
 import { TableCellWorkbench } from "~/app/_components/data-table/table-cell-workbench";
 import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
 import { Description } from "~/components/ui/description";
+import { EnumPill } from "~/components/ui/enum-pill";
 import {
   captureRequest,
   financialTransactionEditRequest,
@@ -20,6 +20,7 @@ import { formatFieldProvenance } from "~/entities/field-provenance";
 import { formatCurrency } from "~/lib/utils";
 
 import { LinkedTransactions } from "../finance/linked-transactions";
+import { financialSettlementOptions } from "./purchase-options";
 
 type FinancialPurchase = PurchaseOut & {
   financialReconciliation: {
@@ -33,13 +34,6 @@ type FinancialPurchase = PurchaseOut & {
     delta: number | null;
   };
 };
-const tone = {
-  unknown: "slate",
-  pending: "warning",
-  match: "positive",
-  mismatch: "destructive",
-} as const;
-
 const settlementField = entityFieldModels.purchase.fields.find(
   (field) => field.key === "financialReconciliation",
 );
@@ -50,23 +44,19 @@ const settlementProvenanceDescription = formatFieldProvenance(
   settlementField.provenance,
 );
 
-/** Human labels — this badge used to interpolate the raw enum value. */
-const label = {
-  unknown: "No evidence",
-  pending: "Pending",
-  match: "Settled",
-  mismatch: "Mismatch",
-} as const;
-export function FinancialSettlementBadge({
+export function FinancialSettlementStatus({
   purchase,
 }: {
   purchase: FinancialPurchase;
 }) {
   const settlement = purchase.financialReconciliation;
+  const option = financialSettlementOptions.find(
+    (candidate) => candidate.value === settlement.status,
+  );
   return (
-    <Badge variant={tone[settlement.status]}>
-      {label[settlement.status]} · {settlement.transactionCount}
-    </Badge>
+    <EnumPill color={option?.color ?? "var(--slate)"}>
+      {option?.label ?? settlement.status} · {settlement.transactionCount}
+    </EnumPill>
   );
 }
 export function FinancialSettlement({
@@ -82,7 +72,7 @@ export function FinancialSettlement({
   return (
     <Stack gap="sm">
       <Row align="center" justify="between">
-        <FinancialSettlementBadge purchase={purchase} />
+        <FinancialSettlementStatus purchase={purchase} />
         <span className="font-mono text-sm tabular-nums">
           {settlement.transactionCount} entries
         </span>
@@ -148,7 +138,7 @@ export function FinancialSettlementCell({
       <TableCellWorkbench
         title="Financial settlement"
         description={settlementProvenanceDescription}
-        summary={<FinancialSettlementBadge purchase={purchase} />}
+        summary={<FinancialSettlementStatus purchase={purchase} />}
         open={workbenchOpen}
         onOpenChange={setWorkbenchOpen}
       >
