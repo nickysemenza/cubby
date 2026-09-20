@@ -11,7 +11,6 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { z } from "zod";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Cargo.lock is skipped: the resolved graph it encodes is already hashed via
@@ -57,14 +56,14 @@ export const sourceInputs = (roots: string[], workspace: string): string =>
       .sort(([left], [right]) => left.localeCompare(right)),
   );
 
-export const cargoMetadataSchema = z.object({
-  packages: z.array(
-    z.object({
-      manifest_path: z.string(),
-      source: z.string().nullable(),
-    }),
-  ),
-});
+type CargoPackage = { manifest_path: string; source: string | null };
+type CargoMetadata = { packages: CargoPackage[] };
+
+// This runs before workspace dependencies are installed in the native CI jobs.
+// SAFETY: Cargo owns the `--format-version=1` output contract and its command
+// failure is already fatal in `command`; these are the only fields consumed.
+const parseCargoMetadata = (input: string): CargoMetadata =>
+  JSON.parse(input) as CargoMetadata;
 
 export const command = (program: string, args: string[]) =>
   execFileSync(program, args, {
@@ -88,8 +87,7 @@ export const rustFingerprint = (
     manifestPath,
   ]);
   const roots = new Set(
-    cargoMetadataSchema
-      .parse(JSON.parse(metadata))
+    parseCargoMetadata(metadata)
       .packages.filter((pkg) => pkg.source === null)
       .map((pkg) => dirname(pkg.manifest_path)),
   );
