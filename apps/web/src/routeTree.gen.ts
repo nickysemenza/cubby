@@ -110,6 +110,7 @@ import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_auth
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiImportMerchantRulesRouteImport } from './routes/api/import/merchant-rules'
+import { Route as ApiImportRunLogsRouteImport } from './routes/api/import/run-logs'
 import { Route as ApiImportRunsRouteImport } from './routes/api/import/runs'
 import { Route as ApiSettingsMemberLoginsRouteImport } from './routes/api/settings/member-logins'
 import { Route as ApiV1ResourceRouteImport } from './routes/api/v1/$resource'
@@ -124,6 +125,7 @@ import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenti
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
 import { Route as ApiCalendarTokenFeedRouteImport } from './routes/api/calendar.$token.$feed'
 import { Route as ApiImportAgentAccountsRouteImport } from './routes/api/import/agent/accounts'
+import { Route as ApiImportAgentDebugEventsRouteImport } from './routes/api/import/agent/debug-events'
 import { Route as ApiImportAgentSocketRouteImport } from './routes/api/import/agent/socket'
 import { Route as ApiImportAgentSyncRouteImport } from './routes/api/import/agent/sync'
 import { Route as ApiV1ResourceOperationRouteImport } from './routes/api/v1/$resource/$operation'
@@ -701,6 +703,11 @@ const ApiImportMerchantRulesRoute = ApiImportMerchantRulesRouteImport.update({
   path: '/api/import/merchant-rules',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiImportRunLogsRoute = ApiImportRunLogsRouteImport.update({
+  id: '/api/import/run-logs',
+  path: '/api/import/run-logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiImportRunsRoute = ApiImportRunsRouteImport.update({
   id: '/api/import/runs',
   path: '/api/import/runs',
@@ -778,6 +785,12 @@ const ApiImportAgentAccountsRoute = ApiImportAgentAccountsRouteImport.update({
   path: '/api/import/agent/accounts',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiImportAgentDebugEventsRoute =
+  ApiImportAgentDebugEventsRouteImport.update({
+    id: '/api/import/agent/debug-events',
+    path: '/api/import/agent/debug-events',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiImportAgentSocketRoute = ApiImportAgentSocketRouteImport.update({
   id: '/api/import/agent/socket',
   path: '/api/import/agent/socket',
@@ -870,6 +883,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
+  '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
@@ -909,6 +923,7 @@ export interface FileRoutesByFullPath {
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
   '/api/import/agent/accounts': typeof ApiImportAgentAccountsRoute
+  '/api/import/agent/debug-events': typeof ApiImportAgentDebugEventsRoute
   '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
   '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
@@ -988,6 +1003,7 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
+  '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
@@ -1027,6 +1043,7 @@ export interface FileRoutesByTo {
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
   '/api/import/agent/accounts': typeof ApiImportAgentAccountsRoute
+  '/api/import/agent/debug-events': typeof ApiImportAgentDebugEventsRoute
   '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
   '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
@@ -1109,6 +1126,7 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
+  '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
@@ -1148,6 +1166,7 @@ export interface FileRoutesById {
   '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
   '/api/import/agent/accounts': typeof ApiImportAgentAccountsRoute
+  '/api/import/agent/debug-events': typeof ApiImportAgentDebugEventsRoute
   '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
   '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
@@ -1230,6 +1249,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/import/merchant-rules'
+    | '/api/import/run-logs'
     | '/api/import/runs'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
@@ -1269,6 +1289,7 @@ export interface FileRouteTypes {
     | '/usda/upc/$code'
     | '/api/calendar/$token/$feed'
     | '/api/import/agent/accounts'
+    | '/api/import/agent/debug-events'
     | '/api/import/agent/socket'
     | '/api/import/agent/sync'
     | '/api/v1/$resource/$operation'
@@ -1348,6 +1369,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/import/merchant-rules'
+    | '/api/import/run-logs'
     | '/api/import/runs'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
@@ -1387,6 +1409,7 @@ export interface FileRouteTypes {
     | '/usda/upc/$code'
     | '/api/calendar/$token/$feed'
     | '/api/import/agent/accounts'
+    | '/api/import/agent/debug-events'
     | '/api/import/agent/socket'
     | '/api/import/agent/sync'
     | '/api/v1/$resource/$operation'
@@ -1468,6 +1491,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/import/merchant-rules'
+    | '/api/import/run-logs'
     | '/api/import/runs'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
@@ -1507,6 +1531,7 @@ export interface FileRouteTypes {
     | '/_authenticated/usda/upc/$code'
     | '/api/calendar/$token/$feed'
     | '/api/import/agent/accounts'
+    | '/api/import/agent/debug-events'
     | '/api/import/agent/socket'
     | '/api/import/agent/sync'
     | '/api/v1/$resource/$operation'
@@ -1526,6 +1551,7 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
   ApiImportMerchantRulesRoute: typeof ApiImportMerchantRulesRoute
+  ApiImportRunLogsRoute: typeof ApiImportRunLogsRoute
   ApiImportRunsRoute: typeof ApiImportRunsRoute
   ApiSettingsMemberLoginsRoute: typeof ApiSettingsMemberLoginsRoute
   ApiV1ResourceRoute: typeof ApiV1ResourceRouteWithChildren
@@ -1534,6 +1560,7 @@ export interface RootRouteChildren {
   ApiWorkflowStreamOperationRoute: typeof ApiWorkflowStreamOperationRoute
   ApiCalendarTokenFeedRoute: typeof ApiCalendarTokenFeedRoute
   ApiImportAgentAccountsRoute: typeof ApiImportAgentAccountsRoute
+  ApiImportAgentDebugEventsRoute: typeof ApiImportAgentDebugEventsRoute
   ApiImportAgentSocketRoute: typeof ApiImportAgentSocketRoute
   ApiImportAgentSyncRoute: typeof ApiImportAgentSyncRoute
 }
@@ -2247,6 +2274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImportMerchantRulesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/import/run-logs': {
+      id: '/api/import/run-logs'
+      path: '/api/import/run-logs'
+      fullPath: '/api/import/run-logs'
+      preLoaderRoute: typeof ApiImportRunLogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/import/runs': {
       id: '/api/import/runs'
       path: '/api/import/runs'
@@ -2343,6 +2377,13 @@ declare module '@tanstack/react-router' {
       path: '/api/import/agent/accounts'
       fullPath: '/api/import/agent/accounts'
       preLoaderRoute: typeof ApiImportAgentAccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import/agent/debug-events': {
+      id: '/api/import/agent/debug-events'
+      path: '/api/import/agent/debug-events'
+      fullPath: '/api/import/agent/debug-events'
+      preLoaderRoute: typeof ApiImportAgentDebugEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/import/agent/socket': {
@@ -2649,6 +2690,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
   ApiImportMerchantRulesRoute: ApiImportMerchantRulesRoute,
+  ApiImportRunLogsRoute: ApiImportRunLogsRoute,
   ApiImportRunsRoute: ApiImportRunsRoute,
   ApiSettingsMemberLoginsRoute: ApiSettingsMemberLoginsRoute,
   ApiV1ResourceRoute: ApiV1ResourceRouteWithChildren,
@@ -2657,6 +2699,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiWorkflowStreamOperationRoute: ApiWorkflowStreamOperationRoute,
   ApiCalendarTokenFeedRoute: ApiCalendarTokenFeedRoute,
   ApiImportAgentAccountsRoute: ApiImportAgentAccountsRoute,
+  ApiImportAgentDebugEventsRoute: ApiImportAgentDebugEventsRoute,
   ApiImportAgentSocketRoute: ApiImportAgentSocketRoute,
   ApiImportAgentSyncRoute: ApiImportAgentSyncRoute,
 }

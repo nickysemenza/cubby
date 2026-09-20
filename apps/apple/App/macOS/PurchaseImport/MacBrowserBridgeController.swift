@@ -42,6 +42,11 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             baseURL: baseURL, credentials: credentials)
         syncClient = URLSessionBrowserBridgeSyncClient(baseURL: baseURL, credentials: credentials)
         self.settings = settings
+        #if DEBUG
+            let reporter = URLSessionBrowserBridgeDebugReporter(
+                baseURL: baseURL, credentials: credentials)
+            Task { await BrowserBridgeDebugLog.installRemoteReporter(reporter) }
+        #endif
     }
 
     func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws {

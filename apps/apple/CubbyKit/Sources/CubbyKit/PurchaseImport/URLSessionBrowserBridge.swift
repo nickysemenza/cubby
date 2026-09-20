@@ -296,7 +296,10 @@ public actor URLSessionBrowserBridge {
             }
             commandTasks.attach(task, to: command.id)
         case .acknowledge(let commandID):
-            BrowserBridgeDebugLog.emit(.acknowledgementReceived, commandID: commandID)
+            let completed = ledger.replayResult(for: commandID)
+            BrowserBridgeDebugLog.emit(
+                .acknowledgementReceived, commandID: commandID, runID: completed?.runID,
+                operationID: completed?.operationID)
             ledger.acknowledge(commandID)
             try await replayStore.save(ledger)
         case .cancel(let commandID):
