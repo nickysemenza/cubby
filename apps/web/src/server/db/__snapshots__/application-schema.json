@@ -2957,6 +2957,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "resolvedByUserId": {
           "name": "resolvedByUserId",
           "type": "text",
@@ -3092,7 +3098,7 @@
         },
         "ImportFinding_target_check": {
           "name": "ImportFinding_target_check",
-          "value": "\"ImportFinding\".\"targetType\" IN ('purchase', 'expense', 'product')"
+          "value": "\"ImportFinding\".\"targetType\" IN ('purchase', 'expense', 'product', 'import_run')"
         }
       },
       "isRLSEnabled": false
@@ -3477,6 +3483,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ImportRun_one_active_vendor_account_key": {
+          "name": "ImportRun_one_active_vendor_account_key",
+          "columns": [
+            {
+              "expression": "vendorAccountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImportRun\".\"vendorAccountId\" IS NOT NULL AND \"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3517,7 +3539,7 @@
         },
         "ImportRun_status_check": {
           "name": "ImportRun_status_check",
-          "value": "\"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'completed', 'failed')"
+          "value": "\"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'needs_review', 'completed', 'failed')"
         }
       },
       "isRLSEnabled": false
@@ -3641,6 +3663,158 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ImportRunOperation": {
+      "name": "ImportRunOperation",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operationId": {
+          "name": "operationId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inputFingerprint": {
+          "name": "inputFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'started'"
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "startedAt": {
+          "name": "startedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImportRunOperation_run_operation_key": {
+          "name": "ImportRunOperation_run_operation_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "operationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunOperation_run_state_idx": {
+          "name": "ImportRunOperation_run_state_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportRunOperation_runId_ImportRun_id_fk": {
+          "name": "ImportRunOperation_runId_ImportRun_id_fk",
+          "tableFrom": "ImportRunOperation",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImportRunOperation_state_check": {
+          "name": "ImportRunOperation_state_check",
+          "value": "\"ImportRunOperation\".\"state\" IN ('started', 'completed', 'failed')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ImportSourceClaim": {
@@ -7424,12 +7598,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "pendingDataBase64Url": {
-          "name": "pendingDataBase64Url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "providerAttachmentId": {
           "name": "providerAttachmentId",
           "type": "text",
@@ -7453,6 +7621,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "pendingDataBase64Url": {
+          "name": "pendingDataBase64Url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "imageId": {
           "name": "imageId",
