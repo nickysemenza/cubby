@@ -100,6 +100,7 @@ export const imageListOverride = defineListOverride<
             createImageColumn(columnHelper, {
               getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
               entity: "image",
+              provenance: null,
             }),
           );
           declared.filter((column) => column.id !== "filename").visit(add);

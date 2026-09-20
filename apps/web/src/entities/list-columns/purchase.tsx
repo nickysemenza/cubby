@@ -298,6 +298,7 @@ export const purchaseListOverride = defineListOverride<
               header: "Purchase",
               enableSorting: false,
               meta: {
+                provenance: labeledFieldProvenance("Purchase record"),
                 className: "w-56",
                 mobile: { slot: "title", priority: 0 },
               },

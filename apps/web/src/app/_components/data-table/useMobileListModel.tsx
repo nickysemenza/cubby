@@ -8,7 +8,10 @@ import { z } from "zod";
 
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
-import { FieldProvenance } from "~/entities/field-provenance";
+import {
+  FieldProvenance,
+  isInspectableFieldProvenance,
+} from "~/entities/field-provenance";
 import { extractEntityTitle } from "~/lib/entity-utils";
 
 import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
@@ -271,9 +274,7 @@ function collectMobileSlots<TItem extends RowData>(
 
     const rowId = mobileShortcode(row.original);
     const parsed = rowId ? parseShortcode(rowId) : null;
-    const inspectable = meta?.provenance?.sources.some(
-      (source) => source.relation !== null,
-    );
+    const inspectable = isInspectableFieldProvenance(meta?.provenance);
     const inspectedValue =
       meta?.provenance &&
       inspectable &&

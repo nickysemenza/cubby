@@ -34,6 +34,7 @@ import {
 } from "~/app/projects/shared";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
+import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 
 import { defineListOverride } from "./types";
@@ -328,6 +329,13 @@ export const expenseListOverride = defineListOverride<
           add(
             createImageColumn(columnHelper, {
               entity: "expense",
+              provenance: {
+                kind: "derived",
+                sources: [
+                  ...relationshipFieldProvenance("expense", "product").sources,
+                  ...relationshipFieldProvenance("expense", "purchase").sources,
+                ],
+              },
               // The helper stays typed to `ExpenseOut` so it interoperates
               // with the column factories shared with the project page's
               // embedded ledger, whose rows never carry images; this list's

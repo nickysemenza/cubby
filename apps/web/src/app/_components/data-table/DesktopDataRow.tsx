@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import { Button } from "~/components/ui/button";
 import { TableCell, TableRow } from "~/components/ui/table";
+import { isInspectableFieldProvenance } from "~/entities/field-provenance";
 import { cn } from "~/lib/utils";
 
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
@@ -29,12 +30,10 @@ const dataRowIdentitySchema = z.object({ id: z.string() });
 function relationWorkbenchContent(
   row: RowData,
   rendered: ReactNode,
-  provenance: EntityFieldProvenance | undefined,
+  provenance: EntityFieldProvenance | null | undefined,
   handled: boolean | undefined,
 ): ReactNode {
-  if (!provenance || handled) return rendered;
-  if (!provenance.sources.some((source) => source.relation !== null))
-    return rendered;
+  if (handled || !isInspectableFieldProvenance(provenance)) return rendered;
   const rowIdentity = dataRowIdentitySchema.safeParse(row);
   if (!rowIdentity.success) return rendered;
   const parsed = parseShortcode(rowIdentity.data.id);

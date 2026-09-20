@@ -12,6 +12,7 @@ import {
 import type { CubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { TableLink } from "~/app/_components/table/TableLink";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { labeledFieldProvenance } from "~/entities/field-provenance";
 import { formatCurrency } from "~/lib/utils";
 
 import { financialTransactionStatusOptions } from "./financial-transaction-kind-options";
@@ -27,7 +28,11 @@ export function createFinancialTransactionIdentityColumn(
   return helper.accessor(financialTransactionLabel, {
     id: "transaction",
     header: "Transaction",
-    meta: { className, mobile: { slot: "title", priority: 0 } },
+    meta: {
+      provenance: labeledFieldProvenance("Financial transaction record"),
+      className,
+      mobile: { slot: "title", priority: 0 },
+    },
     cell: (info) => {
       const transaction = info.row.original;
       const label = info.getValue();

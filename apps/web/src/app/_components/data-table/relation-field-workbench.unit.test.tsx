@@ -94,4 +94,22 @@ describe("RelationFieldWorkbench", () => {
     expect(screen.getByText("42")).toBeVisible();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("leaves direct reference content on its existing link", () => {
+    render(
+      <RelationFieldWorkbench
+        sourceEntity="inventory"
+        sourceId="INV-2345"
+        provenance={{
+          kind: "reference",
+          sources: [{ entity: "product", label: null, relation: "product" }],
+        }}
+        summary={<a href="/products/PRD-2345">Tomatoes</a>}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(screen.getByRole("link", { name: "Tomatoes" })).toBeVisible();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
 });

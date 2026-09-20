@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
@@ -15,6 +16,7 @@ import {
   EntityEditDialog,
   type EntityEditDialogRequest,
 } from "~/entities/editing/entity-edit-dialog";
+import { formatFieldProvenance } from "~/entities/field-provenance";
 import { formatCurrency } from "~/lib/utils";
 
 import { LinkedTransactions } from "../finance/linked-transactions";
@@ -37,6 +39,16 @@ const tone = {
   match: "positive",
   mismatch: "destructive",
 } as const;
+
+const settlementField = entityFieldModels.purchase.fields.find(
+  (field) => field.key === "financialReconciliation",
+);
+if (!settlementField?.provenance) {
+  throw new Error("Purchase financial settlement requires provenance");
+}
+const settlementProvenanceDescription = formatFieldProvenance(
+  settlementField.provenance,
+);
 
 /** Human labels — this badge used to interpolate the raw enum value. */
 const label = {
@@ -135,7 +147,7 @@ export function FinancialSettlementCell({
     <>
       <TableCellWorkbench
         title="Financial settlement"
-        description="Derived from the financial transactions linked to this purchase."
+        description={settlementProvenanceDescription}
         summary={<FinancialSettlementBadge purchase={purchase} />}
         open={workbenchOpen}
         onOpenChange={setWorkbenchOpen}

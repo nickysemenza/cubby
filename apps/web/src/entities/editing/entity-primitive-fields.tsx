@@ -649,8 +649,16 @@ export function EntityIntentFields({
               `Field ${entity}.${field.key} has no specialized intent renderer for "${presentation.control.renderer}"`,
             );
           }
+          const provenanceId = field.provenance
+            ? `${idPrefix}-${field.key}-provenance`
+            : undefined;
           return (
-            <div key={field.key} className="space-y-1">
+            <fieldset
+              key={field.key}
+              className="space-y-1"
+              aria-label={field.label}
+              aria-describedby={provenanceId}
+            >
               <Renderer
                 entity={entity}
                 field={field}
@@ -658,8 +666,12 @@ export function EntityIntentFields({
                 idPrefix={idPrefix}
                 mode={mode}
               />
-              <FieldProvenance provenance={field.provenance} />
-            </div>
+              {field.provenance ? (
+                <div id={provenanceId}>
+                  <FieldProvenance provenance={field.provenance} />
+                </div>
+              ) : null}
+            </fieldset>
           );
         }
         const fieldOptions: PrimitiveFieldOptions = {};

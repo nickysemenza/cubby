@@ -491,6 +491,8 @@ interface CreateImageColumnOptions<T> {
   className?: string;
   /** Mobile projection metadata override */
   mobile?: MobileColumnMeta;
+  /** Origin of a projected thumbnail; null marks an ordinary local image. */
+  provenance?: EntityFieldProvenance | null;
 }
 
 /** A row carrying the server-resolved `displayImages` list contract — the
@@ -554,6 +556,7 @@ export function createImageColumn<T extends BaseRow>(
     // every entity's image column, which is fine (they're all this narrow
     // for the same "just a thumbnail" reason).
     meta: {
+      provenance: options.provenance,
       className: cn("h-px w-16 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
     },

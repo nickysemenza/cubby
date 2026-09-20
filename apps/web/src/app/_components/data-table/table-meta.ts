@@ -41,7 +41,7 @@ export interface MobileColumnMeta {
 /** Per-column Cubby rendering and editing conventions, bound through v9's meta slot. */
 export interface CubbyColumnMeta<TData = CellData> {
   /** Generated origin metadata for relation-backed or computed values. */
-  provenance?: EntityFieldProvenance;
+  provenance?: EntityFieldProvenance | null;
   /** Specialist cell already supplies the relation workbench interaction. */
   provenanceWorkbenchHandled?: boolean;
   mobile?: MobileColumnMeta;

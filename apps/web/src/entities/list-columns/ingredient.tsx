@@ -222,7 +222,12 @@ export const ingredientListOverride = defineListOverride<
     const compose = useMemo(
       () => (declared: CubbyColumnCollection<IngredientListItem>) =>
         createCubbyColumnCollection<IngredientListItem>((add) => {
-          add(createImageColumn(columnHelper, { entity: "ingredient" }));
+          add(
+            createImageColumn(columnHelper, {
+              entity: "ingredient",
+              provenance: relationshipFieldProvenance("ingredient", "products"),
+            }),
+          );
           declared.visit(add);
           add(
             columnHelper.accessor("appearsInRecipes", {

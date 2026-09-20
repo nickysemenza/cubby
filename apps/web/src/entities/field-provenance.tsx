@@ -48,6 +48,18 @@ export function entityFieldProvenance(
   };
 }
 
+/** Direct references keep their own links and pickers; only relationship-backed
+ * projections and managed inputs open the generic related-record workbench. */
+export function isInspectableFieldProvenance(
+  provenance: EntityFieldProvenance | null | undefined,
+): provenance is EntityFieldProvenance {
+  return Boolean(
+    provenance &&
+    provenance.kind !== "reference" &&
+    provenance.sources.some((source) => source.relation !== null),
+  );
+}
+
 function sourceName(
   source: ProvenanceSource,
   kind: EntityFieldProvenance["kind"],

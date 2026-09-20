@@ -13,7 +13,10 @@ import {
   type EntityDetailRoute,
 } from "~/entities/entities";
 import { entityGraph } from "~/entities/entity-graph.functions";
-import { formatFieldProvenance } from "~/entities/field-provenance";
+import {
+  formatFieldProvenance,
+  isInspectableFieldProvenance,
+} from "~/entities/field-provenance";
 
 import { TableLink } from "../table/TableLink";
 import { TableCellWorkbench } from "./table-cell-workbench";
@@ -130,10 +133,11 @@ export function RelationFieldWorkbench({
   summary: ReactNode;
   operations?: RelationWorkbenchOperations;
 }) {
+  if (!isInspectableFieldProvenance(provenance)) return summary;
+
   const relationKeys = provenance.sources.flatMap((source) =>
     source.relation ? [source.relation] : [],
   );
-  if (relationKeys.length === 0) return summary;
 
   const description = formatFieldProvenance(provenance);
   return (

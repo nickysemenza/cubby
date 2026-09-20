@@ -269,11 +269,15 @@ export function useStandardColumns<TData extends BaseListRow>({
           .visit((column) => columnIdentifier(column) === "image")
           .some(Boolean);
         if (!hasExplicitImageColumn) {
+          const imageField = standardColumns.find(
+            (field) => field.display.standard === "image",
+          );
           add(
             withManifestFilter(
               createImageColumn(columnHelper, {
                 entity,
                 getImages: (row) => row.displayImages ?? [],
+                provenance: imageField?.provenance ?? null,
               }),
               "image",
             ),

@@ -1,9 +1,11 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
 import type { ListWorkbenchProps } from "~/app/_components/data-table/ListWorkbench";
 import type {
   createCubbyColumnCollection,
+  CubbyColumnDef,
   CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
 import type { ListSlotProps } from "~/app/_components/entity-list/list-slot-types";
@@ -189,4 +191,39 @@ export function interleaveDeclared<TData extends BaseListRow>(
       declared.filter((column) => !placed.has(String(column.id))).visit(add);
     },
   };
+}
+
+function columnId<TData extends BaseListRow, TValue extends CellData>(
+  column: CubbyColumnDef<TData, TValue>,
+): string | null {
+  if (column.id !== undefined) return String(column.id);
+  return "accessorKey" in column ? String(column.accessorKey) : null;
+}
+
+/**
+ * Every hand-composed list column must explicitly declare provenance or opt
+ * out with `provenance: null`. Declared fields are compiler-audited instead.
+ * This turns a newly added specialist projection into a loud local failure
+ * rather than an unlabeled source that slips into one route.
+ */
+export function assertSpecialistColumnProvenance<TData extends BaseListRow>(
+  entity: BrowserRoutedEntity,
+  declared: CubbyColumnCollection<TData>,
+  composed: CubbyColumnCollection<TData>,
+): CubbyColumnCollection<TData> {
+  const declaredIds = new Set<string>();
+  declared.visit((column) => {
+    const id = columnId(column);
+    if (id !== null) declaredIds.add(id);
+  });
+  composed.visit((column) => {
+    const id = columnId(column);
+    if (id === null || declaredIds.has(id)) return;
+    if (column.meta?.provenance === undefined) {
+      throw new Error(
+        `${entity}.${id} is a specialist list column without explicit provenance`,
+      );
+    }
+  });
+  return composed;
 }

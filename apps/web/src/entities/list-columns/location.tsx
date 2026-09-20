@@ -94,7 +94,12 @@ export const locationListOverride = defineListOverride<
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<LocationListItemOut>((add) => {
-          add(createImageColumn(columnHelper, { entity: "location" }));
+          add(
+            createImageColumn(columnHelper, {
+              entity: "location",
+              provenance: relationshipFieldProvenance("location", "images"),
+            }),
+          );
           add(
             createNameColumn(columnHelper, "location", "name", {
               mobile: { slot: "title", priority: 0 },

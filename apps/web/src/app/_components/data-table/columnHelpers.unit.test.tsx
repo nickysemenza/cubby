@@ -583,6 +583,24 @@ describe("createImageColumn", () => {
       expect.stringContaining("cover.png"),
     );
   });
+
+  it("preserves provenance metadata for projected thumbnails", () => {
+    type ImageProjectionRow = {
+      id: string;
+      displayImages: DisplayImageSummary[];
+    };
+    const provenance = {
+      kind: "derived" as const,
+      sources: [{ entity: "image" as const, label: null, relation: "images" }],
+    };
+
+    const column = createImageColumn(
+      createCubbyColumnHelper<ImageProjectionRow>(),
+      { entity: "product", provenance },
+    );
+
+    expect(column.meta?.provenance).toEqual(provenance);
+  });
 });
 
 describe("createActionsColumn", () => {

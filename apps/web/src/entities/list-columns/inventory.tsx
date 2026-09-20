@@ -153,6 +153,7 @@ export const inventoryListOverride = defineListOverride<
             createImageColumn(columnHelper, {
               entity: "inventory",
               className: "w-10",
+              provenance: relationshipFieldProvenance("inventory", "product"),
             }),
           );
           place("amount");

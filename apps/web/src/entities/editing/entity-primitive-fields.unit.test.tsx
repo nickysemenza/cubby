@@ -519,6 +519,18 @@ describe("EntityIntentFields", () => {
     harness.dispose();
   });
 
+  it("associates specialist controls with their provenance description", () => {
+    render(<ExpenseCaptureFields />, { wrapper: harness.wrapper });
+
+    const source = screen.getByRole("note", {
+      name: "Managed through Vendors",
+    });
+    expect(screen.getByRole("group", { name: "Vendor" })).toHaveAttribute(
+      "aria-describedby",
+      source.parentElement?.id,
+    );
+  });
+
   it("hides lineKind once a product is picked and shows productQuantity instead (hiddenWhen)", () => {
     render(<ExpenseCaptureFields />, { wrapper: harness.wrapper });
     expect(screen.getByLabelText("Line kind")).toBeInTheDocument();

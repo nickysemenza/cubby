@@ -6,6 +6,7 @@ import {
   entityFieldProvenance,
   FieldProvenance,
   formatFieldProvenance,
+  isInspectableFieldProvenance,
   labeledFieldProvenance,
   relationshipFieldProvenance,
 } from "./field-provenance";
@@ -65,6 +66,21 @@ describe("specialist provenance builders", () => {
       kind: "derived",
       sources: [{ entity: "usda-food", label: null, relation: null }],
     });
+  });
+});
+
+describe("isInspectableFieldProvenance", () => {
+  it("keeps direct references on their existing links and pickers", () => {
+    expect(isInspectableFieldProvenance(reference())).toBe(false);
+  });
+
+  it("allows relation-backed projections to open their source records", () => {
+    expect(
+      isInspectableFieldProvenance({
+        ...reference(),
+        kind: "derived",
+      }),
+    ).toBe(true);
   });
 });
 

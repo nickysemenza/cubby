@@ -43,11 +43,12 @@ import {
   timelineEntities,
 } from "~/entities/generated/entity-timelines.gen";
 import { listOverrides } from "~/entities/list-columns";
-import type {
-  AnyEntityListOverride,
-  EntityListOverrideResult,
-  ListOverrideContext,
-  ListOverrideWorkbenchProps,
+import {
+  assertSpecialistColumnProvenance,
+  type AnyEntityListOverride,
+  type EntityListOverrideResult,
+  type ListOverrideContext,
+  type ListOverrideWorkbenchProps,
 } from "~/entities/list-columns/types";
 
 import { EntityShelf } from "./entity-shelf";
@@ -143,7 +144,9 @@ function useListColumns(
         await update.mutateAsync({ id: row.id, data: { [field]: value } });
       },
     });
-    return compose ? compose(declared) : declared;
+    return compose
+      ? assertSpecialistColumnProvenance(entity, declared, compose(declared))
+      : declared;
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- mutation result objects change every render; mutateAsync is the stable operation port.
   }, [entity, helper, overrides, compose, update.mutateAsync]);
 }
