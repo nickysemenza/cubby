@@ -15,6 +15,7 @@ const purchaseImportDebugEventName = z.enum([
   "apple_event.started",
   "apple_event.finished",
   "apple_event.rejected",
+  "apple_event.failed",
   "result.persisted",
   "result.sent",
   "result.send_deferred",
@@ -50,6 +51,7 @@ export const purchaseImportDebugEvent = z.object({
   outcome: safeMetadata.nullable().optional(),
   messageType: safeMetadata.nullable().optional(),
   errorType: safeMetadata.nullable().optional(),
+  errorCode: z.number().int().min(-100_000).max(100_000).nullable().optional(),
 });
 
 export const purchaseImportDebugEventsRequest = z.object({
@@ -73,6 +75,7 @@ const purchaseImportRunLogEntry = z.object({
   outcome: z.string().nullable(),
   messageType: z.string().nullable(),
   errorType: z.string().nullable(),
+  errorCode: z.number().int().nullable(),
   error: z.string().nullable(),
 });
 

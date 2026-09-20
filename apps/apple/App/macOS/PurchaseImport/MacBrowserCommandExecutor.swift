@@ -394,13 +394,24 @@ private actor SerializedAppleScriptExecutor {
         let result = script.executeAndReturnError(&details)
         if let details {
             let number = details[NSAppleScript.errorNumber] as? Int
+            let message = details[NSAppleScript.errorMessage] as? String
             if number == -1743 {
-                BrowserBridgeDebugLog.emit(.appleEventRejected, messageType: action)
+                BrowserBridgeDebugLog.emit(
+                    .appleEventRejected, messageType: action, errorCode: number)
                 throw ExecutionFailure.permissionDenied
             }
             if number == -1728 {
+                BrowserBridgeDebugLog.emit(
+                    .appleEventFailed, messageType: action, errorCode: number)
                 throw ExecutionFailure.browserUnavailable
             }
+            if message?.contains("JavaScript through AppleScript is turned off") == true {
+                BrowserBridgeDebugLog.emit(
+                    .appleEventRejected, messageType: action, errorCode: number)
+                throw ExecutionFailure.javascriptAutomationDisabled
+            }
+            BrowserBridgeDebugLog.emit(
+                .appleEventFailed, messageType: action, errorCode: number)
             throw ExecutionFailure.executionFailed
         }
         BrowserBridgeDebugLog.emit(.appleEventFinished, messageType: action)
@@ -413,6 +424,7 @@ private enum ExecutionFailure: Error, Sendable {
     case unknownLink
     case browserUnavailable
     case permissionDenied
+    case javascriptAutomationDisabled
     case authenticationRequired
     case captureUnavailable
     case uploadFailed
@@ -424,7 +436,7 @@ private enum ExecutionFailure: Error, Sendable {
         case .invalidCommand: .invalidCommand
         case .unknownLink: .unknownLink
         case .browserUnavailable: .browserUnavailable
-        case .permissionDenied: .browserPermissionDenied
+        case .permissionDenied, .javascriptAutomationDisabled: .browserPermissionDenied
         case .authenticationRequired: .authenticationRequired
         case .captureUnavailable: .captureUnavailable
         case .uploadFailed: .uploadFailed
@@ -438,7 +450,8 @@ private enum ExecutionFailure: Error, Sendable {
         case .browserUnavailable, .permissionDenied, .captureUnavailable, .uploadFailed,
             .executionFailed:
             true
-        case .invalidCommand, .unknownLink, .authenticationRequired, .cancelled: false
+        case .invalidCommand, .unknownLink, .authenticationRequired,
+            .javascriptAutomationDisabled, .cancelled: false
         }
     }
 
@@ -448,6 +461,8 @@ private enum ExecutionFailure: Error, Sendable {
         case .unknownLink: "The captured link is no longer available."
         case .browserUnavailable: "The selected browser or Cubby-owned window is unavailable."
         case .permissionDenied: "macOS did not allow Cubby to control the selected browser."
+        case .javascriptAutomationDisabled:
+            "In Chrome, choose View > Developer > Allow JavaScript from Apple Events."
         case .authenticationRequired: "The vendor needs you to sign in in Cubby's browser window."
         case .captureUnavailable: "The signed-in page could not be captured."
         case .uploadFailed: "The evidence file could not be staged."

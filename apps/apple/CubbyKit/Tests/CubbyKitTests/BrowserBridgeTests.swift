@@ -15,7 +15,7 @@ struct BrowserBridgeTests {
             operationID: "capture-001", operationKind: "capture",
             host: "orders.example.test", browser: "chrome", accountID: "VACCT-4K7M",
             attempt: nil, count: nil, outcome: "completed_with_capture",
-            messageType: nil, errorType: nil)
+            messageType: nil, errorType: nil, errorCode: nil)
 
         let data = try JSONEncoder().encode(record)
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])

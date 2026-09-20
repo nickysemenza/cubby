@@ -551,6 +551,11 @@ function PurchaseImportRunLogRow({
             {[entry.errorType, entry.error].filter(Boolean).join(" · ")}
           </div>
         ) : null}
+        {entry.errorCode !== null ? (
+          <div className="font-mono text-xs break-words text-destructive">
+            Apple event error {entry.errorCode}
+          </div>
+        ) : null}
       </div>
     </div>
   );

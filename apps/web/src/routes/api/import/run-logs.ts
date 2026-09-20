@@ -25,6 +25,7 @@ const emptyMetadata = {
   outcome: null,
   messageType: null,
   errorType: null,
+  errorCode: null,
   error: null,
 } as const;
 
@@ -59,6 +60,7 @@ const operationLogEntry = (
       outcome: event.data.outcome ?? null,
       messageType: event.data.messageType ?? null,
       errorType: event.data.errorType ?? null,
+      errorCode: event.data.errorCode ?? null,
       error: null,
     };
   }
