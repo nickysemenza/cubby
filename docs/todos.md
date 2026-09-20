@@ -118,11 +118,6 @@ history is the archive. Permanent product constraints live in the
   values (`filterValues(for:)` in `EntityOperations.swift`); declaring the
   options on the control removes the heuristic on both platforms.
 
-- **`pnpm deploy` is shadowed by pnpm's built-in.** `pnpm --filter
-  @cubby/web deploy` errors with `ERR_PNPM_INVALID_DEPLOY_TARGET`; only
-  `pnpm run deploy` reaches the script. Rename it `deploy:web` (and update
-  `README.md`'s deployment section).
-
 - **Photo-flow leftovers from #1084/#1086.** Small, independent:
   - `PhotoRelatedCreateEditor.renders(_:)` hides `pendingImageIds`,
     `removeImageIds`, `imageOrder` by literal; emit the image-field key set
