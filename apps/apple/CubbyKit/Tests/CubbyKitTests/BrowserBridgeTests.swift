@@ -169,16 +169,14 @@ struct BrowserBridgeTests {
 
     @Test("Manual sync response preserves server identifier spelling")
     func manualSyncResponse() throws {
-        let commandID = UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
-        let data = Data(
-            #"{"runId":"RUN-EXAMPLE","commandId":"44444444-4444-4444-4444-444444444444"}"#.utf8)
+        let data = Data(#"{"runId":"RUN-EXAMPLE","resumed":true}"#.utf8)
         let response = try JSONDecoder().decode(BrowserBridgeSyncResponse.self, from: data)
 
-        #expect(response == BrowserBridgeSyncResponse(runID: "RUN-EXAMPLE", commandID: commandID))
+        #expect(response == BrowserBridgeSyncResponse(runID: "RUN-EXAMPLE", resumed: true))
         let encoded = try JSONEncoder().encode(response)
         let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         #expect(object["runId"] as? String == "RUN-EXAMPLE")
-        #expect(object["commandId"] as? String == commandID.uuidString)
+        #expect(object["resumed"] as? Bool == true)
     }
 
     @Test("Nested command protocol versions are rejected even when the envelope is current")

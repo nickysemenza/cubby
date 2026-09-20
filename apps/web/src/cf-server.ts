@@ -36,6 +36,10 @@ import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
+import {
+  handleDirectBrowserSocketUpgrade,
+  isDirectBrowserSocketUpgrade,
+} from "./server/purchase-import/direct-socket-route";
 import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
@@ -205,6 +209,25 @@ const handler = {
                       boundedStale: env.HYPERDRIVE_CACHED.connectionString,
                     },
                     async () => {
+                      if (isDirectBrowserSocketUpgrade(request)) {
+                        const response = await withTrace(
+                          "cf.purchaseImportSocket",
+                          () =>
+                            runWithExecutionCtx(
+                              ctx,
+                              () => handleDirectBrowserSocketUpgrade(request),
+                              url.origin,
+                            ),
+                        );
+                        span.setAttribute(
+                          "http.response.status_code",
+                          response.status,
+                        );
+                        endSpan();
+                        // Preserve Cloudflare's immutable 101 headers and
+                        // non-standard WebSocket slot verbatim.
+                        return response;
+                      }
                       const handlerImport = withTrace("cf.importHandler", () =>
                         getHandler(),
                       );
