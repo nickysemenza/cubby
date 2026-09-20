@@ -153,7 +153,7 @@ and drift-check procedure live in [docs/infrastructure.md](docs/infrastructure.m
 | [packages/usda-schemas](packages/usda-schemas) | `@cubby/usda-schemas` | Shared Zod schemas for USDA entities | `web`, `usda-api` |
 | [packages/schemas](packages/schemas) | `@cubby/schemas` | Cross-app Zod schemas | `web` |
 | [packages/shared](packages/shared) | `@cubby/shared` | Shared utilities, including guarded external fetches | `web`, `upc-lookup` |
-| [packages/worker-tracing](packages/worker-tracing) | `@cubby/worker-tracing` | Cloudflare Worker tracing/Sentry bootstrap | all three Workers |
+| [packages/worker-tracing](packages/worker-tracing) | `@cubby/worker-tracing` | Cloudflare Worker tracing/Sentry bootstrap | `upc-lookup`, `usda-api` |
 | [packages/design-tokens](packages/design-tokens) | `@cubby/design-tokens` | Shared brand CSS (palette, type stacks) | `web`, `mcp-apps` |
 | [apps/mcp-apps](apps/mcp-apps) | `@cubby/mcp-apps` | Interactive MCP-hosted UIs — its own build target, inlined into `web`'s server rather than deployed on its own; see [MCP Apps](#mcp-apps-interactive-uis-in-the-conversation) | `web` (inlined at build) |
 | [recipebridge/](recipebridge) | (Rust source) | Source for the ingredient-parser WASM shim | Built into `packages/wasm` |
