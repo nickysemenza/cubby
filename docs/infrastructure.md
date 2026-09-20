@@ -344,8 +344,11 @@ Cloudflare must have two account-level Workers Observability destinations:
 - `grafana-logs` -> Grafana Cloud Loki OTLP endpoint.
 - `grafana-traces` -> Grafana Cloud Tempo OTLP endpoint.
 
-All three Wrangler configurations reference those exact names. Destination
-credentials live in Cloudflare, not GitHub or this repository.
+All four production Wrangler configurations reference those exact names and
+persist their logs and traces for investigation in Workers Observability.
+The calendar-test Worker is intentionally excluded: it is a local test
+harness and must not export test traffic to the production destinations.
+Destination credentials live in Cloudflare, not GitHub or this repository.
 
 ## GitHub and deployment
 

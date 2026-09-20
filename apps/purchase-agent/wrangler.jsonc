@@ -14,12 +14,14 @@
     "logs": {
       "enabled": true,
       "head_sampling_rate": 1,
+      "persist": true,
       "invocation_logs": true,
       "destinations": ["grafana-logs"]
     },
     "traces": {
       "enabled": true,
       "head_sampling_rate": 1,
+      "persist": true,
       "destinations": ["grafana-traces"]
     }
   },
