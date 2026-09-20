@@ -49,6 +49,9 @@ export class PurchaseImportSqlStore {
       "CREATE INDEX IF NOT EXISTS broker_command_replay_idx ON broker_command(state, created_at)",
     );
     this.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS broker_completed_command (request_id TEXT PRIMARY KEY, completed_at INTEGER NOT NULL)",
+    );
+    this.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS broker_notification (run_id TEXT PRIMARY KEY, summary_json TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     );
   }
@@ -88,7 +91,7 @@ export class PurchaseImportSqlStore {
   nextReplayable(): BrowserBridgeRequest | null {
     const row = this.storage.sql
       .exec<{ request_json: string }>(
-        "SELECT request_json FROM broker_command WHERE state IN ('pending','sent') ORDER BY created_at, request_id LIMIT 1",
+        "SELECT request_json FROM broker_command WHERE state IN ('pending','sent') AND NOT EXISTS (SELECT 1 FROM broker_completed_command WHERE broker_completed_command.request_id = broker_command.request_id) ORDER BY created_at, request_id LIMIT 1",
       )
       .toArray()[0];
     return row
@@ -122,6 +125,7 @@ export class PurchaseImportSqlStore {
       throw new Error("Browser result does not match its durable command");
     }
     if (row.state === "completed") {
+      this.recordCompletion(parsed.commandID);
       return { command, newlyCompleted: false };
     }
     if (row.state !== "pending" && row.state !== "sent") {
@@ -133,7 +137,16 @@ export class PurchaseImportSqlStore {
       Date.now(),
       parsed.commandID,
     );
+    this.recordCompletion(parsed.commandID);
     return { command, newlyCompleted: true };
+  }
+
+  private recordCompletion(requestId: string): void {
+    this.storage.sql.exec(
+      "INSERT OR IGNORE INTO broker_completed_command (request_id, completed_at) VALUES (?, ?)",
+      requestId,
+      Date.now(),
+    );
   }
 
   result(requestId: string): BrowserBridgeResult | null {

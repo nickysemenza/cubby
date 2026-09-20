@@ -49,6 +49,41 @@ public enum BrowserBridgeConnectionStatus: Equatable, Sendable {
     case failed(message: String)
 }
 
+struct BrowserBridgeCommandTaskRegistry {
+    private var claimed: Set<UUID> = []
+    private var settled: Set<UUID> = []
+    private var tasks: [UUID: Task<Void, Never>] = [:]
+
+    mutating func claim(_ commandID: UUID) -> Bool {
+        guard !settled.contains(commandID) else { return false }
+        return claimed.insert(commandID).inserted
+    }
+
+    mutating func attach(_ task: Task<Void, Never>, to commandID: UUID) {
+        guard claimed.contains(commandID) else { return task.cancel() }
+        tasks[commandID] = task
+    }
+
+    mutating func finish(_ commandID: UUID) {
+        claimed.remove(commandID)
+        tasks.removeValue(forKey: commandID)
+        settled.insert(commandID)
+    }
+
+    mutating func cancel(_ commandID: UUID) {
+        claimed.remove(commandID)
+        tasks.removeValue(forKey: commandID)?.cancel()
+    }
+
+    mutating func transientDisconnect() {}
+
+    mutating func cancelAll() {
+        for task in tasks.values { task.cancel() }
+        claimed = []
+        tasks = [:]
+    }
+}
+
 public actor URLSessionBrowserBridge {
     public typealias StatusObserver = @Sendable (BrowserBridgeConnectionStatus) -> Void
     public typealias ResultObserver = @Sendable (BrowserBridgeCommandResult) -> Void
@@ -65,7 +100,7 @@ public actor URLSessionBrowserBridge {
     private var configuration: BrowserBridgeConnectionConfiguration?
     private var socket: URLSessionWebSocketTask?
     private var connectionTask: Task<Void, Never>?
-    private var commandTasks: [UUID: Task<Void, Never>] = [:]
+    private var commandTasks = BrowserBridgeCommandTaskRegistry()
     private var ledger = BrowserBridgeReplayLedger()
     private var status: BrowserBridgeConnectionStatus = .disconnected
 
@@ -90,11 +125,14 @@ public actor URLSessionBrowserBridge {
     deinit {
         connectionTask?.cancel()
         socket?.cancel(with: .goingAway, reason: nil)
-        for task in commandTasks.values { task.cancel() }
+        commandTasks.cancelAll()
     }
 
     public func connect(_ configuration: BrowserBridgeConnectionConfiguration) async {
         disconnect()
+        BrowserBridgeDebugLog.emit(
+            .connectRequested, browser: configuration.browser,
+            messageType: configuration.url.host()?.lowercased())
         guard configuration.isSecureOrLocalDevelopment else {
             publish(.failed(message: "The browser bridge requires WSS outside local development."))
             return
@@ -106,6 +144,7 @@ public actor URLSessionBrowserBridge {
         self.configuration = configuration
         do {
             ledger = try await replayStore.load()
+            BrowserBridgeDebugLog.emit(.replayLoaded, count: ledger.resultsForReplay.count)
         } catch {
             publish(.failed(message: "Pending browser results could not be restored."))
             return
@@ -114,12 +153,12 @@ public actor URLSessionBrowserBridge {
     }
 
     public func disconnect() {
+        BrowserBridgeDebugLog.emit(.disconnectRequested)
         connectionTask?.cancel()
         connectionTask = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
-        for task in commandTasks.values { task.cancel() }
-        commandTasks = [:]
+        commandTasks.cancelAll()
         configuration = nil
         publish(.disconnected)
     }
@@ -129,6 +168,8 @@ public actor URLSessionBrowserBridge {
     private func runConnectionLoop() async {
         var attempt = 0
         while !Task.isCancelled, let configuration {
+            BrowserBridgeDebugLog.emit(
+                .connectionAttempt, browser: configuration.browser, attempt: attempt)
             publish(attempt == 0 ? .connecting : .waitingToReconnect(attempt: attempt))
             do {
                 try await runOneConnection(configuration)
@@ -136,8 +177,9 @@ public actor URLSessionBrowserBridge {
             } catch is CancellationError {
                 break
             } catch {
-                cancelInFlightForDisconnect()
+                commandTasks.transientDisconnect()
                 attempt += 1
+                BrowserBridgeDebugLog.emit(.connectionRetry, attempt: attempt, error: error)
                 socket?.cancel(with: .abnormalClosure, reason: nil)
                 socket = nil
                 publish(.waitingToReconnect(attempt: attempt))
@@ -171,11 +213,17 @@ public actor URLSessionBrowserBridge {
                 deviceID: configuration.deviceID, browser: configuration.browser,
                 capabilities: configuration.capabilities),
             on: socket)
-        for result in ledger.resultsForReplay { try await send(.result(result), on: socket) }
+        for result in ledger.resultsForReplay {
+            BrowserBridgeDebugLog.emit(
+                .commandReplayed, commandID: result.commandID, runID: result.runID,
+                operationID: result.operationID, outcome: result.outcome)
+            try await send(.result(result), on: socket)
+        }
         for completion in ledger.runCompletionsForAcknowledgement {
             try await send(.runCompletedAcknowledged(runID: completion.runID), on: socket)
         }
         publish(.connected)
+        BrowserBridgeDebugLog.emit(.connectionReady, browser: configuration.browser)
 
         while !Task.isCancelled, self.socket === socket {
             let message = try await socket.receive()
@@ -187,6 +235,8 @@ public actor URLSessionBrowserBridge {
             }
             let serverMessage = try JSONDecoder.browserBridge.decode(
                 BrowserBridgeServerMessage.self, from: data)
+            BrowserBridgeDebugLog.emit(
+                .messageReceived, messageType: Self.messageType(serverMessage))
             try await handle(serverMessage, socket: socket)
         }
     }
@@ -214,10 +264,15 @@ public actor URLSessionBrowserBridge {
                     try await finish(rejection)
                     return
                 }
+                BrowserBridgeDebugLog.emit(.commandReplayed, command: command, outcome: result.outcome)
                 try await send(.result(result), on: socket)
                 return
             }
-            guard commandTasks[command.id] == nil, !ledger.cancelled.contains(command.id) else { return }
+            guard !ledger.cancelled.contains(command.id) else { return }
+            guard commandTasks.claim(command.id) else {
+                BrowserBridgeDebugLog.emit(.commandDuplicate, command: command)
+                return
+            }
             if command.deadline <= .now {
                 let result = BrowserBridgeCommandResult(
                     commandID: command.id, runID: command.runID, operationID: command.operationID,
@@ -230,19 +285,23 @@ public actor URLSessionBrowserBridge {
             }
             let task = Task { [weak self] in
                 guard let self else { return }
+                BrowserBridgeDebugLog.emit(.commandStarted, command: command)
                 let outcome = await executor.execute(command)
+                BrowserBridgeDebugLog.emit(.commandFinished, command: command, outcome: outcome)
                 guard !Task.isCancelled else { return }
                 let result = BrowserBridgeCommandResult(
                     commandID: command.id, runID: command.runID, operationID: command.operationID,
                     completedAt: .now, outcome: outcome)
                 await self.finishIgnoringSendFailure(result)
             }
-            commandTasks[command.id] = task
+            commandTasks.attach(task, to: command.id)
         case .acknowledge(let commandID):
+            BrowserBridgeDebugLog.emit(.acknowledgementReceived, commandID: commandID)
             ledger.acknowledge(commandID)
             try await replayStore.save(ledger)
         case .cancel(let commandID):
-            commandTasks.removeValue(forKey: commandID)?.cancel()
+            BrowserBridgeDebugLog.emit(.cancellationReceived, commandID: commandID)
+            commandTasks.cancel(commandID)
             await executor.cancel(commandID: commandID)
             ledger.cancel(commandID)
             try await replayStore.save(ledger)
@@ -252,6 +311,7 @@ public actor URLSessionBrowserBridge {
             await executor.raiseAuthenticationWindow()
             authWindowObserver?(runID)
         case .runCompleted(let completion):
+            BrowserBridgeDebugLog.emit(.runCompleted, runID: completion.runID)
             let isNew = ledger.recordRunCompletion(completion)
             try await replayStore.save(ledger)
             try await send(.runCompletedAcknowledged(runID: completion.runID), on: socket)
@@ -263,24 +323,28 @@ public actor URLSessionBrowserBridge {
         do {
             try await finish(result)
         } catch {
+            BrowserBridgeDebugLog.emit(
+                .resultSendDeferred, commandID: result.commandID, runID: result.runID,
+                operationID: result.operationID, outcome: result.outcome, error: error)
             // The durable result is intentionally kept. A reconnect replays it before accepting
             // new work, so a lost acknowledgement can never repeat business writes.
         }
     }
 
     private func finish(_ result: BrowserBridgeCommandResult) async throws {
-        commandTasks.removeValue(forKey: result.commandID)
+        commandTasks.finish(result.commandID)
         guard !ledger.cancelled.contains(result.commandID) else { return }
         ledger.record(result)
         try await replayStore.save(ledger)
+        BrowserBridgeDebugLog.emit(
+            .resultPersisted, commandID: result.commandID, runID: result.runID,
+            operationID: result.operationID, outcome: result.outcome)
         resultObserver?(result)
         guard let socket else { return }
         try await send(.result(result), on: socket)
-    }
-
-    private func cancelInFlightForDisconnect() {
-        for task in commandTasks.values { task.cancel() }
-        commandTasks = [:]
+        BrowserBridgeDebugLog.emit(
+            .resultSent, commandID: result.commandID, runID: result.runID,
+            operationID: result.operationID, outcome: result.outcome)
     }
 
     private func send(
@@ -298,5 +362,16 @@ public actor URLSessionBrowserBridge {
 
     private static func reconnectDelay(attempt: Int) -> Duration {
         .seconds(min(30, 1 << min(max(0, attempt - 1), 5)))
+    }
+
+    private static func messageType(_ message: BrowserBridgeServerMessage) -> String {
+        switch message {
+        case .command: "command"
+        case .acknowledge: "acknowledge"
+        case .cancel: "cancel"
+        case .ping: "ping"
+        case .raiseAuthWindow: "raise_auth_window"
+        case .runCompleted: "run_completed"
+        }
     }
 }

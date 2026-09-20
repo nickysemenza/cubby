@@ -13,6 +13,10 @@
         "name": "CALENDAR_FEED",
         "class_name": "CalendarFeedDurableObject",
       },
+      {
+        "name": "PURCHASE_IMPORT",
+        "class_name": "PurchaseImportDurableObject",
+      },
     ],
   },
   "exports": {
@@ -24,5 +28,17 @@
       "type": "durable-object",
       "storage": "sqlite",
     },
+    "PurchaseImportDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "PURCHASE_AGENT_QUEUE",
+        "queue": "cubby-purchase-agent-test",
+      },
+    ],
   },
 }

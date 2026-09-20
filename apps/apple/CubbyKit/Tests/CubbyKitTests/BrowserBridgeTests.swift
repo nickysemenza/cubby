@@ -71,6 +71,25 @@ struct BrowserBridgeTests {
         #expect(ledger.resultsForReplay.isEmpty)
     }
 
+    @Test("Socket loss or a duplicate dispatch does not restart a browser side effect")
+    func transientDisconnectKeepsInFlightCommand() {
+        let id = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        var tasks = BrowserBridgeCommandTaskRegistry()
+
+        let firstStart = tasks.claim(id)
+        #expect(firstStart)
+        tasks.attach(Task {}, to: id)
+        tasks.transientDisconnect()
+        let replayStart = tasks.claim(id)
+        #expect(!replayStart)
+
+        tasks.finish(id)
+        let acknowledgedReplayStart = tasks.claim(id)
+        #expect(!acknowledgedReplayStart)
+
+        tasks.cancelAll()
+    }
+
     @Test("Cancellation prevents a late command result from entering replay")
     func cancellationWinsRace() {
         let id = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
