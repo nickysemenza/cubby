@@ -838,12 +838,6 @@ history is the archive. Permanent product constraints live in the
   workerd test) in a repo whose direction is removing execution infrastructure,
   and the fixed refetch covers the observed latencies for a single-user tool.
 
-- **Record the TestFlight build-number rule where the archive script lives** —
-  Promote on the next rejected upload. ASC rejects a repeated
-  `CURRENT_PROJECT_VERSION`; it must be bumped in `project.yml` (not the
-  gitignored `.xcodeproj`) per upload, and neither `apps/apple/README.md` nor
-  `scripts/apple.ts` says so yet.
-
 - **Repeat-purchase ranking** — Promote when enough Products have genuine repeated
   acquisitions to make a cross-product ranking useful.
 

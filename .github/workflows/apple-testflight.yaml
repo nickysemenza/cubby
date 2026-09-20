@@ -1,0 +1,121 @@
+name: Apple TestFlight
+
+# Strict version tags publish both apps. Manual runs exercise the same signed
+# archive/export path without uploading anything to App Store Connect.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp into validation artifacts (MAJOR.MINOR.PATCH)"
+        required: true
+        default: "1.0.0"
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  release:
+    name: Archive and distribute iOS + macOS
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release coordinates
+        id: release
+        shell: bash
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "::error::Release tags must match vMAJOR.MINOR.PATCH; got '$GITHUB_REF_NAME'."
+              exit 1
+            }
+            version="${GITHUB_REF_NAME#v}"
+            mode="upload"
+          else
+            version="$DISPATCH_VERSION"
+            [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "::error::Validation versions must match MAJOR.MINOR.PATCH; got '$version'."
+              exit 1
+            }
+            mode="validate"
+          fi
+          commit_count="$(git rev-list --count HEAD)"
+          {
+            echo "version=$version"
+            echo "mode=$mode"
+            echo "ios-build=${commit_count}.1.${GITHUB_RUN_ATTEMPT}"
+            echo "macos-build=${commit_count}.2.${GITHUB_RUN_ATTEMPT}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check current main
+        if: github.event_name == 'push'
+        id: current-main
+        uses: ./.github/actions/check-current-main
+
+      - name: Reject a stale release tag
+        if: github.event_name == 'push' && steps.current-main.outputs.current != 'true'
+        shell: bash
+        run: |
+          echo "::error::Release tags must point to the current main commit."
+          exit 1
+
+      - name: Require successful exact-head CI
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.current-main.outputs.sha }}
+        run: |
+          set -euo pipefail
+          ci_url="$(
+            gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yaml/runs" \
+              -f branch=main -f event=push -f status=completed \
+              -f head_sha="$RELEASE_SHA" -f per_page=100 \
+              --jq '[.workflow_runs[] | select(.conclusion == "success")][0].html_url // empty'
+          )"
+          [[ -n "$ci_url" ]] || {
+            echo "::error::No successful CI workflow run exists for main commit $RELEASE_SHA."
+            exit 1
+          }
+          echo "Using successful exact-head CI run: $ci_url"
+
+      - uses: ./.github/actions/release-apple
+        with:
+          version: ${{ steps.release.outputs.version }}
+          ios-build-number: ${{ steps.release.outputs.ios-build }}
+          macos-build-number: ${{ steps.release.outputs.macos-build }}
+          mode: ${{ steps.release.outputs.mode }}
+          api-key-p8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          p12-base64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
+          sentry-auth-token: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+      - name: Preserve exports and symbols
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Cubby-${{ steps.release.outputs.version }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/CubbyTestFlight/exports
+            ${{ runner.temp }}/CubbyTestFlight/ExportOptions-*.plist
+            ${{ runner.temp }}/CubbyTestFlight/*.xcarchive/Info.plist
+            ${{ runner.temp }}/CubbyTestFlight/*.xcarchive/dSYMs
+          if-no-files-found: warn
+          retention-days: 14
