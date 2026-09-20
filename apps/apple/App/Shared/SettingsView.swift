@@ -244,7 +244,7 @@ struct SettingsView: View {
                         VStack(alignment: .trailing, spacing: 4) {
                             Text(account.statusLabel)
                                 .foregroundStyle(
-                                    account.needsAuthentication
+                                    account.needsAuthentication || account.error != nil
                                         ? PorcelainTokens.destructive : PorcelainTokens.graphiteSecondary)
                             if account.needsAuthentication {
                                 Button("Open sign-in") {

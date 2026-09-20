@@ -115,8 +115,8 @@ export function registerImageTools(server: McpServer) {
   registerMcpTool(server, {
     name: "attach_file",
     description:
-      `Attach an image or PDF to one of ${attachableImageEntity.options.join(", ")} or ` +
-      "purchase (one vendor order/receipt event — this is how a receipt or an emailed PDF " +
+      `Attach an image or PDF to one of ${attachableImageEntity.options.join(", ")}. ` +
+      "A Purchase is one vendor order/receipt event — this is how a receipt or an emailed PDF " +
       "invoice gets filed against the vendor event it documents). Purchase attachments require " +
       "documentKind; order_confirmation, sales_order, invoice, and receipt count as primary evidence. " +
       `${ATTACH_FILE_SOURCE_PROSE} Resolve the ` +

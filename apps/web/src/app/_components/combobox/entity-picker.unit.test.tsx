@@ -46,6 +46,30 @@ function openPicker(input: HTMLElement) {
   fireEvent.keyDown(input, { key: "ArrowDown" });
 }
 
+function PlantingHarness() {
+  const [value, setValue] = useState<ComboboxItem | null>({
+    id: "PLT-4K7M",
+    shortcode: "PLT-4K7M",
+    name: "Example crop · current",
+  });
+  return (
+    <EntityPicker
+      entity="planting"
+      label="Planting"
+      items={[
+        {
+          id: "PLT-8K7M",
+          shortcode: "PLT-8K7M",
+          name: "Example crop · replacement",
+        },
+      ]}
+      value={value}
+      setValue={setValue}
+      clearable
+    />
+  );
+}
+
 describe("matchesPickerItem", () => {
   it.each(["cordless", "driver", "makita", "prd-2abc"])(
     "searches names, aliases, metadata, and full shortcodes: %s",
@@ -56,6 +80,21 @@ describe("matchesPickerItem", () => {
 });
 
 describe("EntityPicker", () => {
+  it("selects a replacement planting and can clear it", async () => {
+    render(<PlantingHarness />);
+    const input = screen.getByRole("combobox", { name: "Planting" });
+    expect(input).toHaveValue("Example crop · current");
+    openPicker(input);
+    fireEvent.click(
+      screen.getByRole("option", { name: /Example crop · replacement/ }),
+    );
+    await waitFor(() =>
+      expect(input).toHaveValue("Example crop · replacement"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear Planting" }));
+    await waitFor(() => expect(input).toHaveValue(""));
+  });
+
   it("uses one direct-focus input and renders the selected item as a checked result", async () => {
     render(<Harness />);
     expect(screen.queryByText("PRD")).not.toBeInTheDocument();

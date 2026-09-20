@@ -37,6 +37,10 @@ import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import {
+  resolvePurchaseAgentBrowserOperation,
+  type PurchaseAgentCommand,
+} from "./server/purchase-import/agent-browser-command";
+import {
   handleDirectBrowserSocketUpgrade,
   isDirectBrowserSocketUpgrade,
 } from "./server/purchase-import/direct-socket-route";
@@ -592,15 +596,6 @@ const handler = {
   },
 };
 
-type PurchaseAgentCommand = {
-  kind:
-    | "navigate_orders"
-    | "capture_order"
-    | "capture_pdf"
-    | "capture_screenshot";
-  target?: string;
-};
-
 /**
  * Private RPC boundary for the Flue Worker. Every method resolves authority
  * from the ImportRun; the caller cannot supply a party, account, vendor, SQL,
@@ -660,23 +655,12 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
         this.env.PURCHASE_IMPORT,
         input.runId,
       );
-      const target =
-        input.command.target ??
-        ("startUrl" in claimed ? claimed.startUrl : null);
-      const operation =
-        input.command.kind === "navigate_orders"
-          ? {
-              type: "navigate" as const,
-              url: target ?? "",
-              allowedHosts: scope.public.allowedHosts,
-            }
-          : {
-              type: "capture" as const,
-              allowedHosts: scope.public.allowedHosts,
-              enhancedEvidence:
-                input.command.kind === "capture_pdf" ||
-                input.command.kind === "capture_screenshot",
-            };
+      const claimedTarget = "startUrl" in claimed ? claimed.startUrl : null;
+      const operation = resolvePurchaseAgentBrowserOperation(
+        input.command,
+        claimedTarget,
+        scope.public.allowedHosts,
+      );
       return service.issueBrowserCommand(db, this.env.PURCHASE_IMPORT, {
         runId: input.runId,
         operationId: input.operationId,

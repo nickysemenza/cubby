@@ -61,7 +61,9 @@ const commandOutcome = z.discriminatedUnion("status", [
 ]);
 export const browserBridgeResult = z.object({
   protocolVersion: z.literal(2),
-  commandID: z.uuid(),
+  // Foundation encodes UUID values uppercase. Normalize at the protocol
+  // boundary because Durable Object SQLite command keys are lowercase text.
+  commandID: z.uuid().transform((value) => value.toLowerCase()),
   operationID: z.string().trim().min(1).max(200),
   runID: z.string().min(1).max(200),
   completedAt: z.iso.datetime(),

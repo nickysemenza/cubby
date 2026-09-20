@@ -23,8 +23,8 @@ export type PickerSearchEntity =
   | "recipe"
   | "project"
   | "task"
-  | "vendor"
-  | "planting";
+  | "planting"
+  | "vendor";
 
 /**
  * Row source for the blank- or typed-query branch. Hook-shaped (its own

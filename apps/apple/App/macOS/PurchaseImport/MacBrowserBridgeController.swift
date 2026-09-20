@@ -42,13 +42,20 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             baseURL: baseURL, credentials: credentials)
         syncClient = URLSessionBrowserBridgeSyncClient(baseURL: baseURL, credentials: credentials)
         self.settings = settings
+        #if DEBUG
+            let reporter = URLSessionBrowserBridgeDebugReporter(
+                baseURL: baseURL, credentials: credentials)
+            Task { await BrowserBridgeDebugLog.installRemoteReporter(reporter) }
+        #endif
     }
 
     func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
+        BrowserBridgeDebugLog.emit(.connectRequested, browser: browser)
         try await replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
     }
 
     func syncNow(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
+        BrowserBridgeDebugLog.emit(.syncRequested, browser: browser)
         // Refresh the roster and browser preference first so a newly added or paused account is
         // reflected in this manual run, then enqueue one server-owned run per eligible account.
         try await replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
@@ -111,6 +118,7 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             throw Failure.bearerSessionRequired
         }
         let listedAccounts = try await accountClient.browserBridgeVendorAccounts()
+        BrowserBridgeDebugLog.emit(.controllerRoster, browser: browser, count: listedAccounts.count)
         guard !listedAccounts.isEmpty else {
             settings?.setAccountCounts(connected: 0, total: 0)
             settings?.setStatus(.disconnected)
@@ -156,6 +164,8 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             bridges[account.id] = bridge
             executors[account.id] = executor
             statuses[account.id] = .connecting
+            BrowserBridgeDebugLog.emit(
+                .connectRequested, browser: browser, accountID: account.id)
             let url = try BrowserBridgeEndpoint.socketURL(
                 baseURL: baseURL, vendorAccountID: account.id)
             await bridge.connect(
@@ -175,6 +185,9 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
     ) {
         guard generation == self.generation, bridges[accountID] != nil else { return }
         statuses[accountID] = status
+        BrowserBridgeDebugLog.emit(
+            .controllerStatus, accountID: accountID,
+            messageType: Self.statusLabel(status))
         settings?.setAccountStatus(status, accountID: accountID)
         switch status {
         case .waitingToReconnect:
@@ -193,11 +206,17 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         _ result: BrowserBridgeCommandResult, accountID: String, generation: UUID
     ) {
         guard generation == self.generation, bridges[accountID] != nil else { return }
-        guard case .failed(let code, let message, _) = result.outcome,
-            code == .authenticationRequired
-        else { return }
-        executors[accountID]?.raiseAuthenticationWindow()
-        settings?.requireAuthentication(accountID: accountID, message: message)
+        switch result.outcome {
+        case .completed:
+            settings?.setAccountError(nil, accountID: accountID)
+        case .failed(let code, let message, _):
+            if code == .authenticationRequired {
+                executors[accountID]?.raiseAuthenticationWindow()
+                settings?.requireAuthentication(accountID: accountID, message: message)
+            } else {
+                settings?.setAccountError(message, accountID: accountID)
+            }
+        }
     }
 
     private func didRequestAuthentication(runID: String, accountID: String, generation: UUID) {
@@ -229,5 +248,15 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         let value = UUID()
         UserDefaults.standard.set(value.uuidString, forKey: key)
         return value
+    }
+
+    private static func statusLabel(_ status: BrowserBridgeConnectionStatus) -> String {
+        switch status {
+        case .disconnected: "disconnected"
+        case .connecting: "connecting"
+        case .connected: "connected"
+        case .waitingToReconnect(let attempt): "waiting_to_reconnect:\(attempt)"
+        case .failed: "failed"
+        }
     }
 }

@@ -152,7 +152,7 @@ export class PurchaseImportDurableObject
     }
     if (parsed.data.type === "result") {
       const claimed = this.store.claimResult(parsed.data.result);
-      if (claimed.command) {
+      if (claimed.command && claimed.newlyCompleted) {
         // Publish before acknowledgement. If queue publication fails, the Mac
         // retains and replays its result; the stable event id makes that replay
         // harmless after a successful publication.
@@ -173,7 +173,7 @@ export class PurchaseImportDurableObject
           }),
         ),
       );
-      this.sendNext(socket);
+      this.sendNext(socket, parsed.data.result.commandID);
     }
   }
 
@@ -196,9 +196,19 @@ export class PurchaseImportDurableObject
     for (const socket of this.ctx.getWebSockets()) this.send(socket, next);
   }
 
-  private sendNext(socket: CfWebSocket): void {
+  private sendNext(socket: CfWebSocket, justCompletedId?: string): void {
     const next = this.store.nextReplayable();
-    if (next) this.send(socket, next);
+    if (!next) return;
+    if (next.id === justCompletedId) {
+      // A completed side effect must never be dispatched again, even if a
+      // runtime/storage regression briefly exposes a stale replay row. The
+      // Mac has already persisted the result and will replay it on reconnect.
+      console.error("purchase-import.bridge.completed-command-replay", {
+        commandId: next.id,
+      });
+      return;
+    }
+    this.send(socket, next);
   }
 
   private send(socket: CfWebSocket, command: BrowserBridgeRequest): void {

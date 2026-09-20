@@ -19,6 +19,7 @@ export default defineConfig({
     include: [
       "src/server/calendar/**/*.workers.test.ts",
       "src/server/database-freshness/**/*.workers.test.ts",
+      "src/server/purchase-import/**/*.workers.test.ts",
     ],
     testTimeout: 30_000,
     hookTimeout: 30_000,

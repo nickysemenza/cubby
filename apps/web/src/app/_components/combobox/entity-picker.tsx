@@ -28,11 +28,11 @@ const ENTITY_CODE = {
   recipe: "RCP",
   project: "PRJ",
   task: "TSK",
+  planting: "PLT",
   vendor: "VEN",
   financialAccount: "FAC",
   purchase: "PUR",
   ledgerParty: "LPY",
-  planting: "PLT",
 } satisfies Record<PickerEntity, string>;
 
 export function matchesPickerItem(
@@ -394,6 +394,7 @@ function EntityPickerInput<TId extends string>({
   compact,
   clearable,
   value,
+  setValue,
   setQuery,
 }: {
   inputId?: string;
@@ -412,6 +413,7 @@ function EntityPickerInput<TId extends string>({
   compact?: boolean;
   clearable?: boolean;
   value: ComboboxItem<TId> | null;
+  setValue: (value: ComboboxItem<TId> | null) => void;
   setQuery: (query: string) => void;
 }) {
   return (
@@ -445,6 +447,7 @@ function EntityPickerInput<TId extends string>({
             onMouseDown={(event) => event.preventDefault()}
             onClick={(event) => {
               event.stopPropagation();
+              setValue(null);
               setQuery("");
             }}
           >
@@ -616,6 +619,7 @@ export function EntityPicker<TId extends string>({
         compact={compact}
         clearable={clearable}
         value={value}
+        setValue={setValue}
         setQuery={setQuery}
       />
 

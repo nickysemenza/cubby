@@ -479,8 +479,14 @@ export async function issueBrowserCommand(
         : operation.type === "capture"
           ? { ...operation, allowedHosts }
           : operation;
-  if (scopedOperation.type === "navigate") {
-    const host = new URL(scopedOperation.url).hostname.toLowerCase();
+  const boundedNavigationURL =
+    scopedOperation.type === "navigate"
+      ? scopedOperation.url
+      : scopedOperation.type === "capture"
+        ? scopedOperation.recoveryURL
+        : undefined;
+  if (boundedNavigationURL) {
+    const host = new URL(boundedNavigationURL).hostname.toLowerCase();
     if (!allowedHosts.includes(host))
       throw new Error("Navigation URL is outside the vendor allowlist");
   }

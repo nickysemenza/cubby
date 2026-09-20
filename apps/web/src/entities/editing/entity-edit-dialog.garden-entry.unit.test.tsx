@@ -20,11 +20,11 @@ afterEach(() => {
   harness.dispose();
 });
 
-function gardenEntryPort() {
+function gardenEntryPort(action: "create" | "update" = "create") {
   const created = mock(gardenEntryOut, { seed: 3, overrides: { images: [] } });
   const transport = vi.fn(async () =>
     entityBrowserMutationResultSchema.parse({
-      action: "create",
+      action,
       entity: "gardenEntry",
       item: created,
       sideEffects: { backgroundBatches: [] },
@@ -63,6 +63,9 @@ describe("EntityEditDialog generic create", () => {
       { wrapper: harness.wrapper },
     );
     expect(await screen.findByText("New Garden Entry")).toBeInTheDocument();
+    expect(screen.getByLabelText("Planting", { exact: true })).toHaveValue(
+      "PLT-4K7M",
+    );
     const harvest = screen.getByLabelText("Harvest amount", { exact: true });
     const observed = screen.getByLabelText("Observed", { exact: true });
     fireEvent.change(observed, { target: { value: "2026-08-20" } });
@@ -85,10 +88,52 @@ describe("EntityEditDialog generic create", () => {
       expect.objectContaining({
         input: expect.objectContaining({
           data: expect.objectContaining({
+            plantingId: "PLT-4K7M",
             observedOn: "2026-08-20",
             harvestAmount: "A handful",
             note: "First harvest",
           }),
+        }),
+      }),
+    );
+  });
+
+  it("clears the singular planting link through the update API", async () => {
+    const { mutationPort, transport } = gardenEntryPort("update");
+    const currentPlantingId = testShortcode("planting", "PLT-4K7M");
+    const record = mock(gardenEntryOut, {
+      seed: 4,
+      overrides: { images: [], plantingId: currentPlantingId },
+    });
+    render(
+      <EntityEditDialog
+        open
+        onOpenChange={() => undefined}
+        mutationPort={mutationPort}
+        request={{
+          entity: "gardenEntry",
+          operation: "update",
+          intent: "full",
+          record,
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    const planting = await screen.findByRole("combobox", { name: "Planting" });
+    expect(planting).toHaveValue(currentPlantingId);
+    fireEvent.keyDown(planting, { key: "ArrowDown" });
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Clear Planting" }).at(-1)!,
+    );
+    await waitFor(() => expect(planting).toHaveValue(""));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+    expect(transport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          data: expect.objectContaining({ plantingId: null }),
         }),
       }),
     );

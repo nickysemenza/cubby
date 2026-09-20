@@ -7,13 +7,13 @@ import type {
   ProjectShortcode,
   RecipeShortcode,
   TaskShortcode,
+  ShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { ingredientOut } from "@cubby/schemas/ingredient";
 import type { LedgerPartyOut } from "@cubby/schemas/ledger-party";
 import { infLocation } from "@cubby/schemas/location";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import type { SearchHit } from "@cubby/schemas/search";
-import { plantingShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
@@ -33,6 +33,7 @@ import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
   buildLocationComboboxItemFromDetail,
+  buildPlantingComboboxItem,
   buildProductComboboxItem,
   buildProjectComboboxItem,
   buildRecipeComboboxItem,
@@ -50,6 +51,8 @@ import {
   type PickerSearchEntity,
   type UseEntitySearchConfig,
 } from "./entity-search-hooks";
+
+type PlantingShortcode = ShortcodeFor<"planting">;
 
 const EntityEditDialog = lazy(() =>
   import("~/entities/editing/entity-edit-dialog").then((module) => ({
@@ -338,17 +341,6 @@ const taskConfig: UseEntitySearchConfig<
   useOnCreateNew: useNoCreateNew,
   createNew: "none",
 };
-
-type PlantingShortcode = z.output<typeof plantingShortcode>;
-
-const buildPlantingComboboxItem = (planting: {
-  id: PlantingShortcode;
-  displayName: string;
-}): ComboboxItem<PlantingShortcode> => ({
-  id: planting.id,
-  shortcode: planting.id,
-  name: planting.displayName,
-});
 
 const plantingConfig: UseEntitySearchConfig<
   PlantingShortcode,

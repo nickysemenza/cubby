@@ -52,6 +52,7 @@ export function getRegisteredTool(
 
 export interface DeclaredToolSchemas {
   readonly name: string;
+  readonly description?: string;
   readonly inputSchema?: z.ZodType;
   readonly outputSchema?: z.core.$ZodType;
 }
@@ -73,6 +74,7 @@ export function listDeclaredToolSchemas(
     .filter(([, tool]) => tool.enabled)
     .map(([name, tool]) => ({
       name,
+      description: tool.description,
       inputSchema: tool.inputSchema,
       outputSchema:
         declaredOutputSchemas.get(server)?.get(name) ?? tool.outputSchema,
