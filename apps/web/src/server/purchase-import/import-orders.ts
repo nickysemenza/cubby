@@ -18,6 +18,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { attachPendingOrderMailEvidence } from "./gmail/process";
+import { auditAllImportBatches, startOrResumeImportRun } from "./run-service";
 import { importVendorOrder } from "./writer";
 
 export async function importVendorOrders(
@@ -51,15 +52,11 @@ export async function importVendorOrders(
   if (!scope)
     throw new Error("Vendor account is not owned by the authenticated member");
 
-  const [run] = await getDb(db)
-    .insert(importRun)
-    .values({
-      ledgerPartyId: scope.ledgerPartyId,
-      vendorAccountId: accountId,
-      trigger: "manual",
-    })
-    .returning({ id: importRun.id });
-  if (!run) throw new Error("Import run was not created");
+  const run = await startOrResumeImportRun(db, {
+    ledgerPartyId: scope.ledgerPartyId,
+    vendorAccountId: accountId,
+    trigger: "manual",
+  });
 
   try {
     const items = [];
@@ -99,6 +96,7 @@ export async function importVendorOrders(
           vendorId: scope.vendorId,
           orderId,
           purchaseShortcode: row.shortcode,
+          ledgerPartyId: scope.ledgerPartyId,
         });
       }
       items.push({
@@ -107,16 +105,28 @@ export async function importVendorOrders(
         findingCount: result.findingIds.length,
       });
     }
-    await getDb(db)
-      .update(importRun)
-      .set({ status: "completed", endedAt: new Date(), updatedAt: new Date() })
-      .where(eq(importRun.id, run.id));
+    if (run.created) {
+      await auditAllImportBatches(db, {
+        runId: run.id,
+        operationId: "vendor-export-final-audit",
+      });
+      await getDb(db)
+        .update(importRun)
+        .set({
+          status: "completed",
+          endedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(importRun.id, run.id));
+    }
     return importVendorOrdersOut.parse({ items });
   } catch (error) {
-    await getDb(db)
-      .update(importRun)
-      .set({ status: "failed", endedAt: new Date(), updatedAt: new Date() })
-      .where(eq(importRun.id, run.id));
+    if (run.created) {
+      await getDb(db)
+        .update(importRun)
+        .set({ status: "failed", endedAt: new Date(), updatedAt: new Date() })
+        .where(eq(importRun.id, run.id));
+    }
     throw error;
   }
 }

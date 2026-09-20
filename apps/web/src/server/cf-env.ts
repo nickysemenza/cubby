@@ -8,6 +8,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { BackgroundQueueProducer } from "./background-queue-types";
+import type { PurchaseAgentQueueProducer } from "./purchase-agent-queue-types";
 import type { VectorizeIndexBinding } from "./semantic/vector-store";
 import type { TelemetryQueueProducer } from "./telemetry-queue-types";
 
@@ -65,6 +66,15 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   // SAFETY: Wrangler generates Env bindings structurally from configuration;
   // this adapter narrows that generated queue binding to Cubby's owned port.
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
+};
+
+/** Queue producer for the private per-run Flue purchase-import Worker. */
+export const getPurchaseAgentQueue = ():
+  | PurchaseAgentQueueProducer
+  | undefined => {
+  // SAFETY: Wrangler generates this queue binding from wrangler.jsonc; this
+  // adapter narrows it to the single send method Cubby's producer owns.
+  return cfEnv?.PURCHASE_AGENT_QUEUE as PurchaseAgentQueueProducer | undefined;
 };
 
 /** Origin-keyed durable calendar publishing state, absent in plain Vite. */

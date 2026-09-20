@@ -8,6 +8,10 @@ import UniformTypeIdentifiers
 
 @MainActor
 final class MacBrowserCommandExecutor: BrowserCommandExecuting {
+    private struct BrowserScreenshot {
+        let evidence: BrowserLocalEvidence
+        let image: CGImage
+    }
     private struct FixedCapturePayload: Decodable {
         struct Link: Decodable { let url: String; let label: String? }
         struct Image: Decodable { let url: String; let alt: String? }
@@ -31,8 +35,37 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         self.evidenceUploader = evidenceUploader
     }
 
+    /// A rendered PDF is only advertised when the OS has granted the window-capture permission
+    /// that lets Cubby render its own dedicated Safari or Chrome window into evidence.
+    static var supportsRenderedPDF: Bool { CGPreflightScreenCaptureAccess() }
+
     func cancel(commandID: UUID) {
         cancelled.insert(commandID)
+    }
+
+    func raiseAuthenticationWindow() {
+        guard let ownedWindowID else { return }
+        let script: String
+        switch browser {
+        case .safari:
+            script = """
+                tell application "Safari"
+                activate
+                set index of window id \(ownedWindowID) to 1
+                end tell
+                """
+        case .chrome:
+            script = """
+                tell application "Google Chrome"
+                activate
+                set index of window id \(ownedWindowID) to 1
+                end tell
+                """
+        }
+        _ = try? execute(script)
+        let bundleIdentifier = browser == .safari ? "com.apple.Safari" : "com.google.Chrome"
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first?.activate(
+            options: [.activateAllWindows])
     }
 
     func execute(_ command: BrowserBridgeCommand) async -> BrowserBridgeCommandOutcome {
@@ -77,6 +110,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         } catch let failure as BrowserBridgeURLPolicy.Failure {
             return .failed(code: .disallowedURL, message: failure.message, retryable: false)
         } catch let failure as ExecutionFailure {
+            if case .authenticationRequired = failure { raiseAuthenticationWindow() }
             return .failed(code: failure.code, message: failure.message, retryable: failure.retryable)
         } catch {
             return .failed(
@@ -172,12 +206,19 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         } catch {
             throw ExecutionFailure.uploadFailed
         }
-        if enhancedEvidence, CGPreflightScreenCaptureAccess(),
-            let screenshot = try? await captureBrowserScreenshot()
-        {
-            defer { try? FileManager.default.removeItem(at: screenshot.url) }
-            if let reference = try? await evidenceUploader.upload(screenshot, runID: command.runID) {
+        if Self.supportsRenderedPDF, let screenshot = try? await captureBrowserScreenshot() {
+            defer { try? FileManager.default.removeItem(at: screenshot.evidence.url) }
+            if enhancedEvidence,
+                let reference = try? await evidenceUploader.upload(
+                    screenshot.evidence, runID: command.runID)
+            {
                 references.append(reference)
+            }
+            if let rendered = try? RenderedBrowserEvidencePDF.makeFile(from: screenshot.image) {
+                defer { try? FileManager.default.removeItem(at: rendered.url) }
+                if let reference = try? await evidenceUploader.upload(rendered, runID: command.runID) {
+                    references.append(reference)
+                }
             }
         }
         return BrowserPageCapture(
@@ -186,7 +227,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             evidence: references)
     }
 
-    private func captureBrowserScreenshot() async throws -> BrowserLocalEvidence {
+    private func captureBrowserScreenshot() async throws -> BrowserScreenshot {
         guard let ownedCaptureWindowID else { throw ExecutionFailure.captureUnavailable }
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
@@ -217,9 +258,11 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(UUID().uuidString + ".png")
         try (data as Data).write(to: url, options: .atomic)
-        return BrowserLocalEvidence(
-            url: url, kind: .screenshot,
-            checksum: NormalizedEvidencePDF.sha256(data as Data), contentType: "image/png")
+        return BrowserScreenshot(
+            evidence: BrowserLocalEvidence(
+                url: url, kind: .screenshot,
+                checksum: NormalizedEvidencePDF.sha256(data as Data), contentType: "image/png"),
+            image: image)
     }
 
     /// ScreenCaptureKit uses CGWindowIDs, while browser Apple Events expose a different window

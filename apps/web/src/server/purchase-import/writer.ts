@@ -1,6 +1,10 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import {
+  expenseLineKindValues,
+  type ExpenseLineKind,
+} from "@cubby/schemas/expense-line-kind";
+import {
   parseEntityId,
   userId as userIdSchema,
 } from "@cubby/schemas/identifiers";
@@ -24,7 +28,13 @@ import {
   sql,
 } from "drizzle-orm";
 
-import { PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE } from "~/server/ai/features";
+import {
+  PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
+  PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
+  PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
+  PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
+  PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
+} from "~/server/ai/features";
 import { runJevChoice } from "~/server/ai/jev";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -200,6 +210,7 @@ async function attachEvidence(
 async function attachPendingMailEvidence(
   tx: DrizzleTransaction,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
+  ledgerPartyId: ReturnType<typeof parseEntityId<"ledgerParty">>,
   vendorId: ReturnType<typeof parseEntityId<"vendor">>,
   orderId: string | null,
 ) {
@@ -220,6 +231,7 @@ async function attachPendingMailEvidence(
     )
     .where(
       and(
+        eq(orderMail.ledgerPartyId, ledgerPartyId),
         eq(orderMail.vendorId, vendorId),
         eq(orderMailEvent.orderId, orderId),
       ),
@@ -254,12 +266,83 @@ const externalSource = (url: string | undefined, vendorId: string): string => {
   );
 };
 
+/** The same vendor SKU in one order must resolve to one Product decision. */
+export const lineExternalIdentity = (
+  line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,
+  vendorId: string,
+): string | null =>
+  line.sku
+    ? `${externalSource(line.productUrl, vendorId)}:sku:${line.sku}`
+    : null;
+
 type LineIdentityDecision = {
   productId: string | null;
-  create: boolean;
+  promote: boolean;
   variantDoubt: boolean;
   probability: number;
+  lineKind: ExpenseLineKind;
+  kitKind: "kit_with_components" | "single" | "n_pack";
+  reversalKind: "return" | "concession" | "cancellation" | "replacement" | null;
 };
+
+const lineDecisionSubject = (line: ExtractedPurchaseLine) =>
+  JSON.stringify({
+    title: line.title,
+    amount: line.amount,
+    extractedLineKind: line.lineKind,
+    quantity: line.quantity ?? null,
+    sku: line.sku ?? null,
+    seller: line.seller ?? null,
+    productUrl: line.productUrl ?? null,
+  });
+
+async function chooseLineStage(
+  db: Database,
+  input: ImportWriterInput,
+  index: number,
+  line: ExtractedPurchaseLine,
+  stage: "role" | "kit" | "promotion" | "reversal",
+) {
+  const specs = {
+    role: {
+      feature: PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
+      choices: expenseLineKindValues,
+      rules:
+        "Classify the receipt row's financial role. Principal is a purchased or returned item; taxes, shipping, discounts, fees, tips, and other adjustments are not products.",
+    },
+    kit: {
+      feature: PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
+      choices: ["kit_with_components", "single", "n_pack"] as const,
+      rules:
+        "Classify the sellable item. A kit has distinct reusable components, an n-pack is repeated units of one item, and a single is one sellable product.",
+    },
+    promotion: {
+      feature: PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
+      choices: ["promote", "coarse_only"] as const,
+      rules:
+        "Choose promote only when the line identifies a durable sellable product worth creating or linking. Choose coarse_only for services, vague bundles, fees, warranties, or insufficient identity.",
+    },
+    reversal: {
+      feature: PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,
+      choices: ["return", "concession", "cancellation", "replacement"] as const,
+      rules:
+        "Classify a negative item row: return means units left the household; concession means the item was kept; cancellation means it was never acquired; replacement means the money line accompanies a replacement rather than a returned unit.",
+    },
+  } as const;
+  const spec = specs[stage];
+  return runJevChoice({
+    feature: spec.feature,
+    subject: lineDecisionSubject(line),
+    rules: spec.rules,
+    choices: spec.choices,
+    allowNone: false,
+    usage: {
+      db,
+      operation: `purchaseImport.${stage}.${index}`,
+      job: { kind: "purchase_import_run", id: input.runId },
+    },
+  });
+}
 
 const productSearchPatterns = (title: string) =>
   title
@@ -268,25 +351,66 @@ const productSearchPatterns = (title: string) =>
     .slice(0, 3)
     .map((token) => `%${token.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`);
 
+// The staged decision pipeline intentionally keeps all five model decisions and
+// deterministic short-circuits in one ordered pass over each source line.
+// eslint-disable-next-line complexity
 async function decideLineIdentities(
   db: Database,
   input: ImportWriterInput,
 ): Promise<LineIdentityDecision[]> {
   const database = getDb(db);
   const decisions: LineIdentityDecision[] = [];
+  const decisionsByExternalIdentity = new Map<string, LineIdentityDecision>();
   const candidate = input.extraction.candidate;
   if (!candidate) return [];
   for (const [index, line] of candidate.lines.entries()) {
-    if (line.lineKind !== "principal") {
+    const role = await chooseLineStage(db, input, index, line, "role");
+    const selectedRole = expenseLineKindValues[role.selectedIndex ?? -1];
+    const lineKind =
+      selectedRole && role.probability >= 0.85 ? selectedRole : line.lineKind;
+    const kit = await chooseLineStage(db, input, index, line, "kit");
+    const kitKind =
+      (["kit_with_components", "single", "n_pack"] as const)[
+        kit.selectedIndex ?? 1
+      ] ?? "single";
+    const promotion = await chooseLineStage(
+      db,
+      input,
+      index,
+      line,
+      "promotion",
+    );
+    const promote =
+      promotion.selectedIndex === 0 && promotion.probability >= 0.6;
+    const reversal =
+      line.amount < 0
+        ? await chooseLineStage(db, input, index, line, "reversal")
+        : null;
+    const reversalKind = reversal
+      ? ((["return", "concession", "cancellation", "replacement"] as const)[
+          reversal.selectedIndex ?? 1
+        ] ?? "concession")
+      : null;
+    const baseDecision = { lineKind, kitKind, reversalKind };
+    if (lineKind !== "principal") {
       decisions.push({
         productId: null,
-        create: false,
+        promote: false,
         variantDoubt: false,
         probability: 1,
+        ...baseDecision,
       });
       continue;
     }
     const source = externalSource(line.productUrl, input.vendorId);
+    const identity = lineExternalIdentity(line, input.vendorId);
+    const decidedEarlier = identity
+      ? decisionsByExternalIdentity.get(identity)
+      : null;
+    if (decidedEarlier) {
+      decisions.push(decidedEarlier);
+      continue;
+    }
     const [externalMatch] = line.sku
       ? await database
           .select({ productId: productExternalId.productId })
@@ -309,12 +433,15 @@ async function decideLineIdentities(
           .limit(1)
       : [];
     if (externalMatch) {
-      decisions.push({
+      const decision = {
         productId: externalMatch.productId,
-        create: false,
+        promote: true,
         variantDoubt: false,
         probability: 1,
-      });
+        ...baseDecision,
+      };
+      decisions.push(decision);
+      if (identity) decisionsByExternalIdentity.set(identity, decision);
       continue;
     }
     const patterns = productSearchPatterns(line.title);
@@ -337,12 +464,15 @@ async function decideLineIdentities(
           .limit(20)
       : [];
     if (candidates.length === 0) {
-      decisions.push({
+      const decision = {
         productId: null,
-        create: true,
+        promote,
         variantDoubt: false,
         probability: 1,
-      });
+        ...baseDecision,
+      };
+      decisions.push(decision);
+      if (identity) decisionsByExternalIdentity.set(identity, decision);
       continue;
     }
     const choice = await runJevChoice({
@@ -368,19 +498,25 @@ async function decideLineIdentities(
     const selected =
       choice.selectedIndex === null ? null : candidates[choice.selectedIndex];
     if (selected && choice.probability >= 0.85) {
-      decisions.push({
+      const decision = {
         productId: selected.id,
-        create: false,
+        promote: true,
         variantDoubt: false,
         probability: choice.probability,
-      });
+        ...baseDecision,
+      };
+      decisions.push(decision);
+      if (identity) decisionsByExternalIdentity.set(identity, decision);
     } else {
-      decisions.push({
+      const decision = {
         productId: null,
-        create: true,
+        promote,
         variantDoubt: choice.probability >= 0.6,
         probability: choice.probability,
-      });
+        ...baseDecision,
+      };
+      decisions.push(decision);
+      if (identity) decisionsByExternalIdentity.set(identity, decision);
     }
   }
   return decisions;
@@ -394,7 +530,7 @@ async function resolveLineProduct(
   productsByExternalIdentity: Map<string, string>,
 ) {
   const source = externalSource(line.productUrl, vendorId);
-  const externalIdentity = line.sku ? `${source}:sku:${line.sku}` : null;
+  const externalIdentity = lineExternalIdentity(line, vendorId);
   const resolvedEarlier = externalIdentity
     ? productsByExternalIdentity.get(externalIdentity)
     : null;
@@ -417,7 +553,7 @@ async function resolveLineProduct(
       productsByExternalIdentity.set(externalIdentity, productId);
     return productId;
   }
-  if (line.lineKind !== "principal" || !decision.create) return null;
+  if (decision.lineKind !== "principal" || !decision.promote) return null;
   const created = await insertWithShortcode(tx, "product", {
     name: line.title,
     manufacturer: "",
@@ -444,6 +580,8 @@ async function fileFinding(
     | "duplicate_lines"
     | "sum_mismatch"
     | "foreign_currency"
+    | "reversal_kind"
+    | "kit_double_booked"
     | "variant_doubt"
     | "arrived"
     | "other",
@@ -651,6 +789,7 @@ export async function importVendorOrder(
     await attachPendingMailEvidence(
       tx,
       purchaseId,
+      partyId,
       vendorId,
       candidate.orderId,
     );
@@ -751,9 +890,12 @@ export async function importVendorOrder(
         for (const [lineIndex, line] of decision.lines.entries()) {
           const identity = identityDecisions[lineIndex] ?? {
             productId: null,
-            create: false,
+            promote: false,
             variantDoubt: false,
             probability: 0,
+            lineKind: line.lineKind,
+            kitKind: "single" as const,
+            reversalKind: null,
           };
           const productId = await resolveLineProduct(
             tx,
@@ -763,16 +905,22 @@ export async function importVendorOrder(
             productsByExternalIdentity,
           );
           const quantity =
-            productId && line.quantity !== undefined
-              ? Math.abs(line.quantity) * (line.amount < 0 ? -1 : 1)
-              : null;
+            !productId || line.quantity === undefined
+              ? null
+              : line.amount >= 0
+                ? Math.abs(line.quantity)
+                : identity.reversalKind === "return"
+                  ? -Math.abs(line.quantity)
+                  : identity.reversalKind === "concession"
+                    ? 0
+                    : null;
           const inserted = await insertWithShortcode(tx, "expense", {
             purchaseId,
             name: line.title,
             notes: line.seller ? `Seller: ${line.seller}` : null,
             cost: line.amount,
             date: dateOnly(candidate.orderedAt),
-            lineKind: line.lineKind,
+            lineKind: identity.lineKind,
             lineBasis: "item_line",
             costType: costTypeSchema.parse(aggregate?.costType ?? "materials"),
             trade: tradeSchema.parse(aggregate?.tradeId ?? "other"),
@@ -803,6 +951,34 @@ export async function importVendorOrder(
                 purchaseId,
                 "variant_doubt",
                 `Created a distinct product for “${line.title}” because the closest existing match was uncertain (${Math.round(identity.probability * 100)}%).`,
+                null,
+              ),
+            );
+          }
+          if (identity.kitKind === "kit_with_components") {
+            findingIds.push(
+              await fileFinding(
+                tx,
+                input,
+                purchaseId,
+                "kit_double_booked",
+                `“${line.title}” appears to be a kit. Review its component accounting before receiving inventory.`,
+                null,
+              ),
+            );
+          }
+          if (
+            line.amount < 0 &&
+            identity.reversalKind !== "return" &&
+            identity.reversalKind !== "concession"
+          ) {
+            findingIds.push(
+              await fileFinding(
+                tx,
+                input,
+                purchaseId,
+                "reversal_kind",
+                `“${line.title}” was classified as ${identity.reversalKind ?? "an uncertain reversal"}; no inventory quantity was inferred.`,
                 null,
               ),
             );

@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "purchase-agent",
+  "compatibility_date": "2026-09-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "queues": {
+    "consumers": [
+      {
+        "queue": "cubby-purchase-agent",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5
+      }
+    ]
+  },
+  "services": [
+    {
+      "binding": "CUBBY_PURCHASE_SERVICE",
+      "service": "cubby",
+      "entrypoint": "PurchaseImportService"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["FluePurchaseImportRunAgent"]
+    }
+  ]
+}

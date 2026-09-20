@@ -31,6 +31,7 @@
         "src/styles.css!",
         "src/lib/recipebridge-cf.ts!",
         "src/lib/sentry-cf-shim.ts!",
+        "src/server/purchase-import/run-service.ts!",
         "src/integrations/**/*.{ts,tsx}!",
         "src/contracts/index.ts!",
         "src/lib/generated/http-resources.gen.ts!",
@@ -65,6 +66,19 @@
       ],
       "vitest": { "config": "vitest.config.ts" },
       "playwright": { "config": "playwright.config.ts" }
+    },
+    "apps/purchase-agent": {
+      "entry": [
+        "src/app.ts!",
+        "src/cloudflare.ts!",
+        "src/purchase-import-run.ts!",
+        "src/**/*.unit.test.ts!",
+        "flue.config.ts!",
+        "vite.config.ts!"
+      ],
+      "project": ["src/**/*.ts!", "*.ts!"],
+      "ignoreDependencies": ["cloudflare"],
+      "vitest": { "config": "vitest.config.ts" }
     },
     "apps/mcp-apps": {
       "entry": [

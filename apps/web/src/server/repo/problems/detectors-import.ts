@@ -1,5 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, lt, lte, or } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -11,7 +11,15 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 export async function findOpenImportFindings(db: Database) {
-  const rows = await getDb(db)
+  const database = getDb(db);
+  const now = new Date();
+  await database
+    .update(importFinding)
+    .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
+    .where(
+      and(eq(importFinding.status, "open"), lt(importFinding.expiresAt, now)),
+    );
+  const rows = await database
     .select({
       id: importFinding.id,
       purchaseShortcode: purchase.shortcode,
@@ -63,6 +71,16 @@ export async function findOpenImportFindings(db: Database) {
     .where(
       and(
         inArray(vendorAccount.status, ["paused_auth", "paused_offline"]),
+        or(
+          eq(vendorAccount.status, "paused_auth"),
+          and(
+            eq(vendorAccount.status, "paused_offline"),
+            lte(
+              vendorAccount.updatedAt,
+              new Date(now.getTime() - 24 * 60 * 60 * 1_000),
+            ),
+          ),
+        ),
         notDeleted(vendorAccount),
       ),
     )

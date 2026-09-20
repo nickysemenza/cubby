@@ -16,6 +16,7 @@ dependency.
 | Concern | Provider | Production resource |
 |---|---|---|
 | Web application and APIs | Cloudflare Workers | Worker `cubby`, custom domain `cubby.nickysemenza.com` |
+| Purchase-import orchestration | Cloudflare Workers + Flue | Private Worker `purchase-agent`, queue `cubby-purchase-agent`, SQLite Durable Objects |
 | PostgreSQL | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations |
 | Images and documents | Cloudflare R2 | Bucket `foo`, public origin `https://media.nickysemenza.com` |
 | Product lookup | Cloudflare Workers | Worker `upc-lookup`, D1 `upc-lookup-db`, R2 `upc-images` |
@@ -31,6 +32,7 @@ dependency.
 The checked-in provider configurations are:
 
 - [`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc)
+- [`apps/purchase-agent/wrangler.jsonc`](../apps/purchase-agent/wrangler.jsonc)
 - [`apps/upc-lookup/wrangler.jsonc`](../apps/upc-lookup/wrangler.jsonc)
 - [`apps/usda-api/wrangler.jsonc`](../apps/usda-api/wrangler.jsonc)
 - [`.github/workflows/deploy.yaml`](../.github/workflows/deploy.yaml)
@@ -50,8 +52,8 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 - SQLite Durable Objects `DatabaseFreshnessDurableObject`,
   `CalendarFeedDurableObject`, and `PurchaseImportDurableObject`.
 - Workflow `cubby-search-index-repair`.
-- Queues `cubby-background` and `cubby-telemetry`, with producer and consumer
-  settings in the Wrangler file.
+- Queues `cubby-background` and `cubby-telemetry`, plus producer-only
+  `cubby-purchase-agent`, with settings in the Wrangler files.
 - Hourly and daily cron triggers.
 - Workers AI binding `AI` and AI Gateway `cubby`.
 - Vectorize binding `VECTORIZE` ->
@@ -64,6 +66,7 @@ One-time creation commands that cannot be inferred or safely rerun by deploy:
 ```bash
 pnpm --dir apps/web exec wrangler queues create cubby-background
 pnpm --dir apps/web exec wrangler queues create cubby-telemetry
+pnpm --dir apps/web exec wrangler queues create cubby-purchase-agent
 pnpm --dir apps/web exec wrangler vectorize create \
   cubby-openai-text-embedding-3-small-1536 \
   --dimensions=1536 --metric=cosine
@@ -74,6 +77,42 @@ pnpm --dir apps/web exec wrangler vectorize create-metadata-index \
 
 The Workflow, Durable Object namespaces, bindings, consumers, crons, and route
 are created or updated by `wrangler deploy` from the checked-in configuration.
+
+### Private purchase-agent Worker
+
+`apps/purchase-agent` is the private Flue runtime for purchase imports. It has
+no route, preview URL, database credential, document binding, or browser
+authority. Its checked-in Wrangler configuration declares:
+
+- queue consumer `cubby-purchase-agent`;
+- SQLite Durable Object class `FluePurchaseImportRunAgent`, one instance named
+  `import-run:<ImportRun.id>` per run;
+- direct named service binding `CUBBY_PURCHASE_SERVICE` to the web Worker's
+  `PurchaseImportService` entrypoint;
+- Workers AI binding `AI`, with every orchestration call routed through AI
+  Gateway `cubby` by the Flue provider adapter.
+
+Create and verify the non-route resource before the first deploy:
+
+```bash
+pnpm --dir apps/web exec wrangler queues create cubby-purchase-agent
+pnpm --dir apps/web exec wrangler queues list
+pnpm --dir apps/purchase-agent run build
+pnpm --dir apps/purchase-agent exec wrangler deploy --dry-run
+```
+
+Deploy `cubby` first whenever `PurchaseImportService` changes, then deploy
+`purchase-agent`. The GitHub workflow preserves that order; agent-only changes
+skip the web deploy. Verify the private Worker and bindings with:
+
+```bash
+pnpm --dir apps/purchase-agent exec wrangler deployments list
+pnpm --dir apps/purchase-agent exec wrangler tail
+```
+
+Rollback is additive: pause the `cubby-purchase-agent` consumer and deploy the
+previous web and Apple versions. Postgres import rows and the retained
+`PurchaseImportDurableObject` namespace remain compatible.
 
 ### PostgreSQL and Hyperdrive
 
@@ -252,7 +291,7 @@ or environment secrets are:
 
 | Secret | Purpose |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | Deploy all three Workers and manage their declared bindings |
+| `CLOUDFLARE_API_TOKEN` | Deploy all four Workers and manage their declared bindings |
 | `CODECOV_TOKEN` | Optional coverage upload workflow |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Automated Claude workflows, not application runtime |
 
@@ -281,8 +320,9 @@ For a new account or disaster recovery:
 4. Restore Worker and GitHub secrets through their providers.
 5. Recreate Google Auth Platform configuration and rotate the Google client
    secret rather than copying it through documentation.
-6. Deploy `cubby`, verify its exact source revision, and run authenticated
-   database, media, AI, Gmail, and auxiliary-service smoke tests.
+6. Deploy `cubby`, then the private `purchase-agent`; verify their exact source
+   revision, queue/service binding, Flue storage, Gateway usage, and run
+   authenticated database, media, AI, Gmail, and auxiliary-service smoke tests.
 7. Reconnect native clients and regrant local macOS permissions.
 
 Before deleting apparently unused provider state, search the repository, check

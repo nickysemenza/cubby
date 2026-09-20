@@ -13,136 +13,133 @@ type CommandRow = {
   result_json: string | null;
 };
 
+export type RunCompletionSummary = {
+  runID: string;
+  imported: number;
+  updated: number;
+  skipped: number;
+  findingCount: number;
+};
+
+const runCompletionSummary = z.object({
+  runID: z.string(),
+  imported: z.number().int().nonnegative(),
+  updated: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  findingCount: z.number().int().nonnegative(),
+});
+
+type ClaimedBrowserResult = {
+  command: BrowserBridgeRequest | null;
+  newlyCompleted: boolean;
+};
+
+/** Durable transport state only. Purchase-import orchestration lives in Flue. */
 export class PurchaseImportSqlStore {
   constructor(private readonly storage: DurableObjectStorage) {}
 
   migrate(): void {
     this.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS command (request_id TEXT PRIMARY KEY, request_json TEXT NOT NULL, state TEXT NOT NULL CHECK (state IN ('pending','sent','completed','cancelled')), result_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS broker_command (request_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL, run_id TEXT NOT NULL, request_json TEXT NOT NULL, state TEXT NOT NULL CHECK (state IN ('pending','sent','completed','cancelled')), result_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     );
     this.storage.sql.exec(
-      "CREATE INDEX IF NOT EXISTS command_replay_idx ON command(state, created_at)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS broker_command_operation_key ON broker_command(run_id, operation_id)",
     );
     this.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS run_state (run_id TEXT PRIMARY KEY, root_url TEXT NOT NULL, allowed_hosts_json TEXT NOT NULL, steps INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+      "CREATE INDEX IF NOT EXISTS broker_command_replay_idx ON broker_command(state, created_at)",
+    );
+    this.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS broker_notification (run_id TEXT PRIMARY KEY, summary_json TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     );
   }
 
-  ensureRun(runId: string, rootUrl: string, allowedHosts: string[]): void {
-    const now = Date.now();
-    this.storage.sql.exec(
-      "INSERT OR IGNORE INTO run_state (run_id, root_url, allowed_hosts_json, steps, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)",
-      runId,
-      rootUrl,
-      JSON.stringify(allowedHosts),
-      now,
-      now,
-    );
-  }
-
-  advanceRun(runId: string): {
-    rootUrl: string;
-    allowedHosts: string[];
-    steps: number;
-  } | null {
-    this.storage.sql.exec(
-      "UPDATE run_state SET steps = steps + 1, updated_at = ? WHERE run_id = ?",
-      Date.now(),
-      runId,
-    );
-    return this.runState(runId);
-  }
-
-  runState(runId: string): {
-    rootUrl: string;
-    allowedHosts: string[];
-    steps: number;
-  } | null {
-    const row = this.storage.sql
-      .exec<{ root_url: string; allowed_hosts_json: string; steps: number }>(
-        "SELECT root_url, allowed_hosts_json, steps FROM run_state WHERE run_id = ?",
-        runId,
+  enqueue(command: BrowserBridgeRequest): BrowserBridgeRequest {
+    const parsed = browserBridgeRequest.parse(command);
+    const existing = this.storage.sql
+      .exec<{ request_json: string }>(
+        "SELECT request_json FROM broker_command WHERE request_id = ? OR (run_id = ? AND operation_id = ?) LIMIT 1",
+        parsed.id,
+        parsed.runID,
+        parsed.operationId,
       )
       .toArray()[0];
-    return row
-      ? {
-          rootUrl: row.root_url,
-          allowedHosts: z
-            .array(z.string())
-            .parse(JSON.parse(row.allowed_hosts_json)),
-          steps: row.steps,
-        }
-      : null;
-  }
-
-  enqueue(command: BrowserBridgeRequest): void {
-    const parsed = browserBridgeRequest.parse(command);
-    if (parsed.operation.type === "navigate") {
-      this.ensureRun(
-        parsed.runID,
-        parsed.operation.url,
-        parsed.operation.allowedHosts,
+    if (existing) {
+      const replay = browserBridgeRequest.parse(
+        JSON.parse(existing.request_json),
       );
+      if (JSON.stringify(replay) !== JSON.stringify(parsed)) {
+        throw new Error("Browser operation was replayed with different input");
+      }
+      return replay;
     }
     const now = Date.now();
     this.storage.sql.exec(
-      "INSERT OR IGNORE INTO command (request_id, request_json, state, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?)",
+      "INSERT INTO broker_command (request_id, operation_id, run_id, request_json, state, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
       parsed.id,
+      parsed.operationId,
+      parsed.runID,
       JSON.stringify(parsed),
       now,
       now,
     );
+    return parsed;
   }
 
-  replayable(): BrowserBridgeRequest[] {
-    return this.storage.sql
+  nextReplayable(): BrowserBridgeRequest | null {
+    const row = this.storage.sql
       .exec<{ request_json: string }>(
-        "SELECT request_json FROM command WHERE state IN ('pending','sent') ORDER BY created_at, request_id",
+        "SELECT request_json FROM broker_command WHERE state IN ('pending','sent') ORDER BY created_at, request_id LIMIT 1",
       )
-      .toArray()
-      .map(({ request_json }) =>
-        browserBridgeRequest.parse(JSON.parse(request_json)),
-      );
+      .toArray()[0];
+    return row
+      ? browserBridgeRequest.parse(JSON.parse(row.request_json))
+      : null;
   }
 
   markSent(requestId: string): void {
     this.storage.sql.exec(
-      "UPDATE command SET state = 'sent', updated_at = ? WHERE request_id = ? AND state = 'pending'",
+      "UPDATE broker_command SET state = 'sent', updated_at = ? WHERE request_id = ? AND state = 'pending'",
       Date.now(),
       requestId,
     );
   }
 
-  claimResult(result: BrowserBridgeResult): BrowserBridgeRequest | null {
+  claimResult(result: BrowserBridgeResult): ClaimedBrowserResult {
     const parsed = browserBridgeResult.parse(result);
     const row = this.storage.sql
       .exec<CommandRow>(
-        "SELECT request_json, state, result_json FROM command WHERE request_id = ?",
+        "SELECT request_json, state, result_json FROM broker_command WHERE request_id = ?",
         parsed.commandID,
       )
       .toArray()[0];
-    if (!row || (row.state !== "pending" && row.state !== "sent")) return null;
+    if (!row) return { command: null, newlyCompleted: false };
+    const command = browserBridgeRequest.parse(JSON.parse(row.request_json));
+    if (
+      command.protocolVersion !== parsed.protocolVersion ||
+      command.runID !== parsed.runID ||
+      command.operationId !== parsed.operationID
+    ) {
+      throw new Error("Browser result does not match its durable command");
+    }
+    if (row.state === "completed") {
+      return { command, newlyCompleted: false };
+    }
+    if (row.state !== "pending" && row.state !== "sent") {
+      return { command: null, newlyCompleted: false };
+    }
     this.storage.sql.exec(
-      "UPDATE command SET state = 'completed', result_json = ?, updated_at = ? WHERE request_id = ? AND state IN ('pending','sent')",
+      "UPDATE broker_command SET state = 'completed', result_json = ?, updated_at = ? WHERE request_id = ? AND state IN ('pending','sent')",
       JSON.stringify(parsed),
       Date.now(),
       parsed.commandID,
     );
-    return browserBridgeRequest.parse(JSON.parse(row.request_json));
-  }
-
-  retryResult(requestId: string): void {
-    this.storage.sql.exec(
-      "UPDATE command SET state = 'sent', result_json = NULL, updated_at = ? WHERE request_id = ? AND state = 'completed'",
-      Date.now(),
-      requestId,
-    );
+    return { command, newlyCompleted: true };
   }
 
   result(requestId: string): BrowserBridgeResult | null {
     const row = this.storage.sql
-      .exec<CommandRow>(
-        "SELECT request_json, state, result_json FROM command WHERE request_id = ?",
+      .exec<{ result_json: string | null }>(
+        "SELECT result_json FROM broker_command WHERE request_id = ?",
         requestId,
       )
       .toArray()[0];
@@ -151,23 +148,41 @@ export class PurchaseImportSqlStore {
       : null;
   }
 
-  command(requestId: string): BrowserBridgeRequest | null {
-    const row = this.storage.sql
-      .exec<{ request_json: string }>(
-        "SELECT request_json FROM command WHERE request_id = ?",
-        requestId,
-      )
-      .toArray()[0];
-    return row
-      ? browserBridgeRequest.parse(JSON.parse(row.request_json))
-      : null;
-  }
-
   cancel(requestId: string): void {
     this.storage.sql.exec(
-      "UPDATE command SET state = 'cancelled', updated_at = ? WHERE request_id = ? AND state IN ('pending','sent')",
+      "UPDATE broker_command SET state = 'cancelled', updated_at = ? WHERE request_id = ? AND state IN ('pending','sent')",
       Date.now(),
       requestId,
+    );
+  }
+
+  saveRunCompletion(summary: RunCompletionSummary): void {
+    const now = Date.now();
+    this.storage.sql.exec(
+      "INSERT INTO broker_notification (run_id, summary_json, acknowledged, created_at, updated_at) VALUES (?, ?, 0, ?, ?) ON CONFLICT(run_id) DO UPDATE SET summary_json = excluded.summary_json, updated_at = excluded.updated_at",
+      summary.runID,
+      JSON.stringify(summary),
+      now,
+      now,
+    );
+  }
+
+  pendingRunCompletions(): RunCompletionSummary[] {
+    return this.storage.sql
+      .exec<{ summary_json: string }>(
+        "SELECT summary_json FROM broker_notification WHERE acknowledged = 0 ORDER BY created_at",
+      )
+      .toArray()
+      .map(({ summary_json }) =>
+        runCompletionSummary.parse(JSON.parse(summary_json)),
+      );
+  }
+
+  acknowledgeRunCompletion(runId: string): void {
+    this.storage.sql.exec(
+      "UPDATE broker_notification SET acknowledged = 1, updated_at = ? WHERE run_id = ?",
+      Date.now(),
+      runId,
     );
   }
 }

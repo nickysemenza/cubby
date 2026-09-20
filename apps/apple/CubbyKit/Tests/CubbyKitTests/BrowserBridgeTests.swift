@@ -9,7 +9,8 @@ struct BrowserBridgeTests {
     func protocolRoundTrip(operation: BrowserBridgeOperation) throws {
         let command = BrowserBridgeCommand(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!, runID: "RUN-EXAMPLE",
-            deadline: Date(timeIntervalSince1970: 1_800_000_000), operation: operation)
+            operationID: "operation-example", deadline: Date(timeIntervalSince1970: 1_800_000_000),
+            operation: operation)
         let message = BrowserBridgeServerMessage.command(command)
 
         let encoded = try JSONEncoder.browserBridge.encode(message)
@@ -18,12 +19,13 @@ struct BrowserBridgeTests {
 
         #expect(decoded == message)
         let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        #expect(object["version"] as? Int == BrowserBridgeProtocol.currentVersion)
+        #expect(object["protocolVersion"] as? Int == BrowserBridgeProtocol.currentProtocolVersion)
     }
 
     @Test("A future protocol version is rejected")
     func futureProtocolVersion() throws {
-        let data = Data(#"{"version":999,"type":"ping","timestamp":"2027-01-15T00:00:00Z"}"#.utf8)
+        let data = Data(
+            #"{"protocolVersion":999,"type":"ping","timestamp":"2027-01-15T00:00:00Z"}"#.utf8)
         #expect(throws: DecodingError.self) {
             try JSONDecoder.browserBridge.decode(BrowserBridgeServerMessage.self, from: data)
         }
@@ -56,8 +58,8 @@ struct BrowserBridgeTests {
     func replayLifecycle() {
         let id = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
         let result = BrowserBridgeCommandResult(
-            commandID: id, runID: "RUN-EXAMPLE", completedAt: Date(timeIntervalSince1970: 100),
-            outcome: .completed(capture: nil))
+            commandID: id, runID: "RUN-EXAMPLE", operationID: "operation-example",
+            completedAt: Date(timeIntervalSince1970: 100), outcome: .completed(capture: nil))
         var ledger = BrowserBridgeReplayLedger()
 
         ledger.record(result)
@@ -76,11 +78,25 @@ struct BrowserBridgeTests {
         ledger.cancel(id)
         ledger.record(
             BrowserBridgeCommandResult(
-                commandID: id, runID: "RUN-EXAMPLE", completedAt: .now,
-                outcome: .completed(capture: nil)))
+                commandID: id, runID: "RUN-EXAMPLE", operationID: "operation-example",
+                completedAt: .now, outcome: .completed(capture: nil)))
 
         #expect(ledger.cancelled.contains(id))
         #expect(ledger.replayResult(for: id) == nil)
+    }
+
+    @Test("A stale replay result can be discarded before a protocol rejection replaces it")
+    func staleReplayResultIsFenced() {
+        let id = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+        let cached = BrowserBridgeCommandResult(
+            commandID: id, runID: "RUN-OLD", operationID: "operation-old", completedAt: .now,
+            outcome: .completed(capture: nil))
+        var ledger = BrowserBridgeReplayLedger()
+
+        ledger.record(cached)
+        ledger.discardReplayResult(for: id)
+        #expect(ledger.replayResult(for: id) == nil)
+        #expect(!ledger.cancelled.contains(id))
     }
 
     @Test("Socket URLs upgrade HTTPS and preserve only the account query")
@@ -163,6 +179,62 @@ struct BrowserBridgeTests {
         let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         #expect(object["runId"] as? String == "RUN-EXAMPLE")
         #expect(object["commandId"] as? String == commandID.uuidString)
+    }
+
+    @Test("Nested command protocol versions are rejected even when the envelope is current")
+    func staleNestedCommandProtocol() throws {
+        let message = Data(
+            #"""
+            {"protocolVersion":2,"type":"command","command":{"protocolVersion":1,"id":"11111111-1111-1111-1111-111111111111","runID":"RUN-EXAMPLE","operationId":"operation-example","deadline":"2027-01-15T00:00:00Z","operation":{"type":"scroll","pageCount":1}}}
+            """#.utf8)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder.browserBridge.decode(BrowserBridgeServerMessage.self, from: message)
+        }
+    }
+
+    @Test("A run completion persists its acknowledgement and only creates one notification edge")
+    func runCompletionReplayLifecycle() {
+        let completion = BrowserBridgeRunCompletion(
+            runID: "RUN-EXAMPLE", imported: 1, updated: 2, skipped: 3, findingCount: 4)
+        var ledger = BrowserBridgeReplayLedger()
+
+        let firstRecord = ledger.recordRunCompletion(completion)
+        let replayRecord = ledger.recordRunCompletion(completion)
+        #expect(firstRecord)
+        #expect(!replayRecord)
+        #expect(ledger.runCompletionsForAcknowledgement == [completion])
+    }
+
+    @Test("Result keeps the server's operationID spelling while commands use operationId")
+    func operationIdentifiersMatchTheBridgeContract() throws {
+        let command = BrowserBridgeCommand(
+            id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!, runID: "RUN-EXAMPLE",
+            operationID: "operation-example", deadline: .distantFuture, operation: .scroll(pageCount: 1))
+        let commandData = try JSONEncoder.browserBridge.encode(command)
+        let commandObject = try #require(JSONSerialization.jsonObject(with: commandData) as? [String: Any])
+        #expect(commandObject["operationId"] as? String == "operation-example")
+
+        let result = BrowserBridgeCommandResult(
+            commandID: command.id, runID: command.runID, operationID: command.operationID,
+            completedAt: .now, outcome: .completed(capture: nil))
+        let resultData = try JSONEncoder.browserBridge.encode(result)
+        let resultObject = try #require(JSONSerialization.jsonObject(with: resultData) as? [String: Any])
+        #expect(resultObject["operationID"] as? String == "operation-example")
+    }
+
+    @Test("Run completion and authentication controls preserve their bounded payloads")
+    func controlMessagesRoundTrip() throws {
+        let completion = BrowserBridgeRunCompletion(
+            runID: "RUN-EXAMPLE", imported: 1, updated: 2, skipped: 3, findingCount: 4)
+        for message in [
+            BrowserBridgeServerMessage.raiseAuthWindow(runID: "RUN-EXAMPLE"),
+            BrowserBridgeServerMessage.runCompleted(completion),
+        ] {
+            let encoded = try JSONEncoder.browserBridge.encode(message)
+            #expect(
+                try JSONDecoder.browserBridge.decode(BrowserBridgeServerMessage.self, from: encoded)
+                    == message)
+        }
     }
 
     private static let operations: [BrowserBridgeOperation] = [

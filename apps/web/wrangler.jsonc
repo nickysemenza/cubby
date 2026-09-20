@@ -170,7 +170,11 @@
   "queues": {
     "producers": [
       { "binding": "BACKGROUND_QUEUE", "queue": "cubby-background" },
-      { "binding": "TELEMETRY_QUEUE", "queue": "cubby-telemetry" }
+      { "binding": "TELEMETRY_QUEUE", "queue": "cubby-telemetry" },
+      {
+        "binding": "PURCHASE_AGENT_QUEUE",
+        "queue": "cubby-purchase-agent"
+      }
     ],
     "consumers": [
       {

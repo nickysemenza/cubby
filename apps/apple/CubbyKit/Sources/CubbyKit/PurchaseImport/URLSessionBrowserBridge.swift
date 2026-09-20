@@ -51,11 +51,17 @@ public enum BrowserBridgeConnectionStatus: Equatable, Sendable {
 
 public actor URLSessionBrowserBridge {
     public typealias StatusObserver = @Sendable (BrowserBridgeConnectionStatus) -> Void
+    public typealias ResultObserver = @Sendable (BrowserBridgeCommandResult) -> Void
+    public typealias AuthWindowObserver = @Sendable (String) -> Void
+    public typealias RunCompletionObserver = @Sendable (BrowserBridgeRunCompletion) -> Void
 
     private let session: URLSession
     private let replayStore: any BrowserBridgeReplayStoring
     private let executor: any BrowserCommandExecuting
     private let statusObserver: StatusObserver?
+    private let resultObserver: ResultObserver?
+    private let authWindowObserver: AuthWindowObserver?
+    private let runCompletionObserver: RunCompletionObserver?
     private var configuration: BrowserBridgeConnectionConfiguration?
     private var socket: URLSessionWebSocketTask?
     private var connectionTask: Task<Void, Never>?
@@ -67,12 +73,18 @@ public actor URLSessionBrowserBridge {
         replayStore: any BrowserBridgeReplayStoring,
         executor: any BrowserCommandExecuting,
         session: URLSession = .cubbyShared,
-        statusObserver: StatusObserver? = nil
+        statusObserver: StatusObserver? = nil,
+        resultObserver: ResultObserver? = nil,
+        authWindowObserver: AuthWindowObserver? = nil,
+        runCompletionObserver: RunCompletionObserver? = nil
     ) {
         self.replayStore = replayStore
         self.executor = executor
         self.session = session
         self.statusObserver = statusObserver
+        self.resultObserver = resultObserver
+        self.authWindowObserver = authWindowObserver
+        self.runCompletionObserver = runCompletionObserver
     }
 
     deinit {
@@ -149,7 +161,8 @@ public actor URLSessionBrowserBridge {
         request.timeoutInterval = 30
         request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
         request.setValue(
-            "cubby-apple/\(BrowserBridgeProtocol.currentVersion)", forHTTPHeaderField: "User-Agent")
+            "cubby-apple/\(BrowserBridgeProtocol.currentProtocolVersion)",
+            forHTTPHeaderField: "User-Agent")
         let socket = session.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
@@ -159,6 +172,9 @@ public actor URLSessionBrowserBridge {
                 capabilities: configuration.capabilities),
             on: socket)
         for result in ledger.resultsForReplay { try await send(.result(result), on: socket) }
+        for completion in ledger.runCompletionsForAcknowledgement {
+            try await send(.runCompletedAcknowledged(runID: completion.runID), on: socket)
+        }
         publish(.connected)
 
         while !Task.isCancelled, self.socket === socket {
@@ -181,13 +197,31 @@ public actor URLSessionBrowserBridge {
         switch message {
         case .command(let command):
             if let result = ledger.replayResult(for: command.id) {
+                guard result.protocolVersion == command.protocolVersion,
+                    result.runID == command.runID, result.operationID == command.operationID
+                else {
+                    // A command identifier may never be rebound to another run or operation. Do
+                    // not replay a cached result into that mismatched server state.
+                    ledger.discardReplayResult(for: command.id)
+                    try await replayStore.save(ledger)
+                    let rejection = BrowserBridgeCommandResult(
+                        commandID: command.id, runID: command.runID, operationID: command.operationID,
+                        completedAt: .now,
+                        outcome: .failed(
+                            code: .invalidCommand,
+                            message: "The browser command identifier was rebound to different work.",
+                            retryable: false))
+                    try await finish(rejection)
+                    return
+                }
                 try await send(.result(result), on: socket)
                 return
             }
             guard commandTasks[command.id] == nil, !ledger.cancelled.contains(command.id) else { return }
             if command.deadline <= .now {
                 let result = BrowserBridgeCommandResult(
-                    commandID: command.id, runID: command.runID, completedAt: .now,
+                    commandID: command.id, runID: command.runID, operationID: command.operationID,
+                    completedAt: .now,
                     outcome: .failed(
                         code: .deadlineExceeded, message: "The browser command deadline elapsed.",
                         retryable: false))
@@ -199,7 +233,8 @@ public actor URLSessionBrowserBridge {
                 let outcome = await executor.execute(command)
                 guard !Task.isCancelled else { return }
                 let result = BrowserBridgeCommandResult(
-                    commandID: command.id, runID: command.runID, completedAt: .now, outcome: outcome)
+                    commandID: command.id, runID: command.runID, operationID: command.operationID,
+                    completedAt: .now, outcome: outcome)
                 await self.finishIgnoringSendFailure(result)
             }
             commandTasks[command.id] = task
@@ -213,6 +248,14 @@ public actor URLSessionBrowserBridge {
             try await replayStore.save(ledger)
         case .ping(let timestamp):
             try await send(.pong(timestamp: timestamp), on: socket)
+        case .raiseAuthWindow(let runID):
+            await executor.raiseAuthenticationWindow()
+            authWindowObserver?(runID)
+        case .runCompleted(let completion):
+            let isNew = ledger.recordRunCompletion(completion)
+            try await replayStore.save(ledger)
+            try await send(.runCompletedAcknowledged(runID: completion.runID), on: socket)
+            if isNew { runCompletionObserver?(completion) }
         }
     }
 
@@ -230,6 +273,7 @@ public actor URLSessionBrowserBridge {
         guard !ledger.cancelled.contains(result.commandID) else { return }
         ledger.record(result)
         try await replayStore.save(ledger)
+        resultObserver?(result)
         guard let socket else { return }
         try await send(.result(result), on: socket)
     }

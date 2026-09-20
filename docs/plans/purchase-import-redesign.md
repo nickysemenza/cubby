@@ -1,11 +1,9 @@
 # Purchase import redesign
 
-Status: implemented on `codex/purchase-import-redesign` (2026-09-19), after
-adversarial Fable and Astra reviews against the checkout. The production
-database cutover was applied and verified on 2026-09-19; local deployment and
-operator validation remain the merge gate. Every decision was put to the
-operator and confirmed unless marked **assumption**. Review findings that
-changed the design are noted inline as *(review)*.
+Status: shipped architecture, updated by the Flue follow-up on 2026-09-19.
+The original database cutover was applied and verified; the additive Flue
+cutover is operator-applied from the follow-up branch before merge. Every
+decision was put to the operator and confirmed unless marked **assumption**.
 
 ## 1. Summary
 
@@ -22,7 +20,7 @@ assembled result, and reaches a human only for corrections.
 Gmail (per member, hourly cron) ─discovers order ids──────────┐
 Mac app (drives the member's own Chrome/Safari) ─fetches──────┤
                                                               ▼
-   Flue agent, one per VendorAccount (SQLite Durable Object)
+   Flue agent, one per ImportRun (private Worker, SQLite Durable Object)
      └─ tool: cubby.import_order_page
           capture → fast-tier extract (+ sum-check as validate) →
           PDF attach → import_vendor_orders (writer) → Jev identity
@@ -74,12 +72,12 @@ store.
 | 25 | Delivered signal | Read from the order page; `arrived` finding only when all shipments show delivered. |
 | 26 | Agentic loop | Yes: a Flue agent per VendorAccount with coarse tools. |
 | 27 | Browser | The member's real Chrome (default) or Safari via Apple Events, tabs in a dedicated background window. |
-| 28 | Agent granularity | Long-lived agent per VendorAccount, one run at a time; in-flight state in the DO, durable state in Postgres. |
+| 28 | Agent granularity | One durable Flue agent per `ImportRun`, named `import-run:<id>`; transcript/recovery state is in its SQLite DO and authoritative business/audit state remains in Postgres. |
 | 29 | Model tiers | Fast tier drives and extracts; Jev decides; reasoning tier at high effort audits and repairs. |
 | 30 | Browser offline | Pause instantly on socket drop, auto-resume on reconnect, nag after 24 h. |
 | 31 | Run triggers | Browser runs: Mac app foreground with a browser available, a non-empty worklist (hunts from charges or Gmail), manual "Sync now". Gmail polling and charge matching run on an hourly cron *(review: Workflows do not self-schedule)*. |
 | 32 | Prompts | In-repo under `apps/web/src/server/agents/purchase-import/`, versioned like features, with an offline eval. |
-| 33 | Loop implementation | Flue, gated on a spike with the definition of done in §8.1. Fallback: Agents SDK primitives. |
+| 33 | Loop implementation | Flue in a private `purchase-agent` Worker. Its generated entry/Vite configuration is isolated from the existing TanStack/Vite web Worker; there is no fallback runtime. |
 | 34 | Browser bridge tools | Read-only by construction: `navigate` (allow-listed to the VendorAccount's domains), `capture`, `click(selector)`, `paginate`, `screenshot`, `pdf`, `tabs`. No free-form `evaluate`, no tool that submits a form — page text reaches the agent as data, so a page must never be able to turn into an action in a signed-in session. |
 | 35 | Auditor batching | Per run; per ≤25 orders during backfill; input is the rendered import only. |
 | 36 | `ImportRun` | A plain table (not an entity): one row per run, `Purchase.importRunId`; cost is `SUM(AiUsage)` by job id, never stored. |
@@ -228,7 +226,39 @@ duplicate; the screenshot attaches as `other`.
 - Shared code in `CubbyKit` (`BrowserBridge` protocol; Apple Events executor
   on macOS, `WKWebView` executor stub for iOS later).
 
-### 4.2 Server: VendorAccount agent (Flue)
+### 4.2 Server: per-run agent and account browser broker (Flue)
+
+The shipped topology avoids a circular binding. The web Worker transactionally
+admits every trigger through `startOrResume`, then publishes a typed event to
+`cubby-purchase-agent`. The private agent Worker consumes it and calls the web
+Worker's named `PurchaseImportService` entrypoint through a service binding.
+Only the web Worker holds Postgres, document, authentication, and browser
+authority.
+
+Flue owns one SQLite Durable Object conversation per `ImportRun`. Its tools are
+bounded run-scoped RPCs; each durable step also carries a stable operation id
+through `ImportRunOperation`, so queue redelivery, Flue replay, and a crash
+around an external effect converge on the original typed result. The agent has
+no SQL, shell, arbitrary browser evaluation, generic mutation, or unrestricted
+finding-resolution tool.
+
+`PurchaseImportDurableObject` remains bound by VendorAccount solely as the thin
+Mac/browser broker. It serializes one command stream, persists results before
+acknowledgement, fences stale protocol generations, and emits continuation
+events. A submission settles while a browser result is pending; reconnect or a
+result resumes the same conversation without waiting against Flue's deadline.
+
+Authentication and offline conditions pause the run. Ambiguous evidence
+atomically creates an `import_run` finding and terminalizes the run as
+`needs_review`; retrying is an explicit new run. Orchestration uses the existing
+fast model through AI Gateway `cubby`, and aggregate Flue usage—including
+retries and compaction—is recorded under `jobKind=purchase_import_run`.
+
+The previous custom loop and broker SQL orchestration were removed. Legacy
+SQLite tables are intentionally left untouched inside the retained namespace
+so rollback does not require a namespace migration.
+
+#### Historical design
 
 One SQLite-backed Durable Object per VendorAccount: `new_sqlite_classes` +
 `migrations` block in `wrangler.jsonc`, exported from `cf-server.ts`, Postgres
@@ -484,15 +514,20 @@ known outcomes for `product-line-identity`, 50 for `reversal-kind`, 50 for
 
 ## 8. Implementation sequence (historical)
 
-### 8.1 Flue spike — definition of done
+### 8.1 Flue decision and shipped boundary
 
-One day. Go/no-go for Flue vs Agents SDK primitives. Done means, in a branch:
-a SQLite DO class registered in `wrangler.jsonc` `migrations`, exported from
-`cf-server.ts`; a Flue agent in it with a custom tool that blocks on a
-WebSocket message from a stub client; Postgres reached via
-`withRequestDbClient(env.HYPERDRIVE.connectionString, …)`; the tool call
-survives a redeploy mid-wait and resumes when the stub reconnects; hibernation
-does not lose the attached identity.
+The executable spike selected Flue. The implementation is isolated in
+`apps/purchase-agent`; it does not replace or wrap the web Worker's Vite
+configuration. Browser waits are continuation events rather than blocked tool
+calls. Postgres effects stay behind the named web service and are replay-safe
+through `ImportRunOperation`; Flue SQLite stores only transcript and recovery
+state.
+
+The rollout order is schema plus the temporary checked-in cutover SQL, web
+Worker first, private agent Worker second, then the matching Apple build. The
+cutover terminalizes pre-Flue active runs with `runtime_replaced`, requeues
+unfinished browser hunts, and installs the one-active-run partial index. After
+the operator verifies Neon, the temporary SQL file is deleted before merge.
 
 ### 8.2 Order
 
@@ -555,7 +590,9 @@ build for the Mac app.
 
 - **Chrome Apple Events** toggle survives updates; Safari is the fallback and
   a Cubby extension the upgrade.
-- **Flue maturity:** 1.0 beta; the spike decides.
+- **Flue upgrades:** keep runtime, SDK, and Vite packages on one exact version;
+  validate generated Worker configuration and the two-Worker boundary before
+  accepting an upgrade.
 - **Gmail volume:** hourly polling across two mailboxes is far under quota;
   `users.watch` push is a later option.
 - **Foreign-currency orders** are rare enough that a finding plus a human

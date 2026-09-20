@@ -27,11 +27,9 @@ import {
 import {
   type ImportAuditOutput,
   type ImportExtractionOutcome,
-  type PurchaseImportNavigationDecision,
   type OrderMailClassification,
   importAuditOutput,
   importExtractionOutcome,
-  purchaseImportNavigationDecision,
   orderMailClassification,
 } from "@cubby/schemas/purchase-import";
 import {
@@ -190,7 +188,35 @@ export const FIELD_SUGGESTION_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
-  feature: "purchase-import-product-identity",
+  feature: "product-line-identity",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-09-19.1",
+}) satisfies AiDecisionFeature;
+
+export const PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE = defineFeature({
+  feature: "expense-line-role",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-09-19.1",
+}) satisfies AiDecisionFeature;
+
+export const PURCHASE_IMPORT_KIT_DETECTION_FEATURE = defineFeature({
+  feature: "kit-detection",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-09-19.1",
+}) satisfies AiDecisionFeature;
+
+export const PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE = defineFeature({
+  feature: "product-promotion",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-09-19.1",
+}) satisfies AiDecisionFeature;
+
+export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
+  feature: "reversal-kind",
   tier: "decision",
   cache: true,
   promptVersion: "2026-09-19.1",
@@ -248,16 +274,6 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   promptVersion: "2026-09-19.1",
   schema: importExtractionOutcome,
 }) satisfies AiStructuredFeature<ImportExtractionOutcome>;
-
-export const PURCHASE_IMPORT_NAVIGATION_FEATURE = defineFeature({
-  feature: "purchase-import-navigation",
-  tier: "fast",
-  maxTokens: 1_000,
-  effort: "low",
-  cache: false,
-  promptVersion: "2026-09-19.1",
-  schema: purchaseImportNavigationDecision,
-}) satisfies AiStructuredFeature<PurchaseImportNavigationDecision>;
 
 export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   feature: "purchase-import-receipt-extraction",
@@ -356,7 +372,6 @@ export const AI_FEATURES = [
   PRODUCT_IDENTIFICATION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
-  PURCHASE_IMPORT_NAVIGATION_FEATURE,
   PURCHASE_IMPORT_RECEIPT_FEATURE,
   PURCHASE_IMPORT_MAIL_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
