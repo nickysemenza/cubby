@@ -5,67 +5,13 @@ many-to-many `GardenEntryPlanting` table. It is a coordinated maintenance
 operation: old and new Garden Entry writers are intentionally not compatible,
 and `main` automatically deploys the web Worker after merge.
 
-Keep one operator responsible for the database and deployment. Do not run
-`db:push` for this cutover: it can combine the intended changes with unrelated
-production drift and cannot safely order the expansion and cleanup.
+The additive table and legacy association backfill have been applied and
+verified in production. The one-shot backfill SQL and its script-specific test
+were removed after use. Keep one operator responsible for the remaining
+deployment and cleanup, and do not run `db:push` until the legacy column has
+been removed: it cannot safely order the remaining deploy-before-drop boundary.
 
-## 1. Prepare and expand
-
-1. Finish local validation and require GitHub Actions to pass on the exact PR
-   head. Prepare the matching Apple build, but do not merge yet.
-2. Confirm the target database and take a restorable database backup.
-3. Inspect the current columns, constraints, indexes, and legacy-row count.
-4. Apply only this additive schema while the old Worker is still deployed:
-
-```sql
-CREATE TABLE "GardenEntryPlanting" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "gardenEntryId" uuid NOT NULL
-    REFERENCES "GardenEntry" ("id"),
-  "plantingId" uuid NOT NULL
-    REFERENCES "Planting" ("id"),
-  "createdAt" timestamp NOT NULL DEFAULT now(),
-  "updatedAt" timestamp NOT NULL DEFAULT now(),
-  "deletedAt" timestamp
-);
-
-CREATE UNIQUE INDEX "GardenEntryPlanting_gardenEntryId_plantingId_key"
-  ON "GardenEntryPlanting" ("gardenEntryId", "plantingId")
-  WHERE "deletedAt" IS NULL;
-
-CREATE INDEX "GardenEntryPlanting_gardenEntryId_idx"
-  ON "GardenEntryPlanting" ("gardenEntryId");
-
-CREATE INDEX "GardenEntryPlanting_plantingId_idx"
-  ON "GardenEntryPlanting" ("plantingId");
-```
-
-Read the table and index definitions back from PostgreSQL before proceeding.
-The old Worker ignores this additive table.
-
-## 2. Freeze and backfill
-
-1. Hold household browser, HTTP API, MCP, and native traffic. Pause delivery
-   on `cubby-background` and any scheduled or maintenance producer that can
-   write application data.
-2. Allow in-flight requests and jobs to finish. Keep the hold active until the
-   new Worker and Apple client are verified.
-3. Run the checked-in backfill with a SQL client configured to stop on error:
-
-```sh
-psql "$DATABASE_URL" --set ON_ERROR_STOP=1 \
-  --file scripts/cutovers/garden-entry-plantings.sql
-```
-
-The script locks the source and destination tables, inserts only missing
-legacy pairs, and aborts on missing pairs, duplicate pairs, deletion-state
-drift, or orphaned foreign keys. Its final notice must report zero for every
-problem count and equal `legacy` and `covered` counts.
-
-Run the same command a second time. It must report
-`inserted_associations = 0` with the same clean verification totals.
-
-## 3. Deploy and verify
+## 1. Deploy and verify
 
 1. Merge the exact verified PR head. Do not release the traffic hold.
 2. Wait for the normal `main` deployment and confirm that the production web
@@ -82,7 +28,7 @@ If verification fails before cleanup, redeploy the previous Worker. The
 legacy column remains unchanged and authoritative; the additive association
 table can remain in place while the failure is investigated.
 
-## 4. Remove the legacy column
+## 2. Remove the legacy column
 
 After the new Worker and Apple clients pass verification, run this separately
 while the traffic hold remains active:
@@ -125,7 +71,9 @@ COMMIT;
 Read back the final Garden Entry and association table columns, constraints,
 and indexes. Rerun the application integrity detector and the representative
 Garden Entry/Planting flows, then resume background delivery and household
-traffic.
+traffic. Production then matches the checked-in schema, so later `db:push`
+runs can use the normal inspected, non-`--force` workflow without needing
+special handling for this cutover.
 
 After the column is removed and real many-to-many writes begin, an old Worker
 cannot represent the data. Recovery from that point means re-entering the
