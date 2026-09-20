@@ -430,10 +430,12 @@ history is the archive. Permanent product constraints live in the
   Show an actionable reconnect path, preserve the resumable Problem, and avoid
   silently treating authorization failure as an empty mailbox.
 
-- **Drain queued browser work after terminal runs.** Promote when production
-  logs show browser commands surviving a completed, failed, or needs-review run.
-  Terminalize or reject queued commands by run generation and surface the
-  discarded work in the run log without touching a successor run.
+- **Finish terminal browser cleanup.** Promote when production logs show
+  browser commands surviving a completed, failed, or needs-review run, or an
+  owned browser window remaining visible after failure/review. Terminalize or
+  reject queued commands by run generation, send one terminal client signal,
+  minimize only Cubby's window, and surface discarded work in the run log
+  without touching a successor run.
 
 - **Typed pagination and final grocery evidence.** Promote when a real vendor
   exposes pagination or grocery pages whose last page is not represented by
