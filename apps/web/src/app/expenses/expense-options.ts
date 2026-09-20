@@ -38,7 +38,7 @@ export const costTypeBadgeVariant = {
 /**
  * `{value,label,color}` options for the cost-type filter/inline-edit select.
  * Not `buildSelectOptions` — that helper carries no color, and the colour is
- * what the table cell renders as its dot (see `renderOptionCell`), so the
+ * what tints the table cell pill (see `renderOptionCell`), so the
  * picklist and the cell cannot drift apart.
  */
 export const costTypeOptions: FilterableComboboxItem[] = costTypeValues.map(

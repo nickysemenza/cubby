@@ -1,7 +1,5 @@
 import type { MealFilters, MealOut } from "@cubby/schemas/meal";
 import {
-  MEAL_KIND_LABELS,
-  MEAL_TYPE_LABELS,
   mealKindSchema,
   mealTypeSchema,
 } from "@cubby/schemas/meal-classification";
@@ -22,12 +20,7 @@ import { EntityInlineLinkList } from "~/app/_components/EntityInlineLinkList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { formatMealCost, mealDateLabel } from "~/app/meals/meal-format";
-import {
-  mealKindBadgeVariant,
-  mealKindOptions,
-  mealTypeOptions,
-} from "~/app/meals/meal-options";
-import { Badge } from "~/components/ui/badge";
+import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
@@ -108,12 +101,6 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
               className: "w-28",
               mobile: { slot: "meta", priority: 30 },
               filterConfig: manifestFilterConfig("meal", "mealType"),
-              renderCell: (value) => {
-                const mealType = mealTypeSchema.nullable().parse(value);
-                return mealType ? (
-                  <Badge variant="outline">{MEAL_TYPE_LABELS[mealType]}</Badge>
-                ) : null;
-              },
               editable: {
                 parseValue: (value) => mealTypeSchema.nullable().parse(value),
                 onSave: async (newValue, meal) => {
@@ -133,14 +120,6 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
               className: "w-28",
               mobile: { slot: "meta", priority: 40 },
               filterConfig: manifestFilterConfig("meal", "mealKind"),
-              renderCell: (value) => {
-                const mealKind = mealKindSchema.parse(value);
-                return (
-                  <Badge variant={mealKindBadgeVariant[mealKind]}>
-                    {MEAL_KIND_LABELS[mealKind]}
-                  </Badge>
-                );
-              },
               editable: {
                 parseValue: (value) => mealKindSchema.parse(value),
                 onSave: async (newValue, meal) => {

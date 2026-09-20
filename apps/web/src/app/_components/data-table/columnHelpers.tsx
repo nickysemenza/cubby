@@ -38,13 +38,13 @@ import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { renderScalarValue } from "~/components/common/scalar-value";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { DotLabel } from "~/components/ui/dot-label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { EnumPill } from "~/components/ui/enum-pill";
 import { NoneValue } from "~/components/ui/none-value";
 import {
   Tooltip,
@@ -1633,14 +1633,14 @@ export function createSingleEntityInlineLinkColumn<
 
 /**
  * The one way a small-enum / boolean value renders in a table cell: a quiet
- * colour dot plus the option's own label.
+ * tinted pill carrying the option's own label.
  *
  * Derived from the column's `selectOptions` roster, which already carries
  * `{ value, label, color }` for the filter control and the inline editor — so
  * the roster is the single source of both the wording and the tone, and a cell
  * cannot disagree with the dropdown that edits it. Before this, the same class
  * of value rendered five different ways across 35 columns (bare string, Badge
- * with a tone map, Badge with an inline ternary, DotLabel, icon + text), and
+ * with a tone map, Badge with an inline ternary, dot + text, icon + text), and
  * several columns printed the raw enum (`needs_data`, `UPLOADED`) because their
  * label lived only in the filter roster the cell never consulted.
  *
@@ -1655,9 +1655,9 @@ export function renderOptionCell(
   if (value == null || value === "") return <NoneValue />;
   const option = colorizeSelectOptions(options).find((o) => o.value === value);
   return (
-    <DotLabel icon={option?.icon} color={option?.color ?? "var(--slate)"}>
+    <EnumPill icon={option?.icon} color={option?.color ?? "var(--slate)"}>
       {option?.label ?? value}
-    </DotLabel>
+    </EnumPill>
   );
 }
 
@@ -1863,7 +1863,7 @@ export function createFilterableSelectColumn<
     placeholder: string;
     selectOptions: FilterableComboboxItem[];
     /**
-     * Override the default dot + label render. Omit it — the default reads the
+     * Override the default tinted-pill render. Omit it — the default reads the
      * label and tone straight off `selectOptions`, which is what keeps a cell
      * and its editor in agreement.
      */

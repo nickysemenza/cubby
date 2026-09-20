@@ -1,6 +1,6 @@
 import type { ProductCategory } from "@cubby/schemas/product";
 
-import { DotLabel } from "~/components/ui/dot-label";
+import { EnumPill } from "~/components/ui/enum-pill";
 import { NoneValue } from "~/components/ui/none-value";
 
 import { getCategoryColor } from "./category-theme";
@@ -13,8 +13,8 @@ export function CategoryLabel({ category }: CategoryLabelProps) {
   if (!category) return <NoneValue />;
 
   return (
-    <DotLabel color={getCategoryColor(category)}>
+    <EnumPill color={getCategoryColor(category)}>
       {category.replace("-", " ")}
-    </DotLabel>
+    </EnumPill>
   );
 }

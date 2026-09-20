@@ -22,7 +22,7 @@ import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import { DotLabel } from "~/components/ui/dot-label";
+import { EnumPill } from "~/components/ui/enum-pill";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import {
@@ -251,9 +251,9 @@ function EventLine({ event }: { event: EntityTimelineEvent }) {
       <TimelineLink link={event.link} className="min-w-0 truncate text-sm">
         {event.label}
       </TimelineLink>
-      <DotLabel color={kindColor(event.kind)} className="text-xs">
+      <EnumPill color={kindColor(event.kind)} className="text-xs">
         {kindLabel(event.kind)}
-      </DotLabel>
+      </EnumPill>
       {event.detail ? (
         <Description size="xs" className="min-w-0 truncate">
           {event.detail}
@@ -424,9 +424,9 @@ function LifecyclesView({
       </div>
       <Row wrap gap="md" className="text-xs">
         {kinds.map((kind) => (
-          <DotLabel key={kind} color={kindColor(kind)}>
+          <EnumPill key={kind} color={kindColor(kind)}>
             {kindLabel(kind)}
-          </DotLabel>
+          </EnumPill>
         ))}
         <span className="inline-flex items-center gap-2">
           <span aria-hidden className="h-2 w-6 rounded-full bg-positive/30" />

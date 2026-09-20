@@ -5,9 +5,11 @@ import type {
 import { reconcilePurchase } from "@cubby/schemas/purchase";
 import type { FC } from "react";
 
-import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Description } from "~/components/ui/description";
+import { EnumPill } from "~/components/ui/enum-pill";
 import { formatCurrency } from "~/lib/utils";
+
+import { purchaseReconciliationOptions } from "./purchase-options";
 
 /**
  * `statedTotal` vs `SUM(expense.cost)`, as a **soft** cue.
@@ -24,14 +26,11 @@ import { formatCurrency } from "~/lib/utils";
 const STATUS_PRESENTATION = {
   // Covers both reconcilePurchase "unknown" cases: no stated total to compare
   // against, and no Expense lines to compare with.
-  unknown: { label: "Nothing to reconcile", variant: "slate" },
-  match: { label: "Reconciles", variant: "positive" },
-  refund_adjusted: { label: "Refund-adjusted", variant: "slate" },
-  mismatch: { label: "Needs review", variant: "warning" },
-} satisfies Record<
-  PurchaseReconciliation,
-  { label: string; variant: BadgeVariant }
->;
+  unknown: { label: "Nothing to reconcile" },
+  match: { label: "Reconciles" },
+  refund_adjusted: { label: "Refund-adjusted" },
+  mismatch: { label: "Needs review" },
+} satisfies Record<PurchaseReconciliation, { label: string }>;
 
 type ReconciliationPurchase = {
   statedTotal: number | null;
@@ -67,19 +66,22 @@ export const reconciliationDelta = (purchase: {
     ? null
     : purchase.expenseTotal - purchase.statedTotal;
 
-export const ReconciliationBadge: FC<{
+export const ReconciliationStatus: FC<{
   purchase: ReconciliationPurchase;
 }> = ({ purchase }) => {
   const status = purchaseReconciliationStatus(purchase);
   const delta = reconciliationDelta(purchase);
 
   const presentation = STATUS_PRESENTATION[status];
+  const option = purchaseReconciliationOptions.find(
+    (candidate) => candidate.value === status,
+  );
   return (
-    <Badge variant={presentation.variant}>
+    <EnumPill color={option?.color ?? "var(--slate)"}>
       {(status === "mismatch" || status === "refund_adjusted") && delta !== null
         ? `${presentation.label} ${formatCurrency(delta)}`
         : presentation.label}
-    </Badge>
+    </EnumPill>
   );
 };
 

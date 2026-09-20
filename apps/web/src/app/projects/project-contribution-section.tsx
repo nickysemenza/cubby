@@ -4,13 +4,14 @@ import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, UsersRound, WalletCards } from "lucide-react";
 import { useId } from "react";
 
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import {
   ContributionGapTargets,
   contributionGapLabels,
-  ledgerPartyLabel,
   MoneyCell,
 } from "~/app/_components/household-contribution-format";
 import { householdContribution } from "~/app/finance/household-contribution.functions";
+import { ledgerPartyKindOptions } from "~/app/finance/ledger-party-columns";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -98,13 +99,7 @@ export function ProjectContributionReport({
                     <TableCell>
                       <Row align="center" gap="xs">
                         <span>{party.name}</span>
-                        <Badge
-                          variant={
-                            party.kind === "household" ? "slate" : "outline"
-                          }
-                        >
-                          {ledgerPartyLabel(party.kind)}
-                        </Badge>
+                        {renderOptionCell(party.kind, ledgerPartyKindOptions)}
                       </Row>
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
@@ -146,15 +141,10 @@ export function ProjectContributionReport({
                     <TableCell>
                       <Row align="center" gap="xs">
                         <span>{funder.party.name}</span>
-                        <Badge
-                          variant={
-                            funder.party.kind === "household"
-                              ? "slate"
-                              : "outline"
-                          }
-                        >
-                          {ledgerPartyLabel(funder.party.kind)}
-                        </Badge>
+                        {renderOptionCell(
+                          funder.party.kind,
+                          ledgerPartyKindOptions,
+                        )}
                       </Row>
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">

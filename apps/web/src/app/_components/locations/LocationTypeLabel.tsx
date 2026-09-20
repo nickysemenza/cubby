@@ -1,6 +1,6 @@
 import type { LocationType } from "@cubby/schemas/location";
 
-import { DotLabel } from "~/components/ui/dot-label";
+import { EnumPill } from "~/components/ui/enum-pill";
 
 import { getLocationTypeColor } from "./location-type-theme";
 
@@ -22,5 +22,5 @@ interface LocationTypeLabelProps {
 export function LocationTypeLabel({ type, product }: LocationTypeLabelProps) {
   const text = type ?? product?.name;
   if (!text) return null;
-  return <DotLabel color={getLocationTypeColor(type)}>{text}</DotLabel>;
+  return <EnumPill color={getLocationTypeColor(type)}>{text}</EnumPill>;
 }
