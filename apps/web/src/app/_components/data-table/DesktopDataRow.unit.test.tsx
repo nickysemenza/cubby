@@ -1,3 +1,4 @@
+import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -10,6 +11,8 @@ import {
   materializeCubbyColumns,
   useCubbyTable,
 } from "./table-features";
+import type { CubbyColumnMeta } from "./table-meta";
+import TableHeaderLayout from "./TableHeaderLayout";
 
 interface TestRow {
   id: string;
@@ -17,13 +20,21 @@ interface TestRow {
 
 const columnHelper = createCubbyColumnHelper<TestRow>();
 
-function useTestTable(cell?: () => ReactNode) {
+function useTestTable(
+  cell?: () => ReactNode,
+  options: {
+    id?: string;
+    header?: string;
+    meta?: CubbyColumnMeta;
+  } = {},
+) {
   const columns = createCubbyColumnCollection<TestRow>((add) => {
     add(
       columnHelper.accessor("id", {
-        id: "related:product.vendors",
-        header: "Vendors",
+        id: options.id ?? "related:product.vendors",
+        header: options.header ?? "Vendors",
         cell,
+        meta: options.meta,
       }),
     );
   });
@@ -53,6 +64,91 @@ function desktopRowProps(row: Row<TestRow>, overrides: RowOverrides = {}) {
 }
 
 describe("DesktopDataRow", () => {
+  const inspectableProvenance = {
+    kind: "derived",
+    sources: [
+      {
+        entity: "financialTransaction",
+        label: null,
+        relation: "financial-transactions",
+      },
+    ],
+  } satisfies EntityFieldProvenance;
+
+  it("renders provenance-backed image previews directly while keeping header provenance", () => {
+    const { result } = renderHook(() =>
+      useTestTable(
+        () => (
+          <button type="button" aria-label="Preview image">
+            Thumbnail
+          </button>
+        ),
+        {
+          id: "image",
+          header: "Image",
+          meta: {
+            mobile: { slot: "image" },
+            provenance: inspectableProvenance,
+          },
+        },
+      ),
+    );
+    const row = result.current.getRow("PRD-TEST");
+
+    render(
+      <table>
+        <thead>
+          <TableHeaderLayout
+            table={result.current}
+            styles={{ header: "", sortIcon: "" }}
+            isDebugEnabled={false}
+          />
+        </thead>
+        <tbody>
+          <DesktopDataRow {...desktopRowProps(row)} />
+        </tbody>
+      </table>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Preview image" }),
+    ).toHaveTextContent("Thumbnail");
+    expect(
+      screen.queryByRole("button", { name: "Inspect related records" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("note", { name: "From Transactions" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Sort by Image" }),
+    ).toHaveTextContent("Image");
+  });
+
+  it("keeps provenance-backed non-image cells in the relation workbench", () => {
+    const { result } = renderHook(() =>
+      useTestTable(() => <span>Vendor count</span>, {
+        meta: {
+          mobile: { slot: "meta" },
+          provenance: inspectableProvenance,
+        },
+      }),
+    );
+    const row = result.current.getRow("PRD-TEST");
+
+    render(
+      <table>
+        <tbody>
+          <DesktopDataRow {...desktopRowProps(row)} />
+        </tbody>
+      </table>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Inspect related records" }),
+    ).toBeVisible();
+    expect(screen.getByText("Vendor count")).toBeVisible();
+  });
+
   it("re-renders memoized cells when external row content changes", () => {
     let preview = "…";
     const { result } = renderHook(() => useTestTable(() => preview));
