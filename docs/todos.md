@@ -414,29 +414,28 @@ history is the archive. Permanent product constraints live in the
 
 ### Needs a decision or investigation
 
-- **`Entity` supertable for polymorphic references.** Three patterns
+- **Durable Entity identity and shared files.** Three patterns
   coexist for a row that points at any of several entity types: untyped
   `entityType + entityId` with no FK (search index, embeddings, AI analysis,
   `AiUsage`, audit log); `Image.targetType/targetId` plus eight per-entity
   join tables; and an exclusive-arc CHECK (`LedgerSourceClaim_owner_check`).
-  Current rule in `docs/agents/domain-rules.md#data-layers-and-deletion`:
-  untyped pairs with a
-  kind CHECK for rows that describe an entity and may outlive it or be
-  rebuilt, plain FKs for one type, arcs only where they exist. An `Entity`
-  supertable was designed, adversarially reviewed, and tabled on 2026-09-19
-  (entities are hard-deleted on two paths; 623 cross-kind body collisions;
-  the edge registry cannot express per-kind generated edges) — read
-  [plans/entity-supertable.md](plans/entity-supertable.md) before reopening.
+  The proposed end state gives every local shortcode-bearing entity a durable
+  identity, consolidates direct files in `EntityAttachment`, and deliberately
+  preserves typed domain FKs and joins. It includes merge redirects, tombstones,
+  payload-retention policy, workflow file liveness, migration gates, and the
+  constraints from the tabled 2026-09-19 review. It is planned but not
+  implemented; see
+  [the detailed plan](plans/entity-identity-and-files.md).
 
 - **Merge redirects.** A merged-away shortcode in a URL, note, or MCP
   client resolves to nothing today; `finalizeMerge` records no forward.
-  Add `mergedIntoId` on the mergeable tables (path-compressed at merge
-  time), consult it on resolver miss for reads with a `redirectedFrom`
-  marker, and keep mutations on a non-redirecting resolver that refuses a
-  redirected code — otherwise merging `keep=A, loser=B` where B was earlier
-  absorbed into A resolves to a self-merge. Two tests assert the current
-  404 (`purchase.integration.test.ts`, `vendor.integration.test.ts`) and
-  become named regressions.
+  This is now part of the durable identity plan above: `Entity.mergedIntoId`
+  is path-compressed at merge time, read resolution returns
+  `redirectedFrom`, and mutation resolution refuses redirected codes.
+  Otherwise merging `keep=A, loser=B` where B was earlier absorbed into A
+  resolves to a self-merge. Two tests assert the current 404
+  (`purchase.integration.test.ts`, `vendor.integration.test.ts`) and become
+  named regressions.
 
 - **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
   Vectorize's per-vector cost is model-agnostic, so a cheaper/faster
