@@ -47,8 +47,8 @@
     },
     // Applies to every package.json-inferred `test` target (the aux packages
     // under apps/* and packages/*); `{projectRoot}` resolves per-project.
-    // apps/web/project.json overrides this back to `cache: false` — its own
-    // "test" spans multiple Vitest projects and isn't scoped this narrowly.
+    // apps/web/project.json replaces these narrow inputs with its complete
+    // cross-workspace/runtime contract while retaining target-level caching.
     "test": {
       "cache": true,
       "inputs": ["{projectRoot}/**/*"]

@@ -93,7 +93,7 @@ if (!Number.isSafeInteger(sharedIsolationSeed)) {
   throw new Error("CUBBY_TEST_SHUFFLE_SEED must be an integer");
 }
 const groupZeroMaxWorkers = Number.parseInt(
-  process.env.VITEST_MAX_WORKERS ?? "5",
+  process.env.VITEST_MAX_WORKERS ?? "4",
   10,
 );
 if (!Number.isSafeInteger(groupZeroMaxWorkers) || groupZeroMaxWorkers < 1) {
@@ -158,9 +158,10 @@ export default defineConfig({
             // Sharing the module graph removes the dominant per-file startup cost.
             pool: "threads",
             isolate: false,
-            // Keep the cap aligned across group 0 so one project cannot starve
-            // the others. The environment override supports uncached tuning
-            // measurements and participates in the Nx test cache key.
+            // Four workers reduced the paired-run maximum without slowing the
+            // solo median. Keep the cap aligned across group 0 so one project
+            // cannot starve the others. The environment override supports
+            // uncached tuning measurements and participates in the Nx cache key.
             maxWorkers: groupZeroMaxWorkers,
             sequence: {
               groupOrder: 0,
