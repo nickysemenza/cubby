@@ -80,6 +80,32 @@ describe("matchesPickerItem", () => {
 });
 
 describe("EntityPicker", () => {
+  it("keeps entity-search rows' existing icon and swatch marks", () => {
+    render(
+      <EntityPicker
+        entity="product"
+        label="product"
+        items={[
+          {
+            id: "icon-product",
+            name: "Icon Product",
+            color: "rgb(1, 2, 3)",
+            icon: <span data-testid="entity-icon">entity glyph</span>,
+          },
+        ]}
+        value={null}
+        setValue={vi.fn()}
+      />,
+    );
+
+    openPicker(screen.getByRole("combobox", { name: "product" }));
+    const option = screen.getByRole("option", { name: "Icon Product" });
+    expect(within(option).getAllByTestId("entity-icon")).toHaveLength(1);
+    expect(option.querySelectorAll('[style*="background-color"]')).toHaveLength(
+      1,
+    );
+  });
+
   it("sizes an intrinsic picker to its options while retaining the trigger minimum", () => {
     render(
       <EntityPicker

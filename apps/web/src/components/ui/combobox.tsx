@@ -278,16 +278,23 @@ function ComboboxPopup({
                     <ComboboxPrimitive.ItemIndicator className="shrink-0">
                       <CheckIcon className="size-3.5" />
                     </ComboboxPrimitive.ItemIndicator>
-                    {item.color && (
+                    {item.icon ? (
                       <span
                         aria-hidden
+                        data-enum-option-icon=""
+                        className="flex shrink-0 items-center [&>svg]:size-3.5!"
+                        style={{ color: item.color }}
+                      >
+                        {item.icon}
+                      </span>
+                    ) : item.color ? (
+                      <span
+                        aria-hidden
+                        data-enum-option-swatch=""
                         className="inline-block size-2 shrink-0 rounded-sm"
                         style={{ backgroundColor: item.color }}
                       />
-                    )}
-                    {item.icon && (
-                      <span className="shrink-0">{item.icon}</span>
-                    )}
+                    ) : null}
                     {item.detail ? (
                       // Second line, not a trailing column: the label is what
                       // the user is picking, and sharing the row with a
@@ -321,4 +328,3 @@ function ComboboxPopup({
     </>
   );
 }
-
