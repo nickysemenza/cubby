@@ -30,6 +30,8 @@ interface ChatAiModelConfig {
   /** The id the provider itself wants; `compat` prefixes the gateway vendor. */
   wireModel: string;
   vision: boolean;
+  /** Provider USD-per-million prompt-cache rates for normalized cache tokens. */
+  cachePricing?: { read: number; write: number };
   /**
    * Anthropic only: whether the model takes `thinking: {type: "adaptive"}` and
    * `output_config.effort`. Haiku 4.5 rejects both with a 400, so its options
@@ -62,6 +64,8 @@ type AiModelConfig =
 
 const supportedChatModel = z.enum([
   "gpt-5.6-luna",
+  "gpt-5.6-terra",
+  "gpt-5.6-sol",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "claude-sonnet-5",
@@ -105,7 +109,13 @@ export const DEFAULT_EMBEDDING_MODEL =
  * added here without a catalog entry fails loudly instead of silently
  * recording null-cost usage.
  */
-const UNCATALOGED_MODELS = [] as const satisfies readonly AiModel[];
+// Flue records the provider-reported total for its Terra/Sol turns. They are
+// intentionally usable through the shared Gateway registry even while the
+// cookbook catalog remains focused on extraction tiers.
+const UNCATALOGED_MODELS = [
+  "gpt-5.6-terra",
+  "gpt-5.6-sol",
+] as const satisfies readonly AiModel[];
 
 const AI_MODEL_REGISTRY = {
   "gpt-5.6-luna": {
@@ -114,6 +124,23 @@ const AI_MODEL_REGISTRY = {
     route: "openai-responses",
     wireModel: "gpt-5.6-luna",
     vision: true,
+    cachePricing: { read: 0.1, write: 1.25 },
+  },
+  "gpt-5.6-terra": {
+    role: "chat",
+    provider: "openai",
+    route: "openai-responses",
+    wireModel: "gpt-5.6-terra",
+    vision: true,
+    cachePricing: { read: 0.25, write: 3.125 },
+  },
+  "gpt-5.6-sol": {
+    role: "chat",
+    provider: "openai",
+    route: "openai-responses",
+    wireModel: "gpt-5.6-sol",
+    vision: true,
+    cachePricing: { read: 0.5, write: 6.25 },
   },
   "gemini-2.5-flash": {
     role: "chat",
@@ -121,6 +148,7 @@ const AI_MODEL_REGISTRY = {
     route: "compat",
     wireModel: "google-ai-studio/gemini-2.5-flash",
     vision: true,
+    cachePricing: { read: 0.03, write: 0 },
   },
   "gemini-2.5-flash-lite": {
     role: "chat",
@@ -128,6 +156,7 @@ const AI_MODEL_REGISTRY = {
     route: "compat",
     wireModel: "google-ai-studio/gemini-2.5-flash-lite",
     vision: true,
+    cachePricing: { read: 0.01, write: 0 },
   },
   "claude-sonnet-5": {
     role: "chat",
@@ -135,6 +164,7 @@ const AI_MODEL_REGISTRY = {
     route: "anthropic",
     wireModel: "claude-sonnet-5",
     vision: true,
+    cachePricing: { read: 0.2, write: 2.5 },
     adaptiveThinking: true,
   },
   "claude-haiku-4-5": {
@@ -143,6 +173,7 @@ const AI_MODEL_REGISTRY = {
     route: "anthropic",
     wireModel: "claude-haiku-4-5",
     vision: true,
+    cachePricing: { read: 0.1, write: 1.25 },
     adaptiveThinking: false,
   },
   "text-embedding-3-small": {
@@ -261,9 +292,10 @@ export function parseSupportedEmbeddingModel(
 /**
  * What one recorded call cost, or `null` when the model is unknown to the
  * registry, the recorded provider disagrees with it, no token counts were
- * reported, or the crate catalog carries no rates for the model. Chat and
- * decision prices come from the catalog (cache reads and writes included
- * when the adapter reports them); the embedding row is priced here.
+ * reported, or the catalog cannot price the exact token classes. Chat and
+ * decision base prices come from the catalog. Chat cache tokens use the
+ * provider-specific rates in the registry; an adapter-reported exact total
+ * still wins when the usage row is recorded. The embedding row is priced here.
  */
 export function estimateAiUsageCostUsd(
   provider: string,
@@ -286,15 +318,16 @@ export function estimateAiUsageCostUsd(
 
   const rates = getAiModelCatalog().get(model)?.rates;
   if (!rates) return null;
-  // The catalog carries no cache tiers, so cache reads and writes are priced
-  // as input; an Anthropic cache read really costs a tenth of that.
-  const allInput =
-    inputTokens +
-    finiteTokenCount(usage.cacheReadTokens) +
-    finiteTokenCount(usage.cacheWriteTokens);
+  const cacheReadTokens = finiteTokenCount(usage.cacheReadTokens);
+  const cacheWriteTokens = finiteTokenCount(usage.cacheWriteTokens);
+  const cachePricing = config.role === "chat" ? config.cachePricing : undefined;
+  if ((cacheReadTokens > 0 || cacheWriteTokens > 0) && !cachePricing)
+    return null;
   return (
-    (allInput / 1_000_000) * rates.input +
-    (outputTokens / 1_000_000) * rates.output
+    (inputTokens / 1_000_000) * rates.input +
+    (outputTokens / 1_000_000) * rates.output +
+    (cacheReadTokens / 1_000_000) * (cachePricing?.read ?? 0) +
+    (cacheWriteTokens / 1_000_000) * (cachePricing?.write ?? 0)
   );
 }
 

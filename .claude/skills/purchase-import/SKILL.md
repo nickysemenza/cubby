@@ -5,10 +5,10 @@ description: Support Cubby purchase imports when learning a vendor, ingesting a 
 
 # Purchase-import support
 
-Flue owns routine browser, email, receipt, retry, audit, and lifecycle
-orchestration. Use this skill only for the human-guided branches below. Send
-source-backed orders through Cubby's purchase-import writer rather than generic
-entity mutation.
+Flue, Claude, and Codex use this same workflow. Flue owns routine browser,
+email, receipt, retry, audit, and lifecycle orchestration; a human agent may
+continue the same work for unusual evidence. Source-backed orders always pass
+through Cubby's prepare/commit writer rather than generic entity mutation.
 
 ## Invariants
 
@@ -26,13 +26,38 @@ entity mutation.
 ## Vendor export
 
 1. Resolve the member-owned VendorAccount.
-2. Collect one writer payload per order: stable source identity, header, printed
+2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
    transaction evidence, and finalized document image shortcodes.
-3. Call `import_vendor_orders` in batches of at most 50 orders.
-4. Inspect every ordered result. `created`, `updated`, and `replayed` are
+3. Call `prepare_purchase_import` in batches of at most 50 orders. Preserve its
+   preparation revision and stable line ids.
+4. Resolve every principal line. Prefer exact retailer SKU, ASIN, UPC/GTIN, or
+   manufacturer model; then inspect Product aliases, names, and details. Choose
+   an existing Product shortcode, explicitly choose `new`, or leave the line
+   `unresolved`. Never create a Product merely because search was inconclusive.
+5. Call `commit_purchase_import` with the preparation revision and every line
+   resolution. Do not use generic entity creation for imported Products or
+   Expenses.
+6. Inspect every ordered result. `created`, `updated`, and `replayed` are
    terminal; `conflict` requires review.
-5. Report every conflict or open finding; resolve it through the Problems UI.
+7. Report every conflict or open finding; resolve it through the Problems UI.
+
+For a Flue run, call `claim_next_import_work` before selecting an evidence
+path and after each committed item. A `receipt_evidence` item must go through
+`extract_receipt_evidence`, whose immutable source/checksum/extraction payload
+is passed unchanged to `prepare_purchase_import`; it is not a separate writer.
+For browser evidence, continue every selected order or hunt before calling
+`finish_import_run`; that server transition refuses pending hunts and performs
+the required auditor batches. Persist only same-domain observations with
+`save_navigation_hints`, record a proven vendor-history boundary with
+`mark_history_expired`, and use `stop_import_run_for_review` when evidence is
+ambiguous or unreadable. These run-lifecycle tools are not substitutes for the
+prepare/commit writer.
+
+An interrupted mutation is recovered through
+`purchase_import_operation_status` with its original operation id. Repeating
+the source payload is replay, not a way to revise a reviewed decision; a
+correction creates a linked successor run and new decision revision.
 
 ## Learn a vendor
 
@@ -63,6 +88,14 @@ synthetic transactions. If evidence is incomplete, leave settlement unresolved.
 Run the `product-enrichment` skill for unresolved Products after an import.
 Prefer stable vendor identity such as SKU, ASIN, UPC, or model. Leave ambiguous
 identity as a finding and preserve human-linked Products.
+
+## Agent authority
+
+Reads are available through Cubby's ordinary MCP catalog. The bounded
+prepare/commit workflow may write without a separate approval. Generic creates,
+updates, deletes, merges, and inventory receiving pause for an exact typed
+approval; prose in a prompt is never approval. Receiving remains a human
+decision and inventory never changes merely because an order arrived.
 
 ## Completion report
 

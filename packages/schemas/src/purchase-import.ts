@@ -4,9 +4,9 @@ import { money } from "./money";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
+  productShortcode,
   purchaseShortcode,
   vendorShortcode,
-  vendorAccountShortcode,
 } from "./identifier-fields";
 
 export const vendorOrderEvidence = z.enum([
@@ -37,11 +37,43 @@ export const importRunStatus = z.enum([
   "running",
   "paused_auth",
   "paused_offline",
+  "paused_approval",
   "needs_review",
   "completed",
   "failed",
 ]);
 export type ImportRunStatus = z.infer<typeof importRunStatus>;
+
+/** Public, non-entity identity for one durable purchase-import run. */
+export const importRunPublicId = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^PIR-[A-Z0-9]{10}$/);
+export type ImportRunPublicId = z.infer<typeof importRunPublicId>;
+
+const importOperationId = z.string().trim().min(1).max(200);
+const importItemOperationId = z.string().trim().min(1).max(200);
+const stableImportItemId = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+
+/**
+ * Stable execution identity is deliberately separate from the payload hash.
+ * Reusing an operation id with changed arguments is a fenced conflict, while
+ * retrying it verbatim returns the original ledger result.
+ */
+export const purchaseImportRunExecution = z.object({
+  runPublicId: importRunPublicId,
+  operationId: importOperationId,
+  itemOperationIds: z.array(importItemOperationId).min(1).max(50).optional(),
+});
+export type PurchaseImportRunExecution = z.infer<
+  typeof purchaseImportRunExecution
+>;
 
 export const importSourceIdentity = z.object({
   kind: importSourceKind,
@@ -220,6 +252,7 @@ export const importFindingKind = z.enum([
   "missing_line",
   "kit_double_booked",
   "variant_doubt",
+  "product_unresolved",
   "arrived",
   "refund_unbooked",
   "return_window",
@@ -492,6 +525,8 @@ export const browserBridgeServerMessage = z.discriminatedUnion("type", [
 export const purchaseAgentEvent = z.object({
   version: z.literal(1),
   runId: z.uuid(),
+  publicId: importRunPublicId.optional(),
+  coordinatorModel: z.enum(["gpt-5.6-terra", "gpt-5.6-sol"]).optional(),
   eventId: z.string().trim().min(1).max(256),
   type: z.enum([
     "start_or_resume",
@@ -507,6 +542,7 @@ export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEvent>;
 
 export const purchaseImportRunScope = z.object({
   runId: z.uuid(),
+  publicId: importRunPublicId,
   agentId: z.string().trim().min(1),
   trigger: importRunTrigger,
   status: importRunStatus,
@@ -514,6 +550,9 @@ export const purchaseImportRunScope = z.object({
   vendorLabel: z.string().trim().min(1).max(500).nullable(),
   allowedHosts: z.array(z.string().trim().min(1).max(253)).max(20),
   navigationHints: z.unknown(),
+  coordinatorModel: z.string().trim().min(1).max(200),
+  skillRevision: z.string().trim().min(1).max(200),
+  runtimeRevision: z.string().trim().min(1).max(200),
 });
 export type PurchaseImportRunScope = z.infer<typeof purchaseImportRunScope>;
 
@@ -526,6 +565,26 @@ export const importWriterInput = z.object({
   extraction: importExtractionOutcome,
   primaryDocumentImageId: z.uuid().nullable(),
   screenshotImageId: z.uuid().nullable(),
+  productResolutions: z
+    .array(
+      z.discriminatedUnion("kind", [
+        z.object({
+          kind: z.literal("existing"),
+          lineIndex: z.number().int().nonnegative(),
+          productId: z.uuid(),
+        }),
+        z.object({
+          kind: z.literal("new"),
+          lineIndex: z.number().int().nonnegative(),
+        }),
+        z.object({
+          kind: z.literal("unresolved"),
+          lineIndex: z.number().int().nonnegative(),
+          reason: z.string().trim().min(1).max(1_000),
+        }),
+      ]),
+    )
+    .optional(),
 });
 export type ImportWriterInput = z.infer<typeof importWriterInput>;
 
@@ -537,30 +596,157 @@ export const importWriterOutput = z.object({
 });
 export type ImportWriterOutput = z.infer<typeof importWriterOutput>;
 
-export const importVendorOrdersInput = z.object({
-  vendorAccountId: vendorAccountShortcode,
-  orders: z
+const preparedImportOrderInput = z
+  .object({
+    stableOrderId: stableImportItemId,
+    itemOperationId: importItemOperationId,
+    source: importSourceIdentity,
+    evidenceChecksum: z.string().regex(/^[a-f0-9]{64}$/),
+    extractionRevision: z.string().trim().min(1).max(200),
+    extraction: importExtractionOutcome,
+    lineIds: z.array(stableImportItemId).max(500),
+    primaryDocumentImageId: imageShortcode.nullable().default(null),
+    screenshotImageId: imageShortcode.nullable().default(null),
+  })
+  .superRefine((value, context) => {
+    const expected = value.extraction.candidate?.lines.length ?? 0;
+    if (value.lineIds.length !== expected) {
+      context.addIssue({
+        code: "custom",
+        path: ["lineIds"],
+        message: "lineIds must contain one stable id per extracted line",
+      });
+    }
+    if (new Set(value.lineIds).size !== value.lineIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["lineIds"],
+        message: "lineIds must be unique within an order",
+      });
+    }
+  });
+
+export const preparePurchaseImportInput = z
+  .object({
+    _runExecution: purchaseImportRunExecution,
+    orders: z.array(preparedImportOrderInput).min(1).max(50),
+  })
+  .superRefine((value, context) => {
+    const itemIds = value.orders.map((order) => order.itemOperationId);
+    if (new Set(itemIds).size !== itemIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["orders"],
+        message: "itemOperationId must be unique within a preparation",
+      });
+    }
+    const executionIds = value._runExecution.itemOperationIds;
+    if (
+      executionIds &&
+      (executionIds.length !== itemIds.length ||
+        executionIds.some((id, index) => id !== itemIds[index]))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["_runExecution", "itemOperationIds"],
+        message: "itemOperationIds must match orders in order",
+      });
+    }
+  });
+export type PreparePurchaseImportInput = z.infer<
+  typeof preparePurchaseImportInput
+>;
+
+export const preparedProductCandidate = z.object({
+  productId: productShortcode,
+  name: z.string().trim().min(1).max(500),
+  manufacturer: z.string().max(300),
+  model: z.string().max(300).nullable(),
+  exactIdentifierMatch: z.boolean(),
+});
+
+export const preparePurchaseImportOut = z.object({
+  runPublicId: importRunPublicId,
+  operationId: importOperationId,
+  status: z.literal("running"),
+  orders: z.array(
+    z.object({
+      stableOrderId: stableImportItemId,
+      itemOperationId: importItemOperationId,
+      source: importSourceIdentity,
+      orderId: z.string().nullable(),
+      targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      evidenceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      lines: z.array(
+        z.object({
+          stableLineId: stableImportItemId,
+          title: z.string(),
+          amount: money,
+          identifiers: z.record(z.string(), z.string()),
+          candidates: z.array(preparedProductCandidate).max(20),
+          requiresProductResolution: z.boolean(),
+        }),
+      ),
+    }),
+  ),
+});
+
+export const preparedProductResolution = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("existing"), productId: productShortcode }),
+  z.object({ kind: z.literal("new") }),
+  z.object({
+    kind: z.literal("unresolved"),
+    reason: z.string().trim().min(1).max(1_000),
+  }),
+]);
+
+export const commitPurchaseImportInput = z.object({
+  _runExecution: purchaseImportRunExecution,
+  prepareOperationId: importOperationId,
+  resolutions: z
     .array(
       z.object({
-        source: importSourceIdentity,
-        extraction: importExtractionOutcome,
-        primaryDocumentImageId: imageShortcode.nullable().default(null),
-        screenshotImageId: imageShortcode.nullable().default(null),
+        stableOrderId: stableImportItemId,
+        stableLineId: stableImportItemId,
+        resolution: preparedProductResolution,
       }),
     )
-    .min(1)
-    .max(50),
+    .max(25_000),
 });
-export type ImportVendorOrdersInput = z.infer<typeof importVendorOrdersInput>;
+export type CommitPurchaseImportInput = z.infer<
+  typeof commitPurchaseImportInput
+>;
 
-export const importVendorOrdersOut = z.object({
+export const commitPurchaseImportOut = z.object({
+  runPublicId: importRunPublicId,
+  operationId: importOperationId,
+  status: importRunStatus,
   items: z.array(
     z.object({
+      stableOrderId: stableImportItemId,
       outcome: importWriterOutput.shape.outcome,
       purchaseId: purchaseShortcode.nullable(),
       findingCount: z.number().int().nonnegative(),
     }),
   ),
+});
+
+export const purchaseImportOperationStatusInput = z.object({
+  _runExecution: purchaseImportRunExecution,
+});
+export type PurchaseImportOperationStatusInput = z.infer<
+  typeof purchaseImportOperationStatusInput
+>;
+
+export const purchaseImportOperationStatusOut = z.object({
+  runPublicId: importRunPublicId,
+  operationId: importOperationId,
+  kind: z.string(),
+  state: z.enum(["started", "paused_approval", "completed", "failed"]),
+  result: z.unknown().nullable(),
+  error: z.string().nullable(),
+  startedAt: z.iso.datetime(),
+  completedAt: z.iso.datetime().nullable(),
 });
 
 export const confirmMerchantVendorRuleInput = z.object({

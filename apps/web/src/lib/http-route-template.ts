@@ -29,6 +29,9 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/debug/timing",
   "/api/import/agent/accounts",
   "/api/import/agent/debug-events",
+  "/api/import/agent/oauth/callback",
+  "/api/import/agent/oauth/start",
+  "/api/import/agent/oauth/status",
   "/api/import/agent/socket",
   "/api/import/agent/sync",
   "/api/import/merchant-rules",
@@ -88,6 +91,22 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   pattern: RegExp;
   template: string;
 }> = [
+  {
+    pattern: /^\/purchase-imports\/[^/]+$/u,
+    template: "/purchase-imports/:publicId",
+  },
+  {
+    pattern: /^\/api\/import\/runs\/[^/]+$/u,
+    template: "/api/import/runs/:publicId",
+  },
+  {
+    pattern: /^\/api\/import\/runs\/[^/]+\/agent$/u,
+    template: "/api/import/runs/:publicId/agent",
+  },
+  {
+    pattern: /^\/api\/import\/runs\/[^/]+\/agent\/.*$/u,
+    template: "/api/import/runs/:publicId/agent/:splat",
+  },
   {
     pattern: /^\/api\/calendar\/[^/]+\/[^/]+$/u,
     template: "/api/calendar/:token/:feed",

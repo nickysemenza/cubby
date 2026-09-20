@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   purchaseImportDebugEvent,
+  purchaseImportRunLogRequest,
   purchaseImportRunLogResponse,
 } from "./purchase-import-debug";
 
@@ -63,5 +64,15 @@ describe("purchase import debug contract", () => {
     });
 
     expect(parsed.entries[0]).not.toHaveProperty("result");
+  });
+
+  it("accepts the public PIR address used by the detail page", () => {
+    expect(
+      purchaseImportRunLogRequest.parse({ publicId: "PIR-ABCDE12345" }),
+    ).toEqual({ publicId: "PIR-ABCDE12345" });
+    expect(
+      purchaseImportRunLogRequest.safeParse({ publicId: validEvent.runId })
+        .success,
+    ).toBe(false);
   });
 });

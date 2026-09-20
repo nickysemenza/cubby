@@ -1,4 +1,5 @@
 import { purchaseImportContract } from "~/contracts/purchase-import.contract";
+import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   listReceiptHunts,
@@ -10,7 +11,15 @@ export const purchaseImportHandlers = implementOperationDomain(
   {
     listReceiptHunts: (context) =>
       listReceiptHunts(context.db, context.actorContext),
-    submitReceiptEvidence: (context, input) =>
-      submitReceiptEvidence(context.db, input, context.actorContext),
+    submitReceiptEvidence: (context, input) => {
+      const queue = getPurchaseAgentQueue();
+      if (!queue) throw new Error("Purchase Agent queue is unavailable");
+      return submitReceiptEvidence(
+        context.db,
+        input,
+        context.actorContext,
+        queue,
+      );
+    },
   },
 );

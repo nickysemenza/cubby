@@ -21,9 +21,13 @@ export type RecordAiUsageInput = {
   jobId?: string | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
-  /** Prompt-cache tokens, when the adapter reports them: priced, not stored. */
+  /** Prompt-cache tokens, when the adapter reports them. */
   cacheReadTokens?: number | null;
   cacheWriteTokens?: number | null;
+  attempt?: number;
+  status?: "succeeded" | "failed";
+  gatewayLogId?: string | null;
+  eventId?: string;
   durationMs: number;
   cacheStatus?: "hit" | "miss" | "none" | null;
   entity?: { entityType: string; entityId: string } | null;
@@ -39,7 +43,7 @@ export async function recordAiUsage(
     await port.emit(db, {
       version: 1,
       queueType: "telemetry",
-      eventId: crypto.randomUUID(),
+      eventId: input.eventId ?? crypto.randomUUID(),
       occurredAt: new Date().toISOString(),
       release: __GIT_COMMIT__,
       type: "ai_usage",
@@ -53,6 +57,9 @@ export async function recordAiUsage(
       outputTokens: input.outputTokens ?? null,
       cacheReadTokens: input.cacheReadTokens ?? null,
       cacheWriteTokens: input.cacheWriteTokens ?? null,
+      attempt: input.attempt ?? 1,
+      status: input.status ?? "succeeded",
+      gatewayLogId: input.gatewayLogId ?? null,
       durationMs: input.durationMs,
       cacheStatus: input.cacheStatus ?? null,
       entityType: input.entity?.entityType ?? null,

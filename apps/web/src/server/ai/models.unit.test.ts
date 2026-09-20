@@ -50,19 +50,15 @@ describe("the crate catalog backs every registered chat model", () => {
     ).toBeCloseTo(0.042, 6);
   });
 
-  it("adds the provider's cache read and write tokens to the estimate", () => {
-    const base = estimateAiUsageCostUsd("anthropic", REASONING_MODEL, {
-      inputTokens: 1000,
-      outputTokens: 1000,
-    });
-    const withCache = estimateAiUsageCostUsd("anthropic", REASONING_MODEL, {
-      inputTokens: 1000,
-      outputTokens: 1000,
-      cacheReadTokens: 10_000,
-      cacheWriteTokens: 10_000,
-    });
-    expect(base).not.toBeNull();
-    expect(withCache).toBeGreaterThan(base ?? 0);
+  it("prices provider-specific cache reads and writes", () => {
+    expect(
+      estimateAiUsageCostUsd("anthropic", REASONING_MODEL, {
+        inputTokens: 1000,
+        outputTokens: 1000,
+        cacheReadTokens: 10_000,
+        cacheWriteTokens: 10_000,
+      }),
+    ).toBeCloseTo(0.039, 8);
   });
 });
 

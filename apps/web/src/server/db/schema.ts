@@ -1395,24 +1395,48 @@ export const importRun = pgTable(
   "ImportRun",
   {
     id: pkUuid(),
+    publicId: text("publicId").notNull(),
     ledgerPartyId: uuid("ledgerPartyId")
       .notNull()
       .$type<LedgerPartyId>()
       .references(() => ledgerParty.id),
+    actorUserId: text("actorUserId")
+      .notNull()
+      .$type<UserId>()
+      .references(() => user.id),
+    actorName: text("actorName").notNull(),
+    actorEmail: text("actorEmail").notNull(),
+    actorLedgerPartyShortcode: text("actorLedgerPartyShortcode").notNull(),
+    actorLedgerPartyName: text("actorLedgerPartyName").notNull(),
+    actorLedgerPartyKind: text("actorLedgerPartyKind").notNull(),
     vendorAccountId: uuid("vendorAccountId").references(() => vendorAccount.id),
+    vendorId: uuid("vendorId")
+      .$type<VendorId>()
+      .references(() => vendor.id),
+    predecessorRunId: uuid("predecessorRunId").references(
+      (): AnyPgColumn => importRun.id,
+    ),
     trigger: text("trigger").notNull(),
     status: text("status").notNull().default("running"),
+    coordinatorModel: text("coordinatorModel")
+      .notNull()
+      .default("gpt-5.6-terra"),
+    skillRevision: text("skillRevision").notNull().default("purchase-import@1"),
+    runtimeRevision: text("runtimeRevision").notNull().default("flue@1"),
+    decisionRevision: integer("decisionRevision").notNull().default(1),
     startedAt: timestamp("startedAt", { mode: "date" }).notNull().defaultNow(),
     endedAt: timestamp("endedAt", { mode: "date" }),
     ordersSeen: integer("ordersSeen").notNull().default(0),
     imported: integer("imported").notNull().default(0),
     updated: integer("updated").notNull().default(0),
     skipped: integer("skipped").notNull().default(0),
+    auditedAt: timestamp("auditedAt", { mode: "date" }),
     failureCode: text("failureCode"),
     agentSessionId: text("agentSessionId"),
     ...baseTimestamps(),
   },
   (table) => [
+    uniqueIndex("ImportRun_publicId_unique").on(table.publicId),
     index("ImportRun_party_started_idx").on(
       table.ledgerPartyId,
       table.startedAt.desc(),
@@ -1427,12 +1451,12 @@ export const importRun = pgTable(
     ),
     check(
       "ImportRun_status_check",
-      sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'needs_review', 'completed', 'failed')`,
+      sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed')`,
     ),
     uniqueIndex("ImportRun_one_active_vendor_account_key")
       .on(table.vendorAccountId)
       .where(
-        sql`${table.vendorAccountId} IS NOT NULL AND ${table.status} IN ('running', 'paused_auth', 'paused_offline')`,
+        sql`${table.vendorAccountId} IS NOT NULL AND ${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')`,
       ),
   ],
 );
@@ -1527,7 +1551,174 @@ export const importRunOperation = pgTable(
     index("ImportRunOperation_run_state_idx").on(table.runId, table.state),
     check(
       "ImportRunOperation_state_check",
-      sql`${table.state} IN ('started', 'completed', 'failed')`,
+      sql`${table.state} IN ('started', 'paused_approval', 'completed', 'failed')`,
+    ),
+  ],
+);
+
+/** Idempotent progress events mirrored from the private Flue coordinator. */
+export const importRunProgress = pgTable(
+  "ImportRunProgress",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    eventId: text("eventId").notNull(),
+    phase: text("phase").notNull(),
+    currentItem: text("currentItem"),
+    awaitingApproval: boolean("awaitingApproval").notNull().default(false),
+    detail: text("detail"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ImportRunProgress_eventId_unique").on(table.eventId),
+    index("ImportRunProgress_run_created_idx").on(
+      table.runId,
+      table.createdAt.desc(),
+    ),
+  ],
+);
+
+/** Immutable record of which household member prompted, approved, or stopped a run. */
+export const importRunControlEvent = pgTable(
+  "ImportRunControlEvent",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    action: text("action").notNull(),
+    controllerUserId: text("controllerUserId").notNull().$type<UserId>(),
+    controllerName: text("controllerName").notNull(),
+    controllerEmail: text("controllerEmail").notNull(),
+    controllerLedgerPartyId: uuid("controllerLedgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>(),
+    controllerLedgerPartyShortcode: text(
+      "controllerLedgerPartyShortcode",
+    ).notNull(),
+    controllerLedgerPartyName: text("controllerLedgerPartyName").notNull(),
+    controllerLedgerPartyKind: text("controllerLedgerPartyKind").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("ImportRunControlEvent_run_created_idx").on(
+      table.runId,
+      table.createdAt,
+    ),
+    check(
+      "ImportRunControlEvent_action_check",
+      sql`${table.action} IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'escalate_sol')`,
+    ),
+  ],
+);
+
+/** Immutable prepared order evidence; commit decisions live in the operation ledger. */
+export const importPreparedOrder = pgTable(
+  "ImportPreparedOrder",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    prepareOperationId: text("prepareOperationId").notNull(),
+    itemOperationId: text("itemOperationId").notNull(),
+    stableOrderId: text("stableOrderId").notNull(),
+    sourceKind: text("sourceKind").notNull(),
+    sourceExternalKey: text("sourceExternalKey").notNull(),
+    sourceChecksum: text("sourceChecksum").notNull(),
+    evidenceChecksum: text("evidenceChecksum").notNull(),
+    extractionRevision: text("extractionRevision").notNull(),
+    extraction: jsonb("extraction").notNull(),
+    primaryDocumentImageId: uuid("primaryDocumentImageId").references(
+      () => image.id,
+    ),
+    screenshotImageId: uuid("screenshotImageId").references(() => image.id),
+    targetFingerprint: text("targetFingerprint").notNull(),
+    evidenceFingerprint: text("evidenceFingerprint").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ImportPreparedOrder_run_item_operation_key").on(
+      table.runId,
+      table.itemOperationId,
+    ),
+    uniqueIndex("ImportPreparedOrder_run_stable_order_key").on(
+      table.runId,
+      table.stableOrderId,
+    ),
+    index("ImportPreparedOrder_prepare_operation_idx").on(
+      table.runId,
+      table.prepareOperationId,
+    ),
+    check(
+      "ImportPreparedOrder_source_kind_check",
+      sql`${table.sourceKind} IN ('browser_order', 'mail_message', 'mail_attachment', 'receipt_photo', 'vendor_export')`,
+    ),
+  ],
+);
+
+/** Immutable normalized line, its identifiers, and the bounded candidates shown for approval. */
+export const importPreparedLine = pgTable(
+  "ImportPreparedLine",
+  {
+    id: pkUuid(),
+    preparedOrderId: uuid("preparedOrderId")
+      .notNull()
+      .references(() => importPreparedOrder.id),
+    stableLineId: text("stableLineId").notNull(),
+    position: integer("position").notNull(),
+    line: jsonb("line").notNull(),
+    identifiers: jsonb("identifiers").$type<Record<string, string>>().notNull(),
+    candidates: jsonb("candidates").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ImportPreparedLine_order_stable_line_key").on(
+      table.preparedOrderId,
+      table.stableLineId,
+    ),
+    uniqueIndex("ImportPreparedLine_order_position_key").on(
+      table.preparedOrderId,
+      table.position,
+    ),
+  ],
+);
+
+/** One exact human grant; commit rechecks fingerprints and consumes it transactionally. */
+export const importRunApproval = pgTable(
+  "ImportRunApproval",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    operationId: text("operationId").notNull(),
+    operationKind: text("operationKind").notNull(),
+    args: jsonb("args").notNull(),
+    argsFingerprint: text("argsFingerprint").notNull(),
+    targetFingerprint: text("targetFingerprint").notNull(),
+    evidenceFingerprint: text("evidenceFingerprint").notNull(),
+    state: text("state").notNull().default("pending"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    decidedByUserId: text("decidedByUserId")
+      .$type<UserId>()
+      .references(() => user.id),
+    decidedAt: timestamp("decidedAt", { mode: "date" }),
+    rejectedAt: timestamp("rejectedAt", { mode: "date" }),
+    consumedAt: timestamp("consumedAt", { mode: "date" }),
+    invalidatedAt: timestamp("invalidatedAt", { mode: "date" }),
+  },
+  (table) => [
+    uniqueIndex("ImportRunApproval_run_operation_key").on(
+      table.runId,
+      table.operationId,
+    ),
+    index("ImportRunApproval_run_state_idx").on(table.runId, table.state),
+    check(
+      "ImportRunApproval_state_check",
+      sql`${table.state} IN ('pending', 'granted', 'rejected', 'consumed', 'invalidated')`,
     ),
   ],
 );
@@ -1603,6 +1794,7 @@ export const importHunt = pgTable(
       .default(sql`'[]'::jsonb`),
     error: text("error"),
     receiptImageId: uuid("receiptImageId").references(() => image.id),
+    receiptRunId: uuid("receiptRunId").references(() => importRun.id),
     receiptQueuedAt: timestamp("receiptQueuedAt", { mode: "date" }),
     ...baseTimestamps(),
   },
@@ -1612,6 +1804,7 @@ export const importHunt = pgTable(
     uniqueIndex("ImportHunt_receipt_image_key")
       .on(table.id, table.receiptImageId)
       .where(sql`${table.receiptImageId} IS NOT NULL`),
+    index("ImportHunt_receipt_run_idx").on(table.receiptRunId),
   ],
 );
 
@@ -2954,6 +3147,14 @@ export const aiUsage = pgTable(
     jobId: text("jobId"),
     inputTokens: integer("inputTokens"),
     outputTokens: integer("outputTokens"),
+    cacheReadTokens: integer("cacheReadTokens"),
+    cacheWriteTokens: integer("cacheWriteTokens"),
+    attempt: integer("attempt").notNull().default(1),
+    status: text("status")
+      .notNull()
+      .$type<"succeeded" | "failed">()
+      .default("succeeded"),
+    gatewayLogId: text("gatewayLogId"),
     estimatedCost: real("estimatedCost"),
     durationMs: integer("durationMs").notNull(),
     cacheStatus: text("cacheStatus").$type<"hit" | "miss" | "none">(),

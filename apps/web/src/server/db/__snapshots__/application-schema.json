@@ -332,6 +332,38 @@
           "primaryKey": false,
           "notNull": false
         },
+        "cacheReadTokens": {
+          "name": "cacheReadTokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cacheWriteTokens": {
+          "name": "cacheWriteTokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'succeeded'"
+        },
+        "gatewayLogId": {
+          "name": "gatewayLogId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "estimatedCost": {
           "name": "estimatedCost",
           "type": "real",
@@ -2452,138 +2484,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.GardenEntryPlanting": {
-      "name": "GardenEntryPlanting",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "gardenEntryId": {
-          "name": "gardenEntryId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "plantingId": {
-          "name": "plantingId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "GardenEntryPlanting_gardenEntryId_plantingId_key": {
-          "name": "GardenEntryPlanting_gardenEntryId_plantingId_key",
-          "columns": [
-            {
-              "expression": "gardenEntryId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "plantingId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"GardenEntryPlanting\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "GardenEntryPlanting_gardenEntryId_idx": {
-          "name": "GardenEntryPlanting_gardenEntryId_idx",
-          "columns": [
-            {
-              "expression": "gardenEntryId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "GardenEntryPlanting_plantingId_idx": {
-          "name": "GardenEntryPlanting_plantingId_idx",
-          "columns": [
-            {
-              "expression": "plantingId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "GardenEntryPlanting_gardenEntryId_GardenEntry_id_fk": {
-          "name": "GardenEntryPlanting_gardenEntryId_GardenEntry_id_fk",
-          "tableFrom": "GardenEntryPlanting",
-          "tableTo": "GardenEntry",
-          "columnsFrom": [
-            "gardenEntryId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "GardenEntryPlanting_plantingId_Planting_id_fk": {
-          "name": "GardenEntryPlanting_plantingId_Planting_id_fk",
-          "tableFrom": "GardenEntryPlanting",
-          "tableTo": "Planting",
-          "columnsFrom": [
-            "plantingId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.GardenEntryImage": {
       "name": "GardenEntryImage",
       "schema": "",
@@ -2709,6 +2609,138 @@
           "tableTo": "Image",
           "columnsFrom": [
             "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.GardenEntryPlanting": {
+      "name": "GardenEntryPlanting",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "gardenEntryId": {
+          "name": "gardenEntryId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plantingId": {
+          "name": "plantingId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "GardenEntryPlanting_gardenEntryId_plantingId_key": {
+          "name": "GardenEntryPlanting_gardenEntryId_plantingId_key",
+          "columns": [
+            {
+              "expression": "gardenEntryId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "plantingId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"GardenEntryPlanting\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "GardenEntryPlanting_gardenEntryId_idx": {
+          "name": "GardenEntryPlanting_gardenEntryId_idx",
+          "columns": [
+            {
+              "expression": "gardenEntryId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "GardenEntryPlanting_plantingId_idx": {
+          "name": "GardenEntryPlanting_plantingId_idx",
+          "columns": [
+            {
+              "expression": "plantingId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "GardenEntryPlanting_gardenEntryId_GardenEntry_id_fk": {
+          "name": "GardenEntryPlanting_gardenEntryId_GardenEntry_id_fk",
+          "tableFrom": "GardenEntryPlanting",
+          "tableTo": "GardenEntry",
+          "columnsFrom": [
+            "gardenEntryId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "GardenEntryPlanting_plantingId_Planting_id_fk": {
+          "name": "GardenEntryPlanting_plantingId_Planting_id_fk",
+          "tableFrom": "GardenEntryPlanting",
+          "tableTo": "Planting",
+          "columnsFrom": [
+            "plantingId"
           ],
           "columnsTo": [
             "id"
@@ -3281,6 +3313,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "receiptRunId": {
+          "name": "receiptRunId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "receiptQueuedAt": {
           "name": "receiptQueuedAt",
           "type": "timestamp",
@@ -3360,6 +3398,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ImportHunt_receipt_run_idx": {
+          "name": "ImportHunt_receipt_run_idx",
+          "columns": [
+            {
+              "expression": "receiptRunId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3427,12 +3480,365 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "ImportHunt_receiptRunId_ImportRun_id_fk": {
+          "name": "ImportHunt_receiptRunId_ImportRun_id_fk",
+          "tableFrom": "ImportHunt",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "receiptRunId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ImportPreparedLine": {
+      "name": "ImportPreparedLine",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "preparedOrderId": {
+          "name": "preparedOrderId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stableLineId": {
+          "name": "stableLineId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line": {
+          "name": "line",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "identifiers": {
+          "name": "identifiers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "candidates": {
+          "name": "candidates",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImportPreparedLine_order_stable_line_key": {
+          "name": "ImportPreparedLine_order_stable_line_key",
+          "columns": [
+            {
+              "expression": "preparedOrderId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "stableLineId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportPreparedLine_order_position_key": {
+          "name": "ImportPreparedLine_order_position_key",
+          "columns": [
+            {
+              "expression": "preparedOrderId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportPreparedLine_preparedOrderId_ImportPreparedOrder_id_fk": {
+          "name": "ImportPreparedLine_preparedOrderId_ImportPreparedOrder_id_fk",
+          "tableFrom": "ImportPreparedLine",
+          "tableTo": "ImportPreparedOrder",
+          "columnsFrom": [
+            "preparedOrderId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ImportPreparedOrder": {
+      "name": "ImportPreparedOrder",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prepareOperationId": {
+          "name": "prepareOperationId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "itemOperationId": {
+          "name": "itemOperationId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stableOrderId": {
+          "name": "stableOrderId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceKind": {
+          "name": "sourceKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceExternalKey": {
+          "name": "sourceExternalKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceChecksum": {
+          "name": "sourceChecksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidenceChecksum": {
+          "name": "evidenceChecksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "extractionRevision": {
+          "name": "extractionRevision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "extraction": {
+          "name": "extraction",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "primaryDocumentImageId": {
+          "name": "primaryDocumentImageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "screenshotImageId": {
+          "name": "screenshotImageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "targetFingerprint": {
+          "name": "targetFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidenceFingerprint": {
+          "name": "evidenceFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImportPreparedOrder_run_item_operation_key": {
+          "name": "ImportPreparedOrder_run_item_operation_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "itemOperationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportPreparedOrder_run_stable_order_key": {
+          "name": "ImportPreparedOrder_run_stable_order_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "stableOrderId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportPreparedOrder_prepare_operation_idx": {
+          "name": "ImportPreparedOrder_prepare_operation_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "prepareOperationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportPreparedOrder_runId_ImportRun_id_fk": {
+          "name": "ImportPreparedOrder_runId_ImportRun_id_fk",
+          "tableFrom": "ImportPreparedOrder",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportPreparedOrder_primaryDocumentImageId_Image_id_fk": {
+          "name": "ImportPreparedOrder_primaryDocumentImageId_Image_id_fk",
+          "tableFrom": "ImportPreparedOrder",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "primaryDocumentImageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportPreparedOrder_screenshotImageId_Image_id_fk": {
+          "name": "ImportPreparedOrder_screenshotImageId_Image_id_fk",
+          "tableFrom": "ImportPreparedOrder",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "screenshotImageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImportPreparedOrder_source_kind_check": {
+          "name": "ImportPreparedOrder_source_kind_check",
+          "value": "\"ImportPreparedOrder\".\"sourceKind\" IN ('browser_order', 'mail_message', 'mail_attachment', 'receipt_photo', 'vendor_export')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ImportRun": {
@@ -3446,14 +3852,68 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "publicId": {
+          "name": "publicId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "ledgerPartyId": {
           "name": "ledgerPartyId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
+        "actorUserId": {
+          "name": "actorUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorName": {
+          "name": "actorName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorEmail": {
+          "name": "actorEmail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorLedgerPartyShortcode": {
+          "name": "actorLedgerPartyShortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorLedgerPartyName": {
+          "name": "actorLedgerPartyName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actorLedgerPartyKind": {
+          "name": "actorLedgerPartyKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "vendorAccountId": {
           "name": "vendorAccountId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vendorId": {
+          "name": "vendorId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "predecessorRunId": {
+          "name": "predecessorRunId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -3470,6 +3930,34 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'running'"
+        },
+        "coordinatorModel": {
+          "name": "coordinatorModel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'gpt-5.6-terra'"
+        },
+        "skillRevision": {
+          "name": "skillRevision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'purchase-import@1'"
+        },
+        "runtimeRevision": {
+          "name": "runtimeRevision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'flue@1'"
+        },
+        "decisionRevision": {
+          "name": "decisionRevision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
         },
         "startedAt": {
           "name": "startedAt",
@@ -3512,6 +4000,12 @@
           "notNull": true,
           "default": 0
         },
+        "auditedAt": {
+          "name": "auditedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "failureCode": {
           "name": "failureCode",
           "type": "text",
@@ -3540,6 +4034,21 @@
         }
       },
       "indexes": {
+        "ImportRun_publicId_unique": {
+          "name": "ImportRun_publicId_unique",
+          "columns": [
+            {
+              "expression": "publicId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "ImportRun_party_started_idx": {
           "name": "ImportRun_party_started_idx",
           "columns": [
@@ -3593,7 +4102,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"ImportRun\".\"vendorAccountId\" IS NOT NULL AND \"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline')",
+          "where": "\"ImportRun\".\"vendorAccountId\" IS NOT NULL AND \"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -3613,12 +4122,51 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "ImportRun_actorUserId_user_id_fk": {
+          "name": "ImportRun_actorUserId_user_id_fk",
+          "tableFrom": "ImportRun",
+          "tableTo": "user",
+          "columnsFrom": [
+            "actorUserId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "ImportRun_vendorAccountId_VendorAccount_id_fk": {
           "name": "ImportRun_vendorAccountId_VendorAccount_id_fk",
           "tableFrom": "ImportRun",
           "tableTo": "VendorAccount",
           "columnsFrom": [
             "vendorAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRun_vendorId_Vendor_id_fk": {
+          "name": "ImportRun_vendorId_Vendor_id_fk",
+          "tableFrom": "ImportRun",
+          "tableTo": "Vendor",
+          "columnsFrom": [
+            "vendorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRun_predecessorRunId_ImportRun_id_fk": {
+          "name": "ImportRun_predecessorRunId_ImportRun_id_fk",
+          "tableFrom": "ImportRun",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "predecessorRunId"
           ],
           "columnsTo": [
             "id"
@@ -3637,7 +4185,310 @@
         },
         "ImportRun_status_check": {
           "name": "ImportRun_status_check",
-          "value": "\"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'needs_review', 'completed', 'failed')"
+          "value": "\"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImportRunApproval": {
+      "name": "ImportRunApproval",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operationId": {
+          "name": "operationId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operationKind": {
+          "name": "operationKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "args": {
+          "name": "args",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "argsFingerprint": {
+          "name": "argsFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "targetFingerprint": {
+          "name": "targetFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidenceFingerprint": {
+          "name": "evidenceFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "decidedByUserId": {
+          "name": "decidedByUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decidedAt": {
+          "name": "decidedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rejectedAt": {
+          "name": "rejectedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "consumedAt": {
+          "name": "consumedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invalidatedAt": {
+          "name": "invalidatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ImportRunApproval_run_operation_key": {
+          "name": "ImportRunApproval_run_operation_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "operationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunApproval_run_state_idx": {
+          "name": "ImportRunApproval_run_state_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportRunApproval_runId_ImportRun_id_fk": {
+          "name": "ImportRunApproval_runId_ImportRun_id_fk",
+          "tableFrom": "ImportRunApproval",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRunApproval_decidedByUserId_user_id_fk": {
+          "name": "ImportRunApproval_decidedByUserId_user_id_fk",
+          "tableFrom": "ImportRunApproval",
+          "tableTo": "user",
+          "columnsFrom": [
+            "decidedByUserId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImportRunApproval_state_check": {
+          "name": "ImportRunApproval_state_check",
+          "value": "\"ImportRunApproval\".\"state\" IN ('pending', 'granted', 'rejected', 'consumed', 'invalidated')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImportRunControlEvent": {
+      "name": "ImportRunControlEvent",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "controllerUserId": {
+          "name": "controllerUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "controllerName": {
+          "name": "controllerName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "controllerEmail": {
+          "name": "controllerEmail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "controllerLedgerPartyId": {
+          "name": "controllerLedgerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "controllerLedgerPartyShortcode": {
+          "name": "controllerLedgerPartyShortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "controllerLedgerPartyName": {
+          "name": "controllerLedgerPartyName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "controllerLedgerPartyKind": {
+          "name": "controllerLedgerPartyKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImportRunControlEvent_run_created_idx": {
+          "name": "ImportRunControlEvent_run_created_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "createdAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportRunControlEvent_runId_ImportRun_id_fk": {
+          "name": "ImportRunControlEvent_runId_ImportRun_id_fk",
+          "tableFrom": "ImportRunControlEvent",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImportRunControlEvent_action_check": {
+          "name": "ImportRunControlEvent_action_check",
+          "value": "\"ImportRunControlEvent\".\"action\" IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'escalate_sol')"
         }
       },
       "isRLSEnabled": false
@@ -3910,9 +4761,124 @@
       "checkConstraints": {
         "ImportRunOperation_state_check": {
           "name": "ImportRunOperation_state_check",
-          "value": "\"ImportRunOperation\".\"state\" IN ('started', 'completed', 'failed')"
+          "value": "\"ImportRunOperation\".\"state\" IN ('started', 'paused_approval', 'completed', 'failed')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.ImportRunProgress": {
+      "name": "ImportRunProgress",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "eventId": {
+          "name": "eventId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currentItem": {
+          "name": "currentItem",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "awaitingApproval": {
+          "name": "awaitingApproval",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImportRunProgress_eventId_unique": {
+          "name": "ImportRunProgress_eventId_unique",
+          "columns": [
+            {
+              "expression": "eventId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunProgress_run_created_idx": {
+          "name": "ImportRunProgress_run_created_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "createdAt",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportRunProgress_runId_ImportRun_id_fk": {
+          "name": "ImportRunProgress_runId_ImportRun_id_fk",
+          "tableFrom": "ImportRunProgress",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.ImportSourceClaim": {

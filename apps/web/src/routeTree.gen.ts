@@ -86,6 +86,7 @@ import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenti
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProjectsShortcodeRouteImport } from './routes/_authenticated/projects.$shortcode'
 import { Route as AuthenticatedProjectsToolsRouteImport } from './routes/_authenticated/projects.tools'
+import { Route as AuthenticatedPurchaseImportsPublicIdRouteImport } from './routes/_authenticated/purchase-imports.$publicId'
 import { Route as AuthenticatedPurchasesIndexRouteImport } from './routes/_authenticated/purchases.index'
 import { Route as AuthenticatedPurchasesShortcodeRouteImport } from './routes/_authenticated/purchases.$shortcode'
 import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
@@ -128,7 +129,13 @@ import { Route as ApiImportAgentAccountsRouteImport } from './routes/api/import/
 import { Route as ApiImportAgentDebugEventsRouteImport } from './routes/api/import/agent/debug-events'
 import { Route as ApiImportAgentSocketRouteImport } from './routes/api/import/agent/socket'
 import { Route as ApiImportAgentSyncRouteImport } from './routes/api/import/agent/sync'
+import { Route as ApiImportRunsPublicIdRouteImport } from './routes/api/import/runs.$publicId'
 import { Route as ApiV1ResourceOperationRouteImport } from './routes/api/v1/$resource/$operation'
+import { Route as ApiImportAgentOauthCallbackRouteImport } from './routes/api/import/agent/oauth.callback'
+import { Route as ApiImportAgentOauthStartRouteImport } from './routes/api/import/agent/oauth.start'
+import { Route as ApiImportAgentOauthStatusRouteImport } from './routes/api/import/agent/oauth.status'
+import { Route as ApiImportRunsPublicIdAgentRouteImport } from './routes/api/import/runs.$publicId.agent'
+import { Route as ApiImportRunsPublicIdAgentSplatRouteImport } from './routes/api/import/runs.$publicId.agent.$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -566,6 +573,12 @@ const AuthenticatedProjectsToolsRoute =
     path: '/projects/tools',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedPurchaseImportsPublicIdRoute =
+  AuthenticatedPurchaseImportsPublicIdRouteImport.update({
+    id: '/purchase-imports/$publicId',
+    path: '/purchase-imports/$publicId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedPurchasesIndexRoute =
   AuthenticatedPurchasesIndexRouteImport.update({
     id: '/purchases/',
@@ -801,11 +814,46 @@ const ApiImportAgentSyncRoute = ApiImportAgentSyncRouteImport.update({
   path: '/api/import/agent/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiImportRunsPublicIdRoute = ApiImportRunsPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => ApiImportRunsRoute,
+} as any)
 const ApiV1ResourceOperationRoute = ApiV1ResourceOperationRouteImport.update({
   id: '/$operation',
   path: '/$operation',
   getParentRoute: () => ApiV1ResourceRoute,
 } as any)
+const ApiImportAgentOauthCallbackRoute =
+  ApiImportAgentOauthCallbackRouteImport.update({
+    id: '/api/import/agent/oauth/callback',
+    path: '/api/import/agent/oauth/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiImportAgentOauthStartRoute =
+  ApiImportAgentOauthStartRouteImport.update({
+    id: '/api/import/agent/oauth/start',
+    path: '/api/import/agent/oauth/start',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiImportAgentOauthStatusRoute =
+  ApiImportAgentOauthStatusRouteImport.update({
+    id: '/api/import/agent/oauth/status',
+    path: '/api/import/agent/oauth/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiImportRunsPublicIdAgentRoute =
+  ApiImportRunsPublicIdAgentRouteImport.update({
+    id: '/agent',
+    path: '/agent',
+    getParentRoute: () => ApiImportRunsPublicIdRoute,
+  } as any)
+const ApiImportRunsPublicIdAgentSplatRoute =
+  ApiImportRunsPublicIdAgentSplatRouteImport.update({
+    id: '/$',
+    path: '/$',
+    getParentRoute: () => ApiImportRunsPublicIdAgentRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -868,6 +916,7 @@ export interface FileRoutesByFullPath {
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/projects/tools': typeof AuthenticatedProjectsToolsRoute
+  '/purchase-imports/$publicId': typeof AuthenticatedPurchaseImportsPublicIdRoute
   '/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -884,7 +933,7 @@ export interface FileRoutesByFullPath {
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
-  '/api/import/runs': typeof ApiImportRunsRoute
+  '/api/import/runs': typeof ApiImportRunsRouteWithChildren
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -926,7 +975,13 @@ export interface FileRoutesByFullPath {
   '/api/import/agent/debug-events': typeof ApiImportAgentDebugEventsRoute
   '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
   '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
+  '/api/import/runs/$publicId': typeof ApiImportRunsPublicIdRouteWithChildren
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
+  '/api/import/agent/oauth/callback': typeof ApiImportAgentOauthCallbackRoute
+  '/api/import/agent/oauth/start': typeof ApiImportAgentOauthStartRoute
+  '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
+  '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
+  '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -988,6 +1043,7 @@ export interface FileRoutesByTo {
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/projects/tools': typeof AuthenticatedProjectsToolsRoute
+  '/purchase-imports/$publicId': typeof AuthenticatedPurchaseImportsPublicIdRoute
   '/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -1004,7 +1060,7 @@ export interface FileRoutesByTo {
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
-  '/api/import/runs': typeof ApiImportRunsRoute
+  '/api/import/runs': typeof ApiImportRunsRouteWithChildren
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -1046,7 +1102,13 @@ export interface FileRoutesByTo {
   '/api/import/agent/debug-events': typeof ApiImportAgentDebugEventsRoute
   '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
   '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
+  '/api/import/runs/$publicId': typeof ApiImportRunsPublicIdRouteWithChildren
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
+  '/api/import/agent/oauth/callback': typeof ApiImportAgentOauthCallbackRoute
+  '/api/import/agent/oauth/start': typeof ApiImportAgentOauthStartRoute
+  '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
+  '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
+  '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1111,6 +1173,7 @@ export interface FileRoutesById {
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
   '/_authenticated/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
   '/_authenticated/projects/tools': typeof AuthenticatedProjectsToolsRoute
+  '/_authenticated/purchase-imports/$publicId': typeof AuthenticatedPurchaseImportsPublicIdRoute
   '/_authenticated/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
   '/_authenticated/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
@@ -1127,7 +1190,7 @@ export interface FileRoutesById {
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
-  '/api/import/runs': typeof ApiImportRunsRoute
+  '/api/import/runs': typeof ApiImportRunsRouteWithChildren
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -1169,7 +1232,13 @@ export interface FileRoutesById {
   '/api/import/agent/debug-events': typeof ApiImportAgentDebugEventsRoute
   '/api/import/agent/socket': typeof ApiImportAgentSocketRoute
   '/api/import/agent/sync': typeof ApiImportAgentSyncRoute
+  '/api/import/runs/$publicId': typeof ApiImportRunsPublicIdRouteWithChildren
   '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
+  '/api/import/agent/oauth/callback': typeof ApiImportAgentOauthCallbackRoute
+  '/api/import/agent/oauth/start': typeof ApiImportAgentOauthStartRoute
+  '/api/import/agent/oauth/status': typeof ApiImportAgentOauthStatusRoute
+  '/api/import/runs/$publicId/agent': typeof ApiImportRunsPublicIdAgentRouteWithChildren
+  '/api/import/runs/$publicId/agent/$': typeof ApiImportRunsPublicIdAgentSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1234,6 +1303,7 @@ export interface FileRouteTypes {
     | '/products/new'
     | '/projects/$shortcode'
     | '/projects/tools'
+    | '/purchase-imports/$publicId'
     | '/purchases/$shortcode'
     | '/recipes/$shortcode'
     | '/recipes/compare'
@@ -1292,7 +1362,13 @@ export interface FileRouteTypes {
     | '/api/import/agent/debug-events'
     | '/api/import/agent/socket'
     | '/api/import/agent/sync'
+    | '/api/import/runs/$publicId'
     | '/api/v1/$resource/$operation'
+    | '/api/import/agent/oauth/callback'
+    | '/api/import/agent/oauth/start'
+    | '/api/import/agent/oauth/status'
+    | '/api/import/runs/$publicId/agent'
+    | '/api/import/runs/$publicId/agent/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1354,6 +1430,7 @@ export interface FileRouteTypes {
     | '/products/new'
     | '/projects/$shortcode'
     | '/projects/tools'
+    | '/purchase-imports/$publicId'
     | '/purchases/$shortcode'
     | '/recipes/$shortcode'
     | '/recipes/compare'
@@ -1412,7 +1489,13 @@ export interface FileRouteTypes {
     | '/api/import/agent/debug-events'
     | '/api/import/agent/socket'
     | '/api/import/agent/sync'
+    | '/api/import/runs/$publicId'
     | '/api/v1/$resource/$operation'
+    | '/api/import/agent/oauth/callback'
+    | '/api/import/agent/oauth/start'
+    | '/api/import/agent/oauth/status'
+    | '/api/import/runs/$publicId/agent'
+    | '/api/import/runs/$publicId/agent/$'
   id:
     | '__root__'
     | '/'
@@ -1476,6 +1559,7 @@ export interface FileRouteTypes {
     | '/_authenticated/products/new'
     | '/_authenticated/projects/$shortcode'
     | '/_authenticated/projects/tools'
+    | '/_authenticated/purchase-imports/$publicId'
     | '/_authenticated/purchases/$shortcode'
     | '/_authenticated/recipes/$shortcode'
     | '/_authenticated/recipes/compare'
@@ -1534,7 +1618,13 @@ export interface FileRouteTypes {
     | '/api/import/agent/debug-events'
     | '/api/import/agent/socket'
     | '/api/import/agent/sync'
+    | '/api/import/runs/$publicId'
     | '/api/v1/$resource/$operation'
+    | '/api/import/agent/oauth/callback'
+    | '/api/import/agent/oauth/start'
+    | '/api/import/agent/oauth/status'
+    | '/api/import/runs/$publicId/agent'
+    | '/api/import/runs/$publicId/agent/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1552,7 +1642,7 @@ export interface RootRouteChildren {
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
   ApiImportMerchantRulesRoute: typeof ApiImportMerchantRulesRoute
   ApiImportRunLogsRoute: typeof ApiImportRunLogsRoute
-  ApiImportRunsRoute: typeof ApiImportRunsRoute
+  ApiImportRunsRoute: typeof ApiImportRunsRouteWithChildren
   ApiSettingsMemberLoginsRoute: typeof ApiSettingsMemberLoginsRoute
   ApiV1ResourceRoute: typeof ApiV1ResourceRouteWithChildren
   ApiV1DocsRoute: typeof ApiV1DocsRoute
@@ -1563,6 +1653,9 @@ export interface RootRouteChildren {
   ApiImportAgentDebugEventsRoute: typeof ApiImportAgentDebugEventsRoute
   ApiImportAgentSocketRoute: typeof ApiImportAgentSocketRoute
   ApiImportAgentSyncRoute: typeof ApiImportAgentSyncRoute
+  ApiImportAgentOauthCallbackRoute: typeof ApiImportAgentOauthCallbackRoute
+  ApiImportAgentOauthStartRoute: typeof ApiImportAgentOauthStartRoute
+  ApiImportAgentOauthStatusRoute: typeof ApiImportAgentOauthStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -2106,6 +2199,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsToolsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/purchase-imports/$publicId': {
+      id: '/_authenticated/purchase-imports/$publicId'
+      path: '/purchase-imports/$publicId'
+      fullPath: '/purchase-imports/$publicId'
+      preLoaderRoute: typeof AuthenticatedPurchaseImportsPublicIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/purchases/': {
       id: '/_authenticated/purchases/'
       path: '/purchases'
@@ -2400,12 +2500,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImportAgentSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/import/runs/$publicId': {
+      id: '/api/import/runs/$publicId'
+      path: '/$publicId'
+      fullPath: '/api/import/runs/$publicId'
+      preLoaderRoute: typeof ApiImportRunsPublicIdRouteImport
+      parentRoute: typeof ApiImportRunsRoute
+    }
     '/api/v1/$resource/$operation': {
       id: '/api/v1/$resource/$operation'
       path: '/$operation'
       fullPath: '/api/v1/$resource/$operation'
       preLoaderRoute: typeof ApiV1ResourceOperationRouteImport
       parentRoute: typeof ApiV1ResourceRoute
+    }
+    '/api/import/agent/oauth/callback': {
+      id: '/api/import/agent/oauth/callback'
+      path: '/api/import/agent/oauth/callback'
+      fullPath: '/api/import/agent/oauth/callback'
+      preLoaderRoute: typeof ApiImportAgentOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import/agent/oauth/start': {
+      id: '/api/import/agent/oauth/start'
+      path: '/api/import/agent/oauth/start'
+      fullPath: '/api/import/agent/oauth/start'
+      preLoaderRoute: typeof ApiImportAgentOauthStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import/agent/oauth/status': {
+      id: '/api/import/agent/oauth/status'
+      path: '/api/import/agent/oauth/status'
+      fullPath: '/api/import/agent/oauth/status'
+      preLoaderRoute: typeof ApiImportAgentOauthStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import/runs/$publicId/agent': {
+      id: '/api/import/runs/$publicId/agent'
+      path: '/agent'
+      fullPath: '/api/import/runs/$publicId/agent'
+      preLoaderRoute: typeof ApiImportRunsPublicIdAgentRouteImport
+      parentRoute: typeof ApiImportRunsPublicIdRoute
+    }
+    '/api/import/runs/$publicId/agent/$': {
+      id: '/api/import/runs/$publicId/agent/$'
+      path: '/$'
+      fullPath: '/api/import/runs/$publicId/agent/$'
+      preLoaderRoute: typeof ApiImportRunsPublicIdAgentSplatRouteImport
+      parentRoute: typeof ApiImportRunsPublicIdAgentRoute
     }
   }
 }
@@ -2460,6 +2602,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
   AuthenticatedProjectsShortcodeRoute: typeof AuthenticatedProjectsShortcodeRoute
   AuthenticatedProjectsToolsRoute: typeof AuthenticatedProjectsToolsRoute
+  AuthenticatedPurchaseImportsPublicIdRoute: typeof AuthenticatedPurchaseImportsPublicIdRoute
   AuthenticatedPurchasesShortcodeRoute: typeof AuthenticatedPurchasesShortcodeRoute
   AuthenticatedRecipesShortcodeRoute: typeof AuthenticatedRecipesShortcodeRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
@@ -2565,6 +2708,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
   AuthenticatedProjectsShortcodeRoute: AuthenticatedProjectsShortcodeRoute,
   AuthenticatedProjectsToolsRoute: AuthenticatedProjectsToolsRoute,
+  AuthenticatedPurchaseImportsPublicIdRoute:
+    AuthenticatedPurchaseImportsPublicIdRoute,
   AuthenticatedPurchasesShortcodeRoute: AuthenticatedPurchasesShortcodeRoute,
   AuthenticatedRecipesShortcodeRoute: AuthenticatedRecipesShortcodeRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
@@ -2661,6 +2806,45 @@ const DotwellKnownOauthProtectedResourceRouteWithChildren =
     DotwellKnownOauthProtectedResourceRouteChildren,
   )
 
+interface ApiImportRunsPublicIdAgentRouteChildren {
+  ApiImportRunsPublicIdAgentSplatRoute: typeof ApiImportRunsPublicIdAgentSplatRoute
+}
+
+const ApiImportRunsPublicIdAgentRouteChildren: ApiImportRunsPublicIdAgentRouteChildren =
+  {
+    ApiImportRunsPublicIdAgentSplatRoute: ApiImportRunsPublicIdAgentSplatRoute,
+  }
+
+const ApiImportRunsPublicIdAgentRouteWithChildren =
+  ApiImportRunsPublicIdAgentRoute._addFileChildren(
+    ApiImportRunsPublicIdAgentRouteChildren,
+  )
+
+interface ApiImportRunsPublicIdRouteChildren {
+  ApiImportRunsPublicIdAgentRoute: typeof ApiImportRunsPublicIdAgentRouteWithChildren
+}
+
+const ApiImportRunsPublicIdRouteChildren: ApiImportRunsPublicIdRouteChildren = {
+  ApiImportRunsPublicIdAgentRoute: ApiImportRunsPublicIdAgentRouteWithChildren,
+}
+
+const ApiImportRunsPublicIdRouteWithChildren =
+  ApiImportRunsPublicIdRoute._addFileChildren(
+    ApiImportRunsPublicIdRouteChildren,
+  )
+
+interface ApiImportRunsRouteChildren {
+  ApiImportRunsPublicIdRoute: typeof ApiImportRunsPublicIdRouteWithChildren
+}
+
+const ApiImportRunsRouteChildren: ApiImportRunsRouteChildren = {
+  ApiImportRunsPublicIdRoute: ApiImportRunsPublicIdRouteWithChildren,
+}
+
+const ApiImportRunsRouteWithChildren = ApiImportRunsRoute._addFileChildren(
+  ApiImportRunsRouteChildren,
+)
+
 interface ApiV1ResourceRouteChildren {
   ApiV1ResourceOperationRoute: typeof ApiV1ResourceOperationRoute
 }
@@ -2691,7 +2875,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDebugTimingRoute: ApiDebugTimingRoute,
   ApiImportMerchantRulesRoute: ApiImportMerchantRulesRoute,
   ApiImportRunLogsRoute: ApiImportRunLogsRoute,
-  ApiImportRunsRoute: ApiImportRunsRoute,
+  ApiImportRunsRoute: ApiImportRunsRouteWithChildren,
   ApiSettingsMemberLoginsRoute: ApiSettingsMemberLoginsRoute,
   ApiV1ResourceRoute: ApiV1ResourceRouteWithChildren,
   ApiV1DocsRoute: ApiV1DocsRoute,
@@ -2702,6 +2886,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiImportAgentDebugEventsRoute: ApiImportAgentDebugEventsRoute,
   ApiImportAgentSocketRoute: ApiImportAgentSocketRoute,
   ApiImportAgentSyncRoute: ApiImportAgentSyncRoute,
+  ApiImportAgentOauthCallbackRoute: ApiImportAgentOauthCallbackRoute,
+  ApiImportAgentOauthStartRoute: ApiImportAgentOauthStartRoute,
+  ApiImportAgentOauthStatusRoute: ApiImportAgentOauthStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

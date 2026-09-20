@@ -9,16 +9,19 @@ import {
   importFinding,
   importHunt,
   importRun,
+  ledgerParty,
   orderMail,
   orderMailAttachment,
   orderMailEvent,
   purchase,
   vendor,
+  user,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
+import { mintImportRunPublicId } from "../run-identifiers";
 import { uniqueOrderSubsetForCharge } from "../writer-policy";
 import type { GmailOrderMailAttachment } from "./types";
 
@@ -153,10 +156,37 @@ export async function processOrderMails(
         )
         .limit(1);
       if (!existing) {
+        const [actorSnapshot] = await database
+          .select({
+            actorUserId: ledgerParty.userId,
+            actorName: user.name,
+            actorEmail: user.email,
+            actorLedgerPartyShortcode: ledgerParty.shortcode,
+            actorLedgerPartyName: ledgerParty.name,
+            actorLedgerPartyKind: ledgerParty.kind,
+          })
+          .from(ledgerParty)
+          .innerJoin(user, eq(user.id, ledgerParty.userId))
+          .where(
+            and(
+              eq(ledgerParty.id, mail.ledgerPartyId),
+              notDeleted(ledgerParty),
+            ),
+          )
+          .limit(1);
+        if (!actorSnapshot?.actorUserId)
+          throw new Error("Order mail party has no controlling member");
         const runId = crypto.randomUUID();
         await database.insert(importRun).values({
           id: runId,
+          publicId: mintImportRunPublicId(),
           ledgerPartyId: mail.ledgerPartyId,
+          actorUserId: actorSnapshot.actorUserId,
+          actorName: actorSnapshot.actorName,
+          actorEmail: actorSnapshot.actorEmail,
+          actorLedgerPartyShortcode: actorSnapshot.actorLedgerPartyShortcode,
+          actorLedgerPartyName: actorSnapshot.actorLedgerPartyName,
+          actorLedgerPartyKind: actorSnapshot.actorLedgerPartyKind,
           trigger: "discovery",
           status: "needs_review",
           agentSessionId: `import-run:${runId}`,

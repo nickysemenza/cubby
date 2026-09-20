@@ -30,10 +30,14 @@ import {
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
+  commitPurchaseImportInput,
+  commitPurchaseImportOut,
   confirmMerchantVendorRuleInput,
   confirmMerchantVendorRuleOut,
-  importVendorOrdersInput,
-  importVendorOrdersOut,
+  preparePurchaseImportInput,
+  preparePurchaseImportOut,
+  purchaseImportOperationStatusInput,
+  purchaseImportOperationStatusOut,
 } from "@cubby/schemas/purchase-import";
 import { vendorCoverageInput, vendorCoverageOut } from "@cubby/schemas/vendor";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -42,7 +46,11 @@ import { z } from "zod";
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { executeEntity } from "~/server/entity-kernel";
 import { confirmMerchantVendorRule } from "~/server/purchase-import/hunts";
-import { importVendorOrders } from "~/server/purchase-import/import-orders";
+import {
+  commitPurchaseImport,
+  preparePurchaseImport,
+  purchaseImportOperationStatus,
+} from "~/server/purchase-import/import-orders";
 import { getVendorCoverage } from "~/server/repo/vendor";
 
 import { getEntityKernelContext } from "../kernel-context";
@@ -115,15 +123,45 @@ export function registerPurchaseTools(server: McpServer) {
   });
 
   registerMcpTool(server, {
-    name: "import_vendor_orders",
+    name: "prepare_purchase_import",
     description:
-      "Atomically import one to fifty extracted vendor orders for a Vendor Account owned by the authenticated member. Stable source keys make exact replays no-ops; existing itemized or linked Expenses are never overwritten and become Problems findings instead. Receiving remains a separate human action.",
-    inputSchema: importVendorOrdersInput,
-    outputSchema: importVendorOrdersOut,
+      "Persist an immutable proposed purchase import for the authenticated run. Returns stable order and line ids plus existing Product candidates. This bounded preparation never writes Purchases, Expenses, or Products and does not require open-world mutation approval.",
+    inputSchema: preparePurchaseImportInput,
+    outputSchema: preparePurchaseImportOut,
     annotations: WRITE_CLOSED,
     handler: (params, extra) => {
       const context = getEntityKernelContext(extra);
-      return importVendorOrders(context.db, params, context.actorContext);
+      return preparePurchaseImport(context.db, params, context.actorContext);
+    },
+  });
+
+  registerMcpTool(server, {
+    name: "commit_purchase_import",
+    description:
+      "Commit one exact previously prepared purchase import. Every principal line maps to an existing Product shortcode, an explicit new Product, or unresolved. Unresolved lines create a finding and stop the run for review; they never create a speculative Product. This bounded commit is replay-safe, rechecks targets and evidence, and does not require open-world mutation approval.",
+    inputSchema: commitPurchaseImportInput,
+    outputSchema: commitPurchaseImportOut,
+    annotations: WRITE_CLOSED,
+    handler: (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      return commitPurchaseImport(context.db, params, context.actorContext);
+    },
+  });
+
+  registerMcpTool(server, {
+    name: "purchase_import_operation_status",
+    description:
+      "Read the durable status and original result of one stable purchase-import operation id. Use this after interruption instead of inventing a new id or blindly repeating a write.",
+    inputSchema: purchaseImportOperationStatusInput,
+    outputSchema: purchaseImportOperationStatusOut,
+    annotations: READ_ONLY_CLOSED,
+    handler: (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      return purchaseImportOperationStatus(
+        context.db,
+        params,
+        context.actorContext,
+      );
     },
   });
 

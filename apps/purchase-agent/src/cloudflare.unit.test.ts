@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   dispatchPurchaseAgentEvent,
@@ -14,6 +15,8 @@ describe("purchase-agent queue dispatch", () => {
     const event = parsePurchaseAgentEvent({
       type: "browser_connected",
       runId,
+      publicId: "PIR-ABCDE12345",
+      coordinatorModel: "gpt-5.6-sol",
       eventId: "connection-9",
       connectionId: "mac-bridge-9",
     });
@@ -23,12 +26,32 @@ describe("purchase-agent queue dispatch", () => {
     expect(send).toHaveBeenCalledOnce();
     expect(send.mock.calls[0]?.[0]).toMatchObject({
       id: `import-run:${runId}`,
-      initialData: { runId },
+      initialData: {
+        runId,
+        publicId: "PIR-ABCDE12345",
+        coordinatorModel: "gpt-5.6-sol",
+      },
       idempotencyKey: `purchase-agent:${runId}:browser_connected:connection-9`,
       message: {
         kind: "signal",
         type: "purchase-import.browser_connected",
+        body: JSON.stringify({
+          version: 1,
+          publicId: "PIR-ABCDE12345",
+          coordinatorModel: "gpt-5.6-sol",
+          eventId: "connection-9",
+          type: "browser_connected",
+          connectionId: "mac-bridge-9",
+        }),
+        attributes: {
+          publicId: "PIR-ABCDE12345",
+          eventId: "connection-9",
+        },
       },
     });
+    const message = z
+      .object({ body: z.string() })
+      .parse(send.mock.calls[0]?.[0].message);
+    expect(message.body).not.toContain(runId);
   });
 });

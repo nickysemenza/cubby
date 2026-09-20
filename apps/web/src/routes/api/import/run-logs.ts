@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { and, asc, eq } from "drizzle-orm";
-import { z } from "zod";
+import { asc, eq } from "drizzle-orm";
 
 import {
   purchaseImportDebugEvent,
+  purchaseImportRunLogRequest,
   purchaseImportRunLogResponse,
   type PurchaseImportRunLogEntry,
 } from "~/lib/purchase-import-debug";
@@ -81,10 +81,10 @@ export const Route = createFileRoute("/api/import/run-logs")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const runId = z
-          .object({ runId: z.uuid() })
-          .safeParse(await request.json());
-        if (!runId.success) {
+        const identifier = purchaseImportRunLogRequest.safeParse(
+          await request.json(),
+        );
+        if (!identifier.success) {
           return Response.json(
             { error: "Import run was not found" },
             { status: 404 },
@@ -111,10 +111,9 @@ export const Route = createFileRoute("/api/import/run-logs")({
           })
           .from(importRun)
           .where(
-            and(
-              eq(importRun.id, runId.data.runId),
-              eq(importRun.ledgerPartyId, party.id),
-            ),
+            "publicId" in identifier.data
+              ? eq(importRun.publicId, identifier.data.publicId)
+              : eq(importRun.id, identifier.data.runId),
           )
           .limit(1);
         if (!run) {

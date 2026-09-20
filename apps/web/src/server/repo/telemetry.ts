@@ -66,10 +66,14 @@ export async function persistTelemetryMessages(
             jobId: event.jobId ?? null,
             inputTokens: event.inputTokens,
             outputTokens: event.outputTokens,
-            // The event's own figure wins (the cookbook extractor prices
-            // every model it calls); the registry prices the rest. Cache
-            // token counts have no column of their own — they only reach the
-            // ledger through this estimate.
+            cacheReadTokens: event.cacheReadTokens ?? null,
+            cacheWriteTokens: event.cacheWriteTokens ?? null,
+            attempt: event.attempt ?? 1,
+            status: event.status ?? "succeeded",
+            gatewayLogId: event.gatewayLogId ?? null,
+            // The event's own figure wins (the cookbook extractor and Flue
+            // provider price every model attempt); the registry prices calls
+            // whose provider did not return an exact total.
             estimatedCost:
               event.estimatedCost ??
               estimateAiUsageCostUsd(event.provider, event.model, {

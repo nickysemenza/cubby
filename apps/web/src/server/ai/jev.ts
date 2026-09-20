@@ -130,6 +130,8 @@ async function requestJev(
         model: feature.model,
         feature: feature.feature,
         operation: ctx.operation,
+        jobKind: ctx.job?.kind ?? null,
+        jobId: ctx.job?.id ?? null,
         inputTokens: parsed?.usage?.input_tokens ?? null,
         outputTokens: parsed?.usage?.output_tokens ?? null,
         durationMs: Math.max(0, Math.round(performance.now() - startedAt)),

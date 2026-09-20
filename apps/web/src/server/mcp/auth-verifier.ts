@@ -43,6 +43,10 @@ export interface McpActor {
   sessionId: string | null;
   /** OAuth authorized-party claim; absent only on legacy access tokens. */
   clientId: string | null;
+  /** Present only for the private purchase-agent delegation credential. */
+  purchaseAgentRunId?: string;
+  /** OAuth refresh-grant row that authorized the private delegation. */
+  purchaseAgentGrantId?: string;
 }
 
 interface McpTokenVerifierDependencies {

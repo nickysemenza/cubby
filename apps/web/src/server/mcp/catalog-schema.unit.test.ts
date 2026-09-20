@@ -85,7 +85,12 @@ function collectIdFields(
     return;
   }
   if (schema.properties && isJsonObject(schema.properties)) {
-    for (const [key, value] of Object.entries(schema.properties)) {
+    // Purchase-agent execution ids address the run ledger itself; they are
+    // opaque idempotency keys, not Cubby entity references/shortcodes.
+    const entityProperties = Object.entries(schema.properties).filter(
+      ([key]) => key !== "_runExecution",
+    );
+    for (const [key, value] of entityProperties) {
       const next = path ? `${path}.${key}` : key;
       const strings = stringSchemas(value);
       if (
@@ -385,6 +390,14 @@ describe("MCP catalog schemas", () => {
       "update_statement_rows.selector.externalIds",
       "update_statement_rows.data.supersededByExternalId",
       "delete_statement_rows.selector.externalIds",
+      // Stable source/workflow identifiers are opaque import evidence keys,
+      // not Cubby entity UUIDs or public shortcodes.
+      "prepare_purchase_import.orders[].stableOrderId",
+      "prepare_purchase_import.orders[].itemOperationId",
+      "prepare_purchase_import.orders[].lineIds",
+      "commit_purchase_import.prepareOperationId",
+      "commit_purchase_import.resolutions[].stableOrderId",
+      "commit_purchase_import.resolutions[].stableLineId",
     ]);
     const freeTextIds = new Set([
       "orderId",

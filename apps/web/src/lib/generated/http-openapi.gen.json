@@ -24385,6 +24385,40 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "cacheReadTokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "cacheWriteTokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "attempt": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "failed"
+            ]
+          },
+          "gatewayLogId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "estimatedCost": {
             "$ref": "#/components/schemas/Money"
           },
@@ -24421,6 +24455,11 @@
           "jobId",
           "inputTokens",
           "outputTokens",
+          "cacheReadTokens",
+          "cacheWriteTokens",
+          "attempt",
+          "status",
+          "gatewayLogId",
           "durationMs",
           "entityType",
           "entityId",
@@ -24488,6 +24527,16 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "cacheReadTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "cacheWriteTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "estimatedCost": {
             "$ref": "#/components/schemas/Money"
           },
@@ -24508,6 +24557,8 @@
           "count",
           "inputTokens",
           "outputTokens",
+          "cacheReadTokens",
+          "cacheWriteTokens",
           "durationMs"
         ],
         "additionalProperties": false

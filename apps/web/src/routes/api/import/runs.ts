@@ -1,34 +1,18 @@
 import type { EntityId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
 
+import { purchaseImportRunsResponse } from "~/lib/purchase-import-run-detail";
 import {
   listPurchaseImportRuns,
   resolvePurchaseImportTarget,
 } from "~/server/purchase-import/run-target";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
-export const purchaseImportRunSummary = z.object({
-  id: z.uuid(),
-  vendorAccountLabel: z.string().nullable(),
-  vendorName: z.string().nullable(),
-  trigger: z.string(),
-  status: z.string(),
-  startedAt: z.iso.datetime(),
-  endedAt: z.iso.datetime().nullable(),
-  ordersSeen: z.number().int(),
-  imported: z.number().int(),
-  updated: z.number().int(),
-  skipped: z.number().int(),
-  failureCode: z.string().nullable(),
-  estimatedCost: z.number(),
-});
-export type PurchaseImportRunSummary = z.infer<typeof purchaseImportRunSummary>;
-
-export const purchaseImportRunsResponse = z.object({
-  runs: z.array(purchaseImportRunSummary),
-});
-export const purchaseImportRunsError = z.object({ error: z.string() });
+export {
+  purchaseImportRunsError,
+  purchaseImportRunsResponse,
+  type PurchaseImportRunSummary,
+} from "~/lib/purchase-import-run-detail";
 
 export const Route = createFileRoute("/api/import/runs")({
   server: {
@@ -71,9 +55,19 @@ export const Route = createFileRoute("/api/import/runs")({
         return Response.json(
           purchaseImportRunsResponse.parse({
             runs: runs.map((run) => ({
-              ...run,
+              publicId: run.publicId,
+              vendorAccountLabel: run.vendorAccountLabel,
+              vendorName: run.vendorName,
+              trigger: run.trigger,
+              status: run.status,
               startedAt: run.startedAt.toISOString(),
               endedAt: run.endedAt?.toISOString() ?? null,
+              ordersSeen: run.ordersSeen,
+              imported: run.imported,
+              updated: run.updated,
+              skipped: run.skipped,
+              failureCode: run.failureCode,
+              estimatedCost: run.estimatedCost,
             })),
           }),
         );

@@ -1,15 +1,19 @@
-import { buildActorContext } from "@cubby/schemas/context";
+import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import {
   parseEntityId,
+  ledgerPartyId,
   purchaseId,
+  userId,
   vendorAccountId,
   type LedgerPartyId,
   type VendorAccountId,
+  type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
   browserBridgeOperation,
   browserBridgeRequest,
   browserCapture,
+  importRunPublicId,
   importRunTrigger,
   purchaseImportRunScope,
   type BrowserBridgeOperation,
@@ -21,10 +25,13 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   inArray,
   isNotNull,
   isNull,
+  lt,
+  or,
   sql,
 } from "drizzle-orm";
 import { z } from "zod";
@@ -37,7 +44,12 @@ import {
   importFinding,
   importHunt,
   importRun,
+  importRunApproval,
+  importRunControlEvent,
   importRunOperation,
+  importRunProgress,
+  importPreparedLine,
+  importPreparedOrder,
   ledgerParty,
   purchase,
   vendor,
@@ -48,8 +60,10 @@ import {
   product,
   productExternalId,
   productImage,
+  user,
 } from "~/server/db/schema";
 import {
+  databaseForTransaction,
   getDb,
   notDeleted,
   withTransaction,
@@ -58,13 +72,35 @@ import {
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveImportFinding } from "./findings";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
+import { loadReceiptEvidenceForRun } from "./receipt-evidence";
+import { mintImportRunPublicId } from "./run-identifiers";
 import { importVendorOrder } from "./writer";
 
 const ACTIVE_RUN_STATUSES = [
   "running",
   "paused_auth",
   "paused_offline",
+  "paused_approval",
 ] as const;
+
+const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
+
+const usageCursorSchema = z.object({
+  createdAt: z.iso.datetime(),
+  id: z.uuid(),
+});
+
+const encodeUsageCursor = (value: z.infer<typeof usageCursorSchema>) =>
+  btoa(JSON.stringify(value))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+
+const decodeUsageCursor = (value: string) => {
+  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+  return usageCursorSchema.parse(JSON.parse(atob(padded)));
+};
 
 const sha256 = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest(
@@ -208,6 +244,10 @@ export async function startOrResumeImportRun(
     ledgerPartyId: LedgerPartyId;
     vendorAccountId: VendorAccountId;
     trigger: ImportRunTrigger;
+    predecessorRunId?: string;
+    coordinatorModel?: string;
+    skillRevision?: string;
+    runtimeRevision?: string;
   },
 ) {
   const trigger = importRunTrigger.parse(input.trigger);
@@ -216,8 +256,25 @@ export async function startOrResumeImportRun(
       sql`SELECT pg_advisory_xact_lock(hashtext(${input.vendorAccountId}))`,
     );
     const [scope] = await tx
-      .select({ id: vendorAccount.id })
+      .select({
+        id: vendorAccount.id,
+        vendorId: vendorAccount.vendorId,
+        actorUserId: ledgerParty.userId,
+        actorName: user.name,
+        actorEmail: user.email,
+        actorLedgerPartyShortcode: ledgerParty.shortcode,
+        actorLedgerPartyName: ledgerParty.name,
+        actorLedgerPartyKind: ledgerParty.kind,
+      })
       .from(vendorAccount)
+      .innerJoin(
+        ledgerParty,
+        and(
+          eq(ledgerParty.id, vendorAccount.ledgerPartyId),
+          notDeleted(ledgerParty),
+        ),
+      )
+      .innerJoin(user, eq(user.id, ledgerParty.userId))
       .where(
         and(
           eq(vendorAccount.id, input.vendorAccountId),
@@ -226,9 +283,14 @@ export async function startOrResumeImportRun(
         ),
       )
       .limit(1);
-    if (!scope) throw new Error("Vendor account is not owned by this member");
+    if (!scope?.actorUserId)
+      throw new Error("Vendor account is not owned by an authenticated member");
     const [existing] = await tx
-      .select({ id: importRun.id, status: importRun.status })
+      .select({
+        id: importRun.id,
+        publicId: importRun.publicId,
+        status: importRun.status,
+      })
       .from(importRun)
       .where(
         and(
@@ -239,16 +301,38 @@ export async function startOrResumeImportRun(
       .limit(1);
     if (existing) return { ...existing, created: false };
     const id = crypto.randomUUID();
-    const [created] = await tx
-      .insert(importRun)
-      .values({
-        id,
-        ledgerPartyId: input.ledgerPartyId,
-        vendorAccountId: input.vendorAccountId,
-        trigger,
-        agentSessionId: `import-run:${id}`,
-      })
-      .returning({ id: importRun.id, status: importRun.status });
+    let created: { id: string; publicId: string; status: string } | undefined;
+    for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
+      [created] = await tx
+        .insert(importRun)
+        .values({
+          id,
+          publicId: mintImportRunPublicId(),
+          ledgerPartyId: input.ledgerPartyId,
+          actorUserId: scope.actorUserId,
+          actorName: scope.actorName,
+          actorEmail: scope.actorEmail,
+          actorLedgerPartyShortcode: scope.actorLedgerPartyShortcode,
+          actorLedgerPartyName: scope.actorLedgerPartyName,
+          actorLedgerPartyKind: scope.actorLedgerPartyKind,
+          vendorAccountId: input.vendorAccountId,
+          vendorId: scope.vendorId,
+          predecessorRunId: input.predecessorRunId
+            ? z.uuid().parse(input.predecessorRunId)
+            : null,
+          trigger,
+          coordinatorModel: input.coordinatorModel ?? "gpt-5.6-terra",
+          skillRevision: input.skillRevision ?? "purchase-import@1",
+          runtimeRevision: input.runtimeRevision ?? "flue@1",
+          agentSessionId: `import-run:${id}`,
+        })
+        .onConflictDoNothing()
+        .returning({
+          id: importRun.id,
+          publicId: importRun.publicId,
+          status: importRun.status,
+        });
+    }
     if (!created) throw new Error("Import run was not created");
     await tx
       .update(vendorAccount)
@@ -263,18 +347,23 @@ export async function loadRunScope(db: Database, runId: string) {
   const [row] = await getDb(db)
     .select({
       runId: importRun.id,
+      publicId: importRun.publicId,
       agentId: importRun.agentSessionId,
       trigger: importRun.trigger,
       status: importRun.status,
       vendorAccountId: importRun.vendorAccountId,
+      vendorId: sql<VendorId | null>`coalesce(${importRun.vendorId}, ${vendor.id})`,
       vendorLabel: vendorAccount.label,
       allowedHosts: vendor.browserDomains,
       navigationHints: vendor.agentHints,
       cursor: vendorAccount.cursor,
       website: vendor.website,
       ledgerPartyId: importRun.ledgerPartyId,
-      vendorId: vendor.id,
-      actorUserId: ledgerParty.userId,
+      actorUserId: importRun.actorUserId,
+      coordinatorModel: importRun.coordinatorModel,
+      skillRevision: importRun.skillRevision,
+      runtimeRevision: importRun.runtimeRevision,
+      runUpdatedAt: importRun.updatedAt,
     })
     .from(importRun)
     .leftJoin(
@@ -286,7 +375,13 @@ export async function loadRunScope(db: Database, runId: string) {
     )
     .leftJoin(
       vendor,
-      and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
+      and(
+        or(
+          eq(vendor.id, importRun.vendorId),
+          eq(vendor.id, vendorAccount.vendorId),
+        ),
+        notDeleted(vendor),
+      ),
     )
     .innerJoin(
       ledgerParty,
@@ -299,6 +394,7 @@ export async function loadRunScope(db: Database, runId: string) {
   return {
     public: purchaseImportRunScope.parse({
       runId: row.runId,
+      publicId: row.publicId,
       agentId: row.agentId,
       trigger: row.trigger,
       status: row.status,
@@ -306,17 +402,162 @@ export async function loadRunScope(db: Database, runId: string) {
       vendorLabel: row.vendorLabel,
       allowedHosts: row.allowedHosts ?? [],
       navigationHints: row.navigationHints,
+      coordinatorModel: row.coordinatorModel,
+      skillRevision: row.skillRevision,
+      runtimeRevision: row.runtimeRevision,
     }),
     website: row.website,
     cursor: row.cursor,
     ledgerPartyId: row.ledgerPartyId,
     vendorId: row.vendorId,
     actorUserId: row.actorUserId,
+    runUpdatedAt: row.runUpdatedAt,
   };
 }
 
+export async function loadRunScopeByPublicId(db: Database, publicId: string) {
+  const parsedPublicId = importRunPublicId.parse(publicId);
+  const [row] = await getDb(db)
+    .select({ id: importRun.id })
+    .from(importRun)
+    .where(eq(importRun.publicId, parsedPublicId))
+    .limit(1);
+  if (!row) throw new Error("Purchase import run was not found");
+  return loadRunScope(db, row.id);
+}
+
+const agentProgressInput = z.object({
+  runId: z.uuid(),
+  eventId: z.string().trim().min(1).max(256),
+  phase: z.string().trim().min(1).max(200),
+  currentItem: z.string().trim().min(1).max(500).optional(),
+  awaitingApproval: z.boolean().optional(),
+  detail: z.string().trim().min(1).max(2_000).optional(),
+});
+
+export async function updateAgentProgress(
+  db: Database,
+  rawInput: z.input<typeof agentProgressInput>,
+) {
+  const input = agentProgressInput.parse(rawInput);
+  const [inserted] = await getDb(db)
+    .insert(importRunProgress)
+    .values({
+      runId: input.runId,
+      eventId: input.eventId,
+      phase: input.phase,
+      currentItem: input.currentItem,
+      awaitingApproval: input.awaitingApproval ?? false,
+      detail: input.detail,
+    })
+    .onConflictDoNothing()
+    .returning({ id: importRunProgress.id });
+  return { recorded: Boolean(inserted) };
+}
+
+export async function listImportRunProgress(db: Database, runId: string) {
+  return getDb(db)
+    .select({
+      eventId: importRunProgress.eventId,
+      phase: importRunProgress.phase,
+      currentItem: importRunProgress.currentItem,
+      awaitingApproval: importRunProgress.awaitingApproval,
+      detail: importRunProgress.detail,
+      createdAt: importRunProgress.createdAt,
+    })
+    .from(importRunProgress)
+    .where(eq(importRunProgress.runId, z.uuid().parse(runId)))
+    .orderBy(asc(importRunProgress.createdAt), asc(importRunProgress.id));
+}
+
+export async function latestImportRunProgress(db: Database, runId: string) {
+  const [latest] = await getDb(db)
+    .select({
+      eventId: importRunProgress.eventId,
+      phase: importRunProgress.phase,
+      currentItem: importRunProgress.currentItem,
+      awaitingApproval: importRunProgress.awaitingApproval,
+      detail: importRunProgress.detail,
+      createdAt: importRunProgress.createdAt,
+    })
+    .from(importRunProgress)
+    .where(eq(importRunProgress.runId, z.uuid().parse(runId)))
+    .orderBy(desc(importRunProgress.createdAt), desc(importRunProgress.id))
+    .limit(1);
+  return latest ?? null;
+}
+
+export async function pauseImportRunForAuthorization(
+  db: Database,
+  runId: string,
+) {
+  const [run] = await getDb(db)
+    .update(importRun)
+    .set({ status: "paused_auth", updatedAt: new Date() })
+    .where(
+      and(
+        eq(importRun.id, z.uuid().parse(runId)),
+        eq(importRun.status, "running"),
+      ),
+    )
+    .returning({ publicId: importRun.publicId });
+  return run ?? null;
+}
+
+export async function resumeAuthorizedImportRuns(
+  db: Database,
+  actorUserId: string,
+) {
+  return getDb(db)
+    .update(importRun)
+    .set({ status: "running", updatedAt: new Date() })
+    .where(
+      and(
+        eq(importRun.actorUserId, userId.parse(actorUserId)),
+        eq(importRun.status, "paused_auth"),
+      ),
+    )
+    .returning({ id: importRun.id, publicId: importRun.publicId });
+}
+
+export async function pauseAuthorizedImportRuns(
+  db: Database,
+  actorUserId: string,
+) {
+  return getDb(db)
+    .update(importRun)
+    .set({ status: "paused_auth", updatedAt: new Date() })
+    .where(
+      and(
+        eq(importRun.actorUserId, userId.parse(actorUserId)),
+        eq(importRun.status, "running"),
+      ),
+    )
+    .returning({ id: importRun.id });
+}
+
+export async function expireOfflineImportRuns(db: Database, now = new Date()) {
+  const cutoff = new Date(now.getTime() - OFFLINE_EXPIRY_MS);
+  const expired = await getDb(db)
+    .update(importRun)
+    .set({
+      status: "failed",
+      failureCode: "offline_expired",
+      endedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(importRun.status, "paused_offline"),
+        lt(importRun.updatedAt, cutoff),
+      ),
+    )
+    .returning({ id: importRun.id });
+  return { expired: expired.length };
+}
+
 const assertRunActive = (status: string) => {
-  if (!ACTIVE_RUN_STATUSES.some((activeStatus) => activeStatus === status))
+  if (status !== "running")
     throw new Error(`Import run is fenced in status ${status}`);
 };
 
@@ -365,8 +606,20 @@ export async function claimNextImportWork(
   runId: string,
 ) {
   const scope = await loadRunScope(db, runId);
+  const receipt = await loadReceiptEvidenceForRun(db, scope.public.runId);
+  if (receipt) {
+    assertRunActive(scope.public.status);
+    return {
+      kind: "receipt_evidence" as const,
+      huntId: receipt.huntId,
+      imageId: receipt.imageId,
+      evidenceChecksum: receipt.evidenceChecksum,
+    };
+  }
   if (!scope.public.vendorAccountId || !scope.vendorId)
     return { kind: "none" as const };
+  if (scope.public.status === "paused_approval")
+    return { kind: "paused_approval" as const };
   if (
     scope.public.status === "paused_auth" ||
     scope.public.status === "paused_offline"
@@ -374,7 +627,29 @@ export async function claimNextImportWork(
     const connected = await namespace
       .getByName(scope.public.vendorAccountId)
       .connected();
-    if (!connected) return { kind: "paused_offline" as const };
+    if (!connected) {
+      if (
+        scope.public.status === "paused_offline" &&
+        Date.now() - scope.runUpdatedAt.getTime() >= OFFLINE_EXPIRY_MS
+      ) {
+        await getDb(db)
+          .update(importRun)
+          .set({
+            status: "failed",
+            failureCode: "offline_expired",
+            endedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(importRun.id, scope.public.runId),
+              eq(importRun.status, "paused_offline"),
+            ),
+          );
+        return { kind: "failed" as const, failureCode: "offline_expired" };
+      }
+      return { kind: "paused_offline" as const };
+    }
     await getDb(db)
       .update(importRun)
       .set({ status: "running", failureCode: null, updatedAt: new Date() })
@@ -660,9 +935,27 @@ export async function importBrowserOrderEvidence(
   assertRunActive(scope.public.status);
   if (!scope.public.vendorAccountId || !scope.vendorId || !scope.actorUserId)
     throw new Error("Import run ownership is incomplete");
+  const commandId = z.uuid().parse(input.commandId);
+  const commandOperations = await getDb(db)
+    .select({ result: importRunOperation.result })
+    .from(importRunOperation)
+    .where(
+      and(
+        eq(importRunOperation.runId, z.uuid().parse(input.runId)),
+        eq(importRunOperation.kind, "browser_command"),
+      ),
+    );
+  const commandBelongsToRun = commandOperations.some(({ result }) => {
+    const parsed = z.object({ commandId: z.uuid() }).safeParse(result);
+    return parsed.success && parsed.data.commandId === commandId;
+  });
+  if (!commandBelongsToRun)
+    throw new Error(
+      "Browser evidence command was not issued by this import run",
+    );
   const result = await namespace
     .getByName(scope.public.vendorAccountId)
-    .result(z.uuid().parse(input.commandId));
+    .result(commandId);
   if (result?.runID !== input.runId)
     throw new Error("Browser evidence belongs to a different import run");
   if (
@@ -1101,6 +1394,11 @@ export async function stopImportRunForReview(
     ])
     .parse(input.kind);
   const fingerprint = await sha256(`${kind}:${summary}`);
+  await auditAllImportBatches(db, {
+    runId: input.runId,
+    operationId: `${input.operationId}:required-audit`,
+  });
+  const auditedAt = new Date();
   return withTransaction(db, async (tx) => {
     if (scope.public.status !== "needs_review")
       assertRunActive(scope.public.status);
@@ -1151,6 +1449,7 @@ export async function stopImportRunForReview(
       .update(importRun)
       .set({
         status: "needs_review",
+        auditedAt,
         endedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -1190,14 +1489,32 @@ export async function finishImportRun(
       : [];
     if (pendingHunt)
       throw new Error("Import run still has unsettled browser hunt work");
+    const [pendingReceipt] = await getDb(db)
+      .select({ id: importHunt.id })
+      .from(importHunt)
+      .where(
+        and(
+          eq(importHunt.receiptRunId, runId),
+          eq(importHunt.state, "processing_receipt"),
+        ),
+      )
+      .limit(1);
+    if (pendingReceipt)
+      throw new Error("Import run still has unsettled receipt evidence");
 
     await auditAllImportBatches(db, {
       runId: input.runId,
       operationId: `${input.operationId}:audit`,
     });
+    const auditedAt = new Date();
     await getDb(db)
       .update(importRun)
-      .set({ status: "completed", endedAt: new Date(), updatedAt: new Date() })
+      .set({
+        status: "completed",
+        auditedAt,
+        endedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(importRun.id, runId),
@@ -1247,48 +1564,6 @@ export async function finishImportRun(
   return { ...run, findingCount: findingCount?.value ?? 0 };
 }
 
-export async function recordOrchestrationUsage(
-  db: Database,
-  input: {
-    runId: string;
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
-    estimatedCost: number;
-  },
-) {
-  const runId = z.uuid().parse(input.runId);
-  const usage = z
-    .object({
-      inputTokens: z.number().int().nonnegative(),
-      outputTokens: z.number().int().nonnegative(),
-      cacheReadTokens: z.number().int().nonnegative(),
-      cacheWriteTokens: z.number().int().nonnegative(),
-      estimatedCost: z.number().nonnegative(),
-    })
-    .parse(input);
-  await getDb(db)
-    .insert(aiUsage)
-    .values({
-      feature: "purchase-import-orchestration",
-      provider: "cloudflare-ai-gateway",
-      model: "gpt-5.6-luna",
-      operation: "purchaseImport.flue",
-      jobKind: "purchase_import_run",
-      jobId: runId,
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      estimatedCost: usage.estimatedCost,
-      durationMs: 0,
-      cacheStatus:
-        usage.cacheReadTokens > 0 || usage.cacheWriteTokens > 0
-          ? "hit"
-          : "none",
-    });
-  return { recorded: true };
-}
-
 export async function markImportRunFailed(
   db: Database,
   input: {
@@ -1306,12 +1581,7 @@ export async function markImportRunFailed(
       endedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(importRun.id, runId),
-        inArray(importRun.status, [...ACTIVE_RUN_STATUSES]),
-      ),
-    )
+    .where(and(eq(importRun.id, runId), eq(importRun.status, "running")))
     .returning({ vendorAccountId: importRun.vendorAccountId });
   if (run?.vendorAccountId) {
     await getDb(db)
@@ -1320,4 +1590,865 @@ export async function markImportRunFailed(
       .where(sql`${vendorAccount.id} = ${run.vendorAccountId}`);
   }
   return { failed: Boolean(run), detail: input.detail ?? null };
+}
+
+export async function loadImportRunByPublicId(
+  db: Database,
+  actor: ActorContext,
+  rawPublicId: string,
+  options: { usageCursor?: string; usageLimit?: number } = {},
+) {
+  const publicId = importRunPublicId.parse(rawPublicId);
+  const database = getDb(db);
+  const [run] = await database
+    .select({
+      id: importRun.id,
+      publicId: importRun.publicId,
+      ledgerPartyId: importRun.ledgerPartyId,
+      actorUserId: importRun.actorUserId,
+      predecessorRunId: importRun.predecessorRunId,
+      vendorAccountId: importRun.vendorAccountId,
+      vendorAccountShortcode: vendorAccount.shortcode,
+      vendorAccountLabel: vendorAccount.label,
+      vendorName: vendor.name,
+      trigger: importRun.trigger,
+      status: importRun.status,
+      coordinatorModel: importRun.coordinatorModel,
+      skillRevision: importRun.skillRevision,
+      runtimeRevision: importRun.runtimeRevision,
+      decisionRevision: importRun.decisionRevision,
+      startedAt: importRun.startedAt,
+      endedAt: importRun.endedAt,
+      auditedAt: importRun.auditedAt,
+      ordersSeen: importRun.ordersSeen,
+      imported: importRun.imported,
+      updated: importRun.updated,
+      skipped: importRun.skipped,
+      failureCode: importRun.failureCode,
+      actorName: importRun.actorName,
+      actorEmail: importRun.actorEmail,
+      actorLedgerPartyShortcode: importRun.actorLedgerPartyShortcode,
+      actorLedgerPartyName: importRun.actorLedgerPartyName,
+      actorLedgerPartyKind: importRun.actorLedgerPartyKind,
+      controllerPartyShortcode: ledgerParty.shortcode,
+      controllerPartyName: ledgerParty.name,
+      controllerPartyKind: ledgerParty.kind,
+    })
+    .from(importRun)
+    .innerJoin(
+      ledgerParty,
+      and(
+        eq(ledgerParty.userId, actor.userId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .leftJoin(
+      vendorAccount,
+      and(
+        eq(vendorAccount.id, importRun.vendorAccountId),
+        notDeleted(vendorAccount),
+      ),
+    )
+    .leftJoin(
+      vendor,
+      and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
+    )
+    .where(eq(importRun.publicId, publicId))
+    .limit(1);
+  if (!run) throw new Error("Purchase import run was not found");
+
+  const usageLimit = z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .parse(options.usageLimit ?? 25);
+  const usageCursor = options.usageCursor
+    ? decodeUsageCursor(options.usageCursor)
+    : null;
+  const [
+    predecessor,
+    successor,
+    operations,
+    approvals,
+    preparedOrders,
+    progress,
+    affectedPurchases,
+    findings,
+    usageTotals,
+    usageRows,
+    controlHistory,
+  ] = await Promise.all([
+    run.predecessorRunId
+      ? database
+          .select({ publicId: importRun.publicId })
+          .from(importRun)
+          .where(eq(importRun.id, run.predecessorRunId))
+          .limit(1)
+      : Promise.resolve([]),
+    database
+      .select({ publicId: importRun.publicId })
+      .from(importRun)
+      .where(eq(importRun.predecessorRunId, run.id))
+      .orderBy(desc(importRun.startedAt))
+      .limit(1),
+    database
+      .select({
+        id: importRunOperation.id,
+        operationId: importRunOperation.operationId,
+        kind: importRunOperation.kind,
+        state: importRunOperation.state,
+        result: importRunOperation.result,
+        error: importRunOperation.error,
+        startedAt: importRunOperation.startedAt,
+        completedAt: importRunOperation.completedAt,
+      })
+      .from(importRunOperation)
+      .where(eq(importRunOperation.runId, run.id))
+      .orderBy(asc(importRunOperation.startedAt)),
+    database
+      .select({
+        id: importRunApproval.id,
+        operationId: importRunApproval.operationId,
+        operationKind: importRunApproval.operationKind,
+        args: importRunApproval.args,
+        state: importRunApproval.state,
+        createdAt: importRunApproval.createdAt,
+        decidedByUserId: importRunApproval.decidedByUserId,
+        decidedAt: importRunApproval.decidedAt,
+        rejectedAt: importRunApproval.rejectedAt,
+        consumedAt: importRunApproval.consumedAt,
+        invalidatedAt: importRunApproval.invalidatedAt,
+      })
+      .from(importRunApproval)
+      .where(eq(importRunApproval.runId, run.id))
+      .orderBy(asc(importRunApproval.createdAt)),
+    database
+      .select({
+        id: importPreparedOrder.id,
+        stableOrderId: importPreparedOrder.stableOrderId,
+        itemOperationId: importPreparedOrder.itemOperationId,
+        prepareOperationId: importPreparedOrder.prepareOperationId,
+        sourceKind: importPreparedOrder.sourceKind,
+        externalKey: importPreparedOrder.sourceExternalKey,
+        preparedAt: importPreparedOrder.createdAt,
+        lineCount: count(importPreparedLine.id),
+      })
+      .from(importPreparedOrder)
+      .leftJoin(
+        importPreparedLine,
+        eq(importPreparedLine.preparedOrderId, importPreparedOrder.id),
+      )
+      .where(eq(importPreparedOrder.runId, run.id))
+      .groupBy(importPreparedOrder.id)
+      .orderBy(asc(importPreparedOrder.createdAt)),
+    listImportRunProgress(db, run.id),
+    database
+      .selectDistinct({
+        id: purchase.shortcode,
+        displayLabel: purchase.displayLabel,
+        orderId: purchase.orderId,
+      })
+      .from(importRunMutation)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, importRunMutation.targetId), notDeleted(purchase)),
+      )
+      .where(
+        and(
+          eq(importRunMutation.runId, run.id),
+          eq(importRunMutation.targetType, "purchase"),
+        ),
+      ),
+    database
+      .select({
+        id: importFinding.id,
+        kind: importFinding.kind,
+        summary: importFinding.summary,
+        status: importFinding.status,
+        autoApplied: importFinding.autoApplied,
+        probability: importFinding.probability,
+        createdAt: importFinding.createdAt,
+        expiresAt: importFinding.expiresAt,
+      })
+      .from(importFinding)
+      .where(eq(importFinding.importRunId, run.id))
+      .orderBy(asc(importFinding.createdAt)),
+    database
+      .select({
+        pricedSubtotal: sql<number>`coalesce(sum(${aiUsage.estimatedCost}) filter (where ${aiUsage.estimatedCost} is not null), 0)`,
+        unpricedCount: sql<number>`count(*) filter (where ${aiUsage.estimatedCost} is null and ${aiUsage.status} = 'succeeded')`,
+      })
+      .from(aiUsage)
+      .where(
+        and(
+          eq(aiUsage.jobKind, "purchase_import_run"),
+          eq(aiUsage.jobId, run.id),
+          notDeleted(aiUsage),
+        ),
+      ),
+    database
+      .select({
+        id: aiUsage.id,
+        createdAt: aiUsage.createdAt,
+        feature: aiUsage.feature,
+        operation: aiUsage.operation,
+        provider: aiUsage.provider,
+        model: aiUsage.model,
+        inputTokens: aiUsage.inputTokens,
+        outputTokens: aiUsage.outputTokens,
+        cacheReadTokens: aiUsage.cacheReadTokens,
+        cacheWriteTokens: aiUsage.cacheWriteTokens,
+        attempt: aiUsage.attempt,
+        status: aiUsage.status,
+        gatewayLogId: aiUsage.gatewayLogId,
+        durationMs: aiUsage.durationMs,
+        estimatedCost: aiUsage.estimatedCost,
+        cacheStatus: aiUsage.cacheStatus,
+      })
+      .from(aiUsage)
+      .where(
+        and(
+          eq(aiUsage.jobKind, "purchase_import_run"),
+          eq(aiUsage.jobId, run.id),
+          notDeleted(aiUsage),
+          usageCursor
+            ? or(
+                lt(aiUsage.createdAt, new Date(usageCursor.createdAt)),
+                and(
+                  eq(aiUsage.createdAt, new Date(usageCursor.createdAt)),
+                  lt(aiUsage.id, usageCursor.id),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
+      .limit(usageLimit + 1),
+    database
+      .select({
+        action: importRunControlEvent.action,
+        userId: importRunControlEvent.controllerUserId,
+        name: importRunControlEvent.controllerName,
+        email: importRunControlEvent.controllerEmail,
+        ledgerPartyId: importRunControlEvent.controllerLedgerPartyShortcode,
+        ledgerPartyName: importRunControlEvent.controllerLedgerPartyName,
+        ledgerPartyKind: importRunControlEvent.controllerLedgerPartyKind,
+        createdAt: importRunControlEvent.createdAt,
+      })
+      .from(importRunControlEvent)
+      .where(eq(importRunControlEvent.runId, run.id))
+      .orderBy(asc(importRunControlEvent.createdAt)),
+  ]);
+  const hasMoreUsage = usageRows.length > usageLimit;
+  const pageUsage = usageRows.slice(0, usageLimit);
+  return {
+    publicId: run.publicId,
+    status: run.status,
+    trigger: run.trigger,
+    source: {
+      kind: run.trigger,
+      vendorName: run.vendorName,
+    },
+    actor: {
+      id: run.actorUserId,
+      name: run.actorName,
+      email: run.actorEmail,
+      ledgerParty: {
+        id: run.actorLedgerPartyShortcode,
+        name: run.actorLedgerPartyName,
+        kind: run.actorLedgerPartyKind,
+      },
+    },
+    controllingMembers: [
+      ...new Map(
+        controlHistory.map((event) => [
+          event.userId,
+          {
+            userId: event.userId,
+            name: event.name,
+            email: event.email,
+            ledgerParty: {
+              id: event.ledgerPartyId,
+              name: event.ledgerPartyName,
+              kind: event.ledgerPartyKind,
+            },
+          },
+        ]),
+      ).values(),
+    ],
+    controlHistory,
+    vendorAccount: run.vendorAccountShortcode
+      ? { id: run.vendorAccountShortcode, label: run.vendorAccountLabel }
+      : null,
+    startedAt: run.startedAt,
+    endedAt: run.endedAt,
+    auditedAt: run.auditedAt,
+    ordersSeen: run.ordersSeen,
+    imported: run.imported,
+    updated: run.updated,
+    skipped: run.skipped,
+    failureCode: run.failureCode,
+    predecessorRunPublicId: predecessor[0]?.publicId ?? null,
+    successorRunPublicId: successor[0]?.publicId ?? null,
+    coordinatorModel: run.coordinatorModel,
+    skillRevision: run.skillRevision,
+    runtimeRevision: run.runtimeRevision,
+    decisionRevision: run.decisionRevision,
+    operations,
+    approvals,
+    preparedOrders,
+    progress,
+    latestProgress: progress.at(-1) ?? null,
+    affectedPurchases,
+    findings,
+    usage: {
+      pricedSubtotal: usageTotals[0]?.pricedSubtotal ?? 0,
+      unpricedCount: usageTotals[0]?.unpricedCount ?? 0,
+      records: pageUsage,
+      nextCursor: hasMoreUsage
+        ? (() => {
+            const last = pageUsage.at(-1);
+            return last
+              ? encodeUsageCursor({
+                  createdAt: last.createdAt.toISOString(),
+                  id: last.id,
+                })
+              : null;
+          })()
+        : null,
+    },
+  };
+}
+
+const runControlInput = z.object({
+  runPublicId: importRunPublicId,
+  action: z.enum([
+    "pause",
+    "resume",
+    "cancel",
+    "approve",
+    "reject",
+    "retry",
+    "escalate_sol",
+  ]),
+  operationId: z.string().trim().min(1).max(200).optional(),
+  approvalId: z.uuid().optional(),
+});
+
+const importRunControlAction = z.enum([
+  "prompt",
+  "abort",
+  "pause",
+  "resume",
+  "cancel",
+  "approve",
+  "reject",
+  "retry",
+  "escalate_sol",
+]);
+
+export async function recordImportRunControlEvent(
+  db: Database,
+  actor: ActorContext,
+  rawInput: {
+    runPublicId: string;
+    action: z.input<typeof importRunControlAction>;
+  },
+) {
+  const input = z
+    .object({ runPublicId: importRunPublicId, action: importRunControlAction })
+    .parse(rawInput);
+  const scope = await loadRunScopeByPublicId(db, input.runPublicId);
+  const [controller] = await getDb(db)
+    .select({
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      ledgerPartyId: ledgerParty.id,
+      ledgerPartyShortcode: ledgerParty.shortcode,
+      ledgerPartyName: ledgerParty.name,
+      ledgerPartyKind: ledgerParty.kind,
+    })
+    .from(ledgerParty)
+    .innerJoin(user, eq(user.id, ledgerParty.userId))
+    .where(
+      and(
+        eq(ledgerParty.userId, actor.userId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .limit(1);
+  if (!controller)
+    throw new Error("Purchase import run is not owned by this member");
+  const [event] = await getDb(db)
+    .insert(importRunControlEvent)
+    .values({
+      runId: scope.public.runId,
+      action: input.action,
+      controllerUserId: userId.parse(controller.userId),
+      controllerName: controller.name,
+      controllerEmail: controller.email,
+      controllerLedgerPartyId: ledgerPartyId.parse(controller.ledgerPartyId),
+      controllerLedgerPartyShortcode: controller.ledgerPartyShortcode,
+      controllerLedgerPartyName: controller.ledgerPartyName,
+      controllerLedgerPartyKind: controller.ledgerPartyKind,
+    })
+    .returning({
+      id: importRunControlEvent.id,
+      createdAt: importRunControlEvent.createdAt,
+    });
+  if (!event) throw new Error("Import run control event was not recorded");
+  return event;
+}
+
+// Every control action shares one locked run and controller-attribution record;
+// splitting the switch would weaken the cancellation and approval fences.
+export async function controlImportRun(
+  db: Database,
+  actor: ActorContext,
+  rawInput: z.input<typeof runControlInput>,
+) {
+  const input = runControlInput.parse(rawInput);
+  const scope = await loadRunScopeByPublicId(db, input.runPublicId);
+  const [controller] = await getDb(db)
+    .select({
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      ledgerPartyId: ledgerParty.id,
+      ledgerPartyShortcode: ledgerParty.shortcode,
+      ledgerPartyName: ledgerParty.name,
+      ledgerPartyKind: ledgerParty.kind,
+    })
+    .from(ledgerParty)
+    .innerJoin(user, eq(user.id, ledgerParty.userId))
+    .where(
+      and(
+        eq(ledgerParty.userId, actor.userId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .limit(1);
+  if (!controller)
+    throw new Error("Purchase import run is not owned by this member");
+  return withTransaction(
+    db,
+    // eslint-disable-next-line complexity
+    async (tx) => {
+      const [locked] = await tx
+        .select({
+          status: importRun.status,
+          ledgerPartyId: importRun.ledgerPartyId,
+          actorUserId: importRun.actorUserId,
+          actorName: importRun.actorName,
+          actorEmail: importRun.actorEmail,
+          actorLedgerPartyShortcode: importRun.actorLedgerPartyShortcode,
+          actorLedgerPartyName: importRun.actorLedgerPartyName,
+          actorLedgerPartyKind: importRun.actorLedgerPartyKind,
+          vendorAccountId: importRun.vendorAccountId,
+          vendorId: importRun.vendorId,
+          trigger: importRun.trigger,
+          skillRevision: importRun.skillRevision,
+          runtimeRevision: importRun.runtimeRevision,
+          decisionRevision: importRun.decisionRevision,
+        })
+        .from(importRun)
+        .where(eq(importRun.id, scope.public.runId))
+        .limit(1)
+        .for("update");
+      if (!locked) throw new Error("Purchase import run was not found");
+      await tx.insert(importRunControlEvent).values({
+        runId: scope.public.runId,
+        action: input.action,
+        controllerUserId: userId.parse(controller.userId),
+        controllerName: controller.name,
+        controllerEmail: controller.email,
+        controllerLedgerPartyId: ledgerPartyId.parse(controller.ledgerPartyId),
+        controllerLedgerPartyShortcode: controller.ledgerPartyShortcode,
+        controllerLedgerPartyName: controller.ledgerPartyName,
+        controllerLedgerPartyKind: controller.ledgerPartyKind,
+      });
+      if (input.action === "retry" || input.action === "escalate_sol") {
+        if (
+          !new Set(["needs_review", "completed", "failed"]).has(locked.status)
+        )
+          throw new Error(
+            `Purchase import run is not terminal in ${locked.status}`,
+          );
+        if (!locked.vendorAccountId && !locked.vendorId)
+          throw new Error("Purchase import run has no vendor to retry");
+        const successorVendorAccountId = locked.vendorAccountId
+          ? vendorAccountId.parse(locked.vendorAccountId)
+          : null;
+        const [existingSuccessor] = await tx
+          .select({
+            id: importRun.id,
+            publicId: importRun.publicId,
+            status: importRun.status,
+            coordinatorModel: importRun.coordinatorModel,
+          })
+          .from(importRun)
+          .where(eq(importRun.predecessorRunId, scope.public.runId))
+          .orderBy(desc(importRun.startedAt))
+          .limit(1);
+        if (existingSuccessor) {
+          return {
+            publicId: input.runPublicId,
+            status: locked.status,
+            successorRunId: existingSuccessor.id,
+            successorRunPublicId: existingSuccessor.publicId,
+            successorStatus: existingSuccessor.status,
+            successorCoordinatorModel: z
+              .enum(["gpt-5.6-terra", "gpt-5.6-sol"])
+              .parse(existingSuccessor.coordinatorModel),
+            created: false,
+          };
+        }
+        const successorId = crypto.randomUUID();
+        const [successor] = await tx
+          .insert(importRun)
+          .values({
+            id: successorId,
+            publicId: mintImportRunPublicId(),
+            ledgerPartyId: locked.ledgerPartyId,
+            actorUserId: locked.actorUserId,
+            actorName: locked.actorName,
+            actorEmail: locked.actorEmail,
+            actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
+            actorLedgerPartyName: locked.actorLedgerPartyName,
+            actorLedgerPartyKind: locked.actorLedgerPartyKind,
+            vendorAccountId: successorVendorAccountId,
+            vendorId: locked.vendorId,
+            predecessorRunId: scope.public.runId,
+            trigger: locked.trigger,
+            coordinatorModel:
+              input.action === "escalate_sol" ? "gpt-5.6-sol" : "gpt-5.6-terra",
+            skillRevision: locked.skillRevision,
+            runtimeRevision: locked.runtimeRevision,
+            decisionRevision: locked.decisionRevision + 1,
+            agentSessionId: `import-run:${successorId}`,
+          })
+          .returning({
+            publicId: importRun.publicId,
+            status: importRun.status,
+          });
+        if (!successor) throw new Error("Successor import run was not created");
+        if (successorVendorAccountId) {
+          await tx
+            .update(vendorAccount)
+            .set({
+              status: "active",
+              lastRunAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(vendorAccount.id, successorVendorAccountId));
+        } else {
+          await tx
+            .update(importHunt)
+            .set({
+              receiptRunId: successorId,
+              state: "processing_receipt",
+              error: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(importHunt.receiptRunId, scope.public.runId));
+        }
+        return {
+          publicId: input.runPublicId,
+          status: locked.status,
+          successorRunId: successorId,
+          successorRunPublicId: successor.publicId,
+          successorStatus: successor.status,
+          successorCoordinatorModel:
+            input.action === "escalate_sol" ? "gpt-5.6-sol" : "gpt-5.6-terra",
+          created: true,
+        };
+      }
+      if (input.action === "cancel") {
+        if (!ACTIVE_RUN_STATUSES.some((status) => status === locked.status))
+          throw new Error(
+            `Purchase import run is immutable in ${locked.status}`,
+          );
+        const browserOperations = await tx
+          .select({ result: importRunOperation.result })
+          .from(importRunOperation)
+          .where(
+            and(
+              eq(importRunOperation.runId, scope.public.runId),
+              eq(importRunOperation.kind, "browser_command"),
+              inArray(importRunOperation.state, ["started", "completed"]),
+            ),
+          );
+        await tx
+          .update(importRun)
+          .set({
+            status: "failed",
+            failureCode: "user_cancelled",
+            endedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(importRun.id, scope.public.runId));
+        await tx
+          .update(importRunApproval)
+          .set({ state: "invalidated", invalidatedAt: new Date() })
+          .where(
+            and(
+              eq(importRunApproval.runId, scope.public.runId),
+              inArray(importRunApproval.state, ["pending", "granted"]),
+            ),
+          );
+        await tx
+          .update(importRunOperation)
+          .set({
+            state: "failed",
+            error: "Run cancelled by its owner",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(importRunOperation.runId, scope.public.runId),
+              inArray(importRunOperation.state, ["started", "paused_approval"]),
+            ),
+          );
+        return {
+          publicId: input.runPublicId,
+          status: "failed" as const,
+          cancelledBrowserCommandIds: browserOperations.flatMap(
+            ({ result }) => {
+              const parsed = z
+                .object({ commandId: z.uuid() })
+                .safeParse(result);
+              return parsed.success ? [parsed.data.commandId] : [];
+            },
+          ),
+        };
+      }
+      if (input.action === "pause") {
+        if (locked.status !== "running")
+          throw new Error(`Purchase import run is fenced in ${locked.status}`);
+        await tx
+          .update(importRun)
+          .set({ status: "paused_approval", updatedAt: new Date() })
+          .where(eq(importRun.id, scope.public.runId));
+        return {
+          publicId: input.runPublicId,
+          status: "paused_approval" as const,
+        };
+      }
+      if (input.action === "resume") {
+        if (!new Set(["paused_auth", "paused_offline"]).has(locked.status))
+          throw new Error(`Purchase import run is fenced in ${locked.status}`);
+        await tx
+          .update(importRun)
+          .set({ status: "running", failureCode: null, updatedAt: new Date() })
+          .where(eq(importRun.id, scope.public.runId));
+        return { publicId: input.runPublicId, status: "running" as const };
+      }
+
+      if (!input.operationId)
+        throw new Error("Approval decision requires an operation id");
+      const [operation] = await tx
+        .select({
+          inputFingerprint: importRunOperation.inputFingerprint,
+          state: importRunOperation.state,
+          kind: importRunOperation.kind,
+          result: importRunOperation.result,
+        })
+        .from(importRunOperation)
+        .where(
+          and(
+            eq(importRunOperation.runId, scope.public.runId),
+            eq(importRunOperation.operationId, input.operationId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!operation || operation.state !== "paused_approval")
+        throw new Error("Approval proposal is missing or no longer pending");
+      const proposal = z
+        .object({
+          approvalProposal: z.object({
+            operationKind: z.string().min(1),
+            args: z.unknown(),
+            targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+            evidenceFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+          }),
+        })
+        .parse(operation.result).approvalProposal;
+      const [existing] = input.approvalId
+        ? await tx
+            .select({
+              id: importRunApproval.id,
+              state: importRunApproval.state,
+            })
+            .from(importRunApproval)
+            .where(
+              and(
+                eq(importRunApproval.id, input.approvalId),
+                eq(importRunApproval.runId, scope.public.runId),
+                eq(importRunApproval.operationId, input.operationId),
+              ),
+            )
+            .limit(1)
+        : await tx
+            .select({
+              id: importRunApproval.id,
+              state: importRunApproval.state,
+            })
+            .from(importRunApproval)
+            .where(
+              and(
+                eq(importRunApproval.runId, scope.public.runId),
+                eq(importRunApproval.operationId, input.operationId),
+              ),
+            )
+            .limit(1);
+      let approvalId = existing?.id;
+      if (!approvalId) {
+        const [created] = await tx
+          .insert(importRunApproval)
+          .values({
+            runId: scope.public.runId,
+            operationId: input.operationId,
+            operationKind: proposal.operationKind,
+            args: proposal.args,
+            argsFingerprint: operation.inputFingerprint,
+            targetFingerprint: proposal.targetFingerprint,
+            evidenceFingerprint: proposal.evidenceFingerprint,
+            state: "pending",
+          })
+          .returning({ id: importRunApproval.id });
+        approvalId = created?.id;
+      }
+      if (!approvalId) throw new Error("Approval was not recorded");
+      if (input.action === "reject") {
+        if (
+          existing &&
+          existing.state !== "pending" &&
+          existing.state !== "granted"
+        )
+          throw new Error(`Approval is already ${existing.state}`);
+        const decidedAt = new Date();
+        await tx
+          .update(importRunApproval)
+          .set({
+            state: "rejected",
+            decidedByUserId: actor.userId,
+            decidedAt,
+            rejectedAt: decidedAt,
+          })
+          .where(eq(importRunApproval.id, approvalId));
+        await tx
+          .update(importRunOperation)
+          .set({
+            state: "failed",
+            error: "Mutation proposal rejected by a household member",
+            updatedAt: decidedAt,
+          })
+          .where(
+            and(
+              eq(importRunOperation.runId, scope.public.runId),
+              eq(importRunOperation.operationId, input.operationId),
+            ),
+          );
+        const pending = await tx
+          .select({ id: importRunApproval.id })
+          .from(importRunApproval)
+          .where(
+            and(
+              eq(importRunApproval.runId, scope.public.runId),
+              inArray(importRunApproval.state, ["pending", "granted"]),
+            ),
+          )
+          .limit(1);
+        const status = pending.length > 0 ? "paused_approval" : "running";
+        await tx
+          .update(importRun)
+          .set({ status, updatedAt: decidedAt })
+          .where(eq(importRun.id, scope.public.runId));
+        return {
+          publicId: input.runPublicId,
+          status,
+          approvalId,
+          decision: "rejected" as const,
+        };
+      }
+      if (
+        existing &&
+        existing.state !== "pending" &&
+        existing.state !== "granted"
+      )
+        throw new Error(`Approval is already ${existing.state}`);
+      if (operation.kind.startsWith("mcp:")) {
+        const { purchaseAgentTargetFingerprint } =
+          await import("~/server/mcp/purchase-agent-protocol");
+        const currentTarget = await purchaseAgentTargetFingerprint(
+          databaseForTransaction(tx),
+          z.json().parse(proposal.args),
+        );
+        if (currentTarget !== proposal.targetFingerprint) {
+          await tx
+            .update(importRunApproval)
+            .set({ state: "invalidated", invalidatedAt: new Date() })
+            .where(eq(importRunApproval.id, approvalId));
+          await tx
+            .update(importRunOperation)
+            .set({
+              state: "failed",
+              error: "Mutation target changed after proposal",
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(importRunOperation.runId, scope.public.runId),
+                eq(importRunOperation.operationId, input.operationId),
+              ),
+            );
+          await tx
+            .update(importRun)
+            .set({ status: "running", updatedAt: new Date() })
+            .where(eq(importRun.id, scope.public.runId));
+          return {
+            publicId: input.runPublicId,
+            status: "running" as const,
+            approvalId,
+            decision: "invalidated" as const,
+          };
+        }
+      }
+      await tx
+        .update(importRunApproval)
+        .set({
+          state: "granted",
+          decidedByUserId: actor.userId,
+          decidedAt: new Date(),
+        })
+        .where(eq(importRunApproval.id, approvalId));
+      await tx
+        .update(importRunOperation)
+        .set({
+          result: {
+            ...z.record(z.string(), z.unknown()).parse(operation.result),
+            approvalId,
+          },
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(importRunOperation.runId, scope.public.runId),
+            eq(importRunOperation.operationId, input.operationId),
+          ),
+        );
+      return {
+        publicId: input.runPublicId,
+        status: "paused_approval" as const,
+        approvalId,
+        decision: "approved" as const,
+      };
+    },
+  );
 }

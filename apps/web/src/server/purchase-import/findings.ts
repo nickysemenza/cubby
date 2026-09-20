@@ -12,7 +12,7 @@ import {
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
-import { and, eq, gt, isNull, ne } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -122,7 +122,6 @@ const assertRunProvenance = async (
         eq(auditLog.entityType, auditEntity),
         eq(auditLog.entityId, finding.targetId),
         gt(auditLog.createdAt, mutation.createdAt),
-        ne(auditLog.source, "api"),
       ),
     )
     .limit(1);

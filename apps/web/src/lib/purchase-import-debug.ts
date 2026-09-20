@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { importRunPublicId } from "~/lib/purchase-import-run-detail";
+
 const purchaseImportDebugEventName = z.enum([
   "connect.requested",
   "replay.loaded",
@@ -85,6 +87,13 @@ export const purchaseImportRunLogResponse = z.object({
 });
 
 export const purchaseImportRunLogError = z.object({ error: z.string() });
+
+export const purchaseImportRunLogRequest = z.union([
+  z.object({ publicId: importRunPublicId }),
+  // Legacy Settings entries predate public PIR addresses. New detail routes
+  // use the public-id branch; this preserves older local history links.
+  z.object({ runId: z.uuid() }),
+]);
 
 export type PurchaseImportRunLogEntry = z.infer<
   typeof purchaseImportRunLogEntry

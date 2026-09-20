@@ -1,4 +1,5 @@
 import { mcpAppResourceUriForTool } from "@cubby/mcp-apps/metadata";
+import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import type {
   McpServer,
   ToolCallback,
@@ -13,7 +14,13 @@ import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { parseMcpWorkflowCaller } from "~/server/mcp/caller-contract";
+import { getEntityKernelContext } from "~/server/mcp/kernel-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
+import {
+  decoratePurchaseAgentInputSchema,
+  executePurchaseAgentMutation,
+  trustedPurchaseAgent,
+} from "~/server/mcp/purchase-agent-protocol";
 import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
 import type { ReadPolicy } from "~/server/read-policy";
 
@@ -60,6 +67,8 @@ type RegisterMcpToolConfig<
    * this execution needs the authoritative database and advances freshness.
    */
   isMutation?: (params: z.output<TInput>) => boolean;
+  /** Batch registration enforces the purchase-agent protocol per item. */
+  purchaseAgentMutationHandled?: boolean;
 };
 
 export interface McpToolRegistrationRuntime {
@@ -204,7 +213,7 @@ export function getCaller(extra: ToolExtra): Caller {
   return caller;
 }
 
-function operationContextFromExtra(
+export function operationContextFromExtra(
   extra: ToolExtra,
 ): McpOperationContext | undefined {
   const candidate = extra.authInfo?.extra?.operationContext;
@@ -236,6 +245,7 @@ export function registerMcpTool<
   runtime: McpToolRegistrationRuntime = productionMcpToolRegistrationRuntime,
 ): void {
   const inputSchema = requireObjectInputSchema(config.name, config.inputSchema);
+  const registeredInputSchema = decoratePurchaseAgentInputSchema(inputSchema);
   if (config.telemetryEntity) {
     declareToolEntityExtractor(
       server,
@@ -263,7 +273,35 @@ export function registerMcpTool<
         mutation ? "strong" : (configuredReadPolicy ?? "context"),
       );
       enteredHandler = true;
-      const result = await config.handler(parsedParams, preparedExtra);
+      const trusted = trustedPurchaseAgent(preparedExtra);
+      const operationContext = operationContextFromExtra(preparedExtra);
+      const autoAllowedPurchaseImportTool =
+        config.name === "prepare_purchase_import" ||
+        config.name === "commit_purchase_import" ||
+        config.purchaseAgentMutationHandled === true;
+      const result =
+        trusted && mutation && !autoAllowedPurchaseImportTool
+          ? await (async () => {
+              if (!operationContext)
+                throw new Error("Purchase-agent operation context is missing");
+              const execution = z
+                .object({ _runExecution: purchaseImportRunExecution })
+                .parse(params)._runExecution;
+              const parsedKernel = getEntityKernelContext(preparedExtra);
+              return executePurchaseAgentMutation({
+                db: parsedKernel.db,
+                actor: parsedKernel.actorContext,
+                operationContext,
+                trusted,
+                toolName: config.name,
+                args: parsedParams,
+                execution,
+                run: (transactionExtra) =>
+                  config.handler(parsedParams, transactionExtra),
+                baseExtra: preparedExtra,
+              });
+            })()
+          : await config.handler(parsedParams, preparedExtra);
       const response = structuredSuccess(result, config.outputSchema);
       if (mutation) {
         runtime.markCalendarDirty(`mcp.${config.name}`);
@@ -287,7 +325,9 @@ export function registerMcpTool<
     {
       title: config.title,
       description: config.description,
-      inputSchema,
+      // SAFETY: decoration preserves the original object shape and only makes
+      // the trusted purchase-agent execution envelope available to the SDK.
+      inputSchema: registeredInputSchema as TInput,
       outputSchema: sdkOutputSchema(config.outputSchema),
       annotations: config.annotations,
       _meta: uiToolMeta(config.name),

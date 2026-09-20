@@ -2,82 +2,61 @@
 
 import {
   useInitialData,
-  useAgentFinish,
-  useDelivery,
+  useMcpConnection,
   useModel,
   useResponseFinish,
   useResponseStart,
+  useSkill,
   useTool,
-  observe,
   type AgentProps,
 } from "@flue/runtime";
 import * as v from "valibot";
 
-import { purchaseImportAgentIdentity } from "./contracts";
+import productEnrichmentSkill from "../../../.claude/skills/product-enrichment/SKILL.md";
+import purchaseImportSkill from "../../../.claude/skills/purchase-import/SKILL.md";
 import { serviceForCurrentRun } from "./cloudflare-service";
+import { purchaseImportAgentIdentity } from "./contracts";
+import { cubbyMcpConnection } from "./cubby-mcp";
+import { installPurchaseImportTelemetry } from "./telemetry";
 import { purchaseImportTools } from "./tools";
-import { purchaseImportService } from "./service";
 
-observe((event, context) => {
-  if (
-    event.type !== "submission_settled" ||
-    event.outcome === "completed" ||
-    !event.instanceId?.startsWith("import-run:")
-  )
-    return;
-  const runId = event.instanceId.slice("import-run:".length);
-  return purchaseImportService(context.env)
-    .markRunFailed({
-      runId,
-      operationId: `submission-settled:${event.submissionId}`,
-      failureCode: event.outcome === "aborted" ? "flue_aborted" : "flue_failed",
-      detail: event.error?.message,
-    })
-    .then(() => undefined);
-});
+installPurchaseImportTelemetry();
 
-type ImportRunInitialData = { runId: string };
+type ImportRunInitialData = {
+  runId: string;
+  publicId?: string;
+  coordinatorModel?: "gpt-5.6-terra" | "gpt-5.6-sol";
+};
 
 /** One durable Flue conversation per authoritative ImportRun. */
 export function PurchaseImportRun({ id }: AgentProps) {
-  const { runId } = useInitialData<ImportRunInitialData>();
-  const delivery = useDelivery();
+  const {
+    runId,
+    publicId,
+    coordinatorModel = "gpt-5.6-terra",
+  } = useInitialData<ImportRunInitialData>();
   if (id !== purchaseImportAgentIdentity(runId)) {
     throw new Error(
       "Purchase import agent identity does not match its ImportRun",
     );
   }
 
-  useModel("cubby/gpt-5.6-luna");
-  useResponseStart(() => ({
-    jobKind: "purchase_import_run",
-    runId,
-  }));
+  // The coordinator is intentionally fixed. Other registered provider models
+  // exist for Flue internals and future bounded operations, not dynamic routing.
+  useModel(`openai/${coordinatorModel}`, { thinkingLevel: "high" });
+  useMcpConnection(cubbyMcpConnection(runId, serviceForCurrentRun));
+  useSkill(purchaseImportSkill);
+  useSkill(productEnrichmentSkill);
+
+  useResponseStart(() =>
+    publicId
+      ? { jobKind: "purchase_import_run", publicId }
+      : { jobKind: "purchase_import_run" },
+  );
   useResponseFinish(({ response }) => ({
     usage: response.usage,
   }));
-  useAgentFinish(async ({ response, log }) => {
-    const eventId =
-      delivery.kind === "signal"
-        ? (delivery.attributes?.eventId ?? delivery.type)
-        : "direct";
-    const usage = response.usage;
-    try {
-      await serviceForCurrentRun().recordOrchestrationUsage({
-        runId,
-        operationId: `orchestration-usage:${eventId}:${usage.totalTokens}`,
-        inputTokens: usage.input,
-        outputTokens: usage.output,
-        cacheReadTokens: usage.cacheRead,
-        cacheWriteTokens: usage.cacheWrite,
-        estimatedCost: usage.cost.total,
-      });
-    } catch (error) {
-      log.error("purchase import orchestration usage was not recorded", {
-        error: error instanceof Error ? error.message : "unknown",
-      });
-    }
-  });
+
   const tools = purchaseImportTools(runId, serviceForCurrentRun);
   useTool(tools[0]);
   useTool(tools[1]);
@@ -88,13 +67,25 @@ export function PurchaseImportRun({ id }: AgentProps) {
   useTool(tools[6]);
   useTool(tools[7]);
   useTool(tools[8]);
-  useTool(tools[9]);
 
-  return `You coordinate exactly one purchase import run (${runId}). Start by loading its scope, then claim server-selected work. Continue every selected order or hunt until it is imported, explicitly exhausted, or stopped for review; do not treat one imported order as the end of an account scan. You may only use the listed typed tools; never infer ownership, alter browser authority, issue scripts, use shell/SQL, or make generic mutations. Browser commands are read-only. Use a distinct operationId for each logical tool effect and reuse it only to replay that same effect. If a browser command result is pending, the tool terminates this submission; do not wait or retry it in this submission. A later queue event resumes this same durable agent. Authentication and offline conditions are resumable server states. If evidence is ambiguous, unreadable, or provider behavior prevents a confident import, call stop_for_review and do not speculate. Call audit_batch for each server-reported page before finishing; finish_run independently enforces full audit coverage and rejects unsettled hunt work. Finish only after the server reports no more work.`;
+  return `You coordinate exactly one Cubby purchase-import run${publicId ? ` (${publicId})` : ""} with the complete Cubby MCP tool catalog.
+
+Workflow:
+1. Activate the purchase-import skill before doing any import work. Activate product-enrichment whenever an order line lacks a confident existing Product match.
+2. Report the preparing phase and call claim_next_import_work. For receipt_evidence, call extract_receipt_evidence and use its immutable payload. For browser work, use browser commands only when interactive vendor evidence is required. A pending browser command ends this submission; never poll or wait for it. A later queue event resumes this same durable conversation.
+3. Call mcp__cubby__prepare_purchase_import exactly once per logical batch. Every mutation must carry _runExecution with the run public id and stable operation ids. Derive them from durable source identities, keep item ids aligned with their orders, and reuse an id only to replay the identical logical effect.
+4. Report investigating. Use read-only Cubby MCP tools and the product-enrichment skill to investigate every proposed Product resolution. Prefer exact existing Products and verified identifiers; do not create duplicates merely because a title differs.
+5. Preparation itself is bounded and never requires approval. Report committing, then call mcp__cubby__commit_purchase_import with the immutable preparation revision and an explicit evidence-backed resolution for every principal line. Treat conflict or unresolved identity as review: call stop_import_run_for_review and do not speculate.
+6. Continue through every selected order and hunt. Persist safe same-domain navigation discoveries with save_navigation_hints. If the vendor proves older history unavailable, call mark_history_expired with the observed boundary. Only after all work is resolved or explicitly exhausted call finish_import_run; it performs the required auditor pass and is the only successful completion path.
+7. If a genuinely necessary generic mutation reports paused_approval, report awaiting_approval with awaitingApproval=true and end the submission. Never self-approve, invent an approval id, or work around review. When a later authorized event resumes the run, read the persisted operation state and approval before continuing.
+
+The server owns member identity, run scope, approval state, idempotency, and all writes. Imported Product and Expense writes must use commit_purchase_import. A generic mutation may be proposed only when genuinely needed outside that import write, must carry stable _runExecution identity, and may pause for exact typed human approval; never bypass, weaken, or rephrase an approval request. Shell, SQL, scripts, and arbitrary browser evaluation are forbidden. Browser commands are read-only and constrained by the server's vendor allowlist. Continue every selected order or hunt until it is imported, explicitly exhausted, awaiting approval, or stopped for review; one successful order does not finish an account scan. Authentication and offline states are resumable server states.`;
 }
 
 PurchaseImportRun.agentName = "purchase-import-run";
 PurchaseImportRun.initialData = v.object({
   runId: v.pipe(v.string(), v.uuid()),
+  publicId: v.optional(v.pipe(v.string(), v.regex(/^PIR-[A-Z0-9]{10}$/u))),
+  coordinatorModel: v.optional(v.picklist(["gpt-5.6-terra", "gpt-5.6-sol"])),
 });
 PurchaseImportRun.durability = { maxAttempts: 8, timeoutMs: 55 * 60 * 1_000 };

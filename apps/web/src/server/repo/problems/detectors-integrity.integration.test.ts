@@ -1,8 +1,8 @@
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import { parseEntityId } from "@cubby/schemas/identifiers";
-import { sql } from "drizzle-orm";
+import { parseEntityId, userId } from "@cubby/schemas/identifiers";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -16,8 +16,10 @@ import {
   gardenEntryPlanting,
   importFinding,
   importHunt,
+  importPreparedOrder,
   importRun,
   importSourceClaim,
+  ledgerParty,
   ledgerSourceClaim,
   locationImage,
   mailboxCursor,
@@ -239,14 +241,65 @@ const mkVendorAccount = async (db: Database) => {
 const mkImportRun = async (
   db: Database,
   values: Partial<
-    Pick<typeof importRun.$inferInsert, "ledgerPartyId" | "vendorAccountId">
+    Pick<
+      typeof importRun.$inferInsert,
+      "ledgerPartyId" | "vendorAccountId" | "vendorId"
+    >
   > = {},
 ) => {
   const party = values.ledgerPartyId ?? (await mkLedgerParty(db)).id;
+  const [partySnapshot, actor] = await Promise.all([
+    getDb(db)
+      .select({
+        shortcode: ledgerParty.shortcode,
+        name: ledgerParty.name,
+        kind: ledgerParty.kind,
+      })
+      .from(ledgerParty)
+      .where(eq(ledgerParty.id, party))
+      .then((rows) => rows[0]),
+    mkUser(db),
+  ]);
+  if (!partySnapshot) throw new Error("Import run party fixture was not found");
   return insertAndReturn(db, importRun, {
+    publicId: `PIR-${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`,
     ledgerPartyId: party,
+    actorUserId: userId.parse(actor.id),
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorLedgerPartyShortcode: partySnapshot.shortcode,
+    actorLedgerPartyName: partySnapshot.name,
+    actorLedgerPartyKind: partySnapshot.kind,
     vendorAccountId: values.vendorAccountId,
+    vendorId: values.vendorId,
     trigger: "manual",
+  });
+};
+
+const mkImportPreparedOrder = async (
+  db: Database,
+  values: Partial<
+    Pick<
+      typeof importPreparedOrder.$inferInsert,
+      "primaryDocumentImageId" | "screenshotImageId"
+    >
+  >,
+) => {
+  const run = await mkImportRun(db);
+  return insertAndReturn(db, importPreparedOrder, {
+    runId: run.id,
+    prepareOperationId: uniq("prepare-operation"),
+    itemOperationId: uniq("item-operation"),
+    stableOrderId: uniq("stable-order"),
+    sourceKind: "browser_order",
+    sourceExternalKey: uniq("source"),
+    sourceChecksum: uniq("source-checksum"),
+    evidenceChecksum: uniq("evidence-checksum"),
+    extractionRevision: "fixture-v1",
+    extraction: {},
+    targetFingerprint: uniq("target-fingerprint"),
+    evidenceFingerprint: uniq("evidence-fingerprint"),
+    ...values,
   });
 };
 
@@ -356,6 +409,10 @@ const TARGET_FACTORIES = {
  * (named by the edge key) points at `targetId`. Every other required column on
  * the source row is filled with an unrelated, always-live fixture. */
 const SOURCE_FACTORIES = {
+  "ImportPreparedOrder.primaryDocumentImageId": (db, targetId) =>
+    mkImportPreparedOrder(db, { primaryDocumentImageId: targetId }),
+  "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
+    mkImportPreparedOrder(db, { screenshotImageId: targetId }),
   "ImportHunt.receiptImageId": (db, targetId) =>
     mkImportHunt(db, { receiptImageId: targetId }),
   "OrderMailAttachment.imageId": async (db, targetId) => {
@@ -421,6 +478,8 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: party.id,
     });
   },
+  "ImportRun.vendorId": (db, targetId) =>
+    mkImportRun(db, { vendorId: parseEntityId("vendor", targetId) }),
   "ImportHunt.vendorId": (db, targetId) =>
     mkImportHunt(db, { vendorId: parseEntityId("vendor", targetId) }),
   "MerchantVendorRule.vendorId": async (db, targetId) => {
@@ -1229,6 +1288,7 @@ function entityTableName(entity: Entity): string {
 const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
   "ImportFinding",
   "ImportHunt",
+  "ImportPreparedOrder",
   "ImportRun",
   "ImportSourceClaim",
   "MailboxCursor",
@@ -1277,11 +1337,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 100 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 103 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(100);
+    expect(derivedMustTargetLiveEdges).toHaveLength(103);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

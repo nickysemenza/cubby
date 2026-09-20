@@ -184,33 +184,29 @@ export async function dispatchImportHunts(
       ),
     )
     .where(inArray(importHunt.state, ["pending_browser", "pending_mail"]));
-  const alreadyQueued = await database
-    .select({ vendorAccountId: importHunt.vendorAccountId })
-    .from(importHunt)
-    .where(eq(importHunt.state, "browser_queued"));
   let dispatched = 0;
-  const claimedAccounts = new Set(
-    alreadyQueued.flatMap(({ vendorAccountId }) =>
-      vendorAccountId ? [vendorAccountId] : [],
-    ),
-  );
+  const runsByAccount = new Map<
+    string,
+    Awaited<ReturnType<typeof startOrResumeImportRun>>
+  >();
   for (const hunt of hunts) {
     if (!hunt.vendorAccountId) continue;
-    // A bridge is serialized per vendor account. Leave later hunts queued for the next cron
-    // instead of letting one completion resolve unrelated work for the same login.
-    if (claimedAccounts.has(hunt.vendorAccountId)) continue;
-    claimedAccounts.add(hunt.vendorAccountId);
-    const run = await startOrResumeImportRun(db, {
-      ledgerPartyId: hunt.ledgerPartyId,
-      vendorAccountId: vendorAccountId.parse(hunt.vendorAccountId),
-      trigger: "discovery",
-    });
-    await queue.send({
-      version: 1,
-      runId: run.id,
-      eventId: crypto.randomUUID(),
-      type: "start_or_resume",
-    });
+    let run = runsByAccount.get(hunt.vendorAccountId);
+    if (!run) {
+      run = await startOrResumeImportRun(db, {
+        ledgerPartyId: hunt.ledgerPartyId,
+        vendorAccountId: vendorAccountId.parse(hunt.vendorAccountId),
+        trigger: "discovery",
+      });
+      runsByAccount.set(hunt.vendorAccountId, run);
+      await queue.send({
+        version: 1,
+        runId: run.id,
+        publicId: run.publicId,
+        eventId: crypto.randomUUID(),
+        type: "start_or_resume",
+      });
+    }
     await database
       .update(importHunt)
       .set({

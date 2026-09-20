@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Copy, Mail, RefreshCw, Wrench } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -9,6 +9,7 @@ import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { calendar } from "~/app/calendar/calendar.functions";
 import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
+import { purchaseImportRunHref } from "~/app/purchases/purchase-import-links";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -33,11 +34,7 @@ import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import { pageTitle } from "~/lib/page-title";
-import {
-  purchaseImportRunLogError,
-  purchaseImportRunLogResponse,
-  type PurchaseImportRunLogEntry,
-} from "~/lib/purchase-import-debug";
+import { purchaseImportAgentOAuthStatus } from "~/lib/purchase-import-run-detail";
 import { formatCurrency } from "~/lib/utils";
 import {
   timingResponseSchema,
@@ -66,6 +63,7 @@ function SettingsPage() {
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
         <CalendarAccessCard />
         <GmailAccessCard />
+        <PurchaseImportAgentAccessCard />
         <MemberLoginsCard />
         <MerchantVendorRulesCard />
         <PurchaseImportRunsCard />
@@ -111,6 +109,96 @@ function SettingsPage() {
         </Collapsible>
       </Stack>
     </Page>
+  );
+}
+
+function PurchaseImportAgentAccessCard() {
+  const queryClient = useQueryClient();
+  const access = useQuery({
+    queryKey: ["purchase-import", "agent-oauth"],
+    queryFn: async () => {
+      const response = await fetch("/api/import/agent/oauth/status");
+      const body: unknown = await response.json();
+      if (!response.ok)
+        throw new Error("Purchase import agent access could not load.");
+      return purchaseImportAgentOAuthStatus.parse(body);
+    },
+  });
+  const disconnect = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/import/agent/oauth/status", {
+        method: "DELETE",
+      });
+      const body: unknown = await response.json();
+      if (!response.ok)
+        throw new Error(
+          "Purchase import agent access could not be disconnected.",
+        );
+      return purchaseImportAgentOAuthStatus.parse(body);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["purchase-import", "agent-oauth"], data);
+      toast.success("Purchase import agent disconnected");
+    },
+  });
+  return (
+    <Card className="max-md:border-x-0">
+      <CardHeader>
+        <CardTitle>Purchase import agent</CardTitle>
+        <CardDescription>
+          Authorize the private agent to continue an interactive vendor import
+          on your behalf.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {access.isLoading ? (
+          <StatusText>Checking agent access…</StatusText>
+        ) : access.isError ? (
+          <StatusText tone="destructive">
+            {getErrorMessage(access.error)}
+          </StatusText>
+        ) : access.data?.authorized ? (
+          <Row align="center" justify="between" gap="sm" wrap>
+            <span className="text-sm text-muted-foreground">
+              Authorized
+              {access.data.expiresAt
+                ? ` until ${new Date(access.data.expiresAt).toLocaleString()}`
+                : ""}
+              .
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => disconnect.mutate()}
+              disabled={disconnect.isPending}
+            >
+              Disconnect agent
+            </Button>
+          </Row>
+        ) : (
+          <Row align="center" justify="between" gap="sm" wrap>
+            <span className="text-sm text-muted-foreground">
+              Not authorized.
+            </span>
+            <Button
+              render={
+                <a
+                  href="/api/import/agent/oauth/start"
+                  aria-label="Authorize purchase import agent"
+                />
+              }
+            >
+              Authorize agent
+            </Button>
+          </Row>
+        )}
+        {disconnect.isError ? (
+          <StatusText tone="destructive">
+            {getErrorMessage(disconnect.error)}
+          </StatusText>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -341,16 +429,6 @@ function MemberLoginsCard() {
 }
 
 function PurchaseImportRunsCard() {
-  const [requestedRunId, setRequestedRunId] = useState<string | null>(null);
-  useEffect(() => {
-    const prefix = "#purchase-import-run-";
-    const hash = window.location.hash;
-    setRequestedRunId(
-      hash.startsWith(prefix)
-        ? decodeURIComponent(hash.slice(prefix.length))
-        : null,
-    );
-  }, []);
   const runs = useQuery({
     queryKey: ["purchase-import", "runs"],
     queryFn: async () => {
@@ -373,8 +451,8 @@ function PurchaseImportRunsCard() {
         <CardTitle>Purchase imports</CardTitle>
         <CardDescription>
           Recent runs for your vendor accounts. Cost is derived from recorded AI
-          usage for each run. Open a run log to inspect its server and DEBUG Mac
-          timeline.
+          usage for each run. Open a run to inspect its durable agent, server,
+          and Mac evidence.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -397,7 +475,7 @@ function PurchaseImportRunsCard() {
           <Stack gap="sm">
             {runs.data.map((run) => (
               <div
-                key={run.id}
+                key={run.publicId}
                 className="border-b border-border pb-2 text-sm last:border-0 last:pb-0"
               >
                 <div className="grid gap-1 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -423,10 +501,12 @@ function PurchaseImportRunsCard() {
                     <div>{formatCurrency(run.estimatedCost)}</div>
                   </div>
                 </div>
-                <PurchaseImportRunLog
-                  runId={run.id}
-                  initialOpen={requestedRunId === run.id}
-                />
+                <a
+                  className="mt-1 inline-flex min-h-11 items-center text-xs font-medium text-primary hover:underline"
+                  href={purchaseImportRunHref(run.publicId)}
+                >
+                  Open import run
+                </a>
               </div>
             ))}
           </Stack>
@@ -435,157 +515,6 @@ function PurchaseImportRunsCard() {
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function PurchaseImportRunLog({
-  runId,
-  initialOpen = false,
-}: {
-  runId: string;
-  initialOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(initialOpen);
-  useEffect(() => {
-    if (!initialOpen) return;
-    setOpen(true);
-    document
-      .getElementById(`purchase-import-run-${runId}`)
-      ?.scrollIntoView({ block: "center" });
-  }, [initialOpen, runId]);
-  const log = useQuery({
-    queryKey: ["purchase-import", "run-log", runId],
-    enabled: open,
-    queryFn: async () => {
-      const response = await fetch("/api/import/run-logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ runId }),
-      });
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunLogError.safeParse(body);
-        throw new Error(
-          parsed.success ? parsed.data.error : "The run log could not load.",
-        );
-      }
-      return purchaseImportRunLogResponse.parse(body);
-    },
-  });
-
-  return (
-    <div id={`purchase-import-run-${runId}`}>
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger
-          render={
-            <button
-              type="button"
-              aria-label={open ? "Close run log" : "Open run log"}
-              className="mt-1 flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            />
-          }
-        >
-          <ChevronDown
-            className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`}
-          />
-          Run log
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="mb-1 border border-border bg-muted/40 p-2">
-            <p className="mb-2 text-xs text-muted-foreground">
-              Structured metadata only. Credentials, page text, evidence, and
-              full URLs are never recorded.
-            </p>
-            {log.isLoading ? (
-              <StatusText>Loading run log…</StatusText>
-            ) : log.isError ? (
-              <StatusText tone="destructive">
-                {getErrorMessage(log.error)}
-              </StatusText>
-            ) : log.data?.entries.length ? (
-              <div
-                className="max-h-80 overflow-auto"
-                aria-label="Purchase import run log"
-              >
-                {log.data.entries.map((entry) => (
-                  <PurchaseImportRunLogRow key={entry.id} entry={entry} />
-                ))}
-                {log.data.truncated ? (
-                  <p className="border-t border-border pt-2 text-xs text-warning">
-                    This view is limited to the first 2,000 events.
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <StatusText>No events were recorded for this run.</StatusText>
-            )}
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-    </div>
-  );
-}
-
-function PurchaseImportRunLogRow({
-  entry,
-}: {
-  entry: PurchaseImportRunLogEntry;
-}) {
-  const metadata = [
-    entry.operationKind,
-    entry.host,
-    entry.browser,
-    entry.outcome,
-    entry.messageType ? `message=${entry.messageType}` : null,
-    entry.attempt === null ? null : `attempt=${entry.attempt}`,
-    entry.count === null ? null : `count=${entry.count}`,
-  ].filter((value): value is string => value !== null);
-  return (
-    <div className="grid gap-0.5 border-t border-border py-2 first:border-0 first:pt-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2">
-      <time
-        dateTime={entry.occurredAt}
-        className="font-mono text-xs text-muted-foreground tabular-nums"
-      >
-        {new Date(entry.occurredAt).toISOString()}
-      </time>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {entry.source}
-          </span>
-          <code
-            className={
-              entry.level === "error" ? "text-destructive" : "text-foreground"
-            }
-          >
-            {entry.event}
-          </code>
-          {entry.state ? (
-            <span className="text-xs text-muted-foreground">{entry.state}</span>
-          ) : null}
-        </div>
-        {metadata.length > 0 ? (
-          <div className="font-mono text-xs break-words text-muted-foreground">
-            {metadata.join(" · ")}
-          </div>
-        ) : null}
-        {entry.operationId || entry.commandId ? (
-          <div className="font-mono text-xs break-all text-muted-foreground">
-            {[entry.operationId, entry.commandId].filter(Boolean).join(" · ")}
-          </div>
-        ) : null}
-        {entry.errorType || entry.error ? (
-          <div className="text-xs break-words text-destructive">
-            {[entry.errorType, entry.error].filter(Boolean).join(" · ")}
-          </div>
-        ) : null}
-        {entry.errorCode !== null ? (
-          <div className="font-mono text-xs break-words text-destructive">
-            Apple event error {entry.errorCode}
-          </div>
-        ) : null}
-      </div>
-    </div>
   );
 }
 

@@ -1,0 +1,54 @@
+import type { McpConnectionDefinition } from "@flue/runtime";
+import { z } from "zod";
+
+import type { PurchaseImportServiceResolver } from "./tools";
+
+const mcpAccess = z.object({
+  token: z.string().min(1),
+  expiresAt: z.iso.datetime(),
+  mcpUrl: z.url(),
+});
+
+// Flue needs a URL synchronously when it constructs the transport. No request
+// reaches this host: the custom fetch below rewrites it to the URL authorized
+// by Cubby's run-bound access grant, then sends it over the service binding.
+const MCP_PLACEHOLDER_URL = "https://cubby-mcp.invalid/mcp";
+
+function rewriteMcpRequest(request: Request, mcpUrl: string): Request {
+  const target = new URL(mcpUrl);
+  const requested = new URL(request.url);
+  target.search = requested.search;
+  return new Request(target, request);
+}
+
+/**
+ * Mount the private Cubby MCP server without putting its bearer in durable
+ * agent state. Flue resolves `auth` for every transport request; `fetch`
+ * consumes the corresponding authorized URL and crosses only the Worker
+ * service binding.
+ */
+export function cubbyMcpConnection(
+  runId: string,
+  serviceForRun: PurchaseImportServiceResolver,
+): McpConnectionDefinition {
+  let authorizedUrl: string | undefined;
+  return {
+    name: "cubby",
+    url: MCP_PLACEHOLDER_URL,
+    auth: async () => {
+      const access = mcpAccess.parse(
+        await serviceForRun().acquireMcpAccess({ runId }),
+      );
+      authorizedUrl = access.mcpUrl;
+      return access.token;
+    },
+    fetch: async (input, init) => {
+      const request = new Request(input, init);
+      const mcpUrl =
+        authorizedUrl ??
+        mcpAccess.parse(await serviceForRun().acquireMcpAccess({ runId }))
+          .mcpUrl;
+      return serviceForRun().mcpFetch(rewriteMcpRequest(request, mcpUrl));
+    },
+  };
+}

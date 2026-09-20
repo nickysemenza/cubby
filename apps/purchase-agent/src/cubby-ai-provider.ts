@@ -3,14 +3,15 @@ import {
   type Provider,
   type ProviderStreams,
 } from "@earendil-works/pi-ai";
+import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
+import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import { z } from "zod";
 
 const CUBBY_GATEWAY_ID = "cubby";
-const CUBBY_PROVIDER_ID = "cubby";
-const FAST_MODEL = "gpt-5.6-luna";
-const GATEWAY_BASE_URL = "https://ai-gateway.invalid/openai";
+const OPENAI_MODELS = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"] as const;
+const ANTHROPIC_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"] as const;
 const STRIPPED_SDK_HEADERS = [
   "authorization",
   "x-api-key",
@@ -18,15 +19,20 @@ const STRIPPED_SDK_HEADERS = [
 ] as const;
 const gatewayQuerySchema = z.record(z.string(), z.json());
 
+type GatewayProvider = "openai" | "anthropic";
 type Gateway = Pick<AiGateway, "run">;
-type GatewayHost = Pick<Ai, "gateway">;
+type GatewayHost = { gateway(id: string): Gateway };
+
+function gatewayBaseUrl(provider: GatewayProvider) {
+  return `https://ai-gateway.invalid/${provider}`;
+}
 
 function requestUrl(input: RequestInfo | URL) {
   return input instanceof Request ? input.url : String(input);
 }
 
-function endpointFor(url: string) {
-  const prefix = `${GATEWAY_BASE_URL}/`;
+function endpointFor(provider: GatewayProvider, url: string) {
+  const prefix = `${gatewayBaseUrl(provider)}/`;
   if (url.startsWith(prefix)) return url.slice(prefix.length);
   const parsed = new URL(url);
   return `${parsed.pathname.replace(/^\/+/, "")}${parsed.search}`;
@@ -40,13 +46,9 @@ async function gatewayQuery(body: BodyInit | null | undefined) {
   return parsed.success ? parsed.data : {};
 }
 
-/**
- * Pi's OpenAI adapter still builds an ordinary HTTP request. Resolve only its
- * reserved placeholder URL, remove its dummy provider credential, and send
- * the structured request through Cubby's authenticated Universal Gateway
- * binding so Gateway BYOK, logging, and policy stay identical to the web app.
- */
+/** Provider SDK fetch shim for Cubby's binding-authenticated Universal Gateway. */
 export function createCubbyGatewayFetch(
+  provider: GatewayProvider,
   gatewayForRequest: () => Gateway,
 ): typeof fetch {
   return async (input, init) => {
@@ -54,15 +56,18 @@ export function createCubbyGatewayFetch(
     for (const name of STRIPPED_SDK_HEADERS) headers.delete(name);
     return gatewayForRequest().run(
       {
-        provider: "openai",
-        endpoint: endpointFor(requestUrl(input)),
+        provider,
+        endpoint: endpointFor(provider, requestUrl(input)),
         headers: Object.fromEntries(headers.entries()),
         query: await gatewayQuery(init?.body),
       },
       {
         gateway: {
           id: CUBBY_GATEWAY_ID,
-          metadata: { jobKind: "purchase_import_run" },
+          metadata: {
+            feature: "purchase_import_agent",
+            jobKind: "purchase_import_run",
+          },
         },
         signal: init?.signal ?? undefined,
       },
@@ -70,44 +75,74 @@ export function createCubbyGatewayFetch(
   };
 }
 
-export function cubbyAiGatewayProvider(
-  aiForRequest: () => GatewayHost,
-): Provider {
-  const source = openaiProvider()
-    .getModels()
-    .find((model) => model.id === FAST_MODEL);
-  if (!source || source.api !== "openai-responses") {
-    throw new Error(`Pi does not declare ${FAST_MODEL} as OpenAI Responses`);
-  }
-  const gatewayFetch = createCubbyGatewayFetch(() =>
-    aiForRequest().gateway(CUBBY_GATEWAY_ID),
-  );
-  const baseApi = openAIResponsesApi();
-  const api: ProviderStreams = {
+function streamsThroughGateway(
+  streams: ProviderStreams,
+  gatewayFetch: typeof fetch,
+): ProviderStreams {
+  return {
     stream: (model, context, options) =>
-      baseApi.stream(model, context, { ...options, fetch: gatewayFetch }),
+      streams.stream(model, context, { ...options, fetch: gatewayFetch }),
     streamSimple: (model, context, options) =>
-      baseApi.streamSimple(model, context, { ...options, fetch: gatewayFetch }),
+      streams.streamSimple(model, context, {
+        ...options,
+        fetch: gatewayFetch,
+      }),
   };
-  return createProvider({
-    id: CUBBY_PROVIDER_ID,
-    name: "Cubby AI Gateway",
-    auth: {
-      apiKey: {
-        name: "Cubby AI Gateway binding",
-        resolve: async () => ({
-          auth: { apiKey: "binding-authenticated" },
-          source: "Cloudflare AI Gateway binding",
-        }),
-      },
+}
+
+function bindingAuth(provider: string) {
+  return {
+    apiKey: {
+      name: `Cubby ${provider} Gateway binding`,
+      resolve: async () => ({
+        auth: { apiKey: "binding-authenticated" },
+        source: "Cloudflare AI Gateway binding",
+      }),
     },
-    models: [
-      {
-        ...source,
-        provider: CUBBY_PROVIDER_ID,
-        baseUrl: GATEWAY_BASE_URL,
-      },
-    ],
-    api,
+  };
+}
+
+function selectedModels<const TIds extends readonly string[]>(
+  provider: Provider,
+  ids: TIds,
+  baseUrl: string,
+) {
+  return ids.map((id) => {
+    const model = provider.getModels().find((candidate) => candidate.id === id);
+    if (!model) throw new Error(`Pi does not declare ${id}`);
+    return { ...model, baseUrl };
   });
+}
+
+/** All coordinator and optional escalation models, forced through Gateway. */
+export function cubbyAiGatewayProviders(
+  aiForRequest: () => GatewayHost,
+): Provider[] {
+  const gateway = () => aiForRequest().gateway(CUBBY_GATEWAY_ID);
+  const openaiFetch = createCubbyGatewayFetch("openai", gateway);
+  const anthropicFetch = createCubbyGatewayFetch("anthropic", gateway);
+  return [
+    createProvider({
+      id: "openai",
+      name: "OpenAI through Cubby AI Gateway",
+      auth: bindingAuth("OpenAI"),
+      models: selectedModels(
+        openaiProvider(),
+        OPENAI_MODELS,
+        gatewayBaseUrl("openai"),
+      ),
+      api: streamsThroughGateway(openAIResponsesApi(), openaiFetch),
+    }),
+    createProvider({
+      id: "anthropic",
+      name: "Anthropic through Cubby AI Gateway",
+      auth: bindingAuth("Anthropic"),
+      models: selectedModels(
+        anthropicProvider(),
+        ANTHROPIC_MODELS,
+        gatewayBaseUrl("anthropic"),
+      ),
+      api: streamsThroughGateway(anthropicMessagesApi(), anthropicFetch),
+    }),
+  ];
 }

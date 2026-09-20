@@ -7,34 +7,28 @@ import type {
 } from "./service";
 
 const operationId = v.pipe(v.string(), v.minLength(1), v.maxLength(200));
-const commandId = v.pipe(v.string(), v.minLength(1), v.maxLength(256));
-const earliestAvailableOrderAt = v.pipe(
-  v.string(),
-  v.check(
-    (value) => Number.isFinite(Date.parse(value)),
-    "Expected an ISO timestamp",
-  ),
-);
-const auditOffset = v.pipe(v.number(), v.integer(), v.minValue(0));
 const serviceResult = v.nullable(v.looseObject({}));
+const progressPhase = v.picklist([
+  "preparing",
+  "investigating",
+  "awaiting_browser",
+  "awaiting_approval",
+  "committing",
+  "review",
+  "complete",
+]);
+const boundedUrl = v.pipe(v.string(), v.url(), v.maxLength(2_048));
 
 export type PurchaseImportServiceResolver = () => PurchaseImportService;
 
-function stepName(toolName: string, id: string): string {
-  return `${toolName}:${id}`;
-}
-
-function serviceOperationId(toolName: string, id: string): string {
-  return `${toolName}:${id}`;
-}
-
-const pendingServiceResult = v.looseObject({
-  status: v.optional(v.string()),
-  state: v.optional(v.string()),
-});
-
 function pendingResult(result: PurchaseImportServiceResult): boolean {
-  const parsed = v.safeParse(pendingServiceResult, result);
+  const parsed = v.safeParse(
+    v.looseObject({
+      status: v.optional(v.string()),
+      state: v.optional(v.string()),
+    }),
+    result,
+  );
   return (
     parsed.success &&
     (parsed.output.status === "pending" ||
@@ -46,9 +40,10 @@ function pendingResult(result: PurchaseImportServiceResult): boolean {
 }
 
 /**
- * These are the entire model-facing authority surface. Keep browser commands
- * declarative and let the web service resolve account, vendor, ownership, and
- * domain constraints from the run instead of accepting them from the model.
+ * Typed RPC is deliberately limited to seams that cannot travel through MCP:
+ * browser commands must settle the Flue submission while the user's browser
+ * works, progress must be visible before another model turn completes, and
+ * lifecycle transitions stay behind the web Worker's crash-safe guards.
  */
 export function purchaseImportTools(
   runId: string,
@@ -56,38 +51,35 @@ export function purchaseImportTools(
 ) {
   return [
     defineTool({
-      name: "load_run_scope",
+      name: "claim_next_import_work",
       description:
-        "Read the owned account, vendor, limits, and current run state.",
-      output: serviceResult,
-      run: async () => ({
-        output: await serviceForRun().loadRunScope({ runId }),
-      }),
-    }),
-    defineTool({
-      name: "claim_next_work",
-      description: "Claim the next server-selected import work item.",
+        "Claim and describe the run's next bounded work item. Use this before choosing receipt or browser evidence work, and again after each committed item until it returns none.",
       input: v.object({ operationId }),
       output: serviceResult,
       durable: true,
       run: async ({ data, step }) => ({
-        output: await step.do(
-          stepName("claim-next-work", data.operationId),
-          () =>
-            serviceForRun().claimNextWork({
-              runId,
-              operationId: serviceOperationId(
-                "claim-next-work",
-                data.operationId,
-              ),
-            }),
+        output: await step.do(`claim-work:${data.operationId}`, () =>
+          serviceForRun().claimNextWork({ runId, ...data }),
+        ),
+      }),
+    }),
+    defineTool({
+      name: "extract_receipt_evidence",
+      description:
+        "Run Cubby's bounded receipt extractor for the receipt assigned to this run. Its returned immutable source, checksum, extraction, image id, and stable ids are the input to prepare_purchase_import.",
+      input: v.object({ operationId }),
+      output: serviceResult,
+      durable: true,
+      run: async ({ data, step }) => ({
+        output: await step.do(`extract-receipt:${data.operationId}`, () =>
+          serviceForRun().extractReceiptEvidence({ runId, ...data }),
         ),
       }),
     }),
     defineTool({
       name: "issue_browser_command",
       description:
-        "Request one fixed read-only browser action. The service validates the run's vendor domains and browser protocol generation.",
+        "Request one fixed read-only browser action. A pending command ends this submission; a queue event resumes this same agent when evidence is ready.",
       input: v.object({
         operationId,
         command: v.object({
@@ -103,15 +95,21 @@ export function purchaseImportTools(
       output: serviceResult,
       durable: true,
       run: async ({ data, step }) => {
+        await step.do(`browser-progress:${data.operationId}`, () =>
+          serviceForRun().updateAgentProgress({
+            runId,
+            eventId: `browser-progress:${data.operationId}`,
+            phase: "awaiting_browser",
+            currentItem: data.command.target,
+            detail: data.command.kind,
+          }),
+        );
         const output = await step.do(
-          stepName("issue-browser-command", data.operationId),
+          `browser-command:${data.operationId}`,
           () =>
             serviceForRun().issueBrowserCommand({
               runId,
-              operationId: serviceOperationId(
-                "browser-command",
-                data.operationId,
-              ),
+              operationId: `browser-command:${data.operationId}`,
               command: data.command,
             }),
         );
@@ -121,127 +119,106 @@ export function purchaseImportTools(
     defineTool({
       name: "read_browser_command_result",
       description:
-        "Read the persisted result for the browser command issued by this operation. A pending result ends this submission; a browser_result queue event resumes this same agent.",
+        "Read the persisted result for a browser command. A pending result ends this submission; do not poll it.",
       input: v.object({ operationId }),
       output: serviceResult,
       run: async ({ data }) => {
         const output = await serviceForRun().readBrowserCommandResult({
           runId,
-          operationId: serviceOperationId("browser-command", data.operationId),
+          operationId: `browser-command:${data.operationId}`,
         });
         return { output, terminate: pendingResult(output) };
       },
     }),
     defineTool({
-      name: "import_order_evidence",
+      name: "report_agent_progress",
       description:
-        "Import evidence from one persisted browser command through Cubby's replay-safe purchase writer.",
-      input: v.object({ operationId, commandId }),
-      output: serviceResult,
-      durable: true,
-      run: async ({ data, step }) => ({
-        output: await step.do(
-          stepName("import-order-evidence", data.operationId),
-          () =>
-            serviceForRun().importOrderEvidence({
-              runId,
-              operationId: serviceOperationId(
-                "import-order-evidence",
-                data.operationId,
-              ),
-              commandId: data.commandId,
-            }),
-        ),
+        "Publish the current import phase for the live run UI. Set awaitingApproval when a Cubby tool requires a human decision; approval and review phases end this submission.",
+      input: v.object({
+        operationId,
+        phase: progressPhase,
+        currentItem: v.optional(v.pipe(v.string(), v.maxLength(500))),
+        awaitingApproval: v.optional(v.boolean()),
+        detail: v.optional(v.pipe(v.string(), v.maxLength(1_000))),
       }),
+      durable: true,
+      run: async ({ data, step }) => {
+        await step.do(`agent-progress:${data.operationId}`, () =>
+          serviceForRun().updateAgentProgress({
+            runId,
+            eventId: `agent-progress:${data.operationId}`,
+            phase: data.phase,
+            currentItem: data.currentItem,
+            awaitingApproval: data.awaitingApproval,
+            detail: data.detail,
+          }),
+        );
+        return {
+          output: { recorded: true, phase: data.phase },
+          terminate:
+            data.phase === "awaiting_approval" || data.phase === "review",
+        };
+      },
     }),
     defineTool({
       name: "save_navigation_hints",
       description:
-        "Save observed navigational hints. The service accepts only URLs within the existing vendor domain allowlist.",
+        "Persist observed vendor navigation hints. The server accepts only URLs inside the vendor's existing browser allowlist; this tool cannot expand browser authority.",
       input: v.object({
         operationId,
-        hints: v.array(
-          v.object({
-            url: v.pipe(v.string(), v.url(), v.maxLength(2_048)),
-            label: v.optional(v.pipe(v.string(), v.maxLength(256))),
-          }),
+        hints: v.pipe(
+          v.array(
+            v.object({
+              url: boundedUrl,
+              label: v.optional(v.pipe(v.string(), v.maxLength(500))),
+            }),
+          ),
+          v.minLength(1),
+          v.maxLength(25),
         ),
       }),
       output: serviceResult,
       durable: true,
       run: async ({ data, step }) => ({
-        output: await step.do(
-          stepName("save-navigation-hints", data.operationId),
-          () =>
-            serviceForRun().saveNavigationHints({
-              runId,
-              operationId: serviceOperationId(
-                "save-navigation-hints",
-                data.operationId,
-              ),
-              hints: data.hints,
-            }),
+        output: await step.do(`navigation-hints:${data.operationId}`, () =>
+          serviceForRun().saveNavigationHints({ runId, ...data }),
         ),
       }),
     }),
     defineTool({
       name: "mark_history_expired",
-      description: "Record the provider history limit for this run.",
-      input: v.object({ operationId, earliestAvailableOrderAt }),
-      output: serviceResult,
-      durable: true,
-      run: async ({ data, step }) => ({
-        output: await step.do(
-          stepName("mark-history-expired", data.operationId),
-          () =>
-            serviceForRun().markHistoryExpired({
-              runId,
-              operationId: serviceOperationId(
-                "mark-history-expired",
-                data.operationId,
-              ),
-              earliestAvailableOrderAt: data.earliestAvailableOrderAt,
-            }),
-        ),
-      }),
-    }),
-    defineTool({
-      name: "audit_batch",
       description:
-        "Run the server-owned reasoning auditor for at most 25 imported orders.",
-      input: v.object({ operationId, offset: auditOffset }),
+        "Record the earliest order timestamp the vendor still exposes after the bounded history scan proves older orders are unavailable.",
+      input: v.object({
+        operationId,
+        earliestAvailableOrderAt: v.pipe(v.string(), v.isoTimestamp()),
+      }),
       output: serviceResult,
       durable: true,
       run: async ({ data, step }) => ({
-        output: await step.do(stepName("audit-batch", data.operationId), () =>
-          serviceForRun().auditBatch({
-            runId,
-            operationId: serviceOperationId("audit-batch", data.operationId),
-            offset: data.offset,
-          }),
+        output: await step.do(`history-expired:${data.operationId}`, () =>
+          serviceForRun().markHistoryExpired({ runId, ...data }),
         ),
       }),
     }),
     defineTool({
-      name: "finish_run",
-      description: "Finish a completed run after all claimed work has settled.",
+      name: "finish_import_run",
+      description:
+        "Complete the run only after every selected order or hunt is resolved or explicitly exhausted. The server refuses pending hunts and enforces all required audit batches before completion.",
       input: v.object({ operationId }),
       output: serviceResult,
       durable: true,
       run: async ({ data, step }) => ({
-        output: await step.do(stepName("finish-run", data.operationId), () =>
-          serviceForRun().finishRun({
-            runId,
-            operationId: serviceOperationId("finish-run", data.operationId),
-          }),
+        output: await step.do(`finish-run:${data.operationId}`, () =>
+          serviceForRun().finishRun({ runId, ...data }),
         ),
         terminate: true,
       }),
     }),
     defineTool({
-      name: "stop_for_review",
+      name: "stop_import_run_for_review",
       description:
-        "Create a run-scoped review finding for ambiguous evidence and terminate without speculative changes.",
+        "Stop on ambiguous or unreadable evidence without speculative writes. The server creates one run-scoped finding, runs required audits, fences the run, and records needs_review.",
       input: v.object({
         operationId,
         reason: v.picklist([
@@ -250,23 +227,15 @@ export function purchaseImportTools(
           "provider_failure",
           "other",
         ]),
-        detail: v.optional(v.pipe(v.string(), v.maxLength(1_000))),
+        detail: v.optional(
+          v.pipe(v.string(), v.minLength(1), v.maxLength(1_000)),
+        ),
       }),
       output: serviceResult,
       durable: true,
       run: async ({ data, step }) => ({
-        output: await step.do(
-          stepName("stop-for-review", data.operationId),
-          () =>
-            serviceForRun().stopForReview({
-              runId,
-              operationId: serviceOperationId(
-                "stop-for-review",
-                data.operationId,
-              ),
-              reason: data.reason,
-              detail: data.detail,
-            }),
+        output: await step.do(`stop-review:${data.operationId}`, () =>
+          serviceForRun().stopForReview({ runId, ...data }),
         ),
         terminate: true,
       }),

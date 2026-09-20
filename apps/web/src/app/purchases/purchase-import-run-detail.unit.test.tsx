@@ -1,0 +1,151 @@
+import { render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
+import { PurchaseImportRunDetailPage } from "./purchase-import-run-detail";
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+const run = {
+  publicId: "PIR-ABCDE12345",
+  status: "completed",
+  trigger: "manual",
+  startedAt: "2026-09-20T16:00:00.000Z",
+  endedAt: "2026-09-20T16:03:00.000Z",
+  ordersSeen: 3,
+  imported: 1,
+  updated: 1,
+  skipped: 1,
+  failureCode: null,
+  predecessorRunPublicId: null,
+  coordinatorModel: "test-model",
+  skillRevision: "purchase-import@test",
+  runtimeRevision: "flue@test",
+  source: { kind: "vendor export", vendorName: "Fixture vendor" },
+  actor: {
+    name: "Fixture member",
+    ledgerParty: { id: "LPY-ABCDE12345", name: "Fixture household" },
+  },
+  vendorAccount: { id: "account-1", label: "Fixture vendor" },
+  usage: {
+    pricedSubtotal: 0.125,
+    unpricedCount: 1,
+    nextCursor: null,
+    records: [
+      {
+        id: "usage-1",
+        createdAt: "2026-09-20T16:01:00.000Z",
+        feature: "purchase-import",
+        operation: "extract",
+        provider: "gateway",
+        model: "test-model",
+        attempt: 1,
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheReadTokens: null,
+        cacheWriteTokens: null,
+        durationMs: 100,
+        status: "completed",
+        gatewayLogId: null,
+        estimatedCost: 0.125,
+      },
+    ],
+  },
+  affectedPurchases: [
+    {
+      shortcode: "PUR-ABCDE12345",
+      displayName: "Fixture purchase",
+      orderId: "fixture-order",
+    },
+  ],
+  findings: [],
+  controllingMembers: [],
+  controlHistory: [],
+  operations: [
+    {
+      operationId: "extract-1",
+      kind: "extract",
+      state: "completed",
+      startedAt: "2026-09-20T16:01:00.000Z",
+      completedAt: "2026-09-20T16:01:01.000Z",
+      error: null,
+    },
+  ],
+  preparedOrders: [],
+  progress: [],
+  latestProgress: null,
+  approvals: [],
+};
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation((input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/agent")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              v: 1,
+              conversationId: "agent-1",
+              offset: "0",
+              messages: [],
+              settlements: [],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }
+      if (url.includes("/run-logs")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ entries: [], truncated: false }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ run }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }),
+  );
+});
+
+afterEach(() => {
+  harness.dispose();
+  vi.unstubAllGlobals();
+});
+
+describe("PurchaseImportRunDetailPage", () => {
+  it("keeps terminal evidence view-only while showing full-run usage and transcript", async () => {
+    render(<PurchaseImportRunDetailPage publicId={run.publicId} />, {
+      wrapper: harness.wrapper,
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: run.publicId }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Estimated subtotal \$0\.125/)).toHaveTextContent(
+      "1 unpriced",
+    );
+    expect(screen.getByText("$0.125")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Fixture purchase" }),
+    ).toHaveAttribute("href", "/purchases/PUR-ABCDE12345");
+    expect(
+      screen.getByLabelText("Purchase import transcript"),
+    ).toHaveTextContent("extract-1");
+    expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Send prompt" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Abort agent" }),
+    ).not.toBeInTheDocument();
+  });
+});

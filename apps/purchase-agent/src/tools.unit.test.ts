@@ -8,42 +8,32 @@ const unusedService = () => {
 };
 
 describe("purchase-import agent tool authority", () => {
-  it("exposes only run-scoped business tools and makes writes durable", () => {
+  it("keeps model-facing RPC limited to bounded browser and run lifecycle operations", () => {
     const tools = purchaseImportTools(
       "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       unusedService,
     );
-    const names = tools.map((tool) => tool.name);
 
-    expect(names).toEqual([
-      "load_run_scope",
-      "claim_next_work",
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "claim_next_import_work",
+      "extract_receipt_evidence",
       "issue_browser_command",
       "read_browser_command_result",
-      "import_order_evidence",
+      "report_agent_progress",
       "save_navigation_hints",
       "mark_history_expired",
-      "audit_batch",
-      "finish_run",
-      "stop_for_review",
+      "finish_import_run",
+      "stop_import_run_for_review",
     ]);
-    expect(names).not.toContain("sql");
-    expect(names).not.toContain("shell");
-    expect(names).not.toContain("browser_eval");
     expect(
       tools
-        .filter(
-          (tool) =>
-            tool.name !== "load_run_scope" &&
-            tool.name !== "read_browser_command_result",
-        )
+        .filter((tool) => tool.name !== "read_browser_command_result")
         .every((tool) => tool.durable),
     ).toBe(true);
   });
 
-  it("settles rather than waiting for an unavailable browser result", () => {
+  it("settles rather than polling unavailable browser work", () => {
     expect(shouldSettleForBrowserResult({ status: "pending" })).toBe(true);
-    expect(shouldSettleForBrowserResult({ state: "pending" })).toBe(true);
     expect(shouldSettleForBrowserResult({ state: "dispatched" })).toBe(true);
     expect(shouldSettleForBrowserResult({ state: "paused_auth" })).toBe(true);
     expect(shouldSettleForBrowserResult({ state: "paused_offline" })).toBe(
@@ -52,25 +42,7 @@ describe("purchase-import agent tool authority", () => {
     expect(shouldSettleForBrowserResult({ status: "completed" })).toBe(false);
   });
 
-  it("does not let the model request authentication without browser evidence", () => {
-    const tools = purchaseImportTools(
-      "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      unusedService,
-    );
-    const input = tools.find(
-      (tool) => tool.name === "issue_browser_command",
-    )?.input;
-    if (!input) throw new Error("Missing browser command input schema");
-
-    expect(
-      v.safeParse(input, {
-        operationId: "auth-without-evidence",
-        command: { kind: "open_auth" },
-      }).success,
-    ).toBe(false);
-  });
-
-  it("keeps browser result, history, and audit inputs bounded to the service contract", () => {
+  it("rejects arbitrary browser actions and unbounded progress text", () => {
     const tools = purchaseImportTools(
       "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       unusedService,
@@ -82,26 +54,17 @@ describe("purchase-import agent tool authority", () => {
     };
 
     expect(
-      v.safeParse(inputFor("read_browser_command_result"), {
-        operationId: "read-command-4",
+      v.safeParse(inputFor("issue_browser_command"), {
+        operationId: "auth-without-evidence",
+        command: { kind: "open_auth" },
       }).success,
-    ).toBe(true);
+    ).toBe(false);
     expect(
-      v.safeParse(inputFor("import_order_evidence"), {
-        operationId: "import-command-4",
-        commandId: "command-4",
-      }).success,
-    ).toBe(true);
-    expect(
-      v.safeParse(inputFor("mark_history_expired"), {
-        operationId: "history-4",
-        earliestAvailableOrderAt: "2026-09-19T12:30:00.000Z",
-      }).success,
-    ).toBe(true);
-    expect(
-      v.safeParse(inputFor("audit_batch"), {
-        operationId: "audit-4",
-        offset: -1,
+      v.safeParse(inputFor("report_agent_progress"), {
+        operationId: "progress-1",
+        phase: "awaiting_approval",
+        awaitingApproval: true,
+        detail: "x".repeat(1_001),
       }).success,
     ).toBe(false);
   });
