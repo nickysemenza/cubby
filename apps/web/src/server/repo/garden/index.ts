@@ -23,7 +23,7 @@ import { and, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { gardenEntry, planting } from "~/server/db/schema";
+import { gardenEntry, planting, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   guideWindowsFor,
@@ -88,6 +88,35 @@ const required = async <
       `The selected ${entity} no longer exists.`,
     );
   return parseEntityId(entity, id);
+};
+
+/** Keep garden source links semantic without introducing a Product subtype. */
+const validatePlantingSource = async (
+  db: GardenDb,
+  ingredientId: string,
+  sourceProductId: string | null,
+): Promise<void> => {
+  if (!sourceProductId) return;
+  const source = await unwrapDb(db).query.product.findFirst({
+    where: and(
+      eq(product.id, parseEntityId("product", sourceProductId)),
+      isNull(product.deletedAt),
+    ),
+    columns: { category: true, growsIngredientId: true },
+  });
+  if (!source) return;
+  if (source.category === "food") {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A planting source Product must be a garden product, not a food Product.",
+    );
+  }
+  if (source.growsIngredientId && source.growsIngredientId !== ingredientId) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "The planting source Product grows a different crop.",
+    );
+  }
 };
 
 // The joins `plantingOut`'s name/guide projections read; shared by the row
@@ -242,6 +271,7 @@ export const createPlanting = async (
     const sourceProductId = data.sourceProductId
       ? await required(tx, data.sourceProductId, "product")
       : null;
+    await validatePlantingSource(tx, ingredientId, sourceProductId);
     const locationId = data.locationId
       ? await required(tx, data.locationId, "location")
       : null;
@@ -352,6 +382,11 @@ export const updatePlanting = async (
           ? await required(tx, data.taskId, "task")
           : null
         : undefined;
+    await validatePlantingSource(
+      tx,
+      ingredientId ?? before.ingredientId,
+      sourceProductId === undefined ? before.sourceProductId : sourceProductId,
+    );
     const values = buildPartialUpdateValues({
       ingredientId,
       sourceProductId,

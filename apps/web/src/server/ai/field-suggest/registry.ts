@@ -12,6 +12,7 @@ import {
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
 import { type CostType, costTypeValues } from "@cubby/schemas/expense-fields";
+import { gardenEntryKind, plantingStatus } from "@cubby/schemas/garden-fields";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { type LocationType, locationType } from "@cubby/schemas/location";
 import {
@@ -207,6 +208,30 @@ const renderProductCandidate = (candidate: InternalSearchCandidate): string =>
   }`;
 
 export const FIELD_SUGGEST_REGISTRY = {
+  "planting.status": {
+    kind: "enum",
+    values: plantingStatus.options,
+    describe: (v) =>
+      ({
+        planned: "Planned for a future or not-yet-established planting",
+        growing: "Currently transplanted or actively growing",
+        finished: "No longer growing or completed",
+      })[v],
+    rules:
+      "Infer the planting lifecycle status from its dates. A transplant date indicates growing; a finished date indicates finished; otherwise choose planned.",
+    subject: (basis) => renderSubject("planting", basis),
+  } satisfies EnumSuggestSpec<"planned" | "growing" | "finished">,
+  "gardenEntry.kind": {
+    kind: "enum",
+    values: gardenEntryKind.options,
+    describe: (v) =>
+      v === "harvest"
+        ? "A record of gathered produce"
+        : "A note, observation, or photo record",
+    rules:
+      "Choose harvest when a harvest amount is present; otherwise choose note for an observation or photo journal entry.",
+    subject: (basis) => renderSubject("gardenEntry", basis),
+  } satisfies EnumSuggestSpec<"note" | "harvest">,
   "product.category": {
     kind: "enum",
     values: productCategoryValues,
