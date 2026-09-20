@@ -132,7 +132,8 @@ Configure these repository Actions secrets:
 - `APP_STORE_CONNECT_KEY_ID` — the API key ID
 - `APP_STORE_CONNECT_ISSUER_ID` — the API issuer ID
 - `APPLE_DISTRIBUTION_P12_BASE64` — base64 of one `.p12` containing the private keys and
-  certificates for both `Apple Distribution` and `Mac Installer Distribution`
+  certificates for both `Apple Distribution` and `Mac Installer Distribution` (the latter still
+  appears as `3rd Party Mac Developer Installer` in Keychain)
 - `APPLE_DISTRIBUTION_P12_PASSWORD` — the `.p12` export password
 - `SENTRY_AUTH_TOKEN` — the existing org token used to upload archive dSYMs
 
