@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import CoreGraphics
 import CubbyKit
 import Foundation
@@ -25,7 +26,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
 
     private let browser: BrowserChoice
     private let evidenceUploader: any BrowserEvidenceUploading
-    private let appleScript = SerializedAppleScriptExecutor()
+    private let appleScript: SerializedAppleScriptExecutor
     private var ownedWindowID: Int?
     private var ownedCaptureWindowID: CGWindowID?
     private var capturedLinks: [String: URL] = [:]
@@ -34,6 +35,8 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     init(browser: BrowserChoice, evidenceUploader: any BrowserEvidenceUploading) {
         self.browser = browser
         self.evidenceUploader = evidenceUploader
+        appleScript = SerializedAppleScriptExecutor(
+            targetBundleIdentifier: browser == .safari ? "com.apple.Safari" : "com.google.Chrome")
     }
 
     /// A rendered PDF is only advertised when the OS has granted the window-capture permission
@@ -339,9 +342,23 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
 }
 
 private actor SerializedAppleScriptExecutor {
+    private let targetBundleIdentifier: String
+
+    init(targetBundleIdentifier: String) {
+        self.targetBundleIdentifier = targetBundleIdentifier
+    }
+
     func execute(_ source: String) throws -> String {
         // NSAppleScript is synchronous. Keeping it on this dedicated serial executor prevents a
         // slow browser or macOS Automation prompt from freezing SwiftUI and the WebSocket bridge.
+        let target = NSAppleEventDescriptor(bundleIdentifier: targetBundleIdentifier)
+        guard let descriptor = target.aeDesc else { throw ExecutionFailure.browserUnavailable }
+        let permission = AEDeterminePermissionToAutomateTarget(
+            descriptor, typeWildCard, typeWildCard, true)
+        if permission == errAEEventNotPermitted || permission == errAEEventWouldRequireUserConsent {
+            throw ExecutionFailure.permissionDenied
+        }
+        guard permission == noErr else { throw ExecutionFailure.browserUnavailable }
         let bounded = "with timeout of 15 seconds\n\(source)\nend timeout"
         guard let script = NSAppleScript(source: bounded) else {
             throw ExecutionFailure.invalidCommand
