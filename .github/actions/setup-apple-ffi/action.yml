@@ -1,0 +1,59 @@
+name: "Setup Apple FFI"
+description: "Restores or builds the target-specific CubbyFFI framework and UniFFI shim"
+
+inputs:
+  targets:
+    description: "CubbyFFI target set passed to build-rust.sh"
+    required: true
+  profile:
+    description: "CubbyFFI Cargo profile passed to build-rust.sh"
+    required: false
+    default: "release"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Compute Apple FFI cache key
+      id: fingerprint
+      shell: bash
+      env:
+        CUBBY_FFI_PROFILE: ${{ inputs.profile }}
+        CUBBY_FFI_TARGETS: ${{ inputs.targets }}
+      run: |
+        set -euo pipefail
+        fingerprint="$(node scripts/ensure-apple-ffi.ts --fingerprint)"
+        echo "key=apple-ffi-output-v1-${RUNNER_OS}-${{ inputs.targets }}-${{ inputs.profile }}-${fingerprint}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore target-specific Apple FFI output
+      id: ffi-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: |
+          # The target/profile fingerprint marker lives inside this directory.
+          apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework
+          apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
+        # Exact keys only: the marker inside the XCFramework must agree with
+        # the Rust, Xcode, target, and profile fingerprint before reuse.
+        key: ${{ steps.fingerprint.outputs.key }}
+
+    - name: Build target-specific Apple FFI
+      if: steps.ffi-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        CUBBY_FFI_PROFILE: ${{ inputs.profile }}
+        CUBBY_FFI_TARGETS: ${{ inputs.targets }}
+      run: node scripts/ensure-apple-ffi.ts --build
+
+    - name: Check committed UniFFI bindings
+      shell: bash
+      run: git diff --exit-code -- apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
+
+    - name: Save target-specific Apple FFI output
+      if: success() && steps.ffi-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: |
+          # The target/profile fingerprint marker lives inside this directory.
+          apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework
+          apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
+        key: ${{ steps.fingerprint.outputs.key }}

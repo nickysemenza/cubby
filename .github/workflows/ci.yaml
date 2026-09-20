@@ -501,13 +501,12 @@ jobs:
           # never share a target directory.
           cache-workspaces: cubby-ffi -> target-macos
           cache-key: apple-ffi-macos
-      - name: Build macOS CubbyFFI
+      - uses: ./.github/actions/setup-apple-ffi
+        with:
+          targets: mac
+      - name: Run CubbyKit Swift tests
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/cubby-ffi/target-macos
-        run: apps/apple/scripts/build-rust.sh --targets mac
-      - name: Check committed UniFFI bindings
-        run: git diff --exit-code -- apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
-      - name: Run CubbyKit Swift tests
         run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions
 
   test-apple:
@@ -538,6 +537,9 @@ jobs:
         with:
           wasm: "false"
           cache-pnpm-store: "false"
+      - uses: ./.github/actions/setup-apple-ffi
+        with:
+          targets: sim
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Run iOS app checks

@@ -18,6 +18,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import {
   ROOT,
   command,
@@ -25,11 +26,16 @@ import {
   runNxTarget,
 } from "./rust-fingerprint.ts";
 
-export {
-  cargoMetadataSchema,
-  sourceDigest,
-  sourceInputs,
-} from "./rust-fingerprint.ts";
+export { sourceDigest, sourceInputs } from "./rust-fingerprint.ts";
+
+export const cargoMetadataSchema = z.object({
+  packages: z.array(
+    z.object({
+      manifest_path: z.string(),
+      source: z.string().nullable(),
+    }),
+  ),
+});
 
 const WASM_DIR = join(ROOT, "packages/wasm");
 const BINARY = "recipebridge_bg.wasm";
