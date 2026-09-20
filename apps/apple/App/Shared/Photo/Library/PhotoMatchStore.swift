@@ -3,6 +3,26 @@ import CubbyKit
 import Foundation
 import Observation
 
+/// Read-only data for the photo inspector. The root reads analysis-cache state separately; this
+/// transient server-match store does not reach into `PhotoAnalysisStore`.
+struct PhotoMatchInspectorSnapshot: Sendable {
+    let capturedAt: Date
+    let gridState: PhotoGridCellState
+    let registeredQuery: HashQuery?
+    let candidates: [DedupCandidate]
+    let entries: [ImageHashEntry]
+    let entriesLoaded: Int
+    let totalEntries: Int
+    let remainingEntries: Int
+    let hasIndex: Bool
+    let isLoading: Bool
+    let checked: Bool
+    let coverage: String
+    let serverError: String?
+    /// A photo-local hash/download failure, distinct from a failed server index refresh.
+    let matchError: String?
+}
+
 @Observable
 final class PhotoMatchStore {
     private(set) var hasIndex = false
@@ -41,6 +61,9 @@ final class PhotoMatchStore {
     /// this store reading the library's set directly (which would reintroduce a whole-collection
     /// dependency for every cell).
     @ObservationIgnored private var checkedIDs: Set<String> = []
+    @ObservationIgnored private var checkingIDs: Set<String> = []
+    @ObservationIgnored private var cancelledCheckIDs: Set<String> = []
+    @ObservationIgnored private var matchErrorsByID: [String: String] = [:]
     @ObservationIgnored private var cellStateBoxes: [String: PhotoGridCellStateBox] = [:]
     /// Populated by `PhotoLibraryStore`'s batch read on refresh and by the classification sweep as
     /// it finishes each photo (B4's grid dot; developer overlays layer 1's timing/label). Absent
@@ -85,6 +108,12 @@ final class PhotoMatchStore {
             .flatMap { directOwnersByImageID[$0.id.rawValue] ?? [] }
     }
 
+    func possibleDirectOwnerShortcodes(for id: String) -> [String] {
+        storedCandidates(for: id)
+            .filter { $0.confidence == .possible }
+            .flatMap { directOwnersByImageID[$0.id.rawValue] ?? [] }
+    }
+
     func directOwnerShortcodes(for imageID: ImageCode) -> [String] {
         directOwnersByImageID[imageID.rawValue] ?? []
     }
@@ -107,6 +136,50 @@ final class PhotoMatchStore {
         return box
     }
 
+    /// Takes a value snapshot for inspector rendering. It deliberately does not register a query,
+    /// refresh the server index, or touch the analysis cache.
+    func inspectorSnapshot(for localIdentifier: String) -> PhotoMatchInspectorSnapshot {
+        PhotoMatchInspectorSnapshot(
+            capturedAt: .now,
+            gridState: computeCellState(for: localIdentifier),
+            registeredQuery: queries[localIdentifier],
+            candidates: storedCandidates(for: localIdentifier),
+            entries: entries.values.sorted { $0.id.rawValue < $1.id.rawValue },
+            entriesLoaded: entries.count,
+            totalEntries: totalCount,
+            remainingEntries: remainingCount,
+            hasIndex: hasIndex,
+            isLoading: isLoading,
+            checked: checkedIDs.contains(localIdentifier),
+            coverage: coverage,
+            serverError: error,
+            matchError: matchErrorsByID[localIdentifier] ?? error)
+    }
+
+    /// Starts local/cloud fingerprint preparation for one photo before a `HashQuery` exists.
+    func markChecking(for id: String) {
+        checkingIDs.insert(id)
+        cancelledCheckIDs.remove(id)
+        matchErrorsByID[id] = nil
+        publishCellState(for: id)
+    }
+
+    /// Publishes a photo-local preparation failure without discarding a prior positive match.
+    func markUnavailable(for id: String, message: String) {
+        checkingIDs.remove(id)
+        cancelledCheckIDs.remove(id)
+        matchErrorsByID[id] = message
+        publishCellState(for: id)
+    }
+
+    /// Ends preparation neutrally: cancellation is neither a failure nor a known no-match.
+    func markCheckCancelled(for id: String) {
+        checkingIDs.remove(id)
+        cancelledCheckIDs.insert(id)
+        matchErrorsByID[id] = nil
+        publishCellState(for: id)
+    }
+
     /// Called by `PhotoLibraryStore` right before it hands a batch to `register`/`registerBatch`,
     /// so the resulting cell state reads "known: no match" rather than "not checked" as soon as
     /// that batch's match results publish, instead of lagging behind the library's own `checked`
@@ -114,6 +187,9 @@ final class PhotoMatchStore {
     func markChecked(_ ids: some Sequence<String>) {
         for id in ids where !checkedIDs.contains(id) {
             checkedIDs.insert(id)
+            checkingIDs.insert(id)
+            cancelledCheckIDs.remove(id)
+            matchErrorsByID[id] = nil
             publishCellState(for: id)
         }
     }
@@ -141,11 +217,18 @@ final class PhotoMatchStore {
 
     private func computeCellState(for id: String) -> PhotoGridCellState {
         let snapshot = analysisByID[id]
+        let stored = storedCandidates(for: id)
+        let hasPositiveMatch = !stored.isEmpty
+        let matchError = matchErrorsByID[id] ?? error
         return PhotoGridCellState.derive(
-            storedCandidates: storedCandidates(for: id),
+            storedCandidates: stored,
             strongDirectOwnerShortcodes: strongDirectOwnerShortcodes(for: id),
-            hasKnownResult: hasKnownResult(for: id),
-            checked: checkedIDs.contains(id),
+            possibleDirectOwnerShortcodes: possibleDirectOwnerShortcodes(for: id),
+            hasKnownResult: hasKnownResult(for: id) && (matchError == nil || hasPositiveMatch),
+            isPending: !cancelledCheckIDs.contains(id)
+                && (checkingIDs.contains(id) || queries[id] != nil || isLoading),
+            indexIsComplete: hasIndex && remainingCount == 0 && !isRepairing,
+            serverError: matchError,
             analysis: snapshot?.status ?? .pending,
             classifyMs: snapshot?.classifyMs,
             topLabel: snapshot?.topLabels.max(by: { $0.confidence < $1.confidence })?.identifier)
@@ -183,7 +266,8 @@ final class PhotoMatchStore {
         pendingQueries = [:]
         serverCandidates = [:]; batchCandidates = [:]; candidates = [:]
         directOwnersByImageID = [:]
-        checkedIDs = []; cellStateBoxes = [:]
+        checkedIDs = []; checkingIDs = []; cancelledCheckIDs = []; matchErrorsByID = [:]
+        cellStateBoxes = [:]
         analysisByID = [:]
         uncoalescedClassifiedCount = 0; lastClassifiedRevisionBump = .distantPast
         entriesRevision += 1
@@ -204,6 +288,7 @@ final class PhotoMatchStore {
         let task = Task { [weak self] in
             guard let self, generation == token, !Task.isCancelled else { return }
             isLoading = true; error = nil
+            publishCellStates(for: cellStateBoxes.keys)
             do {
                 let document = try await client.imageHashIndex()
                 guard generation == token, !Task.isCancelled else { return }
@@ -216,6 +301,7 @@ final class PhotoMatchStore {
                 totalCount = items.count
                 remainingCount = document.repair.count
                 hasIndex = true
+                publishCellStates(for: cellStateBoxes.keys)
                 let querySnapshot = queries.filter { priorityIDs?.contains($0.key) ?? true }
                 let matched = try await Self.match(entries: items, queries: querySnapshot)
                 guard generation == token, !Task.isCancelled else { return }
@@ -239,6 +325,7 @@ final class PhotoMatchStore {
                 guard generation == token else { return }
                 self.error = error.localizedDescription
                 Diagnostics.report(error, context: "photos.index")
+                publishCellStates(for: cellStateBoxes.keys)
             }
         }
         loadingTask = task
@@ -246,19 +333,46 @@ final class PhotoMatchStore {
         if generation == token {
             isLoading = false
             loadingTask = nil
+            publishCellStates(for: cellStateBoxes.keys)
             schedulePendingRegistrations()
         }
     }
 
     func register(id: String, query: HashQuery) async {
+        if queries[id] == query, hasKnownResult(for: id) {
+            checkingIDs.remove(id)
+            cancelledCheckIDs.remove(id)
+            matchErrorsByID[id] = nil
+            publishCellState(for: id)
+            return
+        }
+        if queries[id] != query {
+            serverCandidates[id] = nil
+            batchCandidates[id] = nil
+            candidates[id] = nil
+        }
         queries[id] = query
         pendingQueries[id] = query
+        checkingIDs.insert(id)
+        cancelledCheckIDs.remove(id)
+        matchErrorsByID[id] = nil
+        publishCellState(for: id)
         schedulePendingRegistrations()
     }
 
     func registerBatch(_ additions: [String: HashQuery]) async {
         guard !additions.isEmpty else { return }
-        for (id, query) in additions { queries[id] = query }
+        for (id, query) in additions {
+            if queries[id] != query {
+                serverCandidates[id] = nil
+                candidates[id] = nil
+            }
+            queries[id] = query
+            checkingIDs.insert(id)
+            cancelledCheckIDs.remove(id)
+            matchErrorsByID[id] = nil
+        }
+        publishCellStates(for: additions.keys)
         guard hasIndex else { return }
         while !Task.isCancelled {
             let token = generation
@@ -347,7 +461,12 @@ final class PhotoMatchStore {
     private func repair(_ rows: [(id: ImageCode, url: URL)], client: CubbyClient, token: UUID) async {
         guard generation == token, !Task.isCancelled, !rows.isEmpty else { return }
         isRepairing = true; repairFailures = 0
-        defer { if generation == token { isRepairing = false } }
+        defer {
+            if generation == token {
+                isRepairing = false
+                publishCellStates(for: cellStateBoxes.keys)
+            }
+        }
         for offset in stride(from: 0, to: rows.count, by: 50) {
             guard !Task.isCancelled, generation == token else { return }
             let batch = Array(rows[offset..<min(offset + 50, rows.count)])
@@ -364,7 +483,8 @@ final class PhotoMatchStore {
                     guard let old = entries[update.id] else { continue }
                     let entry = ImageHashEntry(
                         id: old.id, perceptualHash: try PerceptualHash64(hex: update.perceptualHash),
-                        sourceFingerprint: old.sourceFingerprint, width: old.width, height: old.height)
+                        sourceFingerprint: old.sourceFingerprint, width: old.width, height: old.height,
+                        directOwnerShortcodes: old.directOwnerShortcodes)
                     entries[old.id] = entry
                     added.append(entry)
                 }
@@ -374,6 +494,7 @@ final class PhotoMatchStore {
                 guard generation == token, !Task.isCancelled else { return }
                 publishServerMatches(matches, for: querySnapshot, replacing: false)
                 remainingCount = entries.values.filter { $0.perceptualHash == nil }.count
+                publishCellStates(for: cellStateBoxes.keys)
                 repairFailures += written.unavailable.count
                 revision += 1
             } catch is CancellationError { return } catch {
@@ -410,6 +531,10 @@ final class PhotoMatchStore {
                 : Self.merged(nextServerCandidates[id] ?? [], found)
             nextCandidates[id] = Self.merged(
                 nextServerCandidates[id] ?? [], batchCandidates[id] ?? [])
+            checkedIDs.insert(id)
+            checkingIDs.remove(id)
+            cancelledCheckIDs.remove(id)
+            matchErrorsByID[id] = nil
         }
         serverCandidates = nextServerCandidates
         candidates = nextCandidates

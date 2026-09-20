@@ -69,7 +69,7 @@ public struct ImageHashUpdate: Sendable, Hashable {
     }
 }
 
-public struct HashQuery: Sendable, Hashable {
+public struct HashQuery: Codable, Sendable, Hashable {
     public let perceptualHash: PerceptualHash64
     public let aspectRatio: Double
     public let sourceFingerprint: SourceFingerprint?
@@ -85,9 +85,9 @@ public struct HashQuery: Sendable, Hashable {
     }
 }
 
-public struct DedupCandidate: Sendable, Hashable {
-    public enum Basis: Sendable, Hashable { case content, source }
-    public enum Confidence: Sendable, Hashable { case strong, possible }
+public struct DedupCandidate: Codable, Sendable, Hashable {
+    public enum Basis: String, Codable, Sendable, Hashable { case content, source }
+    public enum Confidence: String, Codable, Sendable, Hashable { case strong, possible }
 
     public let id: ImageCode
     public let basis: Basis
@@ -99,6 +99,58 @@ public struct DedupCandidate: Sendable, Hashable {
         self.basis = basis
         self.confidence = confidence
         self.distance = distance
+    }
+}
+
+/// The shared decision contract for every perceptual-hash comparison. Its thresholds deliberately
+/// match the server-index matcher: 0...2 is strong; 3...6 is strong only within 2% aspect-ratio
+/// agreement; larger distances are rejected.
+public struct PhotoMatchVerdict: Codable, Sendable, Hashable, Equatable {
+    public enum Confidence: String, Codable, Sendable, Hashable { case strong, possible, rejected }
+    public enum Reason: String, Codable, Sendable, Hashable {
+        case exactDistance
+        case aspectRatiosAgree
+        case missingAspectRatio
+        case aspectRatiosDiffer
+        case distanceTooLarge
+    }
+
+    public let confidence: Confidence
+    public let reason: Reason
+
+    public var candidateConfidence: DedupCandidate.Confidence? {
+        switch confidence {
+        case .strong: .strong
+        case .possible: .possible
+        case .rejected: nil
+        }
+    }
+
+    public init(confidence: Confidence, reason: Reason) {
+        self.confidence = confidence
+        self.reason = reason
+    }
+
+    public static func evaluate(
+        distance: Int, leftAspectRatio: Double?, rightAspectRatio: Double?
+    ) -> Self {
+        switch distance {
+        case 0...2:
+            return Self(confidence: .strong, reason: .exactDistance)
+        case 3...6:
+            guard let leftAspectRatio, let rightAspectRatio else {
+                return Self(confidence: .possible, reason: .missingAspectRatio)
+            }
+            let denominator = max(abs(leftAspectRatio), abs(rightAspectRatio))
+            let agrees =
+                denominator > 0
+                && abs(leftAspectRatio - rightAspectRatio) / denominator <= 0.02
+            return agrees
+                ? Self(confidence: .strong, reason: .aspectRatiosAgree)
+                : Self(confidence: .possible, reason: .aspectRatiosDiffer)
+        default:
+            return Self(confidence: .rejected, reason: .distanceTooLarge)
+        }
     }
 }
 
@@ -122,47 +174,51 @@ public struct HashIndex: Sendable {
     public func candidates(for query: HashQuery) -> [DedupCandidate] {
         let found = entries.flatMap { entry -> [DedupCandidate] in
             var candidates: [DedupCandidate] = []
-            if let hash = entry.perceptualHash,
-                let confidence = confidence(
+            if let hash = entry.perceptualHash {
+                let verdict = PhotoMatchVerdict.evaluate(
                     distance: query.perceptualHash.distance(to: hash),
-                    leftRatio: query.aspectRatio,
-                    rightRatio: ratio(width: entry.width, height: entry.height))
-            {
-                candidates.append(
-                    DedupCandidate(
-                        id: entry.id, basis: .content, confidence: confidence,
-                        distance: query.perceptualHash.distance(to: hash)))
+                    leftAspectRatio: query.aspectRatio,
+                    rightAspectRatio: Self.ratio(width: entry.width, height: entry.height))
+                if let confidence = verdict.candidateConfidence {
+                    candidates.append(
+                        DedupCandidate(
+                            id: entry.id, basis: .content, confidence: confidence,
+                            distance: query.perceptualHash.distance(to: hash)))
+                }
             }
-            if let querySource = query.sourceFingerprint, let hash = entry.perceptualHash,
-                let confidence = confidence(
+            if let querySource = query.sourceFingerprint, let hash = entry.perceptualHash {
+                let verdict = PhotoMatchVerdict.evaluate(
                     distance: querySource.hash.distance(to: hash),
-                    leftRatio: querySource.aspectRatio,
-                    rightRatio: ratio(width: entry.width, height: entry.height))
-            {
-                candidates.append(
-                    DedupCandidate(
-                        id: entry.id, basis: .content, confidence: confidence,
-                        distance: querySource.hash.distance(to: hash)))
+                    leftAspectRatio: querySource.aspectRatio,
+                    rightAspectRatio: Self.ratio(width: entry.width, height: entry.height))
+                if let confidence = verdict.candidateConfidence {
+                    candidates.append(
+                        DedupCandidate(
+                            id: entry.id, basis: .content, confidence: confidence,
+                            distance: querySource.hash.distance(to: hash)))
+                }
             }
-            if let querySource = query.sourceFingerprint, let source = entry.sourceFingerprint,
-                let confidence = confidence(
+            if let querySource = query.sourceFingerprint, let source = entry.sourceFingerprint {
+                let verdict = PhotoMatchVerdict.evaluate(
                     distance: querySource.hash.distance(to: source.hash),
-                    leftRatio: querySource.aspectRatio, rightRatio: source.aspectRatio)
-            {
-                candidates.append(
-                    DedupCandidate(
-                        id: entry.id, basis: .source, confidence: confidence,
-                        distance: querySource.hash.distance(to: source.hash)))
+                    leftAspectRatio: querySource.aspectRatio, rightAspectRatio: source.aspectRatio)
+                if let confidence = verdict.candidateConfidence {
+                    candidates.append(
+                        DedupCandidate(
+                            id: entry.id, basis: .source, confidence: confidence,
+                            distance: querySource.hash.distance(to: source.hash)))
+                }
             }
-            if let source = entry.sourceFingerprint,
-                let confidence = confidence(
+            if let source = entry.sourceFingerprint {
+                let verdict = PhotoMatchVerdict.evaluate(
                     distance: query.perceptualHash.distance(to: source.hash),
-                    leftRatio: query.aspectRatio, rightRatio: source.aspectRatio)
-            {
-                candidates.append(
-                    DedupCandidate(
-                        id: entry.id, basis: .source, confidence: confidence,
-                        distance: query.perceptualHash.distance(to: source.hash)))
+                    leftAspectRatio: query.aspectRatio, rightAspectRatio: source.aspectRatio)
+                if let confidence = verdict.candidateConfidence {
+                    candidates.append(
+                        DedupCandidate(
+                            id: entry.id, basis: .source, confidence: confidence,
+                            distance: query.perceptualHash.distance(to: source.hash)))
+                }
             }
             return candidates
         }
@@ -192,23 +248,7 @@ public struct HashIndex: Sendable {
         let basis: DedupCandidate.Basis
     }
 
-    private func confidence(distance: Int, leftRatio: Double?, rightRatio: Double?) -> DedupCandidate
-        .Confidence?
-    {
-        switch distance {
-        case 0...2:
-            return .strong
-        case 3...6:
-            guard let leftRatio, let rightRatio else { return .possible }
-            let denominator = max(abs(leftRatio), abs(rightRatio))
-            let agrees = denominator > 0 && abs(leftRatio - rightRatio) / denominator <= 0.02
-            return agrees ? .strong : .possible
-        default:
-            return nil
-        }
-    }
-
-    private func ratio(width: Int?, height: Int?) -> Double? {
+    public static func ratio(width: Int?, height: Int?) -> Double? {
         guard let width, let height, width > 0, height > 0 else { return nil }
         return Double(max(width, height)) / Double(min(width, height))
     }

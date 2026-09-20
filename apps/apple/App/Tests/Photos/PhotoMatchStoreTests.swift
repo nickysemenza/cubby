@@ -9,10 +9,48 @@ import Testing
 @MainActor
 @Suite("Progressive photo matching", .serialized)
 struct PhotoMatchStoreTests {
+    @Test(arguments: PhotoImportCatalog.ingressRoutes.filter { $0.storage != nil && $0.relationPath.isEmpty })
+    func everyDirectOwnerFamilyCanProduceStrongAndPossibleBadges(route: PhotoIngressRoute) throws {
+        let owner = try #require(EntityCatalog[route.target].shortcodePrefix) + "2345"
+        for confidence in [DedupCandidate.Confidence.strong, .possible] {
+            let candidate = DedupCandidate(
+                id: ImageCode("IMG-2345"), basis: .content,
+                confidence: confidence, distance: 3)
+            let state = PhotoGridCellState.derive(
+                storedCandidates: [candidate], strongDirectOwnerShortcodes: [owner],
+                possibleDirectOwnerShortcodes: [owner], hasKnownResult: true, isPending: false,
+                indexIsComplete: true, serverError: nil)
+            #expect(state.ownerBadgeText == owner + (confidence == .possible ? "?" : ""))
+        }
+    }
+
+    @Test func registeredCachedQueryIsCheckedOnceAndChangedQueryDropsStaleOwnership() async throws {
+        let store = PhotoMatchStore()
+        let client = try client(
+            index: """
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0000000000000000","sourceFingerprint":null,"width":100,"height":100,"directOwnerShortcodes":["PRD-2345"]}],"repair":[]}
+                """)
+        await store.refresh(client: client)
+        let query = HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1)
+        await store.registerBatch(["cached-asset": query])
+        let box = store.cellStateBox(for: "cached-asset")
+        #expect(box.state.ownerBadgeText == "PRD-2345")
+        let revision = store.revision
+        await store.register(id: "cached-asset", query: query)
+        #expect(store.revision == revision)
+        #expect(box.state.matchState == .strong)
+        await store.register(
+            id: "cached-asset", query: .init(perceptualHash: .init(value: .max), aspectRatio: 1))
+        #expect(box.state.ownerBadgeText == nil)
+        #expect(box.state.matchState == .checking)
+        store.reset()
+    }
+
     @Test func ownerBadgeUsesDeterministicPrimaryAndOverflowCount() {
-        #expect(PhotoGridBadge.text(for: ["MEAL-9", "PRJ-2", "MEAL-9"]) == "MEAL-9+1")
+        #expect(PhotoGridBadge.text(for: ["MEAL-9", "PRJ-2", "TASK-2", "MEAL-9"]) == "MEAL-9+2")
         #expect(PhotoGridBadge.text(for: ["TASK-2"]) == "TASK-2")
         #expect(PhotoGridBadge.text(for: ["", ""]) == nil)
+        #expect(PhotoGridBadge.possibleText(for: ["MEAL-9", "PRJ-2", "MEAL-9"]) == "MEAL-9+1?")
         #expect(PhotoGridBadge.accessibilityDescription(for: ["LOC-4K7M"]) == "Owned by LOC-4K7M")
     }
 
@@ -47,38 +85,158 @@ struct PhotoMatchStoreTests {
             id: ImageCode("IMG-1"), basis: .content, confidence: .strong, distance: 0)
         let state = PhotoGridCellState.derive(
             storedCandidates: [candidate], strongDirectOwnerShortcodes: ["PRJ-2"], hasKnownResult: true,
-            checked: true)
+            isPending: false, indexIsComplete: true, serverError: nil)
         #expect(state.represented)
         #expect(!state.possibleMatch)
         #expect(state.known)
         #expect(state.badgeText == "PRJ-2")
         #expect(state.accessibilityStatus == "Owned by PRJ-2")
+
+        let ownerless = PhotoGridCellState.derive(
+            storedCandidates: [candidate], strongDirectOwnerShortcodes: [], hasKnownResult: true,
+            isPending: false, indexIsComplete: true, serverError: nil)
+        #expect(ownerless.accessibilityStatus == "In Cubby")
     }
 
     @Test func cellStateIsAPossibleMatchWhenNoCandidateIsStrong() {
         let candidate = DedupCandidate(
             id: ImageCode("IMG-1"), basis: .content, confidence: .possible, distance: 3)
         let state = PhotoGridCellState.derive(
-            storedCandidates: [candidate], strongDirectOwnerShortcodes: [], hasKnownResult: true,
-            checked: true)
+            storedCandidates: [candidate], strongDirectOwnerShortcodes: [],
+            possibleDirectOwnerShortcodes: ["MEAL-9", "PRJ-2"], hasKnownResult: true,
+            isPending: false, indexIsComplete: true, serverError: nil)
         #expect(!state.represented)
         #expect(state.possibleMatch)
-        #expect(state.badgeText == nil)
-        #expect(state.accessibilityStatus == "Possible Cubby match")
+        #expect(state.ownerBadgeText == "MEAL-9+1?")
+        #expect(state.accessibilityStatus == "Possible Cubby match with MEAL-9, PRJ-2")
     }
 
     @Test func cellStateWithNoCandidatesReadsKnownOrUncheckedFromChecked() {
         let known = PhotoGridCellState.derive(
-            storedCandidates: [], strongDirectOwnerShortcodes: [], hasKnownResult: true, checked: true)
+            storedCandidates: [], strongDirectOwnerShortcodes: [], hasKnownResult: true,
+            isPending: false, indexIsComplete: true, serverError: nil)
         #expect(!known.represented)
         #expect(!known.possibleMatch)
         #expect(known.known)
-        #expect(known.accessibilityStatus == "No known match")
+        #expect(known.accessibilityStatus == "No match found")
 
         let unchecked = PhotoGridCellState.derive(
-            storedCandidates: [], strongDirectOwnerShortcodes: [], hasKnownResult: true, checked: false)
+            storedCandidates: [], strongDirectOwnerShortcodes: [], hasKnownResult: false,
+            isPending: false, indexIsComplete: false, serverError: nil)
         #expect(!unchecked.known)
         #expect(unchecked.accessibilityStatus == "Not checked")
+    }
+
+    @Test func gridMatchStatesCoverPendingFailureAndIncompleteIndexContext() {
+        let empty: [DedupCandidate] = []
+        #expect(
+            PhotoGridCellState.derive(
+                storedCandidates: empty, strongDirectOwnerShortcodes: [], hasKnownResult: false,
+                isPending: true, indexIsComplete: false, serverError: nil
+            ).matchState == .checking)
+        let unavailable = PhotoGridCellState.derive(
+            storedCandidates: empty, strongDirectOwnerShortcodes: [], hasKnownResult: false,
+            isPending: false, indexIsComplete: false, serverError: "Offline")
+        #expect(unavailable.matchState == .unavailable)
+        #expect(unavailable.accessibilityStatus == "Match unavailable. Offline")
+
+        let incomplete = PhotoGridCellState.derive(
+            storedCandidates: empty, strongDirectOwnerShortcodes: [], hasKnownResult: true,
+            isPending: false, indexIsComplete: false, serverError: nil)
+        #expect(incomplete.matchState == .unmatched)
+        #expect(!incomplete.indexIsComplete)
+        #expect(incomplete.accessibilityStatus == "No match found; Cubby index is incomplete")
+    }
+
+    @Test func strongOwnershipWinsWhenStrongAndPossibleCandidatesAreAmbiguous() {
+        let strong = DedupCandidate(
+            id: ImageCode("IMG-strong"), basis: .content, confidence: .strong, distance: 0)
+        let possible = DedupCandidate(
+            id: ImageCode("IMG-possible"), basis: .content, confidence: .possible, distance: 2)
+        let state = PhotoGridCellState.derive(
+            storedCandidates: [possible, strong], strongDirectOwnerShortcodes: ["TASK-2", "MEAL-9"],
+            possibleDirectOwnerShortcodes: ["PRJ-2"], hasKnownResult: true,
+            isPending: false, indexIsComplete: true, serverError: nil)
+        #expect(state.matchState == .strong)
+        #expect(state.ownerBadgeText == "MEAL-9+1")
+    }
+
+    @Test func perIDBoxPublishesCheckingAndFailureWithoutTouchingOtherBoxes() async throws {
+        let store = PhotoMatchStore()
+        let pending = "pending"
+        let untouched = "untouched"
+        let pendingBox = store.cellStateBox(for: pending)
+        let untouchedBox = store.cellStateBox(for: untouched)
+        let untouchedState = untouchedBox.state
+        #expect(pendingBox.state.matchState == .unchecked)
+
+        let query = try await selection(hash: "0123456789abcdef").query()
+        await store.registerBatch([pending: query])
+        #expect(pendingBox.state.matchState == .checking)
+        #expect(untouchedBox.state == untouchedState)
+
+        await store.refresh(client: try client(index: "invalid response"))
+        #expect(pendingBox.state.matchState == .unavailable)
+        #expect(untouchedBox.state.matchState == .unavailable)
+        #expect(store.cellStateBox(for: pending) === pendingBox)
+        #expect(store.cellStateBox(for: untouched) === untouchedBox)
+    }
+
+    @Test func perIDPreparationLifecycleClearsFailureAndNeutralCancellation() async throws {
+        let store = PhotoMatchStore()
+        let id = "cloud-only"
+        let box = store.cellStateBox(for: id)
+        store.markChecking(for: id)
+        #expect(box.state.matchState == .checking)
+
+        store.markUnavailable(for: id, message: "Original is only in iCloud")
+        #expect(box.state.matchState == .unavailable)
+        #expect(box.state.serverError == "Original is only in iCloud")
+        #expect(store.inspectorSnapshot(for: id).matchError == "Original is only in iCloud")
+
+        store.markCheckCancelled(for: id)
+        #expect(box.state.matchState == .unchecked)
+        #expect(box.state.serverError == nil)
+
+        store.markUnavailable(for: id, message: "Original is only in iCloud")
+        await store.refresh(client: try client(index: "{\"algorithmRevision\":1,\"items\":[],\"repair\":[]}"))
+        await store.registerBatch([id: HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1)])
+        #expect(store.inspectorSnapshot(for: id).matchError == nil)
+        #expect(box.state.matchState == .unmatched)
+
+        let strong = DedupCandidate(
+            id: ImageCode("IMG-1"), basis: .content, confidence: .strong, distance: 0)
+        let retained = PhotoGridCellState.derive(
+            storedCandidates: [strong], strongDirectOwnerShortcodes: [], hasKnownResult: true,
+            isPending: false, indexIsComplete: true, serverError: "Original is only in iCloud")
+        #expect(retained.matchState == .strong)
+        #expect(retained.serverError == "Original is only in iCloud")
+    }
+
+    @Test func inspectorSnapshotIsSynchronousAndReportsLoadedIndexContext() async throws {
+        let client = try client(
+            index: """
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":null,"sourceFingerprint":null,"width":null,"height":null,"directOwnerShortcodes":[]}],"repair":[{"id":"IMG-2345","url":"https://example.invalid/photo.jpg"}]}
+                """)
+        let store = PhotoMatchStore()
+        let item = try selection(hash: "0123456789abcdef")
+        try await store.check([item], client: client)
+
+        let snapshot = store.inspectorSnapshot(for: item.id)
+        #expect(snapshot.capturedAt <= .now)
+        #expect(snapshot.gridState.matchState == .unmatched)
+        #expect(!snapshot.gridState.indexIsComplete)
+        #expect(snapshot.registeredQuery != nil)
+        #expect(snapshot.candidates.isEmpty)
+        #expect(snapshot.entries.map(\.id.rawValue) == ["IMG-2345"])
+        #expect(snapshot.entriesLoaded == 1)
+        #expect(snapshot.totalEntries == 1)
+        #expect(snapshot.remainingEntries == 1)
+        #expect(snapshot.hasIndex)
+        #expect(!snapshot.isLoading)
+        #expect(snapshot.checked)
+        #expect(snapshot.serverError == nil)
+        #expect(snapshot.coverage.contains("More matches may appear"))
     }
 
     @Test func ownerBadgeRequiresAStrongDirectImageMatch() async throws {
@@ -112,6 +270,7 @@ struct PhotoMatchStoreTests {
         #expect(store.error != nil)
         #expect(store.hasKnownResult(for: item.id))
         #expect(store.storedCandidates(for: item.id).isEmpty)
+        #expect(store.inspectorSnapshot(for: item.id).gridState.matchState == .unavailable)
         #expect(!store.hasKnownResult(for: "unprocessed"))
         store.reset()
         #expect(!store.hasKnownResult(for: item.id))

@@ -222,12 +222,18 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 guard !Task.isCancelled, generation == token else { return }
                 // Visible cells may finish work after this scan's snapshot was taken.
                 if checked.contains(asset.localIdentifier) { continue }
+                matches.markChecking(for: asset.localIdentifier)
                 do {
                     pending[asset.localIdentifier] =
-                        try await query(asset, preloaded: preloadedHashes[asset.localIdentifier]).query
+                        try await query(asset, preloaded: preloadedHashes[asset.localIdentifier])
                 } catch is CancellationError {
+                    matches.markCheckCancelled(for: asset.localIdentifier)
                     return
-                } catch { /* Cloud-only assets remain unknown until explicitly selected. */  }
+                } catch {
+                    guard generation == token else { return }
+                    matches.markUnavailable(for: asset.localIdentifier, message: error.localizedDescription)
+                    Diagnostics.report(error, context: "photos.match.prepare")
+                }
                 // Coalesce progress even when cloud-only assets cannot be fingerprinted.
                 if offset.isMultiple(of: 32) || offset == remaining.count - 1 {
                     scannedCount = completedCount + offset + 1
@@ -263,25 +269,36 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         _ asset: PHAsset, matches: PhotoMatchStore, degraded: ((CGImage) -> Void)? = nil
     ) async throws -> CGImage {
         let token = generation
-        let image = try await loadImage(asset, degraded: degraded)
-        guard generation == token else { throw CancellationError() }
-        thumbnails.setObject(
-            ImageBox(image), forKey: asset.localIdentifier as NSString,
-            cost: image.bytesPerRow * image.height)
-        guard analysisStore != nil else { return image }
-        let hashed = try await query(asset)
-        // A cell re-executes this `.task` every time it reappears (e.g. scrolled back into
-        // view), but `query(_:)` only recomputes the hash the first time this asset's current
-        // modification date is seen. Re-registering an already-known hash re-triggers a full
-        // match recompute (and every cell's cell-state republish) for no new information, so
-        // skip it once the hash itself is nothing new.
-        if hashed.isNew {
-            matches.markChecked([asset.localIdentifier])
-            await matches.register(id: asset.localIdentifier, query: hashed.query)
+        let id = asset.localIdentifier
+        if !matches.hasKnownResult(for: id) { matches.markChecking(for: id) }
+        do {
+            let image = try await loadImage(asset, degraded: degraded)
+            guard generation == token else { throw CancellationError() }
+            thumbnails.setObject(
+                ImageBox(image), forKey: id as NSString, cost: image.bytesPerRow * image.height)
+            guard analysisStore != nil else {
+                matches.markUnavailable(for: id, message: "Local hash cache is unavailable")
+                return image
+            }
+            let hashed = try await query(asset)
+            guard generation == token else { throw CancellationError() }
+            // A persistent cached hash is not evidence that this in-memory index has checked it.
+            // register deduplicates identical queries; neither this nor inspection repairs hashes.
+            matches.markChecked([id])
+            await matches.register(id: id, query: hashed)
+            guard generation == token else { throw CancellationError() }
+            checked.insert(id)
+            return image
+        } catch is CancellationError {
+            if generation == token { matches.markCheckCancelled(for: id) }
+            throw CancellationError()
+        } catch {
+            if generation == token {
+                matches.markUnavailable(for: id, message: error.localizedDescription)
+                Diagnostics.report(error, context: "photos.match.prepare")
+            }
+            throw error
         }
-        guard generation == token else { throw CancellationError() }
-        checked.insert(asset.localIdentifier)
-        return image
     }
 
     private func loadImage(_ asset: PHAsset, degraded: ((CGImage) -> Void)?) async throws -> CGImage {
@@ -339,29 +356,24 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
 
-    /// `isNew` is false when `hash` came from the store (this exact modification date was already
-    /// fingerprinted, in this session or an earlier one) rather than being computed just now.
     /// `preloaded` — from a batch `PhotoAnalysisStore.hashes(for:)` read — skips the per-id store
     /// round trip entirely when it is present and still valid; the scan loop always supplies it,
     /// the single-cell `thumbnail(_:matches:degraded:)` path never does.
     private func query(
         _ asset: PHAsset, preloaded: PhotoHashRecord? = nil
-    ) async throws -> (query: HashQuery, isNew: Bool) {
+    ) async throws -> HashQuery {
         let token = generation
         let id = asset.localIdentifier
         guard let analysisStore else { throw CancellationError() }
         let hash: PerceptualHash64
-        let isNew: Bool
         if let preloaded, preloaded.hashRevision == PerceptualHash64.algorithmRevision,
             preloaded.modificationDate == asset.modificationDate
         {
             hash = preloaded.perceptualHash
-            isNew = false
         } else if preloaded == nil,
             let cached = try? await analysisStore.hash(for: id, modificationDate: asset.modificationDate)
         {
             hash = cached
-            isNew = false
         } else {
             // Fingerprints use an independent final-quality, full-frame request. Grid cache
             // entries must never become canonical hashes if display sizing/cropping changes.
@@ -369,18 +381,14 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             hash = try await Task.detached(priority: .utility) { try PerceptualHash64.compute(source) }.value
             try? await analysisStore.upsertHash(
                 localIdentifier: id, modificationDate: asset.modificationDate, perceptualHash: hash)
-            isNew = true
         }
         guard !Task.isCancelled, generation == token else { throw CancellationError() }
         let ratio =
             Double(max(asset.pixelWidth, asset.pixelHeight))
             / Double(max(1, min(asset.pixelWidth, asset.pixelHeight)))
-        return (
-            HashQuery(
-                perceptualHash: hash, aspectRatio: ratio,
-                sourceFingerprint: SourceFingerprint(hash: hash, aspectRatio: ratio)),
-            isNew
-        )
+        return HashQuery(
+            perceptualHash: hash, aspectRatio: ratio,
+            sourceFingerprint: SourceFingerprint(hash: hash, aspectRatio: ratio))
     }
 
     private func stopWork() {

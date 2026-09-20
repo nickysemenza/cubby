@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<!-- Sandboxed Mac app. Without the network-client entitlement every request fails in a way
-	     that looks like a network outage. user-selected files feed the Identify file picker.
+	     that looks like a network outage. User-selected access supports imports and diagnostic exports.
 	     These keys are macOS-only: an iOS simulator app carrying them fails to spawn silently. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<key>com.apple.security.files.user-selected.read-only</key>
+	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
 	<key>com.apple.security.personal-information.photos-library</key>
 	<true/>
