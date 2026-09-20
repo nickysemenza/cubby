@@ -13,6 +13,47 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Configure Apple Rust build
+      shell: bash
+      run: |
+        set -euo pipefail
+        case '${{ inputs.targets }}' in
+          all | sim | device | mac) ;;
+          *)
+            echo "::error::targets must be one of all|sim|device|mac"
+            exit 1
+            ;;
+        esac
+        case '${{ inputs.profile }}' in
+          release | dist) ;;
+          *)
+            echo "::error::profile must be release or dist"
+            exit 1
+            ;;
+        esac
+        {
+          echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/cubby-ffi/target-${{ inputs.targets }}-${{ inputs.profile }}"
+          echo "CUBBY_FFI_PROFILE=${{ inputs.profile }}"
+          echo "CUBBY_FFI_TARGETS=${{ inputs.targets }}"
+        } >> "$GITHUB_ENV"
+
+    - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+      with:
+        cache: true
+        cache-workspaces: cubby-ffi -> target-${{ inputs.targets }}-${{ inputs.profile }}
+        cache-key: apple-ffi-${{ inputs.targets }}-${{ inputs.profile }}
+
+    - name: Install requested Apple Rust targets
+      shell: bash
+      run: |
+        set -euo pipefail
+        case '${{ inputs.targets }}' in
+          all) rustup target add aarch64-apple-ios aarch64-apple-ios-sim ;;
+          sim) rustup target add aarch64-apple-ios-sim ;;
+          device) rustup target add aarch64-apple-ios ;;
+          mac) : ;;
+        esac
+
     - name: Compute Apple FFI cache key
       id: fingerprint
       shell: bash

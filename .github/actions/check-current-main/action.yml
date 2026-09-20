@@ -5,6 +5,9 @@ outputs:
   current:
     description: "true when GITHUB_SHA is still refs/heads/main"
     value: ${{ steps.check.outputs.current }}
+  sha:
+    description: "The commit SHA represented by GITHUB_SHA (peels annotated tags)"
+    value: ${{ steps.check.outputs.sha }}
 
 runs:
   using: "composite"
@@ -14,6 +17,11 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        if ! workflow_sha="$(git rev-parse "$GITHUB_SHA^{commit}")"; then
+          echo "::error::Could not resolve $GITHUB_SHA to a commit"
+          exit 1
+        fi
+        echo "sha=$workflow_sha" >> "$GITHUB_OUTPUT"
         if ! current_sha="$(git ls-remote origin refs/heads/main | cut -f1)"; then
           echo "::error::Could not resolve refs/heads/main"
           exit 1
@@ -22,9 +30,9 @@ runs:
           echo "::error::Could not resolve refs/heads/main"
           exit 1
         fi
-        if [[ "$current_sha" == "$GITHUB_SHA" ]]; then
+        if [[ "$current_sha" == "$workflow_sha" ]]; then
           echo "current=true" >> "$GITHUB_OUTPUT"
         else
           echo "current=false" >> "$GITHUB_OUTPUT"
-          echo "::notice::Skipping stale deployment for $GITHUB_SHA; main is $current_sha"
+          echo "::notice::Skipping stale deployment for $workflow_sha; main is $current_sha"
         fi

@@ -81,7 +81,8 @@ targetTemplates:
           ]
         LSMinimumSystemVersion: "26.0"
         # XcodeGen otherwise hardcodes 1.0/1 here, orphaning MARKETING_VERSION and
-        # CURRENT_PROJECT_VERSION above. Bump those for each TestFlight upload.
+        # CURRENT_PROJECT_VERSION above. The TestFlight workflow overrides both values from the
+        # release tag and commit/run-attempt build coordinates; these remain local defaults.
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Only HTTPS via URLSession (exempt); answers App Store Connect's export-compliance

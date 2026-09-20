@@ -91,6 +91,55 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 - UI and physical-device acceptance are separate from these gates; follow
   [DESIGN.md](DESIGN.md#acceptance).
 
+## TestFlight releases
+
+The `Apple TestFlight` GitHub Actions workflow archives and uploads both the iOS and native macOS
+apps to the shared App Store Connect record. A release tag must be an exact `vMAJOR.MINOR.PATCH`
+tag on the current `main` commit, and the `CI` workflow must already have succeeded for that exact
+commit. For example:
+
+```sh
+git switch main
+git pull --ff-only
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The tag supplies `MARKETING_VERSION`. Build numbers are generated without editing `project.yml`:
+iOS uses `<commit-count>.1.<run-attempt>` and macOS uses
+`<commit-count>.2.<run-attempt>`. Rerunning a partially failed release therefore produces fresh
+build numbers for both platforms. Both archives must finish before either upload starts, and every
+uploaded archive has `testFlightInternalTestingOnly` set, so it cannot later be promoted to external
+TestFlight or the App Store.
+
+Use the workflow's manual dispatch with a `MAJOR.MINOR.PATCH` version to validate the complete
+certificate, profile, archive, and export path. Manual runs save the signed exports and dSYMs as a
+workflow artifact but never upload a build to App Store Connect.
+
+### One-time Apple and GitHub setup
+
+The App Store Connect app with Apple ID `6811439338` must have iOS and macOS platforms enabled for
+the `com.nickysemenza.cubby` bundle identifier. Its internal `household` TestFlight group keeps
+automatic Xcode-build distribution enabled. In Certificates, Identifiers & Profiles, enable
+Associated Domains for the identifier and create exactly these active profiles:
+
+- `AppStore com.nickysemenza.cubby iOS` (`IOS_APP_STORE`)
+- `AppStore com.nickysemenza.cubby macOS` (`MAC_APP_STORE`)
+
+Configure these repository Actions secrets:
+
+- `APP_STORE_CONNECT_API_KEY_P8` — the App Store Connect API key's complete `.p8` contents
+- `APP_STORE_CONNECT_KEY_ID` — the API key ID
+- `APP_STORE_CONNECT_ISSUER_ID` — the API issuer ID
+- `APPLE_DISTRIBUTION_P12_BASE64` — base64 of one `.p12` containing the private keys and
+  certificates for both `Apple Distribution` and `Mac Installer Distribution`
+- `APPLE_DISTRIBUTION_P12_PASSWORD` — the `.p12` export password
+- `SENTRY_AUTH_TOKEN` — the existing org token used to upload archive dSYMs
+
+The profiles must contain the imported Apple Distribution certificate and the Associated Domains
+entitlement. Keep the certificate and API key only in GitHub secrets; never commit their files or
+paste their values into workflow YAML.
+
 ## Debugging on device
 
 Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white screen on
