@@ -29,6 +29,7 @@ import {
 } from "~/app/meals/meal-options";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 
 import { defineListOverride } from "./types";
@@ -172,6 +173,7 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                 header: "Recipes",
                 enableSorting: false,
                 meta: attachCubbyColumnMeta<MealOut>({
+                  provenance: relationshipFieldProvenance("meal", "recipes"),
                   className: "min-w-0 w-56 overflow-hidden",
                   mobile: { slot: "meta", priority: 20 },
                   entityRefs: (row) =>
@@ -204,6 +206,7 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                 header: "Cost",
                 enableSorting: false,
                 meta: {
+                  provenance: relationshipFieldProvenance("meal", "recipes"),
                   numeric: true,
                   className: "w-20",
                   mobile: { slot: "trailing", priority: 10 },

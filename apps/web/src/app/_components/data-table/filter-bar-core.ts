@@ -1,6 +1,7 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { colorizeSelectOptions } from "~/lib/select-options";
 
 import type { FilterConfig } from "./columnHelpers";
 
@@ -134,10 +135,12 @@ export function barFieldFromConfig(
     label,
     type,
     placeholder: type === "text" ? `Filter ${label.toLowerCase()}…` : undefined,
-    options: config.options?.map((option) => ({
-      ...option,
-      hint: optionHints?.[option.value] ?? option.hint,
-    })),
+    options: config.options
+      ? colorizeSelectOptions(config.options).map((option) => ({
+          ...option,
+          hint: optionHints?.[option.value] ?? option.hint,
+        }))
+      : undefined,
     onActivate: config.onActivate,
     onSearchChange: config.onSearchChange,
     isLoading: config.isLoading,

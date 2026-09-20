@@ -82,6 +82,10 @@ export default defineEntity({
         kind: "boolean",
         readKey: null,
         control: { kind: "checkbox", section: "details" },
+        provenance: {
+          kind: "relation",
+          sources: [{ entity: "product", relation: "candidates" }],
+        },
         validation: {
           read: null,
           create: null,

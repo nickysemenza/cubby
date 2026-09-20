@@ -274,6 +274,10 @@ export default defineEntity({
           width: "sm",
           mobile: { slot: "meta", priority: 20 },
         },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "purchase", relation: "purchases" }],
+        },
         validation: {
           read: z.number().int().min(0),
           create: null,
@@ -294,6 +298,10 @@ export default defineEntity({
           width: "sm",
           mobile: { slot: "trailing", priority: 5 },
         },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
         validation: {
           read: money,
           create: null,
@@ -310,6 +318,10 @@ export default defineEntity({
           format: "plainDate",
           width: "sm",
           mobile: { slot: "meta", priority: 35 },
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "purchase", relation: "purchases" }],
         },
         validation: {
           read: plainDate.nullable(),

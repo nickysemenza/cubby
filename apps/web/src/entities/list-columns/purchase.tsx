@@ -18,7 +18,7 @@ import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
-import { FinancialSettlementBadge } from "~/app/purchases/financial-settlement";
+import { FinancialSettlementCell } from "~/app/purchases/financial-settlement";
 import { ReconciliationBadge } from "~/app/purchases/purchase-reconciliation";
 import { VendorCell } from "~/components/entity/vendor-cell";
 import { Grid, Row } from "~/components/layout";
@@ -28,6 +28,10 @@ import { StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
+import {
+  labeledFieldProvenance,
+  relationshipFieldProvenance,
+} from "~/entities/field-provenance";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
@@ -216,6 +220,24 @@ export const purchaseListOverride = defineListOverride<
           );
           add(
             columnHelper.display({
+              id: "financialSettlement",
+              header: "Settlement",
+              meta: {
+                provenanceWorkbenchHandled: true,
+                className: "w-32",
+                mobile: {
+                  slot: "meta",
+                  priority: 65,
+                  interactive: true,
+                },
+              },
+              cell: (info) => (
+                <FinancialSettlementCell purchase={info.row.original} />
+              ),
+            }),
+          );
+          add(
+            columnHelper.display({
               id: "reconciliation",
               header: "Reconciles",
               meta: {
@@ -276,6 +298,7 @@ export const purchaseListOverride = defineListOverride<
               header: "Purchase",
               enableSorting: false,
               meta: {
+                provenance: labeledFieldProvenance("Purchase record"),
                 className: "w-56",
                 mobile: { slot: "title", priority: 0 },
               },
@@ -290,19 +313,6 @@ export const purchaseListOverride = defineListOverride<
               ),
             }),
           );
-          add(
-            columnHelper.display({
-              id: "financialSettlement",
-              header: "Settlement",
-              meta: {
-                className: "w-28",
-                mobile: { slot: "meta", priority: 65 },
-              },
-              cell: (info) => (
-                <FinancialSettlementBadge purchase={info.row.original} />
-              ),
-            }),
-          );
           // Hidden by default; these exist so the transaction-presence and
           // data-quality specs are column-backed (a spec with no column makes
           // TanStack error on every render).
@@ -313,7 +323,14 @@ export const purchaseListOverride = defineListOverride<
                 id: "transactionCount",
                 header: "Transactions",
                 enableSorting: false,
-                meta: { numeric: true, className: "w-24" },
+                meta: {
+                  provenance: relationshipFieldProvenance(
+                    "purchase",
+                    "financial-transactions",
+                  ),
+                  numeric: true,
+                  className: "w-24",
+                },
                 cell: (info) =>
                   info.getValue() > 0 ? (
                     <span className="font-mono tabular-nums">
@@ -332,7 +349,10 @@ export const purchaseListOverride = defineListOverride<
                 id: "dataGaps",
                 header: "Data gaps",
                 enableSorting: false,
-                meta: { className: "w-48" },
+                meta: {
+                  provenance: labeledFieldProvenance("Purchase data quality"),
+                  className: "w-48",
+                },
                 cell: (info) => info.getValue() || <NoneValue />,
               },
             ),

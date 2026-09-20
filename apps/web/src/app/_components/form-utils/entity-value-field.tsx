@@ -33,6 +33,7 @@ export function EntityValueField<
   SearchProvider,
   clearable,
   suggestField,
+  description,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -41,12 +42,15 @@ export function EntityValueField<
   placeholder?: string;
   SearchProvider: (props: WithEntitySearchProps<ShortcodeFor<E>>) => ReactNode;
   clearable?: boolean;
+  description?: ReactNode;
   /** The manifest target key this field suggests (e.g. `"projectId"`). The
    * suggested id is seeded into the picker as a labeled item (`seedItem`) so
    * an auto-filled value never renders as a bare shortcode before its label
    * has loaded via search. */
   suggestField?: string;
 }) {
+  const controlId = String(name);
+  const descriptionId = `${controlId}-description`;
   // Called unconditionally regardless of `suggestField` — a no-op without a
   // mounted `FieldSuggestionProvider`, same as `AutoSuggestSlot`.
   const { suggestion, applied, isPending, apply, seedItem } =
@@ -79,12 +83,16 @@ export function EntityValueField<
                   : null);
             return (
               <FormFieldGroup
-                htmlFor={name}
+                htmlFor={controlId}
                 label={label}
+                description={description}
+                descriptionId={descriptionId}
                 invalid={fieldState.invalid}
                 error={fieldState.error}
               >
                 <EntityPicker
+                  inputId={controlId}
+                  aria-describedby={description ? descriptionId : undefined}
                   entity={entity}
                   // The field label is the picker's accessible name ("Parent
                   // location", not "location") and names its clear button.

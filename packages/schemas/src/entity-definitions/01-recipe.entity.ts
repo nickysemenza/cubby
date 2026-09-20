@@ -178,6 +178,7 @@ export default defineEntity({
         // recipelist.tsx supplies.
         readKey: null,
         display: { list: true, listOrder: 2 },
+        provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
       },
       {
         key: "caloriesTotal",
@@ -187,6 +188,7 @@ export default defineEntity({
         // Computed from `totals.nutrition.kcal` at read time; see costTotal.
         readKey: null,
         display: { list: true, listOrder: 3 },
+        provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
       },
       {
         key: "meals",
@@ -204,6 +206,10 @@ export default defineEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         display: { detail: true },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Recipe sections" }],
+        },
         validation: {
           read: recipeSectionsOut,
           create: recipeSectionsInput,
@@ -241,6 +247,10 @@ export default defineEntity({
         kind: "text",
         readKey: null,
         control: { kind: "specialized", renderer: "image-order" },
+        provenance: {
+          kind: "relation",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: null,
           create: null,
@@ -284,6 +294,7 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         display: { list: true, detail: true, listOrder: 5 },
+        provenance: { kind: "derived", sources: [{ label: "Recipe source" }] },
         validation: {
           read: recipeSource.nullable().optional(),
           create: null,
@@ -305,6 +316,10 @@ export default defineEntity({
         key: "images",
         kind: "json",
         display: { list: true, standard: "image", columnId: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: z.array(imageOut),
           create: null,

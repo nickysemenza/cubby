@@ -7,6 +7,7 @@ export type EntityFieldPresentation = {
   key: string;
   label: string;
   description: string | null;
+  provenance: (typeof entityFieldModels)[Entity]["fields"][number]["provenance"];
   control: NonNullable<
     (typeof entityFieldModels)[Entity]["fields"][number]["control"]
   >;
@@ -34,6 +35,7 @@ export function entityFieldPresentation(
     key: field.key,
     label: field.label,
     description: field.description,
+    provenance: field.provenance,
     control: field.control,
     editable: editable.includes(field.key),
   };

@@ -19,7 +19,15 @@ describe("useMobileListModel", () => {
       columnDef: {
         header: "Vendors",
         cell: () => preview,
-        meta: { mobile: { slot: "meta" } },
+        meta: {
+          mobile: { slot: "meta" },
+          provenance: {
+            kind: "derived",
+            sources: [
+              { entity: null, label: "Vendor projection", relation: null },
+            ],
+          },
+        },
       },
       accessorFn: undefined,
     };
@@ -55,6 +63,9 @@ describe("useMobileListModel", () => {
       result.current[0]?.metaValues[0]?.value ?? null,
     );
     expect(screen.getByText("…")).toBeInTheDocument();
+    expect(
+      screen.getByRole("note", { name: "From Vendor projection" }),
+    ).toBeInTheDocument();
     preview = "<vendor name>";
     rerender({ rowContentVersion: {} });
     rerenderCell(result.current[0]?.metaValues[0]?.value ?? null);

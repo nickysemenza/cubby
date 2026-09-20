@@ -34,6 +34,7 @@ import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { FieldProvenance } from "~/entities/field-provenance";
 
 import {
   entityFieldPresentation,
@@ -42,6 +43,7 @@ import {
 } from "./entity-field-presentation";
 import {
   entitySelectOptionsFor,
+  presentEntitySelectOptions,
   type EntitySelectOption,
 } from "./select-options";
 type PrimitiveFieldOptions = {
@@ -55,7 +57,7 @@ type PrimitiveFieldOptions = {
   disabled?: boolean;
   /** Select fields only — overrides `presentation.description` (e.g. why a
    * forced field is disabled) rather than fighting it. */
-  description?: string;
+  description?: ReactNode;
 };
 
 type PrimitiveFieldModel = (typeof entityFieldModels)[Entity]["fields"][number];
@@ -75,8 +77,15 @@ function suggestFieldFor(hasSuggest: boolean, key: string): string | undefined {
 function selectDescriptionFor(
   fieldOptions: PrimitiveFieldOptions,
   presentation: EntityFieldPresentation,
-): string | undefined {
-  return fieldOptions.description ?? presentation.description ?? undefined;
+): ReactNode {
+  const helper = fieldOptions.description ?? presentation.description;
+  if (!helper && !presentation.provenance) return undefined;
+  return (
+    <span className="space-y-0.5">
+      {helper ? <span className="block">{helper}</span> : null}
+      <FieldProvenance provenance={presentation.provenance} />
+    </span>
+  );
 }
 
 /**
@@ -95,6 +104,7 @@ function renderPrimitiveField({
   idPrefix,
   fieldOptions,
   name,
+  mode,
 }: {
   entity: Entity;
   field: PrimitiveFieldModel;
@@ -103,6 +113,7 @@ function renderPrimitiveField({
   idPrefix: string;
   fieldOptions: PrimitiveFieldOptions;
   name: string;
+  mode: EditMode;
 }) {
   const control = presentation.control;
   if (control.kind === "specialized") {
@@ -114,6 +125,7 @@ function renderPrimitiveField({
   const descriptionId = `${controlId}-description`;
   const errorId = `${controlId}-error`;
   const placeholder = fieldOptions.placeholder ?? control.placeholder ?? null;
+  const description = selectDescriptionFor(fieldOptions, presentation);
   if (control.kind === "text") {
     // SAFETY: The generated text-control declaration selects a string
     // field. RHF's conditional string path cannot express a dynamic model.
@@ -124,7 +136,7 @@ function renderPrimitiveField({
         form={form}
         name={textName}
         label={presentation.label}
-        description={presentation.description ?? undefined}
+        description={description}
         placeholder={placeholder ?? presentation.label}
         nullable={field.nullable}
         focusOnMount={fieldOptions.focusOnMount}
@@ -143,7 +155,7 @@ function renderPrimitiveField({
             descriptionId={descriptionId}
             errorId={errorId}
             label={presentation.label}
-            description={presentation.description ?? undefined}
+            description={description}
             invalid={fieldState.invalid}
             error={fieldState.error}
           >
@@ -163,7 +175,7 @@ function renderPrimitiveField({
               aria-invalid={fieldState.invalid}
               aria-describedby={
                 [
-                  presentation.description ? descriptionId : null,
+                  description ? descriptionId : null,
                   fieldState.error ? errorId : null,
                 ]
                   .filter(Boolean)
@@ -187,7 +199,7 @@ function renderPrimitiveField({
             descriptionId={descriptionId}
             errorId={errorId}
             label={presentation.label}
-            description={presentation.description ?? undefined}
+            description={description}
             invalid={fieldState.invalid}
             error={fieldState.error}
           >
@@ -204,7 +216,7 @@ function renderPrimitiveField({
                 aria-invalid={fieldState.invalid}
                 aria-describedby={
                   [
-                    presentation.description ? descriptionId : null,
+                    description ? descriptionId : null,
                     fieldState.error ? errorId : null,
                   ]
                     .filter(Boolean)
@@ -224,11 +236,16 @@ function renderPrimitiveField({
         form={form}
         name={name}
         label={presentation.label}
-        options={fieldOptions.options ?? control.options ?? []}
+        options={presentEntitySelectOptions(
+          entity,
+          field.key,
+          fieldOptions.options ?? control.options ?? [],
+          mode,
+        )}
         placeholder={placeholder ?? undefined}
         nullable={field.nullable}
         disabled={fieldOptions.disabled}
-        description={selectDescriptionFor(fieldOptions, presentation)}
+        description={description}
         suggestField={suggestFieldFor(Boolean(control.suggest), field.key)}
       />
     );
@@ -243,7 +260,7 @@ function renderPrimitiveField({
         form={form}
         name={dateName}
         label={presentation.label}
-        description={presentation.description ?? undefined}
+        description={description}
       />
     );
   }
@@ -265,7 +282,7 @@ function renderPrimitiveField({
           descriptionId={descriptionId}
           errorId={errorId}
           label={presentation.label}
-          description={presentation.description ?? undefined}
+          description={description}
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
@@ -295,7 +312,7 @@ function renderPrimitiveField({
               aria-invalid={fieldState.invalid}
               aria-describedby={
                 [
-                  presentation.description ? descriptionId : null,
+                  description ? descriptionId : null,
                   fieldState.error ? errorId : null,
                 ]
                   .filter(Boolean)
@@ -368,6 +385,7 @@ export function EntityPrimitiveFields({
           idPrefix,
           fieldOptions,
           name,
+          mode,
         });
       })}
     </>
@@ -612,6 +630,7 @@ export function EntityIntentFields({
               entity={referenceEntity as never}
               label={field.label}
               clearable={field.nullable}
+              description={<FieldProvenance provenance={field.provenance} />}
               SearchProvider={referenceEntitySearch(referenceEntity)}
               suggestField={suggestFieldFor(
                 Boolean(field.control?.suggest),
@@ -630,15 +649,29 @@ export function EntityIntentFields({
               `Field ${entity}.${field.key} has no specialized intent renderer for "${presentation.control.renderer}"`,
             );
           }
+          const provenanceId = field.provenance
+            ? `${idPrefix}-${field.key}-provenance`
+            : undefined;
           return (
-            <Renderer
+            <fieldset
               key={field.key}
-              entity={entity}
-              field={field}
-              form={form}
-              idPrefix={idPrefix}
-              mode={mode}
-            />
+              className="space-y-1"
+              aria-label={field.label}
+              aria-describedby={provenanceId}
+            >
+              <Renderer
+                entity={entity}
+                field={field}
+                form={form}
+                idPrefix={idPrefix}
+                mode={mode}
+              />
+              {field.provenance ? (
+                <div id={provenanceId}>
+                  <FieldProvenance provenance={field.provenance} />
+                </div>
+              ) : null}
+            </fieldset>
           );
         }
         const fieldOptions: PrimitiveFieldOptions = {};
@@ -664,6 +697,7 @@ export function EntityIntentFields({
           idPrefix,
           fieldOptions,
           name: field.key,
+          mode,
         });
       })}
     </>

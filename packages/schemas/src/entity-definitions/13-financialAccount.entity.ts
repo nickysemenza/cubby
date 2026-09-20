@@ -159,6 +159,12 @@ export default defineEntity({
         kind: "number",
         label: "Transactions",
         display: { list: true, detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [
+            { entity: "financialTransaction", relation: "transactions" },
+          ],
+        },
         validation: {
           read: z.number().int().nonnegative(),
           create: null,

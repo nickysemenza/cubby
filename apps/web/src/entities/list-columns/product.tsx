@@ -70,6 +70,11 @@ import {
 } from "~/components/ui/tooltip";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
+import {
+  entityFieldProvenance,
+  labeledFieldProvenance,
+  relationshipFieldProvenance,
+} from "~/entities/field-provenance";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
@@ -748,6 +753,11 @@ export const productListOverride = defineListOverride<
                 className: "w-32",
                 mobile: { slot: "meta", priority: 45, interactive: true },
                 enableSorting: true,
+                provenance: relationshipFieldProvenance(
+                  "product",
+                  "ingredient",
+                  "reference",
+                ),
                 editable: {
                   onSave: async (newIngredientId, product) => {
                     await updateProductMutation.mutateAsync({
@@ -770,7 +780,10 @@ export const productListOverride = defineListOverride<
               id: "modelPresence",
               header: "Model present",
               enableSorting: false,
-              meta: { className: "w-24" },
+              meta: {
+                provenance: labeledFieldProvenance("Product record"),
+                className: "w-24",
+              },
               cell: (info) =>
                 renderOptionCell(
                   info.getValue() ? "yes" : "no",
@@ -783,7 +796,10 @@ export const productListOverride = defineListOverride<
               id: "upcPresence",
               header: "UPC present",
               enableSorting: false,
-              meta: { className: "w-24" },
+              meta: {
+                provenance: labeledFieldProvenance("Product record"),
+                className: "w-24",
+              },
               cell: (info) =>
                 renderOptionCell(
                   info.getValue() ? "yes" : "no",
@@ -796,7 +812,10 @@ export const productListOverride = defineListOverride<
               id: "notesPresence",
               header: "Notes present",
               enableSorting: false,
-              meta: { className: "w-24" },
+              meta: {
+                provenance: labeledFieldProvenance("Product record"),
+                className: "w-24",
+              },
               cell: (info) =>
                 renderOptionCell(
                   info.getValue() ? "yes" : "no",
@@ -812,6 +831,7 @@ export const productListOverride = defineListOverride<
               header: "Data gaps",
               enableSorting: false,
               meta: {
+                provenance: labeledFieldProvenance("Product data quality"),
                 className: "w-36",
                 mobile: { slot: "meta", priority: 80 },
               },
@@ -838,7 +858,11 @@ export const productListOverride = defineListOverride<
             columnHelper.display({
               id: "unitPrice",
               header: "Unit price",
-              meta: { numeric: true, className: "w-24" },
+              meta: {
+                provenance: labeledFieldProvenance("Product price and units"),
+                numeric: true,
+                className: "w-24",
+              },
               cell: (info) => (
                 <UnitPriceLine
                   mappings={getMappings(info.row.original)}
@@ -859,7 +883,10 @@ export const productListOverride = defineListOverride<
               header: "USDA Food",
               // No mobile slot: a display column escapes the model's
               // empty-value check, and most products have no USDA link.
-              meta: { className: "w-32" },
+              meta: {
+                provenance: entityFieldProvenance("usda-food"),
+                className: "w-32",
+              },
               cell: ({ row }) => <ProductFoodCell product={row.original} />,
             }),
           );
@@ -873,6 +900,7 @@ export const productListOverride = defineListOverride<
                 id: "location",
                 enableSorting: true,
                 mobile: { slot: "meta", priority: 40, interactive: true },
+                provenance: relationshipFieldProvenance("product", "inventory"),
                 onQuickEdit: (product) => setQuickEditProductId(product.id),
                 inlineEdit: {
                   SearchProvider: (props) => (

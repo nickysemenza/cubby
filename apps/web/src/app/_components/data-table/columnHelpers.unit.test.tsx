@@ -583,6 +583,24 @@ describe("createImageColumn", () => {
       expect.stringContaining("cover.png"),
     );
   });
+
+  it("preserves provenance metadata for projected thumbnails", () => {
+    type ImageProjectionRow = {
+      id: string;
+      displayImages: DisplayImageSummary[];
+    };
+    const provenance = {
+      kind: "derived" as const,
+      sources: [{ entity: "image" as const, label: null, relation: "images" }],
+    };
+
+    const column = createImageColumn(
+      createCubbyColumnHelper<ImageProjectionRow>(),
+      { entity: "product", provenance },
+    );
+
+    expect(column.meta?.provenance).toEqual(provenance);
+  });
 });
 
 describe("createActionsColumn", () => {
@@ -860,6 +878,10 @@ describe("enum/boolean columns stay in the copy/paste range", () => {
     // `filterConfig: null` must leave meta.filterConfig undefined so the
     // manifest's control is the one that attaches.
     expect(column.meta?.filterConfig).toBeUndefined();
+
+    renderColumn<EnumRow, string | null>(column, { kind: "purchase" });
+    const dot = document.querySelector("td span[aria-hidden]");
+    expect(dot).toHaveStyle({ backgroundColor: "var(--chart-1)" });
   });
 });
 

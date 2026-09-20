@@ -1,6 +1,8 @@
 import type React from "react";
 import { useMemo } from "react";
 
+import { colorizeSelectOptions } from "~/lib/select-options";
+
 import type { ComboboxItem } from "./combobox-types";
 import { EntityPicker } from "./entity-picker";
 
@@ -13,6 +15,7 @@ interface StaticPickerOption {
 
 interface StaticPickerProps {
   inputId?: string;
+  "aria-describedby"?: string;
   items: readonly StaticPickerOption[];
   value: string | null;
   onValueChange: (value: string | null) => void;
@@ -23,11 +26,13 @@ interface StaticPickerProps {
   openOnMount?: boolean;
   compact?: boolean;
   clearable?: boolean;
+  widthMode?: "default" | "intrinsic";
 }
 
 /** String-valued form adapter for the shared Base UI picker shell. */
 export function StaticPicker({
   inputId,
+  "aria-describedby": ariaDescribedBy,
   items,
   value,
   onValueChange,
@@ -38,10 +43,11 @@ export function StaticPicker({
   openOnMount,
   compact,
   clearable,
+  widthMode,
 }: StaticPickerProps) {
   const pickerItems = useMemo<ComboboxItem[]>(
     () =>
-      items.map((item) => ({
+      colorizeSelectOptions(items).map((item) => ({
         id: item.value,
         name: item.label,
         icon: item.icon,
@@ -57,6 +63,7 @@ export function StaticPicker({
     <div className={className}>
       <EntityPicker
         inputId={inputId}
+        aria-describedby={ariaDescribedBy}
         label={label}
         items={pickerItems}
         value={selected}
@@ -66,6 +73,7 @@ export function StaticPicker({
         openOnMount={openOnMount}
         compact={compact}
         clearable={clearable}
+        widthMode={widthMode}
       />
     </div>
   );

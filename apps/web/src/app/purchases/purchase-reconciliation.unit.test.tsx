@@ -2,7 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import { FinancialSettlementBadge } from "./financial-settlement";
+import {
+  FinancialSettlementBadge,
+  financialTransactionCaptureRequestForPurchase,
+} from "./financial-settlement";
 import { purchaseReconciliationOptions } from "./purchase-options";
 import { ReconciliationBadge } from "./purchase-reconciliation";
 
@@ -64,5 +67,15 @@ describe("purchase reconciliation badges", () => {
     // "Settled", not the raw `match` enum this badge used to interpolate.
     const badge = screen.getByText("Settled · 2");
     expect(badge.className).toContain("text-positive");
+  });
+
+  it("pre-associates a new settlement transaction with its purchase", () => {
+    expect(financialTransactionCaptureRequestForPurchase("PUR-2345")).toEqual(
+      expect.objectContaining({
+        entity: "financialTransaction",
+        operation: "create",
+        seed: { purchaseId: "PUR-2345" },
+      }),
+    );
   });
 });

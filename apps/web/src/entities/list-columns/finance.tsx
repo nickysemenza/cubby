@@ -66,6 +66,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
+import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { presenceCellOptions } from "~/lib/select-options";
 
 import { defineListOverride, interleaveDeclared } from "./types";
@@ -318,7 +319,13 @@ export const financialTransactionListOverride = defineListOverride<
               id: "purchasePresence",
               header: "Linked",
               enableSorting: false,
-              meta: { className: "w-24" },
+              meta: {
+                provenance: relationshipFieldProvenance(
+                  "financialTransaction",
+                  "purchase",
+                ),
+                className: "w-24",
+              },
               cell: (i) =>
                 renderOptionCell(
                   i.getValue() ? "yes" : "no",

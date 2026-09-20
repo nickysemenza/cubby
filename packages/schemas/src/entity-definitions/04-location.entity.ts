@@ -267,6 +267,10 @@ export default defineEntity({
         kind: "text",
         readKey: null,
         control: { kind: "specialized", renderer: "image-order" },
+        provenance: {
+          kind: "relation",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: locationIdentityProductOut.nullable(),
           create: null,
@@ -289,6 +293,10 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         display: { list: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product", relation: "product" }],
+        },
         validation: {
           read: locationIdentityProductOut.nullable(),
           create: null,
@@ -323,6 +331,10 @@ export default defineEntity({
         key: "images",
         kind: "json",
         display: { list: true, detail: false, columnId: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: z.array(imageOut),
           create: null,
@@ -334,6 +346,7 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         display: { list: true, detail: false, columnId: "valuation" },
+        provenance: { kind: "derived", sources: [{ entity: "location" }] },
         validation: {
           read: locationValuation.nullable(),
           create: null,

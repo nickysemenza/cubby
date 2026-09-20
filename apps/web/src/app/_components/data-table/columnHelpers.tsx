@@ -1,6 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
+import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   type LocationShortcode,
@@ -62,6 +63,7 @@ import {
 } from "~/entities/entities";
 import { multiSelectFilterFn, multiSelectFilterFnBy } from "~/entities/filters";
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
+import { colorizeSelectOptions } from "~/lib/select-options";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import {
@@ -489,6 +491,8 @@ interface CreateImageColumnOptions<T> {
   className?: string;
   /** Mobile projection metadata override */
   mobile?: MobileColumnMeta;
+  /** Origin of a projected thumbnail; null marks an ordinary local image. */
+  provenance?: EntityFieldProvenance | null;
 }
 
 /** A row carrying the server-resolved `displayImages` list contract — the
@@ -552,6 +556,7 @@ export function createImageColumn<T extends BaseRow>(
     // every entity's image column, which is fine (they're all this narrow
     // for the same "just a thumbnail" reason).
     meta: {
+      provenance: options.provenance,
       className: cn("h-px w-16 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
     },
@@ -663,6 +668,7 @@ export function createEntityInlineLinkColumn<
     enableSorting?: boolean;
     dedupe?: boolean;
     mobile?: MobileColumnMeta;
+    provenance?: EntityFieldProvenance;
   },
 ) {
   return columnHelper.accessor((row: T) => row[accessor], {
@@ -675,6 +681,7 @@ export function createEntityInlineLinkColumn<
         : undefined,
       filterConfig: options?.filterConfig,
       mobile: options?.mobile,
+      provenance: options?.provenance,
       entityRefs: (row) => entityInlineItemRefs(entity, row[accessor]),
     }),
     cell: (info) =>
@@ -757,6 +764,7 @@ export function createInventoryEntriesColumn<
     layout?: "stacked" | "inline";
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
+    provenance?: EntityFieldProvenance;
     /**
      * When set, rows with entries get a hover-revealed pencil that opens a
      * quick-edit surface (e.g. the per-entry inventory dialog). A pencil
@@ -796,6 +804,7 @@ export function createInventoryEntriesColumn<
       className: options?.className ?? "min-w-0 w-40 max-w-56",
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
+      provenance: options?.provenance,
       entityRefs: (row) =>
         row[accessor].flatMap((entry) => {
           const related = getRelatedEntity(entry);
@@ -1511,6 +1520,7 @@ export function createSingleEntityInlineLinkColumn<
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     enableSorting?: boolean;
+    provenance?: EntityFieldProvenance;
     editable?: TEntity extends EditableSingleEntity
       ? SingleEntityEditableConfig<T>
       : never;
@@ -1546,6 +1556,7 @@ export function createSingleEntityInlineLinkColumn<
       className: options?.className,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
+      provenance: options?.provenance,
       cellData,
       entityRefs: (row) => {
         const item = valueFor(row);
@@ -1642,7 +1653,7 @@ export function renderOptionCell(
   options: readonly FilterableComboboxItem[],
 ): ReactNode {
   if (value == null || value === "") return <NoneValue />;
-  const option = options.find((o) => o.value === value);
+  const option = colorizeSelectOptions(options).find((o) => o.value === value);
   return (
     <DotLabel icon={option?.icon} color={option?.color ?? "var(--slate)"}>
       {option?.label ?? value}
@@ -1882,13 +1893,14 @@ export function createFilterableSelectColumn<
     };
   },
 ) {
+  const selectOptions = colorizeSelectOptions(options.selectOptions);
   const renderCell =
     options.renderCell ??
-    ((value: T[K]) => renderOptionCell(value ?? null, options.selectOptions));
+    ((value: T[K]) => renderOptionCell(value ?? null, selectOptions));
   const editable = options.editable;
   const cellData = selectCellData<T>(
     (row) => row[accessor] ?? null,
-    options.selectOptions,
+    selectOptions,
     editable
       ? (row, value) => editable.onSave(editable.parseValue(value), row)
       : undefined,
@@ -1900,7 +1912,7 @@ export function createFilterableSelectColumn<
       : (options.filterConfig ?? {
           placeholder: options.placeholder,
           filterType: "select",
-          options: options.selectOptions,
+          options: selectOptions,
         });
   const columnOptions = createEditableAccessorColumn(
     columnHelper,
@@ -1938,7 +1950,7 @@ export function createFilterableSelectColumn<
                 clipboard={clipboard}
                 config={{
                   type: "select",
-                  options: options.selectOptions,
+                  options: selectOptions,
                   placeholder: options.placeholder,
                   suggest,
                 }}

@@ -20,6 +20,7 @@ describe("barFieldFromConfig", () => {
         value: "electrical",
         label: "Electrical & Lighting",
         icon: undefined,
+        color: "var(--chart-1)",
         hint: "0",
       },
     ]);

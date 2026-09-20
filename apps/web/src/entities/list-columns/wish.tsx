@@ -25,6 +25,7 @@ import {
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
 import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
@@ -180,6 +181,7 @@ export const wishListOverride = defineListOverride<
               ),
               enableSorting: false,
               meta: {
+                provenance: relationshipFieldProvenance("wish", "candidates"),
                 className: "h-px w-16 overflow-hidden px-0 py-0",
                 mobile: { slot: "image", priority: -10 },
               },
@@ -194,6 +196,7 @@ export const wishListOverride = defineListOverride<
               id: "candidateSpec",
               header: "Make / model",
               meta: {
+                provenance: relationshipFieldProvenance("wish", "candidates"),
                 className: "w-56",
                 mobile: { slot: "subtitle", priority: 15 },
               },
@@ -218,6 +221,7 @@ export const wishListOverride = defineListOverride<
                 id: "candidateCount",
                 header: "Options",
                 meta: {
+                  provenance: relationshipFieldProvenance("wish", "candidates"),
                   numeric: true,
                   className: "w-24",
                   mobile: { slot: "meta", priority: 20 },
@@ -247,6 +251,7 @@ export const wishListOverride = defineListOverride<
                 id: "priceRange",
                 header: "Price range",
                 meta: {
+                  provenance: relationshipFieldProvenance("wish", "candidates"),
                   numeric: true,
                   // Wide enough for two five-figure amounts plus the en-dash.
                   className: "w-48",

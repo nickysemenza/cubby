@@ -13,6 +13,7 @@ import {
 } from "~/app/projects/project-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { taskStatusOptions } from "~/app/tasks/task-options";
+import { colorizeSelectOptions } from "~/lib/select-options";
 
 /** One `<select>`/combobox option: a value/label pair plus an optional leading icon or swatch color. */
 export type EntitySelectOption = Readonly<{
@@ -21,6 +22,36 @@ export type EntitySelectOption = Readonly<{
   icon?: ReactNode;
   color?: string;
 }>;
+
+/**
+ * Completes a declared enum roster with rich labels/icons and deterministic
+ * presentation. Declared values stay first; rich-only values follow in their
+ * source order. A caller's explicit color or icon always wins over a rich
+ * option, while a rich value fills a missing presentation member.
+ */
+export function presentEntitySelectOptions(
+  entity: string,
+  key: string,
+  declaredOptions: readonly EntitySelectOption[] = [],
+  mode?: "create" | "edit",
+): EntitySelectOption[] {
+  const richOptions = entitySelectOptionsFor(entity, key, mode) ?? [];
+  const richByValue = new Map(
+    richOptions.map((option) => [option.value, option]),
+  );
+  const seen = new Set<string>();
+  const merged = [...declaredOptions, ...richOptions]
+    .filter((option) => {
+      if (seen.has(option.value)) return false;
+      seen.add(option.value);
+      return true;
+    })
+    .map((declaredOption) => {
+      const richOption = richByValue.get(declaredOption.value);
+      return { ...richOption, ...declaredOption };
+    });
+  return colorizeSelectOptions(merged);
+}
 
 /**
  * Option labels for every `entity.field` whose manifest `control` carries no

@@ -21,6 +21,7 @@ import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTab
 import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
+import { labeledFieldProvenance } from "~/entities/field-provenance";
 import { image } from "~/entities/image.functions";
 
 import { defineListOverride } from "./types";
@@ -99,6 +100,7 @@ export const imageListOverride = defineListOverride<
             createImageColumn(columnHelper, {
               getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
               entity: "image",
+              provenance: null,
             }),
           );
           declared.filter((column) => column.id !== "filename").visit(add);
@@ -107,6 +109,7 @@ export const imageListOverride = defineListOverride<
               id: "entity",
               header: "Associated Entities",
               meta: {
+                provenance: labeledFieldProvenance("Entity associations"),
                 className: "w-40",
                 mobile: { slot: "meta", priority: 30 },
               },

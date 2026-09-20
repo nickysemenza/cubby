@@ -227,6 +227,10 @@ export default defineEntity({
         nullable: true,
         readKey: null,
         control: { kind: "text" },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Product identifiers" }],
+        },
         validation: {
           read: null,
           create: gtin.nullable().optional(),
@@ -239,6 +243,10 @@ export default defineEntity({
         nullable: true,
         readKey: null,
         control: { kind: "text" },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Product identifiers" }],
+        },
         // Plain string: check-digit validation + GTIN-14 normalization now
         // happen at the repository boundary (`resolvePrimaryProductCodeInput`
         // in `apps/web/src/server/repo/product/update-helpers.ts`), not here —
@@ -436,6 +444,10 @@ export default defineEntity({
         kind: "json",
         readKey: null,
         control: { kind: "specialized", renderer: "structured-field" },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Unit mappings" }],
+        },
         validation: {
           read: null,
           create: z.array(unitMappingInput).default([]),
@@ -465,6 +477,10 @@ export default defineEntity({
         kind: "text-array",
         label: "External IDs",
         control: { kind: "specialized", renderer: "tag-list" },
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Product identifiers" }],
+        },
         display: {
           list: true,
           listOrder: 8,
@@ -539,6 +555,10 @@ export default defineEntity({
         kind: "text",
         readKey: null,
         control: { kind: "specialized", renderer: "image-order" },
+        provenance: {
+          kind: "relation",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: null,
           create: null,
@@ -571,6 +591,10 @@ export default defineEntity({
           detailOrder: 6,
           width: "sm",
         },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Product identifiers" }],
+        },
         validation: {
           read: gtin.nullable(),
           create: null,
@@ -581,6 +605,10 @@ export default defineEntity({
         key: "images",
         kind: "json",
         display: { list: true, standard: "image", columnId: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "images" }],
+        },
         validation: {
           read: z.array(imageOut),
           create: null,
@@ -603,6 +631,7 @@ export default defineEntity({
         // headed this "Data quality".
         label: "Data quality",
         display: { list: true, listOrder: 7, listHidden: true },
+        provenance: { kind: "derived", sources: [{ entity: "product" }] },
         validation: {
           read: dataQuality,
           create: null,
@@ -618,6 +647,10 @@ export default defineEntity({
         kind: "number",
         label: "Net basis",
         display: { list: true, listOrder: 10, listHidden: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
         validation: {
           read: money,
           create: null,
@@ -629,6 +662,10 @@ export default defineEntity({
         kind: "number",
         label: "Components",
         display: { list: true, listOrder: 12, columnId: "components" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product", relation: "components" }],
+        },
         validation: {
           read: z.number().int().nonnegative(),
           create: null,
@@ -644,6 +681,10 @@ export default defineEntity({
         // `productlist.tsx` supplies.
         readKey: null,
         display: { list: true, listOrder: 11 },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "location", relation: "locations" }],
+        },
       },
       {
         key: "ledgerExpectedQuantity",
@@ -660,6 +701,10 @@ export default defineEntity({
           columnId: "expectedQuantity",
           listHidden: true,
         },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
       },
       {
         key: "quantityVariance",
@@ -667,6 +712,10 @@ export default defineEntity({
         nullable: true,
         label: "Variance",
         display: { list: true, listOrder: 14, listHidden: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
         validation: {
           read: z.number().nullable(),
           create: null,
@@ -681,6 +730,10 @@ export default defineEntity({
         // always headed this "Purchase date".
         label: "Purchase date",
         display: { list: true, listOrder: 15 },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
         validation: {
           read: plainDate.nullable(),
           create: null,
@@ -692,6 +745,10 @@ export default defineEntity({
         kind: "number",
         label: "Expenses",
         display: { list: true, listOrder: 17, columnId: "expenses" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense", relation: "expenses" }],
+        },
         validation: {
           read: z.number().int(),
           create: null,
@@ -710,6 +767,10 @@ export default defineEntity({
           listOrder: 19,
           listHidden: true,
           mobile: { slot: "trailing", priority: 0 },
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "inventory", relation: "inventory" }],
         },
         validation: {
           read: z.number().nullable(),

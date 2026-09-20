@@ -31,6 +31,7 @@ import { Stack } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { multiSelectFilterFn } from "~/entities/filters";
 import type { EntityListParamsByEntity } from "~/entities/generated/entity-lists.gen";
 
@@ -152,6 +153,7 @@ export const inventoryListOverride = defineListOverride<
             createImageColumn(columnHelper, {
               entity: "inventory",
               className: "w-10",
+              provenance: relationshipFieldProvenance("inventory", "product"),
             }),
           );
           place("amount");
@@ -161,6 +163,11 @@ export const inventoryListOverride = defineListOverride<
               header: "Product",
               enableSorting: false,
               meta: {
+                provenance: relationshipFieldProvenance(
+                  "inventory",
+                  "product",
+                  "reference",
+                ),
                 className: "min-w-0 w-64",
                 surplus: true,
                 mobile: { slot: "meta", priority: 50 },
@@ -200,6 +207,11 @@ export const inventoryListOverride = defineListOverride<
                 className: "min-w-0 w-40 max-w-56",
                 mobile: { slot: "subtitle", priority: 20 },
                 filterConfig: { placeholder: "Filter location..." },
+                provenance: relationshipFieldProvenance(
+                  "inventory",
+                  "location",
+                  "reference",
+                ),
                 editable: {
                   // Not clearable, so the fallback only satisfies the
                   // optional (non-nullable) `locationId` update field.
@@ -219,6 +231,7 @@ export const inventoryListOverride = defineListOverride<
               header: "Manufacturer",
               enableSorting: false,
               meta: {
+                provenance: relationshipFieldProvenance("inventory", "product"),
                 className: "min-w-0 w-40 truncate",
                 mobile: { slot: "meta", priority: 70 },
                 filterConfig: { placeholder: "Filter by manufacturer..." },
@@ -233,6 +246,7 @@ export const inventoryListOverride = defineListOverride<
               enableSorting: false,
               filterFn: multiSelectFilterFn,
               meta: {
+                provenance: relationshipFieldProvenance("inventory", "product"),
                 className: "w-32",
                 mobile: { slot: "meta", priority: 75 },
                 filterConfig: {

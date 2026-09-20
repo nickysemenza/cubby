@@ -56,6 +56,7 @@ export function matchesPickerItem(
 
 export interface EntityPickerProps<TId extends string> {
   inputId?: string;
+  "aria-describedby"?: string;
   entity?: PickerEntity;
   /**
    * Visible caption for assistive tech (falls back to the entity's noun when
@@ -74,6 +75,7 @@ export interface EntityPickerProps<TId extends string> {
   error?: string | null;
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
   wide?: boolean;
+  widthMode?: "default" | "intrinsic";
   compact?: boolean;
   openOnMount?: boolean;
   placeholder?: string;
@@ -235,6 +237,7 @@ function EntityPickerPopup<TId extends string>({
   error,
   emptyMessage,
   wide,
+  widthMode,
   create,
 }: {
   anchorRef: React.RefObject<HTMLDivElement | null>;
@@ -255,6 +258,7 @@ function EntityPickerPopup<TId extends string>({
   error?: string | null;
   emptyMessage: string;
   wide?: boolean;
+  widthMode?: "default" | "intrinsic";
   create: CreatePickerItem<TId> | null;
 }) {
   const [isCreating, setIsCreating] = React.useState(false);
@@ -291,12 +295,18 @@ function EntityPickerPopup<TId extends string>({
       >
         <ComboboxPrimitive.Popup
           className={cn(
-            "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),34rem)] max-w-(--available-width) origin-(--transform-origin) flex-col overflow-hidden rounded-none border border-[var(--border)] bg-popover text-popover-foreground",
+            "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),34rem)] origin-(--transform-origin) flex-col overflow-hidden rounded-none border border-[var(--border)] bg-popover text-popover-foreground",
             "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
             wide
-              ? "w-[min(44rem,calc(100vw-16px))]"
-              : "w-[min(24rem,calc(100vw-16px))]",
-            "min-w-[min(var(--anchor-width),calc(100vw-16px))",
+              ? widthMode === "intrinsic"
+                ? "w-max max-w-[min(44rem,var(--available-width),calc(100vw-16px))]"
+                : "w-[min(44rem,calc(100vw-16px))] max-w-(--available-width)"
+              : widthMode === "intrinsic"
+                ? "w-max max-w-[min(24rem,var(--available-width),calc(100vw-16px))]"
+                : "w-[min(24rem,calc(100vw-16px))] max-w-(--available-width)",
+            widthMode === "intrinsic"
+              ? "min-w-[var(--anchor-width)]"
+              : "min-w-[min(var(--anchor-width),calc(100vw-16px))]",
           )}
         >
           {clearable && value ? (
@@ -385,6 +395,7 @@ function pickerNaming(
 
 function EntityPickerInput<TId extends string>({
   inputId,
+  ariaDescribedBy,
   anchorRef,
   inputRef,
   ariaLabel,
@@ -398,6 +409,7 @@ function EntityPickerInput<TId extends string>({
   setQuery,
 }: {
   inputId?: string;
+  ariaDescribedBy?: string;
   anchorRef: React.RefObject<HTMLDivElement | null>;
   inputRef: React.RefObject<HTMLInputElement | null>;
   /** Visible caption (or entity fallback) — accessible name for the input. */
@@ -432,6 +444,7 @@ function EntityPickerInput<TId extends string>({
           id={inputId}
           ref={inputRef}
           aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
           placeholder={placeholder ?? placeholderDefault}
           className={cn(
             "min-w-0 flex-1 bg-transparent px-2 outline-none placeholder:text-muted-foreground",
@@ -468,6 +481,7 @@ function EntityPickerInput<TId extends string>({
  */
 export function EntityPicker<TId extends string>({
   inputId,
+  "aria-describedby": ariaDescribedBy,
   entity,
   label,
   items,
@@ -480,6 +494,7 @@ export function EntityPicker<TId extends string>({
   error,
   renderItem,
   wide,
+  widthMode,
   compact,
   openOnMount,
   placeholder,
@@ -610,6 +625,7 @@ export function EntityPicker<TId extends string>({
     >
       <EntityPickerInput
         inputId={inputId}
+        ariaDescribedBy={ariaDescribedBy}
         anchorRef={anchorRef}
         inputRef={inputRef}
         ariaLabel={ariaLabel}
@@ -638,6 +654,7 @@ export function EntityPicker<TId extends string>({
         error={error}
         emptyMessage={emptyMessage}
         wide={wide}
+        widthMode={widthMode}
         create={
           canCreate && onCreateNew
             ? { name: normalizedQuery, onCreate: onCreateNew }
