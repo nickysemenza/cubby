@@ -130,24 +130,70 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
 
     private func navigate(_ url: URL) async throws -> Int {
         let target = Self.appleScriptLiteral(url.absoluteString)
-        let script: String
         switch (browser, ownedWindowID) {
         case (.safari, .some(let windowID)):
-            script =
+            let script =
                 "tell application \"Safari\" to set URL of current tab of window id \(windowID) to \(target)\nreturn \(windowID)"
+            return try await browserWindowID(from: script, action: "navigate")
         case (.safari, .none):
-            script =
+            let script =
                 "tell application \"Safari\"\nmake new document with properties {URL:\(target)}\nreturn id of front window\nend tell"
+            return try await browserWindowID(from: script, action: "navigate")
         case (.chrome, .some(let windowID)):
-            script =
+            let script =
                 "tell application \"Google Chrome\" to set URL of active tab of window id \(windowID) to \(target)\nreturn \(windowID)"
+            return try await browserWindowID(from: script, action: "navigate")
         case (.chrome, .none):
-            script =
-                "tell application \"Google Chrome\"\nset w to make new window\nset URL of active tab of w to \(target)\nreturn id of w\nend tell"
+            let windowID = try await createChromeWindow()
+            ownedWindowID = windowID
+            let navigateScript =
+                "tell application \"Google Chrome\" to set URL of active tab of window id \(windowID) to \(target)\nreturn \(windowID)"
+            return try await browserWindowID(from: navigateScript, action: "navigate")
         }
-        let value = try await appleScript.execute(script, action: "navigate")
+    }
+
+    private func browserWindowID(
+        from script: String, action: String, timeoutSeconds: Int = 15
+    ) async throws -> Int {
+        let value = try await appleScript.execute(
+            script, action: action, timeoutSeconds: timeoutSeconds)
         guard let id = Int(value) else { throw ExecutionFailure.browserUnavailable }
         return id
+    }
+
+    /// Chrome 153 can create a window and then never reply to the `make new window` Apple Event.
+    /// Send that one event without requesting a reply, then prove which window was created from
+    /// the before/after ID sets. Ambiguous changes are rejected instead of adopting a user window.
+    private func createChromeWindow() async throws -> Int {
+        let previous = try await chromeWindowIDs()
+        let script = """
+            ignoring application responses
+            tell application "Google Chrome" to make new window
+            end ignoring
+            return "requested"
+            """
+        _ = try await appleScript.execute(script, action: "create_window_request")
+        for _ in 0..<40 {
+            try await Task.sleep(for: .milliseconds(250))
+            let candidates = try await chromeWindowIDs().subtracting(previous)
+            if candidates.count == 1, let windowID = candidates.first { return windowID }
+            if candidates.count > 1 { throw ExecutionFailure.browserUnavailable }
+        }
+        throw ExecutionFailure.executionFailed
+    }
+
+    private func chromeWindowIDs() async throws -> Set<Int> {
+        let script = """
+            tell application "Google Chrome"
+            set output to ""
+            repeat with browserWindow in every window
+            set output to output & (id of browserWindow as text) & ","
+            end repeat
+            return output
+            end tell
+            """
+        let value = try await appleScript.execute(script, action: "list_windows")
+        return Set(value.split(separator: ",").compactMap { Int($0) })
     }
 
     private func setOwnedWindowURL(_ url: URL) async throws {
@@ -373,7 +419,7 @@ private actor SerializedAppleScriptExecutor {
         self.targetBundleIdentifier = targetBundleIdentifier
     }
 
-    func execute(_ source: String, action: String) throws -> String {
+    func execute(_ source: String, action: String, timeoutSeconds: Int = 15) throws -> String {
         // NSAppleScript is synchronous. Keeping it on this dedicated serial executor prevents a
         // slow browser or macOS Automation prompt from freezing SwiftUI and the WebSocket bridge.
         BrowserBridgeDebugLog.emit(.appleEventStarted, messageType: action)
@@ -386,7 +432,7 @@ private actor SerializedAppleScriptExecutor {
             throw ExecutionFailure.permissionDenied
         }
         guard permission == noErr else { throw ExecutionFailure.browserUnavailable }
-        let bounded = "with timeout of 15 seconds\n\(source)\nend timeout"
+        let bounded = "with timeout of \(timeoutSeconds) seconds\n\(source)\nend timeout"
         guard let script = NSAppleScript(source: bounded) else {
             throw ExecutionFailure.invalidCommand
         }
