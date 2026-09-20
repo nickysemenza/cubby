@@ -13,6 +13,7 @@ import type { LedgerPartyOut } from "@cubby/schemas/ledger-party";
 import { infLocation } from "@cubby/schemas/location";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import type { SearchHit } from "@cubby/schemas/search";
+import { plantingShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
@@ -209,6 +210,19 @@ function useProductListSource(searchQuery: string, enabled: boolean) {
   return { data: data?.items, isLoading };
 }
 
+/** Plantings have no name-filter descriptor, so their blank state is the
+ * recent list and typed queries use the manifest's global-search projection. */
+function usePlantingListSource(_searchQuery: string, enabled: boolean) {
+  const { data, isLoading } = useQuery({
+    ...entityListFor("planting").queryOptions({
+      filters: {},
+      pagination,
+    }),
+    enabled,
+  });
+  return { data: data?.items, isLoading };
+}
+
 // --- create-from-picker resolution (hook-shaped for the same reason). ---
 
 function useDialogCreateNew<TId extends string>(
@@ -321,6 +335,32 @@ const taskConfig: UseEntitySearchConfig<
   build: buildTaskComboboxItem,
   buildDetail: buildTaskComboboxItem,
   buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "task"),
+  useOnCreateNew: useNoCreateNew,
+  createNew: "none",
+};
+
+type PlantingShortcode = z.output<typeof plantingShortcode>;
+
+const buildPlantingComboboxItem = (planting: {
+  id: PlantingShortcode;
+  displayName: string;
+}): ComboboxItem<PlantingShortcode> => ({
+  id: planting.id,
+  shortcode: planting.id,
+  name: planting.displayName,
+});
+
+const plantingConfig: UseEntitySearchConfig<
+  PlantingShortcode,
+  Parameters<typeof buildPlantingComboboxItem>[0],
+  Parameters<typeof buildPlantingComboboxItem>[0]
+> = {
+  detailPlaceholder: detailPlaceholder("planting"),
+  splitBlankTyped: true,
+  useListSource: usePlantingListSource,
+  build: buildPlantingComboboxItem,
+  buildDetail: buildPlantingComboboxItem,
+  buildSearchHit: (hit) => buildSearchHitComboboxItem(hit, "planting"),
   useOnCreateNew: useNoCreateNew,
   createNew: "none",
 };
@@ -594,6 +634,14 @@ function TaskEntitySearch({ children }: WithEntitySearchProps<TaskShortcode>) {
   return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
 }
 
+function PlantingEntitySearch({
+  children,
+}: WithEntitySearchProps<PlantingShortcode>) {
+  const { items, isLoading, onSearchChange, onOpenChange } =
+    useEntitySearchRows("planting", plantingConfig);
+  return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
+}
+
 type NonVendorPickerEntity = Exclude<PickerSearchEntity, "vendor">;
 
 // Typed over the UNION of picker ids: the public overloads keep each call
@@ -624,6 +672,8 @@ function NonVendorEntitySearch({
       return <ProjectEntitySearch>{children}</ProjectEntitySearch>;
     case "task":
       return <TaskEntitySearch>{children}</TaskEntitySearch>;
+    case "planting":
+      return <PlantingEntitySearch>{children}</PlantingEntitySearch>;
   }
 }
 
@@ -682,7 +732,9 @@ type EntityIdFor<E extends Exclude<PickerSearchEntity, "vendor">> =
             ? RecipeShortcode
             : E extends "project"
               ? ProjectShortcode
-              : TaskShortcode;
+              : E extends "task"
+                ? TaskShortcode
+                : PlantingShortcode;
 
 /**
  * The shared entity combobox provider: search-query state, the deferred-open

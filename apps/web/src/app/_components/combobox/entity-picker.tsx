@@ -32,6 +32,7 @@ const ENTITY_CODE = {
   financialAccount: "FAC",
   purchase: "PUR",
   ledgerParty: "LPY",
+  planting: "PLT",
 } satisfies Record<PickerEntity, string>;
 
 export function matchesPickerItem(

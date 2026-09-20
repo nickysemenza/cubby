@@ -23,7 +23,8 @@ export type PickerSearchEntity =
   | "recipe"
   | "project"
   | "task"
-  | "vendor";
+  | "vendor"
+  | "planting";
 
 /**
  * Row source for the blank- or typed-query branch. Hook-shaped (its own
@@ -199,6 +200,7 @@ const FALLBACK_BLANK_FILTER_KEY = {
   recipe: "nameFilter",
   project: "search",
   task: "search",
+  planting: "searchQuery",
 } satisfies Record<Exclude<PickerSearchEntity, "vendor">, string>;
 
 /** Resolves the filter field a blank-query list request should key on. */

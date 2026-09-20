@@ -19,8 +19,13 @@ import {
   suggestTargetsFor,
 } from "~/app/_components/ai/field-suggestion";
 import {
+  isReferencePickerEntity,
+  referenceEntitySearch,
+} from "~/app/_components/combobox/reference-entity-search";
+import {
   booleanCellData,
   dateCellData,
+  entityCellData,
   numberCellData,
   selectCellData,
   specFromCellData,
@@ -32,6 +37,7 @@ import {
   EditableCell,
   type FilterableComboboxItem,
 } from "~/app/_components/data-table/editable-cell";
+import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
@@ -737,6 +743,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
   )[entity];
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
   const { only, onSaveField } = options;
+  const updateFields: readonly string[] = entityFieldModels[entity].update;
   const listFields = orderedListFields(entity);
   const selected =
     only === undefined
@@ -783,6 +790,60 @@ export function createEntityDisplayColumns<TRecord extends object>(
         });
       });
       if (overridden) continue;
+      const save = (row: TRecord, value: string | number | boolean | null) =>
+        onSaveField?.(row, field.key, value) ?? Promise.resolve();
+      const referenceEditable =
+        field.reference !== null &&
+        !field.reference.multiple &&
+        field.readKey !== null &&
+        onSaveField !== undefined &&
+        updateFields.includes(field.key) &&
+        isReferencePickerEntity(field.reference.entity);
+      if (
+        referenceEditable &&
+        field.reference !== null &&
+        isReferencePickerEntity(field.reference.entity)
+      ) {
+        const referenceEntity = field.reference.entity;
+        const getItem = (row: TRecord) => {
+          const [item] = readReferenceField(row, field)?.items ?? [];
+          return item ? { id: item.id, name: item.name ?? item.id } : null;
+        };
+        const cellData = entityCellData<TRecord, string>(
+          referenceEntity,
+          (id) => id,
+          getItem,
+          (row, id) => save(row, id),
+          field.nullable ? (row) => save(row, null) : undefined,
+        );
+        add(
+          helper.accessor((record) => getItem(record)?.id ?? null, {
+            id: columnId,
+            header: field.label,
+            enableSorting: defaultEnableSorting,
+            meta: attachCubbyColumnMeta({
+              className: widthClassName(field.display.width),
+              mobile: toMobileColumnMeta(field.display.mobile),
+              cellData,
+            }),
+            cell: ({ row }) => (
+              <EditableEntityCell
+                value={getItem(row.original)}
+                onSave={(id) => save(row.original, id)}
+                SearchProvider={referenceEntitySearch(referenceEntity)}
+                label={referenceEntity}
+                clearable={field.nullable}
+                trigger="pencil"
+                clipboard={specFromCellData(cellData, row.original)}
+                renderValue={(item) =>
+                  item ? referenceLink(referenceEntity, item) : <NoneValue />
+                }
+              />
+            ),
+          }),
+        );
+        continue;
+      }
       if (
         field.readKey === null ||
         field.reference ||
@@ -820,7 +881,6 @@ export function createEntityDisplayColumns<TRecord extends object>(
       }
       const format = field.display.format;
       const control = field.control;
-      const updateFields: readonly string[] = entityFieldModels[entity].update;
       const editable =
         onSaveField !== undefined &&
         control !== null &&
@@ -828,9 +888,6 @@ export function createEntityDisplayColumns<TRecord extends object>(
         ["text", "textarea", "number", "date", "select", "checkbox"].includes(
           control.kind,
         );
-      const save = (row: TRecord, value: string | number | boolean | null) =>
-        onSaveField?.(row, field.key, value) ?? Promise.resolve();
-
       if (
         editable &&
         (control?.kind === "text" || control?.kind === "textarea")
