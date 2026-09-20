@@ -67,7 +67,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 """
         }
         Task { [appleScript, browser] in
-            _ = try? await appleScript.execute(script)
+            _ = try? await appleScript.execute(script, action: "raise_auth_window")
             let bundleIdentifier = browser == .safari ? "com.apple.Safari" : "com.google.Chrome"
             NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first?
                 .activate(options: [.activateAllWindows])
@@ -143,7 +143,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             script =
                 "tell application \"Google Chrome\"\nset w to make new window\nset URL of active tab of w to \(target)\nreturn id of w\nend tell"
         }
-        let value = try await appleScript.execute(script)
+        let value = try await appleScript.execute(script, action: "navigate")
         guard let id = Int(value) else { throw ExecutionFailure.browserUnavailable }
         return id
     }
@@ -166,7 +166,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             script =
                 "tell application \"Google Chrome\" to execute active tab of window id \(ownedWindowID) javascript \(source)"
         }
-        return try await appleScript.execute(script)
+        return try await appleScript.execute(script, action: "fixed_javascript")
     }
 
     private func capture(
@@ -348,14 +348,16 @@ private actor SerializedAppleScriptExecutor {
         self.targetBundleIdentifier = targetBundleIdentifier
     }
 
-    func execute(_ source: String) throws -> String {
+    func execute(_ source: String, action: String) throws -> String {
         // NSAppleScript is synchronous. Keeping it on this dedicated serial executor prevents a
         // slow browser or macOS Automation prompt from freezing SwiftUI and the WebSocket bridge.
+        BrowserBridgeDebugLog.emit(.appleEventStarted, messageType: action)
         let target = NSAppleEventDescriptor(bundleIdentifier: targetBundleIdentifier)
         guard let descriptor = target.aeDesc else { throw ExecutionFailure.browserUnavailable }
         let permission = AEDeterminePermissionToAutomateTarget(
             descriptor, typeWildCard, typeWildCard, true)
         if permission == errAEEventNotPermitted || permission == errAEEventWouldRequireUserConsent {
+            BrowserBridgeDebugLog.emit(.appleEventRejected, messageType: action)
             throw ExecutionFailure.permissionDenied
         }
         guard permission == noErr else { throw ExecutionFailure.browserUnavailable }
@@ -367,9 +369,13 @@ private actor SerializedAppleScriptExecutor {
         let result = script.executeAndReturnError(&details)
         if let details {
             let number = details[NSAppleScript.errorNumber] as? Int
-            if number == -1743 { throw ExecutionFailure.permissionDenied }
+            if number == -1743 {
+                BrowserBridgeDebugLog.emit(.appleEventRejected, messageType: action)
+                throw ExecutionFailure.permissionDenied
+            }
             throw ExecutionFailure.executionFailed
         }
+        BrowserBridgeDebugLog.emit(.appleEventFinished, messageType: action)
         return result.stringValue ?? String(result.int32Value)
     }
 }

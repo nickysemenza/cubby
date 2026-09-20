@@ -33,6 +33,11 @@ import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import { pageTitle } from "~/lib/page-title";
+import {
+  purchaseImportRunLogError,
+  purchaseImportRunLogResponse,
+  type PurchaseImportRunLogEntry,
+} from "~/lib/purchase-import-debug";
 import { formatCurrency } from "~/lib/utils";
 import {
   timingResponseSchema,
@@ -358,7 +363,8 @@ function PurchaseImportRunsCard() {
         <CardTitle>Purchase imports</CardTitle>
         <CardDescription>
           Recent runs for your vendor accounts. Cost is derived from recorded AI
-          usage for each run.
+          usage for each run. Open a run log to inspect its server and DEBUG Mac
+          timeline.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -382,29 +388,32 @@ function PurchaseImportRunsCard() {
             {runs.data.map((run) => (
               <div
                 key={run.id}
-                className="grid gap-1 border-b border-border pb-2 text-sm last:border-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_auto]"
+                className="border-b border-border pb-2 text-sm last:border-0 last:pb-0"
               >
-                <div className="min-w-0">
-                  <div className="truncate font-medium">
-                    {run.vendorName ??
-                      run.vendorAccountLabel ??
-                      "Vendor import"}
+                <div className="grid gap-1 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">
+                      {run.vendorName ??
+                        run.vendorAccountLabel ??
+                        "Vendor import"}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {new Date(run.startedAt).toLocaleString()} · {run.trigger}{" "}
+                      · {run.status}
+                    </div>
+                    {run.failureCode ? (
+                      <div className="text-destructive">{run.failureCode}</div>
+                    ) : null}
                   </div>
-                  <div className="text-muted-foreground">
-                    {new Date(run.startedAt).toLocaleString()} · {run.trigger} ·{" "}
-                    {run.status}
+                  <div className="text-muted-foreground md:text-right">
+                    <div>
+                      {run.imported} imported · {run.updated} updated ·{" "}
+                      {run.skipped} skipped
+                    </div>
+                    <div>{formatCurrency(run.estimatedCost)}</div>
                   </div>
-                  {run.failureCode ? (
-                    <div className="text-destructive">{run.failureCode}</div>
-                  ) : null}
                 </div>
-                <div className="text-muted-foreground md:text-right">
-                  <div>
-                    {run.imported} imported · {run.updated} updated ·{" "}
-                    {run.skipped} skipped
-                  </div>
-                  <div>{formatCurrency(run.estimatedCost)}</div>
-                </div>
+                <PurchaseImportRunLog runId={run.id} />
               </div>
             ))}
           </Stack>
@@ -413,6 +422,137 @@ function PurchaseImportRunsCard() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function PurchaseImportRunLog({ runId }: { runId: string }) {
+  const [open, setOpen] = useState(false);
+  const log = useQuery({
+    queryKey: ["purchase-import", "run-log", runId],
+    enabled: open,
+    queryFn: async () => {
+      const response = await fetch("/api/import/run-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId }),
+      });
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const parsed = purchaseImportRunLogError.safeParse(body);
+        throw new Error(
+          parsed.success ? parsed.data.error : "The run log could not load.",
+        );
+      }
+      return purchaseImportRunLogResponse.parse(body);
+    },
+  });
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
+        render={
+          <button
+            type="button"
+            aria-label={open ? "Close run log" : "Open run log"}
+            className="mt-1 flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          />
+        }
+      >
+        <ChevronDown
+          className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+        Run log
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mb-1 border border-border bg-muted/40 p-2">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Structured metadata only. Credentials, page text, evidence, and full
+            URLs are never recorded.
+          </p>
+          {log.isLoading ? (
+            <StatusText>Loading run log…</StatusText>
+          ) : log.isError ? (
+            <StatusText tone="destructive">
+              {getErrorMessage(log.error)}
+            </StatusText>
+          ) : log.data?.entries.length ? (
+            <div
+              className="max-h-80 overflow-auto"
+              aria-label="Purchase import run log"
+            >
+              {log.data.entries.map((entry) => (
+                <PurchaseImportRunLogRow key={entry.id} entry={entry} />
+              ))}
+              {log.data.truncated ? (
+                <p className="border-t border-border pt-2 text-xs text-warning">
+                  This view is limited to the first 2,000 events.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <StatusText>No events were recorded for this run.</StatusText>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function PurchaseImportRunLogRow({
+  entry,
+}: {
+  entry: PurchaseImportRunLogEntry;
+}) {
+  const metadata = [
+    entry.operationKind,
+    entry.host,
+    entry.browser,
+    entry.outcome,
+    entry.messageType ? `message=${entry.messageType}` : null,
+    entry.attempt === null ? null : `attempt=${entry.attempt}`,
+    entry.count === null ? null : `count=${entry.count}`,
+  ].filter((value): value is string => value !== null);
+  return (
+    <div className="grid gap-0.5 border-t border-border py-2 first:border-0 first:pt-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2">
+      <time
+        dateTime={entry.occurredAt}
+        className="font-mono text-xs text-muted-foreground tabular-nums"
+      >
+        {new Date(entry.occurredAt).toISOString()}
+      </time>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {entry.source}
+          </span>
+          <code
+            className={
+              entry.level === "error" ? "text-destructive" : "text-foreground"
+            }
+          >
+            {entry.event}
+          </code>
+          {entry.state ? (
+            <span className="text-xs text-muted-foreground">{entry.state}</span>
+          ) : null}
+        </div>
+        {metadata.length > 0 ? (
+          <div className="font-mono text-xs break-words text-muted-foreground">
+            {metadata.join(" · ")}
+          </div>
+        ) : null}
+        {entry.operationId || entry.commandId ? (
+          <div className="font-mono text-xs break-all text-muted-foreground">
+            {[entry.operationId, entry.commandId].filter(Boolean).join(" · ")}
+          </div>
+        ) : null}
+        {entry.errorType || entry.error ? (
+          <div className="text-xs break-words text-destructive">
+            {[entry.errorType, entry.error].filter(Boolean).join(" · ")}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

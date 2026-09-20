@@ -5,6 +5,29 @@ import Testing
 
 @Suite("Purchase import browser bridge")
 struct BrowserBridgeTests {
+    @Test("Debug records encode only bounded transport metadata")
+    func debugRecordEncoding() throws {
+        let record = BrowserBridgeDebugRecord(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+            occurredAt: Date(timeIntervalSince1970: 100), event: .commandFinished,
+            runID: "22222222-2222-4222-8222-222222222222",
+            commandID: UUID(uuidString: "33333333-3333-4333-8333-333333333333"),
+            operationID: "capture-001", operationKind: "capture",
+            host: "orders.example.test", browser: "chrome", accountID: "VACCT-4K7M",
+            attempt: nil, count: nil, outcome: "completed_with_capture",
+            messageType: nil, errorType: nil)
+
+        let data = try JSONEncoder().encode(record)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["runId"] as? String == "22222222-2222-4222-8222-222222222222")
+        #expect(object["operationKind"] as? String == "capture")
+        #expect(object["host"] as? String == "orders.example.test")
+        #expect(object["url"] == nil)
+        #expect(object["pageText"] == nil)
+        #expect(object["evidence"] == nil)
+    }
+
     @Test("Every safe operation has a stable versioned round trip", arguments: operations)
     func protocolRoundTrip(operation: BrowserBridgeOperation) throws {
         let command = BrowserBridgeCommand(
@@ -69,6 +92,25 @@ struct BrowserBridgeTests {
         ledger.acknowledge(id)
         #expect(ledger.replayResult(for: id) == nil)
         #expect(ledger.resultsForReplay.isEmpty)
+    }
+
+    @Test("Socket loss or a duplicate dispatch does not restart a browser side effect")
+    func transientDisconnectKeepsInFlightCommand() {
+        let id = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        var tasks = BrowserBridgeCommandTaskRegistry()
+
+        let firstStart = tasks.claim(id)
+        #expect(firstStart)
+        tasks.attach(Task {}, to: id)
+        tasks.transientDisconnect()
+        let replayStart = tasks.claim(id)
+        #expect(!replayStart)
+
+        tasks.finish(id)
+        let acknowledgedReplayStart = tasks.claim(id)
+        #expect(!acknowledgedReplayStart)
+
+        tasks.cancelAll()
     }
 
     @Test("Cancellation prevents a late command result from entering replay")
