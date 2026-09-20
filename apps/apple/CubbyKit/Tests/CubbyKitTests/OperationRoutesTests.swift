@@ -63,8 +63,12 @@ struct OperationRoutesTests {
             .deletingLastPathComponent()  // CubbyKit/
             .deletingLastPathComponent()  // apple/
             .appendingPathComponent("openapi/openapi-generator-config.yaml")
-        // The filter is a flat `    - <id>` list under `operations:`; no YAML parser needed.
-        let ids = try String(contentsOf: configURL, encoding: .utf8)
+        // Read only the flat `    - <id>` list under `operations:`. The same filter can also carry
+        // schema-only native wire models, which deliberately have no HTTP route.
+        let config = try String(contentsOf: configURL, encoding: .utf8)
+        let marker = "  operations:\n"
+        let operationsStart = try #require(config.range(of: marker)?.upperBound)
+        let ids = config[operationsStart...]
             .split(separator: "\n")
             .compactMap { line -> String? in
                 guard line.hasPrefix("    - ") else { return nil }
