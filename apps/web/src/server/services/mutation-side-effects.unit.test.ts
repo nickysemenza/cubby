@@ -46,6 +46,7 @@ class InMemoryMutationSideEffectPorts {
     findPlantingEmbeddingRefsForIngredients: async () => this.plantingRefs,
     findPlantingEmbeddingRefsForLocations: async () => this.plantingRefs,
     findGardenEntryEmbeddingRefsForLocations: async () => this.gardenEntryRefs,
+    findGardenEntryEmbeddingRefsForPlantings: async () => this.gardenEntryRefs,
     findTrackerEmbeddingRefsForProjects: async () => [],
     findEmbeddingRefsForVendors: async () => [],
     findEmbeddingRefsForPurchases: async () => [],

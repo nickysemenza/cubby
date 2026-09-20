@@ -59,12 +59,14 @@ struct PhotoRelatedCreateEditor: View {
         }
     }
 
-    /// `createTarget`'s reference fields: each candidate `createRelated` route's `source-id`
+    /// `createTarget`'s reference fields: each candidate `createRelated` route's source-id
     /// binding field, paired with the route filling it in chooses. Sorted for determinism.
     private var referenceFields: [(field: String, option: PhotoDestinationOption)] {
         guard case .createTarget(_, let candidates, _) = mode else { return [] }
         return candidates.compactMap { option in
-            option.route.bindings.first { $0.source == .sourceId }.map { ($0.field, option) }
+            option.route.bindings.first {
+                $0.source == .sourceId || $0.source == .sourceIdList
+            }.map { ($0.field, option) }
         }.sorted { $0.field < $1.field }
     }
 
@@ -212,7 +214,7 @@ struct PhotoRelatedCreateEditor: View {
     }
 
     /// Whether the create form would show `field` at all: hidden when a manifest binding already
-    /// supplies its value from a *known* record. `source-id`/`relation-items` hide only when a
+    /// supplies its value from a *known* record. Source-id bindings hide only when a
     /// real source row is known (`createRelated`) — `createSelf` never has such bindings by schema,
     /// and `createTarget`'s reference is only a typed id, so those fields stay open for the user to
     /// fill in directly. Shared with `PhotoImportManifest.chooseSourceRecord`'s auto-resolve, which
@@ -235,7 +237,7 @@ struct PhotoRelatedCreateEditor: View {
                 if captureDate != nil { return false }
             case .constant:
                 return false
-            case .sourceId, .relationItems:
+            case .sourceId, .sourceIdList, .relationItems:
                 if source != nil { return false }
             }
         }
@@ -262,8 +264,10 @@ struct PhotoRelatedCreateEditor: View {
             switch binding.source {
             case .sourceId:
                 guard let source else { continue }
-                result[binding.field] =
-                    binding.itemField != nil ? .array([.string(source.id)]) : .string(source.id)
+                result[binding.field] = .string(source.id)
+            case .sourceIdList:
+                guard let source else { continue }
+                result[binding.field] = .array([.string(source.id)])
             case .sourceField:
                 guard let source,
                     let value = PhotoImportManifest.nonNullSourceFieldValue(

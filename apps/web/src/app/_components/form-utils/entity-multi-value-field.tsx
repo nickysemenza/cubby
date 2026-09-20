@@ -12,9 +12,11 @@ import { z } from "zod";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { preserveSelectedPickerItems } from "~/entities/editing/reference-scope";
 
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
+import type { EntitySearchScope } from "../combobox/entity-search-hooks";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import { FormFieldGroup } from "../forms/form-field-group";
 
@@ -36,21 +38,25 @@ export function EntityMultiValueField<
   entity,
   label,
   SearchProvider,
+  scope,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   entity: E;
   label: string;
   SearchProvider: (props: WithEntitySearchProps<string>) => ReactNode;
+  /** Dependent-field filters for the candidate picker; null keeps it scoped but idle. */
+  scope?: EntitySearchScope | null;
 }) {
   return (
-    <SearchProvider>
+    <SearchProvider scope={scope}>
       {({ items, onSearchChange, isLoading, onOpenChange }) => (
         <Controller
           control={form.control}
           name={name}
           render={({ field, fieldState }) => {
             const ids = idList.parse(field.value);
+            const selectedItems = preserveSelectedPickerItems(items, ids);
             const commit = (next: string[]) =>
               field.onChange(
                 // SAFETY: `name` is a caller-owned Path whose value is the
@@ -58,8 +64,6 @@ export function EntityMultiValueField<
                 // generic form type.
                 next as PathValue<TFieldValues, Path<TFieldValues>>,
               );
-            const nameOf = (id: string) =>
-              items.find((item) => item.id === id)?.name ?? id;
             return (
               <FormFieldGroup
                 htmlFor={name}
@@ -69,16 +73,18 @@ export function EntityMultiValueField<
               >
                 {ids.length > 0 && (
                   <Row wrap gap="xs" className="mb-1">
-                    {ids.map((id) => (
-                      <Badge key={id} variant="outline">
-                        {nameOf(id)}
+                    {selectedItems.map((item) => (
+                      <Badge key={item.id} variant="outline">
+                        {item.name}
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          aria-label={`Remove ${nameOf(id)}`}
+                          aria-label={`Remove ${item.name}`}
                           onClick={() =>
-                            commit(ids.filter((candidate) => candidate !== id))
+                            commit(
+                              ids.filter((candidate) => candidate !== item.id),
+                            )
                           }
                         >
                           <X />

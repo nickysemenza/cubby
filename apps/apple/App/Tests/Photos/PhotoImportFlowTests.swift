@@ -362,17 +362,19 @@ struct PhotoImportFlowTests {
 
     /// 8c: `createSelf`'s target-of-createRelated case is discovered purely from the catalog by
     /// `target == type && kind == .createRelated`, never by entity name; its reference fields are
-    /// each candidate's `source-id`-bound field.
+    /// each candidate's source-id-bound field, singular or multiple.
     @Test func createTargetOptionsExposeTheReferenceFieldsForAPickedTargetType() throws {
         let candidates = PhotoImportManifest.createTargetOptions(for: .gardenEntry)
         let referenceFields = Set(
             candidates.compactMap { option in
-                option.route.bindings.first { $0.source == .sourceId }?.field
+                option.route.bindings.first {
+                    $0.source == .sourceId || $0.source == .sourceIdList
+                }?.field
             })
 
         #expect(!candidates.isEmpty)
         #expect(candidates.allSatisfy { $0.route.kind == .createRelated && $0.route.target == .gardenEntry })
-        #expect(referenceFields == ["locationId", "plantingId"])
+        #expect(referenceFields == ["locationId", "plantingIds"])
         let fallback = try #require(PhotoImportManifest.createSelfOption(for: .gardenEntry))
         #expect(fallback.route.kind == .createSelf)
         #expect(fallback.route.enabled)

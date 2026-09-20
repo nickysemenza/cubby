@@ -4,6 +4,7 @@ import type {
   IngredientId,
   LocationId,
   ProductId,
+  PlantingId,
   ProjectId,
   PurchaseId,
   RecipeId,
@@ -22,6 +23,7 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   gardenEntry,
+  gardenEntryPlanting,
   inventoryEntry,
   meal,
   mealRecipe,
@@ -260,6 +262,29 @@ export async function findGardenEntryEmbeddingRefsForLocations(
     ),
     columns: { id: true },
   });
+  return rows.map((row) => ({ entityType: "gardenEntry", entityId: row.id }));
+}
+
+/** Garden entries embed the names of their linked plantings. */
+export async function findGardenEntryEmbeddingRefsForPlantings(
+  db: Database | DrizzleTransaction,
+  plantingIds: PlantingId[],
+): Promise<SearchableEntityRef[]> {
+  if (plantingIds.length === 0) return [];
+  const rows = await unwrapDb(db)
+    .select({ id: gardenEntry.id })
+    .from(gardenEntryPlanting)
+    .innerJoin(
+      gardenEntry,
+      eq(gardenEntry.id, gardenEntryPlanting.gardenEntryId),
+    )
+    .where(
+      and(
+        inArray(gardenEntryPlanting.plantingId, plantingIds),
+        notDeleted(gardenEntryPlanting),
+        notDeleted(gardenEntry),
+      ),
+    );
   return rows.map((row) => ({ entityType: "gardenEntry", entityId: row.id }));
 }
 

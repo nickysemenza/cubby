@@ -53,6 +53,8 @@ export interface RelationSectionPlan {
   urlKey: string;
   /** The create-intent field the section's create button prefills, if any. */
   seed: { intent: string; field: string } | null;
+  /** Whether the seeded field is an id array (`idMulti`/many reference). */
+  seedMultiple: boolean;
   columns: readonly string[] | null;
   sort: { field: string; direction: "asc" | "desc" };
   limit: number | null;
@@ -82,12 +84,17 @@ const editIntentsFor = (entity: ListEntity): DeclaredEditIntents | undefined =>
 function createSeedThrough(
   target: ListEntity,
   field: string,
-): { intent: string; field: string } | null {
+): { intent: string; field: string; multiple: boolean } | null {
   const intents = editIntentsFor(target);
   const intent = intents?.create.find((candidate) =>
     intents.fields[candidate]?.includes(field),
   );
-  return intent === undefined ? null : { intent, field };
+  const modelField = entityFieldModels[target].fields.find(
+    (candidate) => candidate.key === field,
+  );
+  return intent === undefined
+    ? null
+    : { intent, field, multiple: modelField?.reference?.multiple === true };
 }
 
 /**
@@ -100,7 +107,13 @@ export function planRelationSection(
   entity: BrowserRoutedEntity,
   section: Pick<
     RelationSection,
-    "relation" | "filter" | "columns" | "sort" | "limit" | "hideWhenEmpty"
+    | "relation"
+    | "filter"
+    | "prefill"
+    | "columns"
+    | "sort"
+    | "limit"
+    | "hideWhenEmpty"
   >,
 ): RelationSectionPlan {
   const relation = entityManifest[entity].relationships.find(
@@ -124,13 +137,19 @@ export function planRelationSection(
   // A create intent can only be prefilled through a real field key, which
   // is what a `<key>Filter` list-filter alias names once the suffix goes.
   const seedField = filterKey.replace(/Filter$/u, "");
-  let seed = createSeedThrough(target, seedField);
+  const explicitField = section.prefill?.field;
+  let seed = createSeedThrough(target, explicitField ?? seedField);
   // The descriptor's own key names no create field — a derived/urlOnly
   // descriptor like `journalPlantingId` reads a computed column, not a
   // storage field. Fall back to the target's own reference field pointing at
-  // the same entity the descriptor scopes by (`journalPlantingId` →
-  // `plantingId`), so its create button still seeds a real, writable field.
-  if (seed === null && descriptor.brandRef !== null) {
+  // the same entity the descriptor scopes by, so its create button still
+  // seeds a real, writable field. Explicit `prefill` is required when that
+  // fallback would be ambiguous or needs a multiple reference.
+  if (
+    (section.prefill === null || section.prefill === undefined) &&
+    seed === null &&
+    descriptor.brandRef !== null
+  ) {
     const referenceField = entityFieldModels[target].fields.find(
       (field) => field.reference?.entity === descriptor.brandRef?.entity,
     );
@@ -142,7 +161,8 @@ export function planRelationSection(
     descriptorId: descriptor.columnId,
     filterKey,
     urlKey: descriptor.urlKey,
-    seed,
+    seed: seed ? { intent: seed.intent, field: seed.field } : null,
+    seedMultiple: seed?.multiple === true,
     columns: section.columns,
     sort: section.sort ?? {
       field: defaultSortFor(target),
@@ -184,7 +204,9 @@ function useRelationCreateDialog(plan: RelationSectionPlan, recordId: string) {
             entity: plan.target as EditableEntity,
             operation: "create",
             intent: plan.seed.intent,
-            seed: { [plan.seed.field]: recordId },
+            seed: {
+              [plan.seed.field]: plan.seedMultiple ? [recordId] : recordId,
+            },
           } as never
         }
       />

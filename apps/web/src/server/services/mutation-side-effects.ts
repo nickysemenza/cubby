@@ -17,6 +17,7 @@ import {
   findEmbeddingRefsForPurchases,
   findEmbeddingRefsForVendors,
   findGardenEntryEmbeddingRefsForLocations,
+  findGardenEntryEmbeddingRefsForPlantings,
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
@@ -91,6 +92,7 @@ export interface MutationSideEffectPorts {
   readonly findPlantingEmbeddingRefsForIngredients: typeof findPlantingEmbeddingRefsForIngredients;
   readonly findPlantingEmbeddingRefsForLocations: typeof findPlantingEmbeddingRefsForLocations;
   readonly findGardenEntryEmbeddingRefsForLocations: typeof findGardenEntryEmbeddingRefsForLocations;
+  readonly findGardenEntryEmbeddingRefsForPlantings: typeof findGardenEntryEmbeddingRefsForPlantings;
   readonly findTrackerEmbeddingRefsForProjects: typeof findTrackerEmbeddingRefsForProjects;
   readonly findEmbeddingRefsForVendors: typeof findEmbeddingRefsForVendors;
   readonly findEmbeddingRefsForPurchases: typeof findEmbeddingRefsForPurchases;
@@ -113,6 +115,7 @@ const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   findPlantingEmbeddingRefsForIngredients,
   findPlantingEmbeddingRefsForLocations,
   findGardenEntryEmbeddingRefsForLocations,
+  findGardenEntryEmbeddingRefsForPlantings,
   findTrackerEmbeddingRefsForProjects,
   findEmbeddingRefsForVendors,
   findEmbeddingRefsForPurchases,
@@ -201,7 +204,8 @@ export async function refreshProjectionsForEvent(
 async function publishEmbeddingRefreshes(
   db: Database,
   refs: SearchableEntityRef[],
-  event: MutationSideEffectEvent,
+  cause: Pick<MutationSideEffectEvent, "source"> &
+    Partial<Pick<MutationSideEffectEvent, "action">>,
   ports: MutationSideEffectPorts,
 ): Promise<void> {
   // Purchase/financialTransaction/expense are searchable but not embeddable
@@ -224,8 +228,27 @@ async function publishEmbeddingRefreshes(
       entityType: ref.entityType,
       entityId: ref.entityId,
     })),
-    { source: `${event.source}:${event.action}` },
+    {
+      source: cause.action ? `${cause.source}:${cause.action}` : cause.source,
+    },
   );
+}
+
+/**
+ * Refresh known denormalized search projections after a relationship change.
+ * The caller supplies the affected refs captured before the relationship is
+ * removed, so no fake mutation event or domain-row update is needed.
+ */
+export async function refreshDerivedSearchRefs(
+  db: Database,
+  refs: SearchableEntityRef[],
+  source: string,
+  ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
+): Promise<void> {
+  const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
+  if (uniqueRefs.length === 0) return;
+  await ports.refreshSearchDocuments(db, uniqueRefs);
+  await publishEmbeddingRefreshes(db, uniqueRefs, { source }, ports);
 }
 
 // Ref-only variant of each embedding-refresh handler below, factored out so
@@ -317,6 +340,14 @@ const collectGardenEntryEmbeddingRefsForLocation: EmbeddingRefCollector =
   async (ctx) => {
     if (ctx.event.entity.entity !== "location") return [];
     return await ctx.ports.findGardenEntryEmbeddingRefsForLocations(ctx.db, [
+      ctx.event.entity.id,
+    ]);
+  };
+
+const collectGardenEntryEmbeddingRefsForPlanting: EmbeddingRefCollector =
+  async (ctx) => {
+    if (ctx.event.entity.entity !== "planting") return [];
+    return await ctx.ports.findGardenEntryEmbeddingRefsForPlantings(ctx.db, [
       ctx.event.entity.id,
     ]);
   };
@@ -438,6 +469,13 @@ async function refreshGardenEntryEmbeddingsForLocation(
   return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
+async function refreshGardenEntryEmbeddingsForPlanting(
+  ctx: HandlerContext,
+): Promise<void> {
+  const refs = await collectGardenEntryEmbeddingRefsForPlanting(ctx);
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
+}
+
 // Tasks/expenses embed their project's name, so a project update fans out.
 async function refreshTrackerEmbeddingsForProject(
   ctx: HandlerContext,
@@ -506,6 +544,10 @@ const embeddingRefCollectorByHandler = new Map<
   [
     refreshGardenEntryEmbeddingsForLocation,
     collectGardenEntryEmbeddingRefsForLocation,
+  ],
+  [
+    refreshGardenEntryEmbeddingsForPlanting,
+    collectGardenEntryEmbeddingRefsForPlanting,
   ],
   [refreshTrackerEmbeddingsForProject, collectTrackerEmbeddingRefsForProject],
   [refreshEmbeddingsForVendor, collectEmbeddingRefsForVendor],
@@ -647,7 +689,7 @@ export const mutationSideEffectManifest = {
   },
   planting: {
     onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding, refreshGardenEntryEmbeddingsForPlanting],
     onDelete: [],
   },
   gardenEntry: {

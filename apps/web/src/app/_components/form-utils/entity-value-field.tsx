@@ -17,6 +17,7 @@ import { useAutoFieldSuggestion } from "~/app/_components/ai/use-auto-field-sugg
 
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
+import type { EntitySearchScope } from "../combobox/entity-search-hooks";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import { FormFieldGroup } from "../forms/form-field-group";
 
@@ -34,6 +35,7 @@ export function EntityValueField<
   clearable,
   suggestField,
   description,
+  scope,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -43,6 +45,8 @@ export function EntityValueField<
   SearchProvider: (props: WithEntitySearchProps<ShortcodeFor<E>>) => ReactNode;
   clearable?: boolean;
   description?: ReactNode;
+  /** Dependent-field filters for the candidate picker; null keeps it scoped but idle. */
+  scope?: EntitySearchScope | null;
   /** The manifest target key this field suggests (e.g. `"projectId"`). The
    * suggested id is seeded into the picker as a labeled item (`seedItem`) so
    * an auto-filled value never renders as a bare shortcode before its label
@@ -61,7 +65,7 @@ export function EntityValueField<
       disabled: !suggestField,
     });
   return (
-    <SearchProvider>
+    <SearchProvider scope={scope}>
       {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
         <Controller
           control={form.control}

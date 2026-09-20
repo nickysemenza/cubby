@@ -193,7 +193,7 @@ describe("entity kernel search projections", () => {
       entity: "gardenEntry",
       data: {
         locationId: bed.id,
-        plantingId: null,
+        plantingIds: [],
         kind: "note",
         observedOn: "2026-05-01",
         note: "Projected garden entry note",

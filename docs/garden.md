@@ -5,16 +5,16 @@ bespoke UI, workflow module, or hand-registered MCP tools. `/plantings` is
 the list entry point; `/garden` is gone. See
 [terminology.md](terminology.md#garden) for the naming glossary.
 
-A **Planting** lives in exactly one `Location` (`locationId`, nullable) and
-carries dates (`sowedOn`, `transplantedOn`, `finishedOn`), `status`
+A **Planting** lives in at most one current `Location` (`locationId`, nullable)
+and carries dates (`sowedOn`, `transplantedOn`, `finishedOn`), `status`
 (`planned | growing | finished`), `variety`, `quantity` (text),
 `plannedWindow` (text), an optional `sourceProductId`, an optional `taskId`,
 and `notes`. There are no lifecycle verbs — Edit is the only hero action. A
 move is editing `locationId`; the audit log and timeline record the from/to
-location as the location history. Sowing in a tray and transplanting to a
-bed is `sowedOn` + `transplantedOn` on the same planting — a tray is never a
-`Location`. A planting has no photo gallery of its own (`capabilities.images:
-false`) — see "Photos" below.
+location as the location history. Sowing in trays and transplanting to a bed is
+`sowedOn` + `transplantedOn` on the same planting; its current location may
+change along the way. A planting has no photo gallery of its own
+(`capabilities.images: false`) — see "Photos" below.
 
 A nursery-bought seedling never gets a `sowedOn`: it carries `transplantedOn`
 only. The timeline's `lifecycle.start` is a generic ordered fallback
@@ -23,11 +23,15 @@ first non-null field, so a bought seedling's interval starts at
 `transplantedOn` and renders marked "Inferred" (the row's `confident: false`)
 rather than needing an origin enum.
 
-A **GardenEntry** is a dated `note | harvest` against a `Location`,
-optionally against one Planting, with photos. A planting's journal is its
-own direct entries plus whole-area entries at its current location whose
-`observedOn` falls in `[coalesce(sowedOn, transplantedOn, createdAt),
-finishedOn]`.
+A **GardenEntry** is a dated `note | harvest` against a required `Location`,
+explicitly associated with zero or more Plantings, with photos. Explicitly
+associated entries remain in each selected planting's journal regardless of
+where or when the entry was recorded. An entry with no live planting
+associations is whole-area context: it appears in a planting's journal when it
+was recorded at that planting's current location and its `observedOn` falls in
+`[coalesce(sowedOn, transplantedOn, createdAt), finishedOn]`. An entry linked
+to any planting is not inferred into other plantings' journals merely because
+they share its location.
 
 ## Photos
 

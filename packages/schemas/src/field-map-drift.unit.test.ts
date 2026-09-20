@@ -378,9 +378,6 @@ const INTENTIONAL_RESPELLINGS = {
     "multi-value filter (oneOrMany(productShortcode)) over the generated scalar sourceProductId field",
   "gardenEntry::gardenEntryFiltersSchema::locationId":
     "multi-value filter (oneOrMany(locationShortcode)) over the generated scalar locationId field",
-  "gardenEntry::gardenEntryFiltersSchema::plantingId":
-    "multi-value filter (oneOrMany(plantingShortcode)) over the generated scalar plantingId field",
-
   // --- location: picker/breadcrumb/ancestor-roster projections of
   // location's own name/type/aliases fields (see the file comments on each
   // export — deliberately narrower than the read schema, same split as

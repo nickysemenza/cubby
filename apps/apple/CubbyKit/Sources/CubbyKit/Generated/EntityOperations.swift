@@ -439,6 +439,7 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "taskId": query.taskId = value.strings
                 case "sourceProductId": query.sourceProductId = value.strings
+                case "activeOn": query.activeOn = try value.string(name)
                 case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.planting, name)
@@ -1128,6 +1129,7 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "taskId": query.taskId = value.strings
                 case "sourceProductId": query.sourceProductId = value.strings
+                case "activeOn": query.activeOn = try value.string(name)
                 case "searchQuery": query.searchQuery = try value.string(name)
                 case "ids": query.ids = value.strings
                 case "from": query.from = try value.string(name)

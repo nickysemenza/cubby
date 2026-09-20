@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 
+import { readReferenceField } from "../entity-references";
 import {
   parseEntityEditCreateInput,
   parseEntityEditUpdateInput,
@@ -74,6 +75,35 @@ const recordImageIds = (record: EntityEditRecord | undefined): string[] =>
 const imageIdList = (value: EntityEditValue): string[] | undefined => {
   const parsed = z.array(z.string()).safeParse(value);
   return parsed.success ? parsed.data : undefined;
+};
+
+const multipleReferenceIdsFromRecord = <E extends EditableEntity>(
+  entity: E,
+  field: EntityFieldModel["fields"][number],
+  record: EntityEditRecord,
+): string[] | undefined => {
+  if (!field.reference?.multiple) return undefined;
+  const direct = readReferenceField(record, field)?.items ?? [];
+  const projection =
+    direct.length > 0
+      ? direct
+      : entityFieldModels[entity].fields
+          .filter(
+            (candidate) =>
+              candidate.key !== field.key &&
+              candidate.readKey !== null &&
+              candidate.reference?.multiple === true &&
+              candidate.reference.entity === field.reference?.entity,
+          )
+          .flatMap(
+            (candidate) => readReferenceField(record, candidate)?.items ?? [],
+          )
+          .filter(
+            (item, index, items) =>
+              items.findIndex((candidate) => candidate.id === item.id) ===
+              index,
+          );
+  return projection.length > 0 ? projection.map((item) => item.id) : undefined;
 };
 
 const noIssues = (): readonly EntityEditIssue[] => [];
@@ -291,6 +321,15 @@ const builderFor = <E extends EditableEntity>(
         return operation === "update" ? recordImageIds(record) : [];
       const existing = valueFor(record, id);
       if (existing !== undefined) return existing;
+      const field = fieldModelByKey.get(id);
+      if (operation === "update" && record && field) {
+        const referenceIds = multipleReferenceIdsFromRecord(
+          entity,
+          field,
+          record,
+        );
+        if (referenceIds !== undefined) return referenceIds;
+      }
       if (id === "parentProjectId" && context.parentProjectId !== undefined) {
         return context.parentProjectId;
       }
@@ -300,7 +339,6 @@ const builderFor = <E extends EditableEntity>(
       // let the column default apply) — the one create-time constant with no
       // schema-derivable value to fall back on.
       if (id === "mealKind" && entity === "meal") return "cooked";
-      const field = fieldModelByKey.get(id);
       return field ? genericCreateDefault(entity, field) : null;
     },
     normalize: options?.normalize ?? ((value) => value),

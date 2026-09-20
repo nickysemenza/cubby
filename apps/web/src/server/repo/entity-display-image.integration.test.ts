@@ -737,7 +737,7 @@ describe("entity display image resolver", () => {
         ctx.db,
         {
           locationId: location.id,
-          plantingId: planted.id,
+          plantingIds: [planted.id],
           kind: "note",
           observedOn: "2026-01-01",
           pendingImageIds: [olderImg.shortcode],
@@ -749,7 +749,7 @@ describe("entity display image resolver", () => {
         ctx.db,
         {
           locationId: location.id,
-          plantingId: planted.id,
+          plantingIds: [planted.id],
           kind: "note",
           observedOn: "2026-02-01",
           pendingImageIds: [newerImg.shortcode],

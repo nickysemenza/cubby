@@ -14,6 +14,7 @@ import {
   financialAccount,
   financialTransaction,
   gardenEntry,
+  gardenEntryPlanting,
   ingredient,
   inventoryEntry,
   location,
@@ -982,9 +983,14 @@ async function getGardenEntryEmbeddingTexts(
       },
       with: {
         location: { columns: { name: true } },
-        planting: {
-          columns: { variety: true },
-          with: { ingredient: { columns: { name: true } } },
+        plantings: {
+          where: notDeleted(gardenEntryPlanting),
+          with: {
+            planting: {
+              columns: { variety: true },
+              with: { ingredient: { columns: { name: true } } },
+            },
+          },
         },
       },
     },
@@ -1000,11 +1006,18 @@ async function getGardenEntryEmbeddingTexts(
         : "Move",
       observedOn: row.observedOn,
       locationName: row.location.name,
-      plantingName: row.planting
-        ? row.planting.variety
-          ? `${row.planting.ingredient.name} · ${row.planting.variety}`
-          : row.planting.ingredient.name
-        : null,
+      plantingName:
+        row.plantings
+          .flatMap((link) =>
+            link.planting
+              ? [
+                  link.planting.variety
+                    ? `${link.planting.ingredient.name} · ${link.planting.variety}`
+                    : link.planting.ingredient.name,
+                ]
+              : [],
+          )
+          .join(", ") || null,
       note: row.note,
       harvestAmount: row.harvestAmount,
     }),

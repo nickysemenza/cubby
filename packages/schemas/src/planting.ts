@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { auditDateFilterFields } from "./base-entity";
+import { auditDateFilterFields, plainDate } from "./base-entity";
 import { displayImagesField } from "./display-images";
 import {
   ingredientShortcode,
@@ -32,6 +32,7 @@ export const plantingFilterFields = {
   ingredientId: oneOrMany(ingredientShortcode).optional(),
   taskId: oneOrMany(taskShortcode).optional(),
   sourceProductId: oneOrMany(productShortcode).optional(),
+  activeOn: plainDate.optional(),
 };
 export const plantingFiltersSchema = z.object(plantingFilterFields);
 export type PlantingFilters = z.infer<typeof plantingFiltersSchema>;

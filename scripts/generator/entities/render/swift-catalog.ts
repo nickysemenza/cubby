@@ -200,7 +200,7 @@ const renderFieldDescriptorLiteral = (
   const reference =
     field.reference === null
       ? "nil"
-      : `FieldReference(entity: .${entityKey(field.reference.entity, `${context}.fields.${field.key}.reference`)}, multiple: ${swiftBool(field.reference.multiple)})`;
+      : `FieldReference(entity: .${entityKey(field.reference.entity, `${context}.fields.${field.key}.reference`)}, multiple: ${swiftBool(field.reference.multiple)}, scope: [${field.reference.scope.map((binding) => `FieldReferenceScope(sourceField: ${swiftString(binding.sourceField)}, targetField: ${swiftString(binding.targetField)})`).join(", ")}])`;
   return (
     "FieldDescriptor(" +
     `key: ${swiftString(field.key)}, ` +
@@ -251,6 +251,7 @@ const renderDetailSectionLiteral = (section: DetailSection): string => {
         `DetailSection(${common}, kind: .relation(RelationSectionSpec(` +
         `relation: ${swiftString(section.relation)}, ` +
         `filterDescriptor: ${swiftString(section.filter.descriptor)}, ` +
+        `prefill: ${section.prefill === null ? "nil" : `RelationSectionPrefill(field: ${swiftString(section.prefill.field)})`}, ` +
         `columns: ${swiftOptionalStringArray(section.columns)}, ` +
         `sort: ${sort}, ` +
         `limit: ${swiftOptionalInt(section.limit)}, ` +
@@ -467,6 +468,11 @@ export const renderSwiftEntityCatalog = (
     "public struct FieldReference: Codable, Sendable, Hashable {\n" +
     "  public let entity: EntityKey\n" +
     "  public let multiple: Bool\n" +
+    "  public let scope: [FieldReferenceScope]\n" +
+    "}\n\n" +
+    "public struct FieldReferenceScope: Codable, Sendable, Hashable {\n" +
+    "  public let sourceField: String\n" +
+    "  public let targetField: String\n" +
     "}\n\n" +
     "public struct FieldDescriptor: Codable, Sendable {\n" +
     "  public let key: String\n" +
@@ -539,11 +545,15 @@ export const renderSwiftEntityCatalog = (
     "public struct RelationSectionSpec: Codable, Sendable, Hashable {\n" +
     "  public let relation: String\n" +
     "  public let filterDescriptor: String\n" +
+    "  public let prefill: RelationSectionPrefill?\n" +
     "  public let columns: [String]?\n" +
     "  public let sort: SectionSort?\n" +
     "  public let limit: Int?\n" +
     "  /// Skip the whole section, on both platforms, when its first page is empty.\n" +
     "  public let hideWhenEmpty: Bool\n" +
+    "}\n\n" +
+    "public struct RelationSectionPrefill: Codable, Sendable, Hashable {\n" +
+    "  public let field: String\n" +
     "}\n\n" +
     "public enum TimelineSectionMode: String, Codable, Sendable, Hashable {\n" +
     "  case events, lifecycles\n" +

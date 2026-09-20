@@ -67,18 +67,18 @@ describe("planRelationSection", () => {
     expect(planFor("purchase", "products").seed).toBeNull();
   });
 
-  it("falls back to the target's reference field sharing the descriptor's brandRef entity when the descriptor's own key names no create field", () => {
+  it("uses an explicit many-reference prefill when the filter key is not writable", () => {
     // Planting's Journal section filters gardenEntry by the derived,
     // urlOnly `journalPlantingId` descriptor (direct + in-window whole-area
     // entries) — that key is not itself a create field on gardenEntry. The
-    // fallback resolves `journalPlantingId`'s `brandRef: { entity: "planting" }`
-    // to gardenEntry's own `plantingId` field (the only one referencing
-    // planting), which the `full` create intent carries (`capture` doesn't):
-    // the "Log entry" button seeds a real, writable field instead of
-    // disappearing, and picks `full` rather than the default `capture`.
+    // section's explicit manifest prefill points at GardenEntry.plantingIds,
+    // which the `full` create intent carries (`capture` doesn't). The create
+    // dialog therefore seeds an id array rather than guessing from a filter
+    // or domain-specific field name.
     const plan = planFor("planting", "garden-history");
     expect(plan.filterKey).toBe("journalPlantingId");
-    expect(plan.seed).toEqual({ intent: "full", field: "plantingId" });
+    expect(plan.seed).toEqual({ intent: "full", field: "plantingIds" });
+    expect(plan.seedMultiple).toBe(true);
   });
 });
 

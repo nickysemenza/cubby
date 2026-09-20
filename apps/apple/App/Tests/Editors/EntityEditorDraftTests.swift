@@ -28,9 +28,12 @@ struct EntityEditorDraftTests {
     @Test func prefillSatisfiesRequiredFieldsAndSeedsHiddenKeys() {
         let entry = model(
             .gardenEntry,
-            prefill: ["locationId": .string("LOC-1"), "plantingId": .string("PLT-1")])
+            prefill: [
+                "locationId": .string("LOC-1"),
+                "plantingIds": .array([.string("PLT-1")]),
+            ])
         #expect(entry.canSave)
-        #expect(entry.createBody()["plantingId"] == .string("PLT-1"))
+        #expect(entry.createBody()["plantingIds"] == .array([.string("PLT-1")]))
         #expect(entry.createBody()["observedOn"]?.stringValue == PlainDate(.now).rawValue)
     }
 

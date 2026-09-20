@@ -6,11 +6,11 @@ import {
   parseShortcodeFor,
   type PlantingId,
 } from "@cubby/schemas/identifiers";
-import { and, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { gardenEntry, planting } from "~/server/db/schema";
+import { gardenEntryPlanting, planting } from "~/server/db/schema";
 import {
   defineEntityAdapter,
   deletedWithImages,
@@ -20,6 +20,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
   computeChanges,
+  diffUnorderedIdSet,
   logAuditEntries,
 } from "~/server/repo/audit-log";
 import {
@@ -36,6 +37,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import {
   mutationEvents,
+  refreshDerivedSearchRefs,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
 
@@ -54,11 +56,11 @@ const plantings = bindShortcodeResolver("planting");
 const entries = bindShortcodeResolver("gardenEntry");
 
 const PLANTING_DELETE_EDGE_POLICY = {
-  "GardenEntry.plantingId": {
-    code: "clear-live-fk-with-audit",
-    effect: "detach",
+  "GardenEntryPlanting.plantingId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
     description:
-      "A garden entry outlives the planting it described — it keeps its own dated history.",
+      "A garden entry outlives the planting it described; only that association is detached.",
   },
 } as const satisfies IncomingEdgePolicy<"planting", OperationDisposition>;
 
@@ -67,6 +69,12 @@ const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description: "Garden entry image associations are removed with the entry.",
+  },
+  "GardenEntryPlanting.gardenEntryId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Planting associations are removed with the garden entry; plantings remain.",
   },
 } as const satisfies IncomingEdgePolicy<"gardenEntry", OperationDisposition>;
 
@@ -197,48 +205,127 @@ export const plantingEntityAdapter = defineEntityAdapter({
     },
     delete: async (ctx, shortcodes) => {
       const ids = await plantings.all(ctx.db, shortcodes);
-      const { detachedImageKeys, deletedImageShortcodes } =
+      const { detachedImageKeys, deletedImageShortcodes, affectedEntryIds } =
         await withTransaction(ctx.db, async (tx) => {
-          // PLANTING_DELETE_EDGE_POLICY declares `GardenEntry.plantingId`
-          // `detach`; `removeEntity`'s cascade has no detach arm, so this is
-          // hand-written — mirrors `purchase.ts`'s expense-detach pattern.
-          const detaching = await tx
-            .select({ id: gardenEntry.id, plantingId: gardenEntry.plantingId })
-            .from(gardenEntry)
+          const affectedEntryRows = await tx
+            .select({ gardenEntryId: gardenEntryPlanting.gardenEntryId })
+            .from(gardenEntryPlanting)
             .where(
               and(
-                inArray(gardenEntry.plantingId, ids),
-                notDeleted(gardenEntry),
+                inArray(gardenEntryPlanting.plantingId, ids),
+                notDeleted(gardenEntryPlanting),
               ),
             );
-          if (detaching.length > 0) {
-            await tx
-              .update(gardenEntry)
-              .set({ plantingId: null })
-              .where(
-                and(
-                  inArray(gardenEntry.plantingId, ids),
-                  notDeleted(gardenEntry),
-                ),
-              );
-            await logAuditEntries(
-              tx,
-              ctx.actorContext,
-              detaching.map((row) => ({
-                entityType: "gardenEntry" as const,
-                entityId: row.id,
-                action: "update" as const,
-                changes: { plantingId: { from: row.plantingId, to: null } },
-              })),
-            );
+          const affectedEntryIds = [
+            ...new Set(affectedEntryRows.map((row) => row.gardenEntryId)),
+          ];
+          const beforeRows = affectedEntryIds.length
+            ? await tx
+                .select({
+                  gardenEntryId: gardenEntryPlanting.gardenEntryId,
+                  shortcode: planting.shortcode,
+                })
+                .from(gardenEntryPlanting)
+                .innerJoin(
+                  planting,
+                  eq(planting.id, gardenEntryPlanting.plantingId),
+                )
+                .where(
+                  and(
+                    inArray(
+                      gardenEntryPlanting.gardenEntryId,
+                      affectedEntryIds,
+                    ),
+                    notDeleted(gardenEntryPlanting),
+                    notDeleted(planting),
+                  ),
+                )
+                .orderBy(
+                  asc(gardenEntryPlanting.gardenEntryId),
+                  asc(planting.shortcode),
+                )
+            : [];
+          const beforeByEntry = new Map<string, string[]>();
+          for (const row of beforeRows) {
+            const values = beforeByEntry.get(row.gardenEntryId) ?? [];
+            values.push(parseShortcodeFor("planting", row.shortcode));
+            beforeByEntry.set(row.gardenEntryId, values);
           }
-          return await removeEntity(tx, {
+          const result = await removeEntity(tx, {
             entity: "planting",
             ids,
             removal: "soft",
             actor: ctx.actorContext,
+            children: [
+              {
+                table: gardenEntryPlanting,
+                parentColumns: [gardenEntryPlanting.plantingId],
+                auditKey: "detachedGardenEntries",
+              },
+            ],
           });
+          const afterRows = affectedEntryIds.length
+            ? await tx
+                .select({
+                  gardenEntryId: gardenEntryPlanting.gardenEntryId,
+                  shortcode: planting.shortcode,
+                })
+                .from(gardenEntryPlanting)
+                .innerJoin(
+                  planting,
+                  eq(planting.id, gardenEntryPlanting.plantingId),
+                )
+                .where(
+                  and(
+                    inArray(
+                      gardenEntryPlanting.gardenEntryId,
+                      affectedEntryIds,
+                    ),
+                    notDeleted(gardenEntryPlanting),
+                    notDeleted(planting),
+                  ),
+                )
+                .orderBy(
+                  asc(gardenEntryPlanting.gardenEntryId),
+                  asc(planting.shortcode),
+                )
+            : [];
+          const afterByEntry = new Map<string, string[]>();
+          for (const row of afterRows) {
+            const values = afterByEntry.get(row.gardenEntryId) ?? [];
+            values.push(parseShortcodeFor("planting", row.shortcode));
+            afterByEntry.set(row.gardenEntryId, values);
+          }
+          await logAuditEntries(
+            tx,
+            ctx.actorContext,
+            [...beforeByEntry.entries()].flatMap(([gardenEntryId, before]) => {
+              const changes = diffUnorderedIdSet(
+                before,
+                afterByEntry.get(gardenEntryId) ?? [],
+              );
+              return changes
+                ? [
+                    {
+                      entityType: "gardenEntry" as const,
+                      entityId: gardenEntryId,
+                      action: "update" as const,
+                      changes: { plantingIds: changes },
+                    },
+                  ]
+                : [];
+            }),
+          );
+          return { ...result, affectedEntryIds };
         });
+      await refreshDerivedSearchRefs(
+        ctx.db,
+        affectedEntryIds.map((entityId) => ({
+          entityType: "gardenEntry" as const,
+          entityId,
+        })),
+        "planting.delete.detachGardenEntries",
+      );
       return {
         deletedReferences: deletedWithImages(
           "planting",
@@ -303,7 +390,14 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
             ids,
             removal: "soft",
             actor: ctx.actorContext,
-            children: [imageCascadeChild(imageJoinBindings.gardenEntry)],
+            children: [
+              {
+                table: gardenEntryPlanting,
+                parentColumns: [gardenEntryPlanting.gardenEntryId],
+                auditKey: "cascadedPlantings",
+              },
+              imageCascadeChild(imageJoinBindings.gardenEntry),
+            ],
           });
         });
       return {
