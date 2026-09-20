@@ -62,4 +62,18 @@ describe("withHtmlNoCache", () => {
     expect(decorated.headers.get("x-cubby-telemetry-schema")).toBe("1");
     expect(await decorated.json()).toEqual({ ok: true });
   });
+
+  it("preserves Cloudflare WebSocket upgrade responses verbatim", () => {
+    const upgrade = new Response();
+    Object.defineProperties(upgrade, {
+      status: { value: 101 },
+      webSocket: { value: {} },
+    });
+    expect(
+      withResponseDiagnostics(upgrade, {
+        requestId: "ray-upgrade-test",
+        workerVersion: "worker-version-test",
+      }),
+    ).toBe(upgrade);
+  });
 });

@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import CoreGraphics
 import CubbyKit
 import Foundation
@@ -8,6 +9,10 @@ import UniformTypeIdentifiers
 
 @MainActor
 final class MacBrowserCommandExecutor: BrowserCommandExecuting {
+    private struct BrowserScreenshot {
+        let evidence: BrowserLocalEvidence
+        let image: CGImage
+    }
     private struct FixedCapturePayload: Decodable {
         struct Link: Decodable { let url: String; let label: String? }
         struct Image: Decodable { let url: String; let alt: String? }
@@ -21,6 +26,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
 
     private let browser: BrowserChoice
     private let evidenceUploader: any BrowserEvidenceUploading
+    private let appleScript: SerializedAppleScriptExecutor
     private var ownedWindowID: Int?
     private var ownedCaptureWindowID: CGWindowID?
     private var capturedLinks: [String: URL] = [:]
@@ -29,10 +35,43 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     init(browser: BrowserChoice, evidenceUploader: any BrowserEvidenceUploading) {
         self.browser = browser
         self.evidenceUploader = evidenceUploader
+        appleScript = SerializedAppleScriptExecutor(
+            targetBundleIdentifier: browser == .safari ? "com.apple.Safari" : "com.google.Chrome")
     }
+
+    /// A rendered PDF is only advertised when the OS has granted the window-capture permission
+    /// that lets Cubby render its own dedicated Safari or Chrome window into evidence.
+    static var supportsRenderedPDF: Bool { CGPreflightScreenCaptureAccess() }
 
     func cancel(commandID: UUID) {
         cancelled.insert(commandID)
+    }
+
+    func raiseAuthenticationWindow() {
+        guard let ownedWindowID else { return }
+        let script: String
+        switch browser {
+        case .safari:
+            script = """
+                tell application "Safari"
+                activate
+                set index of window id \(ownedWindowID) to 1
+                end tell
+                """
+        case .chrome:
+            script = """
+                tell application "Google Chrome"
+                activate
+                set index of window id \(ownedWindowID) to 1
+                end tell
+                """
+        }
+        Task { [appleScript, browser] in
+            _ = try? await appleScript.execute(script)
+            let bundleIdentifier = browser == .safari ? "com.apple.Safari" : "com.google.Chrome"
+            NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first?
+                .activate(options: [.activateAllWindows])
+        }
     }
 
     func execute(_ command: BrowserBridgeCommand) async -> BrowserBridgeCommandOutcome {
@@ -51,7 +90,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 let isCreatingWindow = ownedWindowID == nil
                 let previousCaptureWindows =
                     isCreatingWindow ? await browserCaptureWindowIDs() : nil
-                ownedWindowID = try navigate(validated)
+                ownedWindowID = try await navigate(validated)
                 if isCreatingWindow {
                     ownedCaptureWindowID = await identifyCreatedCaptureWindow(
                         excluding: previousCaptureWindows)
@@ -61,12 +100,13 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             case .followCapturedLink(let linkID, let allowedHosts):
                 guard let url = capturedLinks[linkID] else { throw ExecutionFailure.unknownLink }
                 let validated = try BrowserBridgeURLPolicy.validate(url, allowedHosts: allowedHosts)
-                try setOwnedWindowURL(validated)
+                try await setOwnedWindowURL(validated)
                 capturedLinks = [:]
                 return .completed(capture: nil)
             case .scroll(let pageCount):
                 guard (1...20).contains(pageCount) else { throw ExecutionFailure.invalidCommand }
-                _ = try runFixedJavaScript("window.scrollBy(0, window.innerHeight * \(pageCount)); true;")
+                _ = try await runFixedJavaScript(
+                    "window.scrollBy(0, window.innerHeight * \(pageCount)); true;")
                 return .completed(capture: nil)
             case .capture(let allowedHosts, let enhancedEvidence):
                 return .completed(
@@ -77,6 +117,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         } catch let failure as BrowserBridgeURLPolicy.Failure {
             return .failed(code: .disallowedURL, message: failure.message, retryable: false)
         } catch let failure as ExecutionFailure {
+            if case .authenticationRequired = failure { raiseAuthenticationWindow() }
             return .failed(code: failure.code, message: failure.message, retryable: failure.retryable)
         } catch {
             return .failed(
@@ -85,7 +126,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         }
     }
 
-    private func navigate(_ url: URL) throws -> Int {
+    private func navigate(_ url: URL) async throws -> Int {
         let target = Self.appleScriptLiteral(url.absoluteString)
         let script: String
         switch (browser, ownedWindowID) {
@@ -102,18 +143,18 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             script =
                 "tell application \"Google Chrome\"\nset w to make new window\nset URL of active tab of w to \(target)\nreturn id of w\nend tell"
         }
-        let value = try execute(script)
+        let value = try await appleScript.execute(script)
         guard let id = Int(value) else { throw ExecutionFailure.browserUnavailable }
         return id
     }
 
-    private func setOwnedWindowURL(_ url: URL) throws {
+    private func setOwnedWindowURL(_ url: URL) async throws {
         guard let ownedWindowID else { throw ExecutionFailure.browserUnavailable }
-        _ = try navigate(url)
+        _ = try await navigate(url)
         self.ownedWindowID = ownedWindowID
     }
 
-    private func runFixedJavaScript(_ javascript: String) throws -> String {
+    private func runFixedJavaScript(_ javascript: String) async throws -> String {
         guard let ownedWindowID else { throw ExecutionFailure.browserUnavailable }
         let source = Self.appleScriptLiteral(javascript)
         let script: String
@@ -125,14 +166,14 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             script =
                 "tell application \"Google Chrome\" to execute active tab of window id \(ownedWindowID) javascript \(source)"
         }
-        return try execute(script)
+        return try await appleScript.execute(script)
     }
 
     private func capture(
         command: BrowserBridgeCommand, allowedHosts: Set<String>, enhancedEvidence: Bool
     ) async throws -> BrowserPageCapture {
         try await waitForPageReady()
-        let raw = try runFixedJavaScript(Self.captureScript)
+        let raw = try await runFixedJavaScript(Self.captureScript)
         try Task.checkCancellation()
         guard let data = raw.data(using: .utf8) else { throw ExecutionFailure.captureUnavailable }
         let payload: FixedCapturePayload
@@ -172,12 +213,19 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         } catch {
             throw ExecutionFailure.uploadFailed
         }
-        if enhancedEvidence, CGPreflightScreenCaptureAccess(),
-            let screenshot = try? await captureBrowserScreenshot()
-        {
-            defer { try? FileManager.default.removeItem(at: screenshot.url) }
-            if let reference = try? await evidenceUploader.upload(screenshot, runID: command.runID) {
+        if Self.supportsRenderedPDF, let screenshot = try? await captureBrowserScreenshot() {
+            defer { try? FileManager.default.removeItem(at: screenshot.evidence.url) }
+            if enhancedEvidence,
+                let reference = try? await evidenceUploader.upload(
+                    screenshot.evidence, runID: command.runID)
+            {
                 references.append(reference)
+            }
+            if let rendered = try? RenderedBrowserEvidencePDF.makeFile(from: screenshot.image) {
+                defer { try? FileManager.default.removeItem(at: rendered.url) }
+                if let reference = try? await evidenceUploader.upload(rendered, runID: command.runID) {
+                    references.append(reference)
+                }
             }
         }
         return BrowserPageCapture(
@@ -186,7 +234,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             evidence: references)
     }
 
-    private func captureBrowserScreenshot() async throws -> BrowserLocalEvidence {
+    private func captureBrowserScreenshot() async throws -> BrowserScreenshot {
         guard let ownedCaptureWindowID else { throw ExecutionFailure.captureUnavailable }
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
@@ -217,9 +265,11 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(UUID().uuidString + ".png")
         try (data as Data).write(to: url, options: .atomic)
-        return BrowserLocalEvidence(
-            url: url, kind: .screenshot,
-            checksum: NormalizedEvidencePDF.sha256(data as Data), contentType: "image/png")
+        return BrowserScreenshot(
+            evidence: BrowserLocalEvidence(
+                url: url, kind: .screenshot,
+                checksum: NormalizedEvidencePDF.sha256(data as Data), contentType: "image/png"),
+            image: image)
     }
 
     /// ScreenCaptureKit uses CGWindowIDs, while browser Apple Events expose a different window
@@ -256,22 +306,10 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     private func waitForPageReady() async throws {
         for _ in 0..<40 {
             try Task.checkCancellation()
-            if (try? runFixedJavaScript("document.readyState")) == "complete" { return }
+            if (try? await runFixedJavaScript("document.readyState")) == "complete" { return }
             try await Task.sleep(for: .milliseconds(250))
         }
         throw ExecutionFailure.captureUnavailable
-    }
-
-    private func execute(_ source: String) throws -> String {
-        guard let script = NSAppleScript(source: source) else { throw ExecutionFailure.invalidCommand }
-        var details: NSDictionary?
-        let result = script.executeAndReturnError(&details)
-        if let details {
-            let number = details[NSAppleScript.errorNumber] as? Int
-            if number == -1743 { throw ExecutionFailure.permissionDenied }
-            throw ExecutionFailure.executionFailed
-        }
-        return result.stringValue ?? String(result.int32Value)
     }
 
     private static func appleScriptLiteral(_ value: String) -> String {
@@ -303,7 +341,40 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         """#
 }
 
-private enum ExecutionFailure: Error {
+private actor SerializedAppleScriptExecutor {
+    private let targetBundleIdentifier: String
+
+    init(targetBundleIdentifier: String) {
+        self.targetBundleIdentifier = targetBundleIdentifier
+    }
+
+    func execute(_ source: String) throws -> String {
+        // NSAppleScript is synchronous. Keeping it on this dedicated serial executor prevents a
+        // slow browser or macOS Automation prompt from freezing SwiftUI and the WebSocket bridge.
+        let target = NSAppleEventDescriptor(bundleIdentifier: targetBundleIdentifier)
+        guard let descriptor = target.aeDesc else { throw ExecutionFailure.browserUnavailable }
+        let permission = AEDeterminePermissionToAutomateTarget(
+            descriptor, typeWildCard, typeWildCard, true)
+        if permission == errAEEventNotPermitted || permission == errAEEventWouldRequireUserConsent {
+            throw ExecutionFailure.permissionDenied
+        }
+        guard permission == noErr else { throw ExecutionFailure.browserUnavailable }
+        let bounded = "with timeout of 15 seconds\n\(source)\nend timeout"
+        guard let script = NSAppleScript(source: bounded) else {
+            throw ExecutionFailure.invalidCommand
+        }
+        var details: NSDictionary?
+        let result = script.executeAndReturnError(&details)
+        if let details {
+            let number = details[NSAppleScript.errorNumber] as? Int
+            if number == -1743 { throw ExecutionFailure.permissionDenied }
+            throw ExecutionFailure.executionFailed
+        }
+        return result.stringValue ?? String(result.int32Value)
+    }
+}
+
+private enum ExecutionFailure: Error, Sendable {
     case invalidCommand
     case unknownLink
     case browserUnavailable

@@ -124,3 +124,29 @@ public enum NormalizedEvidencePDF {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
+
+/// A PDF rendered from Cubby's dedicated browser window. It complements the normalized text PDF
+/// with the browser's actual visual layout without exposing an arbitrary page-evaluation surface.
+public enum RenderedBrowserEvidencePDF {
+    public static func makeFile(from image: CGImage) throws -> BrowserLocalEvidence {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "CubbyBrowserEvidence", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent(UUID().uuidString + ".pdf")
+        let width = CGFloat(image.width)
+        let height = CGFloat(image.height)
+        var mediaBox = CGRect(x: 0, y: 0, width: width, height: height)
+        guard let context = CGContext(url as CFURL, mediaBox: &mediaBox, nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        context.beginPDFPage(nil)
+        context.interpolationQuality = .high
+        context.draw(image, in: mediaBox)
+        context.endPDFPage()
+        context.closePDF()
+        let data = try Data(contentsOf: url)
+        return BrowserLocalEvidence(
+            url: url, kind: .renderedPDF, checksum: NormalizedEvidencePDF.sha256(data),
+            contentType: "application/pdf")
+    }
+}

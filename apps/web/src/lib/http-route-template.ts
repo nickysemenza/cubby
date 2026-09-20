@@ -30,6 +30,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/import/agent/accounts",
   "/api/import/agent/socket",
   "/api/import/agent/sync",
+  "/api/import/merchant-rules",
   "/api/import/runs",
   "/api/mcp",
   "/api/settings/member-logins",

@@ -28,5 +28,11 @@ declare module "cloudflare:workers" {
     ): Promise<object>;
   }
 
+  export abstract class WorkerEntrypoint<Environment> {
+    protected readonly ctx: ExecutionContext;
+    protected readonly env: Environment;
+    constructor(ctx: ExecutionContext, env: Environment);
+  }
+
   export const env: Env;
 }

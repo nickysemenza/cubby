@@ -37,6 +37,7 @@ export const importRunStatus = z.enum([
   "running",
   "paused_auth",
   "paused_offline",
+  "needs_review",
   "completed",
   "failed",
 ]);
@@ -229,13 +230,44 @@ export const browserBridgeOperation = z.discriminatedUnion("type", [
     enhancedEvidence: z.boolean(),
   }),
 ]);
+export type BrowserBridgeOperation = z.infer<typeof browserBridgeOperation>;
 export const browserBridgeRequest = z.object({
+  protocolVersion: z.literal(2),
   id: z.uuid(),
+  operationId: z.string().trim().min(1).max(200),
   runID: z.string().trim().min(1).max(200),
   deadline: z.iso.datetime(),
   operation: browserBridgeOperation,
 });
 export type BrowserBridgeRequest = z.infer<typeof browserBridgeRequest>;
+
+export const purchaseAgentEvent = z.object({
+  version: z.literal(1),
+  runId: z.uuid(),
+  eventId: z.string().trim().min(1).max(256),
+  type: z.enum([
+    "start_or_resume",
+    "browser_connected",
+    "browser_result",
+    "retry",
+  ]),
+  commandId: z.uuid().optional(),
+  connectionId: z.string().trim().min(1).max(256).optional(),
+  retryOf: z.string().trim().min(1).max(256).optional(),
+});
+export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEvent>;
+
+export const purchaseImportRunScope = z.object({
+  runId: z.uuid(),
+  agentId: z.string().trim().min(1),
+  trigger: importRunTrigger,
+  status: importRunStatus,
+  vendorAccountId: z.uuid().nullable(),
+  vendorLabel: z.string().trim().min(1).max(500).nullable(),
+  allowedHosts: z.array(z.string().trim().min(1).max(253)).max(20),
+  navigationHints: z.unknown(),
+});
+export type PurchaseImportRunScope = z.infer<typeof purchaseImportRunScope>;
 
 export const importWriterInput = z.object({
   runId: z.uuid(),

@@ -405,6 +405,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires thought or evidence
 
+- **Reconsider broader purchase-agent authority from production evidence.**
+  Keep Flue's current run-scoped tools bounded until real imports show repeated
+  cases they cannot express. Use `ImportFinding`, failed operation-ledger rows,
+  and run transcripts to propose the smallest additional authority, with an
+  explicit audit and idempotency contract; do not add generic entity mutation,
+  SQL, shell, arbitrary browser evaluation, or unrestricted finding resolution.
+
 ### Needs a decision or investigation
 
 - **`Entity` supertable for polymorphic references.** Three patterns

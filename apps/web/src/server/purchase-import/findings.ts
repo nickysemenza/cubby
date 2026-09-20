@@ -1,3 +1,4 @@
+import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
 import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import { parseEntityId } from "@cubby/schemas/identifiers";
@@ -11,13 +12,15 @@ import {
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, ne } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
+  auditLog,
   importFinding,
   importHunt,
+  importRunMutation,
   importSourceClaim,
   ledgerParty,
   product,
@@ -63,6 +66,73 @@ const loadExpenses = async (
   }));
 };
 
+const assertFixTargetsFinding = (
+  finding: {
+    targetType: string;
+    targetId: string;
+  },
+  fix: ProposedImportFix,
+) => {
+  const targetMatches =
+    fix.kind === "relink_product"
+      ? finding.targetType === "expense" && finding.targetId === fix.expenseId
+      : finding.targetType === "purchase" &&
+        finding.targetId === fix.purchaseId;
+  if (!targetMatches) {
+    throw new Error(
+      "The proposed fix no longer targets the finding's original record.",
+    );
+  }
+};
+
+const assertRunProvenance = async (
+  tx: DrizzleTransaction,
+  finding: {
+    importRunId: string | null;
+    targetType: string;
+    targetId: string;
+  },
+) => {
+  if (!finding.importRunId) return;
+  const [mutation] = await tx
+    .select({
+      id: importRunMutation.id,
+      createdAt: importRunMutation.createdAt,
+    })
+    .from(importRunMutation)
+    .where(
+      and(
+        eq(importRunMutation.runId, finding.importRunId),
+        eq(importRunMutation.targetType, finding.targetType),
+        eq(importRunMutation.targetId, finding.targetId),
+      ),
+    )
+    .limit(1);
+  if (!mutation) {
+    throw new Error(
+      "The import run did not write this finding's target; refusing a stale automated fix.",
+    );
+  }
+  const auditEntity = auditEntitySchema.parse(finding.targetType);
+  const [laterHumanWrite] = await tx
+    .select({ id: auditLog.id })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.entityType, auditEntity),
+        eq(auditLog.entityId, finding.targetId),
+        gt(auditLog.createdAt, mutation.createdAt),
+        ne(auditLog.source, "api"),
+      ),
+    )
+    .limit(1);
+  if (laterHumanWrite) {
+    throw new Error(
+      "This record was edited after the import; refusing a stale automated fix.",
+    );
+  }
+};
+
 async function applyFix(
   tx: DrizzleTransaction,
   fix: ProposedImportFix,
@@ -86,7 +156,13 @@ async function applyFix(
     const [updated] = await tx
       .update(expense)
       .set({ productId, updatedAt: new Date() })
-      .where(and(eq(expense.id, expenseId), notDeleted(expense)))
+      .where(
+        and(
+          eq(expense.id, expenseId),
+          isNull(expense.productId),
+          notDeleted(expense),
+        ),
+      )
       .returning({ id: expense.id });
     if (!updated) throw new Error("The proposed Expense no longer exists.");
     await logAuditEntries(tx, actor, [
@@ -109,7 +185,8 @@ async function applyFix(
     })
     .from(purchase)
     .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))
-    .limit(1);
+    .limit(1)
+    .for("update");
   if (!targetPurchase)
     throw new Error("The proposed Purchase no longer exists.");
 
@@ -205,6 +282,9 @@ export async function resolveImportFinding(
         id: importFinding.id,
         status: importFinding.status,
         proposedFix: importFinding.proposedFix,
+        importRunId: importFinding.importRunId,
+        targetType: importFinding.targetType,
+        targetId: importFinding.targetId,
       })
       .from(importFinding)
       .innerJoin(
@@ -253,6 +333,8 @@ export async function resolveImportFinding(
     }
     if (input.action === "apply") {
       const fix = proposedImportFix.parse(finding.proposedFix);
+      assertFixTargetsFinding(finding, fix);
+      await assertRunProvenance(tx, finding);
       await applyFix(tx, fix, actor);
     }
     const status = input.action === "apply" ? "applied" : "dismissed";

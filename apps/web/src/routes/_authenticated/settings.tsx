@@ -26,6 +26,7 @@ import {
 } from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
+import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { StatusText } from "~/components/ui/status-text";
 import { authClient } from "~/lib/auth-client";
@@ -37,6 +38,7 @@ import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
+import { merchantRulesResponse } from "~/routes/api/import/merchant-rules";
 import {
   purchaseImportRunsError,
   purchaseImportRunsResponse,
@@ -60,6 +62,7 @@ function SettingsPage() {
         <CalendarAccessCard />
         <GmailAccessCard />
         <MemberLoginsCard />
+        <MerchantVendorRulesCard />
         <PurchaseImportRunsCard />
 
         {/* Everything dev/debug/maintenance lives behind one collapsed
@@ -103,6 +106,117 @@ function SettingsPage() {
         </Collapsible>
       </Stack>
     </Page>
+  );
+}
+
+function MerchantVendorRulesCard() {
+  const queryClient = useQueryClient();
+  const [merchant, setMerchant] = useState("");
+  const [vendorId, setVendorId] = useState("");
+  const rules = useQuery({
+    queryKey: ["purchase-import", "merchant-rules"],
+    queryFn: async () => {
+      const response = await fetch("/api/import/merchant-rules");
+      const body: unknown = await response.json();
+      if (!response.ok)
+        throw new Error("Merchant routing rules could not load.");
+      return merchantRulesResponse.parse(body);
+    },
+  });
+  const save = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/import/merchant-rules", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ merchant, vendorId }),
+      });
+      const body: unknown = await response.json();
+      if (!response.ok)
+        throw new Error("Merchant routing rule could not save.");
+      return merchantRulesResponse.parse(body);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["purchase-import", "merchant-rules"], data);
+      setMerchant("");
+      toast.success("Merchant routing saved");
+    },
+  });
+  return (
+    <Card className="max-md:border-x-0">
+      <CardHeader>
+        <CardTitle>Purchase merchant routing</CardTitle>
+        <CardDescription>
+          Route a statement merchant label to the vendor whose orders should be
+          searched.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {rules.isError ? (
+          <StatusText tone="destructive">
+            {getErrorMessage(rules.error)}
+          </StatusText>
+        ) : (
+          <Stack gap="md">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+              <label
+                className="grid gap-1 text-sm font-medium"
+                htmlFor="purchase-merchant-label"
+              >
+                Merchant label
+                <Input
+                  id="purchase-merchant-label"
+                  value={merchant}
+                  onChange={(event) => setMerchant(event.target.value)}
+                  placeholder="AMZN Mktp"
+                />
+              </label>
+              <label
+                className="grid gap-1 text-sm font-medium"
+                htmlFor="purchase-merchant-vendor"
+              >
+                Vendor
+                <NativeSelect
+                  id="purchase-merchant-vendor"
+                  value={vendorId}
+                  onChange={(event) => setVendorId(event.target.value)}
+                >
+                  <option value="">Choose a vendor</option>
+                  {rules.data?.vendors.map((vendor) => (
+                    <option key={vendor.shortcode} value={vendor.shortcode}>
+                      {vendor.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </label>
+              <Button
+                type="button"
+                disabled={!merchant.trim() || !vendorId || save.isPending}
+                onClick={() => save.mutate()}
+              >
+                Save rule
+              </Button>
+            </div>
+            {rules.data?.rules.length ? (
+              <Stack gap="tight">
+                {rules.data.rules.map((rule) => (
+                  <div
+                    key={rule.merchant}
+                    className="flex justify-between gap-4 border-b border-border py-2 text-sm last:border-0"
+                  >
+                    <span>{rule.merchant}</span>
+                    <span className="text-muted-foreground">
+                      {rule.vendorName}
+                    </span>
+                  </div>
+                ))}
+              </Stack>
+            ) : (
+              <StatusText>No merchant routing rules yet.</StatusText>
+            )}
+          </Stack>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

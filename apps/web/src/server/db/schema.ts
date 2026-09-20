@@ -1396,8 +1396,13 @@ export const importRun = pgTable(
     ),
     check(
       "ImportRun_status_check",
-      sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'completed', 'failed')`,
+      sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'needs_review', 'completed', 'failed')`,
     ),
+    uniqueIndex("ImportRun_one_active_vendor_account_key")
+      .on(table.vendorAccountId)
+      .where(
+        sql`${table.vendorAccountId} IS NOT NULL AND ${table.status} IN ('running', 'paused_auth', 'paused_offline')`,
+      ),
   ],
 );
 
@@ -1465,6 +1470,37 @@ export const importRunMutation = pgTable(
   ],
 );
 
+/** Replay-safe boundary for Flue durable tools and external side effects. */
+export const importRunOperation = pgTable(
+  "ImportRunOperation",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    operationId: text("operationId").notNull(),
+    kind: text("kind").notNull(),
+    inputFingerprint: text("inputFingerprint").notNull(),
+    state: text("state").notNull().default("started"),
+    result: jsonb("result"),
+    error: text("error"),
+    startedAt: timestamp("startedAt", { mode: "date" }).notNull().defaultNow(),
+    completedAt: timestamp("completedAt", { mode: "date" }),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("ImportRunOperation_run_operation_key").on(
+      table.runId,
+      table.operationId,
+    ),
+    index("ImportRunOperation_run_state_idx").on(table.runId, table.state),
+    check(
+      "ImportRunOperation_state_check",
+      sql`${table.state} IN ('started', 'completed', 'failed')`,
+    ),
+  ],
+);
+
 export const importFinding = pgTable(
   "ImportFinding",
   {
@@ -1484,6 +1520,7 @@ export const importFinding = pgTable(
     probability: real("probability"),
     status: text("status").notNull().default("open"),
     resolvedAt: timestamp("resolvedAt", { mode: "date" }),
+    expiresAt: timestamp("expiresAt", { mode: "date" }),
     resolvedByUserId: text("resolvedByUserId").references(() => user.id),
     ...baseTimestamps(),
   },
@@ -1504,7 +1541,7 @@ export const importFinding = pgTable(
     ),
     check(
       "ImportFinding_target_check",
-      sql`${table.targetType} IN ('purchase', 'expense', 'product')`,
+      sql`${table.targetType} IN ('purchase', 'expense', 'product', 'import_run')`,
     ),
   ],
 );

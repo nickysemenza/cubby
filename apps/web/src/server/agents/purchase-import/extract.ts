@@ -9,7 +9,6 @@ import { and, eq } from "drizzle-orm";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
-  PURCHASE_IMPORT_NAVIGATION_FEATURE,
   PURCHASE_IMPORT_RECEIPT_FEATURE,
   PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,
@@ -23,7 +22,6 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import {
   purchaseAuditPrompt,
   purchaseExtractionPrompt,
-  purchaseNavigationPrompt,
   type PurchaseAuditRenderedBatch,
 } from "./prompts";
 
@@ -50,7 +48,7 @@ const validateExtraction = (output: ImportExtractionOutcome) => {
   };
 };
 
-/** @lintignore Loaded lazily by the Durable Object to keep its bootstrap small. */
+/** Loaded lazily by the purchase-import service to keep its bootstrap small. */
 export const extractPurchaseCapture = async (args: {
   db: Database;
   runId: string;
@@ -126,7 +124,7 @@ export const extractPurchaseCapture = async (args: {
   };
 };
 
-/** @lintignore Loaded lazily by the Durable Object to keep its bootstrap small. */
+/** Loaded lazily by the purchase-import service to keep its bootstrap small. */
 export const auditPurchaseImportBatch = async (args: {
   db: Database;
   runId: string;
@@ -141,37 +139,6 @@ export const auditPurchaseImportBatch = async (args: {
       job: { kind: "purchase_import_run", id: args.runId },
     },
   );
-
-/** @lintignore Loaded lazily by the Durable Object to keep its bootstrap small. */
-export const choosePurchaseImportNavigation = async (args: {
-  db: Database;
-  runId: string;
-  capture: BrowserCapture;
-  knownOrderIds: string[];
-  stepsRemaining: number;
-  huntTarget?: {
-    orderIds: string[];
-    amount: number;
-    dateFrom: string;
-    dateTo: string;
-  };
-}) => {
-  const promptInput: Parameters<typeof purchaseNavigationPrompt>[0] = {
-    capture: browserCapture.parse(args.capture),
-    knownOrderIds: args.knownOrderIds,
-    stepsRemaining: args.stepsRemaining,
-  };
-  if (args.huntTarget) promptInput.huntTarget = args.huntTarget;
-  return runStructuredFeature(
-    PURCHASE_IMPORT_NAVIGATION_FEATURE,
-    purchaseNavigationPrompt(promptInput),
-    {
-      db: args.db,
-      operation: "purchaseImport.navigate",
-      job: { kind: "purchase_import_run", id: args.runId },
-    },
-  );
-};
 
 export const extractPurchaseReceipt = async (args: {
   db: Database;

@@ -12,6 +12,15 @@ export function withResponseDiagnostics(
     workerVersion: string;
   },
 ): Response {
+  // Reconstructing a 101 drops Cloudflare's non-standard `webSocket` slot and
+  // turns a successful Durable Object upgrade into a dead HTTP response.
+  // Upgrade headers are immutable by design; preserve the response verbatim.
+  // SAFETY: Cloudflare extends Response with this documented upgrade slot.
+  if (
+    response.status === 101 ||
+    (response as Response & { webSocket?: WebSocket }).webSocket
+  )
+    return response;
   const headers = new Headers(response.headers);
   if (diagnostics.requestId) {
     headers.set(REQUEST_ID_HEADER, diagnostics.requestId);

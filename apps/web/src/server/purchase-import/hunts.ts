@@ -1,11 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { browserBridgeRequest } from "@cubby/schemas/purchase-import";
+import { vendorAccountId } from "@cubby/schemas/identifiers";
 import {
   confirmMerchantVendorRuleInput,
   confirmMerchantVendorRuleOut,
   type ConfirmMerchantVendorRuleInput,
 } from "@cubby/schemas/purchase-import";
-import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -14,14 +13,16 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   importHunt,
-  importRun,
   ledgerParty,
   merchantVendorRule,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
+import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+
+import { startOrResumeImportRun } from "./run-service";
 
 const normalizeMerchant = (value: string) =>
   value.trim().toLowerCase().replaceAll(/\s+/g, " ");
@@ -159,13 +160,7 @@ export async function discoverImportHunts(db: Database): Promise<number> {
 
 export async function dispatchImportHunts(
   db: Database,
-  namespace: {
-    getByName(name: string): {
-      enqueue(
-        command: ReturnType<typeof browserBridgeRequest.parse>,
-      ): Promise<void>;
-    };
-  },
+  queue: PurchaseAgentQueueProducer,
 ): Promise<number> {
   const database = getDb(db);
   const hunts = await database
@@ -173,11 +168,7 @@ export async function dispatchImportHunts(
       id: importHunt.id,
       ledgerPartyId: importHunt.ledgerPartyId,
       vendorAccountId: importHunt.vendorAccountId,
-      orderIds: importHunt.matchedOrderIds,
       state: importHunt.state,
-      orderUrlTemplate: vendor.orderUrlTemplate,
-      agentHints: vendor.agentHints,
-      browserDomains: vendor.browserDomains,
     })
     .from(importHunt)
     .innerJoin(
@@ -204,43 +195,22 @@ export async function dispatchImportHunts(
     ),
   );
   for (const hunt of hunts) {
-    const orderId = hunt.orderIds[0];
     if (!hunt.vendorAccountId) continue;
     // A bridge is serialized per vendor account. Leave later hunts queued for the next cron
     // instead of letting one completion resolve unrelated work for the same login.
     if (claimedAccounts.has(hunt.vendorAccountId)) continue;
     claimedAccounts.add(hunt.vendorAccountId);
-    const hints = vendorAgentHints.parse(hunt.agentHints);
-    const url =
-      orderId && hunt.orderUrlTemplate
-        ? hunt.orderUrlTemplate
-            .replaceAll("{orderId}", encodeURIComponent(orderId))
-            .replaceAll("{order_id}", encodeURIComponent(orderId))
-        : hints.ordersListUrl;
-    if (!url) continue;
-    const parsedUrl = new URL(url);
-    const allowedHosts =
-      hunt.browserDomains.length > 0
-        ? hunt.browserDomains
-        : [parsedUrl.hostname];
-    const [run] = await database
-      .insert(importRun)
-      .values({
-        ledgerPartyId: hunt.ledgerPartyId,
-        vendorAccountId: hunt.vendorAccountId,
-        trigger: "discovery",
-      })
-      .returning({ id: importRun.id });
-    if (!run) continue;
-    const command = browserBridgeRequest.parse({
-      id: crypto.randomUUID(),
-      runID: run.id,
-      // Discovery may be queued while the owner's Mac is asleep. Keep the
-      // read-only command replayable until the next weekly housekeeping pass.
-      deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
-      operation: { type: "navigate", url, allowedHosts },
+    const run = await startOrResumeImportRun(db, {
+      ledgerPartyId: hunt.ledgerPartyId,
+      vendorAccountId: vendorAccountId.parse(hunt.vendorAccountId),
+      trigger: "discovery",
     });
-    await namespace.getByName(hunt.vendorAccountId).enqueue(command);
+    await queue.send({
+      version: 1,
+      runId: run.id,
+      eventId: crypto.randomUUID(),
+      type: "start_or_resume",
+    });
     await database
       .update(importHunt)
       .set({

@@ -60,7 +60,9 @@ const commandOutcome = z.discriminatedUnion("status", [
   }),
 ]);
 export const browserBridgeResult = z.object({
+  protocolVersion: z.literal(2),
   commandID: z.uuid(),
+  operationID: z.string().trim().min(1).max(200),
   runID: z.string().min(1).max(200),
   completedAt: z.iso.datetime(),
   outcome: commandOutcome,
@@ -69,7 +71,7 @@ export type BrowserBridgeResult = z.infer<typeof browserBridgeResult>;
 
 const bridgeClientMessage = z.discriminatedUnion("type", [
   z.object({
-    version: z.literal(1),
+    protocolVersion: z.literal(2),
     type: z.literal("hello"),
     deviceID: z.uuid(),
     browser: z.enum(["chrome", "safari"]),
@@ -80,14 +82,19 @@ const bridgeClientMessage = z.discriminatedUnion("type", [
     }),
   }),
   z.object({
-    version: z.literal(1),
+    protocolVersion: z.literal(2),
     type: z.literal("result"),
     result: browserBridgeResult,
   }),
   z.object({
-    version: z.literal(1),
+    protocolVersion: z.literal(2),
     type: z.literal("pong"),
     timestamp: z.iso.datetime(),
+  }),
+  z.object({
+    protocolVersion: z.literal(2),
+    type: z.literal("run_completed_ack"),
+    runID: z.uuid(),
   }),
 ]);
 
@@ -107,24 +114,38 @@ export const decodeBrowserBridgeMessage = (message: string | ArrayBuffer) => {
 
 export const bridgeServerMessage = z.discriminatedUnion("type", [
   z.object({
-    version: z.literal(1),
+    protocolVersion: z.literal(2),
     type: z.literal("command"),
     command: browserBridgeRequest,
   }),
   z.object({
-    version: z.literal(1),
+    protocolVersion: z.literal(2),
     type: z.literal("acknowledge"),
     commandID: z.uuid(),
   }),
   z.object({
-    version: z.literal(1),
+    protocolVersion: z.literal(2),
     type: z.literal("cancel"),
     commandID: z.uuid(),
   }),
   z.object({
-    version: z.literal(1),
+    protocolVersion: z.literal(2),
     type: z.literal("ping"),
     timestamp: z.iso.datetime(),
+  }),
+  z.object({
+    protocolVersion: z.literal(2),
+    type: z.literal("raise_auth_window"),
+    runID: z.uuid(),
+  }),
+  z.object({
+    protocolVersion: z.literal(2),
+    type: z.literal("run_completed"),
+    runID: z.uuid(),
+    imported: z.number().int().nonnegative(),
+    updated: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+    findingCount: z.number().int().nonnegative(),
   }),
 ]);
 
@@ -132,4 +153,13 @@ export interface PurchaseImportDurableObjectRpc {
   enqueue(command: BrowserBridgeRequest): Promise<void>;
   result(requestId: string): Promise<BrowserBridgeResult | null>;
   cancel(requestId: string): Promise<void>;
+  connected(): Promise<boolean>;
+  notifyRunCompleted(summary: {
+    runID: string;
+    imported: number;
+    updated: number;
+    skipped: number;
+    findingCount: number;
+  }): Promise<void>;
+  requestAuthentication(runID: string): Promise<void>;
 }

@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       web: ${{ steps.filter.outputs.web }}
+      purchase_agent: ${{ steps.filter.outputs.purchase_agent }}
       workers: ${{ steps.workers.outputs.workers }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -59,6 +60,9 @@ jobs:
               - 'packages/usda-schemas/**'
               - 'packages/wasm/**'
               - 'recipebridge/**'
+            purchase_agent:
+              - *shared
+              - 'apps/purchase-agent/**'
             usda:
               - *shared
               - 'apps/usda-api/**'
@@ -155,6 +159,41 @@ jobs:
       - name: Deploy auxiliary Worker
         if: steps.deploy_current.outputs.current == 'true'
         run: pnpm --filter @cubby/${{ matrix.pkg }} run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
+
+  deploy-purchase-agent:
+    name: Build and deploy purchase agent
+    needs: [scope, deploy-web]
+    if: >-
+      always() &&
+      needs.scope.outputs.purchase_agent == 'true' &&
+      (needs.deploy-web.result == 'success' || needs.deploy-web.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-purchase-agent-production
+      cancel-in-progress: false
+    environment:
+      name: cloudflare
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check current main before building
+        id: current_main
+        uses: ./.github/actions/check-current-main
+      - uses: ./.github/actions/setup-node-with-deps
+        if: steps.current_main.outputs.current == 'true'
+        with:
+          wasm: "false"
+          workspace-filter: "@cubby/purchase-agent..."
+      - name: Re-check current main before deployment
+        if: steps.current_main.outputs.current == 'true'
+        id: deploy_current
+        uses: ./.github/actions/check-current-main
+      - name: Deploy private purchase-agent Worker
+        if: steps.deploy_current.outputs.current == 'true'
+        run: pnpm --filter @cubby/purchase-agent run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88

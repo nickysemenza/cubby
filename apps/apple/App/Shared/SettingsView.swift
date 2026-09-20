@@ -191,6 +191,7 @@ struct SettingsView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     browserPermissions = .current(browser: purchaseImportBrowser)
+                    model.browserBridge.appDidBecomeActive()
                 }
             }
         #endif
@@ -230,6 +231,37 @@ struct SettingsView: View {
                 }
                 .disabled(!model.browserBridge.isConfigured || model.browserBridge.isSyncing)
                 .accessibilityIdentifier("settings.purchaseImport.syncNow")
+                if model.browserBridge.status != .connected {
+                    Button("Reconnect", systemImage: "arrow.trianglehead.clockwise") {
+                        model.browserBridge.reconnect(
+                            browser: purchaseImportBrowser, enhancedEvidence: enhancedEvidence)
+                    }
+                    .disabled(!model.browserBridge.isConfigured || model.browserBridge.isSyncing)
+                    .accessibilityIdentifier("settings.purchaseImport.reconnect")
+                }
+                ForEach(model.browserBridge.accountStates) { account in
+                    LabeledContent(account.label) {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text(account.statusLabel)
+                                .foregroundStyle(
+                                    account.needsAuthentication
+                                        ? PorcelainTokens.destructive : PorcelainTokens.graphiteSecondary)
+                            if account.needsAuthentication {
+                                Button("Open sign-in") {
+                                    model.browserBridge.raiseAuthenticationWindow(accountID: account.id)
+                                }
+                                .accessibilityIdentifier(
+                                    "settings.purchaseImport.openSignIn.\(account.id)")
+                            }
+                            if let error = account.error {
+                                Text(error)
+                                    .font(.porcelainLabel)
+                                    .foregroundStyle(PorcelainTokens.destructive)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                        }
+                    }
+                }
                 if let error = model.browserBridge.error {
                     Text(error).foregroundStyle(PorcelainTokens.destructive)
                 }

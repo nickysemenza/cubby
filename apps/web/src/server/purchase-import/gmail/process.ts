@@ -8,6 +8,7 @@ import {
   expense,
   importFinding,
   importHunt,
+  importRun,
   orderMail,
   orderMailAttachment,
   orderMailEvent,
@@ -35,7 +36,12 @@ const cents = (value: number) => Math.round(value * 100);
 
 export async function attachPendingOrderMailEvidence(
   db: Database,
-  input: { vendorId: string; orderId: string; purchaseShortcode: string },
+  input: {
+    vendorId: string;
+    orderId: string;
+    purchaseShortcode: string;
+    ledgerPartyId?: string;
+  },
 ) {
   const database = getDb(db);
   const rows = await database
@@ -52,6 +58,12 @@ export async function attachPendingOrderMailEvidence(
     .innerJoin(orderMailEvent, eq(orderMailEvent.orderMailId, orderMail.id))
     .where(
       and(
+        input.ledgerPartyId
+          ? eq(
+              orderMail.ledgerPartyId,
+              parseEntityId("ledgerParty", input.ledgerPartyId),
+            )
+          : undefined,
         eq(orderMail.vendorId, parseEntityId("vendor", input.vendorId)),
         eq(orderMailEvent.orderId, input.orderId),
         eq(orderMailAttachment.mimeType, "application/pdf"),
@@ -59,6 +71,7 @@ export async function attachPendingOrderMailEvidence(
         isNotNull(orderMailAttachment.pendingDataBase64Url),
       ),
     );
+  let attachedCount = 0;
   for (const row of rows) {
     if (!row.data) continue;
     const stored = await attachFileToEntity(db, {
@@ -72,16 +85,24 @@ export async function attachPendingOrderMailEvidence(
         : "invoice",
       idempotencyKey: `gmail:${row.messageId}:${row.providerAttachmentId}`,
     });
-    await database
+    const [attached] = await database
       .update(orderMailAttachment)
       .set({
         imageId: await resolveOrThrow(db, "image", stored.imageId),
         pendingDataBase64Url: null,
         updatedAt: new Date(),
       })
-      .where(eq(orderMailAttachment.id, row.id));
+      .where(
+        and(
+          eq(orderMailAttachment.id, row.id),
+          isNull(orderMailAttachment.imageId),
+        ),
+      )
+      .returning({ id: orderMailAttachment.id });
+    if (!attached) continue;
+    attachedCount += 1;
   }
-  return rows.length;
+  return attachedCount;
 }
 
 // This is the ordered mail pipeline: classify, match a hunt, attach evidence,
@@ -104,6 +125,7 @@ export async function processOrderMails(
       .select({
         id: vendor.id,
         senders: vendor.orderEmailSenders,
+        returnWindowDays: vendor.returnWindowDays,
       })
       .from(vendor)
       .where(notDeleted(vendor)),
@@ -114,7 +136,45 @@ export async function processOrderMails(
     const matchedVendors = vendors.filter((candidate) =>
       candidate.senders.some((value) => sender.includes(value.toLowerCase())),
     );
-    if (matchedVendors.length !== 1) continue;
+    if (matchedVendors.length !== 1) {
+      const fingerprint = await sha256(
+        `unknown-sender:${mail.sender.toLowerCase()}`,
+      );
+      const [existing] = await database
+        .select({ id: importFinding.id })
+        .from(importFinding)
+        .where(
+          and(
+            eq(importFinding.ledgerPartyId, mail.ledgerPartyId),
+            eq(importFinding.kind, "unclassified_vendor"),
+            eq(importFinding.evidenceFingerprint, fingerprint),
+            eq(importFinding.status, "open"),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        const runId = crypto.randomUUID();
+        await database.insert(importRun).values({
+          id: runId,
+          ledgerPartyId: mail.ledgerPartyId,
+          trigger: "discovery",
+          status: "needs_review",
+          agentSessionId: `import-run:${runId}`,
+          endedAt: new Date(),
+        });
+        await database.insert(importFinding).values({
+          importRunId: runId,
+          ledgerPartyId: mail.ledgerPartyId,
+          targetType: "import_run",
+          targetId: runId,
+          kind: "unclassified_vendor",
+          summary: `Purchase mail from ${mail.sender} does not match a known vendor. Create or update the vendor's order-email sender list.`,
+          evidenceFingerprint: fingerprint,
+        });
+      }
+      processed += 1;
+      continue;
+    }
     const matchedVendor = matchedVendors[0];
     if (!matchedVendor) continue;
     await database
@@ -256,6 +316,7 @@ export async function processOrderMails(
         vendorId: matchedVendor.id,
         orderId: classification.orderId,
         purchaseShortcode: target.shortcode,
+        ledgerPartyId: mail.ledgerPartyId,
       });
     }
 
@@ -314,6 +375,49 @@ export async function processOrderMails(
           ),
         })
         .onConflictDoNothing();
+      if (
+        classification.event === "delivered" &&
+        matchedVendor.returnWindowDays !== null
+      ) {
+        const costlyLines = await database
+          .select({ name: expense.name, cost: expense.cost })
+          .from(expense)
+          .where(
+            and(
+              eq(expense.purchaseId, target.id),
+              gte(expense.cost, 50),
+              notDeleted(expense),
+            ),
+          );
+        if (costlyLines.length > 0) {
+          const deliveredAt = classification.occurredAt
+            ? new Date(classification.occurredAt)
+            : mail.receivedAt;
+          const expiresAt = new Date(
+            deliveredAt.getTime() +
+              matchedVendor.returnWindowDays * 24 * 60 * 60 * 1_000,
+          );
+          await database
+            .insert(importFinding)
+            .values({
+              ledgerPartyId: mail.ledgerPartyId,
+              targetType: "purchase",
+              targetId: target.id,
+              kind: "return_window",
+              summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,
+              evidenceFingerprint: await sha256(
+                JSON.stringify({
+                  sourceKey,
+                  target: target.id,
+                  expiresAt: expiresAt.toISOString(),
+                  lines: costlyLines,
+                }),
+              ),
+              expiresAt,
+            })
+            .onConflictDoNothing();
+        }
+      }
     }
     processed += 1;
   }

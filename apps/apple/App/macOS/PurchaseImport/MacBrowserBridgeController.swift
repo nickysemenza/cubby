@@ -25,9 +25,11 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
     private let syncClient: any BrowserBridgeSyncRequesting
     private weak var settings: BrowserBridgeSettingsModel?
     private var bridges: [String: URLSessionBrowserBridge] = [:]
+    private var executors: [String: MacBrowserCommandExecutor] = [:]
     private var accounts: [String: BrowserBridgeVendorAccount] = [:]
     private var statuses: [String: BrowserBridgeConnectionStatus] = [:]
     private var generation = UUID()
+    private let notifier = MacBrowserBridgeNotifier()
 
     init(
         baseURL: URL, client: CubbyClient, credentials: CredentialProvider,
@@ -67,6 +69,18 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         await tearDown(reportStatus: true)
     }
 
+    func raiseAuthenticationWindow(for accountID: String) {
+        executors[accountID]?.raiseAuthenticationWindow()
+    }
+
+    func appDidBecomeActive() {
+        for (accountID, status) in statuses where status == .connected {
+            Task { [notifier = self.notifier] in
+                await notifier.notifyDelayedOfflineIfNeeded(accountID: accountID)
+            }
+        }
+    }
+
     func retire() async {
         await tearDown(reportStatus: false)
     }
@@ -75,10 +89,12 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         generation = UUID()
         let current = Array(bridges.values)
         bridges = [:]
+        executors = [:]
         accounts = [:]
         statuses = [:]
         if reportStatus {
             settings?.setAccountCounts(connected: 0, total: 0)
+            settings?.setAccounts([])
             settings?.setStatus(.disconnected)
         }
         for bridge in current { await bridge.disconnect() }
@@ -87,6 +103,7 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
     private func replaceConnections(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
         let old = Array(bridges.values)
         bridges = [:]
+        executors = [:]
         statuses = [:]
         for bridge in old { await bridge.disconnect() }
 
@@ -104,11 +121,12 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         self.generation = generation
         accounts = Dictionary(uniqueKeysWithValues: listedAccounts.map { ($0.id, $0) })
         settings?.setAccountCounts(connected: 0, total: listedAccounts.count)
+        settings?.setAccounts(listedAccounts)
         settings?.setStatus(.connecting)
         let uploader = CubbyBrowserEvidenceUploader(client: client)
         let capabilities = BrowserBridgeCapabilities(
             enhancedScreenshot: enhancedEvidence && CGPreflightScreenCaptureAccess(),
-            renderedPDF: false)
+            renderedPDF: MacBrowserCommandExecutor.supportsRenderedPDF)
 
         for account in listedAccounts {
             let executor = MacBrowserCommandExecutor(browser: browser, evidenceUploader: uploader)
@@ -121,8 +139,22 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
                     self?.didChangeStatus(
                         status, accountID: account.id, generation: generation)
                 }
+            } resultObserver: { [weak self] result in
+                Task { @MainActor [weak self] in
+                    self?.didFinishResult(result, accountID: account.id, generation: generation)
+                }
+            } authWindowObserver: { [weak self] runID in
+                Task { @MainActor [weak self] in
+                    self?.didRequestAuthentication(
+                        runID: runID, accountID: account.id, generation: generation)
+                }
+            } runCompletionObserver: { [weak self] completion in
+                Task { @MainActor [weak self] in
+                    self?.didCompleteRun(completion, accountID: account.id, generation: generation)
+                }
             }
             bridges[account.id] = bridge
+            executors[account.id] = executor
             statuses[account.id] = .connecting
             let url = try BrowserBridgeEndpoint.socketURL(
                 baseURL: baseURL, vendorAccountID: account.id)
@@ -143,7 +175,44 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
     ) {
         guard generation == self.generation, bridges[accountID] != nil else { return }
         statuses[accountID] = status
+        settings?.setAccountStatus(status, accountID: accountID)
+        switch status {
+        case .waitingToReconnect:
+            notifier.noteOffline(accountID: accountID)
+        case .connected:
+            Task { [notifier = self.notifier] in
+                await notifier.notifyDelayedOfflineIfNeeded(accountID: accountID)
+            }
+        default:
+            break
+        }
         publishFleetStatus()
+    }
+
+    private func didFinishResult(
+        _ result: BrowserBridgeCommandResult, accountID: String, generation: UUID
+    ) {
+        guard generation == self.generation, bridges[accountID] != nil else { return }
+        guard case .failed(let code, let message, _) = result.outcome,
+            code == .authenticationRequired
+        else { return }
+        executors[accountID]?.raiseAuthenticationWindow()
+        settings?.requireAuthentication(accountID: accountID, message: message)
+    }
+
+    private func didRequestAuthentication(runID: String, accountID: String, generation: UUID) {
+        guard generation == self.generation, bridges[accountID] != nil else { return }
+        executors[accountID]?.raiseAuthenticationWindow()
+        settings?.requireAuthentication(
+            accountID: accountID, message: "Finish signing in for run \(runID) in Cubby's browser window.")
+    }
+
+    private func didCompleteRun(
+        _ completion: BrowserBridgeRunCompletion, accountID: String, generation: UUID
+    ) {
+        guard generation == self.generation, bridges[accountID] != nil else { return }
+        settings?.markRunCompleted(accountID: accountID, runID: completion.runID)
+        Task { [notifier = self.notifier] in await notifier.notifyRunCompleted(completion) }
     }
 
     private func publishFleetStatus() {

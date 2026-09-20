@@ -10,16 +10,16 @@ public struct BrowserBridgeSyncRequest: Codable, Sendable, Hashable {
 
 public struct BrowserBridgeSyncResponse: Codable, Sendable, Hashable {
     public let runID: String
-    public let commandID: UUID
+    public let resumed: Bool
 
-    public init(runID: String, commandID: UUID) {
+    public init(runID: String, resumed: Bool) {
         self.runID = runID
-        self.commandID = commandID
+        self.resumed = resumed
     }
 
     private enum CodingKeys: String, CodingKey {
         case runID = "runId"
-        case commandID = "commandId"
+        case resumed
     }
 }
 

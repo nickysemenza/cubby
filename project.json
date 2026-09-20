@@ -46,7 +46,7 @@
       "inputs": ["repo"]
     },
     "bindings": {
-      "command": "pnpm --filter @cubby/web --filter @cubby/upc-lookup --filter @cubby/usda-api --workspace-concurrency=2 types:check",
+      "command": "pnpm --filter @cubby/web --filter @cubby/upc-lookup --filter @cubby/usda-api --filter @cubby/purchase-agent --workspace-concurrency=2 types:check",
       "cache": false
     },
     "openapi": {

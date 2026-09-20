@@ -109,6 +109,7 @@ import { Route as AuthenticatedWishesIndexRouteImport } from './routes/_authenti
 import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_authenticated/wishes.$shortcode'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
+import { Route as ApiImportMerchantRulesRouteImport } from './routes/api/import/merchant-rules'
 import { Route as ApiImportRunsRouteImport } from './routes/api/import/runs'
 import { Route as ApiSettingsMemberLoginsRouteImport } from './routes/api/settings/member-logins'
 import { Route as ApiV1ResourceRouteImport } from './routes/api/v1/$resource'
@@ -695,6 +696,11 @@ const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
   path: '/api/debug/timing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiImportMerchantRulesRoute = ApiImportMerchantRulesRouteImport.update({
+  id: '/api/import/merchant-rules',
+  path: '/api/import/merchant-rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiImportRunsRoute = ApiImportRunsRouteImport.update({
   id: '/api/import/runs',
   path: '/api/import/runs',
@@ -863,6 +869,7 @@ export interface FileRoutesByFullPath {
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/runs': typeof ApiImportRunsRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
@@ -980,6 +987,7 @@ export interface FileRoutesByTo {
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/runs': typeof ApiImportRunsRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
@@ -1100,6 +1108,7 @@ export interface FileRoutesById {
   '/_authenticated/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/runs': typeof ApiImportRunsRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
@@ -1220,6 +1229,7 @@ export interface FileRouteTypes {
     | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/import/merchant-rules'
     | '/api/import/runs'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
@@ -1337,6 +1347,7 @@ export interface FileRouteTypes {
     | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/import/merchant-rules'
     | '/api/import/runs'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
@@ -1456,6 +1467,7 @@ export interface FileRouteTypes {
     | '/_authenticated/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/import/merchant-rules'
     | '/api/import/runs'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
@@ -1513,6 +1525,7 @@ export interface RootRouteChildren {
   OauthConsentRoute: typeof OauthConsentRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
+  ApiImportMerchantRulesRoute: typeof ApiImportMerchantRulesRoute
   ApiImportRunsRoute: typeof ApiImportRunsRoute
   ApiSettingsMemberLoginsRoute: typeof ApiSettingsMemberLoginsRoute
   ApiV1ResourceRoute: typeof ApiV1ResourceRouteWithChildren
@@ -2227,6 +2240,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDebugTimingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/import/merchant-rules': {
+      id: '/api/import/merchant-rules'
+      path: '/api/import/merchant-rules'
+      fullPath: '/api/import/merchant-rules'
+      preLoaderRoute: typeof ApiImportMerchantRulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/import/runs': {
       id: '/api/import/runs'
       path: '/api/import/runs'
@@ -2628,6 +2648,7 @@ const rootRouteChildren: RootRouteChildren = {
   OauthConsentRoute: OauthConsentRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
+  ApiImportMerchantRulesRoute: ApiImportMerchantRulesRoute,
   ApiImportRunsRoute: ApiImportRunsRoute,
   ApiSettingsMemberLoginsRoute: ApiSettingsMemberLoginsRoute,
   ApiV1ResourceRoute: ApiV1ResourceRouteWithChildren,

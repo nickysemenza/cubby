@@ -1,4 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+
+import * as Sentry from "@sentry/cloudflare";
 // CF Workers production entry point.
 //
 // 1. Dynamic import catches module-level errors (which would otherwise be silent 500s)
@@ -6,9 +8,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 //    TCP connections, and fetch invocations use a per-request pg.Pool so a single
 //    request's query fan-out runs in parallel instead of serializing.
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
-
-import * as Sentry from "@sentry/cloudflare";
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
+import { WorkerEntrypoint } from "cloudflare:workers";
 
 import {
   TELEMETRY_SCHEMA_VERSION,
@@ -35,6 +36,10 @@ import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
+import {
+  handleDirectBrowserSocketUpgrade,
+  isDirectBrowserSocketUpgrade,
+} from "./server/purchase-import/direct-socket-route";
 import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
@@ -204,6 +209,25 @@ const handler = {
                       boundedStale: env.HYPERDRIVE_CACHED.connectionString,
                     },
                     async () => {
+                      if (isDirectBrowserSocketUpgrade(request)) {
+                        const response = await withTrace(
+                          "cf.purchaseImportSocket",
+                          () =>
+                            runWithExecutionCtx(
+                              ctx,
+                              () => handleDirectBrowserSocketUpgrade(request),
+                              url.origin,
+                            ),
+                        );
+                        span.setAttribute(
+                          "http.response.status_code",
+                          response.status,
+                        );
+                        endSpan();
+                        // Preserve Cloudflare's immutable 101 headers and
+                        // non-standard WebSocket slot verbatim.
+                        return response;
+                      }
                       const handlerImport = withTrace("cf.importHandler", () =>
                         getHandler(),
                       );
@@ -424,13 +448,13 @@ const handler = {
           processMessages: processOrderMails,
         });
         console.log("[scheduled] Gmail purchase discovery", summary);
-        const namespace = env.PURCHASE_IMPORT;
-        if (namespace) {
-          const huntsDispatched = await dispatchImportHunts(db, namespace);
-          console.log("[scheduled] Purchase hunts dispatched", {
-            huntsDispatched,
-          });
-        }
+        const huntsDispatched = await dispatchImportHunts(
+          db,
+          env.PURCHASE_AGENT_QUEUE,
+        );
+        console.log("[scheduled] Purchase hunts dispatched", {
+          huntsDispatched,
+        });
         for (const failure of summary.failures) {
           Sentry.captureMessage(
             `Gmail purchase discovery failed for ${failure.ledgerPartyId}: ${failure.error}`,
@@ -567,6 +591,245 @@ const handler = {
     );
   },
 };
+
+type PurchaseAgentCommand = {
+  kind:
+    | "navigate_orders"
+    | "capture_order"
+    | "capture_pdf"
+    | "capture_screenshot";
+  target?: string;
+};
+
+/**
+ * Private RPC boundary for the Flue Worker. Every method resolves authority
+ * from the ImportRun; the caller cannot supply a party, account, vendor, SQL,
+ * script, or generic mutation target.
+ */
+export class PurchaseImportService extends WorkerEntrypoint<Env> {
+  private withDatabase<T>(
+    fn: (
+      database: typeof import("./server/db").db,
+      service: typeof import("./server/purchase-import/run-service"),
+    ) => Promise<T>,
+  ): Promise<T> {
+    setCfEnv(this.env);
+    return runWithExecutionCtx(this.ctx, () =>
+      withRequestDbClient(this.env.HYPERDRIVE.connectionString, async () => {
+        const [{ db }, service] = await Promise.all([
+          import("./server/db"),
+          import("./server/purchase-import/run-service"),
+        ]);
+        return fn(db, service);
+      }),
+    );
+  }
+
+  loadRunScope(input: { runId: string }) {
+    return this.withDatabase((db, service) =>
+      service.loadRunScope(db, input.runId),
+    );
+  }
+
+  claimNextWork(input: { runId: string; operationId: string }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "claim_next_work", payload: input },
+        () =>
+          service.claimNextImportWork(
+            db,
+            this.env.PURCHASE_IMPORT,
+            input.runId,
+          ),
+      ),
+    );
+  }
+
+  issueBrowserCommand(input: {
+    runId: string;
+    operationId: string;
+    command: PurchaseAgentCommand;
+  }) {
+    return this.withDatabase(async (db, service) => {
+      const scope = await service.loadRunScope(db, input.runId);
+      if (!scope.public.vendorAccountId)
+        throw new Error("This import run has no browser account");
+      const claimed = await service.claimNextImportWork(
+        db,
+        this.env.PURCHASE_IMPORT,
+        input.runId,
+      );
+      const target =
+        input.command.target ??
+        ("startUrl" in claimed ? claimed.startUrl : null);
+      const operation =
+        input.command.kind === "navigate_orders"
+          ? {
+              type: "navigate" as const,
+              url: target ?? "",
+              allowedHosts: scope.public.allowedHosts,
+            }
+          : {
+              type: "capture" as const,
+              allowedHosts: scope.public.allowedHosts,
+              enhancedEvidence:
+                input.command.kind === "capture_pdf" ||
+                input.command.kind === "capture_screenshot",
+            };
+      return service.issueBrowserCommand(db, this.env.PURCHASE_IMPORT, {
+        runId: input.runId,
+        operationId: input.operationId,
+        operation,
+      });
+    });
+  }
+
+  readBrowserCommandResult(input: { runId: string; operationId: string }) {
+    return this.withDatabase((db, service) =>
+      service.readBrowserCommandResult(db, this.env.PURCHASE_IMPORT, input),
+    );
+  }
+
+  importOrderEvidence(input: {
+    runId: string;
+    operationId: string;
+    commandId: string;
+  }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "import_order_evidence", payload: input },
+        () =>
+          service.importBrowserOrderEvidence(
+            db,
+            this.env.PURCHASE_IMPORT,
+            input,
+          ),
+      ),
+    );
+  }
+
+  saveNavigationHints(input: {
+    runId: string;
+    operationId: string;
+    hints: Array<{ url: string; label?: string }>;
+  }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "save_navigation_hints", payload: input },
+        () =>
+          service.saveNavigationHints(db, {
+            runId: input.runId,
+            operationId: input.operationId,
+            patch: {
+              ordersListUrl: input.hints[0]?.url,
+              notes: input.hints
+                .map((hint) => hint.label)
+                .filter((label): label is string => Boolean(label)),
+            },
+          }),
+      ),
+    );
+  }
+
+  markHistoryExpired(input: {
+    runId: string;
+    operationId: string;
+    earliestAvailableOrderAt: string;
+  }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "mark_history_expired", payload: input },
+        () => service.markHistoryExpired(db, input),
+      ),
+    );
+  }
+
+  auditBatch(input: { runId: string; operationId: string; offset: number }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "audit_batch", payload: input },
+        () => service.auditImportBatch(db, input),
+      ),
+    );
+  }
+
+  finishRun(input: { runId: string; operationId: string }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "finish_run", payload: input },
+        () => service.finishImportRun(db, this.env.PURCHASE_IMPORT, input),
+      ),
+    );
+  }
+
+  stopForReview(input: {
+    runId: string;
+    operationId: string;
+    reason:
+      | "navigation_ambiguity"
+      | "unreadable_evidence"
+      | "provider_failure"
+      | "other";
+    detail?: string;
+  }) {
+    const kind =
+      input.reason === "navigation_ambiguity"
+        ? "expected_order_not_found"
+        : "other";
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "stop_for_review", payload: input },
+        () =>
+          service.stopImportRunForReview(db, {
+            runId: input.runId,
+            operationId: input.operationId,
+            kind,
+            summary: input.detail ?? input.reason.replaceAll("_", " "),
+          }),
+      ),
+    );
+  }
+
+  recordOrchestrationUsage(input: {
+    runId: string;
+    operationId: string;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    estimatedCost: number;
+  }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "record_orchestration_usage", payload: input },
+        () => service.recordOrchestrationUsage(db, input),
+      ),
+    );
+  }
+
+  markRunFailed(input: {
+    runId: string;
+    operationId: string;
+    failureCode: "flue_failed" | "flue_aborted";
+    detail?: string;
+  }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "mark_run_failed", payload: input },
+        () => service.markImportRunFailed(db, input),
+      ),
+    );
+  }
+}
 
 export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
 export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";

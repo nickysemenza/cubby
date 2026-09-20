@@ -24,7 +24,22 @@ import {
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { auditAllImportBatches } from "./run-service";
 import { importVendorOrder } from "./writer";
+
+/**
+ * A hunt—not a particular upload—is the durable receipt source. A retry may
+ * replace an unreadable photo, but it must refresh the same source claim so a
+ * redeploy or a second attempt cannot manufacture a second Purchase.
+ */
+export const receiptHuntSourceIdentity = (input: {
+  huntId: string;
+  checksum: string;
+}) => ({
+  kind: "receipt_photo" as const,
+  externalKey: `hunt:${input.huntId}`,
+  checksum: input.checksum,
+});
 
 export async function listReceiptHunts(db: Database, actor: ActorContext) {
   const rows = await getDb(db)
@@ -130,12 +145,15 @@ export async function submitReceiptEvidence(
         return { ...row, runId: null, newlyQueued: false };
       }
     }
+    const runId = crypto.randomUUID();
     const [run] = await tx
       .insert(importRun)
       .values({
+        id: runId,
         ledgerPartyId: row.ledgerPartyId,
         vendorAccountId: row.vendorAccountId,
         trigger: "discovery",
+        agentSessionId: `import-run:${runId}`,
       })
       .returning({ id: importRun.id });
     if (!run) throw new Error("Receipt import run was not created.");
@@ -178,17 +196,20 @@ export async function submitReceiptEvidence(
         ledgerPartyId: claimed.ledgerPartyId,
         vendorId,
         vendorAccountId: claimed.vendorAccountId,
-        source: {
-          kind: "receipt_photo",
-          externalKey: `hunt:${input.huntId}:image:${input.imageId}`,
+        source: receiptHuntSourceIdentity({
+          huntId: input.huntId,
           checksum: claimed.imageChecksum,
-        },
+        }),
         extraction,
         primaryDocumentImageId: imageId,
         screenshotImageId: null,
       },
       actor.userId,
     );
+    await auditAllImportBatches(db, {
+      runId: claimed.runId,
+      operationId: "receipt-final-audit",
+    });
     await withTransaction(db, async (tx) => {
       await tx
         .update(importHunt)

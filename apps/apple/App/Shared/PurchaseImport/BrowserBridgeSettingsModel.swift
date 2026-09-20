@@ -7,6 +7,29 @@ protocol BrowserBridgeControlling: AnyObject {
     func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws
     func syncNow(browser: BrowserChoice, enhancedEvidence: Bool) async throws
     func disconnect() async
+    func raiseAuthenticationWindow(for accountID: String)
+    func appDidBecomeActive()
+}
+
+@MainActor
+struct BrowserBridgeAccountState: Identifiable, Equatable {
+    let id: String
+    let label: String
+    var connection: BrowserBridgeConnectionStatus
+    var error: String?
+    var needsAuthentication: Bool
+    var lastCompletedRunID: String?
+
+    var statusLabel: String {
+        if needsAuthentication { return "Sign-in required" }
+        return switch connection {
+        case .disconnected: "Disconnected"
+        case .connecting: "Connecting"
+        case .connected: "Connected"
+        case .waitingToReconnect: "Waiting to reconnect"
+        case .failed: "Needs attention"
+        }
+    }
 }
 
 @MainActor
@@ -17,6 +40,7 @@ final class BrowserBridgeSettingsModel {
     private(set) var lastCompletedAt: Date?
     private(set) var connectedAccountCount = 0
     private(set) var accountCount = 0
+    private(set) var accountStates: [BrowserBridgeAccountState] = []
     private(set) var error: String?
     @ObservationIgnored private weak var controller: (any BrowserBridgeControlling)?
 
@@ -34,6 +58,42 @@ final class BrowserBridgeSettingsModel {
     func setAccountCounts(connected: Int, total: Int) {
         connectedAccountCount = connected
         accountCount = total
+    }
+
+    func setAccounts(_ accounts: [BrowserBridgeVendorAccount]) {
+        accountStates = accounts.sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
+            .map {
+                BrowserBridgeAccountState(
+                    id: $0.id, label: $0.label, connection: .connecting, error: nil,
+                    needsAuthentication: false, lastCompletedRunID: nil)
+            }
+    }
+
+    func setAccountStatus(_ status: BrowserBridgeConnectionStatus, accountID: String) {
+        guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
+        accountStates[index].connection = status
+    }
+
+    func requireAuthentication(accountID: String, message: String) {
+        guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
+        accountStates[index].needsAuthentication = true
+        accountStates[index].error = message
+    }
+
+    func markRunCompleted(accountID: String, runID: String) {
+        guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
+        accountStates[index].needsAuthentication = false
+        accountStates[index].error = nil
+        accountStates[index].lastCompletedRunID = runID
+        lastCompletedAt = .now
+    }
+
+    func raiseAuthenticationWindow(accountID: String) {
+        controller?.raiseAuthenticationWindow(for: accountID)
+    }
+
+    func appDidBecomeActive() {
+        controller?.appDidBecomeActive()
     }
 
     func connectConfigured() async {
@@ -84,6 +144,7 @@ final class BrowserBridgeSettingsModel {
         await controller?.disconnect()
         status = .disconnected
         setAccountCounts(connected: 0, total: 0)
+        accountStates = []
     }
 
     var statusLabel: String {

@@ -3,12 +3,30 @@ import Foundation
 public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
     public private(set) var completed: [UUID: BrowserBridgeCommandResult]
     public private(set) var cancelled: Set<UUID>
+    /// Completion acknowledgements are durable too. The server may close after persisting a
+    /// completion but before it observes the acknowledgement; replaying this idempotent ack is
+    /// safer than notifying the person twice or starting a successor run.
+    public private(set) var completedRuns: [String: BrowserBridgeRunCompletion]
 
     public init(
-        completed: [UUID: BrowserBridgeCommandResult] = [:], cancelled: Set<UUID> = []
+        completed: [UUID: BrowserBridgeCommandResult] = [:], cancelled: Set<UUID> = [],
+        completedRuns: [String: BrowserBridgeRunCompletion] = [:]
     ) {
         self.completed = completed
         self.cancelled = cancelled
+        self.completedRuns = completedRuns
+    }
+
+    private enum CodingKeys: String, CodingKey { case completed, cancelled, completedRuns }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            completed: try values.decodeIfPresent([UUID: BrowserBridgeCommandResult].self, forKey: .completed)
+                ?? [:],
+            cancelled: try values.decodeIfPresent(Set<UUID>.self, forKey: .cancelled) ?? [],
+            completedRuns: try values.decodeIfPresent(
+                [String: BrowserBridgeRunCompletion].self, forKey: .completedRuns) ?? [:])
     }
 
     public mutating func record(_ result: BrowserBridgeCommandResult) {
@@ -26,8 +44,25 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
         cancelled.insert(commandID)
     }
 
+    /// Drops an incompatible cached result before recording a protocol rejection for the current
+    /// command identifier. This is distinct from a server cancellation, which must fence late
+    /// completion writes.
+    public mutating func discardReplayResult(for commandID: UUID) {
+        completed.removeValue(forKey: commandID)
+        cancelled.remove(commandID)
+    }
+
     public func replayResult(for commandID: UUID) -> BrowserBridgeCommandResult? {
         completed[commandID]
+    }
+
+    /// Returns whether this Mac has not seen the terminal run event before. The caller can use
+    /// that edge to create a local notification exactly once while acknowledgements continue to
+    /// replay across reconnects.
+    public mutating func recordRunCompletion(_ completion: BrowserBridgeRunCompletion) -> Bool {
+        let isNew = completedRuns[completion.runID] == nil
+        completedRuns[completion.runID] = completion
+        return isNew
     }
 
     public var resultsForReplay: [BrowserBridgeCommandResult] {
@@ -35,6 +70,10 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
             if $0.completedAt != $1.completedAt { return $0.completedAt < $1.completedAt }
             return $0.commandID.uuidString < $1.commandID.uuidString
         }
+    }
+
+    public var runCompletionsForAcknowledgement: [BrowserBridgeRunCompletion] {
+        completedRuns.values.sorted { $0.runID < $1.runID }
     }
 }
 
@@ -68,8 +107,15 @@ public actor FileBrowserBridgeReplayStore: BrowserBridgeReplayStoring {
         guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else {
             return BrowserBridgeReplayLedger()
         }
-        return try JSONDecoder.browserBridge.decode(
-            BrowserBridgeReplayLedger.self, from: Data(contentsOf: fileURL))
+        do {
+            return try JSONDecoder.browserBridge.decode(
+                BrowserBridgeReplayLedger.self, from: Data(contentsOf: fileURL))
+        } catch is DecodingError {
+            // v1 results cannot safely be replayed to the v2 Flue broker. Those old runs are
+            // terminalized in the server migration, so start this account's new ledger cleanly.
+            try? FileManager.default.removeItem(at: fileURL)
+            return BrowserBridgeReplayLedger()
+        }
     }
 
     public func save(_ ledger: BrowserBridgeReplayLedger) throws {
