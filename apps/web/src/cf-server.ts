@@ -597,8 +597,7 @@ type PurchaseAgentCommand = {
     | "navigate_orders"
     | "capture_order"
     | "capture_pdf"
-    | "capture_screenshot"
-    | "open_auth";
+    | "capture_screenshot";
   target?: string;
 };
 
@@ -656,12 +655,6 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
       const scope = await service.loadRunScope(db, input.runId);
       if (!scope.public.vendorAccountId)
         throw new Error("This import run has no browser account");
-      if (input.command.kind === "open_auth") {
-        await this.env.PURCHASE_IMPORT.getByName(
-          scope.public.vendorAccountId,
-        ).requestAuthentication(input.runId);
-        return { state: "paused_auth" };
-      }
       const claimed = await service.claimNextImportWork(
         db,
         this.env.PURCHASE_IMPORT,

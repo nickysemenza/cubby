@@ -27,8 +27,7 @@ export interface PurchaseImportService {
         | "navigate_orders"
         | "capture_order"
         | "capture_pdf"
-        | "capture_screenshot"
-        | "open_auth";
+        | "capture_screenshot";
       target?: string;
     };
   }): Promise<PurchaseImportServiceResult>;

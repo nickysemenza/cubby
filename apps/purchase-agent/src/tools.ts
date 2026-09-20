@@ -33,7 +33,11 @@ function pendingResult(result: PurchaseImportServiceResult): boolean {
   const parsed = v.safeParse(pendingServiceResult, result);
   return (
     parsed.success &&
-    (parsed.output.status === "pending" || parsed.output.state === "pending")
+    (parsed.output.status === "pending" ||
+      parsed.output.state === "pending" ||
+      parsed.output.state === "dispatched" ||
+      parsed.output.state === "paused_auth" ||
+      parsed.output.state === "paused_offline")
   );
 }
 
@@ -85,7 +89,6 @@ export function purchaseImportTools(
             "capture_order",
             "capture_pdf",
             "capture_screenshot",
-            "open_auth",
           ]),
           target: v.optional(v.pipe(v.string(), v.maxLength(2_048))),
         }),

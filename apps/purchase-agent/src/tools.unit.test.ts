@@ -44,7 +44,30 @@ describe("purchase-import agent tool authority", () => {
   it("settles rather than waiting for an unavailable browser result", () => {
     expect(shouldSettleForBrowserResult({ status: "pending" })).toBe(true);
     expect(shouldSettleForBrowserResult({ state: "pending" })).toBe(true);
+    expect(shouldSettleForBrowserResult({ state: "dispatched" })).toBe(true);
+    expect(shouldSettleForBrowserResult({ state: "paused_auth" })).toBe(true);
+    expect(shouldSettleForBrowserResult({ state: "paused_offline" })).toBe(
+      true,
+    );
     expect(shouldSettleForBrowserResult({ status: "completed" })).toBe(false);
+  });
+
+  it("does not let the model request authentication without browser evidence", () => {
+    const tools = purchaseImportTools(
+      "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      unusedService,
+    );
+    const input = tools.find(
+      (tool) => tool.name === "issue_browser_command",
+    )?.input;
+    if (!input) throw new Error("Missing browser command input schema");
+
+    expect(
+      v.safeParse(input, {
+        operationId: "auth-without-evidence",
+        command: { kind: "open_auth" },
+      }).success,
+    ).toBe(false);
   });
 
   it("keeps browser result, history, and audit inputs bounded to the service contract", () => {
