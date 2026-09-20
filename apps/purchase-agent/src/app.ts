@@ -1,19 +1,11 @@
 import { setProvider } from "@flue/runtime";
-import { cloudflareBindingProvider } from "@flue/runtime/cloudflare/workers-ai";
 import { env } from "cloudflare:workers";
 
-// Flue's generated entry sees this registered provider and does not install a
-// second default. Every model request, including compaction and retries, uses
-// Cubby's mandatory AI Gateway.
-setProvider(
-  cloudflareBindingProvider({
-    binding: env.AI,
-    gateway: {
-      id: "cubby",
-      metadata: { jobKind: "purchase_import_run" },
-    },
-  }),
-);
+import { cubbyAiGatewayProvider } from "./cubby-ai-provider";
+
+// Every model request, including Flue compaction and retries, uses the same
+// Universal Gateway/BYOK transport as Cubby's web Worker.
+setProvider(cubbyAiGatewayProvider(() => env.AI));
 
 // This Worker is private. The generated fetch exists only for Flue runtime
 // plumbing and deliberately exposes no public application route.

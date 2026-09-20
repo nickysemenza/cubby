@@ -48,7 +48,7 @@ export function PurchaseImportRun({ id }: AgentProps) {
     );
   }
 
-  useModel("cloudflare/openai/gpt-5.6-luna");
+  useModel("cubby/gpt-5.6-luna");
   useResponseStart(() => ({
     jobKind: "purchase_import_run",
     runId,

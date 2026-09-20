@@ -5,5 +5,5 @@ export default defineConfig({
   app: "./src/app.ts",
   cloudflare: "./src/cloudflare.ts",
   agents: "./purchase-import-run.ts",
-  providers: ["cloudflare"],
+  providers: [],
 });
