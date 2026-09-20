@@ -305,12 +305,11 @@ required payload FK, or a join row. A logical relationship may still combine
 several persisted and derived provenance paths; derived paths are never copied
 into `EntityRelation` merely to simplify traversal.
 
-`GardenEntryPlanting` is expected to land before this redesign so garden
-journals can represent several Plantings immediately. Treat it as an ordinary
-legacy typed join during this migration: backfill its endpoint and lifecycle
-facts, then delete it. Its row IDs and physical layout carry no forward-
-compatibility promise, and the garden change must not add relation-spine
-machinery early merely to ease this later replacement.
+`GardenEntryPlanting` currently lets garden journals represent several
+Plantings. Treat it as an ordinary legacy typed join during this migration:
+backfill its endpoint and lifecycle facts, then delete it. Its row IDs and
+physical layout carry no forward-compatibility promise; no relation-spine
+machinery exists solely to ease this later replacement.
 
 `EntityRelation` is not an Entity. It has no shortcode, memo, merge redirect,
 or generic detail page. Its UUID is durable so a typed extension or subrecord

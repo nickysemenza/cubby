@@ -142,32 +142,35 @@ House  →  Room  →  Shelf  →  Bin
   (`locationId`, nullable). Its display name is `"<crop name>[ · <variety>]"`.
   There are no lifecycle verbs — Edit is the only hero action, and
   `status`/`locationId`/`finishedOn` are ordinary editable fields. Its state
-  reads "Planned", "Growing", or "Finished" (`status`). Sowing in a tray and
+  reads "Planned", "Growing", or "Finished" (`status`). Sowing in trays and
   transplanting to a bed is `sowedOn` + `transplantedOn` on the same
-  planting; a tray is never a `Location`. A move is editing `locationId` —
-  the audit log/timeline is the location history, not a separate model. A
-  planting has no photos of its own — see the entry below.
+  planting; its current location may change along the way. A move is editing
+  `locationId` — the audit log/timeline is the location history, not a separate
+  model. A planting has no photos of its own — see the entry below.
 - Nursery stock (bought as a seedling, never sown by the household) carries
   `transplantedOn` only, with `sowedOn` left null. The timeline infers the
   planting's start from `transplantedOn` in that case (`lifecycle.start`'s
   ordered fallback) and marks the interval "Inferred" rather than needing a
   separate origin field.
-- An **entry** (`GardenEntry`) is a dated Note or Harvest against a
-  `Location`, optionally against one planting. The stored `kind` enum is
-  `note` / `harvest`, matching its UI label exactly — no "observation" or
-  "move" spelling survives. Display name is `"<Note|Harvest> · <date> · <area
-  name>"`. The action is "Log entry" (both the trigger and the dialog
-  title); editing is "Edit entry". Every entry field, including its date,
-  Location, and optional Planting, is freely editable — nothing is
+- An **entry** (`GardenEntry`) is a dated Note or Harvest against a required
+  `Location`, explicitly associated with zero or more plantings. The stored
+  `kind` enum is `note` / `harvest`, matching its UI label exactly — no
+  "observation" or "move" spelling survives. Display name is
+  `"<Note|Harvest> · <date> · <area name>"`. The action is "Log entry" (both the
+  trigger and the dialog title); editing is "Edit entry". Every entry field,
+  including its date,
+  Location, and selected Plantings, is freely editable — nothing is
   structural or locked. Entries are the only garden photo surface: a
   planting's list thumbnail borrows its latest entry's photo (falling back
   to its seed Product's image, then nothing).
 - Garden dates and amounts read, by context: "Sowed", "Transplanted",
   "Finished", "Planned window" (planting); "Observed" and "Harvest amount"
   (entry).
-- A planting's journal is plain "Journal": its own direct entries plus
-  whole-area entries at its current location whose date falls within its
-  active window (sowed/transplanted through finished).
+- A planting's journal is plain "Journal": its explicitly associated entries
+  plus unassociated whole-area entries at its current location whose date falls
+  within its active window (sowed/transplanted through finished). An entry
+  associated with any planting is never inferred into another planting's
+  journal from location alone.
 - `Location.type` includes `bed` and `planter` (plus `area` for open
   ground), independent of whether the Location links a Product — a
   product-linked raised bed still carries `type: "bed"`; the product supplies
