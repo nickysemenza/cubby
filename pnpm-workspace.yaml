@@ -59,6 +59,9 @@ overrides:
   # GHSA-2883-xcg3-v3hh. The dependency graph resolves 4.3.1 through
   # xmlbuilder2 and cosmiconfig; 4.3.2 is the compatible patched release.
   js-yaml@4.3.1: 4.3.2
+  # Zod 4.6 changes object output inference for the entity metadata compiler;
+  # keep the existing schema contract until that upstream change is supported.
+  zod: 4.5.4
   # GHSA-4cwx-7wf7-3272 and related Undici 7 advisories. Miniflare pins 7.28;
   # 7.29 is the upstream patched release and remains within the same major.
   undici@7.28.0: 7.29.0
