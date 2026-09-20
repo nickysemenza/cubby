@@ -153,6 +153,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          suggest: { basis: ["transplantedOn", "finishedOn"] },
           options: [
             { value: "planned", label: "Planned" },
             { value: "growing", label: "Growing" },

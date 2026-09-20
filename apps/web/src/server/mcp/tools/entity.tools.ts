@@ -18,6 +18,11 @@ import {
   entitySearchResultSchema,
 } from "~/server/entity-kernel/contracts";
 import {
+  entityPreviewInputSchema,
+  entityPreviewOutputSchema,
+  previewEntity,
+} from "~/server/entity-kernel/preview";
+import {
   generatedMcpEntityCreateCommandSchema,
   generatedMcpEntityGetResultSchema,
   generatedMcpEntityListResultSchema,
@@ -270,6 +275,19 @@ export function registerEntityTools(
           text: JSON.stringify({
             entities: ENTITY_KERNEL_ENTITIES,
             commandSchema: z.toJSONSchema(entityMcpCommandSchema),
+            preview: {
+              tool: "entity_preview",
+              inputSchema: z.toJSONSchema(entityPreviewInputSchema),
+              outputSchema: z.toJSONSchema(entityPreviewOutputSchema),
+              writes: false,
+            },
+            batchPreview: {
+              tool: "entity_batch_preview",
+              itemInputSchema: z.toJSONSchema(entityPreviewInputSchema),
+              itemOutputSchema: z.toJSONSchema(entityPreviewOutputSchema),
+              maxItems: 50,
+              writes: false,
+            },
           }),
         },
       ],
@@ -304,6 +322,25 @@ export function registerEntityTools(
   registerMcpTool(
     server,
     {
+      name: "entity_preview",
+      description:
+        "Preview a create for any entity before writing it. Contextual seeds are merged first, explicit data wins, and manifest-declared Jev suggestions are returned with confidence and provenance. This operation never writes.",
+      inputSchema: entityPreviewInputSchema,
+      outputSchema: entityPreviewOutputSchema,
+      annotations: READ_ONLY_CLOSED,
+      telemetryEntity: (params) =>
+        entityPreviewInputSchema.parse(params).entity,
+      handler: async (params, extra) =>
+        entityPreviewOutputSchema.parse(
+          await previewEntity(getEntityKernelContext(extra), params),
+        ),
+    },
+    runtime,
+  );
+
+  registerMcpTool(
+    server,
+    {
       name: "entity",
       description:
         'Read or mutate one supported household entity through { command }. Read entities://catalog first: it publishes the supported entity list and exact action union. This replaces per-entity CRUD tools; workflow-shaped tools remain separate. For many creates/updates in one call use entity_batch. Merge example: {command:{action:"merge",entity:"product",keepId:"PRD-2ABC",mergeIds:["PRD-3DEF"]}}.',
@@ -323,6 +360,29 @@ export function registerEntityTools(
           kernelCommand(command),
         );
         return entityToolOutput.parse(projectEntityResult(command, result));
+      },
+    },
+    runtime,
+  );
+
+  registerBatchTool(
+    server,
+    {
+      name: "entity_batch_preview",
+      description:
+        "Preview up to 50 entity creates without writing. Each item is evaluated independently using the same generated create schema and Jev suggestion pipeline as entity_preview.",
+      itemInputSchema: entityPreviewInputSchema,
+      itemOutputSchema: entityPreviewOutputSchema,
+      projectReference: (result) =>
+        `${result.entity}:${String(result.proposed.id ?? "preview")}`,
+      annotations: READ_ONLY_CLOSED,
+      telemetryEntity: ({ items }) => items[0]?.entity,
+      run: async (_caller, item, context) => {
+        if (!context)
+          throw new Error("Authenticated entity-kernel context is missing");
+        return entityPreviewOutputSchema.parse(
+          await previewEntity(context, item),
+        );
       },
     },
     runtime,

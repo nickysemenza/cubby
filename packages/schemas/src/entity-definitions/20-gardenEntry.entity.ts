@@ -90,6 +90,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          suggest: { basis: ["harvestAmount", "note"] },
           options: [
             { value: "note", label: "Note" },
             { value: "harvest", label: "Harvest" },

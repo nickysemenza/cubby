@@ -694,9 +694,19 @@ export const entityEditRegistry: EntityEditRegistry = {
   })),
   planting: buildDefinition("planting", (f) => ({
     fields: f.fieldsFrom(["capture", "full"]),
+    // Plantings are contextual records: the generic create preview should
+    // expose crop, source, location, task, dates, and notes in one pass.
+    // Keep the capture intent for relation-section launchers that still ask
+    // for a compact form; full remains first so generic create defaults to it.
+    create: { full: {}, capture: {} },
   })),
   gardenEntry: buildDefinition("gardenEntry", (f) => ({
     fields: f.fieldsFrom(["capture", "full"]),
+    // A journal entry created from a planting is seeded by relation context,
+    // but its full typed payload remains editable before the write.
+    // Keep the capture intent for relation-section launchers that still ask
+    // for a compact form; full remains first so generic create defaults to it.
+    create: { full: {}, capture: {} },
   })),
   recipe: buildDefinition("recipe", (f) => ({
     fields: f.fieldsFrom(["full"]),

@@ -145,20 +145,26 @@ describe("entity edit definitions", () => {
   });
 
   it("defaults pendingImageIds to an empty array off the field roster, not a per-entity literal (G5)", () => {
-    for (const entity of ["gardenEntry", "meal", "task"] as const) {
+    const cases = [
+      ["gardenEntry", "full"],
+      ["gardenEntry", "capture"],
+      ["meal", "capture"],
+      ["task", "capture"],
+    ] as const;
+    for (const [entity, intent] of cases) {
       const request = {
         entity,
         operation: "create" as const,
-        intent: "capture" as const,
+        intent,
         surface: "dialog" as const,
       };
       const resolved = resolveEntityEdit(entityEditRegistry, request);
       if (!("definition" in resolved)) {
-        throw new Error(`${entity} capture create must resolve`);
+        throw new Error(`${entity} ${intent} create must resolve`);
       }
       expect(
         resolved.intentDefinition.fields,
-        `${entity} capture roster`,
+        `${entity} ${intent} roster`,
       ).toContain("pendingImageIds");
       expect(
         initialEntityEditValues(resolved, request).pendingImageIds,
