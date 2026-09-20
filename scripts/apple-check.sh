@@ -69,16 +69,15 @@ apps/apple/scripts/generate-openapi.sh --check
 # Same DerivedData as `pnpm apple`, so this build is incremental over the dev
 # loop's instead of a second full compile of CubbyKit.
 #
-# Xcode 26.6's batch frontend can abort in IR generation with
-# `report_at_maximum_capacity` while compiling Cubby-iOS on hosted macOS. CI
-# has no interactive iteration to benefit from batch compilation, so compile
-# one primary file at a time there; keep the normal faster batch mode locally.
+# Keep the hosted Apple Silicon CI build on its native simulator slice while
+# explicitly exercising Xcode's batch compiler. Local builds retain Xcode's
+# default behavior.
 build_settings=(COMPILER_INDEX_STORE_ENABLE=NO)
 if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   # The macOS-26 hosted runner is Apple Silicon. Restrict the generic
   # Simulator build to its native slice; a release artifact still builds its
   # supported architectures outside this PR gate.
-  build_settings+=(SWIFT_ENABLE_BATCH_MODE=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
+  build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
 fi
 
 xcodebuild \
