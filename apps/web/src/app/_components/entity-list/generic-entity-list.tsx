@@ -24,16 +24,20 @@ import {
 } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
+import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { EntityTimeline } from "~/app/_components/timeline/entity-timeline";
 import { Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { entities } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import type { StandardEntity } from "~/entities/entity-contracts";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import {
   type ListEntity,
   listEntities,
 } from "~/entities/generated/entity-lists.gen";
+import { generatedBrowserCrudEntities } from "~/entities/generated/entity-routes.gen";
 import {
   type TimelineEntity,
   timelineEntities,
@@ -115,16 +119,33 @@ const isTimelineEntity = (
 ): entity is TimelineEntity =>
   timelineEntities.some((candidate) => candidate === entity);
 
+const isStandardEntity = (
+  entity: BrowserRoutedEntity,
+): entity is StandardEntity =>
+  generatedBrowserCrudEntities.some((candidate) => candidate === entity);
+
 function useListColumns(
   entity: BrowserRoutedEntity,
   parts: EntityListOverrideResult<BaseListRow, object>,
 ) {
   const helper = useMemo(() => createCubbyColumnHelper<BaseListRow>(), []);
   const { overrides, compose } = parts;
+  // Cookbook has a custom client-backed list but no standard update command.
+  const mutationEntity = isStandardEntity(entity) ? entity : "product";
+  const update = useUpdateMutation({
+    mutationFn: entityMutationOptionsFactory(mutationEntity, "update"),
+    entity: mutationEntity,
+  });
   return useMemo(() => {
-    const declared = createEntityDisplayColumns(entity, helper, overrides);
+    const declared = createEntityDisplayColumns(entity, helper, overrides, {
+      onSaveField: async (row, field, value) => {
+        if (!isStandardEntity(entity)) return;
+        await update.mutateAsync({ id: row.id, data: { [field]: value } });
+      },
+    });
     return compose ? compose(declared) : declared;
-  }, [entity, helper, overrides, compose]);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- mutation result objects change every render; mutateAsync is the stable operation port.
+  }, [entity, helper, overrides, compose, update.mutateAsync]);
 }
 
 /* -------------------------------------------------------------------------- */

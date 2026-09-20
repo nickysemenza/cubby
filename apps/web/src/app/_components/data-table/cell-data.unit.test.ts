@@ -3,7 +3,12 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { amountCellData, dateCellData, entityCellData } from "./cell-data";
+import {
+  amountCellData,
+  booleanCellData,
+  dateCellData,
+  entityCellData,
+} from "./cell-data";
 
 interface Row {
   id: string;
@@ -61,6 +66,33 @@ describe("dateCellData", () => {
     await expect(
       data.applyPaste?.(null, { text: "not a date" }),
     ).rejects.toThrow("Couldn’t understand that date");
+    expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe("booleanCellData", () => {
+  it.each([
+    ["true", true],
+    ["yes", true],
+    ["1", true],
+    ["false", false],
+    ["no", false],
+    ["0", false],
+  ] as const)("accepts spreadsheet boolean %s", async (text, expected) => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const data = booleanCellData<null>(() => null, save);
+
+    await expect(data.applyPaste?.(null, { text })).resolves.toBe(expected);
+    expect(save).toHaveBeenCalledWith(null, expected);
+  });
+
+  it("rejects an unrecognised boolean without saving", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const data = booleanCellData<null>(() => null, save);
+
+    await expect(data.applyPaste?.(null, { text: "perhaps" })).rejects.toThrow(
+      "Pasted value is not a boolean",
+    );
     expect(save).not.toHaveBeenCalled();
   });
 });

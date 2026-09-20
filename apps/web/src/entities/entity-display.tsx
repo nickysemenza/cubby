@@ -19,8 +19,11 @@ import {
   suggestTargetsFor,
 } from "~/app/_components/ai/field-suggestion";
 import {
+  booleanCellData,
   dateCellData,
   numberCellData,
+  selectCellData,
+  specFromCellData,
   textCellData,
   timestampCellData,
 } from "~/app/_components/data-table/cell-data";
@@ -46,6 +49,7 @@ import {
   renderScalarValue,
   type ScalarDisplayValue,
 } from "~/components/common/scalar-value";
+import { Checkbox } from "~/components/ui/checkbox";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
@@ -711,6 +715,12 @@ export function createEntityDisplayColumns<TRecord extends object>(
      * columns as-is.
      */
     only?: readonly string[];
+    /** Manifest-backed scalar write. The list owner supplies the typed entity mutation. */
+    onSaveField?: (
+      row: TRecord,
+      field: string,
+      value: string | number | boolean | null,
+    ) => Promise<void>;
   } = {},
 ): CubbyColumnCollection<TRecord> {
   // SAFETY: `generatedEntitySort` is `as const satisfies Partial<Record<Entity,
@@ -726,7 +736,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
     >
   )[entity];
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
-  const { only } = options;
+  const { only, onSaveField } = options;
   const listFields = orderedListFields(entity);
   const selected =
     only === undefined
@@ -739,6 +749,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             throw new Error(`${entity}.${id} is not a list column`);
           return [field];
         });
+  // oxlint-disable-next-line complexity -- one exhaustive manifest control dispatcher preserves column metadata and clipboard ownership together.
   return createCubbyColumnCollection<TRecord>((add) => {
     const usedOverrides = new Set<string>();
     for (const field of selected) {
@@ -808,6 +819,221 @@ export function createEntityDisplayColumns<TRecord extends object>(
         continue;
       }
       const format = field.display.format;
+      const control = field.control;
+      const updateFields: readonly string[] = entityFieldModels[entity].update;
+      const editable =
+        onSaveField !== undefined &&
+        control !== null &&
+        updateFields.includes(field.key) &&
+        ["text", "textarea", "number", "date", "select", "checkbox"].includes(
+          control.kind,
+        );
+      const save = (row: TRecord, value: string | number | boolean | null) =>
+        onSaveField?.(row, field.key, value) ?? Promise.resolve();
+
+      if (
+        editable &&
+        (control?.kind === "text" || control?.kind === "textarea")
+      ) {
+        const cellData = textCellData<TRecord>(
+          "text",
+          (row) => copyScalarField(row, field),
+          (row, value) => save(row, value),
+        );
+        add(
+          helper.accessor((record) => copyScalarField(record, field), {
+            id: columnId,
+            header: field.label,
+            enableSorting: defaultEnableSorting,
+            meta: attachCubbyColumnMeta({
+              className: widthClassName(field.display.width),
+              mobile: toMobileColumnMeta(field.display.mobile),
+              cellData,
+            }),
+            cell: ({ row }) => (
+              <EditableCell
+                value={copyScalarField(row.original, field)}
+                onSave={(value) => save(row.original, value)}
+                clipboard={specFromCellData(cellData, row.original)}
+                config={{
+                  type: "text",
+                  multiline: control.kind === "textarea",
+                }}
+                renderValue={(value) => value ?? <NoneValue />}
+              />
+            ),
+          }),
+        );
+        continue;
+      }
+      if (editable && control?.kind === "date") {
+        const cellData = dateCellData<TRecord>(
+          (row) => copyScalarField(row, field),
+          (row, value) => save(row, value),
+        );
+        add(
+          helper.accessor((record) => copyScalarField(record, field), {
+            id: columnId,
+            header: field.label,
+            enableSorting: defaultEnableSorting,
+            meta: attachCubbyColumnMeta({
+              className: widthClassName(field.display.width),
+              mobile: toMobileColumnMeta(field.display.mobile),
+              cellData,
+              mono: true,
+            }),
+            cell: ({ row }) => (
+              <EditableCell
+                value={copyScalarField(row.original, field)}
+                onSave={(value) => save(row.original, value)}
+                clipboard={specFromCellData(cellData, row.original)}
+                config={{ type: "date" }}
+                renderValue={(value) =>
+                  value ? (
+                    renderFormattedScalar(format, { kind: "date", raw: value })
+                  ) : (
+                    <NoneValue />
+                  )
+                }
+              />
+            ),
+          }),
+        );
+        continue;
+      }
+      if (editable && control?.kind === "number") {
+        const kind =
+          format === "currency" || format === "signedCurrency"
+            ? "currency"
+            : "number";
+        const cellData = numberCellData<TRecord>(
+          format === "currency" || format === "signedCurrency"
+            ? "currency"
+            : "number",
+          (row) => {
+            const value = readScalarField(row, field);
+            return value.kind === "number" ? value.raw : null;
+          },
+          (row, value) => save(row, value),
+        );
+        add(
+          helper.accessor((record) => readScalarField(record, field).raw, {
+            id: columnId,
+            header: field.label,
+            enableSorting: defaultEnableSorting,
+            meta: attachCubbyColumnMeta({
+              className: widthClassName(field.display.width),
+              mobile: toMobileColumnMeta(field.display.mobile),
+              numeric: true,
+              cellData,
+            }),
+            cell: ({ row }) => {
+              const value = readScalarField(row.original, field);
+              const number = value.kind === "number" ? value.raw : null;
+              const editor = (
+                <EditableCell
+                  value={number}
+                  onSave={(next) => save(row.original, next)}
+                  clipboard={specFromCellData(cellData, row.original)}
+                  config={{ type: "number" }}
+                  renderValue={(next) =>
+                    next == null ? (
+                      <NoneValue />
+                    ) : format === "currency" || format === "signedCurrency" ? (
+                      formatCurrency(next)
+                    ) : (
+                      next
+                    )
+                  }
+                />
+              );
+              return kind === "currency" ? (
+                <EditableCell
+                  value={number}
+                  onSave={(next) => save(row.original, next)}
+                  clipboard={specFromCellData(cellData, row.original)}
+                  config={{ type: "currency" }}
+                  renderValue={(next) =>
+                    next == null ? <NoneValue /> : formatCurrency(next)
+                  }
+                />
+              ) : (
+                editor
+              );
+            },
+          }),
+        );
+        continue;
+      }
+      if (editable && control?.kind === "select") {
+        const selectOptions = [
+          ...(entitySelectOptionsFor(entity, field.key, "edit") ??
+            control.options ??
+            []),
+        ];
+        const cellData = selectCellData<TRecord>(
+          (row) => copyScalarField(row, field),
+          selectOptions,
+          (row, value) => save(row, value),
+        );
+        add(
+          helper.accessor((record) => copyScalarField(record, field), {
+            id: columnId,
+            header: field.label,
+            enableSorting: defaultEnableSorting,
+            meta: attachCubbyColumnMeta({
+              className: widthClassName(field.display.width),
+              mobile: toMobileColumnMeta(field.display.mobile),
+              cellData,
+            }),
+            cell: ({ row }) => (
+              <EditableCell
+                value={copyScalarField(row.original, field)}
+                onSave={(value) => save(row.original, value)}
+                clipboard={specFromCellData(cellData, row.original)}
+                config={{ type: "select", options: selectOptions }}
+                renderValue={(value) => renderOptionCell(value, selectOptions)}
+              />
+            ),
+          }),
+        );
+        continue;
+      }
+      if (editable && control?.kind === "checkbox") {
+        const cellData = booleanCellData<TRecord>(
+          (row) => {
+            const value = readScalarField(row, field);
+            return value.kind === "boolean" ? value.raw : null;
+          },
+          (row, value) => save(row, value),
+        );
+        add(
+          helper.accessor((record) => readScalarField(record, field).raw, {
+            id: columnId,
+            header: field.label,
+            enableSorting: defaultEnableSorting,
+            meta: attachCubbyColumnMeta({
+              className: widthClassName(field.display.width),
+              mobile: toMobileColumnMeta(field.display.mobile),
+              cellData,
+            }),
+            cell: ({ row }) => {
+              const value = readScalarField(row.original, field);
+              const checked = value.kind === "boolean" && value.raw;
+              return (
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={(next) => {
+                    void save(row.original, next);
+                  }}
+                  aria-label={`Set ${field.label}`}
+                />
+              );
+            },
+          }),
+        );
+        continue;
+      }
       add(
         helper.accessor((record) => readScalarField(record, field).raw, {
           id: columnId,
