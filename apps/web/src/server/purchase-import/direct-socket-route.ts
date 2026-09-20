@@ -9,10 +9,10 @@ import { createRequestContext, requireActor } from "~/server/request-context";
 const SOCKET_PATH = "/api/import/agent/socket";
 
 export function isDirectBrowserSocketUpgrade(request: Request): boolean {
-  return (
-    new URL(request.url).pathname === SOCKET_PATH &&
-    request.headers.get("upgrade")?.toLowerCase() === "websocket"
-  );
+  // Workers may consume the Upgrade header before user code sees the request.
+  // Route every request for this dedicated endpoint around Start; the handler
+  // and Durable Object still reject non-WebSocket requests with HTTP 426.
+  return new URL(request.url).pathname === SOCKET_PATH;
 }
 
 /**

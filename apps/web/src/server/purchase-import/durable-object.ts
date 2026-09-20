@@ -182,13 +182,12 @@ export class PurchaseImportDurableObject
   }
 
   webSocketClose(
-    socket: CfWebSocket,
-    code: number,
-    reason: string,
-    wasClean: boolean,
+    _socket: CfWebSocket,
+    _code: number,
+    _reason: string,
+    _wasClean: boolean,
   ): void {
-    const safeCode = code === 1006 ? 1000 : code;
-    socket.close(safeCode, wasClean ? reason : "Bridge disconnected");
+    // The socket is already closed. Calling close again can attempt to send reserved code 1006.
   }
 
   private broadcastNext(expectedId?: string): void {
