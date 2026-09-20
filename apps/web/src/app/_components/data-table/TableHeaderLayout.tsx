@@ -51,6 +51,17 @@ const ariaSort = (direction: false | "asc" | "desc") => {
   return "none";
 };
 
+function isStringHeader(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function sortableHeaderLabel<TData extends RowData>(
+  header: Header<typeof cubbyTableFeatures, TData, unknown>,
+) {
+  const definition = header.column.columnDef.header;
+  return isStringHeader(definition) ? definition : humanize(header.column.id);
+}
+
 function pinBoundaryClass<TData extends RowData>(
   header: Header<typeof cubbyTableFeatures, TData, unknown>,
 ) {
@@ -93,7 +104,7 @@ function SortableHeader<TData extends RowData>({
   const width = columnWidthValue(header.column.id);
   const sortingArrows = sortIcon(sortDirection, canSort, styles);
   const provenance = header.column.columnDef.meta?.provenance;
-  const headerLabel = humanize(header.column.id);
+  const headerLabel = sortableHeaderLabel(header);
 
   const title = (
     <span className="flex min-w-0 flex-1 flex-col items-start leading-tight">

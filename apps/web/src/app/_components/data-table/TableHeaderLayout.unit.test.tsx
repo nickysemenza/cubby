@@ -14,8 +14,8 @@ const columns = helper.columns([
   helper.display({ id: "select", header: "Select" }),
   helper.display({ id: "image", header: "Image" }),
   helper.accessor("name", {
-    id: "name",
-    header: "Name",
+    id: "nutrient-301",
+    header: "Calcium (mg)",
     size: 180,
     minSize: 80,
     maxSize: 400,
@@ -37,9 +37,9 @@ const columns = helper.columns([
 
 let lastTable: ReturnType<typeof useCubbyTable<TestRow>> | undefined;
 
-function nameResizeHandle() {
+function nutrientResizeHandle() {
   const header = screen
-    .getByRole("button", { name: "Reorder name column" })
+    .getByRole("button", { name: "Reorder nutrient-301 column" })
     .closest("th");
   const handle = header?.querySelector(
     '[title="Drag to resize · double-click to reset"]',
@@ -85,7 +85,7 @@ describe("TableHeaderLayout", () => {
       screen.queryByRole("button", { name: "Reorder actions column" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Reorder name column" }),
+      screen.getByRole("button", { name: "Reorder nutrient-301 column" }),
     ).toBeInTheDocument();
   });
 
@@ -96,36 +96,36 @@ describe("TableHeaderLayout", () => {
       screen.getByRole("note", { name: "From Transactions" }),
     ).toBeVisible();
     expect(
-      screen.getByRole("button", { name: "Sort by Name" }),
-    ).toHaveTextContent("Name");
+      screen.getByRole("button", { name: "Sort by Calcium (mg)" }),
+    ).toHaveTextContent("Calcium (mg)");
   });
 
   it("commits a native mouse resize without starting column ordering", () => {
     render(<Harness />);
-    const handle = nameResizeHandle();
+    const handle = nutrientResizeHandle();
     const orderBefore = lastTable?.state.columnOrder;
 
     fireEvent.mouseDown(handle, { clientX: 180 });
     fireEvent.mouseMove(document, { clientX: 240 });
     fireEvent.mouseUp(document, { clientX: 240 });
 
-    expect(lastTable?.getColumn("name")?.getSize()).toBe(240);
+    expect(lastTable?.getColumn("nutrient-301")?.getSize()).toBe(240);
     expect(lastTable?.state.columnOrder).toEqual(orderBefore);
     expect(
-      screen.getByRole("button", { name: "Reorder name column" }),
+      screen.getByRole("button", { name: "Reorder nutrient-301 column" }),
     ).toBeInTheDocument();
   });
 
   it("supports touch resize and double-click reset", () => {
     render(<Harness />);
-    const handle = nameResizeHandle();
+    const handle = nutrientResizeHandle();
 
     fireEvent.touchStart(handle, { touches: [{ clientX: 180 }] });
     fireEvent.touchMove(document, { touches: [{ clientX: 220 }] });
     fireEvent.touchEnd(document, { touches: [{ clientX: 220 }] });
-    expect(lastTable?.getColumn("name")?.getSize()).toBe(220);
+    expect(lastTable?.getColumn("nutrient-301")?.getSize()).toBe(220);
 
     fireEvent.doubleClick(handle);
-    expect(lastTable?.getColumn("name")?.getSize()).toBe(180);
+    expect(lastTable?.getColumn("nutrient-301")?.getSize()).toBe(180);
   });
 });
