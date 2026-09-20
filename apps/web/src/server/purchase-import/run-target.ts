@@ -26,7 +26,7 @@ export function listPurchaseImportRuns(
   ledgerPartyId: EntityId<"ledgerParty">,
   purchaseId?: EntityId<"purchase">,
 ) {
-  return getDb(db)
+  const query = getDb(db)
     .select({
       id: importRun.id,
       vendorAccountLabel: vendorAccount.label,
@@ -82,6 +82,7 @@ export function listPurchaseImportRuns(
       ),
     )
     .groupBy(importRun.id, vendorAccount.label, vendor.name)
-    .orderBy(desc(importRun.startedAt))
-    .limit(purchaseId ? 100 : 20);
+    .orderBy(desc(importRun.startedAt));
+
+  return purchaseId ? query : query.limit(20);
 }
