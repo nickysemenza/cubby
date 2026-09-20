@@ -1,3 +1,5 @@
+import { galleryEntities } from "@cubby/schemas/entity-manifest";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
 
@@ -120,5 +122,58 @@ describe("MCP tool JSON Schema — toWire parity", () => {
       collectBareDateFormats(output, `${tool.name}.output`, hits);
     }
     expect(hits).toEqual([]);
+  });
+
+  it("advertises every gallery entity and rejects non-gallery attachment targets", () => {
+    const attachFile = requireTool(tools, "attach_file");
+    const attachFiles = requireTool(tools, "attach_files");
+    const attachExisting = requireTool(tools, "attach_existing_image");
+    const schemas = [attachFile, attachFiles, attachExisting].map((tool) => ({
+      tool,
+      input: requireZodType(tool.inputSchema, `${tool.name} input`),
+    }));
+
+    for (const entity of galleryEntities) {
+      const targetId = testShortcode(entity, "ABC1");
+      expect(attachFile.description ?? "").toContain(entity);
+      expect(attachFiles.description ?? "").toContain(entity);
+      expect(attachExisting.description ?? "").toContain(entity);
+      expect(
+        schemas[0]!.input.safeParse({
+          entityId: targetId,
+          url: "https://example.test/file.jpg",
+        }).success,
+      ).toBe(true);
+      expect(
+        schemas[1]!.input.safeParse({
+          items: [{ entityId: targetId, url: "https://example.test/file.jpg" }],
+        }).success,
+      ).toBe(true);
+      expect(
+        schemas[2]!.input.safeParse({
+          imageId: testShortcode("image", "IMG1"),
+          targetId,
+        }).success,
+      ).toBe(true);
+    }
+
+    const vendorId = testShortcode("vendor", "ABC1");
+    expect(
+      schemas[0]!.input.safeParse({
+        entityId: vendorId,
+        url: "https://example.test/file.jpg",
+      }).success,
+    ).toBe(false);
+    expect(
+      schemas[1]!.input.safeParse({
+        items: [{ entityId: vendorId, url: "https://example.test/file.jpg" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      schemas[2]!.input.safeParse({
+        imageId: testShortcode("image", "IMG1"),
+        targetId: vendorId,
+      }).success,
+    ).toBe(false);
   });
 });

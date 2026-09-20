@@ -58,6 +58,7 @@ export type PickerEntity =
   | "recipe"
   | "project"
   | "task"
+  | "planting"
   | "vendor"
   | "financialAccount"
   | "purchase"
