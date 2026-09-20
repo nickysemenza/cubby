@@ -57,7 +57,7 @@ public enum NormalizedEvidencePDF {
         let url = directory.appendingPathComponent(UUID().uuidString + ".pdf")
         try data.write(to: url, options: .atomic)
         return BrowserLocalEvidence(
-            url: url, kind: .normalizedPDF, checksum: sha256(data), contentType: "application/pdf")
+            url: url, kind: .normalizedPdf, checksum: sha256(data), contentType: "application/pdf")
     }
 
     public static func makeData(_ evidence: NormalizedBrowserEvidence) throws -> Data {
@@ -146,7 +146,7 @@ public enum RenderedBrowserEvidencePDF {
         context.closePDF()
         let data = try Data(contentsOf: url)
         return BrowserLocalEvidence(
-            url: url, kind: .renderedPDF, checksum: NormalizedEvidencePDF.sha256(data),
+            url: url, kind: .renderedPdf, checksum: NormalizedEvidencePDF.sha256(data),
             contentType: "application/pdf")
     }
 }

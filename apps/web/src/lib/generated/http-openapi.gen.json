@@ -25137,6 +25137,840 @@
         ],
         "additionalProperties": false
       },
+      "BrowserBridgeCapabilities": {
+        "type": "object",
+        "properties": {
+          "fixedCaptureVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "enhancedScreenshot": {
+            "type": "boolean"
+          },
+          "renderedPDF": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fixedCaptureVersion",
+          "enhancedScreenshot",
+          "renderedPDF"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeClientMessage": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BrowserBridgeClientMessageHello"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeClientMessageResult"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeClientMessagePong"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeClientMessageRunCompletedAck"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "hello": "#/components/schemas/BrowserBridgeClientMessageHello",
+            "result": "#/components/schemas/BrowserBridgeClientMessageResult",
+            "pong": "#/components/schemas/BrowserBridgeClientMessagePong",
+            "run_completed_ack": "#/components/schemas/BrowserBridgeClientMessageRunCompletedAck"
+          }
+        }
+      },
+      "BrowserBridgeClientMessageHello": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "hello"
+          },
+          "deviceID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "browser": {
+            "$ref": "#/components/schemas/BrowserChoice"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/BrowserBridgeCapabilities"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "deviceID",
+          "browser",
+          "capabilities"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeClientMessagePong": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "pong"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "timestamp"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeClientMessageResult": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "result"
+          },
+          "result": {
+            "$ref": "#/components/schemas/BrowserBridgeResult"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeClientMessageRunCompletedAck": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "run_completed_ack"
+          },
+          "runID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "runID"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeCommandOutcome": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BrowserBridgeCommandOutcomeCompleted"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeCommandOutcomeFailed"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "status",
+          "mapping": {
+            "completed": "#/components/schemas/BrowserBridgeCommandOutcomeCompleted",
+            "failed": "#/components/schemas/BrowserBridgeCommandOutcomeFailed"
+          }
+        }
+      },
+      "BrowserBridgeCommandOutcomeCompleted": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "completed"
+          },
+          "capture": {
+            "$ref": "#/components/schemas/BrowserPageCapture"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeCommandOutcomeFailed": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "failed"
+          },
+          "code": {
+            "$ref": "#/components/schemas/BrowserBridgeFailureCode"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "status",
+          "code",
+          "message",
+          "retryable"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeFailureCode": {
+        "type": "string",
+        "enum": [
+          "cancelled",
+          "deadline_exceeded",
+          "invalid_command",
+          "disallowed_url",
+          "unknown_link",
+          "browser_unavailable",
+          "browser_permission_denied",
+          "authentication_required",
+          "capture_unavailable",
+          "upload_failed",
+          "execution_failed"
+        ]
+      },
+      "BrowserBridgeOperation": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BrowserBridgeOperationNavigate"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeOperationFollowCapturedLink"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeOperationScroll"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeOperationCapture"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "navigate": "#/components/schemas/BrowserBridgeOperationNavigate",
+            "follow_captured_link": "#/components/schemas/BrowserBridgeOperationFollowCapturedLink",
+            "scroll": "#/components/schemas/BrowserBridgeOperationScroll",
+            "capture": "#/components/schemas/BrowserBridgeOperationCapture"
+          }
+        }
+      },
+      "BrowserBridgeOperationCapture": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "capture"
+          },
+          "allowedHosts": {
+            "$ref": "#/components/schemas/input_schema152"
+          },
+          "enhancedEvidence": {
+            "type": "boolean"
+          },
+          "recoveryURL": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "type",
+          "allowedHosts",
+          "enhancedEvidence"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeOperationFollowCapturedLink": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "follow_captured_link"
+          },
+          "linkID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "allowedHosts": {
+            "$ref": "#/components/schemas/input_schema152"
+          }
+        },
+        "required": [
+          "type",
+          "linkID",
+          "allowedHosts"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeOperationNavigate": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "navigate"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "allowedHosts": {
+            "$ref": "#/components/schemas/input_schema152"
+          }
+        },
+        "required": [
+          "type",
+          "url",
+          "allowedHosts"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeOperationScroll": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scroll"
+          },
+          "pageCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "type",
+          "pageCount"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeRequest": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "operationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "runID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/BrowserBridgeOperation"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "id",
+          "operationId",
+          "runID",
+          "deadline",
+          "operation"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeResult": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "commandID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "operationID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "runID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/BrowserBridgeCommandOutcome"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "commandID",
+          "operationID",
+          "runID",
+          "completedAt",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeRunCompletion": {
+        "type": "object",
+        "properties": {
+          "runID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "imported": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updated": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "findingCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "runID",
+          "imported",
+          "updated",
+          "skipped",
+          "findingCount"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeServerMessage": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BrowserBridgeServerMessageCommand"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeServerMessageAcknowledge"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeServerMessageCancel"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeServerMessagePing"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserBridgeServerMessageRunCompleted"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "command": "#/components/schemas/BrowserBridgeServerMessageCommand",
+            "acknowledge": "#/components/schemas/BrowserBridgeServerMessageAcknowledge",
+            "cancel": "#/components/schemas/BrowserBridgeServerMessageCancel",
+            "ping": "#/components/schemas/BrowserBridgeServerMessagePing",
+            "raise_auth_window": "#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow",
+            "run_completed": "#/components/schemas/BrowserBridgeServerMessageRunCompleted"
+          }
+        }
+      },
+      "BrowserBridgeServerMessageAcknowledge": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "acknowledge"
+          },
+          "commandID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "commandID"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeServerMessageCancel": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "cancel"
+          },
+          "commandID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "commandID"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeServerMessageCommand": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "command"
+          },
+          "command": {
+            "$ref": "#/components/schemas/BrowserBridgeRequest"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "command"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeServerMessagePing": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "ping"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "timestamp"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeServerMessageRaiseAuthWindow": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "raise_auth_window"
+          },
+          "runID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "runID"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserBridgeServerMessageRunCompleted": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 2
+          },
+          "type": {
+            "type": "string",
+            "const": "run_completed"
+          },
+          "runID": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "imported": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "updated": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "findingCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "runID",
+          "imported",
+          "updated",
+          "skipped",
+          "findingCount"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserCapturedImage": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "alt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserCapturedLink": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserChoice": {
+        "type": "string",
+        "enum": [
+          "chrome",
+          "safari"
+        ]
+      },
+      "BrowserEvidenceKind": {
+        "type": "string",
+        "enum": [
+          "normalized_pdf",
+          "rendered_pdf",
+          "screenshot"
+        ]
+      },
+      "BrowserEvidenceReference": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BrowserEvidenceKind"
+          },
+          "checksum": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "contentType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "checksum",
+          "contentType"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserPageCapture": {
+        "type": "object",
+        "properties": {
+          "sourceURL": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "captureVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "readableText": {
+            "type": "string",
+            "maxLength": 24576
+          },
+          "links": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BrowserCapturedLink"
+            }
+          },
+          "images": {
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BrowserCapturedImage"
+            }
+          },
+          "paymentEvidence": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BrowserPaymentEvidence"
+            }
+          },
+          "evidence": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BrowserEvidenceReference"
+            }
+          }
+        },
+        "required": [
+          "sourceURL",
+          "title",
+          "capturedAt",
+          "captureVersion",
+          "readableText",
+          "links",
+          "images",
+          "paymentEvidence",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "BrowserPaymentEvidence": {
+        "type": "object",
+        "properties": {
+          "methodLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastFour": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amountText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "BulkMovePayload": {
         "type": "object",
         "properties": {
@@ -31813,7 +32647,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -33258,7 +34092,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -34211,7 +35045,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -34879,7 +35713,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -38188,7 +39022,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -39304,7 +40138,17 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema154": {
+      "input_schema152": {
+        "minItems": 1,
+        "maxItems": 20,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        }
+      },
+      "input_schema160": {
         "type": "object",
         "properties": {
           "kind": {
@@ -39320,7 +40164,7 @@
           "value"
         ]
       },
-      "input_schema158": {
+      "input_schema164": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -39344,7 +40188,7 @@
           }
         }
       },
-      "input_schema159": {
+      "input_schema165": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -39942,7 +40786,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -40842,7 +41686,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -41398,7 +42242,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -41790,14 +42634,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema158"
+                "$ref": "#/components/schemas/input_schema164"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema158"
+                  "$ref": "#/components/schemas/input_schema164"
                 }
               }
             ]
@@ -41999,7 +42843,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -43140,16 +43984,16 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema353"
+                  "$ref": "#/components/schemas/output_schema359"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema353"
+                  "$ref": "#/components/schemas/output_schema359"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema355"
+                  "$ref": "#/components/schemas/output_schema361"
                 },
                 "_meta": {
-                  "$ref": "#/components/schemas/output_schema353"
+                  "$ref": "#/components/schemas/output_schema359"
                 }
               },
               "required": [
@@ -43220,10 +44064,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema356"
+                  "$ref": "#/components/schemas/output_schema362"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema357"
+                  "$ref": "#/components/schemas/output_schema363"
                 }
               },
               "required": [
@@ -43324,7 +44168,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema358"
+              "$ref": "#/components/schemas/output_schema364"
             }
           },
           "tools": {
@@ -43348,13 +44192,13 @@
                   ]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema353"
+                  "$ref": "#/components/schemas/output_schema359"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema353"
+                  "$ref": "#/components/schemas/output_schema359"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema355"
+                  "$ref": "#/components/schemas/output_schema361"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -43407,19 +44251,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema358"
+                    "$ref": "#/components/schemas/output_schema364"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema356"
+                    "$ref": "#/components/schemas/output_schema362"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema357"
+                    "$ref": "#/components/schemas/output_schema363"
                   }
                 }
               },
@@ -43446,25 +44290,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema359"
+              "$ref": "#/components/schemas/output_schema365"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema359"
+              "$ref": "#/components/schemas/output_schema365"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema359"
+              "$ref": "#/components/schemas/output_schema365"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema359"
+              "$ref": "#/components/schemas/output_schema365"
             }
           }
         },
@@ -43639,7 +44483,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -46216,7 +47060,7 @@
         "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
         "$ref": "#/components/schemas/ExpenseLineBasis"
       },
-      "output_schema342": {
+      "output_schema348": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -46245,7 +47089,7 @@
           }
         }
       },
-      "output_schema343": {
+      "output_schema349": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -46255,7 +47099,7 @@
           }
         ]
       },
-      "output_schema353": {
+      "output_schema359": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -46264,7 +47108,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema355": {
+      "output_schema361": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -46282,7 +47126,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema356": {
+      "output_schema362": {
         "type": "object",
         "properties": {
           "id": {
@@ -46305,7 +47149,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema357": {
+      "output_schema363": {
         "type": "object",
         "properties": {
           "id": {
@@ -46327,7 +47171,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema358": {
+      "output_schema364": {
         "type": "object",
         "properties": {
           "day": {
@@ -46357,7 +47201,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema359": {
+      "output_schema365": {
         "type": "object",
         "properties": {
           "key": {
@@ -46379,13 +47223,13 @@
         ],
         "additionalProperties": false
       },
-      "output_schema381": {
+      "output_schema387": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WishCandidateOut"
         }
       },
-      "output_schema385": {
+      "output_schema391": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/EntityAttachmentRead"
@@ -47471,7 +48315,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -49069,7 +49913,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -53359,7 +54203,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -55523,7 +56367,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -56592,7 +57436,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -59801,13 +60645,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema342"
+                "$ref": "#/components/schemas/output_schema348"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema342"
+                "$ref": "#/components/schemas/output_schema348"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema342"
+                "$ref": "#/components/schemas/output_schema348"
               }
             },
             "required": [
@@ -59824,10 +60668,10 @@
             ]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema343"
+            "$ref": "#/components/schemas/output_schema349"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema343"
+            "$ref": "#/components/schemas/output_schema349"
           },
           "nutrient": {
             "oneOf": [
@@ -60284,7 +61128,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema154"
+                "$ref": "#/components/schemas/input_schema160"
               }
             ],
             "description": "The scanned code."
@@ -62458,7 +63302,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -64365,14 +65209,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema159"
+                "$ref": "#/components/schemas/input_schema165"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema159"
+                  "$ref": "#/components/schemas/input_schema165"
                 }
               }
             ]
@@ -64539,7 +65383,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -64989,7 +65833,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -65549,7 +66393,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema387"
           },
           "createdAt": {
             "type": "string",
@@ -65565,7 +66409,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema385"
+            "$ref": "#/components/schemas/output_schema391"
           }
         },
         "required": [
@@ -65607,7 +66451,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema387"
           },
           "createdAt": {
             "type": "string",
@@ -65680,7 +66524,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema381"
+            "$ref": "#/components/schemas/output_schema387"
           },
           "createdAt": {
             "type": "string",

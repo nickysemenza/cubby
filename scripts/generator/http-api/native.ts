@@ -19,6 +19,26 @@ import {
 } from "./swift-routes.ts";
 import { ADDITIONAL_IMPORTS, TYPE_OVERRIDES } from "./type-overrides.ts";
 
+/** Native wire protocols that have no HTTP route but still need generated Codable models. */
+export const NATIVE_COMPONENT_ROOTS = [
+  "BrowserBridgeCapabilities",
+  "BrowserBridgeClientMessage",
+  "BrowserBridgeCommandOutcome",
+  "BrowserBridgeFailureCode",
+  "BrowserBridgeOperation",
+  "BrowserBridgeRequest",
+  "BrowserBridgeResult",
+  "BrowserBridgeRunCompletion",
+  "BrowserBridgeServerMessage",
+  "BrowserCapturedImage",
+  "BrowserCapturedLink",
+  "BrowserEvidenceReference",
+  "BrowserEvidenceKind",
+  "BrowserPageCapture",
+  "BrowserPaymentEvidence",
+  "BrowserChoice",
+] as const;
+
 // The native client's route table is derived from the same document so the
 // Swift side never hand-maintains (method, path) pairs. It is committed next
 // to the swift-openapi-generator output and gated by the same --check.
@@ -123,6 +143,8 @@ generate:
 accessModifier: public
 namingStrategy: idiomatic
 ${optional}filter:
+  schemas:
+${NATIVE_COMPONENT_ROOTS.map((name) => `    - ${name}`).join("\n")}
   operations:
 ${generatedOperations.map((id) => `    - ${id}`).join("\n")}
 `,
@@ -269,6 +291,12 @@ export const renderNativeArtifacts = (
       generatedOperationIds,
       nativeOperations,
     ),
-    renderApiTypes(document, components, generatedOperationIds, entityOutputs),
+    renderApiTypes(
+      document,
+      components,
+      generatedOperationIds,
+      entityOutputs,
+      NATIVE_COMPONENT_ROOTS,
+    ),
   ];
 };

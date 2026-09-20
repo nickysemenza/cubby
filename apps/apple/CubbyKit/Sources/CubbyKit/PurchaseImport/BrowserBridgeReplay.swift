@@ -1,15 +1,15 @@
 import Foundation
 
 public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
-    public private(set) var completed: [UUID: BrowserBridgeCommandResult]
-    public private(set) var cancelled: Set<UUID>
+    public private(set) var completed: [String: BrowserBridgeCommandResult]
+    public private(set) var cancelled: Set<String>
     /// Completion acknowledgements are durable too. The server may close after persisting a
     /// completion but before it observes the acknowledgement; replaying this idempotent ack is
     /// safer than notifying the person twice or starting a successor run.
     public private(set) var completedRuns: [String: BrowserBridgeRunCompletion]
 
     public init(
-        completed: [UUID: BrowserBridgeCommandResult] = [:], cancelled: Set<UUID> = [],
+        completed: [String: BrowserBridgeCommandResult] = [:], cancelled: Set<String> = [],
         completedRuns: [String: BrowserBridgeRunCompletion] = [:]
     ) {
         self.completed = completed
@@ -22,9 +22,9 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            completed: try values.decodeIfPresent([UUID: BrowserBridgeCommandResult].self, forKey: .completed)
-                ?? [:],
-            cancelled: try values.decodeIfPresent(Set<UUID>.self, forKey: .cancelled) ?? [],
+            completed: try values.decodeIfPresent(
+                [String: BrowserBridgeCommandResult].self, forKey: .completed) ?? [:],
+            cancelled: try values.decodeIfPresent(Set<String>.self, forKey: .cancelled) ?? [],
             completedRuns: try values.decodeIfPresent(
                 [String: BrowserBridgeRunCompletion].self, forKey: .completedRuns) ?? [:])
     }
@@ -34,12 +34,12 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
         completed[result.commandID] = result
     }
 
-    public mutating func acknowledge(_ commandID: UUID) {
+    public mutating func acknowledge(_ commandID: String) {
         completed.removeValue(forKey: commandID)
         cancelled.remove(commandID)
     }
 
-    public mutating func cancel(_ commandID: UUID) {
+    public mutating func cancel(_ commandID: String) {
         completed.removeValue(forKey: commandID)
         cancelled.insert(commandID)
     }
@@ -47,12 +47,12 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
     /// Drops an incompatible cached result before recording a protocol rejection for the current
     /// command identifier. This is distinct from a server cancellation, which must fence late
     /// completion writes.
-    public mutating func discardReplayResult(for commandID: UUID) {
+    public mutating func discardReplayResult(for commandID: String) {
         completed.removeValue(forKey: commandID)
         cancelled.remove(commandID)
     }
 
-    public func replayResult(for commandID: UUID) -> BrowserBridgeCommandResult? {
+    public func replayResult(for commandID: String) -> BrowserBridgeCommandResult? {
         completed[commandID]
     }
 
@@ -68,7 +68,7 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
     public var resultsForReplay: [BrowserBridgeCommandResult] {
         completed.values.sorted {
             if $0.completedAt != $1.completedAt { return $0.completedAt < $1.completedAt }
-            return $0.commandID.uuidString < $1.commandID.uuidString
+            return $0.commandID < $1.commandID
         }
     }
 

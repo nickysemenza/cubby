@@ -360,6 +360,1784 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeCapabilities`.
+        public struct BrowserBridgeCapabilities: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCapabilities/fixedCaptureVersion`.
+            public var fixedCaptureVersion: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCapabilities/enhancedScreenshot`.
+            public var enhancedScreenshot: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCapabilities/renderedPDF`.
+            public var renderedPDF: Swift.Bool
+            /// Creates a new `BrowserBridgeCapabilities`.
+            ///
+            /// - Parameters:
+            ///   - fixedCaptureVersion:
+            ///   - enhancedScreenshot:
+            ///   - renderedPDF:
+            public init(
+                fixedCaptureVersion: Swift.Int,
+                enhancedScreenshot: Swift.Bool,
+                renderedPDF: Swift.Bool
+            ) {
+                self.fixedCaptureVersion = fixedCaptureVersion
+                self.enhancedScreenshot = enhancedScreenshot
+                self.renderedPDF = renderedPDF
+            }
+            public enum CodingKeys: String, CodingKey {
+                case fixedCaptureVersion
+                case enhancedScreenshot
+                case renderedPDF
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.fixedCaptureVersion = try container.decode(
+                    Swift.Int.self,
+                    forKey: .fixedCaptureVersion
+                )
+                self.enhancedScreenshot = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .enhancedScreenshot
+                )
+                self.renderedPDF = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .renderedPDF
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "fixedCaptureVersion",
+                    "enhancedScreenshot",
+                    "renderedPDF"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessage`.
+        @frozen public enum BrowserBridgeClientMessage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessage/BrowserBridgeClientMessageHello`.
+            case hello(Components.Schemas.BrowserBridgeClientMessageHello)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessage/BrowserBridgeClientMessagePong`.
+            case pong(Components.Schemas.BrowserBridgeClientMessagePong)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessage/BrowserBridgeClientMessageResult`.
+            case result(Components.Schemas.BrowserBridgeClientMessageResult)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessage/BrowserBridgeClientMessageRunCompletedAck`.
+            case runCompletedAck(Components.Schemas.BrowserBridgeClientMessageRunCompletedAck)
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let discriminator = try container.decode(
+                    Swift.String.self,
+                    forKey: ._type
+                )
+                switch discriminator {
+                case "hello":
+                    self = .hello(try .init(from: decoder))
+                case "pong":
+                    self = .pong(try .init(from: decoder))
+                case "result":
+                    self = .result(try .init(from: decoder))
+                case "run_completed_ack":
+                    self = .runCompletedAck(try .init(from: decoder))
+                default:
+                    throw Swift.DecodingError.unknownOneOfDiscriminator(
+                        discriminatorKey: CodingKeys._type,
+                        discriminatorValue: discriminator,
+                        codingPath: decoder.codingPath
+                    )
+                }
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                switch self {
+                case let .hello(value):
+                    try value.encode(to: encoder)
+                case let .pong(value):
+                    try value.encode(to: encoder)
+                case let .result(value):
+                    try value.encode(to: encoder)
+                case let .runCompletedAck(value):
+                    try value.encode(to: encoder)
+                }
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageHello`.
+        public struct BrowserBridgeClientMessageHello: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageHello/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageHello/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeClientMessageHello.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageHello/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case hello = "hello"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageHello/type`.
+            public var _type: Components.Schemas.BrowserBridgeClientMessageHello._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageHello/deviceID`.
+            public var deviceID: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageHello/browser`.
+            public var browser: Components.Schemas.BrowserChoice
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageHello/capabilities`.
+            public var capabilities: Components.Schemas.BrowserBridgeCapabilities
+            /// Creates a new `BrowserBridgeClientMessageHello`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - deviceID:
+            ///   - browser:
+            ///   - capabilities:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeClientMessageHello.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeClientMessageHello._TypePayload,
+                deviceID: Swift.String,
+                browser: Components.Schemas.BrowserChoice,
+                capabilities: Components.Schemas.BrowserBridgeCapabilities
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.deviceID = deviceID
+                self.browser = browser
+                self.capabilities = capabilities
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case deviceID
+                case browser
+                case capabilities
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeClientMessageHello.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeClientMessageHello._TypePayload.self,
+                    forKey: ._type
+                )
+                self.deviceID = try container.decode(
+                    Swift.String.self,
+                    forKey: .deviceID
+                )
+                self.browser = try container.decode(
+                    Components.Schemas.BrowserChoice.self,
+                    forKey: .browser
+                )
+                self.capabilities = try container.decode(
+                    Components.Schemas.BrowserBridgeCapabilities.self,
+                    forKey: .capabilities
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "deviceID",
+                    "browser",
+                    "capabilities"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessagePong`.
+        public struct BrowserBridgeClientMessagePong: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessagePong/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessagePong/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeClientMessagePong.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessagePong/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case pong = "pong"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessagePong/type`.
+            public var _type: Components.Schemas.BrowserBridgeClientMessagePong._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessagePong/timestamp`.
+            public var timestamp: Foundation.Date
+            /// Creates a new `BrowserBridgeClientMessagePong`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - timestamp:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeClientMessagePong.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeClientMessagePong._TypePayload,
+                timestamp: Foundation.Date
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.timestamp = timestamp
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case timestamp
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeClientMessagePong.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeClientMessagePong._TypePayload.self,
+                    forKey: ._type
+                )
+                self.timestamp = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .timestamp
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "timestamp"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageResult`.
+        public struct BrowserBridgeClientMessageResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageResult/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageResult/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeClientMessageResult.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageResult/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case result = "result"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageResult/type`.
+            public var _type: Components.Schemas.BrowserBridgeClientMessageResult._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageResult/result`.
+            public var result: Components.Schemas.BrowserBridgeResult
+            /// Creates a new `BrowserBridgeClientMessageResult`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - result:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeClientMessageResult.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeClientMessageResult._TypePayload,
+                result: Components.Schemas.BrowserBridgeResult
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.result = result
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case result
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeClientMessageResult.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeClientMessageResult._TypePayload.self,
+                    forKey: ._type
+                )
+                self.result = try container.decode(
+                    Components.Schemas.BrowserBridgeResult.self,
+                    forKey: .result
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "result"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageRunCompletedAck`.
+        public struct BrowserBridgeClientMessageRunCompletedAck: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageRunCompletedAck/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageRunCompletedAck/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeClientMessageRunCompletedAck.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageRunCompletedAck/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case runCompletedAck = "run_completed_ack"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageRunCompletedAck/type`.
+            public var _type: Components.Schemas.BrowserBridgeClientMessageRunCompletedAck._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeClientMessageRunCompletedAck/runID`.
+            public var runID: Swift.String
+            /// Creates a new `BrowserBridgeClientMessageRunCompletedAck`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - runID:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeClientMessageRunCompletedAck.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeClientMessageRunCompletedAck._TypePayload,
+                runID: Swift.String
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.runID = runID
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case runID
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeClientMessageRunCompletedAck.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeClientMessageRunCompletedAck._TypePayload.self,
+                    forKey: ._type
+                )
+                self.runID = try container.decode(
+                    Swift.String.self,
+                    forKey: .runID
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "runID"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcome`.
+        @frozen public enum BrowserBridgeCommandOutcome: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcome/BrowserBridgeCommandOutcomeCompleted`.
+            case completed(Components.Schemas.BrowserBridgeCommandOutcomeCompleted)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcome/BrowserBridgeCommandOutcomeFailed`.
+            case failed(Components.Schemas.BrowserBridgeCommandOutcomeFailed)
+            public enum CodingKeys: String, CodingKey {
+                case status
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let discriminator = try container.decode(
+                    Swift.String.self,
+                    forKey: .status
+                )
+                switch discriminator {
+                case "completed":
+                    self = .completed(try .init(from: decoder))
+                case "failed":
+                    self = .failed(try .init(from: decoder))
+                default:
+                    throw Swift.DecodingError.unknownOneOfDiscriminator(
+                        discriminatorKey: CodingKeys.status,
+                        discriminatorValue: discriminator,
+                        codingPath: decoder.codingPath
+                    )
+                }
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                switch self {
+                case let .completed(value):
+                    try value.encode(to: encoder)
+                case let .failed(value):
+                    try value.encode(to: encoder)
+                }
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeCompleted`.
+        public struct BrowserBridgeCommandOutcomeCompleted: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeCompleted/status`.
+            @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case completed = "completed"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeCompleted/status`.
+            public var status: Components.Schemas.BrowserBridgeCommandOutcomeCompleted.StatusPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeCompleted/capture`.
+            public var capture: Components.Schemas.BrowserPageCapture?
+            /// Creates a new `BrowserBridgeCommandOutcomeCompleted`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - capture:
+            public init(
+                status: Components.Schemas.BrowserBridgeCommandOutcomeCompleted.StatusPayload,
+                capture: Components.Schemas.BrowserPageCapture? = nil
+            ) {
+                self.status = status
+                self.capture = capture
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case capture
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.status = try container.decode(
+                    Components.Schemas.BrowserBridgeCommandOutcomeCompleted.StatusPayload.self,
+                    forKey: .status
+                )
+                self.capture = try container.decodeIfPresent(
+                    Components.Schemas.BrowserPageCapture.self,
+                    forKey: .capture
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "status",
+                    "capture"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeFailed`.
+        public struct BrowserBridgeCommandOutcomeFailed: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeFailed/status`.
+            @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case failed = "failed"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeFailed/status`.
+            public var status: Components.Schemas.BrowserBridgeCommandOutcomeFailed.StatusPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeFailed/code`.
+            public var code: Components.Schemas.BrowserBridgeFailureCode
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeFailed/message`.
+            public var message: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeCommandOutcomeFailed/retryable`.
+            public var retryable: Swift.Bool
+            /// Creates a new `BrowserBridgeCommandOutcomeFailed`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - code:
+            ///   - message:
+            ///   - retryable:
+            public init(
+                status: Components.Schemas.BrowserBridgeCommandOutcomeFailed.StatusPayload,
+                code: Components.Schemas.BrowserBridgeFailureCode,
+                message: Swift.String,
+                retryable: Swift.Bool
+            ) {
+                self.status = status
+                self.code = code
+                self.message = message
+                self.retryable = retryable
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case code
+                case message
+                case retryable
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.status = try container.decode(
+                    Components.Schemas.BrowserBridgeCommandOutcomeFailed.StatusPayload.self,
+                    forKey: .status
+                )
+                self.code = try container.decode(
+                    Components.Schemas.BrowserBridgeFailureCode.self,
+                    forKey: .code
+                )
+                self.message = try container.decode(
+                    Swift.String.self,
+                    forKey: .message
+                )
+                self.retryable = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .retryable
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "status",
+                    "code",
+                    "message",
+                    "retryable"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeFailureCode`.
+        @frozen public enum BrowserBridgeFailureCode: String, Codable, Hashable, Sendable, CaseIterable {
+            case cancelled = "cancelled"
+            case deadlineExceeded = "deadline_exceeded"
+            case invalidCommand = "invalid_command"
+            case disallowedUrl = "disallowed_url"
+            case unknownLink = "unknown_link"
+            case browserUnavailable = "browser_unavailable"
+            case browserPermissionDenied = "browser_permission_denied"
+            case authenticationRequired = "authentication_required"
+            case captureUnavailable = "capture_unavailable"
+            case uploadFailed = "upload_failed"
+            case executionFailed = "execution_failed"
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperation`.
+        @frozen public enum BrowserBridgeOperation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperation/BrowserBridgeOperationCapture`.
+            case capture(Components.Schemas.BrowserBridgeOperationCapture)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperation/BrowserBridgeOperationFollowCapturedLink`.
+            case followCapturedLink(Components.Schemas.BrowserBridgeOperationFollowCapturedLink)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperation/BrowserBridgeOperationNavigate`.
+            case navigate(Components.Schemas.BrowserBridgeOperationNavigate)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperation/BrowserBridgeOperationScroll`.
+            case scroll(Components.Schemas.BrowserBridgeOperationScroll)
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let discriminator = try container.decode(
+                    Swift.String.self,
+                    forKey: ._type
+                )
+                switch discriminator {
+                case "capture":
+                    self = .capture(try .init(from: decoder))
+                case "follow_captured_link":
+                    self = .followCapturedLink(try .init(from: decoder))
+                case "navigate":
+                    self = .navigate(try .init(from: decoder))
+                case "scroll":
+                    self = .scroll(try .init(from: decoder))
+                default:
+                    throw Swift.DecodingError.unknownOneOfDiscriminator(
+                        discriminatorKey: CodingKeys._type,
+                        discriminatorValue: discriminator,
+                        codingPath: decoder.codingPath
+                    )
+                }
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                switch self {
+                case let .capture(value):
+                    try value.encode(to: encoder)
+                case let .followCapturedLink(value):
+                    try value.encode(to: encoder)
+                case let .navigate(value):
+                    try value.encode(to: encoder)
+                case let .scroll(value):
+                    try value.encode(to: encoder)
+                }
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture`.
+        public struct BrowserBridgeOperationCapture: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case capture = "capture"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/type`.
+            public var _type: Components.Schemas.BrowserBridgeOperationCapture._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/allowedHosts`.
+            public var allowedHosts: Components.Schemas.InputSchema152
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/enhancedEvidence`.
+            public var enhancedEvidence: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationCapture/recoveryURL`.
+            public var recoveryURL: Swift.String?
+            /// Creates a new `BrowserBridgeOperationCapture`.
+            ///
+            /// - Parameters:
+            ///   - _type:
+            ///   - allowedHosts:
+            ///   - enhancedEvidence:
+            ///   - recoveryURL:
+            public init(
+                _type: Components.Schemas.BrowserBridgeOperationCapture._TypePayload,
+                allowedHosts: Components.Schemas.InputSchema152,
+                enhancedEvidence: Swift.Bool,
+                recoveryURL: Swift.String? = nil
+            ) {
+                self._type = _type
+                self.allowedHosts = allowedHosts
+                self.enhancedEvidence = enhancedEvidence
+                self.recoveryURL = recoveryURL
+            }
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+                case allowedHosts
+                case enhancedEvidence
+                case recoveryURL
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeOperationCapture._TypePayload.self,
+                    forKey: ._type
+                )
+                self.allowedHosts = try container.decode(
+                    Components.Schemas.InputSchema152.self,
+                    forKey: .allowedHosts
+                )
+                self.enhancedEvidence = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .enhancedEvidence
+                )
+                self.recoveryURL = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .recoveryURL
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "type",
+                    "allowedHosts",
+                    "enhancedEvidence",
+                    "recoveryURL"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink`.
+        public struct BrowserBridgeOperationFollowCapturedLink: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case followCapturedLink = "follow_captured_link"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/type`.
+            public var _type: Components.Schemas.BrowserBridgeOperationFollowCapturedLink._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/linkID`.
+            public var linkID: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationFollowCapturedLink/allowedHosts`.
+            public var allowedHosts: Components.Schemas.InputSchema152
+            /// Creates a new `BrowserBridgeOperationFollowCapturedLink`.
+            ///
+            /// - Parameters:
+            ///   - _type:
+            ///   - linkID:
+            ///   - allowedHosts:
+            public init(
+                _type: Components.Schemas.BrowserBridgeOperationFollowCapturedLink._TypePayload,
+                linkID: Swift.String,
+                allowedHosts: Components.Schemas.InputSchema152
+            ) {
+                self._type = _type
+                self.linkID = linkID
+                self.allowedHosts = allowedHosts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+                case linkID
+                case allowedHosts
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeOperationFollowCapturedLink._TypePayload.self,
+                    forKey: ._type
+                )
+                self.linkID = try container.decode(
+                    Swift.String.self,
+                    forKey: .linkID
+                )
+                self.allowedHosts = try container.decode(
+                    Components.Schemas.InputSchema152.self,
+                    forKey: .allowedHosts
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "type",
+                    "linkID",
+                    "allowedHosts"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate`.
+        public struct BrowserBridgeOperationNavigate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case navigate = "navigate"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/type`.
+            public var _type: Components.Schemas.BrowserBridgeOperationNavigate._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/url`.
+            public var url: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationNavigate/allowedHosts`.
+            public var allowedHosts: Components.Schemas.InputSchema152
+            /// Creates a new `BrowserBridgeOperationNavigate`.
+            ///
+            /// - Parameters:
+            ///   - _type:
+            ///   - url:
+            ///   - allowedHosts:
+            public init(
+                _type: Components.Schemas.BrowserBridgeOperationNavigate._TypePayload,
+                url: Swift.String,
+                allowedHosts: Components.Schemas.InputSchema152
+            ) {
+                self._type = _type
+                self.url = url
+                self.allowedHosts = allowedHosts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+                case url
+                case allowedHosts
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeOperationNavigate._TypePayload.self,
+                    forKey: ._type
+                )
+                self.url = try container.decode(
+                    Swift.String.self,
+                    forKey: .url
+                )
+                self.allowedHosts = try container.decode(
+                    Components.Schemas.InputSchema152.self,
+                    forKey: .allowedHosts
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "type",
+                    "url",
+                    "allowedHosts"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationScroll`.
+        public struct BrowserBridgeOperationScroll: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationScroll/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case scroll = "scroll"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationScroll/type`.
+            public var _type: Components.Schemas.BrowserBridgeOperationScroll._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeOperationScroll/pageCount`.
+            public var pageCount: Swift.Int
+            /// Creates a new `BrowserBridgeOperationScroll`.
+            ///
+            /// - Parameters:
+            ///   - _type:
+            ///   - pageCount:
+            public init(
+                _type: Components.Schemas.BrowserBridgeOperationScroll._TypePayload,
+                pageCount: Swift.Int
+            ) {
+                self._type = _type
+                self.pageCount = pageCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+                case pageCount
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeOperationScroll._TypePayload.self,
+                    forKey: ._type
+                )
+                self.pageCount = try container.decode(
+                    Swift.Int.self,
+                    forKey: .pageCount
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "type",
+                    "pageCount"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest`.
+        public struct BrowserBridgeRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeRequest.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest/operationId`.
+            public var operationId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest/runID`.
+            public var runID: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest/deadline`.
+            public var deadline: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRequest/operation`.
+            public var operation: Components.Schemas.BrowserBridgeOperation
+            /// Creates a new `BrowserBridgeRequest`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - id:
+            ///   - operationId:
+            ///   - runID:
+            ///   - deadline:
+            ///   - operation:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeRequest.ProtocolVersionPayload,
+                id: Swift.String,
+                operationId: Swift.String,
+                runID: Swift.String,
+                deadline: Foundation.Date,
+                operation: Components.Schemas.BrowserBridgeOperation
+            ) {
+                self.protocolVersion = protocolVersion
+                self.id = id
+                self.operationId = operationId
+                self.runID = runID
+                self.deadline = deadline
+                self.operation = operation
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case id
+                case operationId
+                case runID
+                case deadline
+                case operation
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeRequest.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self.id = try container.decode(
+                    Swift.String.self,
+                    forKey: .id
+                )
+                self.operationId = try container.decode(
+                    Swift.String.self,
+                    forKey: .operationId
+                )
+                self.runID = try container.decode(
+                    Swift.String.self,
+                    forKey: .runID
+                )
+                self.deadline = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .deadline
+                )
+                self.operation = try container.decode(
+                    Components.Schemas.BrowserBridgeOperation.self,
+                    forKey: .operation
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "id",
+                    "operationId",
+                    "runID",
+                    "deadline",
+                    "operation"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult`.
+        public struct BrowserBridgeResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeResult.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult/commandID`.
+            public var commandID: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult/operationID`.
+            public var operationID: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult/runID`.
+            public var runID: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult/completedAt`.
+            public var completedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeResult/outcome`.
+            public var outcome: Components.Schemas.BrowserBridgeCommandOutcome
+            /// Creates a new `BrowserBridgeResult`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - commandID:
+            ///   - operationID:
+            ///   - runID:
+            ///   - completedAt:
+            ///   - outcome:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeResult.ProtocolVersionPayload,
+                commandID: Swift.String,
+                operationID: Swift.String,
+                runID: Swift.String,
+                completedAt: Foundation.Date,
+                outcome: Components.Schemas.BrowserBridgeCommandOutcome
+            ) {
+                self.protocolVersion = protocolVersion
+                self.commandID = commandID
+                self.operationID = operationID
+                self.runID = runID
+                self.completedAt = completedAt
+                self.outcome = outcome
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case commandID
+                case operationID
+                case runID
+                case completedAt
+                case outcome
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeResult.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self.commandID = try container.decode(
+                    Swift.String.self,
+                    forKey: .commandID
+                )
+                self.operationID = try container.decode(
+                    Swift.String.self,
+                    forKey: .operationID
+                )
+                self.runID = try container.decode(
+                    Swift.String.self,
+                    forKey: .runID
+                )
+                self.completedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .completedAt
+                )
+                self.outcome = try container.decode(
+                    Components.Schemas.BrowserBridgeCommandOutcome.self,
+                    forKey: .outcome
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "commandID",
+                    "operationID",
+                    "runID",
+                    "completedAt",
+                    "outcome"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeRunCompletion`.
+        public struct BrowserBridgeRunCompletion: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRunCompletion/runID`.
+            public var runID: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRunCompletion/imported`.
+            public var imported: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRunCompletion/updated`.
+            public var updated: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRunCompletion/skipped`.
+            public var skipped: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeRunCompletion/findingCount`.
+            public var findingCount: Swift.Int
+            /// Creates a new `BrowserBridgeRunCompletion`.
+            ///
+            /// - Parameters:
+            ///   - runID:
+            ///   - imported:
+            ///   - updated:
+            ///   - skipped:
+            ///   - findingCount:
+            public init(
+                runID: Swift.String,
+                imported: Swift.Int,
+                updated: Swift.Int,
+                skipped: Swift.Int,
+                findingCount: Swift.Int
+            ) {
+                self.runID = runID
+                self.imported = imported
+                self.updated = updated
+                self.skipped = skipped
+                self.findingCount = findingCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runID
+                case imported
+                case updated
+                case skipped
+                case findingCount
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.runID = try container.decode(
+                    Swift.String.self,
+                    forKey: .runID
+                )
+                self.imported = try container.decode(
+                    Swift.Int.self,
+                    forKey: .imported
+                )
+                self.updated = try container.decode(
+                    Swift.Int.self,
+                    forKey: .updated
+                )
+                self.skipped = try container.decode(
+                    Swift.Int.self,
+                    forKey: .skipped
+                )
+                self.findingCount = try container.decode(
+                    Swift.Int.self,
+                    forKey: .findingCount
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "runID",
+                    "imported",
+                    "updated",
+                    "skipped",
+                    "findingCount"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessage`.
+        @frozen public enum BrowserBridgeServerMessage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessage/BrowserBridgeServerMessageAcknowledge`.
+            case acknowledge(Components.Schemas.BrowserBridgeServerMessageAcknowledge)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessage/BrowserBridgeServerMessageCancel`.
+            case cancel(Components.Schemas.BrowserBridgeServerMessageCancel)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessage/BrowserBridgeServerMessageCommand`.
+            case command(Components.Schemas.BrowserBridgeServerMessageCommand)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessage/BrowserBridgeServerMessagePing`.
+            case ping(Components.Schemas.BrowserBridgeServerMessagePing)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessage/BrowserBridgeServerMessageRaiseAuthWindow`.
+            case raiseAuthWindow(Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow)
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessage/BrowserBridgeServerMessageRunCompleted`.
+            case runCompleted(Components.Schemas.BrowserBridgeServerMessageRunCompleted)
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let discriminator = try container.decode(
+                    Swift.String.self,
+                    forKey: ._type
+                )
+                switch discriminator {
+                case "acknowledge":
+                    self = .acknowledge(try .init(from: decoder))
+                case "cancel":
+                    self = .cancel(try .init(from: decoder))
+                case "command":
+                    self = .command(try .init(from: decoder))
+                case "ping":
+                    self = .ping(try .init(from: decoder))
+                case "raise_auth_window":
+                    self = .raiseAuthWindow(try .init(from: decoder))
+                case "run_completed":
+                    self = .runCompleted(try .init(from: decoder))
+                default:
+                    throw Swift.DecodingError.unknownOneOfDiscriminator(
+                        discriminatorKey: CodingKeys._type,
+                        discriminatorValue: discriminator,
+                        codingPath: decoder.codingPath
+                    )
+                }
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                switch self {
+                case let .acknowledge(value):
+                    try value.encode(to: encoder)
+                case let .cancel(value):
+                    try value.encode(to: encoder)
+                case let .command(value):
+                    try value.encode(to: encoder)
+                case let .ping(value):
+                    try value.encode(to: encoder)
+                case let .raiseAuthWindow(value):
+                    try value.encode(to: encoder)
+                case let .runCompleted(value):
+                    try value.encode(to: encoder)
+                }
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageAcknowledge`.
+        public struct BrowserBridgeServerMessageAcknowledge: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageAcknowledge/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageAcknowledge/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeServerMessageAcknowledge.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageAcknowledge/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case acknowledge = "acknowledge"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageAcknowledge/type`.
+            public var _type: Components.Schemas.BrowserBridgeServerMessageAcknowledge._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageAcknowledge/commandID`.
+            public var commandID: Swift.String
+            /// Creates a new `BrowserBridgeServerMessageAcknowledge`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - commandID:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeServerMessageAcknowledge.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeServerMessageAcknowledge._TypePayload,
+                commandID: Swift.String
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.commandID = commandID
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case commandID
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageAcknowledge.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageAcknowledge._TypePayload.self,
+                    forKey: ._type
+                )
+                self.commandID = try container.decode(
+                    Swift.String.self,
+                    forKey: .commandID
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "commandID"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCancel`.
+        public struct BrowserBridgeServerMessageCancel: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCancel/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCancel/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeServerMessageCancel.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCancel/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case cancel = "cancel"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCancel/type`.
+            public var _type: Components.Schemas.BrowserBridgeServerMessageCancel._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCancel/commandID`.
+            public var commandID: Swift.String
+            /// Creates a new `BrowserBridgeServerMessageCancel`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - commandID:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeServerMessageCancel.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeServerMessageCancel._TypePayload,
+                commandID: Swift.String
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.commandID = commandID
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case commandID
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageCancel.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageCancel._TypePayload.self,
+                    forKey: ._type
+                )
+                self.commandID = try container.decode(
+                    Swift.String.self,
+                    forKey: .commandID
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "commandID"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCommand`.
+        public struct BrowserBridgeServerMessageCommand: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCommand/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCommand/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeServerMessageCommand.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCommand/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case command = "command"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCommand/type`.
+            public var _type: Components.Schemas.BrowserBridgeServerMessageCommand._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageCommand/command`.
+            public var command: Components.Schemas.BrowserBridgeRequest
+            /// Creates a new `BrowserBridgeServerMessageCommand`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - command:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeServerMessageCommand.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeServerMessageCommand._TypePayload,
+                command: Components.Schemas.BrowserBridgeRequest
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.command = command
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case command
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageCommand.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageCommand._TypePayload.self,
+                    forKey: ._type
+                )
+                self.command = try container.decode(
+                    Components.Schemas.BrowserBridgeRequest.self,
+                    forKey: .command
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "command"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessagePing`.
+        public struct BrowserBridgeServerMessagePing: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessagePing/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessagePing/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeServerMessagePing.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessagePing/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case ping = "ping"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessagePing/type`.
+            public var _type: Components.Schemas.BrowserBridgeServerMessagePing._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessagePing/timestamp`.
+            public var timestamp: Foundation.Date
+            /// Creates a new `BrowserBridgeServerMessagePing`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - timestamp:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeServerMessagePing.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeServerMessagePing._TypePayload,
+                timestamp: Foundation.Date
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.timestamp = timestamp
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case timestamp
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessagePing.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessagePing._TypePayload.self,
+                    forKey: ._type
+                )
+                self.timestamp = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .timestamp
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "timestamp"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow`.
+        public struct BrowserBridgeServerMessageRaiseAuthWindow: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case raiseAuthWindow = "raise_auth_window"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow/type`.
+            public var _type: Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRaiseAuthWindow/runID`.
+            public var runID: Swift.String
+            /// Creates a new `BrowserBridgeServerMessageRaiseAuthWindow`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - runID:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow._TypePayload,
+                runID: Swift.String
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.runID = runID
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case runID
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageRaiseAuthWindow._TypePayload.self,
+                    forKey: ._type
+                )
+                self.runID = try container.decode(
+                    Swift.String.self,
+                    forKey: .runID
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "runID"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted`.
+        public struct BrowserBridgeServerMessageRunCompleted: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/protocolVersion`.
+            @frozen public enum ProtocolVersionPayload: Int, Codable, Hashable, Sendable, CaseIterable {
+                case _2 = 2
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/protocolVersion`.
+            public var protocolVersion: Components.Schemas.BrowserBridgeServerMessageRunCompleted.ProtocolVersionPayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/type`.
+            @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case runCompleted = "run_completed"
+            }
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/type`.
+            public var _type: Components.Schemas.BrowserBridgeServerMessageRunCompleted._TypePayload
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/runID`.
+            public var runID: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/imported`.
+            public var imported: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/updated`.
+            public var updated: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/skipped`.
+            public var skipped: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/BrowserBridgeServerMessageRunCompleted/findingCount`.
+            public var findingCount: Swift.Int
+            /// Creates a new `BrowserBridgeServerMessageRunCompleted`.
+            ///
+            /// - Parameters:
+            ///   - protocolVersion:
+            ///   - _type:
+            ///   - runID:
+            ///   - imported:
+            ///   - updated:
+            ///   - skipped:
+            ///   - findingCount:
+            public init(
+                protocolVersion: Components.Schemas.BrowserBridgeServerMessageRunCompleted.ProtocolVersionPayload,
+                _type: Components.Schemas.BrowserBridgeServerMessageRunCompleted._TypePayload,
+                runID: Swift.String,
+                imported: Swift.Int,
+                updated: Swift.Int,
+                skipped: Swift.Int,
+                findingCount: Swift.Int
+            ) {
+                self.protocolVersion = protocolVersion
+                self._type = _type
+                self.runID = runID
+                self.imported = imported
+                self.updated = updated
+                self.skipped = skipped
+                self.findingCount = findingCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case protocolVersion
+                case _type = "type"
+                case runID
+                case imported
+                case updated
+                case skipped
+                case findingCount
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.protocolVersion = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageRunCompleted.ProtocolVersionPayload.self,
+                    forKey: .protocolVersion
+                )
+                self._type = try container.decode(
+                    Components.Schemas.BrowserBridgeServerMessageRunCompleted._TypePayload.self,
+                    forKey: ._type
+                )
+                self.runID = try container.decode(
+                    Swift.String.self,
+                    forKey: .runID
+                )
+                self.imported = try container.decode(
+                    Swift.Int.self,
+                    forKey: .imported
+                )
+                self.updated = try container.decode(
+                    Swift.Int.self,
+                    forKey: .updated
+                )
+                self.skipped = try container.decode(
+                    Swift.Int.self,
+                    forKey: .skipped
+                )
+                self.findingCount = try container.decode(
+                    Swift.Int.self,
+                    forKey: .findingCount
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "protocolVersion",
+                    "type",
+                    "runID",
+                    "imported",
+                    "updated",
+                    "skipped",
+                    "findingCount"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserCapturedImage`.
+        public struct BrowserCapturedImage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserCapturedImage/url`.
+            public var url: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserCapturedImage/alt`.
+            public var alt: Swift.String?
+            /// Creates a new `BrowserCapturedImage`.
+            ///
+            /// - Parameters:
+            ///   - url:
+            ///   - alt:
+            public init(
+                url: Swift.String,
+                alt: Swift.String? = nil
+            ) {
+                self.url = url
+                self.alt = alt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case url
+                case alt
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.url = try container.decode(
+                    Swift.String.self,
+                    forKey: .url
+                )
+                self.alt = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .alt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "url",
+                    "alt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserCapturedLink`.
+        public struct BrowserCapturedLink: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserCapturedLink/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserCapturedLink/url`.
+            public var url: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserCapturedLink/label`.
+            public var label: Swift.String?
+            /// Creates a new `BrowserCapturedLink`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - url:
+            ///   - label:
+            public init(
+                id: Swift.String,
+                url: Swift.String,
+                label: Swift.String? = nil
+            ) {
+                self.id = id
+                self.url = url
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case url
+                case label
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Swift.String.self,
+                    forKey: .id
+                )
+                self.url = try container.decode(
+                    Swift.String.self,
+                    forKey: .url
+                )
+                self.label = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "url",
+                    "label"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserChoice`.
+        @frozen public enum BrowserChoice: String, Codable, Hashable, Sendable, CaseIterable {
+            case chrome = "chrome"
+            case safari = "safari"
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserEvidenceKind`.
+        @frozen public enum BrowserEvidenceKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case normalizedPdf = "normalized_pdf"
+            case renderedPdf = "rendered_pdf"
+            case screenshot = "screenshot"
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserEvidenceReference`.
+        public struct BrowserEvidenceReference: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserEvidenceReference/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserEvidenceReference/kind`.
+            public var kind: Components.Schemas.BrowserEvidenceKind
+            /// - Remark: Generated from `#/components/schemas/BrowserEvidenceReference/checksum`.
+            public var checksum: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserEvidenceReference/contentType`.
+            public var contentType: Swift.String
+            /// Creates a new `BrowserEvidenceReference`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - kind:
+            ///   - checksum:
+            ///   - contentType:
+            public init(
+                id: Swift.String,
+                kind: Components.Schemas.BrowserEvidenceKind,
+                checksum: Swift.String,
+                contentType: Swift.String
+            ) {
+                self.id = id
+                self.kind = kind
+                self.checksum = checksum
+                self.contentType = contentType
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case kind
+                case checksum
+                case contentType
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Swift.String.self,
+                    forKey: .id
+                )
+                self.kind = try container.decode(
+                    Components.Schemas.BrowserEvidenceKind.self,
+                    forKey: .kind
+                )
+                self.checksum = try container.decode(
+                    Swift.String.self,
+                    forKey: .checksum
+                )
+                self.contentType = try container.decode(
+                    Swift.String.self,
+                    forKey: .contentType
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "kind",
+                    "checksum",
+                    "contentType"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserPageCapture`.
+        public struct BrowserPageCapture: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/sourceURL`.
+            public var sourceURL: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/capturedAt`.
+            public var capturedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/captureVersion`.
+            public var captureVersion: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/readableText`.
+            public var readableText: Swift.String
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/links`.
+            public var links: [Components.Schemas.BrowserCapturedLink]
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/images`.
+            public var images: [Components.Schemas.BrowserCapturedImage]
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/paymentEvidence`.
+            public var paymentEvidence: [Components.Schemas.BrowserPaymentEvidence]
+            /// - Remark: Generated from `#/components/schemas/BrowserPageCapture/evidence`.
+            public var evidence: [Components.Schemas.BrowserEvidenceReference]
+            /// Creates a new `BrowserPageCapture`.
+            ///
+            /// - Parameters:
+            ///   - sourceURL:
+            ///   - title:
+            ///   - capturedAt:
+            ///   - captureVersion:
+            ///   - readableText:
+            ///   - links:
+            ///   - images:
+            ///   - paymentEvidence:
+            ///   - evidence:
+            public init(
+                sourceURL: Swift.String,
+                title: Swift.String,
+                capturedAt: Foundation.Date,
+                captureVersion: Swift.Int,
+                readableText: Swift.String,
+                links: [Components.Schemas.BrowserCapturedLink],
+                images: [Components.Schemas.BrowserCapturedImage],
+                paymentEvidence: [Components.Schemas.BrowserPaymentEvidence],
+                evidence: [Components.Schemas.BrowserEvidenceReference]
+            ) {
+                self.sourceURL = sourceURL
+                self.title = title
+                self.capturedAt = capturedAt
+                self.captureVersion = captureVersion
+                self.readableText = readableText
+                self.links = links
+                self.images = images
+                self.paymentEvidence = paymentEvidence
+                self.evidence = evidence
+            }
+            public enum CodingKeys: String, CodingKey {
+                case sourceURL
+                case title
+                case capturedAt
+                case captureVersion
+                case readableText
+                case links
+                case images
+                case paymentEvidence
+                case evidence
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.sourceURL = try container.decode(
+                    Swift.String.self,
+                    forKey: .sourceURL
+                )
+                self.title = try container.decode(
+                    Swift.String.self,
+                    forKey: .title
+                )
+                self.capturedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .capturedAt
+                )
+                self.captureVersion = try container.decode(
+                    Swift.Int.self,
+                    forKey: .captureVersion
+                )
+                self.readableText = try container.decode(
+                    Swift.String.self,
+                    forKey: .readableText
+                )
+                self.links = try container.decode(
+                    [Components.Schemas.BrowserCapturedLink].self,
+                    forKey: .links
+                )
+                self.images = try container.decode(
+                    [Components.Schemas.BrowserCapturedImage].self,
+                    forKey: .images
+                )
+                self.paymentEvidence = try container.decode(
+                    [Components.Schemas.BrowserPaymentEvidence].self,
+                    forKey: .paymentEvidence
+                )
+                self.evidence = try container.decode(
+                    [Components.Schemas.BrowserEvidenceReference].self,
+                    forKey: .evidence
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "sourceURL",
+                    "title",
+                    "capturedAt",
+                    "captureVersion",
+                    "readableText",
+                    "links",
+                    "images",
+                    "paymentEvidence",
+                    "evidence"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/BrowserPaymentEvidence`.
+        public struct BrowserPaymentEvidence: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/BrowserPaymentEvidence/methodLabel`.
+            public var methodLabel: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/BrowserPaymentEvidence/lastFour`.
+            public var lastFour: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/BrowserPaymentEvidence/amountText`.
+            public var amountText: Swift.String?
+            /// Creates a new `BrowserPaymentEvidence`.
+            ///
+            /// - Parameters:
+            ///   - methodLabel:
+            ///   - lastFour:
+            ///   - amountText:
+            public init(
+                methodLabel: Swift.String? = nil,
+                lastFour: Swift.String? = nil,
+                amountText: Swift.String? = nil
+            ) {
+                self.methodLabel = methodLabel
+                self.lastFour = lastFour
+                self.amountText = amountText
+            }
+            public enum CodingKeys: String, CodingKey {
+                case methodLabel
+                case lastFour
+                case amountText
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.methodLabel = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .methodLabel
+                )
+                self.lastFour = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .lastFour
+                )
+                self.amountText = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .amountText
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "methodLabel",
+                    "lastFour",
+                    "amountText"
+                ])
+            }
+        }
         /// cookbook shortcode, e.g. CKB-4K7M
         ///
         /// - Remark: Generated from `#/components/schemas/CookbookShortcode`.
@@ -3260,7 +5038,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `ExpenseDetail`.
             ///
             /// - Parameters:
@@ -3326,7 +5104,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -3516,7 +5294,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -4799,7 +6577,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `FinancialAccountDetail`.
             ///
             /// - Parameters:
@@ -4829,7 +6607,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -4911,7 +6689,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -6495,7 +8273,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `FinancialTransactionDetail`.
             ///
             /// - Parameters:
@@ -6543,7 +8321,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.accountId = accountId
@@ -6679,7 +8457,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -7790,7 +9568,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `GardenEntryDetail`.
             ///
             /// - Parameters:
@@ -7824,7 +9602,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.locationId = locationId
@@ -7918,7 +9696,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -13146,7 +14924,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `IngredientDetail`.
             ///
             /// - Parameters:
@@ -13182,7 +14960,7 @@ extension Components {
                 appearsInRecipes: Components.Schemas.OutputSchema144,
                 product: Components.Schemas.OutputSchema145,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -13282,7 +15060,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -14007,23 +15785,25 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema154`.
-        public struct InputSchema154: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema154/kind`.
+        /// - Remark: Generated from `#/components/schemas/input_schema152`.
+        public typealias InputSchema152 = [Swift.String]
+        /// - Remark: Generated from `#/components/schemas/input_schema160`.
+        public struct InputSchema160: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema160/kind`.
             @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case product = "product"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema154/kind`.
-            public var kind: Components.Schemas.InputSchema154.KindPayload
-            /// - Remark: Generated from `#/components/schemas/input_schema154/value`.
+            /// - Remark: Generated from `#/components/schemas/input_schema160/kind`.
+            public var kind: Components.Schemas.InputSchema160.KindPayload
+            /// - Remark: Generated from `#/components/schemas/input_schema160/value`.
             public var value: Components.Schemas.ProductShortcode
-            /// Creates a new `InputSchema154`.
+            /// Creates a new `InputSchema160`.
             ///
             /// - Parameters:
             ///   - kind:
             ///   - value:
             public init(
-                kind: Components.Schemas.InputSchema154.KindPayload,
+                kind: Components.Schemas.InputSchema160.KindPayload,
                 value: Components.Schemas.ProductShortcode
             ) {
                 self.kind = kind
@@ -14106,7 +15886,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `InventoryDetail`.
             ///
             /// - Parameters:
@@ -14134,7 +15914,7 @@ extension Components {
                 location: Components.Schemas.LocationOut,
                 displayName: Swift.String,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.amount = amount
@@ -14210,7 +15990,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -15447,7 +17227,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `LedgerPartyDetail`.
             ///
             /// - Parameters:
@@ -15467,7 +17247,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -15519,7 +17299,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -16407,7 +18187,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `LedgerTransferDetail`.
             ///
             /// - Parameters:
@@ -16441,7 +18221,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.fromPartyId = fromPartyId
@@ -16535,7 +18315,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -17329,7 +19109,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LocationDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `LocationDetail`.
             ///
             /// - Parameters:
@@ -17375,7 +19155,7 @@ extension Components {
                 totalItemCount: Swift.Int? = nil,
                 inventoryItems: Components.Schemas.OutputSchema186? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -17505,7 +19285,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -18841,7 +20621,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/MealDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `MealDetail`.
             ///
             /// - Parameters:
@@ -18875,7 +20655,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.date = date
@@ -18969,7 +20749,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -22230,10 +24010,10 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/output_schema305`.
         public typealias OutputSchema305 = Components.Schemas.ExpenseLineBasis
-        /// - Remark: Generated from `#/components/schemas/output_schema381`.
-        public typealias OutputSchema381 = [Components.Schemas.WishCandidateOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema385`.
-        public typealias OutputSchema385 = [Components.Schemas.EntityAttachmentRead]
+        /// - Remark: Generated from `#/components/schemas/output_schema387`.
+        public typealias OutputSchema387 = [Components.Schemas.WishCandidateOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema391`.
+        public typealias OutputSchema391 = [Components.Schemas.EntityAttachmentRead]
         /// - Remark: Generated from `#/components/schemas/output_schema43`.
         public typealias OutputSchema43 = [Components.Schemas.ExternalIdOut]
         /// - Remark: Generated from `#/components/schemas/output_schema55`.
@@ -23495,7 +25275,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `PlantingDetail`.
             ///
             /// - Parameters:
@@ -23547,7 +25327,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.ingredientId = ingredientId
@@ -23695,7 +25475,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -25386,7 +27166,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `ProductDetail`.
             ///
             /// - Parameters:
@@ -25462,7 +27242,7 @@ extension Components {
                 onHandUnits: Swift.Double? = nil,
                 quantityVariance: Swift.Double? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -25682,7 +27462,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -27986,7 +29766,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `ProjectDetail`.
             ///
             /// - Parameters:
@@ -28036,7 +29816,7 @@ extension Components {
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
                 dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -28178,7 +29958,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -29325,7 +31105,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `PurchaseDetail`.
             ///
             /// - Parameters:
@@ -29377,7 +31157,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.vendorId = vendorId
@@ -29525,7 +31305,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -30502,7 +32282,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `RecipeDetail`.
             ///
             /// - Parameters:
@@ -30540,7 +32320,7 @@ extension Components {
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
                 forkedFromRecipeName: Swift.String? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -30646,7 +32426,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -33043,7 +34823,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value1`.
                 public var value1: Components.Schemas.ProductFindOrCreateByCodeInput?
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value2`.
-                public var value2: Components.Schemas.InputSchema154?
+                public var value2: Components.Schemas.InputSchema160?
                 /// Creates a new `CodePayload`.
                 ///
                 /// - Parameters:
@@ -33051,7 +34831,7 @@ extension Components {
                 ///   - value2:
                 public init(
                     value1: Components.Schemas.ProductFindOrCreateByCodeInput? = nil,
-                    value2: Components.Schemas.InputSchema154? = nil
+                    value2: Components.Schemas.InputSchema160? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -33825,7 +35605,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/TaskDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `TaskDetail`.
             ///
             /// - Parameters:
@@ -33873,7 +35653,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -34009,7 +35789,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -35557,7 +37337,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `VendorAccountDetail`.
             ///
             /// - Parameters:
@@ -35591,7 +37371,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.label = label
@@ -35685,7 +37465,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -36327,7 +38107,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/VendorDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `VendorDetail`.
             ///
             /// - Parameters:
@@ -36367,7 +38147,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -36479,7 +38259,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -37150,7 +38930,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishDetail/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishDetail/candidates`.
-            public var candidates: Components.Schemas.OutputSchema381
+            public var candidates: Components.Schemas.OutputSchema387
             /// - Remark: Generated from `#/components/schemas/WishDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/WishDetail/updatedAt`.
@@ -37158,7 +38938,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/WishDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema385
+            public var attachments: Components.Schemas.OutputSchema391
             /// Creates a new `WishDetail`.
             ///
             /// - Parameters:
@@ -37176,11 +38956,11 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema381,
+                candidates: Components.Schemas.OutputSchema387,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema385
+                attachments: Components.Schemas.OutputSchema391
             ) {
                 self.id = id
                 self.name = name
@@ -37222,7 +39002,7 @@ extension Components {
                     forKey: .acquiredAt
                 )
                 self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema381.self,
+                    Components.Schemas.OutputSchema387.self,
                     forKey: .candidates
                 )
                 self.createdAt = try container.decode(
@@ -37238,7 +39018,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema385.self,
+                    Components.Schemas.OutputSchema391.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -37265,7 +39045,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishListItem/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishListItem/candidates`.
-            public var candidates: Components.Schemas.OutputSchema381
+            public var candidates: Components.Schemas.OutputSchema387
             /// - Remark: Generated from `#/components/schemas/WishListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/WishListItem/updatedAt`.
@@ -37288,7 +39068,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema381,
+                candidates: Components.Schemas.OutputSchema387,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField
@@ -37331,7 +39111,7 @@ extension Components {
                     forKey: .acquiredAt
                 )
                 self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema381.self,
+                    Components.Schemas.OutputSchema387.self,
                     forKey: .candidates
                 )
                 self.createdAt = try container.decode(
@@ -37407,7 +39187,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishOut/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishOut/candidates`.
-            public var candidates: Components.Schemas.OutputSchema381
+            public var candidates: Components.Schemas.OutputSchema387
             /// - Remark: Generated from `#/components/schemas/WishOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/WishOut/updatedAt`.
@@ -37427,7 +39207,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema381,
+                candidates: Components.Schemas.OutputSchema387,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date
             ) {
@@ -37467,7 +39247,7 @@ extension Components {
                     forKey: .acquiredAt
                 )
                 self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema381.self,
+                    Components.Schemas.OutputSchema387.self,
                     forKey: .candidates
                 )
                 self.createdAt = try container.decode(

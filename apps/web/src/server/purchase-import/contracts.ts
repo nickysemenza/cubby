@@ -1,104 +1,14 @@
 import {
-  browserBridgeRequest,
+  browserBridgeClientMessage,
+  browserBridgeResult,
+  browserBridgeServerMessage,
   type BrowserBridgeRequest,
+  type BrowserBridgeResult,
 } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
-const evidenceReference = z.object({
-  id: z.string().min(1).max(500),
-  kind: z.enum(["normalized_pdf", "rendered_pdf", "screenshot"]),
-  checksum: z.string().regex(/^[a-f0-9]{64}$/),
-  contentType: z.string().min(1).max(200),
-});
-const pageCapture = z.object({
-  sourceURL: z.url(),
-  title: z.string().max(500),
-  capturedAt: z.iso.datetime(),
-  captureVersion: z.number().int().positive(),
-  readableText: z.string().max(24 * 1_024),
-  links: z
-    .array(
-      z.object({ id: z.string(), url: z.url(), label: z.string().nullable() }),
-    )
-    .max(200),
-  images: z
-    .array(z.object({ url: z.url(), alt: z.string().nullable() }))
-    .max(200),
-  paymentEvidence: z
-    .array(
-      z.object({
-        methodLabel: z.string().nullable(),
-        lastFour: z.string().nullable(),
-        amountText: z.string().nullable(),
-      }),
-    )
-    .max(100),
-  evidence: z.array(evidenceReference).max(10),
-});
-const commandOutcome = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("completed"),
-    capture: pageCapture.nullable().optional(),
-  }),
-  z.object({
-    status: z.literal("failed"),
-    code: z.enum([
-      "cancelled",
-      "deadline_exceeded",
-      "invalid_command",
-      "disallowed_url",
-      "unknown_link",
-      "browser_unavailable",
-      "browser_permission_denied",
-      "authentication_required",
-      "capture_unavailable",
-      "upload_failed",
-      "execution_failed",
-    ]),
-    message: z.string().max(2_000),
-    retryable: z.boolean(),
-  }),
-]);
-export const browserBridgeResult = z.object({
-  protocolVersion: z.literal(2),
-  // Foundation encodes UUID values uppercase. Normalize at the protocol
-  // boundary because Durable Object SQLite command keys are lowercase text.
-  commandID: z.uuid().transform((value) => value.toLowerCase()),
-  operationID: z.string().trim().min(1).max(200),
-  runID: z.string().min(1).max(200),
-  completedAt: z.iso.datetime(),
-  outcome: commandOutcome,
-});
-export type BrowserBridgeResult = z.infer<typeof browserBridgeResult>;
-
-const bridgeClientMessage = z.discriminatedUnion("type", [
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("hello"),
-    deviceID: z.uuid(),
-    browser: z.enum(["chrome", "safari"]),
-    capabilities: z.object({
-      fixedCaptureVersion: z.number().int().positive(),
-      enhancedScreenshot: z.boolean(),
-      renderedPDF: z.boolean(),
-    }),
-  }),
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("result"),
-    result: browserBridgeResult,
-  }),
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("pong"),
-    timestamp: z.iso.datetime(),
-  }),
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("run_completed_ack"),
-    runID: z.uuid(),
-  }),
-]);
+export { browserBridgeResult };
+export type { BrowserBridgeResult };
 
 export const decodeBrowserBridgeMessage = (message: string | ArrayBuffer) => {
   try {
@@ -108,48 +18,13 @@ export const decodeBrowserBridgeMessage = (message: string | ArrayBuffer) => {
       : new TextDecoder().decode(
           new Uint8Array(z.instanceof(ArrayBuffer).parse(message)),
         );
-    return bridgeClientMessage.safeParse(JSON.parse(text));
+    return browserBridgeClientMessage.safeParse(JSON.parse(text));
   } catch {
-    return bridgeClientMessage.safeParse(null);
+    return browserBridgeClientMessage.safeParse(null);
   }
 };
 
-export const bridgeServerMessage = z.discriminatedUnion("type", [
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("command"),
-    command: browserBridgeRequest,
-  }),
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("acknowledge"),
-    commandID: z.uuid(),
-  }),
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("cancel"),
-    commandID: z.uuid(),
-  }),
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("ping"),
-    timestamp: z.iso.datetime(),
-  }),
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("raise_auth_window"),
-    runID: z.uuid(),
-  }),
-  z.object({
-    protocolVersion: z.literal(2),
-    type: z.literal("run_completed"),
-    runID: z.uuid(),
-    imported: z.number().int().nonnegative(),
-    updated: z.number().int().nonnegative(),
-    skipped: z.number().int().nonnegative(),
-    findingCount: z.number().int().nonnegative(),
-  }),
-]);
+export const bridgeServerMessage = browserBridgeServerMessage;
 
 export interface PurchaseImportDurableObjectRpc {
   enqueue(command: BrowserBridgeRequest): Promise<void>;

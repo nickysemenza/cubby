@@ -50,27 +50,27 @@ public enum BrowserBridgeConnectionStatus: Equatable, Sendable {
 }
 
 struct BrowserBridgeCommandTaskRegistry {
-    private var claimed: Set<UUID> = []
-    private var settled: Set<UUID> = []
-    private var tasks: [UUID: Task<Void, Never>] = [:]
+    private var claimed: Set<String> = []
+    private var settled: Set<String> = []
+    private var tasks: [String: Task<Void, Never>] = [:]
 
-    mutating func claim(_ commandID: UUID) -> Bool {
+    mutating func claim(_ commandID: String) -> Bool {
         guard !settled.contains(commandID) else { return false }
         return claimed.insert(commandID).inserted
     }
 
-    mutating func attach(_ task: Task<Void, Never>, to commandID: UUID) {
+    mutating func attach(_ task: Task<Void, Never>, to commandID: String) {
         guard claimed.contains(commandID) else { return task.cancel() }
         tasks[commandID] = task
     }
 
-    mutating func finish(_ commandID: UUID) {
+    mutating func finish(_ commandID: String) {
         claimed.remove(commandID)
         tasks.removeValue(forKey: commandID)
         settled.insert(commandID)
     }
 
-    mutating func cancel(_ commandID: UUID) {
+    mutating func cancel(_ commandID: String) {
         claimed.remove(commandID)
         tasks.removeValue(forKey: commandID)?.cancel()
     }
@@ -215,7 +215,7 @@ public actor URLSessionBrowserBridge {
             on: socket)
         for result in ledger.resultsForReplay {
             BrowserBridgeDebugLog.emit(
-                .commandReplayed, commandID: result.commandID, runID: result.runID,
+                .commandReplayed, commandID: result.commandUUID, runID: result.runID,
                 operationID: result.operationID, outcome: result.outcome)
             try await send(.result(result), on: socket)
         }
@@ -245,9 +245,10 @@ public actor URLSessionBrowserBridge {
         _ message: BrowserBridgeServerMessage, socket: URLSessionWebSocketTask
     ) async throws {
         switch message {
-        case .command(let command):
+        case .command(let envelope):
+            let command = envelope.command
             if let result = ledger.replayResult(for: command.id) {
-                guard result.protocolVersion == command.protocolVersion,
+                guard result.protocolVersion.rawValue == command.protocolVersion.rawValue,
                     result.runID == command.runID, result.operationID == command.operationID
                 else {
                     // A command identifier may never be rebound to another run or operation. Do
@@ -295,25 +296,33 @@ public actor URLSessionBrowserBridge {
                 await self.finishIgnoringSendFailure(result)
             }
             commandTasks.attach(task, to: command.id)
-        case .acknowledge(let commandID):
+        case .acknowledge(let payload):
+            let commandID = payload.commandID
             let completed = ledger.replayResult(for: commandID)
             BrowserBridgeDebugLog.emit(
-                .acknowledgementReceived, commandID: commandID, runID: completed?.runID,
+                .acknowledgementReceived, commandID: UUID(uuidString: commandID), runID: completed?.runID,
                 operationID: completed?.operationID)
             ledger.acknowledge(commandID)
             try await replayStore.save(ledger)
-        case .cancel(let commandID):
-            BrowserBridgeDebugLog.emit(.cancellationReceived, commandID: commandID)
+        case .cancel(let payload):
+            let commandID = payload.commandID
+            BrowserBridgeDebugLog.emit(
+                .cancellationReceived, commandID: UUID(uuidString: commandID))
             commandTasks.cancel(commandID)
-            await executor.cancel(commandID: commandID)
+            if let commandUUID = UUID(uuidString: commandID) {
+                await executor.cancel(commandID: commandUUID)
+            }
             ledger.cancel(commandID)
             try await replayStore.save(ledger)
-        case .ping(let timestamp):
-            try await send(.pong(timestamp: timestamp), on: socket)
-        case .raiseAuthWindow(let runID):
+        case .ping(let payload):
+            try await send(.pong(timestamp: payload.timestamp), on: socket)
+        case .raiseAuthWindow(let payload):
             await executor.raiseAuthenticationWindow()
-            authWindowObserver?(runID)
-        case .runCompleted(let completion):
+            authWindowObserver?(payload.runID)
+        case .runCompleted(let payload):
+            let completion = BrowserBridgeRunCompletion(
+                runID: payload.runID, imported: payload.imported, updated: payload.updated,
+                skipped: payload.skipped, findingCount: payload.findingCount)
             BrowserBridgeDebugLog.emit(.runCompleted, runID: completion.runID)
             let isNew = ledger.recordRunCompletion(completion)
             try await replayStore.save(ledger)
@@ -327,7 +336,7 @@ public actor URLSessionBrowserBridge {
             try await finish(result)
         } catch {
             BrowserBridgeDebugLog.emit(
-                .resultSendDeferred, commandID: result.commandID, runID: result.runID,
+                .resultSendDeferred, commandID: result.commandUUID, runID: result.runID,
                 operationID: result.operationID, outcome: result.outcome, error: error)
             // The durable result is intentionally kept. A reconnect replays it before accepting
             // new work, so a lost acknowledgement can never repeat business writes.
@@ -340,13 +349,13 @@ public actor URLSessionBrowserBridge {
         ledger.record(result)
         try await replayStore.save(ledger)
         BrowserBridgeDebugLog.emit(
-            .resultPersisted, commandID: result.commandID, runID: result.runID,
+            .resultPersisted, commandID: result.commandUUID, runID: result.runID,
             operationID: result.operationID, outcome: result.outcome)
         resultObserver?(result)
         guard let socket else { return }
         try await send(.result(result), on: socket)
         BrowserBridgeDebugLog.emit(
-            .resultSent, commandID: result.commandID, runID: result.runID,
+            .resultSent, commandID: result.commandUUID, runID: result.runID,
             operationID: result.operationID, outcome: result.outcome)
     }
 

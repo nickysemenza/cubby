@@ -7,9 +7,10 @@ Return the printed USD grand total and every displayed order line. Do not scale,
 invent, or force lines to match a statement charge. If line cents do not equal
 the printed grand total after one careful pass, retain the candidate and mark it
 needs_review with sum_mismatch. Use foreign_currency when no USD total exists.`;
+const MODEL_OUTPUT_CONTRACT = `Always return candidate, reason, and detail fields. Use null for a field that does not apply to the selected status.`;
 
 export const purchaseExtractionPrompt = (capture: BrowserCapture) => ({
-  systemPrompts: [EXTRACTION_SYSTEM],
+  systemPrompts: [EXTRACTION_SYSTEM, MODEL_OUTPUT_CONTRACT],
   messages: [
     {
       role: "user",

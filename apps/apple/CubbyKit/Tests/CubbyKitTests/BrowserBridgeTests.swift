@@ -77,11 +77,47 @@ struct BrowserBridgeTests {
         }
     }
 
+    @Test("Capture navigation honors a new target without reloading the current target")
+    func captureNavigationPolicy() throws {
+        let history = try #require(URL(string: "https://orders.example.com/history"))
+        let order = try #require(URL(string: "https://orders.example.com/order/1"))
+
+        #expect(
+            !BrowserCaptureNavigationPolicy.shouldNavigate(
+                currentURL: history, targetURL: history))
+        #expect(
+            BrowserCaptureNavigationPolicy.shouldNavigate(
+                currentURL: history, targetURL: order))
+        #expect(
+            BrowserCaptureNavigationPolicy.shouldNavigate(
+                currentURL: nil, targetURL: order))
+        #expect(
+            !BrowserCaptureNavigationPolicy.shouldNavigate(
+                currentURL: history, targetURL: nil))
+    }
+
+    @Test("Capture readiness rejects a complete stale document")
+    func captureReadinessPolicy() throws {
+        let current = try #require(URL(string: "https://orders.example.com/order/1"))
+        let target = try #require(URL(string: "https://orders.example.com/order/2"))
+
+        #expect(
+            !BrowserCaptureNavigationPolicy.isReady(
+                currentURL: current, targetURL: target, documentReadyState: "complete"))
+        #expect(
+            !BrowserCaptureNavigationPolicy.isReady(
+                currentURL: target, targetURL: target, documentReadyState: "loading"))
+        #expect(
+            BrowserCaptureNavigationPolicy.isReady(
+                currentURL: target, targetURL: target, documentReadyState: "complete"))
+    }
+
     @Test("Completed results replay until acknowledged")
     func replayLifecycle() {
-        let id = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        let uuid = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        let id = uuid.uuidString.lowercased()
         let result = BrowserBridgeCommandResult(
-            commandID: id, runID: "RUN-EXAMPLE", operationID: "operation-example",
+            commandID: uuid, runID: "RUN-EXAMPLE", operationID: "operation-example",
             completedAt: Date(timeIntervalSince1970: 100), outcome: .completed(capture: nil))
         var ledger = BrowserBridgeReplayLedger()
 
@@ -96,7 +132,7 @@ struct BrowserBridgeTests {
 
     @Test("Socket loss or a duplicate dispatch does not restart a browser side effect")
     func transientDisconnectKeepsInFlightCommand() {
-        let id = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        let id = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!.uuidString.lowercased()
         var tasks = BrowserBridgeCommandTaskRegistry()
 
         let firstStart = tasks.claim(id)
@@ -115,12 +151,13 @@ struct BrowserBridgeTests {
 
     @Test("Cancellation prevents a late command result from entering replay")
     func cancellationWinsRace() {
-        let id = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+        let uuid = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+        let id = uuid.uuidString.lowercased()
         var ledger = BrowserBridgeReplayLedger()
         ledger.cancel(id)
         ledger.record(
             BrowserBridgeCommandResult(
-                commandID: id, runID: "RUN-EXAMPLE", operationID: "operation-example",
+                commandID: uuid, runID: "RUN-EXAMPLE", operationID: "operation-example",
                 completedAt: .now, outcome: .completed(capture: nil)))
 
         #expect(ledger.cancelled.contains(id))
@@ -129,9 +166,10 @@ struct BrowserBridgeTests {
 
     @Test("A stale replay result can be discarded before a protocol rejection replaces it")
     func staleReplayResultIsFenced() {
-        let id = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+        let uuid = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+        let id = uuid.uuidString.lowercased()
         let cached = BrowserBridgeCommandResult(
-            commandID: id, runID: "RUN-OLD", operationID: "operation-old", completedAt: .now,
+            commandID: uuid, runID: "RUN-OLD", operationID: "operation-old", completedAt: .now,
             outcome: .completed(capture: nil))
         var ledger = BrowserBridgeReplayLedger()
 
