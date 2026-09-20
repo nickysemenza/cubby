@@ -214,18 +214,22 @@ async function getSearchDocumentSources(
       LEFT JOIN "Location" l ON l."id" = pl."locationId" AND l."deletedAt" IS NULL
       WHERE pl."deletedAt" IS NULL AND 'planting' IN (${types}) AND ${requested(sql`pl."id"`)}`,
     // Title mirrors `gardenEntryDisplayName` (garden/index.ts): kind label ·
-    // observed date · location name. Subtitle is the linked planting's own
-    // display name (null when the entry has no planting).
+    // observed date · location name. Subtitle is the comma-separated set of
+    // live linked planting display names.  The correlated aggregate keeps the
+    // source projection one row per GardenEntry even when an entry names many
+    // plantings.
     gardenEntry: sql`
       SELECT 'gardenEntry', ge."id"::text, ge."shortcode",
         (CASE ge."kind" WHEN 'observation' THEN 'Note' WHEN 'harvest' THEN 'Harvest' ELSE 'Move' END)
           || ' · ' || to_char(ge."observedOn", 'YYYY-MM-DD') || ' · ' || l."name",
-        CASE WHEN pl."id" IS NULL THEN NULL ELSE i."name" || COALESCE(' · ' || pl."variety", '') END,
+        (SELECT string_agg(i."name" || COALESCE(' · ' || pl."variety", ''), ', ' ORDER BY pl."shortcode")
+         FROM "GardenEntryPlanting" gep
+         JOIN "Planting" pl ON pl."id" = gep."plantingId" AND pl."deletedAt" IS NULL
+         JOIN "Ingredient" i ON i."id" = pl."ingredientId" AND i."deletedAt" IS NULL
+         WHERE gep."gardenEntryId" = ge."id" AND gep."deletedAt" IS NULL),
         ge."kind", ARRAY[]::text[], ARRAY[l."name", ge."harvestAmount"]::text[]
       FROM "GardenEntry" ge
       JOIN "Location" l ON l."id" = ge."locationId" AND l."deletedAt" IS NULL
-      LEFT JOIN "Planting" pl ON pl."id" = ge."plantingId" AND pl."deletedAt" IS NULL
-      LEFT JOIN "Ingredient" i ON i."id" = pl."ingredientId" AND i."deletedAt" IS NULL
       WHERE ge."deletedAt" IS NULL AND 'gardenEntry' IN (${types}) AND ${requested(sql`ge."id"`)}`,
   } satisfies Record<SearchableEntity, SQL>;
 

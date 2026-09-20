@@ -17,6 +17,7 @@ export {
   findEmbeddingRefsForPurchases,
   findEmbeddingRefsForVendors,
   findGardenEntryEmbeddingRefsForLocations,
+  findGardenEntryEmbeddingRefsForPlantings,
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,

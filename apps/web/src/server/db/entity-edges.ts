@@ -82,6 +82,7 @@ import {
   financialTransactionAllocation,
   gardenEntry,
   gardenEntryImage,
+  gardenEntryPlanting,
   importFinding,
   importHunt,
   importRun,
@@ -940,8 +941,8 @@ export const ENTITY_EDGES = {
     },
   }),
   planting: edges({
-    "GardenEntry.plantingId": {
-      column: gardenEntry.plantingId,
+    "GardenEntryPlanting.plantingId": {
+      column: gardenEntryPlanting.plantingId,
       role: "history",
       label: "garden entries",
       description:
@@ -950,6 +951,14 @@ export const ENTITY_EDGES = {
     },
   }),
   gardenEntry: edges({
+    "GardenEntryPlanting.gardenEntryId": {
+      column: gardenEntryPlanting.gardenEntryId,
+      role: "history",
+      label: "planting associations",
+      description:
+        "A live association records which growing attempts a garden entry describes.",
+      liveness: { kind: "must-target-live" },
+    },
     "GardenEntryImage.gardenEntryId": {
       column: gardenEntryImage.gardenEntryId,
       role: "media",

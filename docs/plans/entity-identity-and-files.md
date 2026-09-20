@@ -1,35 +1,40 @@
-# Durable entity identity and shared files
+# Durable entity and relationship identity with shared files
 
 Status: **proposed end state**. This plan supersedes the tabled Entity
 supertable design from 2026-09-19, now removed after its verified constraints
-were carried forward here. It does not supersede ADR 0001: physical domain
-relationships remain typed.
+were carried forward here. ADR 0001 remains authoritative for current code;
+Phase 0 of this plan replaces it with an ADR for the Entity and EntityRelation
+spines before implementation changes physical relationship authority.
 
 ## Outcome
 
 Give every local, shortcode-bearing entity one durable identity row, preserve
-old shortcodes as permanent read redirects after a merge, and replace the
-repeated image ownership shapes with one shared file-attachment model.
+old shortcodes as permanent read redirects after a merge, and give every
+persisted relationship between two local entities one durable relation row.
+Typed relation extensions retain fields and invariants that are not shared.
 
-This is not an EAV conversion and not a universal graph table. The end state
-has four deliberately different relationship shapes:
+This is not an EAV conversion. Entity and relation spines provide identity,
+endpoints, and lifecycle; typed payloads and adapters continue to own domain
+meaning. The end state has these deliberately different storage shapes:
 
 | Relationship | Cardinality | Storage |
 | --- | --- | --- |
 | Durable identity to typed payload | exactly 1:1 while live | `Entity` plus one kind-correct typed table |
-| Ordinary domain relationship | whatever the domain says | typed FK or typed join table |
-| Entity to stored file | M:N | `EntityAttachment` |
+| Persisted local entity relationship | declared per kind | `EntityRelation` plus an optional typed 1:1 extension |
+| Entity to stored file | M:N | `EntityRelation` plus `EntityAttachment` extension |
 | Historical/cache/telemetry subject to entity | N:1 | FK to `Entity` |
 | Merged identity to its survivor | N:1 | `Entity.mergedIntoId` |
 
-The generic seam is identity, resolution, and file attachment. Product,
-Inventory, Recipe, Purchase, Expense, allocation, dependency, and other domain
-relationships keep their current typed semantics. There is no
-`EntityRelation(fromEntityId, toEntityId, kind, metadata)` table.
+The generic seam is entity identity, relation identity, typed endpoints,
+resolution, and declared dispatch. Product, Inventory, Recipe, Purchase,
+Expense, allocation, dependency, and attachment relationships retain typed
+extensions and repository adapters where their behavior differs. There is no
+arbitrary JSON edge payload, and relationship metadata never invents mutation
+behavior.
 
 ## Why this is an improvement
 
-The current schema has three recurring problems:
+The current schema has four recurring problems:
 
 1. Identity and lifecycle are copied into every shortcode table. A merge
    removes the losing public reference, so old URLs, notes, audit records, and
@@ -39,12 +44,16 @@ The current schema has three recurring problems:
 3. File ownership is expressed through eight near-isomorphic gallery tables,
    two singular FKs, and additional workflow evidence FKs. `Image` already
    stores PDFs, so the storage concept is broader than its name.
+4. The manifest describes one logical relationship graph while physical local-
+   entity edges are spread across payload FKs and join tables. Generic reads,
+   lifecycle accounting, and integrity checks must rediscover the same
+   endpoints through per-table provenance.
 
-The proposed model pays for one additional identity layer by deleting repeated
-shortcode/lifecycle behavior, making merge redirects durable, giving selected
-polymorphic references a real FK, and consolidating the genuinely isomorphic
-file-association family. It does not claim that generic storage is inherently
-better; the typed entity kernel remains the behavioral seam.
+The proposed model pays for entity and relation identity layers by deleting
+repeated shortcode/lifecycle behavior, making merge redirects durable, giving
+polymorphic references real FKs, and consolidating endpoint storage. It does
+not claim that generic behavior follows from generic storage: typed extensions
+and the entity kernel remain the behavioral seams.
 
 ### Carry-forward constraints from the tabled review
 
@@ -65,10 +74,10 @@ Phase 0 remeasures live data before migration.
   shortcode insert helper, and tests also insert payloads directly. Every
   production path must use the atomic identity/payload allocation seam; a
   static check permits only explicit migration and test factories.
-- Keep the reference-policy registry separate from the existing typed
-  incoming-edge registry. A cross-entity history/cache policy is not a physical
-  per-kind edge policy, and forcing both through one exhaustive roster obscures
-  their different lifecycle owners.
+- Keep the history/cache/telemetry reference-policy registry separate from the
+  relation-kind registry. Attribution from a non-entity record is not a live
+  domain relation, and forcing both through one lifecycle model obscures their
+  different owners.
 - Nullable polymorphic references need paired-null checks. PostgreSQL's default
   composite-FK `MATCH SIMPLE` behavior skips enforcement when either member is
   null; a consumer either requires both identity and kind or declares its
@@ -96,7 +105,7 @@ Create one `Entity` row for every local kind in the generated
 - the stored-file entity that replaces the current `Image` payload.
 
 USDA Food stays outside this identity system because it is an external dataset
-without a Cubby shortcode. Join rows, allocations, recipe sections, import
+without a Cubby shortcode. Relation rows, allocations, recipe sections, import
 runs, import findings, mail rows, and other workflow/sub-entity records are not
 entities merely because they have UUID primary keys.
 
@@ -109,20 +118,26 @@ entities merely because they have UUID primary keys.
 - `previousShortcodes` on canonical reads.
 - A minimal tombstone response for deleted, unmerged identities.
 - One optional, universal `EntityMemo` per identity.
-- One M:N `EntityAttachment` table for galleries, covers, logos, PDFs, and
-  other directly attached files.
+- One `EntityRelation` row for every authoritative persisted relationship whose
+  endpoints are both local entities.
+- Typed 1:1 relation extensions for fields and invariants not shared by the
+  relation spine; `EntityAttachment` is the first extension.
 - A reference-policy registry that distinguishes operational, durable-history,
   rebuildable-cache, telemetry, and workflow-evidence references.
 - Structural enforcement that every live identity has exactly one payload of
-  the correct kind.
+  the correct kind and every relation has permitted endpoint kinds.
 
 ### Explicitly not included
 
-- Generic storage for ordinary domain relationships.
-- A generic relationship editor or arbitrary graph mutation.
+- Arbitrary JSON/EAV relationship attributes.
+- Mutation inferred merely from the presence of a relation row.
 - Inferring mutation behavior from relationship metadata.
 - Turning every `(type, id)` pair into an entity FK without classifying its
   semantics.
+- Materializing derived or computed relationship paths as duplicate relation
+  rows.
+- Moving relationships involving an external record, history/cache/telemetry
+  row, or non-entity workflow/subrecord into `EntityRelation`.
 - Recursive display-image inheritance.
 - Restoring deleted entities.
 - User-created shortcode aliases or editable shortcodes.
@@ -226,17 +241,18 @@ separate, declared policy:
   staged migration still needs it. This is a migration state, not the preferred
   final policy.
 
-The reference-policy registry determines whether `retain` is required. Two
-known examples must be protected explicitly:
+The relation and reference-policy registries determine whether `retain` is
+required. Two known examples must be protected explicitly:
 
-- `Ingredient.recipeId` can retain a deleted Recipe payload for staleness and
-  recomputation semantics.
+- The Ingredient-to-Recipe relation can retain a deleted Recipe payload for
+  staleness and recomputation semantics.
 - `ImportSourceClaim.purchaseId` can retain a deleted Purchase payload for
   replay suppression.
 
-Operational FKs continue to target typed payloads. Durable historical
-attribution targets `Entity`. No caller may infer payload availability merely
-from the existence of an identity tombstone.
+Operational local-entity relationships target `Entity` through
+`EntityRelation`. Durable historical attribution also targets `Entity` but
+remains a classified direct reference because its source row is not an Entity.
+No caller may infer payload availability merely from an identity tombstone.
 
 Retaining a payload must not retain its claim on a live-only business key.
 PostgreSQL partial indexes cannot predicate on a joined `Entity.deletedAt`, so a
@@ -249,7 +265,76 @@ policy roster lists which retained payloads need this projection; the deferred
 invariant verifies a live Entity never has a retired payload. Recipe names and
 Purchase `(vendorId, orderId)` are initial required cases. Payloads with no
 surviving typed references or live-only keys are removed rather than given a
-projection.
+projection. When a business key includes a related entity, the payload may keep
+a generated, checked endpoint projection solely so PostgreSQL can enforce the
+local unique index; `EntityRelation` remains authoritative.
+
+### `EntityRelation`: identity and endpoints for local domain edges
+
+```text
+EntityRelation
+  id                uuid primary key
+  relationKind      text not null
+  sourceEntityId    uuid not null
+  sourceEntityKind  text not null
+  targetEntityId    uuid not null
+  targetEntityKind  text not null
+  position          integer null
+  createdAt         timestamptz not null
+  updatedAt         timestamptz not null
+  deletedAt         timestamptz null
+
+  unique (id, relationKind)
+  unique (id, relationKind, sourceEntityId, targetEntityId)
+  foreign key (sourceEntityId, sourceEntityKind) references Entity(id, kind)
+  foreign key (targetEntityId, targetEntityKind) references Entity(id, kind)
+```
+
+`relationKind` is a stable storage identifier declared by the entity manifest.
+Generated checks and deferrable constraint triggers enforce the permitted
+source and target kinds. Per-kind partial indexes enforce declared endpoint
+cardinality, set-versus-repeatable multiplicity, and ordering. An ordered kind
+requires a non-negative `position`; an unordered kind requires it to be null.
+Repeated edges are allowed only for relation kinds that explicitly declare bag
+semantics, such as two separately meaningful preparations of the same Recipe
+in one Meal.
+
+Every authoritative persisted relationship whose endpoints are both local
+Entities moves to this table, whether it began as a nullable payload FK, a
+required payload FK, or a join row. A logical relationship may still combine
+several persisted and derived provenance paths; derived paths are never copied
+into `EntityRelation` merely to simplify traversal.
+
+`GardenEntryPlanting` is expected to land before this redesign so garden
+journals can represent several Plantings immediately. Treat it as an ordinary
+legacy typed join during this migration: backfill its endpoint and lifecycle
+facts, then delete it. Its row IDs and physical layout carry no forward-
+compatibility promise, and the garden change must not add relation-spine
+machinery early merely to ease this later replacement.
+
+`EntityRelation` is not an Entity. It has no shortcode, memo, merge redirect,
+or generic detail page. Its UUID is durable so a typed extension or subrecord
+can reference one specific relationship occurrence.
+
+### Typed relation extensions
+
+A relation whose endpoints and lifecycle are its complete state needs no other
+table. A relation with domain fields uses a typed extension whose primary key
+is also the `EntityRelation.id`. The extension has a constant relation-kind
+column and a composite FK to `(EntityRelation.id, relationKind)`, following the
+same kind-correct pattern as Entity payload extensions.
+
+Repositories and server-only manifest adapters remain authoritative for
+locking, atomic replacement, cycle checks, collision handling, audit wording,
+and extension validation. Client-safe metadata can describe a supported
+operation but cannot make an undeclared relation mutable.
+
+An extension may repeat one or both endpoint IDs only as generated, checked
+projections when PostgreSQL needs local columns for an extension-specific
+unique index or a measured query plan. A deferred invariant verifies each
+projection against the base relation. Relation lifecycle remains on
+`EntityRelation`; an extension may carry a checked `retiredAt` projection only
+when a partial unique index must distinguish live and retired relations.
 
 ### `EntityMemo`: optional universal summary
 
@@ -285,21 +370,21 @@ image formats plus PDF. Whether a file can render as an image is derived from
 verified MIME/decoded metadata; “image” is a presentation capability, not the
 storage entity.
 
-### `EntityAttachment`: direct file associations
+### `EntityAttachment`: typed direct-file relation extension
 
 ```text
 EntityAttachment
-  id               uuid primary key
-  subjectEntityId  uuid not null references Entity(id)
-  fileId           uuid not null references StoredFile(id)
+  relationId       uuid primary key
+  relationKind     text not null default 'entityAttachment'
+  subjectEntityId  uuid not null
+  fileId           uuid not null
   role             text not null
-  sortOrder         integer not null default 0
   documentKind     text null
   idempotencyKey   text null
-  createdAt        timestamptz not null
-  updatedAt        timestamptz not null
-  deletedAt        timestamptz null
+  retiredAt        timestamptz null
 
+  foreign key (relationId, relationKind, subjectEntityId, fileId)
+    references EntityRelation(id, relationKind, sourceEntityId, targetEntityId)
   unique active (subjectEntityId, fileId)
   unique active (subjectEntityId, role) where role in ('cover', 'logo')
   unique active (subjectEntityId, idempotencyKey)
@@ -307,6 +392,12 @@ EntityAttachment
   check role in ('gallery', 'cover', 'logo', 'attachment')
   check documentKind is null or is a declared Purchase document kind
 ```
+
+The base relation's source is the subject, its target is the StoredFile, its
+`position` is the attachment order, and its timestamps/deletion state are the
+association lifecycle. The repeated endpoint columns and `retiredAt` are
+checked projections that make the attachment-specific partial unique indexes
+enforceable without cross-table indexes.
 
 The initial roles are:
 
@@ -357,7 +448,7 @@ specific categories. Existing primary-document selection continues to read the
 resolved `documentKind` and must pass differential tests before the old join is
 removed.
 
-The shared table replaces:
+The shared relation kind and extension replace:
 
 - `ProductImage`, `LocationImage`, `GardenEntryImage`, `RecipeImage`;
 - `MealImage`, `TaskImage`, `PurchaseImage`, `ProjectImage`;
@@ -445,7 +536,7 @@ Merges are same-kind only. In one transaction:
 1. Resolve and lock the canonical survivor and every loser without following
    redirects.
 2. Reject deleted, already-redirected, duplicate, cross-kind, or self targets.
-3. Apply the entity-specific typed edge and field collision policy.
+3. Apply the relation-kind adapter and entity-specific field collision policy.
 4. Apply the attachment and memo policies. If only one identity has a memo,
    move it to the survivor. If multiple distinct non-empty memos exist, require
    an explicit merge input choosing one, combining them into supplied text, or
@@ -491,7 +582,7 @@ classes:
 
 | Class | FK target | Delete | Merge | Examples |
 | --- | --- | --- | --- | --- |
-| Operational domain | typed payload | declared typed edge policy | repoint/reject/fold by workflow | inventory product, expense purchase, recipe ingredient |
+| Operational local-entity relation | `EntityRelation` | declared relation policy | repoint/reject/fold by workflow | inventory product, expense purchase, recipe ingredient |
 | Durable history | `Entity` | retain original identity | retain original plus resolve canonical separately | `AuditLog` |
 | Rebuildable cache | `Entity` | delete projection | delete/rebuild or repoint then rebuild | `SearchDocument`, `EntityEmbedding`, `AiAnalysis` |
 | Nullable telemetry | `Entity` | retain attribution | retain original; canonical is a read projection | `AiUsage` when one subject exists |
@@ -515,6 +606,8 @@ The entity declaration remains authoritative for:
 
 - shortcode prefix and payload table;
 - payload-retention policy;
+- persisted relation kind, endpoints, cardinality, multiplicity, ordering, and
+  optional typed extension;
 - allowed attachment roles and document kinds;
 - direct and related display-image sources;
 - delete/merge capabilities and operation owner; and
@@ -525,6 +618,8 @@ Generate:
 - `Entity.kind` values and prefix checks;
 - typed extension identity columns/FKs/checks;
 - live-payload constraint-trigger branches;
+- relation endpoint-kind checks, cardinality/multiplicity indexes, typed
+  relation-extension bindings, and relation integrity branches;
 - the shortcode/payload binding map;
 - attachment-role validation data;
 - file-liveness registry coverage; and
@@ -532,9 +627,9 @@ Generate:
 
 The `executeEntity(context, command)` interface remains the external kernel
 seam. Repositories continue to own transactions, locks, collision behavior,
-and mutation ordering. The kernel may gain normalized memo and attachment
-commands, but a relationship's presence in inspector metadata never implies a
-write command.
+and mutation ordering. The kernel may gain normalized memo, relation, and
+attachment commands, but a relationship's presence in inspector metadata
+never implies a write command.
 
 Generic detail output gains:
 
@@ -556,17 +651,21 @@ approve its inferred drops.
 
 ### Phase 0: freeze the contract and measure the baseline
 
-1. Write ADR 0004 reconciling this identity/file model with ADR 0001. State
-   that `Entity` is an identity spine and `EntityAttachment` is a typed file
-   association, not generic domain edge storage.
+1. Write ADR 0004 for the Entity and EntityRelation spines and mark ADR 0001
+   superseded. State that generic storage owns identity, endpoints, ordering,
+   and lifecycle while typed extensions and adapters retain domain behavior;
+   arbitrary JSON edge metadata remains prohibited.
 2. Snapshot the generated shortcode roster, row counts by kind, duplicate and
-   orphan counts, hard-delete call sites, direct entity inserts, all
-   `(entityType, entityId)` pairs, and all FKs to `Image`.
-3. Record query plans and latency for shortcode resolution, global search,
-   detail attachment reads, display-image selection, and file reaping.
-4. Add contract tests for the target resolver states, mutation refusal through
-   old codes, path compression, tombstones, attachment singularity, workflow
-   file retention, and historical audit attribution before changing storage.
+   orphan counts, hard-delete call sites, direct entity inserts, every FK and
+   join whose endpoints are local entities, all `(entityType, entityId)` pairs,
+   and all FKs to `Image`.
+3. Record query plans and latency for shortcode resolution, representative
+   singular and plural relationship reads/filters, global search, detail
+   attachment reads, display-image selection, and file reaping.
+4. Add contract tests for resolver states, mutation refusal through old codes,
+   path compression, tombstones, representative relation cardinality and
+   multiplicity, attachment singularity, workflow file retention, and
+   historical audit attribution before changing storage.
 5. Define one verified write-freeze gate covering browser, HTTP/MCP, Apple,
    queues, cron, imports, maintenance actions, and scripts. Enumerate and test
    each producer rather than relying on a banner or a general maintenance-mode
@@ -579,12 +678,14 @@ the migration manifest has an owner and exact counts.
 
 ### Phase 1: expand the schema
 
-1. Add `Entity`, `EntityMemo`, the stored-file extension identity columns, and
-   `EntityAttachment` without removing current columns or tables. During
-   expansion, the existing physical `Image` row is the StoredFile payload; do
-   not create a second copy of mutable file status/metadata.
+1. Add `Entity`, `EntityMemo`, `EntityRelation`, the stored-file extension
+   identity columns, and typed relation-extension tables without removing
+   current columns or tables. `EntityAttachment` is an extension of an
+   attachment relation. During expansion, the existing physical `Image` row is
+   the StoredFile payload; do not copy mutable file status/metadata.
 2. Add indexes for canonical shortcode lookup, survivor reverse lookup,
-   subject attachment order, file liveness, and active singular roles.
+   relation endpoint traversal, per-kind cardinality/multiplicity, subject
+   attachment order, file liveness, and active singular roles.
 3. Add generated extension-kind columns as nullable and with no non-null
    default while old writers still run. Do not add the composite payload FK
    yet: `NOT VALID` skips validation of old rows but still enforces new writes,
@@ -592,13 +693,14 @@ the migration manifest has an owner and exact counts.
 4. Add reference columns to selected history/cache/telemetry tables alongside
    their existing pairs. Add paired-null checks where nullable attribution is
    permitted.
-5. Add the generated deferred invariant trigger in audit-only/reporting mode
-   until the backfill is complete.
+5. Add generated payload, relation endpoint-kind, relation-extension, checked-
+   projection, and file-liveness invariant triggers in audit-only/reporting
+   mode until the backfill is complete.
 
 Exit: old deployed code continues to read and write successfully; no existing
 constraint has been weakened. Enter the verified write freeze before Phase 2.
 
-### Phase 2: backfill identity and files
+### Phase 2: backfill identity, relationships, and files
 
 1. Stream every shortcode table into `Entity` using the existing UUID,
    canonical code, declared kind, creation time, and deletion state. Verify
@@ -608,20 +710,28 @@ constraint has been weakened. Enter the verified write freeze before Phase 2.
 3. Treat each existing `Image` row in place as the StoredFile payload and
    backfill its Entity extension identity. File metadata/status continues to
    have one physical owner throughout migration.
-4. Convert the eight gallery tables, Cookbook cover, and Vendor logo into
-   `EntityAttachment` rows. Preserve ordering and purchase `documentKind`.
-   Transfer an old target-scoped idempotency key only onto the matching live
-   association; report targeted-but-detached rows and leave their keys behind.
-5. Backfill `Entity` FKs for each approved history/cache/telemetry table and
+4. Convert every authoritative persisted edge whose endpoints are both local
+   Entities into `EntityRelation`. Classify each logical source independently:
+   direct payload FKs mint migration-owned relation IDs; existing relationship
+   rows may reuse their UUID where a typed extension or dependent subrecord
+   needs stable identity. Preserve cardinality, repeated occurrences, order,
+   timestamps, deletion state, and typed extension data.
+5. Convert the eight gallery tables, Cookbook cover, and Vendor logo into
+   attachment relation rows plus `EntityAttachment` extensions. Preserve order
+   and purchase `documentKind`. Transfer an old target-scoped idempotency key
+   only onto the matching live association; report targeted-but-detached rows
+   and leave their keys behind.
+6. Backfill `Entity` FKs for each approved history/cache/telemetry table and
    report unresolved rows by policy class.
-6. Populate every extension-kind column, install its constant default, set it
-   `NOT NULL`, add the composite payload FKs as `NOT VALID`, and then validate
-   them. Run the live-payload and file-liveness detectors against the complete
-   backfill before validation. `NOT VALID` is only a scan-timing tool here, not
-   a compatibility mechanism for new writes.
+7. Populate every payload/relation extension-kind column, install its constant
+   default, set it `NOT NULL`, add composite FKs as `NOT VALID`, and validate
+   them. Run payload, relation, checked-projection, and file-liveness detectors
+   against the complete backfill first. `NOT VALID` is only a scan-timing tool,
+   not a compatibility mechanism for new writes.
 
-Exit: every live payload has one correct identity; every old direct attachment
-has an equivalent new row; unresolved history is explicitly accounted for.
+Exit: every live payload has one correct identity; every persisted local-
+entity edge and direct attachment has an equivalent relation representation;
+unresolved history is explicitly accounted for.
 
 ### Phase 3: deploy synchronized writers and reconcile
 
@@ -632,15 +742,19 @@ Keep the write freeze active for this entire phase.
    file paths, or route them through explicit migration-only helpers.
 2. Move delete/merge identity writes into the shared in-transaction lifecycle
    tail so hard payload deletion cannot skip tombstoning.
-3. Dual-write attachments from current image mutations while reads still
-   compare old and new projections. Stored-file create, upload promotion,
-   metadata/status update, and delete continue to mutate the single in-place
-   payload rather than mirroring two file tables.
-4. Dual-write approved reference-policy consumers.
-5. Add differential checks that compare old and new resolver, attachment,
-   display-image, and liveness results on every affected test fixture.
+3. Dual-write each local-entity relationship family through its typed adapter
+   while reads compare legacy FK/join projections with `EntityRelation`.
+   Relation-only changes must preserve the legacy owner timestamps and audits
+   until the old representation is removed.
+4. Dual-write attachments as relation plus typed-extension writes. Stored-file
+   create, upload promotion, metadata/status update, and delete continue to
+   mutate the single in-place payload rather than mirroring two file tables.
+5. Dual-write approved reference-policy consumers.
+6. Add differential checks that compare old and new resolver, relationship,
+   filter, attachment, display-image, and liveness results on every affected
+   fixture.
 
-6. Deploy every server writer, restart consumers with snapshotted registries,
+7. Deploy every server writer, restart consumers with snapshotted registries,
    drain or discard pre-freeze queued messages according to their idempotency
    contracts, then run a final complete backfill/reconciliation from a stable
    database state.
@@ -655,42 +769,51 @@ full background/import cycle before removing dual writes.
 2. Return redirect metadata and tombstone states through browser, HTTP, MCP,
    and native contracts; update old merge-404 tests into named redirect and
    mutation-refusal regressions.
-3. Switch gallery/cover/logo reads, detail attachments, display images, upload
-   association, reorder, detach, and file reaping to `EntityAttachment` and the
-   exhaustive liveness registry.
-4. Switch approved history/cache/telemetry consumers to `Entity` FKs and the
+3. Switch singular and plural domain reads, filters, search projections,
+   relationship discovery, and declared mutations to `EntityRelation` plus
+   their typed extensions. Keep derived provenance computed rather than
+   materializing duplicate relation rows.
+4. Switch gallery/cover/logo reads, detail attachments, display images, upload
+   association, reorder, detach, and file reaping to attachment relations,
+   `EntityAttachment`, and the exhaustive liveness registry.
+5. Switch approved history/cache/telemetry consumers to `Entity` FKs and the
    declared merge/delete policy.
-5. Enable memo read/write in the generic entity interface without replacing
+6. Enable memo read/write in the generic entity interface without replacing
    payload-specific notes.
-6. Enable the deferred live-payload constraint trigger as an enforced commit
-   invariant.
+7. Enable deferred payload, relation, extension, projection, and liveness
+   constraint triggers as enforced commit invariants.
 
-Exit: no runtime read or write depends on the legacy lifecycle columns, image
-join tables, cover/logo columns, or approved untyped reference pairs.
+Exit: no runtime read or write depends on legacy local-entity FKs/join tables,
+lifecycle columns, image joins, cover/logo columns, or approved untyped
+reference pairs.
 
 ### Phase 5: cleanup and rename
 
 1. Remove legacy dual writes and comparison telemetry after a measured clean
    interval.
-2. Drop the eight image joins and singular cover/logo FKs, then remove their
+2. Drop legacy local-entity FK columns and join tables after each family has a
+   deployed read switch and exact differential parity. Retain only generated,
+   checked projections justified by a local constraint or measured query plan.
+3. Drop the eight image joins and singular cover/logo FKs, then remove their
    declaration/generator branches and handwritten bindings.
-3. Remove copied shortcode/lifecycle columns from typed payload tables only
+4. Remove copied shortcode/lifecycle columns from typed payload tables only
    after deployed code no longer selects them. Drop old untyped pair columns
    only for consumers that completed the reference-policy migration.
-4. Perform the in-place physical `Image` -> `StoredFile` rename under a brief,
+5. Perform the in-place physical `Image` -> `StoredFile` rename under a brief,
    separate coordinated access gate spanning the DDL, matching server deploy,
    registry/worker restarts, and a read/write smoke test. Preserve the single
    physical payload; do not let either old SQL naming `Image` or new SQL naming
    `StoredFile` run against the wrong side of the rename. Remove temporary
    transport discriminants only after browser, OpenAPI/MCP, and Apple
    compatibility checks.
-5. Update `docs/entities.md`, README shortcode/entity text, inspector wording,
+6. Update `docs/entities.md`, README shortcode/entity text, inspector wording,
    and `docs/todos.md`.
-6. Re-run baseline query plans and record any retained denormalization justified
+7. Re-run baseline query plans and record any retained denormalization justified
    by measured regression.
 
-Exit: there is one authoritative representation for identity and direct file
-attachments, and the removed code exceeds the new compatibility machinery.
+Exit: there is one authoritative representation for entity identity, local-
+entity relationships, and direct file attachments, and the removed legacy
+storage exceeds the new spine and extension machinery.
 
 ## Validation
 
@@ -702,12 +825,16 @@ attachments, and the removed code exceeds the new compatibility machinery.
 - Zero duplicate canonical shortcodes.
 - Zero redirect cycles or multi-hop chains; a redirect to a canonical identity
   deleted after the merge is valid and resolves to that tombstone.
+- Exact legacy/EntityRelation parity by relation kind, endpoint, occurrence,
+  order, timestamps, deletion state, and typed extension fields.
+- Zero relations with forbidden endpoint kinds, missing required extensions,
+  unexpected extensions, or stale checked endpoint/lifecycle projections.
 - Exact old/new attachment parity by subject, file, role, order, and
   `documentKind`; every Purchase attachment remains classified.
 - Zero stored files reaped while referenced by an attachment, import hunt, or
   mail attachment.
-- Query-plan comparison for resolver, attachment list, display image, search,
-  and reaper queries.
+- Query-plan comparison for resolver, representative singular/plural relation
+  reads and filters, attachment list, display image, search, and reaper queries.
 
 ### Behavioral contracts
 
@@ -733,8 +860,8 @@ attachments, and the removed code exceeds the new compatibility machinery.
   not change accidentally.
 - An attachment used by two entities survives either entity's deletion.
 - A workflow-only file survives without an `EntityAttachment`.
-- Existing domain FK, merge, delete, reporting, and uniqueness behavior remains
-  unchanged.
+- Existing domain relationship, merge, delete, reporting, multiplicity,
+  ordering, and uniqueness behavior remains unchanged.
 
 ### Repository gates
 
@@ -760,8 +887,9 @@ redeploying the prior compatible build; there is no row-level user undo.
 Stop the cutover if any of these occur:
 
 - per-kind identity counts diverge;
-- attachment parity or file-liveness checks diverge;
-- the deferred payload invariant finds a live orphan;
+- relation, attachment, or file-liveness parity checks diverge;
+- a deferred payload/relation/extension invariant finds a live orphan or kind
+  mismatch;
 - a writer bypasses the dual-write seam;
 - redirect resolution creates a cycle or changes a mutation target; or
 - representative query plans regress without an understood index fix.
@@ -771,10 +899,15 @@ Stop the cutover if any of these occur:
 These are detailed backlog candidates, not hidden requirements for the identity
 or file migration.
 
-### 1. Generic relationship editor over declared adapters
+### 1. Broader relationship editor over declared adapters
 
 Goal: let a user inspect and mutate supported relationships from a shared UI
-without inventing generic edge storage.
+without treating generic storage as generic permission or behavior.
+
+Manifest-driven multiple-reference fields, scoped pickers, and set-replacement
+adapters ship with the Garden Entry planting association and are prerequisites,
+not part of this follow-up. This section covers editing relations from generic
+relationship/inspector surfaces rather than from an entity's ordinary form.
 
 Promote when at least two typed relationships need the same attach/detach or
 replace interaction beyond file attachments.
@@ -794,8 +927,8 @@ Work:
    for relationships each client actually supports.
 
 Acceptance: adding a supported editor requires one declaration plus one typed
-adapter, transaction semantics remain repository-owned, and no universal
-`EntityRelation` table exists.
+adapter, transaction semantics remain repository-owned, and the existence of
+an `EntityRelation` row never grants mutation capability by itself.
 
 ### 2. Selective conversion of remaining polymorphic references
 
@@ -867,16 +1000,19 @@ Proceed only if the implementation preserves these boundaries:
 
 - Identity can be generic because every entity needs durable naming and
   lifecycle.
-- Files can be M:N because the same immutable stored file can legitimately be
-  attached to multiple entities in multiple supported roles.
-- Domain relationships are not generic unless their business semantics are
-  genuinely identical.
+- Relation identity/endpoints can be generic because every authoritative
+  persisted edge between local Entities needs the same referential spine.
+- Domain relationship fields and behavior remain typed even when their base
+  endpoints use generic storage.
+- Files use an attachment relation extension because role, order,
+  classification, idempotency, and liveness are typed attachment semantics.
 - Relationship metadata describes and dispatches declared behavior; it does
   not create behavior.
 - Historical truth keeps the original identity while read models may also
   resolve the canonical survivor.
 
-If implementation starts adding arbitrary JSON edge metadata, converting typed
-FKs solely for uniformity, or teaching callers the internal payload/redirect
-machinery, stop and re-scope. That would be a different architecture from the
-one approved here.
+If implementation starts adding arbitrary JSON edge metadata, bypassing typed
+adapters, materializing derived paths, moving non-entity references into the
+relation spine solely for uniformity, or teaching callers the internal
+payload/redirect machinery, stop and re-scope. That would be a different
+architecture from the one approved here.

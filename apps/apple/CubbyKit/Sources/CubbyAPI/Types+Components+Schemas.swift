@@ -9488,8 +9488,8 @@ extension Components {
         public struct GardenEntryCreateInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput/plantingId`.
-            public var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput/plantingIds`.
+            public var plantingIds: [Components.Schemas.PlantingShortcode]?
             /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput/kind`.
             public var kind: Components.Schemas.GardenEntryKind?
             /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput/observedOn`.
@@ -9504,7 +9504,7 @@ extension Components {
             ///
             /// - Parameters:
             ///   - locationId:
-            ///   - plantingId:
+            ///   - plantingIds:
             ///   - kind:
             ///   - observedOn:
             ///   - note:
@@ -9512,7 +9512,7 @@ extension Components {
             ///   - pendingImageIds:
             public init(
                 locationId: Components.Schemas.LocationShortcode,
-                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                plantingIds: [Components.Schemas.PlantingShortcode]? = nil,
                 kind: Components.Schemas.GardenEntryKind? = nil,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
@@ -9520,7 +9520,7 @@ extension Components {
                 pendingImageIds: [Components.Schemas.ImageShortcode]? = nil
             ) {
                 self.locationId = locationId
-                self.plantingId = plantingId
+                self.plantingIds = plantingIds
                 self.kind = kind
                 self.observedOn = observedOn
                 self.note = note
@@ -9529,7 +9529,7 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case locationId
-                case plantingId
+                case plantingIds
                 case kind
                 case observedOn
                 case note
@@ -9543,8 +9543,8 @@ extension Components {
             public var id: Components.Schemas.GardenEntryShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/plantingId`.
-            public var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/plantingIds`.
+            public var plantingIds: Components.Schemas.OutputSchema113
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/observedOn`.
@@ -9559,8 +9559,8 @@ extension Components {
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/locationName`.
             public var locationName: Swift.String
-            /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/plantingName`.
-            public var plantingName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/plantings`.
+            public var plantings: Components.Schemas.OutputSchema118
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/updatedAt`.
@@ -9574,7 +9574,7 @@ extension Components {
             /// - Parameters:
             ///   - id:
             ///   - locationId:
-            ///   - plantingId:
+            ///   - plantingIds:
             ///   - kind:
             ///   - observedOn:
             ///   - note:
@@ -9582,7 +9582,7 @@ extension Components {
             ///   - images:
             ///   - displayName:
             ///   - locationName:
-            ///   - plantingName:
+            ///   - plantings:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - displayImages:
@@ -9590,7 +9590,7 @@ extension Components {
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                plantingIds: Components.Schemas.OutputSchema113,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
@@ -9598,7 +9598,7 @@ extension Components {
                 images: Components.Schemas.OutputSchema28,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantingName: Swift.String? = nil,
+                plantings: Components.Schemas.OutputSchema118,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
@@ -9606,7 +9606,7 @@ extension Components {
             ) {
                 self.id = id
                 self.locationId = locationId
-                self.plantingId = plantingId
+                self.plantingIds = plantingIds
                 self.kind = kind
                 self.observedOn = observedOn
                 self.note = note
@@ -9614,7 +9614,7 @@ extension Components {
                 self.images = images
                 self.displayName = displayName
                 self.locationName = locationName
-                self.plantingName = plantingName
+                self.plantings = plantings
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.displayImages = displayImages
@@ -9623,7 +9623,7 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case locationId
-                case plantingId
+                case plantingIds
                 case kind
                 case observedOn
                 case note
@@ -9631,7 +9631,7 @@ extension Components {
                 case images
                 case displayName
                 case locationName
-                case plantingName
+                case plantings
                 case createdAt
                 case updatedAt
                 case displayImages
@@ -9647,9 +9647,9 @@ extension Components {
                     Components.Schemas.LocationShortcode.self,
                     forKey: .locationId
                 )
-                self.plantingId = try container.decodeIfPresent(
-                    Components.Schemas.PlantingShortcode.self,
-                    forKey: .plantingId
+                self.plantingIds = try container.decode(
+                    Components.Schemas.OutputSchema113.self,
+                    forKey: .plantingIds
                 )
                 self.kind = try container.decode(
                     Components.Schemas.GardenEntryKind.self,
@@ -9679,9 +9679,9 @@ extension Components {
                     Swift.String.self,
                     forKey: .locationName
                 )
-                self.plantingName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .plantingName
+                self.plantings = try container.decode(
+                    Components.Schemas.OutputSchema118.self,
+                    forKey: .plantings
                 )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
@@ -9702,7 +9702,7 @@ extension Components {
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "locationId",
-                    "plantingId",
+                    "plantingIds",
                     "kind",
                     "observedOn",
                     "note",
@@ -9710,7 +9710,7 @@ extension Components {
                     "images",
                     "displayName",
                     "locationName",
-                    "plantingName",
+                    "plantings",
                     "createdAt",
                     "updatedAt",
                     "displayImages",
@@ -9729,8 +9729,8 @@ extension Components {
             public var id: Components.Schemas.GardenEntryShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/plantingId`.
-            public var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/plantingIds`.
+            public var plantingIds: Components.Schemas.OutputSchema113
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/observedOn`.
@@ -9745,8 +9745,8 @@ extension Components {
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/locationName`.
             public var locationName: Swift.String
-            /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/plantingName`.
-            public var plantingName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/plantings`.
+            public var plantings: Components.Schemas.OutputSchema118
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryListItem/updatedAt`.
@@ -9758,7 +9758,7 @@ extension Components {
             /// - Parameters:
             ///   - id:
             ///   - locationId:
-            ///   - plantingId:
+            ///   - plantingIds:
             ///   - kind:
             ///   - observedOn:
             ///   - note:
@@ -9766,14 +9766,14 @@ extension Components {
             ///   - images:
             ///   - displayName:
             ///   - locationName:
-            ///   - plantingName:
+            ///   - plantings:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - displayImages:
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                plantingIds: Components.Schemas.OutputSchema113,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
@@ -9781,14 +9781,14 @@ extension Components {
                 images: Components.Schemas.OutputSchema28,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantingName: Swift.String? = nil,
+                plantings: Components.Schemas.OutputSchema118,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField
             ) {
                 self.id = id
                 self.locationId = locationId
-                self.plantingId = plantingId
+                self.plantingIds = plantingIds
                 self.kind = kind
                 self.observedOn = observedOn
                 self.note = note
@@ -9796,7 +9796,7 @@ extension Components {
                 self.images = images
                 self.displayName = displayName
                 self.locationName = locationName
-                self.plantingName = plantingName
+                self.plantings = plantings
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.displayImages = displayImages
@@ -9804,7 +9804,7 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case locationId
-                case plantingId
+                case plantingIds
                 case kind
                 case observedOn
                 case note
@@ -9812,7 +9812,7 @@ extension Components {
                 case images
                 case displayName
                 case locationName
-                case plantingName
+                case plantings
                 case createdAt
                 case updatedAt
                 case displayImages
@@ -9827,9 +9827,9 @@ extension Components {
                     Components.Schemas.LocationShortcode.self,
                     forKey: .locationId
                 )
-                self.plantingId = try container.decodeIfPresent(
-                    Components.Schemas.PlantingShortcode.self,
-                    forKey: .plantingId
+                self.plantingIds = try container.decode(
+                    Components.Schemas.OutputSchema113.self,
+                    forKey: .plantingIds
                 )
                 self.kind = try container.decode(
                     Components.Schemas.GardenEntryKind.self,
@@ -9859,9 +9859,9 @@ extension Components {
                     Swift.String.self,
                     forKey: .locationName
                 )
-                self.plantingName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .plantingName
+                self.plantings = try container.decode(
+                    Components.Schemas.OutputSchema118.self,
+                    forKey: .plantings
                 )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
@@ -9878,7 +9878,7 @@ extension Components {
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "locationId",
-                    "plantingId",
+                    "plantingIds",
                     "kind",
                     "observedOn",
                     "note",
@@ -9886,7 +9886,7 @@ extension Components {
                     "images",
                     "displayName",
                     "locationName",
-                    "plantingName",
+                    "plantings",
                     "createdAt",
                     "updatedAt",
                     "displayImages"
@@ -9937,8 +9937,8 @@ extension Components {
             public var id: Components.Schemas.GardenEntryShortcode
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/locationId`.
             public var locationId: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantingId`.
-            public var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantingIds`.
+            public var plantingIds: Components.Schemas.OutputSchema113
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/kind`.
             public var kind: Components.Schemas.GardenEntryKind
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/observedOn`.
@@ -9953,8 +9953,8 @@ extension Components {
             public var displayName: Swift.String
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/locationName`.
             public var locationName: Swift.String
-            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantingName`.
-            public var plantingName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantings`.
+            public var plantings: Components.Schemas.OutputSchema118
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/createdAt`.
             public var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/GardenEntryOut/updatedAt`.
@@ -9964,7 +9964,7 @@ extension Components {
             /// - Parameters:
             ///   - id:
             ///   - locationId:
-            ///   - plantingId:
+            ///   - plantingIds:
             ///   - kind:
             ///   - observedOn:
             ///   - note:
@@ -9972,13 +9972,13 @@ extension Components {
             ///   - images:
             ///   - displayName:
             ///   - locationName:
-            ///   - plantingName:
+            ///   - plantings:
             ///   - createdAt:
             ///   - updatedAt:
             public init(
                 id: Components.Schemas.GardenEntryShortcode,
                 locationId: Components.Schemas.LocationShortcode,
-                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                plantingIds: Components.Schemas.OutputSchema113,
                 kind: Components.Schemas.GardenEntryKind,
                 observedOn: Components.Schemas.PlainDate,
                 note: Swift.String? = nil,
@@ -9986,13 +9986,13 @@ extension Components {
                 images: Components.Schemas.OutputSchema28,
                 displayName: Swift.String,
                 locationName: Swift.String,
-                plantingName: Swift.String? = nil,
+                plantings: Components.Schemas.OutputSchema118,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date
             ) {
                 self.id = id
                 self.locationId = locationId
-                self.plantingId = plantingId
+                self.plantingIds = plantingIds
                 self.kind = kind
                 self.observedOn = observedOn
                 self.note = note
@@ -10000,14 +10000,14 @@ extension Components {
                 self.images = images
                 self.displayName = displayName
                 self.locationName = locationName
-                self.plantingName = plantingName
+                self.plantings = plantings
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case locationId
-                case plantingId
+                case plantingIds
                 case kind
                 case observedOn
                 case note
@@ -10015,7 +10015,7 @@ extension Components {
                 case images
                 case displayName
                 case locationName
-                case plantingName
+                case plantings
                 case createdAt
                 case updatedAt
             }
@@ -10029,9 +10029,9 @@ extension Components {
                     Components.Schemas.LocationShortcode.self,
                     forKey: .locationId
                 )
-                self.plantingId = try container.decodeIfPresent(
-                    Components.Schemas.PlantingShortcode.self,
-                    forKey: .plantingId
+                self.plantingIds = try container.decode(
+                    Components.Schemas.OutputSchema113.self,
+                    forKey: .plantingIds
                 )
                 self.kind = try container.decode(
                     Components.Schemas.GardenEntryKind.self,
@@ -10061,9 +10061,9 @@ extension Components {
                     Swift.String.self,
                     forKey: .locationName
                 )
-                self.plantingName = try container.decodeIfPresent(
-                    Swift.String.self,
-                    forKey: .plantingName
+                self.plantings = try container.decode(
+                    Components.Schemas.OutputSchema118.self,
+                    forKey: .plantings
                 )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
@@ -10076,7 +10076,7 @@ extension Components {
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "locationId",
-                    "plantingId",
+                    "plantingIds",
                     "kind",
                     "observedOn",
                     "note",
@@ -10084,7 +10084,7 @@ extension Components {
                     "images",
                     "displayName",
                     "locationName",
-                    "plantingName",
+                    "plantings",
                     "createdAt",
                     "updatedAt"
                 ])
@@ -10098,8 +10098,8 @@ extension Components {
         public struct GardenEntryUpdateData: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/locationId`.
             public var locationId: Components.Schemas.LocationShortcode?
-            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/plantingId`.
-            public var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/plantingIds`.
+            public var plantingIds: [Components.Schemas.PlantingShortcode]?
             /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/kind`.
             public var kind: Components.Schemas.GardenEntryKind?
             /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/observedOn`.
@@ -10118,7 +10118,7 @@ extension Components {
             ///
             /// - Parameters:
             ///   - locationId:
-            ///   - plantingId:
+            ///   - plantingIds:
             ///   - kind:
             ///   - observedOn:
             ///   - note:
@@ -10128,7 +10128,7 @@ extension Components {
             ///   - imageOrder:
             public init(
                 locationId: Components.Schemas.LocationShortcode? = nil,
-                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                plantingIds: [Components.Schemas.PlantingShortcode]? = nil,
                 kind: Components.Schemas.GardenEntryKind? = nil,
                 observedOn: Components.Schemas.PlainDate? = nil,
                 note: Swift.String? = nil,
@@ -10138,7 +10138,7 @@ extension Components {
                 imageOrder: [Components.Schemas.ImageShortcode]? = nil
             ) {
                 self.locationId = locationId
-                self.plantingId = plantingId
+                self.plantingIds = plantingIds
                 self.kind = kind
                 self.observedOn = observedOn
                 self.note = note
@@ -10149,7 +10149,7 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case locationId
-                case plantingId
+                case plantingIds
                 case kind
                 case observedOn
                 case note
@@ -23256,6 +23256,48 @@ extension Components {
             case moveDedupe = "move-dedupe"
             case preserve = "preserve"
         }
+        /// - Remark: Generated from `#/components/schemas/output_schema113`.
+        public typealias OutputSchema113 = [Components.Schemas.PlantingShortcode]
+        /// - Remark: Generated from `#/components/schemas/OutputSchema118`.
+        public struct OutputSchema118Payload: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OutputSchema118/id`.
+            public var id: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/OutputSchema118/name`.
+            public var name: Swift.String
+            /// Creates a new `OutputSchema118Payload`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            public init(
+                id: Components.Schemas.PlantingShortcode,
+                name: Swift.String
+            ) {
+                self.id = id
+                self.name = name
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/output_schema118`.
+        public typealias OutputSchema118 = [Components.Schemas.OutputSchema118Payload]
         /// - Remark: Generated from `#/components/schemas/output_schema124`.
         public typealias OutputSchema124 = [Components.Schemas.BaseKind]
         /// - Remark: Generated from `#/components/schemas/output_schema143`.

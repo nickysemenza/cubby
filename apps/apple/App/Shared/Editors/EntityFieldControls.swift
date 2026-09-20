@@ -14,6 +14,9 @@ struct EntityFieldControl: View {
 
     private var key: String { field.key }
     private var value: JSONValue { model.draft[key] ?? .null }
+    private var pickerScope: EntityPickerScope? {
+        EntityReferenceScope.pickerScope(field: field, draft: model.draft)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
@@ -162,7 +165,11 @@ struct EntityFieldControl: View {
             }
         }
         .sheet(isPresented: $picking) {
-            EntityPickerSheet(target: reference.entity, selected: [value.stringValue].compactMap { $0 }) {
+            EntityPickerSheet(
+                target: reference.entity,
+                selected: [value.stringValue].compactMap { $0 },
+                scope: pickerScope
+            ) {
                 picks in
                 guard let pick = picks.first else { return }
                 model.draft[key] = .string(pick.id)
@@ -199,7 +206,12 @@ struct EntityFieldControl: View {
             }
         }
         .sheet(isPresented: $picking) {
-            EntityPickerSheet(target: reference.entity, multiple: true, selected: ids) { picks in
+            EntityPickerSheet(
+                target: reference.entity,
+                multiple: true,
+                selected: ids,
+                scope: pickerScope
+            ) { picks in
                 model.draft[key] = .array(picks.map { .string($0.id) })
                 for pick in picks { pickedTitles[pick.id] = pick.title }
             }

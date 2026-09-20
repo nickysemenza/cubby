@@ -55,7 +55,7 @@ describe("EntityEditDialog generic create", () => {
           operation: "create",
           intent: "full",
           seed: {
-            plantingId: testShortcode("planting", "PLT-4K7M"),
+            plantingIds: [testShortcode("planting", "PLT-4K7M")],
             locationId: testShortcode("location", "LOC-4K7M"),
           },
         }}
@@ -63,9 +63,7 @@ describe("EntityEditDialog generic create", () => {
       { wrapper: harness.wrapper },
     );
     expect(await screen.findByText("New Garden Entry")).toBeInTheDocument();
-    expect(screen.getByLabelText("Planting", { exact: true })).toHaveValue(
-      "PLT-4K7M",
-    );
+    expect(screen.getByText("PLT-4K7M")).toBeInTheDocument();
     const harvest = screen.getByLabelText("Harvest amount", { exact: true });
     const observed = screen.getByLabelText("Observed", { exact: true });
     fireEvent.change(observed, { target: { value: "2026-08-20" } });
@@ -88,7 +86,7 @@ describe("EntityEditDialog generic create", () => {
       expect.objectContaining({
         input: expect.objectContaining({
           data: expect.objectContaining({
-            plantingId: "PLT-4K7M",
+            plantingIds: ["PLT-4K7M"],
             observedOn: "2026-08-20",
             harvestAmount: "A handful",
             note: "First harvest",
@@ -98,12 +96,16 @@ describe("EntityEditDialog generic create", () => {
     );
   });
 
-  it("clears the singular planting link through the update API", async () => {
+  it("clears the planting set through the update API", async () => {
     const { mutationPort, transport } = gardenEntryPort("update");
     const currentPlantingId = testShortcode("planting", "PLT-4K7M");
     const record = mock(gardenEntryOut, {
       seed: 4,
-      overrides: { images: [], plantingId: currentPlantingId },
+      overrides: {
+        images: [],
+        plantingIds: [currentPlantingId],
+        plantings: [{ id: currentPlantingId, name: "Current planting" }],
+      },
     });
     render(
       <EntityEditDialog
@@ -120,20 +122,20 @@ describe("EntityEditDialog generic create", () => {
       { wrapper: harness.wrapper },
     );
 
-    const planting = await screen.findByRole("combobox", { name: "Planting" });
-    expect(planting).toHaveValue(currentPlantingId);
-    fireEvent.keyDown(planting, { key: "ArrowDown" });
+    expect(await screen.findByText(currentPlantingId)).toBeInTheDocument();
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Clear Planting" }).at(-1)!,
+      screen.getByRole("button", { name: `Remove ${currentPlantingId}` }),
     );
-    await waitFor(() => expect(planting).toHaveValue(""));
+    await waitFor(() =>
+      expect(screen.queryByText(currentPlantingId)).not.toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
     expect(transport).toHaveBeenCalledWith(
       expect.objectContaining({
         input: expect.objectContaining({
-          data: expect.objectContaining({ plantingId: null }),
+          data: expect.objectContaining({ plantingIds: [] }),
         }),
       }),
     );

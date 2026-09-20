@@ -147,6 +147,22 @@ const metadataSchemas = () => {
         .boolean({ error: "must be a boolean" })
         .optional()
         .default(false),
+      /**
+       * Values from the owning record that constrain a dependent reference
+       * picker.  `sourceField` is read from the editor form and `targetField`
+       * is the corresponding field/filter on the referenced entity.
+       */
+      scope: z
+        .array(
+          z
+            .object({
+              sourceField: nonEmptyString(),
+              targetField: nonEmptyString(),
+            })
+            .strict(),
+        )
+        .optional()
+        .default([]),
     })
     .strict();
 
@@ -452,6 +468,17 @@ const metadataSchemas = () => {
           .nullable()
           .optional()
           .default(null),
+        /** Explicit create-field prefill for relation sections whose target
+         * reference is not named by the target filter descriptor (including
+         * multiple-reference fields such as `plantingIds`). */
+        prefill: z
+          .object({
+            field: fieldKey,
+          })
+          .strict()
+          .nullable()
+          .optional()
+          .default(null),
         sort: z
           .object({
             field: nonEmptyString(),
@@ -722,6 +749,9 @@ const metadataSchemas = () => {
   const imageIngressBindingMetadataSchema = z.discriminatedUnion("from", [
     z
       .object({ field: nonEmptyString(), from: z.literal("source-id") })
+      .strict(),
+    z
+      .object({ field: nonEmptyString(), from: z.literal("source-id-list") })
       .strict(),
     z
       .object({

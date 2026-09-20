@@ -28,6 +28,7 @@ struct EntityPickerSheet: View {
     let target: EntityKey
     let multiple: Bool
     let onPick: ([EntityPick]) -> Void
+    let scope: EntityPickerScope?
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
@@ -41,11 +42,13 @@ struct EntityPickerSheet: View {
 
     init(
         target: EntityKey, multiple: Bool = false, selected: [String] = [],
+        scope: EntityPickerScope? = nil,
         onPick: @escaping ([EntityPick]) -> Void
     ) {
         self.target = target
         self.multiple = multiple
         self.onPick = onPick
+        self.scope = scope
         // Every call site presents this via `.sheet(isPresented:)`, not `.sheet(item:)` —
         // dismissing tears the subtree down, so re-presenting rebuilds this seed fresh.
         _selected = State(initialValue: selected.map { EntityPick(id: $0, title: $0) })  // state-init-ok
@@ -53,7 +56,9 @@ struct EntityPickerSheet: View {
 
     private var descriptor: EntityDescriptor { EntityCatalog[target] }
     private var textFilter: FilterDescriptor? { descriptor.filters.first { $0.kind == .text } }
-    private var usesSearchRPC: Bool { textFilter == nil && descriptor.searchable }
+    private var usesSearchRPC: Bool {
+        textFilter == nil && descriptor.searchable && scope == nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -178,6 +183,11 @@ struct EntityPickerSheet: View {
     }
 
     private func reload(term: String) async {
+        if let scope, !scope.ready {
+            hits = []
+            model = nil
+            return
+        }
         if usesSearchRPC {
             guard !term.isEmpty else {
                 hits = []
@@ -195,9 +205,14 @@ struct EntityPickerSheet: View {
             }
             return
         }
-        var filters = EntityFilterState()
+        var filters = scope?.filters ?? EntityFilterState()
         if let textFilter, case .param(let name) = textFilter.wire {
             filters.set(.single(term), for: name)
+        } else if let primarySearch = descriptor.primarySearch {
+            // Scoped candidates use the list operation so the dependent
+            // filters remain server-enforced; its primary search key keeps
+            // typed text on the same request instead of widening to search.find.
+            filters.set(.single(term), for: primarySearch.key)
         }
         let fresh = GenericEntityListModel(
             descriptor: descriptor, client: appModel.client, pageSize: 25, filters: filters, view: .table)

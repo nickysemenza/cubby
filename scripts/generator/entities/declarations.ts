@@ -130,7 +130,14 @@ export type EntityField = Readonly<{
   label: string;
   description: string | null;
   readKey: string | null;
-  reference: Readonly<{ entity: string; multiple: boolean }> | null;
+  reference: Readonly<{
+    entity: string;
+    multiple: boolean;
+    scope: readonly Readonly<{
+      sourceField: string;
+      targetField: string;
+    }>[];
+  }> | null;
   provenance: EntityFieldProvenance | null;
   control: EntityFieldControl | null;
   display: Readonly<{

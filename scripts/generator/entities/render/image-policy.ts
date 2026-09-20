@@ -21,6 +21,7 @@ const IMAGE_STORAGE_VALUES = ["gallery", "cover", "logo"] as const;
 /** `imageIngressBindingMetadataSchema` discriminant, packages/schemas/src/entity-definitions/definition.ts. */
 const BINDING_SOURCES = [
   "source-id",
+  "source-id-list",
   "source-field",
   "capture-date",
   "constant",
@@ -69,7 +70,10 @@ type ImageRoute = {
 };
 
 type ImageIngressBinding =
-  | Readonly<{ field: string; from: "source-id" | "capture-date" }>
+  | Readonly<{
+      field: string;
+      from: "source-id" | "source-id-list" | "capture-date";
+    }>
   | Readonly<{ field: string; from: "source-field"; sourceField: string }>
   | Readonly<{
       field: string;
@@ -254,7 +258,7 @@ export const renderImagePolicyArtifacts = (
     'import type { Entity } from "../entity";\n' +
     'import type { PhotoCategoryKey } from "../photo-categories";\n\n' +
     `export type ImageStorage = false | ${unionType(IMAGE_STORAGE_VALUES)};\n` +
-    'export type ImageIngressBinding = { readonly field: string; readonly from: "source-id" | "capture-date" } | { readonly field: string; readonly from: "source-field"; readonly sourceField: string } | { readonly field: string; readonly from: "constant"; readonly value: string | number | boolean | null } | { readonly field: string; readonly from: "relation-items"; readonly item: { readonly field: string; readonly from: "source-id" | "source-field" | "constant"; readonly sourceField?: string; readonly value?: string | number | boolean | null } };\n' +
+    'export type ImageIngressBinding = { readonly field: string; readonly from: "source-id" | "source-id-list" | "capture-date" } | { readonly field: string; readonly from: "source-field"; readonly sourceField: string } | { readonly field: string; readonly from: "constant"; readonly value: string | number | boolean | null } | { readonly field: string; readonly from: "relation-items"; readonly item: { readonly field: string; readonly from: "source-id" | "source-field" | "constant"; readonly sourceField?: string; readonly value?: string | number | boolean | null } };\n' +
     "type ImageRoutePredicate = { readonly field: string; readonly oneOf: readonly string[] };\n" +
     `export type ImageIngressRoute = { readonly routeId: string; readonly sourceEntity: Entity; readonly targetEntity: Entity; readonly kind: ${unionType(ROUTE_KINDS)}; readonly storage: ImageStorage; readonly relationPath: readonly string[]; readonly bindings: readonly ImageIngressBinding[]; readonly append: boolean; readonly requiresReplaceConfirmation: boolean; readonly choice: ${unionType(ROUTE_CHOICES)}; readonly primaryWhen: ImageRoutePredicate | null; readonly enabled: boolean; readonly disabledReason: string | null };\n` +
     `export type ImageDisplayBinding = { readonly relationPath: readonly string[]; readonly targetEntity: Entity; readonly priority: number; readonly ordering: ${unionType(DISPLAY_ORDERINGS)}; readonly identityEvidence: false };\n\n` +

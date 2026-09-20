@@ -45,6 +45,7 @@ export default defineEntity({
           title: "Journal",
           relation: "entries",
           filter: { descriptor: "journalPlantingId" },
+          prefill: { field: "plantingIds" },
           columns: [
             "kind",
             "observedOn",
@@ -472,6 +473,14 @@ export default defineEntity({
         brandRef: { entity: "location" },
       },
       {
+        // Virtual, URL-only scope consumed by dependent Garden Entry
+        // planting pickers; the repository computes lifecycle membership.
+        columnId: "activeOn",
+        kind: "text",
+        placeholder: "Filter plantings active on...",
+        urlOnly: true,
+      },
+      {
         columnId: "ingredientId",
         kind: "idMulti",
         placeholder: "Filter by crop...",
@@ -551,10 +560,16 @@ export default defineEntity({
       cardinality: "many",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "GardenEntry.plantingId", direction: "incoming" }],
+        steps: [
+          { edge: "GardenEntryPlanting.plantingId", direction: "incoming" },
+          { edge: "GardenEntryPlanting.gardenEntryId", direction: "outgoing" },
+        ],
       },
       inverse: {
-        steps: [{ edge: "GardenEntry.plantingId", direction: "outgoing" }],
+        steps: [
+          { edge: "GardenEntryPlanting.gardenEntryId", direction: "incoming" },
+          { edge: "GardenEntryPlanting.plantingId", direction: "outgoing" },
+        ],
       },
     },
   ],
@@ -593,7 +608,7 @@ export default defineEntity({
           relationPath: ["entries"],
           choice: "primary",
           bindings: [
-            { field: "plantingId", from: "source-id" },
+            { field: "plantingIds", from: "source-id-list" },
             {
               field: "locationId",
               from: "source-field",

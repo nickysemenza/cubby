@@ -43,7 +43,7 @@ export default defineEntity({
             "kind",
             "observedOn",
             "locationId",
-            "plantingId",
+            "plantings",
             "note",
             "harvestAmount",
           ],
@@ -72,17 +72,22 @@ export default defineEntity({
         },
       },
       {
-        key: "plantingId",
+        key: "plantingIds",
         kind: "identifier",
-        nullable: true,
-        label: "Planting",
-        reference: { entity: "planting" },
-        control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true },
+        label: "Plantings",
+        reference: {
+          entity: "planting",
+          multiple: true,
+          scope: [
+            { sourceField: "locationId", targetField: "locationId" },
+            { sourceField: "observedOn", targetField: "activeOn" },
+          ],
+        },
+        control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          read: plantingShortcode.nullable(),
-          create: plantingShortcode.nullable().default(null),
-          update: plantingShortcode.nullable().optional(),
+          read: z.array(plantingShortcode),
+          create: z.array(plantingShortcode).default([]),
+          update: z.array(plantingShortcode).optional(),
         },
       },
       {
@@ -192,10 +197,17 @@ export default defineEntity({
         validation: { read: z.string(), create: null, update: null },
       },
       {
-        key: "plantingName",
-        kind: "text",
-        nullable: true,
-        validation: { read: z.string().nullable(), create: null, update: null },
+        key: "plantings",
+        kind: "identifier",
+        label: "Plantings",
+        readKey: "plantings",
+        reference: { entity: "planting", multiple: true },
+        display: { list: true, detail: true, columnId: "plantings" },
+        validation: {
+          read: z.array(z.object({ id: plantingShortcode, name: z.string() })),
+          create: null,
+          update: null,
+        },
       },
       {
         // `"<Kind> · <YYYY-MM-DD> · <location name>"` — gardenEntry has no
@@ -231,7 +243,6 @@ export default defineEntity({
       },
       { key: "shortcode", specialized: "shortcode" },
       { key: "locationId", reference: "location" },
-      { key: "plantingId", reference: "planting" },
       {
         key: "kind",
         specialized: "enum:kind",
@@ -247,7 +258,7 @@ export default defineEntity({
     ],
     create: [
       "locationId",
-      "plantingId",
+      "plantingIds",
       "kind",
       "observedOn",
       "note",
@@ -256,7 +267,7 @@ export default defineEntity({
     ],
     update: [
       "locationId",
-      "plantingId",
+      "plantingIds",
       "kind",
       "observedOn",
       "note",
@@ -268,7 +279,7 @@ export default defineEntity({
     bulk: [],
     audit: [
       "locationId",
-      "plantingId",
+      "plantingIds",
       "kind",
       "observedOn",
       "note",
@@ -283,7 +294,7 @@ export default defineEntity({
         capture: ["locationId", "observedOn", "note", "pendingImageIds"],
         full: [
           "locationId",
-          "plantingId",
+          "plantingIds",
           "kind",
           "observedOn",
           "note",
@@ -299,7 +310,7 @@ export default defineEntity({
     output: [
       "id",
       "locationId",
-      "plantingId",
+      "plantingIds",
       "kind",
       "observedOn",
       "note",
@@ -307,7 +318,7 @@ export default defineEntity({
       "images",
       "displayName",
       "locationName",
-      "plantingName",
+      "plantings",
       "createdAt",
       "updatedAt",
     ],
@@ -397,16 +408,22 @@ export default defineEntity({
       },
     },
     {
-      key: "planting",
-      label: "Planting",
+      key: "plantings",
+      label: "Plantings",
       target: "planting",
-      cardinality: "one",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
-        steps: [{ edge: "GardenEntry.plantingId", direction: "outgoing" }],
+        steps: [
+          { edge: "GardenEntryPlanting.gardenEntryId", direction: "incoming" },
+          { edge: "GardenEntryPlanting.plantingId", direction: "outgoing" },
+        ],
       },
       inverse: {
-        steps: [{ edge: "GardenEntry.plantingId", direction: "incoming" }],
+        steps: [
+          { edge: "GardenEntryPlanting.plantingId", direction: "incoming" },
+          { edge: "GardenEntryPlanting.gardenEntryId", direction: "outgoing" },
+        ],
       },
     },
     {

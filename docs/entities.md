@@ -188,7 +188,12 @@ A relation section's create button seeds the descriptor's field on the new
 record: the descriptor key itself when it is a create field there, otherwise
 the one reference field on the target whose `reference.entity` equals the
 descriptor's `brandRef.entity` — one generic rule instead of a per-entity
-seed hack. `history`, `relationships` and
+seed hack. When more than one field could carry that identity, or the writable
+field is a multiple reference, the section declares `prefill: { field }`; the
+compiler verifies that the field is writable on create and references the
+section owner. Web and
+native relation renderers consume the same generated prefill rather than
+guessing from field names. `history`, `relationships` and
 `images` are derived from capabilities and never declared. `list.views` names
 the renderers (`table`, `shelf`, `timeline`, or a `slot` view with its
 route-only `searchKeys`); the first is the default and the generated search
@@ -226,6 +231,11 @@ direct logo FK, vendor). The manifest keeps the storage boolean `hasImages`
 (`gallery`/`cover`) alongside `imageStorage`. Every public entity list and
 detail read carries server-resolved `displayImages: [{ id, url }]`; details
 also carry directly owned `attachments` with their role and position.
+
+Image-ingress bindings use `source-id` for a singular reference target and
+`source-id-list` for a multiple reference target. Both are compiled against the
+declared reference cardinality; no image workflow branches on a domain field
+name to decide whether the source identity is wrapped in an array.
 
 Related display images come only from explicit domain relationships and never
 recursively consume another entity's resolved `displayImages`. The centralized
@@ -285,6 +295,14 @@ read key equal to that key. Use `readKey: null` for fields without a scalar read
 projection. Missing controls and display flags expose no UI. A control defaults
 to the `main` section; a reference defaults to one entity. Explicit labels,
 nullability, read keys, sections, and renderers override these defaults.
+
+A reference may declare `multiple: true` and an ordered `scope` mapping. Each
+scope item maps a sibling form `sourceField` to a filter `targetField` on the
+referenced entity. The compiler verifies both ends and generated editors wait
+until every scoped source has a value before querying, so an incomplete form
+does not accidentally widen the candidate set. Scope constrains discovery,
+not stored values: existing selections remain visible and can be removed even
+when another field changes and they no longer match the candidate query.
 
 `control.suggest: { basis }` marks a field whose value the decision tier (Jev)
 infers from named sibling fields, so the browser editor can auto-fill it while

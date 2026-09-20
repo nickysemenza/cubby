@@ -19,17 +19,39 @@ import {
   type plantingCreateInput,
   type plantingUpdateData,
 } from "@cubby/schemas/planting";
-import { and, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { gardenEntry, planting, product } from "~/server/db/schema";
+import {
+  gardenEntry,
+  gardenEntryPlanting,
+  planting,
+  product,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   guideWindowsFor,
   resolveGardenGuideKey,
 } from "~/server/garden-guides/windows";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  diffUnorderedIdSet,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   associatePendingImages,
   buildPartialUpdateValues,
@@ -174,17 +196,19 @@ const mapPlanting = (row: PlantingWithReferences) => {
 
 type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
   location: { shortcode: string; name: string };
-  planting: {
-    shortcode: string;
-    variety: string | null;
-    ingredient: { name: string };
-  } | null;
+  plantings: Array<{
+    planting: {
+      shortcode: string;
+      variety: string | null;
+      ingredient: { name: string };
+    } | null;
+  }>;
   images: Array<{ image: MappableImageRecord; deletedAt?: Date | null }>;
 };
 
 /** `"<ingredient name>[ · <variety>]"` — the canonical planting identity, shared
- * by `planting.displayName`, `gardenEntry.plantingName`, and the calendar's
- * planting item title (`repo/calendar-plantings.ts`). */
+ * by `planting.displayName`, garden-entry planting references, and the
+ * calendar's planting item title (`repo/calendar-plantings.ts`). */
 export const plantingDisplayName = (row: {
   ingredientName: string;
   variety: string | null;
@@ -220,16 +244,24 @@ const mapEntry = (row: GardenEntryWithReferences) =>
     ...row,
     id: parseShortcodeFor("gardenEntry", row.shortcode),
     locationId: parseShortcodeFor("location", row.location.shortcode),
-    plantingId: row.planting
-      ? parseShortcodeFor("planting", row.planting.shortcode)
-      : null,
+    ...(() => {
+      const plantings = row.plantings
+        .flatMap((link) => (link.planting ? [link.planting] : []))
+        .sort((left, right) => left.shortcode.localeCompare(right.shortcode));
+      return {
+        plantingIds: plantings.map((linked) =>
+          parseShortcodeFor("planting", linked.shortcode),
+        ),
+        plantings: plantings.map((linked) => ({
+          id: parseShortcodeFor("planting", linked.shortcode),
+          name: plantingDisplayName({
+            ingredientName: linked.ingredient.name,
+            variety: linked.variety,
+          }),
+        })),
+      };
+    })(),
     locationName: row.location.name,
-    plantingName: row.planting
-      ? plantingDisplayName({
-          ingredientName: row.planting.ingredient.name,
-          variety: row.planting.variety,
-        })
-      : null,
     displayName: gardenEntryDisplayName({
       kind: row.kind,
       observedOn: row.observedOn,
@@ -246,9 +278,14 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
     where: and(eq(gardenEntry.id, id), notDeleted(gardenEntry)),
     with: {
       location: { columns: { shortcode: true, name: true } },
-      planting: {
-        columns: { shortcode: true, variety: true },
-        with: { ingredient: { columns: { name: true } } },
+      plantings: {
+        where: notDeleted(gardenEntryPlanting),
+        with: {
+          planting: {
+            columns: { shortcode: true, variety: true },
+            with: { ingredient: { columns: { name: true } } },
+          },
+        },
       },
       images: { with: { image: true } },
     },
@@ -259,6 +296,93 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
       "The garden entry no longer exists.",
     );
   return mapEntry(row);
+};
+
+/**
+ * Replace one entry's live planting set while retaining association history.
+ * The caller owns the surrounding transaction.  Existing tombstones are
+ * rematerialized instead of creating a second row for the same pair.
+ */
+const replaceGardenEntryPlantings = async (
+  tx: DrizzleTransaction,
+  gardenEntryId: GardenEntryId,
+  plantingShortcodes: readonly string[],
+): Promise<string[]> => {
+  // Serialize replacements for one entry.  The live-pair partial unique index
+  // protects duplicates, but only the parent row lock makes two concurrent
+  // full-set replacements observe and audit one deterministic predecessor.
+  await tx
+    .select({ id: gardenEntry.id })
+    .from(gardenEntry)
+    .where(and(eq(gardenEntry.id, gardenEntryId), notDeleted(gardenEntry)))
+    .for("update");
+  const resolved = await resolveAllOrThrow(tx, "planting", plantingShortcodes);
+  const nextIds = [...new Set(resolved)];
+  const rows = await unwrapDb(tx)
+    .select({
+      id: gardenEntryPlanting.id,
+      plantingId: gardenEntryPlanting.plantingId,
+      deletedAt: gardenEntryPlanting.deletedAt,
+      createdAt: gardenEntryPlanting.createdAt,
+    })
+    .from(gardenEntryPlanting)
+    .where(eq(gardenEntryPlanting.gardenEntryId, gardenEntryId))
+    .orderBy(desc(gardenEntryPlanting.createdAt));
+  const liveRows = rows.filter((row) => row.deletedAt === null);
+  const currentIds = new Set(liveRows.map((row) => row.plantingId));
+  const nextIdSet = new Set(nextIds);
+  const now = new Date();
+
+  const removedIds = liveRows
+    .map((row) => row.plantingId)
+    .filter((id) => !nextIdSet.has(id));
+  if (removedIds.length > 0) {
+    await tx
+      .update(gardenEntryPlanting)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(gardenEntryPlanting.gardenEntryId, gardenEntryId),
+          inArray(gardenEntryPlanting.plantingId, removedIds),
+          notDeleted(gardenEntryPlanting),
+        ),
+      );
+  }
+
+  const addIds = nextIds.filter((id) => !currentIds.has(id));
+  for (const plantingId of addIds) {
+    const tombstone = rows.find(
+      (row) => row.plantingId === plantingId && row.deletedAt !== null,
+    );
+    if (tombstone) {
+      await tx
+        .update(gardenEntryPlanting)
+        .set({ deletedAt: null, updatedAt: now })
+        .where(eq(gardenEntryPlanting.id, tombstone.id));
+    } else {
+      await tx.insert(gardenEntryPlanting).values({
+        gardenEntryId,
+        plantingId,
+      });
+    }
+  }
+
+  const shortcodeRows = await unwrapDb(tx)
+    .select({ shortcode: planting.shortcode })
+    .from(planting)
+    .innerJoin(
+      gardenEntryPlanting,
+      and(
+        eq(gardenEntryPlanting.plantingId, planting.id),
+        eq(gardenEntryPlanting.gardenEntryId, gardenEntryId),
+        notDeleted(gardenEntryPlanting),
+      ),
+    )
+    .where(notDeleted(planting))
+    .orderBy(planting.shortcode);
+  return shortcodeRows.map((row) =>
+    parseShortcodeFor("planting", row.shortcode),
+  );
 };
 
 export const createPlanting = async (
@@ -305,17 +429,20 @@ export const createGardenEntry = async (
 ) =>
   withTransaction(db, async (tx) => {
     const locationId = await required(tx, data.locationId, "location");
-    const plantingId = data.plantingId
-      ? await required(tx, data.plantingId, "planting")
-      : null;
     const row = await insertWithShortcode(tx, "gardenEntry", {
       locationId,
-      plantingId,
       kind: data.kind ?? "note",
       observedOn: data.observedOn,
       note: data.note ?? null,
       harvestAmount: data.harvestAmount ?? null,
     });
+    if (data.plantingIds !== undefined) {
+      await replaceGardenEntryPlantings(
+        tx,
+        parseEntityId("gardenEntry", row.id),
+        data.plantingIds,
+      );
+    }
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
       // `resolveAllOrThrow`, not `resolveAllPresent`: unlike product/location/
       // recipe/purchase, a caller-supplied `IMG-` code that doesn't resolve
@@ -448,21 +575,60 @@ export const updateGardenEntry = async (
       data.locationId !== undefined
         ? await required(tx, data.locationId, "location")
         : undefined;
-    const plantingId =
-      data.plantingId !== undefined
-        ? data.plantingId
-          ? await required(tx, data.plantingId, "planting")
-          : null
-        : undefined;
+    let beforePlantingIds: string[] | undefined;
+    let plantingIdsChanged = false;
+    if (data.plantingIds !== undefined) {
+      const beforeRows = await unwrapDb(tx)
+        .select({ shortcode: planting.shortcode })
+        .from(gardenEntryPlanting)
+        .innerJoin(planting, eq(planting.id, gardenEntryPlanting.plantingId))
+        .where(
+          and(
+            eq(gardenEntryPlanting.gardenEntryId, id),
+            notDeleted(gardenEntryPlanting),
+            notDeleted(planting),
+          ),
+        )
+        .orderBy(planting.shortcode);
+      beforePlantingIds = beforeRows.map((row) =>
+        parseShortcodeFor("planting", row.shortcode),
+      );
+      const resolved = await resolveAllOrThrow(
+        tx,
+        "planting",
+        data.plantingIds,
+      );
+      const nextRows = await unwrapDb(tx)
+        .select({ shortcode: planting.shortcode })
+        .from(planting)
+        .where(inArray(planting.id, [...new Set(resolved)]))
+        .orderBy(planting.shortcode);
+      const nextPlantingIds = nextRows.map((row) =>
+        parseShortcodeFor("planting", row.shortcode),
+      );
+      plantingIdsChanged =
+        diffUnorderedIdSet(beforePlantingIds, nextPlantingIds) !== undefined;
+    }
     const values = buildPartialUpdateValues({
       locationId,
-      plantingId,
       kind: data.kind,
       observedOn: data.observedOn,
       note: data.note,
       harvestAmount: data.harvestAmount,
+      // Association-only edits are still edits to the GardenEntry resource;
+      // keep its optimistic/concurrency timestamp monotonic even when all
+      // scalar fields were omitted.
+      updatedAt: plantingIdsChanged ? new Date() : undefined,
     });
     const updated = await updateLiveAndReturn(tx, gardenEntry, values, id);
+    let afterPlantingIds: string[] | undefined;
+    if (data.plantingIds !== undefined) {
+      afterPlantingIds = await replaceGardenEntryPlantings(
+        tx,
+        id,
+        data.plantingIds,
+      );
+    }
     // `unresolved: "throw"` — a caller-supplied `IMG-` code that doesn't
     // resolve is bad input here, unlike product/location/recipe/purchase's
     // silent-drop convention.
@@ -474,15 +640,26 @@ export const updateGardenEntry = async (
       data,
       { unresolved: "throw" },
     );
-    const changes = computeChanges(before, updated, [
-      ...entityFieldModels.gardenEntry.audit,
-    ]);
-    if (changes) {
+    const changes = computeChanges(
+      before,
+      updated,
+      entityFieldModels.gardenEntry.audit.filter(
+        (field) => field !== "plantingIds",
+      ),
+    );
+    const plantingChanges =
+      beforePlantingIds && afterPlantingIds
+        ? diffUnorderedIdSet(beforePlantingIds, afterPlantingIds)
+        : undefined;
+    const allChanges = plantingChanges
+      ? { ...changes, plantingIds: plantingChanges }
+      : changes;
+    if (allChanges) {
       await logAuditEntry(tx, actor, {
         entityType: "gardenEntry",
         entityId: id,
         action: "update",
-        changes,
+        changes: allChanges,
       });
     }
     return getGardenEntry(tx, id);
@@ -507,6 +684,10 @@ export const plantingList = async (
     ]);
   const where = plantingScaffold.where(filters, [
     buildPlantingWhere(),
+    filters.activeOn
+      ? sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${planting.createdAt}::date) <= ${filters.activeOn}::date
+          AND (${planting.finishedOn} IS NULL OR ${planting.finishedOn} >= ${filters.activeOn}::date)`
+      : undefined,
     eqAnyRequested(planting.locationId, locationIds),
     eqAnyRequested(planting.ingredientId, ingredientIds),
     eqAnyRequested(planting.taskId, taskIds),
@@ -533,13 +714,12 @@ export const plantingList = async (
 const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
 
 /**
- * A planting's journal always includes its direct entries. A whole-area
- * entry (no `plantingId`) joins too when it was observed at the planting's
- * current location within the planting's own active window — the planting
- * row itself is the history now (no separate confirmed-period table). The
- * window is read once and inlined: a correlated subquery would have to name
- * the outer table, which the relational query aliases differently from the
- * plain count query that runs beside it.
+ * A planting's journal always includes its direct live associations. A
+ * whole-area entry joins only when it has no live planting associations and
+ * was observed at the planting's current location within the planting's own
+ * active window. The window is read once and inlined: a correlated subquery
+ * would have to name the outer table, which the relational query aliases
+ * differently from the plain count query that runs beside it.
  */
 const journalPredicate = async (db: Database, plantingId: PlantingId) => {
   const row = await unwrapDb(db).query.planting.findFirst({
@@ -552,21 +732,58 @@ const journalPredicate = async (db: Database, plantingId: PlantingId) => {
       finishedOn: true,
     },
   });
-  const direct = eq(gardenEntry.plantingId, plantingId);
-  if (!row || row.locationId === null) return direct;
+  const directEntryIds = unwrapDb(db)
+    .select({ id: gardenEntryPlanting.gardenEntryId })
+    .from(gardenEntryPlanting)
+    .where(
+      and(
+        eq(gardenEntryPlanting.plantingId, plantingId),
+        notDeleted(gardenEntryPlanting),
+      ),
+    );
+  if (!row || row.locationId === null) {
+    return inArray(gardenEntry.id, directEntryIds);
+  }
+
+  // The relational list query aliases its outer GardenEntry table while the
+  // count query does not. Build self-contained id subqueries rather than a
+  // correlated predicate against that unstable outer alias.
+  const wholeAreaEntry = alias(gardenEntry, "wholeAreaGardenEntry");
+  const wholeAreaLink = alias(
+    gardenEntryPlanting,
+    "wholeAreaGardenEntryPlanting",
+  );
   const start =
     row.sowedOn ??
     row.transplantedOn ??
     row.createdAt.toISOString().slice(0, 10);
-  const wholeArea = [
-    isNull(gardenEntry.plantingId),
-    eq(gardenEntry.locationId, row.locationId),
-    gte(gardenEntry.observedOn, start),
-    row.finishedOn === null
-      ? undefined
-      : lte(gardenEntry.observedOn, row.finishedOn),
-  ];
-  return or(direct, and(...wholeArea));
+  const wholeAreaEntryIds = unwrapDb(db)
+    .select({ id: wholeAreaEntry.id })
+    .from(wholeAreaEntry)
+    .where(
+      and(
+        notExists(
+          unwrapDb(db)
+            .select({ id: wholeAreaLink.id })
+            .from(wholeAreaLink)
+            .where(
+              and(
+                eq(wholeAreaLink.gardenEntryId, wholeAreaEntry.id),
+                notDeleted(wholeAreaLink),
+              ),
+            ),
+        ),
+        eq(wholeAreaEntry.locationId, row.locationId),
+        gte(wholeAreaEntry.observedOn, start),
+        row.finishedOn === null
+          ? undefined
+          : lte(wholeAreaEntry.observedOn, row.finishedOn),
+      ),
+    );
+  return or(
+    inArray(gardenEntry.id, directEntryIds),
+    inArray(gardenEntry.id, wholeAreaEntryIds),
+  );
 };
 
 export const gardenEntryList = async (
@@ -585,7 +802,22 @@ export const gardenEntryList = async (
   const where = gardenEntryScaffold.where(filters, [
     buildGardenEntryWhere(),
     eqAnyRequested(gardenEntry.locationId, locationIds),
-    eqAnyRequested(gardenEntry.plantingId, plantingIds),
+    plantingIds && plantingIds.length > 0
+      ? exists(
+          unwrapDb(db)
+            .select({ id: gardenEntryPlanting.id })
+            .from(gardenEntryPlanting)
+            .where(
+              and(
+                eq(gardenEntryPlanting.gardenEntryId, gardenEntry.id),
+                inArray(gardenEntryPlanting.plantingId, plantingIds),
+                notDeleted(gardenEntryPlanting),
+              ),
+            ),
+        )
+      : plantingIds
+        ? sql`false`
+        : undefined,
     filters.journalPlantingId === undefined
       ? undefined
       : journalPlantingId
@@ -614,9 +846,14 @@ export const gardenEntryList = async (
         where,
         with: {
           location: { columns: { shortcode: true, name: true } },
-          planting: {
-            columns: { shortcode: true, variety: true },
-            with: { ingredient: { columns: { name: true } } },
+          plantings: {
+            where: notDeleted(gardenEntryPlanting),
+            with: {
+              planting: {
+                columns: { shortcode: true, variety: true },
+                with: { ingredient: { columns: { name: true } } },
+              },
+            },
           },
           images: { with: { image: true } },
         },

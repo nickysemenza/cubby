@@ -14379,6 +14379,10 @@ public enum Operations {
                 public var taskId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/sourceProductId`.
                 public var sourceProductId: [Swift.String]?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/activeOn`.
+                public var activeOn: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/searchQuery`.
                 public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
@@ -14417,6 +14421,7 @@ public enum Operations {
                 ///   - ingredientId:
                 ///   - taskId:
                 ///   - sourceProductId:
+                ///   - activeOn: Calendar day as "YYYY-MM-DD"
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
@@ -14432,6 +14437,7 @@ public enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     taskId: [Swift.String]? = nil,
                     sourceProductId: [Swift.String]? = nil,
+                    activeOn: Swift.String? = nil,
                     searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
@@ -14447,6 +14453,7 @@ public enum Operations {
                     self.ingredientId = ingredientId
                     self.taskId = taskId
                     self.sourceProductId = sourceProductId
+                    self.activeOn = activeOn
                     self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize
@@ -15197,6 +15204,10 @@ public enum Operations {
                 public var taskId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/sourceProductId`.
                 public var sourceProductId: [Swift.String]?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/activeOn`.
+                public var activeOn: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/searchQuery`.
                 public var searchQuery: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/plantings/timeline/GET/query/ids`.
@@ -15228,6 +15239,7 @@ public enum Operations {
                 ///   - ingredientId:
                 ///   - taskId:
                 ///   - sourceProductId:
+                ///   - activeOn: Calendar day as "YYYY-MM-DD"
                 ///   - searchQuery:
                 ///   - ids:
                 ///   - from: Calendar day as "YYYY-MM-DD"
@@ -15243,6 +15255,7 @@ public enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     taskId: [Swift.String]? = nil,
                     sourceProductId: [Swift.String]? = nil,
+                    activeOn: Swift.String? = nil,
                     searchQuery: Swift.String? = nil,
                     ids: [Swift.String]? = nil,
                     from: Swift.String? = nil,
@@ -15258,6 +15271,7 @@ public enum Operations {
                     self.ingredientId = ingredientId
                     self.taskId = taskId
                     self.sourceProductId = sourceProductId
+                    self.activeOn = activeOn
                     self.searchQuery = searchQuery
                     self.ids = ids
                     self.from = from

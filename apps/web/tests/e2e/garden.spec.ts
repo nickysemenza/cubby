@@ -227,7 +227,7 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
     headers: { Origin: baseURL! },
     data: {
       locationId: bed.id,
-      plantingId: planting.id,
+      plantingIds: [planting.id],
       kind: "note",
       observedOn: "2026-03-15",
       note: `${cropName} first photo`,

@@ -7,6 +7,7 @@ import type {
   ExpenseId,
   FinancialAccountId,
   FinancialTransactionId,
+  GardenEntryId,
   IngredientId,
   LedgerPartyId,
   LedgerTransferId,
@@ -15,6 +16,7 @@ import type {
   MealFoodEntryId,
   MealRecipeId,
   MealRecipePortionId,
+  PlantingId,
   ProductId,
   ProjectId,
   PurchaseId,
@@ -910,13 +912,42 @@ export const gardenEntry = pgTable(
   "GardenEntry",
   generatedGardenEntryColumns({
     location: (): AnyPgColumn => location.id,
-    planting: (): AnyPgColumn => planting.id,
   }),
   (table) => [
     shortcodeUnique("GardenEntry", table.shortcode),
     index("GardenEntry_locationId_idx").on(table.locationId),
-    index("GardenEntry_plantingId_idx").on(table.plantingId),
     index("GardenEntry_observedOn_idx").on(table.observedOn),
+  ],
+);
+
+/**
+ * A garden observation may describe more than one growing attempt.  The
+ * association is historical in its own right, so removal detaches it without
+ * deleting either the dated entry or the planting.  The partial pair key is
+ * what permits a removed planting to be re-attached later without resurrecting
+ * an unrelated live duplicate.
+ */
+export const gardenEntryPlanting = pgTable(
+  "GardenEntryPlanting",
+  {
+    id: pkUuid(),
+    gardenEntryId: uuid("gardenEntryId")
+      .notNull()
+      .$type<GardenEntryId>()
+      .references(() => gardenEntry.id),
+    plantingId: uuid("plantingId")
+      .notNull()
+      .$type<PlantingId>()
+      .references(() => planting.id),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("GardenEntryPlanting_gardenEntryId_plantingId_key")
+      .on(table.gardenEntryId, table.plantingId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("GardenEntryPlanting_gardenEntryId_idx").on(table.gardenEntryId),
+    index("GardenEntryPlanting_plantingId_idx").on(table.plantingId),
   ],
 );
 
@@ -2479,7 +2510,7 @@ export const plantingRelations = relations(planting, ({ one, many }) => ({
     fields: [planting.taskId],
     references: [task.id],
   }),
-  entries: many(gardenEntry),
+  entries: many(gardenEntryPlanting),
 }));
 
 export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
@@ -2487,12 +2518,23 @@ export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
     fields: [gardenEntry.locationId],
     references: [location.id],
   }),
-  planting: one(planting, {
-    fields: [gardenEntry.plantingId],
-    references: [planting.id],
-  }),
+  plantings: many(gardenEntryPlanting),
   images: many(gardenEntryImage),
 }));
+
+export const gardenEntryPlantingRelations = relations(
+  gardenEntryPlanting,
+  ({ one }) => ({
+    gardenEntry: one(gardenEntry, {
+      fields: [gardenEntryPlanting.gardenEntryId],
+      references: [gardenEntry.id],
+    }),
+    planting: one(planting, {
+      fields: [gardenEntryPlanting.plantingId],
+      references: [planting.id],
+    }),
+  }),
+);
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
   product: one(product, {

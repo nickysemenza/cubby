@@ -51,6 +51,7 @@ export type VendorName = string;
  */
 export function WithVendorSearch({
   children,
+  scope,
 }: WithEntitySearchProps<VendorName>) {
   return (
     <WithEntitySearch<VendorName>
@@ -73,6 +74,7 @@ export function WithVendorSearch({
         const trimmed = name.trim();
         return { id: trimmed, name: trimmed };
       }}
+      scope={scope}
     >
       {children}
     </WithEntitySearch>
@@ -82,6 +84,7 @@ export function WithVendorSearch({
 /** Persisted vendor relation adapter: purchase writes keep VendorShortcode. */
 export function WithVendorShortcodeSearch({
   children,
+  scope,
 }: WithEntitySearchProps<VendorShortcode>) {
   const commands = useEntityCommands("vendor");
   const onCreateNew = useCallback(
@@ -120,6 +123,7 @@ export function WithVendorShortcodeSearch({
       build={(row) => buildVendorComboboxItem(row, { itemId: "shortcode" })}
       buildSearchHit={(hit) => buildSearchHitComboboxItem(hit, "vendor")}
       onCreateNew={onCreateNew}
+      scope={scope}
     >
       {children}
     </WithEntitySearch>

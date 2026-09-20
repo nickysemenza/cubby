@@ -15,12 +15,18 @@ public final class RelationSectionModel: Identifiable {
     /// The target field that references the source record, when the target declares one; the
     /// generic create editor prefills it so a record added from this section lands here.
     public let referenceField: FieldDescriptor?
+    private let prefillIsMany: Bool?
     public let list: GenericEntityListModel
 
     /// `nil` when `section` is not a relation section, the relation is undeclared on `source`, or
     /// the target has no descriptor by the section's name — each a compiler-checked declaration
     /// fact, so a nil here means the catalog and the declaration disagree.
-    public init?(section: DetailSection, source: EntityDescriptor, recordID: String, client: CubbyClient) {
+    public init?(
+        section: DetailSection,
+        source: EntityDescriptor,
+        recordID: String,
+        client: CubbyClient
+    ) {
         guard case .relation(let spec) = section.kind,
             let relation = source.relation(spec.relation)
         else { return nil }
@@ -37,13 +43,20 @@ public final class RelationSectionModel: Identifiable {
         // The generic seed rule: when the filter's own column is a real create field on the
         // target (a direct filter like `locationId`), seed that; otherwise (a derived/urlOnly
         // filter like `journalPlantingId`) fall back to the target's single reference field whose
-        // `reference.entity` matches the filter's brandRef entity — planting's Journal section
-        // resolves `journalPlantingId` to `plantingId` this way.
+        // `reference.entity` matches the filter's brandRef entity. Sections with an ambiguous or
+        // multiple reference use the generated explicit prefill field instead.
+        let explicitField = spec.prefill.flatMap { target.field($0.field) }
         self.referenceField =
-            target.field(filter.columnId)
-            ?? filter.targetEntity.flatMap { brandEntity in
-                target.fields.first { $0.reference?.entity == brandEntity && $0.reference?.multiple == false }
-            }
+            explicitField
+            ?? (spec.prefill == nil
+                ? target.field(filter.columnId)
+                    ?? filter.targetEntity.flatMap { brandEntity in
+                        target.fields.first {
+                            $0.reference?.entity == brandEntity
+                        }
+                    }
+                : nil)
+        self.prefillIsMany = referenceField?.reference?.multiple
         let sort = spec.sort.map { $0.direction == .desc ? "-\($0.field)" : $0.field }
         self.list = GenericEntityListModel(
             descriptor: target,
@@ -58,7 +71,11 @@ public final class RelationSectionModel: Identifiable {
     /// The draft the section's create button opens the editor with.
     public var createPrefill: [String: JSONValue] {
         guard let referenceField else { return [:] }
-        return [referenceField.key: .string(recordID)]
+        let value: JSONValue =
+            prefillIsMany == true
+            ? .array([.string(recordID)])
+            : .string(recordID)
+        return [referenceField.key: value]
     }
 
     /// The declared relation sections of `descriptor`, each bound to `recordID`.
@@ -66,7 +83,9 @@ public final class RelationSectionModel: Identifiable {
         of descriptor: EntityDescriptor, recordID: String, client: CubbyClient
     ) -> [RelationSectionModel] {
         descriptor.presentation.detailSections.compactMap {
-            RelationSectionModel(section: $0, source: descriptor, recordID: recordID, client: client)
+            RelationSectionModel(
+                section: $0, source: descriptor, recordID: recordID, client: client
+            )
         }
     }
 }

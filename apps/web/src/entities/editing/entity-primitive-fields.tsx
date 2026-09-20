@@ -13,6 +13,7 @@ import {
 } from "react-hook-form";
 
 import { basisValueOf } from "~/app/_components/ai/field-suggestion";
+import type { EntitySearchScope } from "~/app/_components/combobox/entity-search-hooks";
 import {
   WithEntitySearch,
   type WithEntitySearchProps,
@@ -41,11 +42,13 @@ import {
   type EditMode,
   type EntityFieldPresentation,
 } from "./entity-field-presentation";
+import { referenceScopeFields, referenceScopeFor } from "./reference-scope";
 import {
   entitySelectOptionsFor,
   presentEntitySelectOptions,
   type EntitySelectOption,
 } from "./select-options";
+import { entityEditValueBagSchema } from "./value-schema";
 type PrimitiveFieldOptions = {
   placeholder?: string;
   options?: readonly EntitySelectOption[];
@@ -399,6 +402,7 @@ interface SpecializedIntentRendererProps {
   form: UseFormReturn<FieldValues>;
   idPrefix: string;
   mode: EditMode;
+  scope?: EntitySearchScope | null;
 }
 
 /**
@@ -467,6 +471,7 @@ function VendorNameField({ field, form }: SpecializedIntentRendererProps) {
 function EntityMultiSelectField({
   field,
   form,
+  scope,
 }: SpecializedIntentRendererProps) {
   const referenceEntity = field.reference?.entity;
   if (referenceEntity === undefined)
@@ -480,6 +485,7 @@ function EntityMultiSelectField({
       entity={referenceEntity as never}
       label={field.label}
       SearchProvider={referenceEntitySearch(referenceEntity)}
+      scope={scope}
     />
   );
 }
@@ -611,12 +617,35 @@ export function EntityIntentFields({
       field.control !== null &&
       !hiddenFieldKeys.has(field.key),
   );
+  const scopedFieldKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          fields.flatMap((field) => referenceScopeFields(field.reference)),
+        ),
+      ),
+    [fields],
+  );
+  const scopedValues: unknown[] = useWatch({
+    control: form.control,
+    name: scopedFieldKeys,
+  });
+  const scopedValueRecord = useMemo(
+    () =>
+      entityEditValueBagSchema.parse(
+        Object.fromEntries(
+          scopedFieldKeys.map((key, index) => [key, scopedValues[index]]),
+        ),
+      ),
+    [scopedFieldKeys, scopedValues],
+  );
 
   return (
     <>
       {fields.map((field) => {
         if (field.reference && !field.reference.multiple) {
           const referenceEntity = field.reference.entity;
+          const scope = referenceScopeFor(field.reference, scopedValueRecord);
           return (
             <EntityValueField
               key={field.key}
@@ -632,6 +661,7 @@ export function EntityIntentFields({
               clearable={field.nullable}
               description={<FieldProvenance provenance={field.provenance} />}
               SearchProvider={referenceEntitySearch(referenceEntity)}
+              scope={scope}
               suggestField={suggestFieldFor(
                 Boolean(field.control?.suggest),
                 field.key,
@@ -665,6 +695,7 @@ export function EntityIntentFields({
                 form={form}
                 idPrefix={idPrefix}
                 mode={mode}
+                scope={referenceScopeFor(field.reference, scopedValueRecord)}
               />
               {field.provenance ? (
                 <div id={provenanceId}>

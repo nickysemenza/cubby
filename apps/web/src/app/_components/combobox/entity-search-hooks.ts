@@ -5,9 +5,19 @@ import { useCallback, useRef, useState } from "react";
 
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getEntityFilters } from "~/entities/filter-manifest";
+import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { search } from "~/lib/search.functions";
 
 import type { ComboboxItem } from "./combobox-types";
+
+/**
+ * Filter values supplied by a manifest reference's dependent-field scope.
+ * `null` means the scope is declared but not ready yet; callers must not
+ * widen that request into an unscoped candidate list.
+ */
+export type EntitySearchScope = Readonly<
+  Record<string, string | readonly string[]>
+>;
 
 export const pagination = {
   pageIndex: 0,
@@ -35,6 +45,7 @@ export type PickerSearchEntity =
 type EntitySearchRowSource<TRow> = (
   searchQuery: string,
   enabled: boolean,
+  scope?: EntitySearchScope | null,
 ) => { data: TRow[] | undefined; isLoading: boolean };
 
 export interface UseEntitySearchConfig<TId extends string, TRow, TDetail> {
@@ -213,6 +224,68 @@ export function resolveBlankFilterKey(
   return nameFilter?.field ?? FALLBACK_BLANK_FILTER_KEY[entity];
 }
 
+const resolveSearchPath = (
+  searchQuery: string,
+  entity: PickerSearchEntity,
+  config: Pick<
+    UseEntitySearchConfig<string, unknown, unknown>,
+    "splitBlankTyped" | "supportsGlobalSearch"
+  >,
+  scope?: EntitySearchScope | null,
+) => {
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode = parsedCode?.type === entity ? parsedCode.shortcode : null;
+  const searchingByCode = Boolean(parsedCode);
+  const useBlankPath =
+    scope !== undefined ||
+    config.supportsGlobalSearch === false ||
+    !config.splitBlankTyped ||
+    searchQuery.trim() === "";
+  const globalSearchEntity =
+    config.supportsGlobalSearch === false
+      ? "product"
+      : searchableEntitySchema.parse(entity);
+  return {
+    exactCode,
+    searchingByCode,
+    useBlankPath,
+    globalSearchEntity,
+  };
+};
+
+const buildSearchItems = <
+  E extends PickerSearchEntity,
+  TId extends string,
+  TRow,
+  TDetail,
+>(
+  searchingByCode: boolean,
+  scopeReady: boolean,
+  exactItem: EntityDetailByEntity[E] | null | undefined,
+  useBlankPath: boolean,
+  rows: readonly TRow[] | undefined,
+  searchHits: readonly SearchHit[] | undefined,
+  config: UseEntitySearchConfig<TId, TRow, TDetail>,
+): ComboboxItem<TId>[] => {
+  if (searchingByCode) {
+    if (!scopeReady || !exactItem) return [];
+    // SAFETY: the detail query and config are selected by the same entity key;
+    // TDetail is the smaller picker-facing structural shape that config needs.
+    return [config.buildDetail(exactItem as TDetail)];
+  }
+  if (useBlankPath) return (rows ?? []).map(config.build);
+  return (searchHits ?? []).map(config.buildSearchHit);
+};
+
+const searchLoading = (
+  exactCode: string | null,
+  useBlankPath: boolean,
+  states: { exact: boolean; rows: boolean; search: boolean },
+): boolean => {
+  if (exactCode) return states.exact;
+  return useBlankPath ? states.rows : states.search;
+};
+
 /**
  * Shared orchestration behind every entity combobox: search-query + optional
  * dialog state, the exact-shortcode detail lookup, and the blank/typed row
@@ -225,7 +298,11 @@ export function useEntitySearchRows<
   TId extends string,
   TRow,
   TDetail,
->(entity: E, config: UseEntitySearchConfig<TId, TRow, TDetail>) {
+>(
+  entity: E,
+  config: UseEntitySearchConfig<TId, TRow, TDetail>,
+  scope?: EntitySearchScope | null,
+) {
   const {
     searchQuery,
     onSearchChange,
@@ -237,22 +314,19 @@ export function useEntitySearchRows<
   } = useEntitySearchWithDialog<TId>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
-  const parsedCode = parseShortcode(searchQuery);
-  const exactCode = parsedCode?.type === entity ? parsedCode.shortcode : null;
-  const searchingByCode = parsedCode != null;
-  const hasTypedText = searchQuery.trim() !== "";
-  const useBlankPath =
-    config.supportsGlobalSearch === false ||
-    !config.splitBlankTyped ||
-    !hasTypedText;
-  const globalSearchEntity =
-    config.supportsGlobalSearch === false
-      ? "product"
-      : searchableEntitySchema.parse(entity);
+  // `undefined` means this picker has no dependent scope. `null` means it
+  // does, but one of its source fields is currently empty. Treating the latter
+  // as disabled is important: a missing location/date must never turn a
+  // contextual planting picker into an all-plantings query.
+  const scopeReady = scope !== null;
+
+  const { exactCode, searchingByCode, useBlankPath, globalSearchEntity } =
+    resolveSearchPath(searchQuery, entity, config, scope);
 
   const { data: rows, isLoading: isRowsLoading } = config.useListSource(
     searchQuery,
-    enabled && !searchingByCode && useBlankPath,
+    enabled && scopeReady && !searchingByCode && useBlankPath,
+    scope,
   );
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
     ...search.find.queryOptions({
@@ -261,34 +335,35 @@ export function useEntitySearchRows<
       limit: 20,
     }),
     enabled:
-      enabled && !searchingByCode && config.splitBlankTyped && !useBlankPath,
+      enabled &&
+      scopeReady &&
+      !searchingByCode &&
+      config.splitBlankTyped &&
+      !useBlankPath,
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
     entityDetailFor(entity).queryOptions(
       exactCode ?? config.detailPlaceholder,
-      { enabled: exactCode != null },
+      { enabled: exactCode != null && scopeReady },
     ),
   );
 
   const onCreateNew = config.useOnCreateNew(openDialog);
 
-  const items: ComboboxItem<TId>[] = searchingByCode
-    ? exactItem
-      ? // SAFETY: `entityDetailFor(entity).queryOptions` is keyed by the same
-        // `entity` this `config` was built for, so its result already matches
-        // `TDetail` — TS can't thread that through the generic `E`/`TDetail`
-        // pair on its own.
-        [config.buildDetail(exactItem as TDetail)]
-      : []
-    : useBlankPath
-      ? (rows ?? []).map(config.build)
-      : (searchHits ?? []).map((hit) => config.buildSearchHit(hit));
-
-  const isLoading = exactCode
-    ? isExactLoading
-    : useBlankPath
-      ? isRowsLoading
-      : isSearchLoading;
+  const items = buildSearchItems(
+    searchingByCode,
+    scopeReady,
+    exactItem,
+    useBlankPath,
+    rows,
+    searchHits,
+    config,
+  );
+  const isLoading = searchLoading(exactCode, useBlankPath, {
+    exact: isExactLoading,
+    rows: isRowsLoading,
+    search: isSearchLoading,
+  });
 
   return {
     items,

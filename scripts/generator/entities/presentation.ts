@@ -328,6 +328,84 @@ export const compilePresentation = (
   };
 };
 
+type RelationSection = Extract<
+  CompiledEntity["inspector"]["detail"]["sections"][number],
+  { kind: "relation" }
+>;
+
+const validateRelationPrefill = (
+  entity: CompiledEntity,
+  target: CompiledEntity,
+  section: RelationSection,
+  context: string,
+) => {
+  if (section.prefill === null) return;
+  const prefillContext = `${context}.prefill`;
+  const prefillField = target.fieldModel.fields.find(
+    (candidate) => candidate.key === section.prefill?.field,
+  );
+  if (prefillField === undefined)
+    throw new EntityDeclarationError(
+      `${prefillContext}.field ${section.prefill.field} is not declared on ${target.key}.`,
+    );
+  if (prefillField.reference?.entity !== entity.key)
+    throw new EntityDeclarationError(
+      `${prefillContext}.field ${section.prefill.field} must reference ${entity.key}.`,
+    );
+  if (prefillField.validation.create === null)
+    throw new EntityDeclarationError(
+      `${prefillContext}.field ${section.prefill.field} is not writable on create.`,
+    );
+};
+
+const validateRelationFilter = (
+  entity: CompiledEntity,
+  target: CompiledEntity,
+  section: RelationSection,
+  context: string,
+) => {
+  const descriptor = target.filterDescriptors.find(
+    (candidate) => candidate.columnId === section.filter.descriptor,
+  );
+  if (descriptor === undefined)
+    throw new EntityDeclarationError(
+      `${context} filter descriptor ${section.filter.descriptor} does not exist on ${target.key}.`,
+    );
+  if (descriptor.kind !== "id" && descriptor.kind !== "idMulti")
+    throw new EntityDeclarationError(
+      `${context} filter descriptor ${section.filter.descriptor} on ${target.key} must be an id or idMulti filter.`,
+    );
+  if (descriptor.brandRef?.entity !== entity.key)
+    throw new EntityDeclarationError(
+      `${context} filter descriptor ${section.filter.descriptor} on ${target.key} must reference ${entity.key} (brandRef).`,
+    );
+};
+
+const validateRelationPresentation = (
+  target: CompiledEntity,
+  section: RelationSection,
+  context: string,
+) => {
+  const listColumns = new Set(
+    target.fieldModel.fields
+      .filter((field) => field.display.list)
+      .map((field) => field.display.columnId ?? field.key),
+  );
+  for (const column of section.columns ?? []) {
+    if (!listColumns.has(column))
+      throw new EntityDeclarationError(
+        `${context} column ${column} is not a list column of ${target.key}.`,
+      );
+  }
+  if (section.sort !== null) {
+    const sortable = new Set(target.fieldModel.sort?.fields ?? []);
+    if (!sortable.has(section.sort.field))
+      throw new EntityDeclarationError(
+        `${context} sort field ${section.sort.field} is not in ${target.key}'s sort roster.`,
+      );
+  }
+};
+
 /**
  * A relation section renders the target's list filtered against this record,
  * so the named descriptor must be an id filter on the target that points
@@ -353,39 +431,9 @@ export const validateRelationSections = (
         throw new EntityDeclarationError(
           `${context} relation target ${relation.target} is not a declared entity.`,
         );
-      const descriptor = target.filterDescriptors.find(
-        (candidate) => candidate.columnId === section.filter.descriptor,
-      );
-      if (descriptor === undefined)
-        throw new EntityDeclarationError(
-          `${context} filter descriptor ${section.filter.descriptor} does not exist on ${target.key}.`,
-        );
-      if (descriptor.kind !== "id" && descriptor.kind !== "idMulti")
-        throw new EntityDeclarationError(
-          `${context} filter descriptor ${section.filter.descriptor} on ${target.key} must be an id or idMulti filter.`,
-        );
-      if (descriptor.brandRef?.entity !== entity.key)
-        throw new EntityDeclarationError(
-          `${context} filter descriptor ${section.filter.descriptor} on ${target.key} must reference ${entity.key} (brandRef).`,
-        );
-      const listColumns = new Set(
-        target.fieldModel.fields
-          .filter((field) => field.display.list)
-          .map((field) => field.display.columnId ?? field.key),
-      );
-      for (const column of section.columns ?? []) {
-        if (!listColumns.has(column))
-          throw new EntityDeclarationError(
-            `${context} column ${column} is not a list column of ${target.key}.`,
-          );
-      }
-      if (section.sort !== null) {
-        const sortable = new Set(target.fieldModel.sort?.fields ?? []);
-        if (!sortable.has(section.sort.field))
-          throw new EntityDeclarationError(
-            `${context} sort field ${section.sort.field} is not in ${target.key}'s sort roster.`,
-          );
-      }
+      validateRelationPrefill(entity, target, section, context);
+      validateRelationFilter(entity, target, section, context);
+      validateRelationPresentation(target, section, context);
     }
   }
 };

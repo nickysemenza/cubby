@@ -1316,6 +1316,61 @@ export const validateEntityIdentities = (
   }
 };
 
+/**
+ * Validate dependent reference-picker scope declarations once the complete
+ * entity roster is available.  Keeping this in the compiler means a picker
+ * cannot silently send a source field or target filter that disappeared from
+ * either entity's manifest.
+ */
+const validateReferenceScopes = (entities: readonly CompiledEntity[]): void => {
+  const byKey = new Map(entities.map((entity) => [entity.key, entity]));
+  for (const source of entities) {
+    for (const field of source.fieldModel.fields) {
+      const reference = field.reference;
+      if (reference === null || reference.scope.length === 0) continue;
+      const target = byKey.get(reference.entity);
+      if (target === undefined)
+        throw new EntityDeclarationError(
+          `${source.key}.${field.key}.reference.scope targets undeclared entity ${reference.entity}.`,
+        );
+      for (const [index, binding] of reference.scope.entries()) {
+        const context = `${source.key}.${field.key}.reference.scope[${index}]`;
+        const sourceField = source.fieldModel.fields.find(
+          (candidate) => candidate.key === binding.sourceField,
+        );
+        if (sourceField === undefined)
+          throw new EntityDeclarationError(
+            `${context}.sourceField ${binding.sourceField} is not declared on ${source.key}.`,
+          );
+        const targetField = target.fieldModel.fields.find(
+          (candidate) => candidate.key === binding.targetField,
+        );
+        const targetFilter = target.filterDescriptors.find(
+          (descriptor) =>
+            descriptor.columnId === binding.targetField ||
+            descriptor.field === binding.targetField,
+        );
+        if (targetField === undefined && targetFilter === undefined)
+          throw new EntityDeclarationError(
+            `${context}.targetField ${binding.targetField} is not declared as a field or filter on ${target.key}.`,
+          );
+        // Virtual filter parameters (for example Planting.activeOn) have no
+        // model field to compare; their schema and URL contract are owned by
+        // the target's filter declaration.
+        if (targetField === undefined) continue;
+        if (
+          sourceField.kind !== targetField.kind ||
+          sourceField.reference?.entity !== targetField.reference?.entity ||
+          sourceField.reference?.multiple !== targetField.reference?.multiple
+        )
+          throw new EntityDeclarationError(
+            `${context} maps incompatible fields ${source.key}.${sourceField.key} and ${target.key}.${targetField.key}.`,
+          );
+      }
+    }
+  }
+};
+
 const imagePolicyField = (
   entity: CompiledEntity,
   key: string,
@@ -1378,15 +1433,16 @@ const constantMatchesImageField = (
 const validateSourceIdImageBinding = (
   entity: CompiledEntity,
   targetField: EntityField,
+  multiple: boolean,
   context: string,
 ): void => {
   if (
     targetField.kind !== "identifier" ||
     targetField.reference?.entity !== entity.key ||
-    targetField.reference.multiple
+    targetField.reference.multiple !== multiple
   )
     throw new EntityDeclarationError(
-      `${context} source-id requires a singular ${entity.key} reference target field.`,
+      `${context} ${multiple ? "source-id-list" : "source-id"} requires a ${multiple ? "multiple" : "singular"} ${entity.key} reference target field.`,
     );
 };
 
@@ -1439,7 +1495,11 @@ const validateImageBinding = (
 ): void => {
   const targetField = imagePolicyField(target, binding.field, context);
   if (binding.from === "source-id") {
-    validateSourceIdImageBinding(entity, targetField, context);
+    validateSourceIdImageBinding(entity, targetField, false, context);
+    return;
+  }
+  if (binding.from === "source-id-list") {
+    validateSourceIdImageBinding(entity, targetField, true, context);
     return;
   }
   if (binding.from === "source-field") {
@@ -1834,6 +1894,7 @@ export const compileEntityDeclarations = (
     throw new EntityDeclarationError("Entity declarations must not be empty.");
   const entities = declarations.map(compileEntity);
   validateEntityIdentities(entities);
+  validateReferenceScopes(entities);
   validatePhotoCategoryLabels(photoCategories);
   validateImagePolicies(entities);
   validateRelationSections(entities);

@@ -7602,6 +7602,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "activeOn",
+                    value: input.query.activeOn
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "searchQuery",
                     value: input.query.searchQuery
                 )
@@ -8029,6 +8036,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "sourceProductId",
                     value: input.query.sourceProductId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "activeOn",
+                    value: input.query.activeOn
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

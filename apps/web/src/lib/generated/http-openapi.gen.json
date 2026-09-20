@@ -10752,6 +10752,17 @@
             "explode": true
           },
           {
+            "name": "activeOn",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "searchQuery",
             "in": "query",
             "schema": {
@@ -11138,6 +11149,17 @@
                 "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
                 "description": "product shortcode, e.g. PRD-4K7M"
               }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "activeOn",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "style": "form",
             "explode": true
@@ -35613,9 +35635,12 @@
           "locationId": {
             "$ref": "#/components/schemas/LocationShortcode"
           },
-          "plantingId": {
-            "$ref": "#/components/schemas/PlantingShortcode",
-            "default": null
+          "plantingIds": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlantingShortcode"
+            }
           },
           "kind": {
             "default": "note",
@@ -35661,8 +35686,8 @@
           "locationId": {
             "$ref": "#/components/schemas/LocationShortcode"
           },
-          "plantingId": {
-            "$ref": "#/components/schemas/PlantingShortcode"
+          "plantingIds": {
+            "$ref": "#/components/schemas/output_schema113"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -35693,11 +35718,8 @@
           "locationName": {
             "type": "string"
           },
-          "plantingName": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "plantings": {
+            "$ref": "#/components/schemas/output_schema118"
           },
           "createdAt": {
             "type": "string",
@@ -35719,6 +35741,7 @@
         "required": [
           "id",
           "locationId",
+          "plantingIds",
           "kind",
           "observedOn",
           "note",
@@ -35726,7 +35749,7 @@
           "images",
           "displayName",
           "locationName",
-          "plantingName",
+          "plantings",
           "createdAt",
           "updatedAt",
           "displayImages",
@@ -35750,8 +35773,8 @@
           "locationId": {
             "$ref": "#/components/schemas/LocationShortcode"
           },
-          "plantingId": {
-            "$ref": "#/components/schemas/PlantingShortcode"
+          "plantingIds": {
+            "$ref": "#/components/schemas/output_schema113"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -35782,11 +35805,8 @@
           "locationName": {
             "type": "string"
           },
-          "plantingName": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "plantings": {
+            "$ref": "#/components/schemas/output_schema118"
           },
           "createdAt": {
             "type": "string",
@@ -35805,6 +35825,7 @@
         "required": [
           "id",
           "locationId",
+          "plantingIds",
           "kind",
           "observedOn",
           "note",
@@ -35812,7 +35833,7 @@
           "images",
           "displayName",
           "locationName",
-          "plantingName",
+          "plantings",
           "createdAt",
           "updatedAt",
           "displayImages"
@@ -35847,8 +35868,8 @@
           "locationId": {
             "$ref": "#/components/schemas/LocationShortcode"
           },
-          "plantingId": {
-            "$ref": "#/components/schemas/PlantingShortcode"
+          "plantingIds": {
+            "$ref": "#/components/schemas/output_schema113"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -35879,11 +35900,8 @@
           "locationName": {
             "type": "string"
           },
-          "plantingName": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "plantings": {
+            "$ref": "#/components/schemas/output_schema118"
           },
           "createdAt": {
             "type": "string",
@@ -35899,6 +35917,7 @@
         "required": [
           "id",
           "locationId",
+          "plantingIds",
           "kind",
           "observedOn",
           "note",
@@ -35906,7 +35925,7 @@
           "images",
           "displayName",
           "locationName",
-          "plantingName",
+          "plantings",
           "createdAt",
           "updatedAt"
         ],
@@ -35923,8 +35942,11 @@
           "locationId": {
             "$ref": "#/components/schemas/LocationShortcode"
           },
-          "plantingId": {
-            "$ref": "#/components/schemas/PlantingShortcode"
+          "plantingIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlantingShortcode"
+            }
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -46609,6 +46631,31 @@
           "createdAt"
         ],
         "additionalProperties": false
+      },
+      "output_schema113": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/PlantingShortcode"
+        }
+      },
+      "output_schema118": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/PlantingShortcode"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "additionalProperties": false
+        }
       },
       "output_schema124": {
         "type": "array",

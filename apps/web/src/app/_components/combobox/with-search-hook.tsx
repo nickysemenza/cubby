@@ -47,6 +47,7 @@ import {
   pagination,
   resolveBlankFilterKey,
   useEntitySearchRows,
+  type EntitySearchScope,
   type CreatedResultParser,
   type PickerSearchEntity,
   type UseEntitySearchConfig,
@@ -66,6 +67,8 @@ const ProductCreateDialog = lazy(() =>
 );
 
 export interface WithEntitySearchProps<TId extends string = string> {
+  /** Candidate filters derived from the owning editor's dependent fields. */
+  scope?: EntitySearchScope | null;
   /**
    * Bivariant on purpose (the `bivarianceHack` idiom): the shared dispatcher
    * narrows the entity at runtime and hands `children` to the matching
@@ -89,6 +92,15 @@ export interface WithEntitySearchProps<TId extends string = string> {
 const detailPlaceholder = (entity: PickerSearchEntity) =>
   `${entityInspectorMetadata[entity].shortcodePrefix}2222`;
 
+const withScope = <T extends object>(
+  filters: T,
+  scope?: EntitySearchScope | null,
+): T => {
+  // SAFETY: object spread preserves every key and value from `filters`; scope
+  // only contributes additional manifest-declared filter keys.
+  return { ...filters, ...scope } as T;
+};
+
 function parseCreated<T>(schema: z.ZodType<T>): CreatedResultParser<T> {
   return (result: unknown) => {
     const parsed = schema.safeParse(result);
@@ -101,15 +113,22 @@ function parseCreated<T>(schema: z.ZodType<T>): CreatedResultParser<T> {
 // `useEntitySearchRows` never puts a hook call inside a branch). ---
 
 const ingredientBlankFilterKey = resolveBlankFilterKey("ingredient");
-function useIngredientListSource(searchQuery: string, enabled: boolean) {
+function useIngredientListSource(
+  searchQuery: string,
+  enabled: boolean,
+  scope?: EntitySearchScope | null,
+) {
   const { data, isLoading } = useQuery({
     ...entityListFor("ingredient").queryOptions({
       // SAFETY: `ingredientBlankFilterKey` is resolved from ingredient's own
       // `name`-column filter descriptor (`resolveBlankFilterKey`), so this
       // object always has exactly the one key ingredient's filters expect.
-      filters: {
-        [ingredientBlankFilterKey]: searchQuery,
-      } as EntityListParams<"ingredient">["filters"],
+      filters: withScope(
+        {
+          [ingredientBlankFilterKey]: searchQuery,
+        } as EntityListParams<"ingredient">["filters"],
+        scope,
+      ),
       pagination,
     }),
     enabled,
@@ -117,13 +136,20 @@ function useIngredientListSource(searchQuery: string, enabled: boolean) {
   return { data: data?.items, isLoading };
 }
 
-function useLedgerPartyListSource(searchQuery: string, enabled: boolean) {
+function useLedgerPartyListSource(
+  searchQuery: string,
+  enabled: boolean,
+  scope?: EntitySearchScope | null,
+) {
   const { data, isLoading } = useQuery({
     ...entityListFor("ledgerParty").queryOptions({
-      filters: {
-        search: searchQuery,
-        kind: ["member"],
-      },
+      filters: withScope(
+        {
+          search: searchQuery,
+          kind: ["member"],
+        },
+        scope,
+      ),
       pagination,
     }),
     enabled,
@@ -132,13 +158,20 @@ function useLedgerPartyListSource(searchQuery: string, enabled: boolean) {
 }
 
 const recipeBlankFilterKey = resolveBlankFilterKey("recipe");
-function useRecipeListSource(searchQuery: string, enabled: boolean) {
+function useRecipeListSource(
+  searchQuery: string,
+  enabled: boolean,
+  scope?: EntitySearchScope | null,
+) {
   const { data, isLoading } = useQuery({
     ...entityListFor("recipe").queryOptions({
       // SAFETY: see `useIngredientListSource` — same manifest-resolved key.
-      filters: {
-        [recipeBlankFilterKey]: searchQuery,
-      } as EntityListParams<"recipe">["filters"],
+      filters: withScope(
+        {
+          [recipeBlankFilterKey]: searchQuery,
+        } as EntityListParams<"recipe">["filters"],
+        scope,
+      ),
       pagination,
     }),
     enabled,
@@ -147,13 +180,20 @@ function useRecipeListSource(searchQuery: string, enabled: boolean) {
 }
 
 const projectBlankFilterKey = resolveBlankFilterKey("project");
-function useProjectListSource(searchQuery: string, enabled: boolean) {
+function useProjectListSource(
+  searchQuery: string,
+  enabled: boolean,
+  scope?: EntitySearchScope | null,
+) {
   const { data, isLoading } = useQuery({
     ...entityListFor("project").queryOptions({
       // SAFETY: see `useIngredientListSource` — same manifest-resolved key.
-      filters: {
-        [projectBlankFilterKey]: searchQuery,
-      } as EntityListParams<"project">["filters"],
+      filters: withScope(
+        {
+          [projectBlankFilterKey]: searchQuery,
+        } as EntityListParams<"project">["filters"],
+        scope,
+      ),
       pagination,
     }),
     enabled,
@@ -162,13 +202,20 @@ function useProjectListSource(searchQuery: string, enabled: boolean) {
 }
 
 const taskBlankFilterKey = resolveBlankFilterKey("task");
-function useTaskListSource(searchQuery: string, enabled: boolean) {
+function useTaskListSource(
+  searchQuery: string,
+  enabled: boolean,
+  scope?: EntitySearchScope | null,
+) {
   const { data, isLoading } = useQuery({
     ...entityListFor("task").queryOptions({
       // SAFETY: see `useIngredientListSource` — same manifest-resolved key.
-      filters: {
-        [taskBlankFilterKey]: searchQuery,
-      } as EntityListParams<"task">["filters"],
+      filters: withScope(
+        {
+          [taskBlankFilterKey]: searchQuery,
+        } as EntityListParams<"task">["filters"],
+        scope,
+      ),
       pagination,
     }),
     enabled,
@@ -213,12 +260,18 @@ function useProductListSource(searchQuery: string, enabled: boolean) {
   return { data: data?.items, isLoading };
 }
 
-/** Plantings have no name-filter descriptor, so their blank state is the
- * recent list and typed queries use the manifest's global-search projection. */
-function usePlantingListSource(_searchQuery: string, enabled: boolean) {
+/** Plantings have no ordinary name filter; scoped picks use the list route so
+ * dependent filters stay server-enforced instead of widening to global search. */
+function usePlantingListSource(
+  _searchQuery: string,
+  enabled: boolean,
+  scope?: EntitySearchScope | null,
+) {
   const { data, isLoading } = useQuery({
     ...entityListFor("planting").queryOptions({
-      filters: {},
+      // SAFETY: the manifest compiles Planting's declared reference scope into
+      // this list filter contract, and the route parser validates it again.
+      filters: withScope({}, scope) as EntityListParams<"planting">["filters"],
       pagination,
     }),
     enabled,
@@ -484,6 +537,7 @@ function useCallerCreateNew<TId extends string>(
  */
 function IngredientEntitySearch({
   children,
+  scope,
 }: WithEntitySearchProps<IngredientShortcode>) {
   const {
     items,
@@ -495,7 +549,7 @@ function IngredientEntitySearch({
     setIsDialogOpen,
     pendingName,
     resolveWithEntity,
-  } = useEntitySearchRows("ingredient", ingredientConfig);
+  } = useEntitySearchRows("ingredient", ingredientConfig, scope);
   return (
     <>
       <EntitySearchCreateDialog
@@ -520,6 +574,7 @@ function IngredientEntitySearch({
 
 function LocationEntitySearch({
   children,
+  scope,
 }: WithEntitySearchProps<LocationShortcode>) {
   const {
     items,
@@ -531,7 +586,7 @@ function LocationEntitySearch({
     setIsDialogOpen,
     pendingName,
     resolveWithEntity,
-  } = useEntitySearchRows("location", locationConfig);
+  } = useEntitySearchRows("location", locationConfig, scope);
   return (
     <>
       <EntitySearchCreateDialog
@@ -557,6 +612,7 @@ function LocationEntitySearch({
 function ProductEntitySearch({
   intent = "reference",
   children,
+  scope,
 }: WithEntitySearchProps<ProductShortcode> & { intent?: ProductPickerIntent }) {
   const config = productConfig(intent);
   const {
@@ -569,7 +625,7 @@ function ProductEntitySearch({
     setIsDialogOpen,
     pendingName,
     resolveWithEntity,
-  } = useEntitySearchRows("product", config);
+  } = useEntitySearchRows("product", config, scope);
   return (
     <>
       <EntitySearchCreateDialog
@@ -598,39 +654,46 @@ function ProductEntitySearch({
  */
 function RecipeEntitySearch({
   children,
+  scope,
 }: WithEntitySearchProps<RecipeShortcode>) {
   const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("recipe", recipeConfig);
+    useEntitySearchRows("recipe", recipeConfig, scope);
   return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
 }
 
 function LedgerPartyEntitySearch({
   children,
+  scope,
 }: WithEntitySearchProps<LedgerPartyShortcode>) {
   const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("ledgerParty", ledgerPartyConfig);
+    useEntitySearchRows("ledgerParty", ledgerPartyConfig, scope);
   return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
 }
 
 function ProjectEntitySearch({
   children,
+  scope,
 }: WithEntitySearchProps<ProjectShortcode>) {
   const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("project", projectConfig);
+    useEntitySearchRows("project", projectConfig, scope);
   return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
 }
 
-function TaskEntitySearch({ children }: WithEntitySearchProps<TaskShortcode>) {
+function TaskEntitySearch({
+  children,
+  scope,
+}: WithEntitySearchProps<TaskShortcode>) {
   const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("task", taskConfig);
+    useEntitySearchRows("task", taskConfig, scope);
   return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
 }
 
 function PlantingEntitySearch({
   children,
+  scope,
 }: WithEntitySearchProps<PlantingShortcode>) {
   const { items, isLoading, onSearchChange, onOpenChange } =
-    useEntitySearchRows("planting", plantingConfig);
+    useEntitySearchRows("planting", plantingConfig, scope);
   return <>{children({ items, onSearchChange, isLoading, onOpenChange })}</>;
 }
 
@@ -643,29 +706,46 @@ function NonVendorEntitySearch({
   entity,
   intent,
   children,
+  scope,
 }: {
   entity: NonVendorPickerEntity;
   intent?: ProductPickerIntent;
 } & WithEntitySearchProps<EntityIdFor<NonVendorPickerEntity>>) {
   switch (entity) {
     case "ingredient":
-      return <IngredientEntitySearch>{children}</IngredientEntitySearch>;
+      return (
+        <IngredientEntitySearch scope={scope}>
+          {children}
+        </IngredientEntitySearch>
+      );
     case "ledgerParty":
-      return <LedgerPartyEntitySearch>{children}</LedgerPartyEntitySearch>;
+      return (
+        <LedgerPartyEntitySearch scope={scope}>
+          {children}
+        </LedgerPartyEntitySearch>
+      );
     case "location":
-      return <LocationEntitySearch>{children}</LocationEntitySearch>;
+      return (
+        <LocationEntitySearch scope={scope}>{children}</LocationEntitySearch>
+      );
     case "product":
       return (
-        <ProductEntitySearch intent={intent}>{children}</ProductEntitySearch>
+        <ProductEntitySearch intent={intent} scope={scope}>
+          {children}
+        </ProductEntitySearch>
       );
     case "recipe":
-      return <RecipeEntitySearch>{children}</RecipeEntitySearch>;
+      return <RecipeEntitySearch scope={scope}>{children}</RecipeEntitySearch>;
     case "project":
-      return <ProjectEntitySearch>{children}</ProjectEntitySearch>;
+      return (
+        <ProjectEntitySearch scope={scope}>{children}</ProjectEntitySearch>
+      );
     case "task":
-      return <TaskEntitySearch>{children}</TaskEntitySearch>;
+      return <TaskEntitySearch scope={scope}>{children}</TaskEntitySearch>;
     case "planting":
-      return <PlantingEntitySearch>{children}</PlantingEntitySearch>;
+      return (
+        <PlantingEntitySearch scope={scope}>{children}</PlantingEntitySearch>
+      );
   }
 }
 
@@ -674,6 +754,7 @@ function VendorEntitySearch<TId extends string>({
   buildSearchHit,
   onCreateNew,
   children,
+  scope,
 }: {
   build: (row: VendorRow) => ComboboxItem<TId>;
   buildSearchHit: (hit: SearchHit) => ComboboxItem<TId>;
@@ -695,7 +776,7 @@ function VendorEntitySearch<TId extends string>({
     onSearchChange,
     onOpenChange,
     onCreateNew: resolvedOnCreateNew,
-  } = useEntitySearchRows("vendor", config);
+  } = useEntitySearchRows("vendor", config, scope);
 
   return (
     <>
@@ -776,6 +857,7 @@ export function WithEntitySearch<TId extends string>(
         build={props.build}
         buildSearchHit={props.buildSearchHit}
         onCreateNew={props.onCreateNew}
+        scope={props.scope}
       >
         {props.children}
       </VendorEntitySearch>
@@ -786,7 +868,11 @@ export function WithEntitySearch<TId extends string>(
   // `WithEntitySearchProps<EntityIdFor<E>>["children"]` once `E` is inferred
   // from `entity` below — no cast needed to forward it.
   return (
-    <NonVendorEntitySearch entity={props.entity} intent={props.intent}>
+    <NonVendorEntitySearch
+      entity={props.entity}
+      intent={props.intent}
+      scope={props.scope}
+    >
       {props.children}
     </NonVendorEntitySearch>
   );

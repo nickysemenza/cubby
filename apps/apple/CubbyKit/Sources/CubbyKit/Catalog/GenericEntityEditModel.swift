@@ -260,7 +260,26 @@ public final class GenericEntityEditModel {
         self.original = original
         var seeded: [String: JSONValue] = [:]
         for field in visibleFields {
-            seeded[field.key] = original[field.key] ?? .null
+            if let value = original[field.key] {
+                seeded[field.key] = value
+            } else if field.reference?.multiple == true,
+                let projected = descriptor.fields.first(where: {
+                    $0.key != field.key
+                        && $0.reference?.entity == field.reference?.entity
+                        && $0.reference?.multiple == true
+                        && original[$0.key]?.arrayValue != nil
+                }),
+                let value = original[projected.key]
+            {
+                // M:N writes use an id array while detail reads may expose the
+                // hydrated relation under a separate, read-only field.
+                seeded[field.key] =
+                    value.arrayValue.map {
+                        .array($0.compactMap { $0["id"]?.stringValue.map(JSONValue.string) })
+                    } ?? .null
+            } else {
+                seeded[field.key] = .null
+            }
         }
         draft = seeded
         let existing =
