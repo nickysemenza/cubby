@@ -29,7 +29,18 @@ struct ImageEntityDetailView: View {
                             DevOverlayText(ImageDiagnostics.compareCaption(diagnostics))
                         }
                     }
-                case .diagnostics: ImageDiagnosticsCompareView(model: diagnostics)
+                case .diagnostics:
+                    if let url = detail.imageURL {
+                        Section("Image being compared") {
+                            DiagnosticPhotoPreview(
+                                photo: .init(
+                                    id: id.rawValue, filename: detail.filename, source: .remote(url)),
+                                caption:
+                                    "Cubby display rendition. Server and device fingerprints describe the bytes listed below."
+                            )
+                        }
+                    }
+                    ImageDiagnosticsCompareView(model: diagnostics)
                 }
             } else if let error {
                 Text(error).foregroundStyle(PorcelainTokens.destructive)

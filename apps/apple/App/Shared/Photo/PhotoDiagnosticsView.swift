@@ -80,6 +80,7 @@ final class PhotoDiagnosticsModel {
 /// chrome the host already has.
 struct PhotoDiagnosticsView: View {
     let model: PhotoDiagnosticsModel
+    var photo: PhotoAttachment? = nil
 
     var body: some View {
         switch model.state {
@@ -92,6 +93,11 @@ struct PhotoDiagnosticsView: View {
                 Text(message).foregroundStyle(PorcelainTokens.destructive)
             }
         case .ready(let report):
+            if let photo {
+                Section("Analyzed image") {
+                    DiagnosticPhotoPreview(photo: photo, caption: "Preview of the image analyzed below.")
+                }
+            }
             PhotoDiagnosticsReportSections(report: report)
         }
     }

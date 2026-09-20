@@ -38,8 +38,8 @@ struct DevOverlayText: View {
 }
 
 /// Layer 7: a "Copy diagnostics" toolbar item on every screen that carries an overlay layer.
-/// Encodes `payload()`'s current value as JSON and copies it to the platform pasteboard; disabled
-/// (rather than hidden) when there is nothing to copy yet, so the toolbar never reflows.
+/// Snapshot only on demand: reading a library-wide payload in `body` subscribes this button to
+/// every photo's state and repeatedly encodes the entire library while it is being scanned.
 struct CopyDiagnosticsButton<Payload: Encodable>: View {
     let payload: () -> Payload?
 
@@ -57,7 +57,6 @@ struct CopyDiagnosticsButton<Payload: Encodable>: View {
         } label: {
             Label("Copy diagnostics", systemImage: "doc.on.clipboard")
         }
-        .disabled(json == nil)
         .accessibilityIdentifier("dev.copyDiagnostics")
     }
 

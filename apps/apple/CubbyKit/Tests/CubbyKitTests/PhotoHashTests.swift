@@ -147,6 +147,109 @@ struct HashIndexTests {
     }
 }
 
+@Suite("Photo match diagnostics")
+struct PhotoMatchDiagnosticsTests {
+    @Test func evaluatorUsesSourceRatioAndProductionDimensions() {
+        let base = PerceptualHash64(value: 0)
+        let close = PerceptualHash64(value: 0b111)
+        let entry = ImageHashEntry(
+            id: ImageCode("IMG-OWNER"), perceptualHash: close,
+            sourceFingerprint: SourceFingerprint(hash: close, aspectRatio: 2), width: 100, height: 100,
+            directOwnerShortcodes: ["PRJ-FIXTURE"])
+        let inputs = PhotoMatchDiagnosticReport.Inputs(
+            file: .init(actualHash: base, width: 200, height: 100),
+            thumbnail: .init(
+                actualHash: base, width: 64, height: 64, originalWidth: 200, originalHeight: 100),
+            materialized: .init(
+                actualHash: base, width: 64, height: 64, originalWidth: 200, originalHeight: 100))
+        let report = PhotoMatchDiagnostics.evaluate(
+            .init(
+                initial: .init(state: "fixture"), inputs: inputs, loadedServerEntries: [entry],
+                expectedOwnerShortcode: "PRJ-FIXTURE"))
+
+        let evaluation = report.entries.first
+        #expect(evaluation?.selectedBecauseExpectedOwner == true)
+        #expect(evaluation?.thumbnailToContent?.verdict.confidence == .possible)
+        #expect(evaluation?.thumbnailToSource?.verdict.confidence == .strong)
+    }
+
+    @Test func verdictParityPreservesMissingDimensionAndDistanceTiers() {
+        #expect(
+            PhotoMatchVerdict.evaluate(distance: 3, leftAspectRatio: nil, rightAspectRatio: 2)
+                == .init(confidence: .possible, reason: .missingAspectRatio))
+        #expect(
+            PhotoMatchVerdict.evaluate(distance: 7, leftAspectRatio: 2, rightAspectRatio: 2)
+                == .init(confidence: .rejected, reason: .distanceTooLarge))
+    }
+
+    @Test(arguments: [0, 2, 3, 6, 7, 64], [Optional<Int>.none, 100, 150, 200])
+    func diagnosticVerdictsMatchProduction(distance: Int, width: Int?) throws {
+        let hash = PerceptualHash64(value: distance == 64 ? .max : (UInt64(1) << distance) - 1)
+        let entry = ImageHashEntry(
+            id: ImageCode("IMG-2345"), perceptualHash: hash,
+            width: width, height: 100, directOwnerShortcodes: ["PRD-2345"])
+        let query = HashQuery(perceptualHash: .init(value: 0), aspectRatio: 1.5)
+        let input = PhotoMatchDiagnosticReport.HashInput(
+            actualHash: query.perceptualHash, width: 150, height: 100)
+        let report = PhotoMatchDiagnostics.report(
+            initial: .init(state: "unchecked", registeredQuery: query),
+            inputs: .init(file: input, thumbnail: input, materialized: input),
+            loadedServerEntries: [entry], expectedOwnerShortcode: "PRD-2345")
+        let evaluation = try #require(report.entries.first)
+        let candidate = try HashIndex(entries: [entry]).candidates(for: query).first
+        #expect(evaluation.thumbnailToContent?.distance == distance)
+        #expect(evaluation.thumbnailToContent?.verdict.candidateConfidence == candidate?.confidence)
+        #expect(evaluation.registeredQueryToContent?.verdict == evaluation.thumbnailToContent?.verdict)
+        #expect(evaluation.thumbnailToSource == nil)
+        #expect(evaluation.materializedToSource == nil)
+        #expect(report.thumbnailToMaterializedDistance == 0)
+    }
+
+    @Test func freshIndexNeverOverwritesLoadedEvidenceAndExpectedOwnerIncludesRejectedMatches() throws {
+        let loaded = ImageHashEntry(
+            id: ImageCode("IMG-2345"), perceptualHash: .init(value: .max), width: 100, height: 100)
+        let fresh = ImageHashEntry(
+            id: loaded.id, perceptualHash: .init(value: 0), width: 100, height: 100,
+            directOwnerShortcodes: ["GDE-2345"])
+        let far = ImageHashEntry(
+            id: ImageCode("IMG-6789"), perceptualHash: .init(value: .max),
+            directOwnerShortcodes: ["GDE-2345"])
+        let input = PhotoMatchDiagnosticReport.HashInput(actualHash: .init(value: 0), width: 100, height: 100)
+        let issue = PhotoMatchDiagnosticReport.Issue(stage: .cacheRead, message: "Synthetic cache failure")
+        let report = PhotoMatchDiagnostics.report(
+            initial: .init(state: "unchecked"),
+            inputs: .init(file: input, thumbnail: input, materialized: input),
+            loadedServerEntries: [loaded, far],
+            freshServerIndex: .init(status: .success, algorithmRevision: 1, entries: [fresh]),
+            expectedOwnerShortcode: " gde-2345 ", issues: [issue])
+        #expect(report.loadedServerEntries == [loaded, far])
+        #expect(report.entries.map(\.entry.id) == [loaded.id, far.id, fresh.id])
+        #expect(report.entries.map(\.indexSource) == [.loaded, .loaded, .fresh])
+        #expect(
+            report.entries.map { $0.thumbnailToContent?.verdict.confidence } == [
+                .rejected, .rejected, .strong,
+            ])
+        #expect(report.entries.allSatisfy { $0.selectedBecauseExpectedOwner })
+        #expect(report.issues.map(\.message) == [issue.message])
+        let decoded = try JSONDecoder().decode(
+            PhotoMatchDiagnosticReport.self, from: JSONEncoder().encode(report))
+        #expect(decoded.entries.map(\.entry) == report.entries.map(\.entry))
+    }
+
+    @Test func materializedMatchesAreIncludedWhenThumbnailIsUnavailable() {
+        let entry = ImageHashEntry(
+            id: ImageCode("IMG-2345"), sourceFingerprint: .init(hash: .init(value: 0), aspectRatio: 2))
+        let empty = PhotoMatchDiagnosticReport.HashInput(actualHash: nil, width: nil, height: nil)
+        let input = PhotoMatchDiagnosticReport.HashInput(actualHash: .init(value: 7), width: 200, height: 100)
+        let report = PhotoMatchDiagnostics.report(
+            initial: .init(state: "unavailable"),
+            inputs: .init(file: input, thumbnail: empty, materialized: input),
+            loadedServerEntries: [entry])
+        #expect(report.entries.first?.materializedToSource?.verdict.confidence == .strong)
+        #expect(report.entries.first?.thumbnailToSource == nil)
+    }
+}
+
 @Suite("PhotoFile")
 struct PhotoFileTests {
     @Test func materializationPreservesBytesAndMetadata() throws {

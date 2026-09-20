@@ -109,7 +109,10 @@ private struct PhotoLibraryBrowser: View {
     /// `FilteredMonthAssetsCache` (keyed on this, not `matches.revision` — see B4/finding 2) knows
     /// to re-run `includes()` for a category filter even though no ownership match changed.
     @State private var categoryMatchesRevision = 0
-    private let columns = [GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 3)]
+    @ScaledMetric(relativeTo: .caption2) private var minimumTileWidth = 100.0
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: minimumTileWidth, maximum: max(160, minimumTileWidth)), spacing: 3)]
+    }
     /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
     /// items fall back to the window toolbar there.
     private static var selectionBarPlacement: ToolbarItemPlacement {
@@ -249,6 +252,7 @@ private struct PhotoLibraryBrowser: View {
             PhotoLibraryPreview(asset: selected.asset) {
                 toggle(selected.asset.localIdentifier)
             }
+            .id(selected.asset.localIdentifier)
         }
         .alert(
             "Could not load photos",
@@ -657,9 +661,17 @@ private struct PhotoLibraryCell: View {
                     }
                 }.clipped()
                 .overlay(alignment: .bottomTrailing) { cornerBadge }
-                .overlay(alignment: .topTrailing) { analysisDot }
+                .overlay(alignment: .topTrailing) {
+                    if let selection {
+                        Text("\(selection)").font(.caption.bold()).padding(7)
+                            .background(.blue, in: Circle()).foregroundStyle(.white).padding(5)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .overlay(alignment: .bottomLeading) { analysisDot }
         }.buttonStyle(.plain)
             .overlay(alignment: .topLeading) { detailsButton }
+            .help(cellState.accessibilityStatus)
             .accessibilityLabel(cellAccessibilityLabel)
             .accessibilityValue(selection.map { "Selected photo \($0)" } ?? "")
             .onDisappear { image = nil }
@@ -674,30 +686,9 @@ private struct PhotoLibraryCell: View {
             }
     }
 
-    /// Selection number > owner badge > "unchecked" glyph. Split out of `body` (with the
-    /// accessibility label and the details button) to keep each expression under the
-    /// 200ms type-check budget.
-    @ViewBuilder private var cornerBadge: some View {
-        let state = cellState
-        if let selection {
-            Text("\(selection)").font(.caption.bold()).padding(7).background(.blue, in: Circle())
-                .foregroundStyle(.white).padding(5)
-        } else if let badgeText = state.badgeText {
-            Text(badgeText)
-                .font(.caption2.weight(.semibold).monospaced())
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .padding(.horizontal, 7)
-                .frame(minHeight: 28)
-                .foregroundStyle(.primary)
-                .background(.thinMaterial, in: Capsule())
-                .overlay { Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1) }
-                .shadow(radius: 2, y: 1)
-                .padding(5)
-        } else if state.possibleMatch || !state.known {
-            Image(systemName: "questionmark.circle").foregroundStyle(.white).shadow(radius: 2)
-                .padding(6)
-        }
+    /// Ownership and selection occupy different corners so selecting cannot hide a match.
+    private var cornerBadge: some View {
+        PhotoGridMatchIndicator(state: cellState).padding(5)
     }
 
     /// B4's grid dot: absent while pending, `.secondary` once analysed with no category hit,
@@ -734,11 +725,15 @@ private struct PhotoLibraryCell: View {
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
                 .background(.ultraThinMaterial, in: Circle())
-                .contentShape(Circle())
+                #if os(iOS)
+                    .frame(width: 44, height: 44)
+                #endif
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(4)
         .accessibilityLabel("Photo details")
+        .help("Photo details")
         .accessibilityIdentifier("photos.grid.details")
     }
 
@@ -758,7 +753,7 @@ private struct PhotoLibraryPreview: View {
     @State private var image: CGImage?
     @State private var error: String?
     @State private var tab: Tab = .photo
-    @State private var diagnostics = PhotoDiagnosticsModel()
+    @State private var matchInspection = PhotoMatchInspectionModel()
 
     var body: some View {
         NavigationStack {
@@ -770,7 +765,12 @@ private struct PhotoLibraryPreview: View {
                 .listRowSeparator(.hidden)
                 switch tab {
                 case .photo: photoTab
-                case .diagnostics: PhotoDiagnosticsView(model: diagnostics)
+                case .diagnostics:
+                    PhotoMatchInspectionView(model: matchInspection) {
+                        matchInspection.inspect(
+                            asset: asset, matches: appModel.photoMatches,
+                            analysisStore: appModel.photoAnalysisStore, client: appModel.client)
+                    }
                 }
             }.navigationTitle("Photo")
                 .toolbar {
@@ -792,11 +792,7 @@ private struct PhotoLibraryPreview: View {
                         Diagnostics.report(error, context: "photos.preview")
                     }
                 }
-                .onChange(of: tab) { _, newValue in
-                    guard newValue == .diagnostics else { return }
-                    startDiagnosticsIfNeeded()
-                }
-                .onDisappear { diagnostics.cancel() }
+                .onDisappear { matchInspection.cancel() }
         }
     }
 
@@ -812,19 +808,22 @@ private struct PhotoLibraryPreview: View {
         Section("Cubby") {
             let candidates = appModel.photoMatches.storedCandidates(for: asset.localIdentifier)
             if candidates.isEmpty {
-                if appModel.photoMatches.hasKnownResult(for: asset.localIdentifier) {
-                    Label("Ready to add", systemImage: "plus.circle")
-                    Text("No existing copy was found.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else if appModel.photoMatches.isLoading {
-                    ProgressView("Checking for an existing copy…")
-                } else {
-                    Label("Not checked yet", systemImage: "questionmark.circle")
-                        .foregroundStyle(.secondary)
+                let state = appModel.photoMatches.cellStateBox(for: asset.localIdentifier).state
+                HStack {
+                    PhotoGridMatchIndicator(state: state).accessibilityHidden(true)
+                    Text(state.accessibilityStatus)
                 }
             }
             ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
+                let owners = Set(appModel.photoMatches.directOwnerShortcodes(for: candidate.id)).sorted()
+                if !owners.isEmpty {
+                    Text(owners.joined(separator: ", "))
+                        .font(.subheadline.monospaced())
+                        .textSelection(.enabled)
+                        .accessibilityLabel(
+                            "\(candidate.confidence == .strong ? "Owned by" : "Possible owners") \(owners.joined(separator: ", "))"
+                        )
+                }
                 MatchCandidateView(candidate: candidate)
                 NavigationLink {
                     ImageEntityDetailView(id: candidate.id)
@@ -845,21 +844,6 @@ private struct PhotoLibraryPreview: View {
         }
     }
 
-    /// Materializing the asset and running Vision costs seconds and RAM, so it happens only once
-    /// the Diagnostics tab is actually opened — never eagerly when the preview itself appears.
-    private func startDiagnosticsIfNeeded() {
-        guard case .idle = diagnostics.state else { return }
-        Task {
-            do {
-                let file = try await PhotoLibraryIO.shared.file(for: asset)
-                diagnostics.run(
-                    file: file, localIdentifier: asset.localIdentifier,
-                    analysisStore: appModel.photoAnalysisStore)
-            } catch {
-                Diagnostics.report(error, context: "photos.diagnostics")
-            }
-        }
-    }
 }
 
 #Preview(traits: .modifier(SignedInPreview())) { NavigationStack { PhotosRootView() } }

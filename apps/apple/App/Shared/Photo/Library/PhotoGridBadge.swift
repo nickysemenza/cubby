@@ -9,16 +9,36 @@ import SwiftUI
 /// deliberately a display-only concern: it never changes the selected photo
 /// or the importer destination.
 enum PhotoGridBadge {
+    static func owners(for directOwnerShortcodes: [String]) -> [String] {
+        Set(directOwnerShortcodes.filter { !$0.isEmpty }).sorted()
+    }
+
     static func text(for directOwnerShortcodes: [String]) -> String? {
-        let owners = Set(directOwnerShortcodes.filter { !$0.isEmpty }).sorted()
+        let owners = owners(for: directOwnerShortcodes)
         guard let primary = owners.first else { return nil }
         return owners.count == 1 ? primary : "\(primary)+\(owners.count - 1)"
     }
 
     static func accessibilityDescription(for directOwnerShortcodes: [String]) -> String? {
-        guard let text = text(for: directOwnerShortcodes) else { return nil }
-        return "Owned by \(text)"
+        let owners = owners(for: directOwnerShortcodes)
+        guard !owners.isEmpty else { return nil }
+        return "Owned by \(owners.joined(separator: ", "))"
     }
+
+    static func possibleText(for directOwnerShortcodes: [String]) -> String? {
+        text(for: directOwnerShortcodes).map { "\($0)?" }
+    }
+}
+
+/// The match result for one grid photo. Ownership is intentionally separate: a match can exist
+/// without a direct owner, and a possible match's owner remains a review hint rather than proof.
+enum PhotoGridMatchState: String, Equatable, Sendable {
+    case unchecked
+    case checking
+    case strong
+    case possible
+    case unmatched
+    case unavailable
 }
 
 /// Everything a grid cell needs to render its badge and accessibility status, derived once
@@ -29,11 +49,14 @@ enum PhotoGridBadge {
 /// per-id `PhotoGridCellStateBox` instead, so a cell observing only its own box's `state`
 /// re-renders solely when its own status changes.
 struct PhotoGridCellState: Equatable, Sendable {
-    var badgeText: String?
-    var represented: Bool
-    var possibleMatch: Bool
-    var known: Bool
+    var matchState: PhotoGridMatchState
+    var ownerBadgeText: String?
     var accessibilityStatus: String
+    /// A partial server index must not be presented as a complete negative result in diagnostics.
+    var indexIsComplete: Bool
+    /// The server failure is retained for inspector context even when cached positive candidates
+    /// still give the grid a useful strong/possible state.
+    var serverError: String? = nil
     /// On-device classification status (B3/B4): drives the grid cell's 6pt dot. Defaulted so
     /// existing call sites that predate the classification sweep still compile unchanged.
     var analysis: PhotoAnalysisStatus = .pending
@@ -42,35 +65,75 @@ struct PhotoGridCellState: Equatable, Sendable {
     var classifyMs: Double?
     var topLabel: String?
 
-    /// `checked` distinguishes "no match, confirmed" from "not looked at yet" once a photo has
-    /// no candidates at all — both otherwise look identical (empty `storedCandidates`).
+    // Compatibility projections for the grid while its root view adopts `matchState`.
+    var badgeText: String? { ownerBadgeText }
+    var represented: Bool { matchState == .strong }
+    var possibleMatch: Bool { matchState == .possible }
+    var known: Bool { [.strong, .possible, .unmatched].contains(matchState) }
+
+    /// Pending registration distinguishes "still checking" from a completed empty result. A
+    /// server failure preserves cached positive evidence but makes a stale negative unavailable.
     static func derive(
         storedCandidates: [DedupCandidate],
         strongDirectOwnerShortcodes: [String],
+        possibleDirectOwnerShortcodes: [String] = [],
         hasKnownResult: Bool,
-        checked: Bool,
+        isPending: Bool,
+        indexIsComplete: Bool,
+        serverError: String?,
         analysis: PhotoAnalysisStatus = .pending,
         classifyMs: Double? = nil,
         topLabel: String? = nil
     ) -> PhotoGridCellState {
-        let represented = storedCandidates.contains { $0.confidence == .strong }
-        let possibleMatch = !represented && !storedCandidates.isEmpty
-        let known = checked && hasKnownResult
-        let badgeDescription = PhotoGridBadge.accessibilityDescription(for: strongDirectOwnerShortcodes)
-        let status: String
-        if let badgeDescription {
-            status = badgeDescription
-        } else if represented {
-            status = "In Cubby"
-        } else if possibleMatch {
-            status = "Possible Cubby match"
+        let matchState: PhotoGridMatchState
+        if storedCandidates.contains(where: { $0.confidence == .strong }) {
+            matchState = .strong
+        } else if !storedCandidates.isEmpty {
+            matchState = .possible
+        } else if serverError != nil {
+            matchState = .unavailable
+        } else if hasKnownResult {
+            matchState = .unmatched
+        } else if isPending {
+            matchState = .checking
         } else {
-            status = known ? "No known match" : "Not checked"
+            matchState = .unchecked
+        }
+        let ownerBadgeText: String?
+        switch matchState {
+        case .strong:
+            ownerBadgeText = PhotoGridBadge.text(for: strongDirectOwnerShortcodes)
+        case .possible:
+            ownerBadgeText = PhotoGridBadge.possibleText(for: possibleDirectOwnerShortcodes)
+        case .unchecked, .checking, .unmatched, .unavailable:
+            ownerBadgeText = nil
+        }
+        let status: String
+        switch matchState {
+        case .unchecked: status = "Not checked"
+        case .checking: status = "Checking Cubby match"
+        case .strong:
+            status = PhotoGridBadge.accessibilityDescription(for: strongDirectOwnerShortcodes) ?? "In Cubby"
+        case .possible:
+            let owners = PhotoGridBadge.owners(for: possibleDirectOwnerShortcodes)
+            let base =
+                if owners.isEmpty {
+                    "Possible Cubby match"
+                } else {
+                    "Possible Cubby match with \(owners.joined(separator: ", "))"
+                }
+            status = serverError.map { "\(base). Match refresh failed: \($0)" } ?? base
+        case .unmatched:
+            status = indexIsComplete ? "No match found" : "No match found; Cubby index is incomplete"
+        case .unavailable:
+            status =
+                serverError.map { "Match unavailable. \($0)" }
+                ?? "Match unavailable"
         }
         return PhotoGridCellState(
-            badgeText: PhotoGridBadge.text(for: strongDirectOwnerShortcodes),
-            represented: represented, possibleMatch: possibleMatch, known: known,
-            accessibilityStatus: status, analysis: analysis, classifyMs: classifyMs, topLabel: topLabel)
+            matchState: matchState, ownerBadgeText: ownerBadgeText, accessibilityStatus: status,
+            indexIsComplete: indexIsComplete, serverError: serverError, analysis: analysis,
+            classifyMs: classifyMs, topLabel: topLabel)
     }
 }
 
