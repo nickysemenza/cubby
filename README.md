@@ -388,6 +388,7 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm --filter @cubby/web run build:cf` | Build only the main web Worker |
 | `pnpm --filter @cubby/web run preview:cf` | Run the Workers build locally |
 | `pnpm --filter @cubby/web run deploy:cf` | Deploy to Cloudflare Workers |
+| `pnpm run deploy:all` | Deploy all four production Workers in dependency order |
 | `pnpm run wasm` | Rebuild `@cubby/recipebridge` from Rust source |
 
 See [docs/ci.md](docs/ci.md) for CI scoping, artifact provenance, scheduled
@@ -430,6 +431,11 @@ for the shared browser fixtures.
 What deploys where lives in the [Monorepo Layout](#-monorepo-layout) table. This section covers the non-trivial internals of the main app's CF Workers deploy. (`upc-lookup` and `usda-api` are also Cloudflare Workers.)
 
 The dev server is plain Node via `vite dev`. Production = CF Workers.
+
+`pnpm run deploy:all` deploys the complete production system in order: web,
+purchase-agent, upc-lookup, then usda-api. It stops at the first failed deploy.
+Bare `pnpm deploy` is reserved by pnpm for workspace package deployment; use
+`pnpm run deploy:all` for this command.
 
 `pnpm --filter @cubby/web run deploy:cf` builds and deploys the Worker. For
 per-chunk gzip reporting, run `CUBBY_BUNDLE_REPORT=1 pnpm --filter @cubby/web run build:cf`;

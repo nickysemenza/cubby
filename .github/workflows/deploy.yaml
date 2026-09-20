@@ -9,85 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  scope:
-    name: Changed Workers
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      web: ${{ steps.filter.outputs.web }}
-      purchase_agent: ${{ steps.filter.outputs.purchase_agent }}
-      workers: ${{ steps.workers.outputs.workers }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-      # Replaces scripts/ci-scope.ts's classifyPaths (deleted): three filters
-      # covering the same prefixes classifyPaths used for `web`/`usda`/`upc`.
-      # Shared-root paths (root manifests, CI, scripts) are duplicated into
-      # every filter so a workspace-wide change still deploys every Worker.
-      # Unlike classifyPaths, an entirely unrecognised top-level path is NOT a
-      # fail-safe "deploy everything" here — add it to the filter(s) it should
-      # affect (see docs/ci.md "Deployment").
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        id: filter
-        with:
-          # push-to-main is the documented "long-lived branch" case: base ==
-          # the triggering branch compares against the most recent commit on
-          # main before this push (and against every file when there is
-          # none, e.g. the branch's first push).
-          base: main
-          filters: |
-            shared: &shared
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
-              - 'package.json'
-              - 'nx.json'
-              - 'project.json'
-              - 'tsconfig.json'
-              - '.github/**'
-              - '.husky/**'
-              - 'scripts/**'
-              - 'packages/tsconfig.package.json'
-            web:
-              - *shared
-              - 'apps/mcp-apps/**'
-              - 'apps/web/**'
-              - 'packages/design-tokens/**'
-              - 'packages/schemas/**'
-              - 'packages/shared/**'
-              - 'packages/upc-contract/**'
-              - 'packages/usda-contract/**'
-              - 'packages/usda-schemas/**'
-              - 'packages/wasm/**'
-              - 'recipebridge/**'
-            purchase_agent:
-              - *shared
-              - 'apps/purchase-agent/**'
-            usda:
-              - *shared
-              - 'apps/usda-api/**'
-              - 'packages/usda-contract/**'
-              - 'packages/usda-schemas/**'
-              - 'packages/worker-tracing/**'
-            upc:
-              - *shared
-              - 'apps/upc-lookup/**'
-              - 'packages/shared/**'
-              - 'packages/upc-contract/**'
-              - 'packages/usda-schemas/**'
-              - 'packages/worker-tracing/**'
-      - id: workers
-        run: |
-          workers=$(jq -nc \
-            --argjson usda '${{ steps.filter.outputs.usda }}' \
-            --argjson upc '${{ steps.filter.outputs.upc }}' \
-            '[if $usda then "usda-api" else empty end, if $upc then "upc-lookup" else empty end]')
-          echo "workers=$workers" >> "$GITHUB_OUTPUT"
-
   deploy-web:
     name: Build and deploy web
-    needs: scope
-    if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
@@ -129,14 +52,12 @@ jobs:
 
   deploy-worker:
     name: Deploy ${{ matrix.pkg }} Worker
-    needs: scope
-    if: needs.scope.outputs.workers != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        pkg: ${{ fromJSON(needs.scope.outputs.workers) }}
+        pkg: [upc-lookup, usda-api]
     concurrency:
       group: deploy-${{ matrix.pkg }}-production
       cancel-in-progress: false
@@ -165,10 +86,9 @@ jobs:
 
   deploy-purchase-agent:
     name: Build and deploy purchase agent
-    needs: [scope, deploy-web]
+    needs: deploy-web
     if: >-
       always() &&
-      needs.scope.outputs.purchase_agent == 'true' &&
       (needs.deploy-web.result == 'success' || needs.deploy-web.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15

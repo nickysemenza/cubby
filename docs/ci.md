@@ -92,14 +92,12 @@ Claude workflows remain manual.
 
 ## Deployment
 
-`.github/workflows/deploy.yaml` runs on `main` pushes. A `dorny/paths-filter`
-step (replacing the deleted `scripts/ci-scope.ts` `classifyPaths`) classifies
-changed paths into `web`/`usda`/`upc` filters, builds the affected Workers and
-deploys them. Unlike the deleted classifier, an entirely unrecognised
-top-level path is not a fail-safe "deploy everything" — add the path to the
-filter(s) it should affect. Each Worker serializes
-production deployments and checks that the commit is still current main before
-building and again before deploying. Production never depends on a test job.
+`.github/workflows/deploy.yaml` runs on `main` pushes and deploys all four
+production Workers every time. The purchase-agent deploy waits for the web
+Worker, while the auxiliary Workers run
+independently. Each Worker serializes production deployments and checks that
+the commit is still current main before building and again before deploying.
+Production never depends on a test job.
 This trusts required PR checks before merging. Public-repository standard
 GitHub-hosted runners are free; no self-hosted runner or Cloudflare Builds is
 required.
