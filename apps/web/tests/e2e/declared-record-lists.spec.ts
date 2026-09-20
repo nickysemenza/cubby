@@ -66,7 +66,7 @@ test("declared record lists retain identities, relationships and amounts on desk
         exact: true,
       }),
     }),
-  ).toContainText("Name");
+  ).toContainText("Location");
   await expect(
     page.getByRole("link", { name: `${name} room · room`, exact: true }),
   ).toHaveAttribute("href", `/locations/${fixture.location.id}`);
