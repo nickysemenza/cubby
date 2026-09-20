@@ -17,6 +17,11 @@ inputs:
     required: false
     default: "true"
 
+outputs:
+  pnpm-store-cache:
+    description: "pnpm-store cache state: hit, miss, or disabled"
+    value: ${{ steps.pnpm-store-cache.outputs.state }}
+
 runs:
   using: "composite"
   steps:
@@ -26,6 +31,7 @@ runs:
         version: 12.3.4
 
     - name: Setup Node.js
+      id: node
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version: "24"
@@ -33,6 +39,21 @@ runs:
         # save hook. This matters for container jobs, where compressing the pnpm
         # store can take longer than the filtered install it is meant to save.
         cache: ${{ inputs.cache-pnpm-store == 'true' && 'pnpm' || '' }}
+
+    - name: Report pnpm store cache
+      id: pnpm-store-cache
+      shell: bash
+      env:
+        CACHE_MODE: ${{ inputs.cache-pnpm-store }}
+        CACHE_HIT: ${{ steps.node.outputs.cache-hit }}
+      run: |
+        if [[ "$CACHE_MODE" == "true" ]]; then
+          cache_state="${CACHE_HIT:-miss}"
+        else
+          cache_state="disabled"
+        fi
+        printf 'pnpm-store cache: mode=%s state=%s\n' "$CACHE_MODE" "$cache_state" >> "$GITHUB_STEP_SUMMARY"
+        echo "state=$cache_state" >> "$GITHUB_OUTPUT"
 
     # WASM is restored independently so consumers can start in parallel. See
     # docs/ci.md for the measured producer-job and cache tradeoffs.

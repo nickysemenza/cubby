@@ -116,6 +116,21 @@ merge-to-deploy duration. The target is a 4–7 minute warm critical path and no
 more than 10 minutes cold. Optimize only a measured bottleneck; prior evidence
 already rejects node_modules caching and extra E2E sharding.
 
+### Public exact-head run ledger
+
+Record wall time from GitHub job metadata, not summed step duration. Cache
+state comes from each job summary, `cancelled` is the workflow conclusion, and
+deployment time is measured from the merged commit's `main` push to the
+matching Cloudflare deployment completion. Keep five successful exact-head
+samples for an experiment before retaining it: its targeted step's p50 must
+improve by at least 10%, with no regression in the required-check critical
+path. Append the remaining samples here rather than inventing a timing value
+from a partial or stale run.
+
+| PR / exact head | Queue | Required lanes (wall) | Cache state | Cancelled | Merge to Cloudflare |
+| --- | ---: | --- | --- | --- | ---: |
+| [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no | 82s |
+
 Cloudflare Workers Builds was piloted and rejected: native PostgreSQL/pgvector/
 IntegreSQL and both browser engines worked, but no run reached a complete
 hosted pass with a cold-plus-two-warm timing result, so the pilot was

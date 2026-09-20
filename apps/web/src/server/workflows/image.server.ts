@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import type {
   createFileUploadInput,
   cullPendingImagesSchema,
@@ -6,13 +7,17 @@ import type {
   initiateDocumentUploadSchema,
   initiateUploadWithoutEntitySchema,
   mcpAttachFileInput,
+  imageAttachExistingInput,
 } from "@cubby/schemas/image";
 import type { AppErrorReason } from "@cubby/shared";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { AppError, createAppError } from "~/server/errors/app-error";
-import { markImageUploaded } from "~/server/repo/image";
+import {
+  attachExistingImageToEntity,
+  markImageUploaded,
+} from "~/server/repo/image";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   attachFileToEntity,
@@ -134,6 +139,25 @@ export const attachFileWorkflow = imageOperation(
   "IMAGE_UPLOAD_FAILED",
   "Failed to attach file",
   true,
+);
+export const attachExistingImageWorkflow = bindWorkflow(
+  workflow<
+    { db: Database; actor: ActorContext },
+    z.output<typeof imageAttachExistingInput>
+  >("image.attachExisting")
+    .commit("attach", async ({ context }, { input }) =>
+      attachExistingImageToEntity(context.db, input, context.actor),
+    )
+    .output(({ attach, input }) => ({
+      imageId: input.imageId,
+      targetId: input.targetId,
+      reused: attach.reused,
+    })),
+  (
+    db: Database,
+    actor: ActorContext,
+    input: z.output<typeof imageAttachExistingInput>,
+  ) => ({ context: { db, actor }, input }),
 );
 export const createFileUploadWorkflow = imageOperation(
   "image.createFileUpload",

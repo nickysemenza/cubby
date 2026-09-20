@@ -265,13 +265,13 @@ export const updateLiveAndReturn = async <
  * `repo/location/crud.ts`'s two `pendingImageIds` call sites shipped without
  * the resolve step and only surfaced via a failing integration test.
  */
-type ImageJoinTable = PgTable & {
+export type ImageJoinTable = PgTable & {
   imageId: AnyColumn;
   sortOrder: AnyColumn;
   deletedAt: AnyColumn;
 };
 
-interface ImageJoinBinding<
+export interface ImageJoinBinding<
   TTable extends ImageJoinTable,
   TParentColumn extends AnyColumn,
 > {

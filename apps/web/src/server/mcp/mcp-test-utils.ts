@@ -48,6 +48,7 @@ const unavailableCaller = {
   },
   image: {
     attachFile: unavailableCallerMethod,
+    attachExisting: unavailableCallerMethod,
     createFileUpload: unavailableCallerMethod,
   },
   ingredient: {

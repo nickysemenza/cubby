@@ -18,6 +18,9 @@ export const image = defineOperationDomain(imageContract, {
   delete: {
     invalidates: ripple.image,
   },
+  attachExisting: {
+    invalidates: ripple.image,
+  },
   projectSummaries: {
     tags: [["image", "projectSummaries"]],
     cache: "stable",

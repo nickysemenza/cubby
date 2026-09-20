@@ -5,6 +5,7 @@ import {
   imageBrowserListInput,
   imageBrowserListOut,
   imageBrowserUpdateInput,
+  imageAttachExistingInput,
   type ImageWithEntity,
 } from "@cubby/schemas/image";
 import type { z } from "zod";
@@ -22,6 +23,7 @@ import {
   getImageHashIndex,
   getImagesByProjectIds,
   setImagePerceptualHashes,
+  attachExistingImageToEntity,
 } from "~/server/repo/image";
 import {
   getLocalImageAnalysis,
@@ -43,6 +45,7 @@ type ImageListOutput = z.output<typeof imageBrowserListOut>;
 type ImageUpdateInput = z.output<typeof imageBrowserUpdateInput>;
 type ImageDeleteInput = z.output<typeof imageBrowserDeleteInput>;
 type ImageDeleteOutput = z.output<typeof imageBrowserDeleteOut>;
+type ImageAttachExistingInput = z.output<typeof imageAttachExistingInput>;
 
 export interface ImageBrowserPorts {
   list(
@@ -275,6 +278,18 @@ export const imageHandlers = implementOperationDomain(imageContract, {
   },
   update: async (context, input) => {
     return updateImageThenReload(productionImageBrowserPorts, context, input);
+  },
+  attachExisting: async (context, input: ImageAttachExistingInput) => {
+    const result = await attachExistingImageToEntity(
+      context.db,
+      input,
+      context.actorContext,
+    );
+    return {
+      imageId: input.imageId,
+      targetId: input.targetId,
+      reused: result.reused,
+    };
   },
   delete: (context, input) =>
     productionImageBrowserPorts.delete(context, input),
