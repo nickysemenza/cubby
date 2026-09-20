@@ -50,8 +50,17 @@ export function StaticPicker({
       colorizeSelectOptions(items).map((item) => ({
         id: item.value,
         name: item.label,
-        icon: item.icon,
-        color: item.color,
+        icon: item.icon ? (
+          <span
+            aria-hidden
+            data-enum-option-icon=""
+            className="flex items-center [&>svg]:size-3.5!"
+            style={{ color: item.color }}
+          >
+            {item.icon}
+          </span>
+        ) : undefined,
+        color: item.icon ? undefined : item.color,
       })),
     [items],
   );

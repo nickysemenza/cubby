@@ -104,7 +104,7 @@ export const tradeOptions: FilterableComboboxItem[] = tradeValues.map(
     return {
       value,
       label: TRADE_LABELS[value],
-      icon: <Icon className="size-3.5 text-muted-foreground" />,
+      icon: <Icon className="size-3.5" />,
     };
   },
 );

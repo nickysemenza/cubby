@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,6 +7,11 @@ import { StaticPicker } from "./static-picker";
 const ITEMS = [
   { value: "materials", label: "Materials", color: "rgb(1, 2, 3)" },
   { value: "services", label: "Services" },
+  {
+    value: "food",
+    label: "Food",
+    icon: <span data-testid="food-icon">food glyph</span>,
+  },
 ];
 
 function Harness() {
@@ -41,13 +46,26 @@ describe("StaticPicker", () => {
     expect(onValueChange).toHaveBeenCalledWith("services");
   });
 
-  it("renders the selected label and categorical swatch", () => {
+  it("renders a color-only option with one categorical swatch", () => {
     render(<Harness />);
     const input = screen.getByRole("combobox", { name: "cost type" });
     expect(input).toHaveValue("Materials");
     fireEvent.keyDown(input, { key: "ArrowDown" });
-    expect(
-      document.querySelector('[style*="background-color"]'),
-    ).not.toBeNull();
+    const option = screen.getByRole("option", { name: "Materials" });
+    expect(within(option).queryAllByTestId("food-icon")).toHaveLength(0);
+    expect(option.querySelectorAll('[style*="background-color"]')).toHaveLength(
+      1,
+    );
+  });
+
+  it("renders an icon-backed option with one icon and no categorical swatch", () => {
+    render(<Harness />);
+    const input = screen.getByRole("combobox", { name: "cost type" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    const option = screen.getByRole("option", { name: "Food" });
+    expect(within(option).getAllByTestId("food-icon")).toHaveLength(1);
+    expect(option.querySelectorAll('[style*="background-color"]')).toHaveLength(
+      0,
+    );
   });
 });

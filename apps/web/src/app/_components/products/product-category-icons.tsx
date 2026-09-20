@@ -10,7 +10,7 @@ interface CategoryIconProps {
   colored?: boolean;
 }
 
-function CategoryIcon({
+export function CategoryIcon({
   category,
   className,
   size = 16,
@@ -27,10 +27,9 @@ function CategoryIcon({
 }
 
 /**
- * Product category options with colored icons for dropdowns.
- *
- * No `color`: the combobox renders that as a swatch *beside* the icon, and the
- * icon is already tinted with the same value — two marks for one fact.
+ * Product category options with colored icons for dropdowns. The shared static
+ * picker suppresses its fallback swatch when an option already has an icon, so
+ * each row carries exactly one categorical mark.
  */
 export const productCategoryOptionsWithTheme = productCategory.options.map(
   (cat) => ({

@@ -2,6 +2,7 @@ import type { LocationType } from "@cubby/schemas/location";
 
 import { EnumPill } from "~/components/ui/enum-pill";
 
+import { LocationIcon } from "./location-icons";
 import { getLocationTypeColor } from "./location-type-theme";
 
 interface LocationTypeLabelProps {
@@ -22,5 +23,14 @@ interface LocationTypeLabelProps {
 export function LocationTypeLabel({ type, product }: LocationTypeLabelProps) {
   const text = type ?? product?.name;
   if (!text) return null;
-  return <EnumPill color={getLocationTypeColor(type)}>{text}</EnumPill>;
+  return (
+    <EnumPill
+      color={getLocationTypeColor(type)}
+      icon={
+        type ? <LocationIcon type={type} product={null} size={10} /> : undefined
+      }
+    >
+      {text}
+    </EnumPill>
+  );
 }
