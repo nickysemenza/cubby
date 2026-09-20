@@ -10,7 +10,8 @@ import type {
 const tableLinkVariants = cva("transition-colors hover:underline", {
   variants: {
     variant: {
-      default: "font-medium text-primary",
+      default: "font-medium text-muted-foreground hover:text-primary",
+      identity: "font-semibold text-primary",
       mono: "font-mono text-primary",
       muted: "font-medium text-muted-foreground hover:text-foreground",
     },
@@ -58,6 +59,7 @@ export const TableLink = ({
       to={to}
       params={params}
       title={title}
+      onClick={(event) => event.stopPropagation()}
     >
       {children}
     </Link>

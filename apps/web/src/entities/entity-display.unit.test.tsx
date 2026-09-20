@@ -1,5 +1,5 @@
 import type { CellData } from "@tanstack/react-table";
-import { render, screen } from "@testing-library/react";
+import { render, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnDef,
 } from "~/app/_components/data-table/table-features";
+import { useStandardColumns } from "~/app/_components/hooks/useStandardColumns";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
@@ -290,7 +291,7 @@ describe("declared entity displays", () => {
   });
 
   it.each([undefined, "Old local label"])(
-    "derives labels for renderer header %s while preserving metadata and copy data",
+    "keeps titleField out of declared facts for renderer header %s",
     (header) => {
       type Party = { name: string; kind: string; notes: string | null };
       const helper = createCubbyColumnHelper<Party>();
@@ -321,20 +322,53 @@ describe("declared entity displays", () => {
         copied: column.meta?.cellData?.getCopyPayload(row),
       }));
       expect(details.map(({ id, header }) => ({ id, header }))).toEqual([
-        { id: "name", header: "Name" },
         { id: "kind", header: "Kind" },
         { id: "notes", header: "Notes" },
       ]);
       expect(details[0]).toMatchObject({
-        cellIsOverride: true,
-        mobile: { slot: "title", priority: 0 },
+        cellIsOverride: false,
       });
-      expect(details[2]?.copied).toEqual({
+      expect(details[1]?.copied).toEqual({
         text: "Review these notes",
         json: "Review these notes",
       });
     },
   );
+
+  it("places a Purchase's own identity before embedded relation facts", () => {
+    type PurchaseRow = {
+      id: string;
+      displayName: string;
+      displayImages?: [];
+      vendorName: string | null;
+      displayLabel: string | null;
+      date: string;
+      statedTotal: number | null;
+    };
+    const helper = createCubbyColumnHelper<PurchaseRow>();
+    const declared = createEntityDisplayColumns("purchase", helper, undefined, {
+      only: ["vendor", "displayLabel", "date", "statedTotal"],
+    });
+    const { result } = renderHook(() =>
+      useStandardColumns({
+        entity: "purchase",
+        columnHelper: helper,
+        customColumns: declared,
+        filters: [],
+        enableRowSelection: false,
+        mappingsMap: null,
+        hasUnitMappings: false,
+      }),
+    );
+    expect(result.current.visit((column) => column.id).slice(0, 6)).toEqual([
+      "image",
+      "displayName",
+      "vendor",
+      "displayLabel",
+      "date",
+      "statedTotal",
+    ]);
+  });
 
   it("leaves standard identity rendering to the shared table without duplicating it", () => {
     const columns = createEntityDisplayColumns(

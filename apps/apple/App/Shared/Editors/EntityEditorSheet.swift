@@ -32,6 +32,23 @@ struct EntityEditorSheet: View {
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
+    private var isCreate: Bool {
+        if case .create = mode { return true }
+        return false
+    }
+
+    private var unsupportedFields: [FieldDescriptor] {
+        descriptor.fields.filter { field in
+            let participates = isCreate ? field.inCreate : field.inUpdate
+            return participates && NativePresentationCoverage.unsupportedControl(field) != nil
+        }
+    }
+
+    private var unsupportedRequiredFields: [FieldDescriptor] {
+        guard isCreate else { return [] }
+        return unsupportedFields.filter(\.requiredOnCreate)
+    }
+
     /// Keys the photo block owns; they never render as field controls.
     private static let imageKeys: Set<String> = ["pendingImageIds", "removeImageIds", "imageOrder"]
 
@@ -56,7 +73,9 @@ struct EntityEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { startSave() }
-                        .disabled(!(model?.canSave ?? false) || isSaving)
+                        .disabled(
+                            !(model?.canSave ?? false) || !unsupportedRequiredFields.isEmpty || isSaving
+                        )
                         .accessibilityIdentifier("editor.\(key.rawValue).save")
                 }
             }
@@ -92,6 +111,16 @@ struct EntityEditorSheet: View {
 
     private func form(_ model: GenericEntityEditModel) -> some View {
         Form {
+            if !unsupportedFields.isEmpty {
+                Section {
+                    Text(
+                        unsupportedRequiredFields.isEmpty
+                            ? "Additional fields are available on web."
+                            : "This record needs additional fields available on web to create it."
+                    )
+                    .foregroundStyle(.secondary)
+                }
+            }
             if let banner = model.bannerError {
                 Section {
                     Text(banner).foregroundStyle(PorcelainTokens.destructive)
@@ -134,6 +163,7 @@ struct EntityEditorSheet: View {
     private func renders(_ field: FieldDescriptor) -> Bool {
         if Self.imageKeys.contains(field.key) { return false }
         guard field.controlKind == .specialized else { return true }
+        if NativePresentationCoverage.unsupportedControl(field) != nil { return false }
         return field.reference != nil || field.format == "amount" || field.kind == .textArray
     }
 

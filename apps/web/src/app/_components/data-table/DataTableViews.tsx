@@ -55,9 +55,15 @@ function applyTableLayout<TData extends RowData>(
 ) {
   const defaults = table.options.meta?.defaultLayout;
   if (!defaults) return;
+  const actionColumnIds = new Set(
+    table
+      .getAllLeafColumns()
+      .filter((column) => column.columnDef.meta?.entityColumnRole === "action")
+      .map((column) => column.id),
+  );
   table.setColumnOrder(
     savedLayout.columnOrder.length > 0
-      ? withLockedEndLast(savedLayout.columnOrder)
+      ? withLockedEndLast(savedLayout.columnOrder, actionColumnIds)
       : defaults.columnOrder,
   );
   table.setColumnPinning({
@@ -67,7 +73,7 @@ function applyTableLayout<TData extends RowData>(
         : defaults.columnPinning.start,
     end:
       savedLayout.columnPinning.end.length > 0
-        ? withLockedEndLast(savedLayout.columnPinning.end)
+        ? withLockedEndLast(savedLayout.columnPinning.end, actionColumnIds)
         : defaults.columnPinning.end,
   });
   table.setColumnVisibility({

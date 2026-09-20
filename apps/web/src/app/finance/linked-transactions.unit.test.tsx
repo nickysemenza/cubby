@@ -73,9 +73,10 @@ describe("LinkedTransactions", () => {
     });
 
     expect(
-      await screen.findByRole("columnheader", { name: /^Transaction/ }),
+      await screen.findByRole("columnheader", {
+        name: /^Financial transaction/i,
+      }),
     ).toHaveClass("w-40");
-    expect(screen.getByText("From Financial transaction record")).toBeVisible();
     expect(screen.queryByRole("columnheader", { name: "Account" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Vendor" })).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Status" })).toHaveClass(
@@ -96,8 +97,7 @@ describe("LinkedTransactions", () => {
       "href",
       "/financial-transactions/FTX-2345",
     );
-    expect(transactionLink).toHaveClass("block", "truncate");
-    expect(transactionLink).toHaveAttribute("title", "Neighborhood Market");
+    expect(transactionLink).toHaveClass("font-semibold", "text-primary");
     const row = transactionLink.closest("tr");
     expect(row).not.toBeNull();
     const statusCell = within(row!).getByText("Posted").closest("td");

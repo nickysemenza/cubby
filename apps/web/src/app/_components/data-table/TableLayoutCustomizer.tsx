@@ -39,7 +39,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
 
-import { isLockedColumnId, withLockedEndLast } from "./column-layout";
+import { isLockedColumn, withLockedEndLast } from "./column-layout";
 import { columnLabel } from "./data-table-view-options";
 import type {
   CubbyColumn as Column,
@@ -69,9 +69,9 @@ function SortableColumn<TData extends RowData>({
   table: Table<TData>;
 }) {
   const region = regionFor(column);
-  const locked = isLockedColumnId(column.id);
+  const locked = isLockedColumn(column);
   const regionColumns = columns.filter(
-    (item) => regionFor(item) === region && !isLockedColumnId(item.id),
+    (item) => regionFor(item) === region && !isLockedColumn(item),
   );
   const index = regionColumns.findIndex((item) => item.id === column.id);
   const {
@@ -316,9 +316,9 @@ export default function TableLayoutCustomizer<TData extends RowData>({
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const activeColumn = table.getColumn(String(active.id));
-    if (!activeColumn || isLockedColumnId(activeColumn.id)) return;
+    if (!activeColumn || isLockedColumn(activeColumn)) return;
     const targetColumn = table.getColumn(String(over.id));
-    if (targetColumn && isLockedColumnId(targetColumn.id)) return;
+    if (targetColumn && isLockedColumn(targetColumn)) return;
     const targetRegion =
       dragRegion(over.data.current) ??
       (targetColumn ? regionFor(targetColumn) : undefined);
@@ -349,7 +349,14 @@ export default function TableLayoutCustomizer<TData extends RowData>({
       activeColumn.id,
     );
 
-    const end = withLockedEndLast(idsByRegion.end);
+    const actionColumnIds = new Set(
+      columns
+        .filter(
+          (column) => column.columnDef.meta?.entityColumnRole === "action",
+        )
+        .map((column) => column.id),
+    );
+    const end = withLockedEndLast(idsByRegion.end, actionColumnIds);
     table.setColumnPinning({ start: idsByRegion.start, end });
     table.setColumnOrder([...idsByRegion.start, ...idsByRegion.center, ...end]);
   };

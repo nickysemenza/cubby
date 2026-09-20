@@ -179,7 +179,7 @@ export function useDataTableController<TItem extends RowData>({
 
   const styles = {
     table:
-      "table-grid-lines border-separate border-spacing-0 text-sm leading-tight tabular-nums",
+      "border-separate border-spacing-0 text-sm leading-tight tabular-nums",
     header:
       "h-8 border-border border-b bg-card px-2 py-1 font-medium text-2xs text-muted-foreground",
     cell: cn(

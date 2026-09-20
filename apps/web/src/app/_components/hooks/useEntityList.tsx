@@ -165,6 +165,7 @@ export interface UseEntityListOptions<
   /** Inline-edit callbacks must be referentially stable. */
   nameEditable?: {
     onSave: (newValue: string, row: TData) => Promise<void>;
+    getValue?: (row: TData) => string | null;
   };
   nameSuffix?: (row: TData) => ReactNode;
   namePrefix?: (row: TData) => ReactNode;

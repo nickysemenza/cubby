@@ -12,7 +12,6 @@ import {
   createFilterableSelectColumn,
   createImageColumn,
   createInventoryEntriesColumn,
-  createNameColumn,
   createSingleEntityInlineLinkColumn,
   createTextColumn,
   createTimestampColumn,
@@ -90,6 +89,18 @@ export const locationListOverride = defineListOverride<
       mutationFn: entityMutationOptionsFactory("location", "update"),
       entity: "location",
     });
+    const mutateLocation = updateLocationMutation.mutateAsync;
+    const nameEditable = useMemo(
+      () => ({
+        onSave: async (newName: string, location: LocationListItemOut) => {
+          await mutateLocation({
+            id: location.id,
+            data: { name: newName },
+          });
+        },
+      }),
+      [mutateLocation],
+    );
 
     const overrides = useMemo(
       () =>
@@ -98,20 +109,6 @@ export const locationListOverride = defineListOverride<
             createImageColumn(columnHelper, {
               entity: "location",
               provenance: relationshipFieldProvenance("location", "images"),
-            }),
-          );
-          add(
-            createNameColumn(columnHelper, "location", "name", {
-              mobile: { slot: "title", priority: 0 },
-              filterConfig: { placeholder: "Filter by location name..." },
-              editable: {
-                onSave: async (newName, location) => {
-                  await updateLocationMutation.mutateAsync({
-                    id: location.id,
-                    data: { name: newName },
-                  });
-                },
-              },
             }),
           );
           add(
@@ -257,8 +254,9 @@ export const locationListOverride = defineListOverride<
         extraActions,
         initialColumnVisibility: LOCATION_INITIAL_COLUMN_VISIBILITY,
         groupConfig: LOCATION_GROUP_CONFIG,
+        nameEditable,
       }),
-      [filterOptions],
+      [filterOptions, nameEditable],
     );
     return { overrides, compose, list };
   },

@@ -17,7 +17,6 @@ import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFil
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
-import { TableLink } from "~/app/_components/table/TableLink";
 import { FinancialSettlementCell } from "~/app/purchases/financial-settlement";
 import { ReconciliationStatus } from "~/app/purchases/purchase-reconciliation";
 import { VendorCell } from "~/components/entity/vendor-cell";
@@ -25,7 +24,6 @@ import { Grid, Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
-import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import {
@@ -33,7 +31,6 @@ import {
   relationshipFieldProvenance,
 } from "~/entities/field-provenance";
 import { dataQualityOptions } from "~/lib/data-quality-options";
-import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
 import { defineListOverride, interleaveDeclared } from "./types";
@@ -290,29 +287,6 @@ export const purchaseListOverride = defineListOverride<
       () => (declared: CubbyColumnCollection<PurchaseOut>) =>
         createCubbyColumnCollection<PurchaseOut>((add) => {
           const { rest } = interleaveDeclared(declared, add);
-          // A purchase has no `name`, so this is its name column: the identity
-          // ladder from `purchaseIdentityLabel`, linked to the purchase itself.
-          add(
-            columnHelper.accessor((row) => purchaseIdentityLabel(row), {
-              id: "purchase",
-              header: "Purchase",
-              enableSorting: false,
-              meta: {
-                provenance: labeledFieldProvenance("Purchase record"),
-                className: "w-56",
-                mobile: { slot: "title", priority: 0 },
-              },
-              cell: (info) => (
-                <TableLink
-                  to={entities.purchase.routes.detail}
-                  params={entityDetailParams(info.row.original.id)}
-                  className="block truncate"
-                >
-                  {info.getValue()}
-                </TableLink>
-              ),
-            }),
-          );
           // Hidden by default; these exist so the transaction-presence and
           // data-quality specs are column-backed (a spec with no column makes
           // TanStack error on every render).

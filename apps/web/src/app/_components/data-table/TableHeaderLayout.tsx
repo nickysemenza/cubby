@@ -22,7 +22,7 @@ import { TableHead, TableRow } from "~/components/ui/table";
 import { FieldProvenance } from "~/entities/field-provenance";
 import { cn } from "~/lib/utils";
 
-import { columnWidthValue, isLockedColumnId } from "./column-layout";
+import { columnWidthValue, isLockedColumn } from "./column-layout";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import type { cubbyTableFeatures, CubbyTable as Table } from "./table-features";
 
@@ -73,9 +73,9 @@ function pinBoundaryClass<TData extends RowData>(
       : header.getContext().table.getEndVisibleLeafColumns();
   const index = columns.findIndex((column) => column.id === header.column.id);
   return pinned === "start" && index === columns.length - 1
-    ? "border-r-2 border-r-foreground"
+    ? "table-pinned-boundary-start"
     : pinned === "end" && index === 0
-      ? "border-l-2 border-l-foreground"
+      ? "table-pinned-boundary-end"
       : undefined;
 }
 
@@ -88,7 +88,7 @@ function SortableHeader<TData extends RowData>({
   table: Table<TData>;
   styles: HeaderStyles;
 }) {
-  const locked = isLockedColumnId(header.column.id);
+  const locked = isLockedColumn(header.column);
   const {
     attributes,
     listeners,
@@ -214,7 +214,12 @@ export default function TableHeaderLayout<TData extends RowData>({
     if (!over || active.id === over.id) return;
     const activeId = String(active.id);
     const overId = String(over.id);
-    if (isLockedColumnId(activeId) || isLockedColumnId(overId)) {
+    const activeColumn = table.getColumn(activeId);
+    const overColumn = table.getColumn(overId);
+    if (
+      (activeColumn && isLockedColumn(activeColumn)) ||
+      (overColumn && isLockedColumn(overColumn))
+    ) {
       return;
     }
     if (region(activeId) !== region(overId)) return;

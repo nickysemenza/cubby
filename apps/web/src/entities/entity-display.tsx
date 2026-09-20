@@ -746,6 +746,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
   )[entity];
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
   const { only, onSaveField } = options;
+  const titleField = entitySummary[entity].titleField;
   const updateFields: readonly string[] = entityFieldModels[entity].update;
   const listFields = orderedListFields(entity);
   const selected =
@@ -763,8 +764,21 @@ export function createEntityDisplayColumns<TRecord extends object>(
   return createCubbyColumnCollection<TRecord>((add) => {
     const usedOverrides = new Set<string>();
     for (const field of selected) {
-      if (field.display.standard) continue;
       const columnId = field.display.columnId ?? field.key;
+      const isIdentityField = field.readKey === titleField;
+      if (isIdentityField) {
+        // The standard-column pipeline owns the one canonical identity lane.
+        // Consume a legacy field override while list modules migrate so it
+        // cannot create a second, competing destination later in the row.
+        overrides?.visit((column) => {
+          const id =
+            column.id ??
+            ("accessorKey" in column ? String(column.accessorKey) : null);
+          if (id === columnId) usedOverrides.add(columnId);
+        });
+        continue;
+      }
+      if (field.display.standard) continue;
       const defaultEnableSorting = sortableColumnIds.includes(columnId);
       let overridden = false;
       overrides?.visit((column) => {
@@ -783,6 +797,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
           id: columnId,
           meta: attachCubbyColumnMeta({
             ...column.meta,
+            entityColumnRole: "fact",
             provenance: field.provenance ?? undefined,
           }),
           header:
@@ -829,6 +844,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
@@ -874,6 +890,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
@@ -912,6 +929,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
@@ -944,6 +962,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
@@ -990,6 +1009,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
@@ -1052,6 +1072,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
@@ -1084,6 +1105,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             header: field.label,
             enableSorting: defaultEnableSorting,
             meta: attachCubbyColumnMeta({
+              entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
@@ -1112,6 +1134,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
           header: field.label,
           enableSorting: defaultEnableSorting,
           meta: attachCubbyColumnMeta({
+            entityColumnRole: "fact",
             provenance: field.provenance ?? undefined,
             className: widthClassName(field.display.width),
             numeric:

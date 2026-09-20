@@ -219,17 +219,6 @@
     var(--brand-paper)
   );
 
-  /* Data-table grid: softened hairline for column dividers (full-strength
-     hairline reads too heavy repeated every column) and the zebra tint —
-     mixed toward paper (opaque) so the full-strength paper-alt hover wash
-     still reads clearly on top of striped rows. */
-  --table-grid: color-mix(in oklab, var(--brand-hairline) 60%, transparent);
-  --row-zebra: color-mix(
-    in oklab,
-    var(--brand-paper-alt) 55%,
-    var(--brand-paper)
-  );
-
   /* Extended palette */
   --highlight: var(--brand-ultramarine);
   --plum: var(--brand-aubergine); /* recipe/cookbook accent → aubergine */
@@ -481,21 +470,28 @@
   }
   .table-row-hover:hover {
     background: var(--brand-paper-alt);
-    box-shadow: inset 2px 0 0 var(--row-accent, var(--brand-ultramarine));
+    box-shadow: inset 1px 0 0 var(--row-accent, var(--brand-ultramarine));
   }
 
-  /* Ledger column grid - each cell paints its own right divider (table is
-     border-separate). :not(:last-child) keeps the outer edge on the wrapper
-     border and exempts colSpan status/spacer/sentinel rows automatically. */
+  /* Analytical grids may opt into a quiet column rule. Ordinary record tables
+     stay open and use horizontal hairlines only. */
   .table-grid-lines th:not(:last-child),
   .table-grid-lines td:not(:last-child) {
-    border-right: 1px solid var(--table-grid);
+    border-right: 1px solid
+      color-mix(in oklab, var(--brand-hairline) 60%, transparent);
   }
 
-  /* Zebra stripe - components layer on purpose: hover (same layer, :hover
-     specificity) and selection/custom tints (utilities layer) must win. */
-  .table-row-zebra {
-    background: var(--row-zebra);
+  /* Pinned boundaries are functional depth cues, not table dividers: a single
+     neutral hairline plus a soft edge shadow keeps the parked columns readable
+     without making them look like a second table. */
+  .table-pinned-boundary-start {
+    border-inline-end: 1px solid var(--brand-hairline);
+    box-shadow: 4px 0 8px -8px rgb(23 26 33 / 0.32);
+  }
+
+  .table-pinned-boundary-end {
+    border-inline-start: 1px solid var(--brand-hairline);
+    box-shadow: -4px 0 8px -8px rgb(23 26 33 / 0.32);
   }
 
   /* Trailing gutter cell. It renders AFTER the actions column, so the content

@@ -253,6 +253,20 @@ const metadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /**
+       * Semantic renderer ids for values whose presentation cannot be derived
+       * from kind/reference/format alone. The manifest chooses the renderer;
+       * each platform keeps the executable component in its typed registry.
+       */
+      renderer: z
+        .object({
+          list: nonEmptyString().nullable().optional().default(null),
+          detail: nonEmptyString().nullable().optional().default(null),
+        })
+        .strict()
+        .nullable()
+        .optional()
+        .default(null),
       /** Mobile card placement for the list column. */
       mobile: z
         .object({

@@ -2,8 +2,8 @@ import CubbyKit
 import SwiftUI
 
 /// The one sanctioned `switch (key, id)` in the App: which declared detail slots and hero verbs
-/// native fills. A slot the catalog declares but this registry does not know renders nothing,
-/// and a verb it does not know is not offered (Q12: a slot is the only per-platform fill).
+/// native fills. Unsupported declared slots are surfaced once by the detail screen rather than
+/// disappearing silently; a verb it does not know is not offered.
 enum DetailSlotRegistry {
     /// Section content for `slot` on `key`'s detail; nil renders nothing (the section is skipped).
     @MainActor

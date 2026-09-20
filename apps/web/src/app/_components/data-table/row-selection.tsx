@@ -73,6 +73,7 @@ export function buildSelectColumn<T extends RowData>(): CubbyColumnDef<T> {
     enableHiding: false,
     enablePinning: false,
     enableCellSelection: false,
+    meta: { entityColumnRole: "selection" },
     size: 40,
     minSize: 40,
     maxSize: 72,

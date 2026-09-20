@@ -91,12 +91,12 @@ struct EntityRowPresentation: Sendable, Hashable {
     private static func defaultKeys(descriptor: EntityDescriptor) -> [String] {
         descriptor.fields
             .filter {
-                $0.showInList && $0.key != descriptor.titleField && $0.key != "id"
+                $0.showInList && !$0.listHidden && $0.key != descriptor.titleField && $0.key != "id"
                     && $0.kind != .json
             }
             .sorted {
-                let left = ($0.mobilePriority ?? $0.detailOrder ?? .max, $0.key)
-                let right = ($1.mobilePriority ?? $1.detailOrder ?? .max, $1.key)
+                let left = ($0.listOrder ?? .max, $0.key)
+                let right = ($1.listOrder ?? .max, $1.key)
                 return left < right
             }
             .map(\.key)

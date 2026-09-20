@@ -143,12 +143,16 @@ describe("isTableLayoutCustomized", () => {
 
 describe("withLockedEndLast", () => {
   it("moves locked-end ids to the tail and leaves everything else in place", () => {
-    expect(withLockedEndLast(["actions", "cost", "name"])).toEqual([
+    const lockedEnd = new Set(["actions"]);
+    expect(withLockedEndLast(["actions", "cost", "name"], lockedEnd)).toEqual([
       "cost",
       "name",
       "actions",
     ]);
-    expect(withLockedEndLast(["cost", "name"])).toEqual(["cost", "name"]);
+    expect(withLockedEndLast(["cost", "name"], lockedEnd)).toEqual([
+      "cost",
+      "name",
+    ]);
   });
 });
 
@@ -157,8 +161,11 @@ describe("useTableColumnLayout", () => {
     const imageColumns = createCubbyColumnCollection<Row>((add) => {
       add(
         helper.display({
-          id: "image",
-          meta: { className: "h-px w-16 overflow-hidden px-0 py-0" },
+          id: "thumbnail",
+          meta: {
+            className: "h-px w-16 overflow-hidden px-0 py-0",
+            entityColumnRole: "image",
+          },
         }),
       );
       add(helper.accessor("name", { header: "Name" }));
@@ -174,8 +181,10 @@ describe("useTableColumnLayout", () => {
       maxSize: 64,
       enableResizing: false,
     });
-    expect(result.current.defaultLayout.columnOrder[0]).toBe("image");
-    expect(result.current.defaultLayout.columnPinning.start).toEqual(["image"]);
+    expect(result.current.defaultLayout.columnOrder[0]).toBe("thumbnail");
+    expect(result.current.defaultLayout.columnPinning.start).toEqual([
+      "thumbnail",
+    ]);
   });
 
   it("imports legacy Tailwind widths into v9 numeric column definitions", () => {
@@ -202,7 +211,13 @@ describe("useTableColumnLayout", () => {
     const withActions = createCubbyColumnCollection<Row>((add) => {
       add(helper.accessor("name", { header: "Name" }));
       add(helper.accessor("cost", { header: "Cost" }));
-      add(helper.display({ id: "actions", header: "" }));
+      add(
+        helper.display({
+          id: "rowMenu",
+          header: "",
+          meta: { entityColumnRole: "action" },
+        }),
+      );
     });
     const { result } = renderHook(() =>
       useTableColumnLayout({
@@ -212,9 +227,9 @@ describe("useTableColumnLayout", () => {
     );
 
     expect(result.current.defaultLayout).toEqual({
-      columnOrder: ["name", "cost", "actions"],
-      columnPinning: { start: [], end: ["actions"] },
-      columnVisibility: { name: true, cost: false, actions: true },
+      columnOrder: ["name", "cost", "rowMenu"],
+      columnPinning: { start: [], end: ["rowMenu"] },
+      columnVisibility: { name: true, cost: false, rowMenu: true },
       columnSizing: {},
     });
   });

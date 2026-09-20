@@ -13,11 +13,23 @@ interface TestRow {
 
 const helper = createCubbyColumnHelper<TestRow>();
 const columns = helper.columns([
-  helper.display({ header: "Select", id: "select" }),
-  helper.display({ header: "Image", id: "image" }),
+  helper.display({
+    header: "Select",
+    id: "select",
+    meta: { entityColumnRole: "selection" },
+  }),
+  helper.display({
+    header: "Image",
+    id: "image",
+    meta: { entityColumnRole: "image" },
+  }),
   helper.accessor("name", { header: "Name", id: "name" }),
   helper.accessor("trade", { header: "Trade", id: "trade" }),
-  helper.display({ header: "Actions", id: "actions" }),
+  helper.display({
+    header: "Actions",
+    id: "actions",
+    meta: { entityColumnRole: "action" },
+  }),
 ]);
 const defaultLayout = {
   columnOrder: ["select", "image", "name", "trade", "actions"],

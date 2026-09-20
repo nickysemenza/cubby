@@ -38,7 +38,7 @@ export const ImageThumbnail = ({
         entity={entity}
         preview
         lazyPreview={lazyPreview}
-        className="thumbnail-ring h-full"
+        className="thumbnail-ring size-6"
       />
     </div>
   );

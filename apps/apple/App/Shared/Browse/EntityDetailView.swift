@@ -241,6 +241,17 @@ struct EntityDetailContent: View {
 
     private var presentation: EntityPresentation { descriptor.presentation }
 
+    private var hasUnsupportedPresentation: Bool {
+        let unsupportedField = descriptor.fields.contains {
+            $0.showInDetail && NativePresentationCoverage.unsupportedDetail($0) != nil
+        }
+        let unsupportedSlot = presentation.detailSections.contains { section in
+            guard case .slot = section.kind else { return false }
+            return NativePresentationCoverage.unsupportedSlot(section.id) != nil
+        }
+        return unsupportedField || unsupportedSlot
+    }
+
     /// The journal variant's leading section: the first declared relation.
     private var journalSection: RelationSectionModel? {
         guard presentation.detailVariant == .journal else { return nil }
@@ -274,6 +285,13 @@ struct EntityDetailContent: View {
             }
             ForEach(presentation.detailSections) { section in
                 if section.id != journalSection?.id { declared(section) }
+            }
+            if hasUnsupportedPresentation {
+                Section("More details") {
+                    Text("Additional details are available on web.")
+                        .foregroundStyle(.secondary)
+                    Link("Open on web", destination: appModel.webURL(for: row.id))
+                }
             }
             if let relationshipsModel {
                 Section("Relationships") {

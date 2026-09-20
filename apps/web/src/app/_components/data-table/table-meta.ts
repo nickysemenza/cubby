@@ -38,8 +38,18 @@ export interface MobileColumnMeta {
   label?: string;
 }
 
+/** Structural meaning shared by manifest-built and specialist columns. */
+export type EntityColumnRole =
+  | "selection"
+  | "image"
+  | "identity"
+  | "fact"
+  | "action";
+
 /** Per-column Cubby rendering and editing conventions, bound through v9's meta slot. */
 export interface CubbyColumnMeta<TData = CellData> {
+  /** Stable table role; layout and styling must not infer this from an id. */
+  entityColumnRole?: EntityColumnRole;
   /** Generated origin metadata for relation-backed or computed values. */
   provenance?: EntityFieldProvenance | null;
   /** Specialist cell already supplies the relation workbench interaction. */
