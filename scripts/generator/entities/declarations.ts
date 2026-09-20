@@ -156,6 +156,10 @@ export type EntityField = Readonly<{
       | "external-link"
       | "amount"
       | null;
+    renderer: Readonly<{
+      list: string | null;
+      detail: string | null;
+    }> | null;
     mobile: Readonly<{
       slot: string;
       priority: number;

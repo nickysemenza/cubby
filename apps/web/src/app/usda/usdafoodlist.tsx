@@ -43,6 +43,9 @@ type USDAListFilters = {
 };
 
 const USDA_TABLE_STATE = { initialSort: "fdc_id" } as const;
+const USDA_FILTERS = [
+  { id: "description", placeholder: "Filter by description..." },
+];
 
 export interface USDAFoodListOperations {
   list: typeof usdaFood.list;
@@ -51,7 +54,7 @@ export interface USDAFoodListOperations {
 const productionOperations: USDAFoodListOperations = { list: usdaFood.list };
 
 const buildUSDAFilters = (tableState: TableStateReturn): USDAListFilters => ({
-  nameFilter: tableState.getColumnFilter("foodinfo-description"),
+  nameFilter: tableState.getColumnFilter("description"),
   dataTypeFilter: dataTypeEnum
     .optional()
     .parse(tableState.getColumnFilter("foodInfo-data_type")),
@@ -62,7 +65,7 @@ const buildUSDAFilters = (tableState: TableStateReturn): USDAListFilters => ({
 
 const USDA_SORT_FIELDS = new Map<string, USDAFoodSortField>([
   ["fdc_id", "fdc_id"],
-  ["foodinfo-description", "description"],
+  ["description", "description"],
   ["foodInfo-data_type", "data_type"],
   ["linkedProducts", "linkedProducts"],
 ]);
@@ -172,18 +175,6 @@ export function USDAFoodList({
           }),
         );
         add(
-          columnHelper.accessor("foodInfo.description", {
-            meta: {
-              className: "w-72",
-              filterConfig: { placeholder: "Filter by description..." },
-            },
-            id: "foodinfo-description",
-            enableSorting: true,
-            header: "Description",
-            cell: (info) => info.getValue(),
-          }),
-        );
-        add(
           columnHelper.accessor("brandedFoodInfo", {
             header: "Brand Info",
             meta: {
@@ -290,6 +281,7 @@ export function USDAFoodList({
   const { workbench, inspection } = useEntityList<USDAListRow, USDAListFilters>(
     {
       entity: "usda-food",
+      filters: USDA_FILTERS,
       preview: { idField: "fdc_id", responsiveInspector: true },
       queryOptions,
       buildFilters: buildUSDAFilters,

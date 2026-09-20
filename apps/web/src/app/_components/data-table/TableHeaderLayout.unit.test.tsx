@@ -11,8 +11,16 @@ interface TestRow {
 
 const helper = createCubbyColumnHelper<TestRow>();
 const columns = helper.columns([
-  helper.display({ id: "select", header: "Select" }),
-  helper.display({ id: "image", header: "Image" }),
+  helper.display({
+    id: "select",
+    header: "Select",
+    meta: { entityColumnRole: "selection" },
+  }),
+  helper.display({
+    id: "image",
+    header: "Image",
+    meta: { entityColumnRole: "image" },
+  }),
   helper.accessor("name", {
     id: "nutrient-301",
     header: "Calcium (mg)",
@@ -32,7 +40,11 @@ const columns = helper.columns([
       },
     },
   }),
-  helper.display({ id: "actions", header: "Actions" }),
+  helper.display({
+    id: "actions",
+    header: "Actions",
+    meta: { entityColumnRole: "action" },
+  }),
 ]);
 
 let lastTable: ReturnType<typeof useCubbyTable<TestRow>> | undefined;

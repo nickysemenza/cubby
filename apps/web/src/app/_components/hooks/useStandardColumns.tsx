@@ -1,10 +1,12 @@
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import { z } from "zod";
 
 import type { EntityActionSubject } from "~/app/_components/actions/entity-actions";
 import {
@@ -97,6 +99,7 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    */
   nameEditable?: {
     onSave: (newValue: string, row: TData) => Promise<void>;
+    getValue?: (row: TData) => string | null;
   };
   /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
@@ -187,8 +190,9 @@ export function useStandardColumns<TData extends BaseListRow>({
   );
 
   // Memoize entity config to prevent re-renders when entity doesn't change
-  const { standardColumns, shouldUseMappings } = useMemo(() => {
+  const { standardColumns, shouldUseMappings, titleField } = useMemo(() => {
     const listConfig = browserEntityDefinition(entity).list;
+    const resolvedTitleField = entitySummary[entity].titleField;
     const standardColumns = entityFieldModels[entity].fields.filter(
       (field) => field.display.list && field.display.standard,
     );
@@ -196,6 +200,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     return {
       standardColumns,
       shouldUseMappings: listHasUnitMappings && hasUnitMappings,
+      titleField: resolvedTitleField,
     };
   }, [entity, hasUnitMappings]);
 
@@ -283,23 +288,36 @@ export function useStandardColumns<TData extends BaseListRow>({
             ),
           );
         }
-        const nameField = standardColumns.find(
-          (field) => field.display.standard === "name",
-        );
-        if (nameField) {
-          const nameFilterConfig = getFilterConfig("name");
-          const nameColumnOptions = {
-            header: nameField.label,
-            filterConfig: nameFilterConfig,
+        {
+          const identityFilterConfig = getFilterConfig(titleField);
+          const identityColumnOptions = {
+            id: titleField,
+            header: entitySummary[entity].singular,
+            filterConfig: identityFilterConfig,
+            enableSorting: getSortableFields(entity).includes(titleField),
             className: nameClassName,
+            // Computed titles stay read-only unless the list explicitly maps
+            // the edit gesture to an underlying stored field (Meal name is the
+            // canonical example).
             editable: nameEditable,
             nameSuffix,
             namePrefix,
             expandable,
             rowLink,
+            getValue: (row: TData) =>
+              z
+                .string()
+                .nullish()
+                .catch(null)
+                .parse(z.looseObject({}).parse(row)[titleField]) ?? null,
           };
           add(
-            createNameColumn(columnHelper, entity, "name", nameColumnOptions),
+            createNameColumn(
+              columnHelper,
+              entity,
+              undefined,
+              identityColumnOptions,
+            ),
           );
         }
 
@@ -331,7 +349,14 @@ export function useStandardColumns<TData extends BaseListRow>({
             // factories' own `filterConfig` (e.g. createFilterableSelectColumn
             // deriving one from its editor options) stays as the fallback for
             // columns and tables the manifest doesn't cover.
-            const withSorting = { ...col, enableSorting };
+            const withSorting = {
+              ...col,
+              enableSorting,
+              meta: {
+                ...col.meta,
+                entityColumnRole: col.meta?.entityColumnRole ?? "fact",
+              },
+            };
             add(colId ? withManifestFilter(withSorting, colId) : withSorting);
           });
 
@@ -377,6 +402,7 @@ export function useStandardColumns<TData extends BaseListRow>({
       entity,
       shouldUseMappings,
       standardColumns,
+      titleField,
       mappingsMap,
       stableFilters,
       filterOptions,

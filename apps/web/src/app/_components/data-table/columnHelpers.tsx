@@ -183,17 +183,32 @@ function nameColumnParams(row: BaseRow) {
 
 type EntityRowLink = {
   to: EntityDetailRoute;
-  params: EntityDetailParams;
+  params: EntityDetailParams | { id: string };
 };
 
 export type RowLinkResolver<T> = (row: T) => EntityRowLink | null;
+
+function resolveNameValue<T extends BaseRow>(
+  fieldName: keyof T,
+  getValue?: (row: T) => string | null,
+) {
+  if (getValue) return getValue;
+  return (row: T) => {
+    const raw = row[fieldName];
+    return raw == null ? null : String(raw);
+  };
+}
 
 const defaultRowLink = <T extends BaseRow>(
   entity: Entity,
 ): RowLinkResolver<T> => {
   if (!isBrowserRoutedEntity(entity)) return () => null;
   const to = entities[entity].routes.detail;
-  return (row) => ({ to, params: nameColumnParams(row) });
+  return (row) => ({
+    to,
+    params:
+      entity === "usda-food" ? { id: String(row.id) } : nameColumnParams(row),
+  });
 };
 
 /** A row that genuinely carries its own images. `images` is REQUIRED: when it
@@ -243,6 +258,8 @@ export function createNameColumn<T extends BaseRow>(
     className?: string;
     editable?: {
       onSave: (newValue: string, row: T) => Promise<void>;
+      /** Stored edit value when the visible identity is a computed title. */
+      getValue?: (row: T) => string | null;
     };
     mobile?: MobileColumnMeta;
     header?: string;
@@ -251,13 +268,15 @@ export function createNameColumn<T extends BaseRow>(
     expandable?: boolean;
     emptyLabel?: (row: T) => string;
     rowLink?: RowLinkResolver<T>;
+    /** Manifest title projection when it is not a literal row `name` key. */
+    getValue?: (row: T) => string | null;
+    /** Preserve the manifest read-projection id for sorting/filter ownership. */
+    id?: string;
+    enableSorting?: boolean;
   },
 ) {
   const resolvedFieldName = fieldName ?? "name";
-  const nameValue = (row: T) => {
-    const raw = row[resolvedFieldName];
-    return raw == null ? null : String(raw);
-  };
+  const nameValue = resolveNameValue(resolvedFieldName, options?.getValue);
   const singularLabel = entityLabel(entity).toLowerCase();
   const pluralLabel = entityPluralLabel(entity).toLowerCase();
   const rowLink = options?.rowLink ?? defaultRowLink<T>(entity);
@@ -268,10 +287,11 @@ export function createNameColumn<T extends BaseRow>(
     editable ? (row, v) => editable.onSave(v ?? "", row) : undefined,
   );
   const config = {
-    id: String(resolvedFieldName),
-    enableSorting: true,
+    id: options?.id ?? String(resolvedFieldName),
+    enableSorting: options?.enableSorting ?? true,
     meta: attachCubbyColumnMeta({
       className: options?.className ?? "w-64",
+      entityColumnRole: "identity",
       surplus: true,
       filterConfig: options?.filterConfig,
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
@@ -306,7 +326,7 @@ export function createNameColumn<T extends BaseRow>(
       // unlinked branch keeps the truncation and the full-name tooltip.
       const linkName = (label: ReactNode) =>
         link ? (
-          <TableLink to={link.to} params={link.params}>
+          <TableLink to={link.to} params={link.params} variant="identity">
             {label}
           </TableLink>
         ) : (
@@ -374,12 +394,13 @@ export function createNameColumn<T extends BaseRow>(
       };
 
       if (editable) {
+        const editValue = editable.getValue?.(info.row.original) ?? stored;
         return wrapExpandable(
           <EditableCell
             // The EDITOR gets the stored value, not the fallback — prefilling
             // it with a derived label would silently persist that label as a
             // real name on the next save.
-            value={stored}
+            value={editValue}
             onSave={(newVal) =>
               editable.onSave(newVal ?? "", info.row.original)
             }
@@ -433,6 +454,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
     id: "createdAt",
     header: "Created",
     meta: attachCubbyColumnMeta({
+      entityColumnRole: "fact",
       // Relative timestamps are short ("5 months ago"); without a cap the
       // fixed-layout table hands this column an equal share of leftover width.
       className: "w-32",
@@ -460,6 +482,7 @@ export function createUpdatedAtColumn<T extends BaseRow>(
     id: "updatedAt",
     header: "Updated",
     meta: attachCubbyColumnMeta({
+      entityColumnRole: "fact",
       className: "w-32",
       mono: true,
       mobile: { slot: "hidden" },
@@ -550,14 +573,13 @@ export function createImageColumn<T extends BaseRow>(
     enablePinning: false,
     enableCellSelection: false,
     // h-px trick: setting height:1px on td makes h-full work on children
-    // overflow-hidden prevents image from expanding the row. w-16 (not w-10):
-    // a select-combobox header filter renders in this column and needs room
-    // for more than a bare chevron — widening the shared default affects
-    // every entity's image column, which is fine (they're all this narrow
-    // for the same "just a thumbnail" reason).
+    // overflow-hidden prevents image from expanding the row. The 40px lane
+    // holds a 24px cover with breathing room while remaining subordinate to
+    // the adjacent identity link.
     meta: {
       provenance: options.provenance,
-      className: cn("h-px w-16 overflow-hidden px-0 py-0", options?.className),
+      entityColumnRole: "image",
+      className: cn("h-px w-10 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
     },
     // Reads `row.original` rather than `info.getValue()` — deliberately, and it
@@ -892,6 +914,7 @@ export function createActionsColumnBase<T extends RowData>(
     minSize: 40,
     maxSize: 72,
     meta: {
+      entityColumnRole: "action",
       mobile: { slot: "actions", priority: 100 },
     },
     cell: (info) => {

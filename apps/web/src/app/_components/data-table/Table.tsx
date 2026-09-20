@@ -468,9 +468,9 @@ function PinnedFooterCell<TItem extends RowData>({
   );
   const boundaryClass =
     pinned === "start" && index === pinnedColumns.length - 1
-      ? "border-r-2 border-r-foreground"
+      ? "table-pinned-boundary-start"
       : pinned === "end" && index === 0
-        ? "border-l-2 border-l-foreground"
+        ? "table-pinned-boundary-end"
         : undefined;
   const inset =
     pinned === "start"
@@ -534,7 +534,6 @@ function VirtualSelectionRow<TItem extends RowData>({
   rows,
   row,
   rowIndex,
-  groupRowIndex,
   height,
   currentRowId,
   isDebugEnabled,
@@ -551,7 +550,6 @@ function VirtualSelectionRow<TItem extends RowData>({
   rows: readonly Row<TItem>[];
   row: Row<TItem>;
   rowIndex: number;
-  groupRowIndex?: number;
   height: string;
   currentRowId?: string;
   isDebugEnabled: boolean;
@@ -565,10 +563,7 @@ function VirtualSelectionRow<TItem extends RowData>({
   rowContentVersion: unknown;
 }) {
   const selectionProjection = projectRowSelection(rows, row.id, rowIndex);
-  const classes = cn(
-    rowClassName?.(row),
-    (groupRowIndex ?? rowIndex) % 2 === 1 && "table-row-zebra",
-  );
+  const classes = cn(rowClassName?.(row));
   return (
     <table.Subscribe
       source={table.atoms.cellSelection!}
@@ -764,8 +759,8 @@ function DesktopTableView<TItem extends RowData>({
         <div
           ref={paneWrapperRef}
           className={cn(
-            "relative hidden flex-col border-[var(--border)] md:flex",
-            embedded ? "border" : "border-r border-b",
+            "relative hidden flex-col md:flex",
+            !embedded && "border-r border-b border-[var(--border)]",
             desktopInspector && !embedded && "xl:pr-[25rem]",
           )}
           style={paneStyle}
@@ -1110,7 +1105,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               rows={rows}
               row={row}
               rowIndex={item.rowIndex}
-              groupRowIndex={item.groupRowIndex}
               height={`${virtualRow.size}px`}
               currentRowId={currentRowId}
               isDebugEnabled={isDebugEnabled}

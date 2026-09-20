@@ -265,6 +265,7 @@ const compileFieldModel = (
         standard: field.display.standard,
         width: field.display.width ?? null,
         format: field.display.format ?? null,
+        renderer: field.display.renderer ?? null,
         mobile: field.display.mobile ?? null,
         detailOrder: field.display.detailOrder,
         listOrder: field.display.listOrder,

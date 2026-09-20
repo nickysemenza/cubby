@@ -7,7 +7,6 @@ import { useMemo } from "react";
 
 import {
   createFilterableSelectColumn,
-  createNameColumn,
   createPlainDateColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -52,6 +51,7 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
             data: { name: newName.trim() || null },
           });
         },
+        getValue: (meal: MealOut) => meal.name,
       }),
       // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members govern this hook.
       [updateMealMutation.mutateAsync],
@@ -81,16 +81,6 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                   });
                 },
               },
-            }),
-          );
-          add(
-            createNameColumn(columnHelper, "meal", "name", {
-              editable: nameEditable,
-              className: "w-56",
-              // The canonical computed title (name || date) keeps this
-              // column's empty state in step with every other meal-naming
-              // surface.
-              emptyLabel: (row) => row.displayName,
             }),
           );
           add(
@@ -205,11 +195,13 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
     const list = useMemo(
       () => ({
         deletable,
+        nameClassName: "w-56",
+        nameEditable,
         // Same fallback the Name column uses, so the confirm dialog names an
         // unnamed meal by its date instead of its id.
         deleteEmptyLabel: mealDateLabel,
       }),
-      [deletable],
+      [deletable, nameEditable],
     );
     return { overrides, compose, list };
   },

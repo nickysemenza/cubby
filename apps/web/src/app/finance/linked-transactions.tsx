@@ -24,7 +24,6 @@ import { formatCurrency } from "~/lib/utils";
 import {
   createFinancialTransactionAccountColumn,
   createFinancialTransactionAmountColumn,
-  createFinancialTransactionIdentityColumn,
   createFinancialTransactionPostedDateColumn,
   createFinancialTransactionStatusColumn,
 } from "./financial-transaction-columns";
@@ -116,7 +115,6 @@ export function LinkedTransactions({
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<FinancialTransactionOut>((add) => {
-        add(createFinancialTransactionIdentityColumn(helper, "w-40"));
         if (!accountId) {
           add(createFinancialTransactionAccountColumn(helper, "w-32"));
         }
@@ -176,6 +174,7 @@ export function LinkedTransactions({
     queryOptions: listQueryOptions,
     scopeFilters: scope,
     columns,
+    nameClassName: "w-40",
     tableStateOptions: EMBEDDED_TABLE_STATE,
     includeCatalogActions: false,
     initialColumnVisibility: {

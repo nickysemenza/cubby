@@ -189,12 +189,22 @@ const renderFilterDescriptorLiteral = (
   );
 };
 
+const fieldRendererMetadata = (
+  field: CompiledEntity["fieldModel"]["fields"][number],
+) => ({
+  control: field.control?.renderer ?? null,
+  list: field.display.renderer?.list ?? null,
+  detail: field.display.renderer?.detail ?? null,
+  mobileInteractive: field.display.mobile?.interactive ?? false,
+});
+
 const renderFieldDescriptorLiteral = (
   field: CompiledEntity["fieldModel"]["fields"][number],
   fieldModel: CompiledEntity["fieldModel"],
   entityKey: EntityKeyLookup,
   context: string,
 ): string => {
+  const rendererMetadata = fieldRendererMetadata(field);
   const controlKind =
     field.control === null ? "nil" : `.${swiftCaseName(field.control.kind)}`;
   const reference =
@@ -210,6 +220,7 @@ const renderFieldDescriptorLiteral = (
     `nullable: ${swiftBool(field.nullable)}, ` +
     `reference: ${reference}, ` +
     `controlKind: ${controlKind}, ` +
+    `controlRenderer: ${swiftOptionalString(rendererMetadata.control)}, ` +
     `controlSection: ${swiftOptionalString(field.control?.section ?? null)}, ` +
     `controlOptions: ${renderOptionsLiteral(field.control?.options ?? null)}, ` +
     `placeholder: ${swiftOptionalString(field.control?.placeholder ?? null)}, ` +
@@ -225,9 +236,15 @@ const renderFieldDescriptorLiteral = (
     `showInList: ${swiftBool(field.display.list)}, ` +
     `showInDetail: ${swiftBool(field.display.detail)}, ` +
     `detailOrder: ${swiftOptionalInt(field.display.detailOrder)}, ` +
+    `listOrder: ${swiftOptionalInt(field.display.listOrder)}, ` +
+    `listHidden: ${swiftBool(field.display.listHidden)}, ` +
+    `width: ${swiftOptionalString(field.display.width)}, ` +
     `format: ${swiftOptionalString(field.display.format)}, ` +
+    `listRenderer: ${swiftOptionalString(rendererMetadata.list)}, ` +
+    `detailRenderer: ${swiftOptionalString(rendererMetadata.detail)}, ` +
     `mobileSlot: ${swiftOptionalString(field.display.mobile?.slot ?? null)}, ` +
-    `mobilePriority: ${swiftOptionalInt(field.display.mobile?.priority ?? null)})`
+    `mobilePriority: ${swiftOptionalInt(field.display.mobile?.priority ?? null)}, ` +
+    `mobileInteractive: ${swiftBool(rendererMetadata.mobileInteractive)})`
   );
 };
 
@@ -484,6 +501,8 @@ export const renderSwiftEntityCatalog = (
     "  public let nullable: Bool\n" +
     "  public let reference: FieldReference?\n" +
     "  public let controlKind: EntityControlKind?\n" +
+    "  /// Semantic specialized-control id; the platform registry owns its implementation.\n" +
+    "  public let controlRenderer: String?\n" +
     "  /// The editor section the field groups under when `presentation.editSections` is nil.\n" +
     "  public let controlSection: String?\n" +
     "  /// A select control's choices; nil for every other control.\n" +
@@ -499,11 +518,17 @@ export const renderSwiftEntityCatalog = (
     "  public let showInList: Bool\n" +
     "  public let showInDetail: Bool\n" +
     "  public let detailOrder: Int?\n" +
+    "  public let listOrder: Int?\n" +
+    "  public let listHidden: Bool\n" +
+    "  public let width: String?\n" +
     "  /// Cell formatter (`currency`, `signedCurrency`, `plainDate`, `timestamp`, `external-link`, `amount`).\n" +
     "  public let format: String?\n" +
+    "  public let listRenderer: String?\n" +
+    "  public let detailRenderer: String?\n" +
     "  /// Mobile card placement of the list column, when declared.\n" +
     "  public let mobileSlot: String?\n" +
     "  public let mobilePriority: Int?\n" +
+    "  public let mobileInteractive: Bool\n" +
     "}\n\n" +
     "/// The list-route query parameter(s) a filter binds to; the request is keyed by these names.\n" +
     "public enum FilterWire: Codable, Sendable, Hashable {\n" +

@@ -75,9 +75,14 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   // entry point (Decision #8 — `/garden` is gone).
   await page.goto(`/plantings?locationId=${growingBed.id}`);
   await waitForAppHydration(page);
-  const plantingRows = page.getByRole("link", { name: cropName });
+  const plantingRows = page.locator('a[href^="/plantings/"]', {
+    hasText: cropName,
+  });
   await expect(plantingRows.first()).toBeVisible();
   await expect(plantingRows).toHaveCount(2);
+  await expect(
+    page.locator(`a[href="/ingredients/${crop.id}"]`, { hasText: cropName }),
+  ).toHaveCount(2);
 
   // Edit `status` on the seeded planting through the generic edit dialog —
   // it is an ordinary editable field now, not a lifecycle verb.

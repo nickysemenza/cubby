@@ -12,43 +12,9 @@ import {
 import type { CubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { TableLink } from "~/app/_components/table/TableLink";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { labeledFieldProvenance } from "~/entities/field-provenance";
 import { formatCurrency } from "~/lib/utils";
 
 import { financialTransactionStatusOptions } from "./financial-transaction-kind-options";
-
-function financialTransactionLabel(transaction: FinancialTransactionOut) {
-  return transaction.merchant || transaction.rawDescription || transaction.id;
-}
-
-export function createFinancialTransactionIdentityColumn(
-  helper: CubbyColumnHelper<FinancialTransactionOut>,
-  className = "w-64",
-) {
-  return helper.accessor(financialTransactionLabel, {
-    id: "transaction",
-    header: "Transaction",
-    meta: {
-      provenance: labeledFieldProvenance("Financial transaction record"),
-      className,
-      mobile: { slot: "title", priority: 0 },
-    },
-    cell: (info) => {
-      const transaction = info.row.original;
-      const label = info.getValue();
-      return (
-        <TableLink
-          to={entities.financialTransaction.routes.detail}
-          params={entityDetailParams(transaction.id)}
-          className="block truncate"
-          title={label}
-        >
-          {label}
-        </TableLink>
-      );
-    },
-  });
-}
 
 export function createFinancialTransactionAccountColumn(
   helper: CubbyColumnHelper<FinancialTransactionOut>,

@@ -8,7 +8,6 @@ import { useMemo } from "react";
 
 import {
   createImageColumn,
-  createNameColumn,
   renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -61,13 +60,6 @@ export const imageListOverride = defineListOverride<
       () =>
         createCubbyColumnCollection<ImageListRow>((add) => {
           add(
-            createNameColumn(columnHelper, "image", "filename", {
-              header: "Filename",
-              editable: nameEditable,
-              filterConfig: { placeholder: "Filter by filename..." },
-            }),
-          );
-          add(
             columnHelper.accessor("size", {
               header: "Size",
               meta: {
@@ -90,7 +82,7 @@ export const imageListOverride = defineListOverride<
             }),
           );
         }),
-      [nameEditable],
+      [],
     );
     const compose = useMemo(
       () => (declared: CubbyColumnCollection<ImageListRow>) =>
@@ -125,7 +117,7 @@ export const imageListOverride = defineListOverride<
       overrides,
       compose,
       source: imageListSource,
-      list: IMAGE_LIST_OPTIONS,
+      list: { ...IMAGE_LIST_OPTIONS, nameEditable },
     };
   },
 });

@@ -71,9 +71,9 @@ function cellPresentation<TItem extends RowData>(
   const index = columns.findIndex((column) => column.id === cell.column.id);
   const boundary =
     pinned === "start" && index === columns.length - 1
-      ? "border-r-2 border-r-foreground"
+      ? "table-pinned-boundary-start"
       : pinned === "end" && index === 0
-        ? "border-l-2 border-l-foreground"
+        ? "table-pinned-boundary-end"
         : undefined;
   const width = columnWidthValue(cell.column.id);
   return { selectable, selected, anchor, pinned, boundary, width };

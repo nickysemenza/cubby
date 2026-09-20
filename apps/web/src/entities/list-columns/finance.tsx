@@ -47,7 +47,6 @@ import { WithLedgerPartySearch } from "~/app/finance/financial-selectors";
 import {
   createFinancialTransactionAccountColumn,
   createFinancialTransactionAmountColumn,
-  createFinancialTransactionIdentityColumn,
   createFinancialTransactionStatusColumn,
 } from "~/app/finance/financial-transaction-columns";
 import { financialTransactionKindOptions } from "~/app/finance/financial-transaction-kind-options";
@@ -93,24 +92,6 @@ export const financialAccountListOverride = defineListOverride<
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<FinancialAccountOut>((add) => {
-          add(
-            accountHelper.accessor("name", {
-              header: "Account",
-              meta: {
-                className: "w-64",
-                mobile: { slot: "title", priority: 0 },
-              },
-              cell: (i) => (
-                <TableLink
-                  to={entities.financialAccount.routes.detail}
-                  params={entityDetailParams(i.row.original.id)}
-                  className="block truncate"
-                >
-                  {i.getValue()}
-                </TableLink>
-              ),
-            }),
-          );
           // Load-bearing: an Expense's funder is DERIVED from the paying
           // account's owner, so an unowned account is spend the contribution
           // report cannot attribute.
@@ -310,7 +291,6 @@ export const financialTransactionListOverride = defineListOverride<
       () => (declared: CubbyColumnCollection<FinancialTransactionOut>) =>
         createCubbyColumnCollection<FinancialTransactionOut>((add) => {
           const { rest } = interleaveDeclared(declared, add);
-          add(createFinancialTransactionIdentityColumn(transactionHelper));
           // Hidden by default: exists so `purchasePresence` is a column-backed
           // spec rather than a urlOnly one; derived from `purchaseId`'s
           // presence, not a scalar of its own.

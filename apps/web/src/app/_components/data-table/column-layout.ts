@@ -20,6 +20,7 @@ import {
   type CubbyColumnCollection,
   type CubbyColumnDef,
 } from "./table-features";
+import type { EntityColumnRole } from "./table-meta";
 
 type MaterializedColumnDef<TData extends RowData> = CubbyColumnDef<
   TData,
@@ -28,9 +29,11 @@ type MaterializedColumnDef<TData extends RowData> = CubbyColumnDef<
 
 const MIN_COLUMN_WIDTH = 48;
 
-/** Structural columns that always lead the desktop table in this order. */
-const LOCKED_START_COLUMN_IDS = ["select", "image"] as const;
-const lockedStartColumnIdSet = new Set<string>(LOCKED_START_COLUMN_IDS);
+/** Structural roles that always lead the desktop table in this order. */
+const LOCKED_START_COLUMN_ROLES: readonly EntityColumnRole[] = [
+  "selection",
+  "image",
+];
 
 /**
  * Structural columns that always trail the desktop table.
@@ -42,20 +45,21 @@ const lockedStartColumnIdSet = new Set<string>(LOCKED_START_COLUMN_IDS);
  * there themselves. Left as an ordinary center column it was draggable, and one
  * drag stranded it mid-table for good.
  */
-const LOCKED_END_COLUMN_IDS = ["actions"] as const;
-const lockedEndColumnIdSet = new Set<string>(LOCKED_END_COLUMN_IDS);
+const LOCKED_END_COLUMN_ROLES: readonly EntityColumnRole[] = ["action"];
 
-function isLockedStartColumnId(id: string) {
-  return lockedStartColumnIdSet.has(id);
-}
-
-function isLockedEndColumnId(id: string) {
-  return lockedEndColumnIdSet.has(id);
-}
+type RoleBearingColumn = {
+  id: string;
+  columnDef: { meta?: { entityColumnRole?: EntityColumnRole } };
+};
 
 /** Either end's structural columns: never dragged, hidden, or re-pinned. */
-export function isLockedColumnId(id: string) {
-  return isLockedStartColumnId(id) || isLockedEndColumnId(id);
+export function isLockedColumn(column: RoleBearingColumn) {
+  const role = column.columnDef.meta?.entityColumnRole;
+  return (
+    role != null &&
+    (LOCKED_START_COLUMN_ROLES.includes(role) ||
+      LOCKED_END_COLUMN_ROLES.includes(role))
+  );
 }
 
 /**
@@ -64,11 +68,14 @@ export function isLockedColumnId(id: string) {
  * subject, but a drop onto empty space past it still appends after it — this is
  * what keeps that landing spot from outranking the actions menu.
  */
-export function withLockedEndLast(ids: readonly string[]) {
-  const locked = ids.filter(isLockedEndColumnId);
+export function withLockedEndLast(
+  ids: readonly string[],
+  lockedEndIds: ReadonlySet<string>,
+) {
+  const locked = ids.filter((id) => lockedEndIds.has(id));
   return locked.length === 0
     ? [...ids]
-    : [...ids.filter((id) => !isLockedEndColumnId(id)), ...locked];
+    : [...ids.filter((id) => !lockedEndIds.has(id)), ...locked];
 }
 
 function columnIdHash(id: string) {
@@ -101,7 +108,11 @@ type TableWidthColumn = {
   getIsPinned?: () => false | "start" | "end";
   columnDef: {
     header?: unknown;
-    meta?: { surplus?: boolean; numeric?: boolean };
+    meta?: {
+      entityColumnRole?: EntityColumnRole;
+      surplus?: boolean;
+      numeric?: boolean;
+    };
   };
 };
 
@@ -117,10 +128,15 @@ export function tableSurplusColumnId(
   columns: readonly TableWidthColumn[],
 ): string | undefined {
   const candidates = columns.filter(
-    (column) => !isLockedColumnId(column.id) && !column.getIsPinned?.(),
+    (column) => !isLockedColumn(column) && !column.getIsPinned?.(),
   );
   const explicit = candidates.find((column) => column.columnDef.meta?.surplus);
   if (explicit) return explicit.id;
+
+  const identity = candidates.find(
+    (column) => column.columnDef.meta?.entityColumnRole === "identity",
+  );
+  if (identity) return identity.id;
 
   const conventional = candidates.find((column) =>
     ["name", "title", "product", "filename"].includes(column.id),
@@ -176,10 +192,12 @@ export function columnWidthVariables(
   return variables;
 }
 
-function columnIdsFromDefs<TData extends RowData>(
+type ColumnDescriptor = { id: string; role?: EntityColumnRole };
+
+function columnDescriptorsFromDefs<TData extends RowData>(
   columns: MaterializedColumnDef<TData>[],
-): string[] {
-  const result: string[] = [];
+): ColumnDescriptor[] {
+  const result: ColumnDescriptor[] = [];
   const visit = (defs: MaterializedColumnDef<TData>[]) => {
     for (const def of defs) {
       if ("columns" in def && Array.isArray(def.columns)) {
@@ -194,11 +212,15 @@ function columnIdsFromDefs<TData extends RowData>(
         def.id ??
         accessorKey?.replaceAll(".", "_") ??
         (isNonEmptyColumnHeader(def.header) ? def.header : undefined);
-      if (id) result.push(id);
+      if (id) result.push({ id, role: def.meta?.entityColumnRole });
     }
   };
   visit(columns);
-  return [...new Set(result)];
+  return [
+    ...new Map(
+      result.map((descriptor) => [descriptor.id, descriptor]),
+    ).values(),
+  ];
 }
 
 function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
@@ -215,11 +237,11 @@ function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
 
 function normalizedColumnSize<TData extends RowData>(
   definition: MaterializedColumnDef<TData>,
-  id: string | undefined,
   className: string,
 ) {
   const size = definition.size ?? tailwindWidth(className, "w");
-  const fixedImageSize = id === "image" ? (size ?? 64) : undefined;
+  const fixedImageSize =
+    definition.meta?.entityColumnRole === "image" ? (size ?? 64) : undefined;
   const normalizedSize = fixedImageSize ?? size;
   const minSize =
     fixedImageSize ??
@@ -253,7 +275,6 @@ function normalizeColumnDefinitions<TData extends RowData>(
       };
     }
     const className = definition.meta?.className ?? "";
-    const id = columnIdsFromDefs([definition])[0];
     // Image is a structural identity strip, not a data column. Keep it exactly
     // as wide as its declared thumbnail cell so a stray resize cannot leave an
     // empty gutter between the dedicated image and the record name.
@@ -261,9 +282,16 @@ function normalizeColumnDefinitions<TData extends RowData>(
       size: normalizedSize,
       minSize,
       maxSize,
-    } = normalizedColumnSize(definition, id, className);
-    const fixedImageSize = id === "image" ? normalizedSize : undefined;
-    const locked = id != null && isLockedColumnId(id);
+    } = normalizedColumnSize(definition, className);
+    const fixedImageSize =
+      definition.meta?.entityColumnRole === "image"
+        ? normalizedSize
+        : undefined;
+    const role = definition.meta?.entityColumnRole;
+    const locked =
+      role != null &&
+      (LOCKED_START_COLUMN_ROLES.includes(role) ||
+        LOCKED_END_COLUMN_ROLES.includes(role));
     const normalized = {
       ...definition,
     };
@@ -299,20 +327,22 @@ export interface CubbyDefaultTableLayout {
 }
 
 function computeDefaultLayout(
-  columnIds: readonly string[],
+  descriptors: readonly ColumnDescriptor[],
   initialColumnVisibility: ColumnVisibilityState,
 ): CubbyDefaultTableLayout {
-  const lockedStart = LOCKED_START_COLUMN_IDS.filter((id) =>
-    columnIds.includes(id),
-  );
-  const lockedEnd = LOCKED_END_COLUMN_IDS.filter((id) =>
-    columnIds.includes(id),
-  );
-  const rest = columnIds.filter((id) => !isLockedColumnId(id));
+  const idsForRole = (role: EntityColumnRole) =>
+    descriptors
+      .filter((descriptor) => descriptor.role === role)
+      .map((descriptor) => descriptor.id);
+  const lockedStart = LOCKED_START_COLUMN_ROLES.flatMap(idsForRole);
+  const lockedEnd = LOCKED_END_COLUMN_ROLES.flatMap(idsForRole);
+  const lockedIds = new Set([...lockedStart, ...lockedEnd]);
+  const columnIds = descriptors.map(({ id }) => id);
+  const rest = columnIds.filter((id) => !lockedIds.has(id));
   const columnVisibility: ColumnVisibilityState = {};
   for (const id of columnIds) {
     columnVisibility[id] =
-      isLockedColumnId(id) || initialColumnVisibility[id] !== false;
+      lockedIds.has(id) || initialColumnVisibility[id] !== false;
   }
   return {
     columnOrder: [...lockedStart, ...rest, ...lockedEnd],
@@ -351,16 +381,18 @@ export function useTableColumnLayout<TData extends RowData>({
     () => normalizeColumnDefinitions(materializeCubbyColumns(columns)),
     [columns],
   );
-  const columnIds = useMemo(
-    () => columnIdsFromDefs(normalizedColumns),
+  const columnDescriptors = useMemo(
+    () => columnDescriptorsFromDefs(normalizedColumns),
     [normalizedColumns],
   );
-  const definitionKey = columnIds.join("");
+  const definitionKey = columnDescriptors
+    .map(({ id, role }) => `${id}:${role ?? ""}`)
+    .join("");
   const visibilityKey = JSON.stringify(initialColumnVisibility);
   // Fresh column-def arrays are common; their stable signatures are the
   // intended inputs, not their referential identities.
   const defaultLayout = useMemo(
-    () => computeDefaultLayout(columnIds, initialColumnVisibility),
+    () => computeDefaultLayout(columnDescriptors, initialColumnVisibility),
     // oxlint-disable-next-line react/exhaustive-deps -- signatures stand in for fresh values
     [definitionKey, visibilityKey],
   );

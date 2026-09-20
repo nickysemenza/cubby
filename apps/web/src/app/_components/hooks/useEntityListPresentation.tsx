@@ -167,7 +167,10 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   mappingsMap?: Record<string, UnitMapping[]> | null;
   hasUnitMappings?: boolean;
   nameClassName?: string;
-  nameEditable?: { onSave: (newValue: string, row: TData) => Promise<void> };
+  nameEditable?: {
+    onSave: (newValue: string, row: TData) => Promise<void>;
+    getValue?: (row: TData) => string | null;
+  };
   nameSuffix?: (row: TData) => ReactNode;
   namePrefix?: (row: TData) => ReactNode;
   hiddenFilterColumns?: string[];
