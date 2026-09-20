@@ -176,23 +176,6 @@ function useTaskListSource(searchQuery: string, enabled: boolean) {
   return { data: data?.items, isLoading };
 }
 
-const plantingBlankFilterKey = resolveBlankFilterKey("planting");
-function usePlantingListSource(searchQuery: string, enabled: boolean) {
-  const { data, isLoading } = useQuery({
-    ...entityListFor("planting").queryOptions({
-      // SAFETY: `plantingBlankFilterKey` is resolved from planting's own
-      // `displayName` filter descriptor, so this object has exactly the key
-      // the planting list accepts for a blank or typed picker query.
-      filters: {
-        [plantingBlankFilterKey]: searchQuery,
-      } as EntityListParams<"planting">["filters"],
-      pagination,
-    }),
-    enabled,
-  });
-  return { data: data?.items, isLoading };
-}
-
 /**
  * `location.search` (not `.list`): the picker needs {id, name, type,
  * ancestors, coverImage}, so it skips the inventory-entry + product relation
@@ -223,6 +206,19 @@ function useProductListSource(searchQuery: string, enabled: boolean) {
   const { data, isLoading } = useQuery({
     ...product.search.queryOptions({
       filters: { nameFilter: searchQuery },
+      pagination,
+    }),
+    enabled,
+  });
+  return { data: data?.items, isLoading };
+}
+
+/** Plantings have no name-filter descriptor, so their blank state is the
+ * recent list and typed queries use the manifest's global-search projection. */
+function usePlantingListSource(_searchQuery: string, enabled: boolean) {
+  const { data, isLoading } = useQuery({
+    ...entityListFor("planting").queryOptions({
+      filters: {},
       pagination,
     }),
     enabled,

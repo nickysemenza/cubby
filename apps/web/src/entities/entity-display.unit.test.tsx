@@ -1,9 +1,10 @@
 import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { isReferencePickerEntity } from "~/app/_components/combobox/reference-entity-search";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -43,6 +44,26 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 }
 
 describe("declared entity displays", () => {
+  it("has a picker path for every updateable singular reference shown in a manifest list", () => {
+    // Current list-visible update references span these targets: the roster is
+    // intentionally target-based because several entities reuse the same
+    // picker (for example Planting and Expense both select Product).
+    for (const entity of [
+      "ingredient",
+      "location",
+      "product",
+      "project",
+      "task",
+      "vendor",
+      "ledgerParty",
+      "financialAccount",
+      "purchase",
+      "planting",
+    ] as const) {
+      expect(isReferencePickerEntity(entity)).toBe(true);
+    }
+  });
+
   it("selects declared detail sections without leaking overview fields", () => {
     render(
       <EntityBasicInfo
@@ -190,6 +211,82 @@ describe("declared entity displays", () => {
     // `spend` declares `format: signedCurrency`, which the detail honours.
     expect(screen.getByText("0")).toBeInTheDocument();
     expect(screen.getByText("$0.00")).toBeInTheDocument();
+  });
+
+  it("makes updateable singular manifest references editable with ID-only paste and nullable clear", async () => {
+    type PlantingRow = {
+      id: string;
+      ingredientId: string;
+      ingredientName: string;
+      locationId: string | null;
+      locationName: string | null;
+      sourceProductId: string | null;
+      sourceProductName: string | null;
+      taskId: string | null;
+      taskName: string | null;
+      status: string;
+      variety: string | null;
+      quantity: string | null;
+      notes: string | null;
+      plannedWindow: string | null;
+      sowedOn: string | null;
+      transplantedOn: string | null;
+      finishedOn: string | null;
+    };
+    const row: PlantingRow = {
+      id: "PLT-TEST",
+      ingredientId: "ING-TEST",
+      ingredientName: "Tomato",
+      locationId: "LOC-TEST",
+      locationName: "Raised bed",
+      sourceProductId: null,
+      sourceProductName: null,
+      taskId: null,
+      taskName: null,
+      status: "growing",
+      variety: null,
+      quantity: null,
+      notes: null,
+      plannedWindow: null,
+      sowedOn: null,
+      transplantedOn: null,
+      finishedOn: null,
+    };
+    const onSaveField = vi.fn().mockResolvedValue(undefined);
+    const columns = createEntityDisplayColumns(
+      "planting",
+      createCubbyColumnHelper<PlantingRow>(),
+      undefined,
+      { onSaveField },
+    );
+    const cellData = columns
+      .visit((column) =>
+        column.id === "locationId" ? column.meta?.cellData : undefined,
+      )
+      .find((value) => value !== undefined);
+    if (!cellData) throw new Error("Expected a location cell descriptor.");
+
+    expect(cellData.kind).toBe("entity:location");
+    expect(cellData.getCopyPayload(row)).toEqual({
+      text: "Raised bed",
+      json: { id: "LOC-TEST", name: "Raised bed" },
+    });
+    await expect(
+      cellData.applyPaste?.(row, {
+        json: { id: "LOC-NEXT", name: "Sun bed" },
+      }),
+    ).resolves.toEqual({ id: "LOC-NEXT", name: "Sun bed" });
+    await expect(cellData.applyClear?.(row)).resolves.toBeNull();
+    expect(onSaveField).toHaveBeenNthCalledWith(
+      1,
+      row,
+      "locationId",
+      "LOC-NEXT",
+    );
+    expect(onSaveField).toHaveBeenNthCalledWith(2, row, "locationId", null);
+    await expect(
+      cellData.applyPaste?.(row, { text: "Raised bed" }),
+    ).rejects.toThrow("Paste a location cell here");
   });
 
   it.each([undefined, "Old local label"])(

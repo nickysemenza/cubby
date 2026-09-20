@@ -70,6 +70,7 @@ const pastedStringSchema = z.string();
 const pastedNumberSchema = z.number();
 const pastedEntitySchema = z.object({ id: z.string(), name: z.string() });
 const pastedTagsSchema = z.array(z.string());
+const pastedBooleanSchema = z.boolean();
 
 const pastedString = (payload: CellPastePayload): string => {
   const parsed = pastedStringSchema.safeParse(payload.json);
@@ -141,6 +142,41 @@ export function dateCellData<TData>(
           if (!parsed.ok) throw new Error(parsed.error);
           await save(row, parsed.value);
           return parsed.value;
+        }
+      : undefined,
+  };
+}
+
+/** Boolean cells keep a typed payload in-app and accept the familiar text
+ * spellings when pasted from a spreadsheet. */
+export function booleanCellData<TData>(
+  getValue: (row: TData) => boolean | null,
+  save?: (row: TData, value: boolean) => Promise<void>,
+): ColumnCellData<TData, boolean | null> {
+  return {
+    kind: "boolean",
+    getCopyPayload: (row) => {
+      const value = getValue(row);
+      return value == null ? null : { text: String(value), json: value };
+    },
+    applyPaste: save
+      ? async (row, { json, text }) => {
+          const typed = pastedBooleanSchema.safeParse(json);
+          const normalized = (text ?? "").trim().toLowerCase();
+          const value = typed.success
+            ? typed.data
+            : normalized === "true" ||
+                normalized === "yes" ||
+                normalized === "1"
+              ? true
+              : normalized === "false" ||
+                  normalized === "no" ||
+                  normalized === "0"
+                ? false
+                : null;
+          if (value === null) throw new Error("Pasted value is not a boolean");
+          await save(row, value);
+          return value;
         }
       : undefined,
   };
