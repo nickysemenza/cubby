@@ -22,8 +22,8 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            completed: try values.decodeIfPresent([String: BrowserBridgeCommandResult].self, forKey: .completed)
-                ?? [:],
+            completed: try values.decodeIfPresent(
+                [String: BrowserBridgeCommandResult].self, forKey: .completed) ?? [:],
             cancelled: try values.decodeIfPresent(Set<String>.self, forKey: .cancelled) ?? [],
             completedRuns: try values.decodeIfPresent(
                 [String: BrowserBridgeRunCompletion].self, forKey: .completedRuns) ?? [:])
