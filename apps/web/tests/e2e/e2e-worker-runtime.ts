@@ -81,6 +81,7 @@ function createHarness(databaseUrl: string, objectStorageUrl: string) {
         bindingOverrides: {
           USDA_API: "e2e-usda-empty",
           UPC_LOOKUP: "e2e-upc-empty",
+          PURCHASE_AGENT: "e2e-purchase-agent-empty",
         },
       },
       {
@@ -94,6 +95,13 @@ function createHarness(databaseUrl: string, objectStorageUrl: string) {
         config: {
           name: "e2e-upc-empty",
           main: "tests/e2e/harness-services/upc-empty.ts",
+          compatibility_date: compatibilityDate,
+        },
+      },
+      {
+        config: {
+          name: "e2e-purchase-agent-empty",
+          main: "tests/e2e/harness-services/purchase-agent-empty.ts",
           compatibility_date: compatibilityDate,
         },
       },
