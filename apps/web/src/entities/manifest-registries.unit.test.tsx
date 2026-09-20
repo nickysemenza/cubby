@@ -5,9 +5,16 @@ import { describe, expect, it } from "vitest";
 import { actionVerbs } from "~/app/_components/actions/action-verbs";
 import { entityActionCatalogDescriptors } from "~/app/_components/actions/entity-actions";
 import type { GenericDetailEntity } from "~/app/_components/entity-detail/detail-record";
+import { detailSlots } from "~/app/_components/entity-detail/detail-slots";
+import { listSlotCoverage } from "~/app/_components/entity-list/list-slots";
 import { detailEntities } from "~/entities/generated/entity-details.gen";
 
-import { detailFieldRenderersFor } from "./detail-field-renderers";
+import {
+  detailFieldRenderersFor,
+  detailRendererCoverage,
+} from "./detail-field-renderers";
+import { controlRendererCoverage } from "./editing/entity-primitive-fields";
+import { listRendererCoverage } from "./list-field-renderers";
 
 // SAFETY: `entitySummary` is the closed per-entity roster; its keys are
 // entity keys.
@@ -34,6 +41,70 @@ const covers = (verb: string, entity: string, surfaces: readonly string[]) =>
   );
 
 describe("manifest registries", () => {
+  it("covers every declared renderer and slot with an explicit platform disposition", () => {
+    type Disposition = { kind: string; reason?: string };
+    type NestedDispositionRegistry = Readonly<
+      Record<string, Readonly<Record<string, Disposition>> | undefined>
+    >;
+    const controls: Readonly<Record<string, Disposition>> =
+      controlRendererCoverage;
+    const nested = (
+      registry: NestedDispositionRegistry,
+      entity: string,
+      id: string,
+    ) => registry[entity]?.[id];
+    const missing: string[] = [];
+    const unsupportedWithoutReason: string[] = [];
+    const inspect = (label: string, disposition: Disposition | undefined) => {
+      if (!disposition) missing.push(label);
+      if (disposition?.kind === "unsupported" && !disposition.reason?.trim()) {
+        unsupportedWithoutReason.push(label);
+      }
+    };
+
+    for (const entity of entities) {
+      for (const field of entityFieldModels[entity].fields) {
+        const control = field.control?.renderer;
+        if (control) {
+          inspect(`control:${control}`, controls[control]);
+        }
+        const list = field.display.renderer?.list;
+        if (list) {
+          inspect(
+            `list:${entity}.${field.key}:${list}`,
+            nested(listRendererCoverage, entity, list),
+          );
+        }
+        const detail = field.display.renderer?.detail;
+        if (detail) {
+          inspect(
+            `detail:${entity}.${field.key}:${detail}`,
+            nested(detailRendererCoverage, entity, detail),
+          );
+        }
+      }
+      for (const section of entitySummary[entity].detail.sections) {
+        if (section.kind === "slot") {
+          inspect(
+            `detail-slot:${entity}.${section.id}`,
+            nested(detailSlots, entity, section.id),
+          );
+        }
+      }
+      for (const view of entitySummary[entity].list.views) {
+        if (view !== "table" && view !== "shelf" && view !== "timeline") {
+          inspect(
+            `list-slot:${entity}.${view.id}`,
+            nested(listSlotCoverage, entity, view.id),
+          );
+        }
+      }
+    }
+
+    expect(missing).toEqual([]);
+    expect(unsupportedWithoutReason).toEqual([]);
+  });
+
   it("preserves explicit sentence-case labels for derived garden windows", () => {
     const labels = Object.fromEntries(
       entityFieldModels.ingredient.fields.map((field) => [

@@ -214,6 +214,7 @@ export default defineEntity({
           detail: true,
           detailOrder: 10,
           listHidden: true,
+          renderer: { detail: "product-tags" },
         },
         validation: {
           read: z.array(z.string()),
@@ -272,6 +273,7 @@ export default defineEntity({
           detail: true,
           detailOrder: 7,
           width: "sm",
+          renderer: { detail: "product-fdc-id" },
           format: "external-link",
           listHidden: true,
         },
@@ -386,7 +388,11 @@ export default defineEntity({
         readKey: null,
         reference: { entity: "ingredient" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true, detailOrder: 8 },
+        display: {
+          detail: true,
+          detailOrder: 8,
+          renderer: { detail: "product-ingredient" },
+        },
         validation: {
           read: null,
           create: ingredientShortcode.nullable().optional(),
@@ -486,6 +492,7 @@ export default defineEntity({
           listOrder: 8,
           detail: true,
           detailOrder: 9,
+          renderer: { detail: "product-external-ids" },
           listHidden: true,
         },
         validation: {
@@ -569,7 +576,11 @@ export default defineEntity({
         key: "id",
         kind: "identifier",
         label: "Shortcode",
-        display: { detail: true, detailOrder: 1 },
+        display: {
+          detail: true,
+          detailOrder: 1,
+          renderer: { detail: "product-id" },
+        },
         validation: {
           read: productShortcode,
           create: null,
@@ -590,6 +601,7 @@ export default defineEntity({
           detail: true,
           detailOrder: 6,
           width: "sm",
+          renderer: { detail: "product-primary-gtin" },
         },
         provenance: {
           kind: "derived",

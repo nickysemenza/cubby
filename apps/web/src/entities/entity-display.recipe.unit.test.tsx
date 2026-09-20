@@ -1,7 +1,8 @@
+import type { RecipeSource } from "@cubby/schemas/recipe-shared";
 import type { CellData } from "@tanstack/react-table";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import {
@@ -10,6 +11,7 @@ import {
   type CubbyColumnDef,
 } from "~/app/_components/data-table/table-features";
 
+import { detailFieldRenderersFor } from "./detail-field-renderers";
 import { createEntityDisplayColumns } from "./entity-display";
 
 /**
@@ -28,7 +30,7 @@ interface RecipeRow {
   costTotal: number | null;
   caloriesTotal: number | null;
   totalMinutes: number | null;
-  source: string | null;
+  source: RecipeSource | null;
   meals: number;
   notes: string | null;
 }
@@ -39,7 +41,7 @@ const RECIPE_ROW: RecipeRow = {
   costTotal: 12.5,
   caloriesTotal: 640,
   totalMinutes: 35,
-  source: "https://example.com/recipe",
+  source: { type: "website", url: "https://www.example.com/recipe" },
   meals: 2,
   notes: "Fixture notes",
 };
@@ -73,8 +75,8 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
  * overrides for the six specialized columns (`yield`/`costTotal`/
  * `caloriesTotal`/`totalMinutes`/`meals` are `readKey: null` or `reference`
  * fields, so `createEntityDisplayColumns` throws without one; `tags` and
- * `source` are overridden too, matching the page's inline-editable tag cell
- * and source link), and `notes` left generic to exercise the declaration's
+ * `tags` is overridden for inline editing; `source` is supplied by the named
+ * manifest renderer, and `notes` stays generic to exercise the declaration's
  * own metadata.
  */
 function buildRecipeColumns() {
@@ -113,13 +115,6 @@ function buildRecipeColumns() {
         helper.display({
           id: "totalMinutes",
           cell: ({ row }) => <span>{row.original.totalMinutes} min</span>,
-        }),
-      );
-      // No explicit `id` — mirrors recipelist.tsx's own source column, which
-      // relies on the accessorKey fallback in createEntityDisplayColumns.
-      add(
-        helper.accessor("source", {
-          cell: ({ row }) => <span>{row.original.source ?? "No source"}</span>,
         }),
       );
       add(
@@ -219,9 +214,44 @@ describe("recipe list display columns", () => {
     expect(screen.getByText("$12.5")).toBeVisible();
   });
 
-  it("renders the source override through its accessorKey-derived id", () => {
-    render(<>{renderRecipeCell("source", RECIPE_ROW)}</>);
-    expect(screen.getByText("https://example.com/recipe")).toBeVisible();
+  it("renders Recipe Source through the manifest and stops row activation", () => {
+    const onRowClick = vi.fn();
+    render(
+      <button type="button" onClick={onRowClick}>
+        {renderRecipeCell("source", RECIPE_ROW)}
+      </button>,
+    );
+    const link = screen.getByRole("link", { name: /example\.com/i });
+    expect(link).toHaveAttribute("href", "https://www.example.com/recipe");
+    fireEvent.click(link);
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it("resolves the fuller detail Recipe Source renderer from the manifest", () => {
+    const renderer = detailFieldRenderersFor("recipe")?.source;
+    if (!renderer) throw new Error("Expected recipe.source detail renderer");
+    // SAFETY: the generated registry resolved this renderer from the recipe
+    // manifest, and the fixture is a recipe detail record.
+    const rendered = renderer(RECIPE_ROW as never);
+    render(<>{rendered.value}</>);
+    expect(screen.getByRole("link", { name: /example\.com/i })).toHaveAttribute(
+      "href",
+      "https://www.example.com/recipe",
+    );
+  });
+
+  it("rejects a legacy source override beside the manifest renderer", () => {
+    const helper = createCubbyColumnHelper<RecipeRow>();
+    expect(() =>
+      createEntityDisplayColumns(
+        "recipe",
+        helper,
+        createCubbyColumnCollection((add) => {
+          add(helper.display({ id: "source", cell: () => null }));
+        }),
+        { only: ["source"] },
+      ),
+    ).toThrow("Manifest and legacy list renderers both claim recipe.source");
   });
 
   it("rejects an override for a field the declaration doesn't list (totals is list: false)", () => {
@@ -236,7 +266,6 @@ describe("recipe list display columns", () => {
           add(helper.display({ id: "costTotal", cell: () => null }));
           add(helper.display({ id: "caloriesTotal", cell: () => null }));
           add(helper.display({ id: "totalMinutes", cell: () => null }));
-          add(helper.display({ id: "source", cell: () => null }));
           add(helper.display({ id: "meals", cell: () => null }));
           add(helper.display({ id: "totals", cell: () => null }));
         }),

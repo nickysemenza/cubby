@@ -16,7 +16,6 @@ import { purchaseListOverride } from "./purchase";
 import { recipeListOverride } from "./recipe";
 import { taskListOverride } from "./task";
 import type { ListOverrideRegistry } from "./types";
-import { vendorListOverride } from "./vendor";
 import { wishListOverride } from "./wish";
 
 /**
@@ -40,6 +39,5 @@ export const listOverrides: ListOverrideRegistry = {
   purchase: purchaseListOverride,
   recipe: recipeListOverride,
   task: taskListOverride,
-  vendor: vendorListOverride,
   wish: wishListOverride,
 };

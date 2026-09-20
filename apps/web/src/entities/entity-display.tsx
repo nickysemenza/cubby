@@ -68,6 +68,7 @@ import {
   isBrowserRoutedEntity,
 } from "./entities";
 import { readReferenceField, type ReferenceItem } from "./entity-references";
+import { listRendererColumns } from "./list-field-renderers";
 
 type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
@@ -780,6 +781,53 @@ export function createEntityDisplayColumns<TRecord extends object>(
       }
       if (field.display.standard) continue;
       const defaultEnableSorting = sortableColumnIds.includes(columnId);
+      const namedRenderer = field.display.renderer?.list ?? null;
+      if (namedRenderer !== null) {
+        overrides?.visit((column) => {
+          const id =
+            column.id ??
+            ("accessorKey" in column ? String(column.accessorKey) : null);
+          if (id === columnId) {
+            throw new Error(
+              `Manifest and legacy list renderers both claim ${entity}.${field.key}`,
+            );
+          }
+        });
+        const rendered = listRendererColumns(entity, namedRenderer, helper);
+        let count = 0;
+        rendered.visit((column) => {
+          const id =
+            column.id ??
+            ("accessorKey" in column ? String(column.accessorKey) : null);
+          if (id !== columnId) {
+            throw new Error(
+              `List renderer ${namedRenderer} must render ${entity}.${columnId}`,
+            );
+          }
+          count += 1;
+          add({
+            ...column,
+            id: columnId,
+            meta: attachCubbyColumnMeta({
+              ...column.meta,
+              entityColumnRole: "fact",
+              provenance: field.provenance ?? undefined,
+            }),
+            header:
+              column.header === undefined ||
+              z.string().safeParse(column.header).success
+                ? field.label
+                : column.header,
+            enableSorting: column.enableSorting ?? defaultEnableSorting,
+          });
+        });
+        if (count !== 1) {
+          throw new Error(
+            `List renderer ${namedRenderer} must produce one column for ${entity}.${field.key}`,
+          );
+        }
+        continue;
+      }
       let overridden = false;
       overrides?.visit((column) => {
         const id =

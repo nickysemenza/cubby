@@ -42,13 +42,13 @@ function ProductIngredientLink({
 }
 
 export const productDetailFields = {
-  id: (product) => ({
+  "product-id": (product) => ({
     value: <span className="font-mono text-xs">{product.id}</span>,
   }),
   // Rendered as the printed encoding, not the stored GTIN-14 — the operator
   // is comparing this against the barcode on the package, and the USDA page
   // is keyed the same way. A book barcode reads as its ISBN-13.
-  primaryGtin: (product) => {
+  "product-primary-gtin": (product) => {
     const isbn = product.primaryGtin
       ? wasm.isbn_from_gtin(product.primaryGtin)
       : null;
@@ -67,7 +67,7 @@ export const productDetailFields = {
       ) : undefined,
     };
   },
-  fdc_id: (product) => ({
+  "product-fdc-id": (product) => ({
     value: product.fdc_id ? (
       <Link
         to="/usda/$id"
@@ -78,7 +78,7 @@ export const productDetailFields = {
       </Link>
     ) : undefined,
   }),
-  ingredientId: (product) => ({
+  "product-ingredient": (product) => ({
     value: product.ingredient ? (
       <Row gap="sm" wrap>
         <ProductIngredientLink ingredient={product.ingredient} />
@@ -95,7 +95,7 @@ export const productDetailFields = {
   // `{ source, kind, externalId, url }` rows, not the plain string list the
   // field kind implies — this renderer is what keeps the page from parsing
   // them as strings.
-  externalIds: (product) => ({
+  "product-external-ids": (product) => ({
     value:
       product.externalIds.length > 0 ? (
         <div className="flex flex-wrap gap-x-2 gap-y-1 font-mono text-xs">
@@ -122,7 +122,7 @@ export const productDetailFields = {
   }),
   // A collection tag links to its collection page; every other tag is a
   // cohort link into the product list.
-  tags: (product) => ({
+  "product-tags": (product) => ({
     filterAction: null,
     value:
       product.tags.length > 0 ? (

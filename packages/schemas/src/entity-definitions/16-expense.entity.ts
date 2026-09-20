@@ -275,6 +275,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          renderer: { detail: "expense-project" },
           detailOrder: 120,
           columnId: "project",
         },

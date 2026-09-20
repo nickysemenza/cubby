@@ -4,7 +4,7 @@ import { ledgerTransferClassificationOptions } from "~/app/finance/ledger-transf
 import type { EntityDetailFieldRenderers } from "./index";
 
 export const ledgerTransferDetailFields = {
-  classification: (transfer) => ({
+  "ledger-transfer-classification": (transfer) => ({
     value: renderOptionCell(
       transfer.classification,
       ledgerTransferClassificationOptions,

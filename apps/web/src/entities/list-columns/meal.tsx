@@ -28,6 +28,10 @@ import { defineListOverride } from "./types";
 
 const columnHelper = createCubbyColumnHelper<MealOut>();
 
+export function mealNameUpdate(newName: string) {
+  return { name: newName.trim() || null };
+}
+
 /**
  * The `/meals?view=table` surface: inline rename/reschedule, delete (row +
  * bulk). Cost stays unsortable on purpose: it is a read-time rollup of
@@ -48,7 +52,7 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
         onSave: async (newName: string, meal: MealOut) => {
           await updateMealMutation.mutateAsync({
             id: meal.id,
-            data: { name: newName.trim() || null },
+            data: mealNameUpdate(newName),
           });
         },
         getValue: (meal: MealOut) => meal.name,

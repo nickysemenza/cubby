@@ -279,6 +279,18 @@ const compileFieldModel = (
   validateFieldSuggestions(fields, context);
   const displayedColumnIds = new Set<string>();
   for (const field of fields) {
+    const listRenderer = field.display.renderer?.list ?? null;
+    const detailRenderer = field.display.renderer?.detail ?? null;
+    if (listRenderer !== null && !field.display.list) {
+      throw new EntityDeclarationError(
+        `${context}.${field.key}.display.renderer.list requires display.list.`,
+      );
+    }
+    if (detailRenderer !== null && !field.display.detail) {
+      throw new EntityDeclarationError(
+        `${context}.${field.key}.display.renderer.detail requires display.detail.`,
+      );
+    }
     const standard = field.display.standard;
     if (
       standard !== null &&

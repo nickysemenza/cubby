@@ -46,11 +46,16 @@ struct EntityListView: View {
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
-    /// Table, shelf and timeline; a `.slot` view renders only where a registry provides it (none).
+    /// Table, shelf and timeline; qualified `.slot` views remain web-owned until a native list
+    /// slot is registered. Filtering by the coverage registry keeps an entity-qualified id from
+    /// being mistaken for a built-in view during initial selection or picker changes.
     private var renderableViews: [ListView] {
         descriptor.presentation.listViews.filter {
-            if case .slot = $0 { return false }
-            return true
+            guard case .slot(let id, _, _) = $0 else { return true }
+            switch NativePresentationCoverage.listSlot(id) {
+            case .implemented, .generic: return true
+            case .ownedElsewhere, .unsupported: return false
+            }
         }
     }
 

@@ -22,10 +22,6 @@ import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useRecipeTagOptions } from "~/app/_components/hooks/useRecipeTagOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { EditableTagsCell } from "~/app/_components/recipe/editable-tags-cell";
-import {
-  RecipeSourceLink,
-  sourceLabel,
-} from "~/app/_components/recipe/recipe-source";
 import { RecipeTag } from "~/app/_components/recipe/recipe-tag";
 import {
   formatRecipeTime,
@@ -129,18 +125,6 @@ export const recipeListOverride = defineListOverride<
       mutationFn: entityMutationOptionsFactory("recipe", "update"),
       entity: "recipe",
     });
-    const nameEditable = useMemo(
-      () => ({
-        onSave: async (newName: string, recipe: RecipeListItem) => {
-          await updateRecipeMutation.mutateAsync({
-            id: recipe.id,
-            data: { name: newName },
-          });
-        },
-      }),
-      // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
-      [],
-    );
     // Its own config, not the contract default: a recipe write from this
     // table only moves `recipe.list`, not the meal rollups.
     const deletable = useDeletableConfig({
@@ -345,26 +329,6 @@ export const recipeListOverride = defineListOverride<
             },
           ),
         );
-        add(
-          columnHelper.accessor("source", {
-            header: "Source",
-            meta: {
-              className: "w-44",
-              mobile: { slot: "meta", priority: 30 },
-            },
-            cell: (info) => {
-              const source = info.getValue();
-              if (!sourceLabel(source)) return <NoneValue />;
-              return (
-                <RecipeSourceLink
-                  source={source}
-                  text="host"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              );
-            },
-          }),
-        );
         // A live MealRecipe under a soft-deleted Meal doesn't count.
         add(
           columnHelper.accessor("mealCount", {
@@ -393,11 +357,9 @@ export const recipeListOverride = defineListOverride<
       () => ({
         deletable,
         filterOptions,
-        nameEditable,
-        nameClassName: "w-64",
         initialColumnVisibility: RECIPE_INITIAL_COLUMN_VISIBILITY,
       }),
-      [deletable, filterOptions, nameEditable],
+      [deletable, filterOptions],
     );
     return { overrides, list };
   },

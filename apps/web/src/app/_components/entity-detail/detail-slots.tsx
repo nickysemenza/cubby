@@ -1,6 +1,11 @@
 import type { DetailSlotId } from "@cubby/schemas/entity-manifest";
 import { type FunctionComponent, lazy, type LazyExoticComponent } from "react";
 
+import {
+  implemented,
+  type PresentationCoverage,
+} from "~/entities/presentation-coverage";
+
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 
 /** A slot renders one declared section body against the loaded record. */
@@ -21,8 +26,10 @@ type SlotModule<T> = Promise<{ default: T }>;
 const slot = <E extends GenericDetailEntity>(
   load: () => SlotModule<DetailSlotComponent<E>>,
   applies?: (record: DetailRecordOf<E>) => boolean,
-): DetailSlot<E> =>
-  applies ? { component: lazy(load), applies } : { component: lazy(load) };
+): PresentationCoverage<DetailSlot<E>> =>
+  implemented(
+    applies ? { component: lazy(load), applies } : { component: lazy(load) },
+  );
 
 /**
  * The web fills for every `kind: "slot"` section the declarations name.
@@ -164,14 +171,27 @@ export const detailSlots = {
     ),
   },
 } satisfies {
-  [E in GenericDetailEntity]?: Partial<Record<DetailSlotId<E>, DetailSlot<E>>>;
+  [
+    E in GenericDetailEntity as DetailSlotId<E> extends never ? never : E
+  ]: Record<DetailSlotId<E>, PresentationCoverage<DetailSlot<E>>>;
 };
 
 /** The slots for one entity, read through the erased map the page walks. */
 export const detailSlotsFor = (
   entity: GenericDetailEntity,
-): Partial<Record<string, DetailSlot<never>>> | undefined =>
-  Object.hasOwn(detailSlots, entity)
-    ? // SAFETY: `hasOwn` proves `entity` is one of the registry's own keys.
-      detailSlots[entity as keyof typeof detailSlots]
-    : undefined;
+): Readonly<Record<string, DetailSlot<never>>> | undefined => {
+  if (!Object.hasOwn(detailSlots, entity)) return undefined;
+  // SAFETY: `hasOwn` proves `entity` is one of the registry's own keys. The
+  // public erased map is consumed only with this same entity's record.
+  const coverage = detailSlots[entity as keyof typeof detailSlots] as Readonly<
+    Record<string, PresentationCoverage<DetailSlot<never>>>
+  >;
+  return Object.fromEntries(
+    Object.entries(coverage).map(([id, disposition]) => {
+      if (disposition.kind !== "implemented") {
+        throw new Error(`Web detail slot ${entity}.${id} is not implemented`);
+      }
+      return [id, disposition.implementation];
+    }),
+  );
+};

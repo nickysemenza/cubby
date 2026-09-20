@@ -117,7 +117,7 @@ export default defineEntity({
       {
         key: "candidates",
         kind: "json",
-        display: { detail: true },
+        display: { detail: true, renderer: { detail: "wish-candidates" } },
         validation: {
           read: z.array(wishCandidateOut),
           create: null,

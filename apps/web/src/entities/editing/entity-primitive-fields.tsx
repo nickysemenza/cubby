@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { type ComponentType, type ReactNode, useId, useMemo } from "react";
 import {
@@ -36,6 +37,13 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { FieldProvenance } from "~/entities/field-provenance";
+import {
+  generic,
+  implemented,
+  ownedElsewhere,
+  type PresentationCoverage,
+  unsupported,
+} from "~/entities/presentation-coverage";
 
 import {
   entityFieldPresentation,
@@ -498,17 +506,26 @@ function EntityMultiSelectField({
  * specialized, non-reference field with no entry here fails loudly rather
  * than silently dropping the field.
  */
-const specializedIntentRenderers = {
-  "tag-list": TagListField,
-  amount: AmountField,
-  "entity-multi-select": EntityMultiSelectField,
-  "vendor-name": VendorNameField,
+export const controlRendererCoverage = {
+  "entity-select": generic,
+  money: generic,
+  url: generic,
+  "tag-list": implemented(TagListField),
+  amount: implemented(AmountField),
+  "entity-multi-select": implemented(EntityMultiSelectField),
+  "vendor-name": implemented(VendorNameField),
   // The gallery block the dialog shell mounts owns reordering (it writes
   // `imageOrder` through `onExistingImagesReorder`); the field itself has no
   // control of its own to draw.
-  "image-order": () => null,
+  "image-order": ownedElsewhere,
+  "structured-field": unsupported(
+    "Structured fields require their workflow-specific editor.",
+  ),
 } satisfies Readonly<
-  Record<string, ComponentType<SpecializedIntentRendererProps>>
+  Record<
+    ControlRendererId,
+    PresentationCoverage<ComponentType<SpecializedIntentRendererProps>>
+  >
 >;
 
 /** Looks up a manifest-declared `control.renderer` name, or `undefined` for
@@ -516,12 +533,13 @@ const specializedIntentRenderers = {
 function specializedRendererFor(
   name: string,
 ): ComponentType<SpecializedIntentRendererProps> | undefined {
-  if (!Object.hasOwn(specializedIntentRenderers, name)) return undefined;
+  if (!Object.hasOwn(controlRendererCoverage, name)) return undefined;
   // SAFETY: the `Object.hasOwn` check above proves `name` is one of
-  // `specializedIntentRenderers`'s own declared keys, not an arbitrary string.
-  return specializedIntentRenderers[
-    name as keyof typeof specializedIntentRenderers
-  ];
+  // `controlRendererCoverage`'s own declared keys, not an arbitrary string.
+  const disposition = controlRendererCoverage[name as ControlRendererId];
+  if (disposition.kind === "implemented") return disposition.implementation;
+  if (disposition.kind === "ownedElsewhere") return () => null;
+  return undefined;
 }
 
 /**

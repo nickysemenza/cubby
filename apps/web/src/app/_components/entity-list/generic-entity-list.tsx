@@ -14,6 +14,10 @@ import { z } from "zod";
 import { DataTableToolbar } from "~/app/_components/data-table/data-table-toolbar";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  identityListConfig,
+  identityPatch,
+} from "~/app/_components/entity-list/identity-list-config";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeferredReferenceFilterOptions } from "~/app/_components/hooks/useDeferredReferenceFilterOptions";
 import {
@@ -128,6 +132,7 @@ const isStandardEntity = (
 function useListColumns(
   entity: BrowserRoutedEntity,
   parts: EntityListOverrideResult<BaseListRow, object>,
+  allowAutoIdentityEditing: boolean,
 ) {
   const helper = useMemo(() => createCubbyColumnHelper<BaseListRow>(), []);
   const { overrides, compose } = parts;
@@ -137,7 +142,33 @@ function useListColumns(
     mutationFn: entityMutationOptionsFactory(mutationEntity, "update"),
     entity: mutationEntity,
   });
-  return useMemo(() => {
+  const identity = useMemo(
+    () =>
+      identityListConfig(entity, {
+        generatedCrud: isStandardEntity(entity),
+        flatRows:
+          allowAutoIdentityEditing &&
+          !parts.tree &&
+          !parts.source &&
+          !parts.client,
+      }),
+    [allowAutoIdentityEditing, entity, parts.client, parts.source, parts.tree],
+  );
+  const identityEditable = useMemo(() => {
+    if (!identity.canAutoEdit || parts.list?.nameEditable) return undefined;
+    return {
+      onSave: async (newValue: string, row: BaseListRow) => {
+        await update.mutateAsync({
+          id: row.id,
+          // SAFETY: identityListConfig proves this is the same non-null text
+          // field in the generated entity's update roster.
+          data: identityPatch(identity.titleField, newValue),
+        });
+      },
+    };
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation result objects change every render; mutateAsync is the stable operation port.
+  }, [identity, parts.list?.nameEditable, update.mutateAsync]);
+  const columns = useMemo(() => {
     const declared = createEntityDisplayColumns(entity, helper, overrides, {
       onSaveField: async (row, field, value) => {
         if (!isStandardEntity(entity)) return;
@@ -149,6 +180,9 @@ function useListColumns(
       : declared;
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- mutation result objects change every render; mutateAsync is the stable operation port.
   }, [entity, helper, overrides, compose, update.mutateAsync]);
+  // The generic column collection is kept separate from the identity adapter
+  // so client/custom-source lists can still share the same column compiler.
+  return { columns, identityEditable };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -224,7 +258,11 @@ function ServerListBody({
   // reconstructing its navigation state.
   const searching = Boolean(context.search.searchQuery);
   const renderedView = searching ? "table" : view;
-  const columns = useListColumns(entity, parts);
+  const { columns, identityEditable } = useListColumns(entity, parts, true);
+  const listOptions = useMemo(() => {
+    if (parts.list?.nameEditable || !identityEditable) return parts.list;
+    return { ...parts.list, nameEditable: identityEditable };
+  }, [identityEditable, parts.list]);
   const queryOptions = useMemo((): ListQueryOptionsFn<object, BaseListRow> => {
     if (operations?.list) return operations.list;
     if (parts.source) return parts.source;
@@ -241,7 +279,7 @@ function ServerListBody({
     columns,
     deletable: true,
     preview: DEFAULT_PREVIEW,
-    ...parts.list,
+    ...listOptions,
     filterOptions,
     // SAFETY: the flat and tree overloads only differ in whether `tree` is
     // present; the hook branches on it at runtime.
@@ -387,7 +425,7 @@ function ClientListBody({
   context: ListOverrideContext;
 }) {
   const parts = override.use(context);
-  const columns = useListColumns(entity, parts);
+  const { columns } = useListColumns(entity, parts, false);
   const client = parts.client;
   if (!client)
     throw new Error(`${entity} list override declares no client rows`);

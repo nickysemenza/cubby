@@ -5,12 +5,11 @@ import SwiftUI
 /// editor sections as a grouped `Form`, a photo block for an image-attachable entity, Cancel →
 /// Discard through `DraftDismissalState`, Save gated on `GenericEntityEditModel.canSave`.
 ///
-/// Specialized controls the catalog declares that native does not render (their fields are left
-/// out of the form; the web editor owns them): product `unitMappings`/`labelNutrition`, recipe
-/// `sections`/`yield`/`meta`, meal `recipes`, expense `beneficiaries`/`funders`/`sourceClaims`,
-/// ledger-transfer `sourceClaims`, financial-account `identity`/`sourceAliases`, and
-/// financial-transaction `sourceRefs`. `entity-select`, `amount` and `text-array` render, and the
-/// image keys render through `EntityImageBlock`.
+/// Structured fields the catalog declares that native does not render remain in the web editor
+/// (product `unitMappings`, recipe `sections`/`yield`/`meta`, expense evidence, financial-account
+/// identity, and financial-transaction source refs). Typed generic controls, entity references,
+/// amounts, tags, and vendor names render through `EntityFieldControl`; image keys render through
+/// `EntityImageBlock`.
 struct EntityEditorSheet: View {
     let key: EntityKey
     let mode: GenericEntityEditModel.Mode
@@ -163,8 +162,11 @@ struct EntityEditorSheet: View {
     private func renders(_ field: FieldDescriptor) -> Bool {
         if Self.imageKeys.contains(field.key) { return false }
         guard field.controlKind == .specialized else { return true }
-        if NativePresentationCoverage.unsupportedControl(field) != nil { return false }
-        return field.reference != nil || field.format == "amount" || field.kind == .textArray
+        guard let renderer = field.controlRenderer else { return false }
+        switch NativePresentationCoverage.control(renderer) {
+        case .implemented, .generic: return true
+        case .ownedElsewhere, .unsupported: return false
+        }
     }
 
     /// When the entity records an `observedOn` day and every picked photo was captured on one

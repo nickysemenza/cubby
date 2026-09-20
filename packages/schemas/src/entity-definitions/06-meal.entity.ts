@@ -220,6 +220,7 @@ export default defineEntity({
         // canonical non-null title.
         key: "displayName",
         kind: "text",
+        display: { width: "lg" },
         validation: { read: z.string(), create: null, update: null },
       },
       {

@@ -12,6 +12,10 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import {
+  identityListConfig,
+  identityPatch,
+} from "~/app/_components/entity-list/identity-list-config";
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,
@@ -24,6 +28,7 @@ import {
   productListItem,
 } from "~/entities/generated/entity-lists.gen";
 import { listOverrides } from "~/entities/list-columns";
+import { mealNameUpdate } from "~/entities/list-columns/meal";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
@@ -143,6 +148,55 @@ describe("listPage", () => {
 });
 
 describe("GenericEntityList", () => {
+  it.each([
+    {
+      label: "Vendor name",
+      entity: "vendor" as const,
+      generatedCrud: true,
+      flatRows: true,
+      titleField: "name",
+      canAutoEdit: true,
+    },
+    {
+      label: "Meal display name",
+      entity: "meal" as const,
+      generatedCrud: true,
+      flatRows: true,
+      titleField: "displayName",
+      canAutoEdit: false,
+    },
+    {
+      label: "tree rows",
+      entity: "vendor" as const,
+      generatedCrud: true,
+      flatRows: false,
+      titleField: "name",
+      canAutoEdit: false,
+    },
+    {
+      label: "custom source rows",
+      entity: "vendor" as const,
+      generatedCrud: true,
+      flatRows: false,
+      titleField: "name",
+      canAutoEdit: false,
+    },
+  ])(
+    "$label: derives identity editing only for a flat readable/updateable title field",
+    ({ entity, generatedCrud, flatRows, titleField, canAutoEdit }) => {
+      const config = identityListConfig(entity, { generatedCrud, flatRows });
+      expect(config.titleField).toBe(titleField);
+      expect(config.canAutoEdit).toBe(canAutoEdit);
+    },
+  );
+
+  it("maps derived and explicit identity edits to their stored fields", () => {
+    expect(identityPatch("name", "New vendor")).toEqual({
+      name: "New vendor",
+    });
+    expect(mealNameUpdate("  ")).toEqual({ name: null });
+  });
+
   const meal = mock(mealListItem, {
     overrides: {
       id: testShortcode("meal", "ML-4K7M"),
