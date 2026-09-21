@@ -81,6 +81,7 @@ import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_au
 import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
 import { Route as AuthenticatedPlantingsIndexRouteImport } from './routes/_authenticated/plantings.index'
 import { Route as AuthenticatedPlantingsShortcodeRouteImport } from './routes/_authenticated/plantings.$shortcode'
+import { Route as AuthenticatedPlantingsNewRouteImport } from './routes/_authenticated/plantings.new'
 import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
 import { Route as AuthenticatedProductsShortcodeRouteImport } from './routes/_authenticated/products.$shortcode'
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
@@ -545,6 +546,12 @@ const AuthenticatedPlantingsShortcodeRoute =
     path: '/plantings/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedPlantingsNewRoute =
+  AuthenticatedPlantingsNewRouteImport.update({
+    id: '/plantings/new',
+    path: '/plantings/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProductsIndexRoute =
   AuthenticatedProductsIndexRouteImport.update({
     id: '/products/',
@@ -932,6 +939,7 @@ export interface FileRoutesByFullPath {
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
+  '/plantings/new': typeof AuthenticatedPlantingsNewRoute
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -1062,6 +1070,7 @@ export interface FileRoutesByTo {
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
+  '/plantings/new': typeof AuthenticatedPlantingsNewRoute
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -1195,6 +1204,7 @@ export interface FileRoutesById {
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/_authenticated/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
+  '/_authenticated/plantings/new': typeof AuthenticatedPlantingsNewRoute
   '/_authenticated/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
   '/_authenticated/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -1328,6 +1338,7 @@ export interface FileRouteTypes {
     | '/meals/shopping-list'
     | '/meals/suggestions'
     | '/plantings/$shortcode'
+    | '/plantings/new'
     | '/products/$shortcode'
     | '/products/new'
     | '/projects/$shortcode'
@@ -1458,6 +1469,7 @@ export interface FileRouteTypes {
     | '/meals/shopping-list'
     | '/meals/suggestions'
     | '/plantings/$shortcode'
+    | '/plantings/new'
     | '/products/$shortcode'
     | '/products/new'
     | '/projects/$shortcode'
@@ -1590,6 +1602,7 @@ export interface FileRouteTypes {
     | '/_authenticated/meals/shopping-list'
     | '/_authenticated/meals/suggestions'
     | '/_authenticated/plantings/$shortcode'
+    | '/_authenticated/plantings/new'
     | '/_authenticated/products/$shortcode'
     | '/_authenticated/products/new'
     | '/_authenticated/projects/$shortcode'
@@ -2203,6 +2216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlantingsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/plantings/new': {
+      id: '/_authenticated/plantings/new'
+      path: '/plantings/new'
+      fullPath: '/plantings/new'
+      preLoaderRoute: typeof AuthenticatedPlantingsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/products/': {
       id: '/_authenticated/products/'
       path: '/products'
@@ -2658,6 +2678,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
   AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
   AuthenticatedPlantingsShortcodeRoute: typeof AuthenticatedPlantingsShortcodeRoute
+  AuthenticatedPlantingsNewRoute: typeof AuthenticatedPlantingsNewRoute
   AuthenticatedProductsShortcodeRoute: typeof AuthenticatedProductsShortcodeRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
   AuthenticatedProjectsShortcodeRoute: typeof AuthenticatedProjectsShortcodeRoute
@@ -2765,6 +2786,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,
   AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,
   AuthenticatedPlantingsShortcodeRoute: AuthenticatedPlantingsShortcodeRoute,
+  AuthenticatedPlantingsNewRoute: AuthenticatedPlantingsNewRoute,
   AuthenticatedProductsShortcodeRoute: AuthenticatedProductsShortcodeRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
   AuthenticatedProjectsShortcodeRoute: AuthenticatedProjectsShortcodeRoute,

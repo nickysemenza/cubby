@@ -489,6 +489,49 @@ history is the archive. Permanent product constraints live in the
   telemetry storage and queue consumers compatibly before new producers; the
   current lightweight tracing does not require this migration.
 
+- **Cluster and reproduce the native app-hang corpus before changing code.**
+  Collect sanitized release, duration, foreground state, and the top symbolicated
+  main-thread frames for each Sentry family; group by shared app frames rather
+  than issue id. Reproduce each surviving family in a Release build without
+  LLDB and use Time Profiler for busy-main-thread work or System Trace for
+  waits/locks. Keep hang tracking enabled and make one repair per demonstrated
+  root cause rather than treating repeated samples as independent bugs.
+
+- **Make generated native response decoding forward-compatible.** The current
+  image-detail failure may be either a missing required `useOriginal` field or
+  an older strict client rejecting additive representation fields. Capture the
+  sanitized decoding path first, then fix the generator so output projections
+  tolerate additive server fields while request/input schemas remain strict;
+  keep this lane exclusive over OpenAPI and generated Swift, and deploy the
+  backward-compatible server behavior before distributing the client.
+
+- **Reproduce macOS photo-match export inside the sandbox.** Capture the
+  underlying error chain and sandbox denial for Downloads, Desktop, and an
+  iCloud Drive/file-provider destination before choosing between exact-file
+  authorization, coordinated writes, or per-file copying. Keep the existing
+  user-selected entitlement; do not add broad access or persistent bookmarks
+  for an immediate export.
+
+- **Validate image bytes before AI description.** The image-description path
+  hands a Cloudflare rendition URL to the provider without proving that the
+  response is decodable image content. First confirm the gateway adapter's
+  supported binary input shape, then validate MIME, magic bytes, and bounded
+  size at the outbound boundary so transformation error bodies never reach the
+  model and the durable image job records a truthful failure.
+
+- **Capture exact runtime error shapes before broadening suppression.** The
+  remaining client-disconnected cancellation, missing update-result, opaque
+  database failure, and pathological LIKE/GLOB reports need sanitized
+  name/message/stack/route evidence and an event-shaped regression test before
+  changing global filters or contracts. Archive expected noise only after the
+  narrow classifier is proved; do not hide unrelated transport or query errors.
+
+- **Audit legacy Product external-id kinds after compatibility lands.** Keep
+  writes on the canonical enum and let reads preserve service by projecting an
+  unknown stored kind as `legacy_unspecified`; separately inspect distinct
+  production values and migrate only aliases whose intended canonical kind is
+  provable. Do not rewrite ambiguous identifiers just to empty the worklist.
+
 - **Merge redirects.** A merged-away shortcode in a URL, note, or MCP
   client resolves to nothing today; `finalizeMerge` records no forward.
   This is now part of the durable identity plan above: `Entity.mergedIntoId`

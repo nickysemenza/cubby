@@ -34,6 +34,14 @@ export const externalIdKind = z.enum([
 ]);
 export type ExternalIdKind = z.infer<typeof externalIdKind>;
 
+/**
+ * Read compatibility for identifier rows written before the current kind
+ * vocabulary. Writes continue to use `externalIdKind`, so unknown values
+ * cannot enter through current contracts.
+ */
+export const persistedExternalIdKind = (value: unknown): ExternalIdKind =>
+  externalIdKind.safeParse(value).data ?? "legacy_unspecified";
+
 export const GTIN_SOURCE = "gtin";
 
 export const GTIN_KIND = "gtin_14" satisfies ExternalIdKind;

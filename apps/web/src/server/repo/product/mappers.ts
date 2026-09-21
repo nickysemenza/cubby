@@ -1,8 +1,8 @@
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import {
   canonicalExternalIdUrl,
-  externalIdKind,
   GTIN_SOURCE,
+  persistedExternalIdKind,
 } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
@@ -95,9 +95,7 @@ export const mapProductExternalIds = (
   (externalIds ?? [])
     .filter((externalId) => externalId.deletedAt === null)
     .map((externalId) => {
-      const kind = externalIdKind.parse(
-        externalId.kind ?? "legacy_unspecified",
-      );
+      const kind = persistedExternalIdKind(externalId.kind);
       return {
         id: externalId.id,
         source: externalId.source,

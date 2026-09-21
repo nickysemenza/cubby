@@ -9,7 +9,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type ExternalIdKind,
-  externalIdKind,
+  persistedExternalIdKind,
 } from "@cubby/schemas/external-id";
 import {
   type InventoryId,
@@ -818,7 +818,7 @@ async function buildProductMergePlan(
   ).map((row): ExternalIdRow => ({
     ...row,
     productId: parseEntityId("product", row.productId),
-    kind: externalIdKind.parse(row.kind),
+    kind: persistedExternalIdKind(row.kind),
   }));
   const imageRows = (
     await db.query.productImage.findMany({

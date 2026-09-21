@@ -212,6 +212,19 @@ const deletedLocation = {
 };
 
 describe("product mappers", () => {
+  it("keeps list and detail reads available for a retired persisted identifier kind", () => {
+    const result = dbProductToTopLevelAPI({
+      ...baseProduct,
+      dataQuality: completeDataQuality,
+      images: [],
+      externalIds: [{ ...activeExternalId, kind: "retired_kind" }],
+    });
+
+    expect(result.externalIds).toMatchObject([
+      { kind: "legacy_unspecified", externalId: "B000000001" },
+    ]);
+  });
+
   it("maps top-level products exactly and filters soft-deleted relations", () => {
     const result = dbProductToTopLevelAPI({
       ...baseProduct,
