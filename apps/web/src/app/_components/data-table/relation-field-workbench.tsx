@@ -119,7 +119,12 @@ function RelatedRecords({
   );
 }
 
-/** Adds lazy inspection only when provenance names an executable relation. */
+/**
+ * Adds lazy inspection only when provenance names an executable relation.
+ * The summary is whatever the column renders — entity links, an inline edit
+ * trigger, a quick-edit pencil — so the workbench control sits beside it
+ * rather than around it.
+ */
 export function RelationFieldWorkbench({
   sourceEntity,
   sourceId,
@@ -145,6 +150,7 @@ export function RelationFieldWorkbench({
       title="Related records"
       description={description}
       summary={summary}
+      trigger="icon"
     >
       <RelatedRecords
         sourceEntity={sourceEntity}

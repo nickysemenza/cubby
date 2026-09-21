@@ -1,6 +1,9 @@
+import { Network } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 
+import { Row } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -15,7 +18,10 @@ function stopRowInteraction(event: MouseEvent<HTMLButtonElement>) {
   event.stopPropagation();
 }
 
-function WorkbenchTrigger({
+const inspectLabel = (title: string) => `Inspect ${title.toLocaleLowerCase()}`;
+
+/** The whole summary is the control. Only valid when the summary is inert. */
+function SummaryTrigger({
   title,
   summary,
   onClick,
@@ -27,7 +33,7 @@ function WorkbenchTrigger({
   return (
     <button
       type="button"
-      aria-label={`Inspect ${title.toLocaleLowerCase()}`}
+      aria-label={inspectLabel(title)}
       className="inline-flex min-h-7 max-w-full items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-11"
       onClick={(event) => {
         stopRowInteraction(event);
@@ -40,16 +46,41 @@ function WorkbenchTrigger({
 }
 
 /**
+ * Icon-only control beside the summary, styled like the inventory cell's
+ * quick-edit pencil so the two read as one family of cell affordances. Spread
+ * onto a `Button` (also as a Base UI `render` element, which merges its own
+ * handlers with `onClick`).
+ */
+const iconTriggerProps = (title: string) => ({
+  size: "icon" as const,
+  variant: "ghost" as const,
+  className:
+    "size-5 shrink-0 opacity-40 transition-opacity group-hover/workbench:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+  "aria-label": inspectLabel(title),
+  onClick: stopRowInteraction,
+});
+
+const iconTriggerGlyph = <Network className="size-3 text-muted-foreground" />;
+
+/**
  * A dense table-cell entry point for evidence that belongs to related rows.
  * The body mounts only while open so a list does not start one relation query
  * per visible row. Desktop keeps the context beside the cell; phones use a
  * bottom sheet with the platform's 44px trigger floor.
+ *
+ * `trigger` picks what is clickable. `"summary"` wraps the summary in the
+ * control and is only valid for inert content (a status pill). A summary that
+ * carries its own links, edit trigger, or buttons must use `"icon"`, which
+ * renders the summary as a sibling of an icon-only control: interactive
+ * content inside a `<button>` is invalid HTML and React reports it as a
+ * hydration error.
  */
 export function TableCellWorkbench({
   title,
   description,
   summary,
   children,
+  trigger = "summary",
   open: controlledOpen,
   onOpenChange,
 }: {
@@ -57,6 +88,7 @@ export function TableCellWorkbench({
   description?: string;
   summary: ReactNode;
   children: ReactNode;
+  trigger?: "summary" | "icon";
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -71,11 +103,26 @@ export function TableCellWorkbench({
   if (isMobile) {
     return (
       <>
-        <WorkbenchTrigger
-          title={title}
-          summary={summary}
-          onClick={() => setOpen(true)}
-        />
+        {trigger === "icon" ? (
+          <Row align="center" gap="xs" className="group/workbench min-w-0">
+            <span className="min-w-0">{summary}</span>
+            <Button
+              {...iconTriggerProps(title)}
+              onClick={(event) => {
+                stopRowInteraction(event);
+                setOpen(true);
+              }}
+            >
+              {iconTriggerGlyph}
+            </Button>
+          </Row>
+        ) : (
+          <SummaryTrigger
+            title={title}
+            summary={summary}
+            onClick={() => setOpen(true)}
+          />
+        )}
         <ResponsiveSheet
           open={open}
           onOpenChange={setOpen}
@@ -89,13 +136,20 @@ export function TableCellWorkbench({
     );
   }
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
+  const popoverTrigger =
+    trigger === "icon" ? (
+      <Row align="center" gap="xs" className="group/workbench min-w-0">
+        <span className="min-w-0">{summary}</span>
+        <PopoverTrigger render={<Button {...iconTriggerProps(title)} />}>
+          {iconTriggerGlyph}
+        </PopoverTrigger>
+      </Row>
+    ) : (
       <PopoverTrigger
         render={
           <button
             type="button"
-            aria-label={`Inspect ${title.toLocaleLowerCase()}`}
+            aria-label={inspectLabel(title)}
             className="inline-flex min-h-7 max-w-full items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
             onClick={stopRowInteraction}
           />
@@ -103,6 +157,11 @@ export function TableCellWorkbench({
       >
         {summary}
       </PopoverTrigger>
+    );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      {popoverTrigger}
       <PopoverContent
         align="start"
         className="w-[min(42rem,calc(100vw-2rem))] p-0"
