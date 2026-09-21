@@ -8,6 +8,10 @@ test("public home renders and protected detail redirects before rendering", asyn
 
   await page.goto("/products/PRD-2222");
   await expect(page).toHaveURL(/\/auth\/sign-in/);
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+  await expect(page.locator('input[type="password"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: /google/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /passkey/i })).toHaveCount(0);
 });
 
 test("footer metadata is server rendered and reused across client navigation", async ({

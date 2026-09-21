@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { request as apiRequest } from "@playwright/test";
 import { z } from "zod";
 import { Pool } from "pg";
@@ -10,6 +11,7 @@ const keyResult = z.object({
   referenceId: z.string(),
 });
 const entityCreated = z.object({ item: z.object({ id: z.string() }) });
+const nativeTransfer = z.object({ electron_authorization_code: z.string() });
 
 test("API keys execute typed operations, preserve validation, and revoke immediately", async ({
   page,
@@ -380,6 +382,91 @@ test("bearer tokens authenticate a cookie-less native client", async ({
     ).toBe(401);
   } finally {
     await login.dispose();
+    await native.dispose();
+  }
+});
+
+test("native handoff exchanges PKCE once for a signed API session", async ({
+  page,
+  baseURL,
+}) => {
+  const cookieless = { baseURL, storageState: { cookies: [], origins: [] } };
+  const exchange = await apiRequest.newContext(cookieless);
+  const native = await apiRequest.newContext(cookieless);
+  const origin = { Origin: "cubby-mobile://" };
+  const verifier = randomBytes(32).toString("base64url");
+  const state = randomBytes(32).toString("base64url");
+  const params = new URLSearchParams({
+    client_id: "cubby-native",
+    state,
+    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    code_challenge_method: "S256",
+  });
+  const createCode = async () => {
+    const response = await page.request.post(
+      `/api/auth/electron/transfer-user?${params}`,
+      { headers: { Origin: baseURL! }, data: {} },
+    );
+    expect(response.status(), await response.text()).toBe(200);
+    return nativeTransfer.parse(await response.json())
+      .electron_authorization_code;
+  };
+  let signedToken: string | undefined;
+  try {
+    const token = await createCode();
+    const body = { token, state, code_verifier: verifier };
+    const response = await exchange.post("/api/auth/electron/token", {
+      headers: origin,
+      data: body,
+    });
+    expect(response.status(), await response.text()).toBe(200);
+    signedToken = response.headers()["set-auth-token"];
+    expect(signedToken).toMatch(/^\S+\.\S+$/u);
+
+    // A separate cookie-less context proves the plugin's signed header, not
+    // the exchange response's ambient cookies, authenticates the native API.
+    const read = await native.get("/api/v1/recipes", {
+      headers: { Authorization: `Bearer ${signedToken}` },
+      params: { page: "1", pageSize: "1" },
+    });
+    expect(read.status(), await read.text()).toBe(200);
+    const rawToken = z
+      .object({ token: z.string() })
+      .parse(await response.json()).token;
+    expect(
+      (
+        await native.get("/api/v1/recipes", {
+          headers: { Authorization: `Bearer ${rawToken}` },
+        })
+      ).status(),
+    ).toBe(401);
+    expect(
+      (
+        await exchange.post("/api/auth/electron/token", {
+          headers: origin,
+          data: body,
+        })
+      ).status(),
+    ).toBe(404);
+
+    const wrongVerifier = await exchange.post("/api/auth/electron/token", {
+      headers: origin,
+      data: {
+        token: await createCode(),
+        state,
+        code_verifier: randomBytes(32).toString("base64url"),
+      },
+    });
+    expect(wrongVerifier.status()).toBe(400);
+    expect(wrongVerifier.headers()["set-auth-token"]).toBeUndefined();
+  } finally {
+    if (signedToken) {
+      await native.post("/api/auth/sign-out", {
+        headers: { ...origin, Authorization: `Bearer ${signedToken}` },
+        data: {},
+      });
+    }
+    await exchange.dispose();
     await native.dispose();
   }
 });

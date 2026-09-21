@@ -10,10 +10,12 @@ import { Link as TanStackLink, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import superjson from "superjson";
+import { z } from "zod";
 
 import { authClient } from "~/lib/auth-client";
 import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
 import { getErrorMessage } from "~/lib/error-utils";
+import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 
 import {
   EMPTY_INVALIDATION_TAG_SET,
@@ -45,6 +47,23 @@ const Link = ({
     {children}
   </TanStackLink>
 );
+
+const googleSignInParams = z.object({
+  provider: z.literal("google"),
+  callbackURL: z.string().optional(),
+});
+
+const signInWithGoogle = (params: unknown) => {
+  const parsed = googleSignInParams.parse(params);
+  return authClient.signIn.social({
+    provider: "google",
+    callbackURL: parsed.callbackURL,
+    errorCallbackURL: "/auth/sign-in?google_error=true",
+    fetchOptions: { throw: true },
+    requestSignUp: false,
+    scopes: [GMAIL_READONLY_SCOPE],
+  });
+};
 
 // React Query fires these cache error callbacks from inside its notify cycle,
 // which can land during React's render/commit phase (e.g. a background query
@@ -149,7 +168,10 @@ export function Provider({
         navigate={(href) => navigate({ to: href })}
         replace={(href) => navigate({ to: href, replace: true })}
         Link={Link}
-        passkey
+        social={{
+          providers: ["google"],
+          signIn: signInWithGoogle,
+        }}
         apiKey={{ prefix: "cubby_" }}
         signUp={false}
         toast={({ variant, message }) => {

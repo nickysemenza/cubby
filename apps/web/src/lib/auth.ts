@@ -1,21 +1,23 @@
 import { apiKey } from "@better-auth/api-key";
+import { electron } from "@better-auth/electron";
 import { oauthProvider } from "@better-auth/oauth-provider";
-import { passkey } from "@better-auth/passkey";
 import { betterAuth, type BetterAuthAdvancedOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { bearer, jwt, openAPI } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { and, eq } from "drizzle-orm";
 
 import { env } from "~/env";
 import { drizzle } from "~/server/db";
 import * as schema from "~/server/db/auth.schema";
 
+import { MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "./auth-constants";
 import {
-  APP_ORIGIN,
-  MCP_RESOURCE,
-  OAUTH_ISSUER,
-  OAUTH_SCOPES,
-} from "./auth-constants";
+  authorizeGoogleUserInfo,
+  isGoogleIdTokenOnlyRequest,
+} from "./google-auth";
+import { GMAIL_READONLY_SCOPE } from "./google-auth-constants";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -55,12 +57,52 @@ function oauthProviderWithRequestScopedResourceSeed(
   };
 }
 
+async function getAuthorizedGoogleUserInfo(
+  tokens: Parameters<typeof authorizeGoogleUserInfo>[0],
+  clientId: string,
+) {
+  return authorizeGoogleUserInfo(
+    tokens,
+    clientId,
+    async (accountId) => {
+      const [existingAccount] = await drizzle
+        .select({
+          id: schema.account.id,
+          refreshToken: schema.account.refreshToken,
+          scope: schema.account.scope,
+        })
+        .from(schema.account)
+        .where(
+          and(
+            eq(schema.account.providerId, "google"),
+            eq(schema.account.accountId, accountId),
+          ),
+        )
+        .limit(1);
+      return existingAccount
+        ? {
+            id: existingAccount.id,
+            hasRefreshToken: Boolean(existingAccount.refreshToken),
+            scopes: existingAccount.scope?.split(",") ?? [],
+          }
+        : null;
+    },
+    async (id, scopes) => {
+      // Better Auth intentionally omits scopes from returning social sign-in
+      // updates, so persist Google's fresh authoritative grant here.
+      await drizzle
+        .update(schema.account)
+        .set({ scope: scopes.join(",") })
+        .where(eq(schema.account.id, id));
+    },
+  );
+}
+
 // Preview deploys (`wrangler versions upload`) each get a unique host, so a
 // host-only session cookie forces a fresh login on every preview. CI injects
 // COOKIE_DOMAIN via `--var` on preview uploads (see preview-cf.yaml); scoping
 // the cookie to the configured preview suffix means one login carries to all
-// previews. Unset in prod, which keeps a host-only cookie. Passkeys remain
-// bound to the production WebAuthn RP; this only covers the session.
+// previews. Unset in prod, which keeps a host-only cookie.
 const previewCookieDomain = env.COOKIE_DOMAIN;
 
 const advancedOptions: BetterAuthAdvancedOptions = {};
@@ -92,6 +134,25 @@ export const auth = betterAuth({
     // Personal instance: signup closed. Set ALLOW_SIGNUP=true temporarily to
     // open it (e.g. adding a second account), then unset.
     disableSignUp: env.ALLOW_SIGNUP !== "true",
+  },
+  account: {
+    accountLinking: {
+      trustedProviders: ["google"],
+      // Google verifies the address in getGoogleUserInfo. The two existing
+      // household users predate local email verification, so that verified
+      // provider address is the ownership proof for the initial link.
+      requireLocalEmailVerified: false,
+    },
+  },
+  hooks: {
+    before: createAuthMiddleware(async (context) => {
+      if (isGoogleIdTokenOnlyRequest(context.path, context.body)) {
+        throw new APIError("BAD_REQUEST", {
+          code: "GOOGLE_AUTHORIZATION_CODE_REQUIRED",
+          message: "Google sign-in requires the full authorization flow.",
+        });
+      }
+    }),
   },
   // The E2E harness intentionally runs the production Worker artifact, where
   // Better Auth otherwise applies its process-local request limit to every
@@ -132,11 +193,6 @@ export const auth = betterAuth({
       enableSessionForAPIKeys: false,
       rateLimit: { enabled: false },
     }),
-    passkey({
-      rpID: isDev ? "localhost" : "cubby.nickysemenza.com",
-      rpName: "Cubby",
-      origin: isDev ? "http://localhost:3000" : APP_ORIGIN,
-    }),
     // Signs OAuth access tokens (and publishes JWKS at /api/auth/jwks) so
     // /api/mcp can verify them locally without a round trip to the DB.
     //
@@ -164,6 +220,7 @@ export const auth = betterAuth({
     // Scalar reference for the auth surface. Dev-only UI: the JSON schema
     // endpoint (/api/auth/open-api/generate-schema) stays available in both.
     openAPI(isDev ? {} : { disableDefaultReference: true }),
+    electron({ clientID: "cubby-native" }),
     // Native clients (the Swift app) cannot hold ambient cookies. After a
     // sign-in the plugin echoes the session cookie's value in a
     // `set-auth-token` response header; the client then sends it back as
@@ -187,9 +244,8 @@ export const auth = betterAuth({
   // In prod, trust the mobile scheme plus per-PR preview deploys (see
   // preview-cf.yaml). The wildcard is scoped to our account subdomain —
   // better-auth's `*` doesn't cross `/`, so this only widens the auth-origin
-  // (CSRF) surface to those Workers. Passkeys remain bound to the production
-  // WebAuthn RP; email/password works on previews. The custom domain is trusted
-  // automatically as the baseURL.
+  // (CSRF) surface to those Workers. Email/password works on previews. The
+  // custom domain is trusted automatically as the baseURL.
   trustedOrigins: isDev
     ? (request) => {
         const base = [
@@ -210,8 +266,11 @@ export const auth = betterAuth({
             clientId: env.GOOGLE_CLIENT_ID,
             clientSecret: env.GOOGLE_CLIENT_SECRET,
             accessType: "offline",
-            scope: ["https://www.googleapis.com/auth/gmail.readonly"],
-            disableImplicitSignUp: true,
+            prompt: "consent",
+            scope: [GMAIL_READONLY_SCOPE],
+            disableSignUp: true,
+            getUserInfo: (tokens) =>
+              getAuthorizedGoogleUserInfo(tokens, env.GOOGLE_CLIENT_ID!),
           },
         }
       : {},

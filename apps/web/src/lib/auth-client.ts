@@ -1,6 +1,6 @@
 import { apiKeyClient } from "@better-auth/api-key/client";
+import { electronProxyClient } from "@better-auth/electron/proxy";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
-import { passkeyClient } from "@better-auth/passkey/client";
 import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({
@@ -9,7 +9,15 @@ export const authClient = createAuthClient({
   // `oauth_query` out of window.location.search into every non-GET auth
   // request, which is what carries authorize-flow state through the sign-in
   // and consent screens.
-  plugins: [oauthProviderClient(), passkeyClient(), apiKeyClient()],
+  plugins: [
+    oauthProviderClient(),
+    electronProxyClient({
+      clientID: "cubby-native",
+      protocol: "cubby",
+      callbackPath: "/auth/callback",
+    }),
+    apiKeyClient(),
+  ],
   fetchOptions: {
     onRequest(context) {
       // The installed account UI omits configId; scope every management request.

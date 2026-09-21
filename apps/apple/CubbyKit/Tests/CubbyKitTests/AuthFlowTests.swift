@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Synchronization
 import Testing
@@ -59,6 +60,33 @@ struct AuthFlowTests {
 
     private func resetHandlerAfterTest() {
         AuthStubURLProtocol.handler.withLock { $0 = nil }
+    }
+
+    private func googleCallback(identifier: String, state: String) throws -> URL {
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "identifier": identifier,
+            "state": state,
+        ])
+        let token = payload.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return try #require(URL(string: "cubby://auth/callback#token=\(token)"))
+    }
+
+    private static func requestBody(_ request: URLRequest) throws -> Data {
+        if let body = request.httpBody { return body }
+        let stream = try #require(request.httpBodyStream)
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeRawData) }
+            if count == 0 { return data }
+            data.append(contentsOf: buffer.prefix(count))
+        }
     }
 
     @Test func signInStoresTheBearerToken() async throws {
@@ -158,6 +186,124 @@ struct AuthFlowTests {
         await #expect(throws: AuthError.rateLimited) {
             _ = try await flow.signIn(email: "nicky@example.com", password: "hunter2")
         }
+    }
+
+    @Test func googleSignInExchangesPKCETransferForSignedBearer() async throws {
+        defer { resetHandlerAfterTest() }
+        let authorizationQuery = Mutex<[String: String]?>(nil)
+        AuthStubURLProtocol.handler.withLock { handler in
+            handler = { request in
+                #expect(request.url?.path() == "/api/auth/electron/token")
+                #expect(request.httpMethod == "POST")
+                #expect(request.value(forHTTPHeaderField: "Origin") == "cubby-mobile://")
+
+                let body = (try? Self.requestBody(request)).flatMap {
+                    (try? JSONSerialization.jsonObject(with: $0)) as? [String: String]
+                }
+                #expect(body?["token"] == "transfer-identifier")
+                let query = authorizationQuery.withLock { $0 }
+                #expect(body?["state"] == query?["state"])
+                let verifier = body?["code_verifier"] ?? ""
+                #expect(!verifier.isEmpty)
+                let challenge = Data(SHA256.hash(data: Data(verifier.utf8)))
+                    .base64EncodedString()
+                    .replacingOccurrences(of: "+", with: "-")
+                    .replacingOccurrences(of: "/", with: "_")
+                    .replacingOccurrences(of: "=", with: "")
+                #expect(challenge == query?["code_challenge"])
+                return (
+                    200,
+                    [
+                        "set-auth-token": "signed-session-token",
+                        "Set-Cookie": "better-auth.session_data=signed-cache; Path=/; HttpOnly",
+                    ],
+                    Data(#"{"token":"raw-session-token","user":{}}"#.utf8)
+                )
+            }
+        }
+        let (flow, credentials) = try makeFlow()
+
+        let credential = try await flow.signInWithGoogle { url in
+            let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+            #expect(components.path == "/auth/native")
+            let query = Dictionary(
+                uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
+                    item.value.map { (item.name, $0) }
+                })
+            authorizationQuery.withLock { $0 = query }
+            #expect(query["code_challenge_method"] == "S256")
+            return try googleCallback(
+                identifier: "transfer-identifier", state: try #require(query["state"])
+            )
+        }
+
+        #expect(credential == .bearer("signed-session-token"))
+        #expect(await credentials.current() == .bearer("signed-session-token"))
+        #expect(
+            await credentials.currentState()?.sessionDataCookies == [
+                "better-auth.session_data": "signed-cache"
+            ]
+        )
+    }
+
+    @Test func googleSignInRejectsMismatchedStateBeforeExchange() async throws {
+        defer { resetHandlerAfterTest() }
+        let (flow, credentials) = try makeFlow()
+
+        await #expect(throws: AuthError.stateMismatch) {
+            _ = try await flow.signInWithGoogle { _ in
+                try googleCallback(identifier: "transfer-identifier", state: "wrong-state")
+            }
+        }
+
+        #expect(await credentials.current() == nil)
+    }
+
+    @Test func googleSignInCancellationLeavesCredentialUntouched() async throws {
+        defer { resetHandlerAfterTest() }
+        let (flow, credentials) = try makeFlow()
+
+        await #expect(throws: AuthError.cancelled) {
+            _ = try await flow.signInWithGoogle { _ in throw AuthError.cancelled }
+        }
+
+        #expect(await credentials.current() == nil)
+    }
+
+    @Test func googleSignInDoesNotRestoreSupersededAuthentication() async throws {
+        defer { resetHandlerAfterTest() }
+        AuthStubURLProtocol.handler.withLock { handler in
+            handler = { _ in
+                (200, ["set-auth-token": "late-token"], Data(#"{"token":"raw"}"#.utf8))
+            }
+        }
+        let (flow, credentials) = try makeFlow()
+
+        await #expect(throws: AuthError.superseded) {
+            _ = try await flow.signInWithGoogle { url in
+                await credentials.invalidate()
+                let components = try #require(
+                    URLComponents(url: url, resolvingAgainstBaseURL: false))
+                let state = try #require(
+                    components.queryItems?.first(where: { $0.name == "state" })?.value)
+                return try googleCallback(identifier: "transfer-identifier", state: state)
+            }
+        }
+
+        #expect(await credentials.current() == nil)
+    }
+
+    @Test func googleSignInRejectsMalformedCallback() async throws {
+        defer { resetHandlerAfterTest() }
+        let (flow, credentials) = try makeFlow()
+
+        await #expect(throws: AuthError.invalidCallback) {
+            _ = try await flow.signInWithGoogle { _ in
+                URL(string: "cubby://auth/callback#token=not-json")!
+            }
+        }
+
+        #expect(await credentials.current() == nil)
     }
 
     @Test func signOutClearsTheCredentialOnSuccess() async throws {

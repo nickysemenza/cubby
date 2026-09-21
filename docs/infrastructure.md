@@ -319,6 +319,23 @@ Better Auth stores the resulting per-member access and refresh tokens encrypted
 in its `account` table. Cubby requests read-only Gmail access and does not store
 Google passwords.
 
+Google sign-in on the web and Apple apps uses this same OAuth client and
+requires the Gmail read-only grant. It only signs in existing Cubby users:
+verified Google email can link to the matching existing household account,
+but Google cannot create a new user. Password login remains available and
+public signup remains closed. Reconnecting Google from Settings renews Gmail
+consent; disconnecting Google removes both Google login and Gmail access.
+
+The Apple apps use `ASWebAuthenticationSession` with `/auth/native`, backed by
+the server and browser-proxy exports of `@better-auth/electron` (no Electron
+runtime). The `cubby-native` client uses PKCE and the existing
+`cubby://auth/callback` scheme. Its single-use code is exchanged at
+`/api/auth/electron/token`; native clients persist the signed `set-auth-token`
+header, never the raw token in the JSON response. Both password and Google
+login use the same Keychain/session completion. This reuses the production
+Google callback above; it does not require separate iOS or macOS OAuth clients.
+Local and preview environments retain password login.
+
 ## AI providers
 
 Production calls use the Workers AI Gateway binding and gateway `cubby`.

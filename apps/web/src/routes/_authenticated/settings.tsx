@@ -33,6 +33,8 @@ import { StatusText } from "~/components/ui/status-text";
 import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
+import { hasGmailReadonlyScope } from "~/lib/google-auth";
+import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { pageTitle } from "~/lib/page-title";
 import { purchaseImportAgentOAuthStatus } from "~/lib/purchase-import-run-detail";
 import { formatCurrency } from "~/lib/utils";
@@ -530,7 +532,7 @@ function GmailAccessCard() {
   const googleAccount = accounts.data?.find(
     (account) => account.providerId === "google",
   );
-  const connected = Boolean(googleAccount);
+  const connected = hasGmailReadonlyScope(googleAccount?.scopes);
   const [busy, setBusy] = useState(false);
 
   const connect = async () => {
@@ -538,7 +540,7 @@ function GmailAccessCard() {
     const result = await authClient.linkSocial({
       provider: "google",
       callbackURL: "/settings",
-      scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+      scopes: [GMAIL_READONLY_SCOPE],
     });
     if (result.error) {
       toast.error(result.error.message || "Gmail could not be connected.");
@@ -554,7 +556,7 @@ function GmailAccessCard() {
     if (result.error) {
       toast.error(result.error.message || "Gmail could not be disconnected.");
     } else {
-      toast.success("Gmail disconnected");
+      toast.success("Google and Gmail disconnected");
       await accounts.refetch();
     }
     setBusy(false);
@@ -573,8 +575,10 @@ function GmailAccessCard() {
             <CardTitle>Purchase email</CardTitle>
             <CardDescription>
               {connected
-                ? "Gmail is connected read-only for order discovery and receipt attachments."
-                : "Connect Gmail read-only so Cubby can match order mail to statement charges."}
+                ? "Google sign-in and read-only Gmail access are connected for order discovery and receipt attachments."
+                : googleAccount
+                  ? "Google is linked, but read-only Gmail access is missing. Reconnect to restore order matching."
+                  : "Connect Google and read-only Gmail so Cubby can sign you in and match order mail to statement charges."}
             </CardDescription>
           </Stack>
           <Button
@@ -584,7 +588,13 @@ function GmailAccessCard() {
             onClick={() => void (connected ? disconnect() : connect())}
           >
             <Mail className="size-4" />
-            {busy ? "Working…" : connected ? "Disconnect" : "Connect Gmail"}
+            {busy
+              ? "Working…"
+              : connected
+                ? "Disconnect Google & Gmail"
+                : googleAccount
+                  ? "Reconnect Google & Gmail"
+                  : "Connect Google & Gmail"}
           </Button>
         </Row>
       </CardHeader>
