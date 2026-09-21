@@ -22,6 +22,7 @@ required=(
   IOS_PROFILES_JSON
   MACOS_PROFILES_JSON
   TESTFLIGHT_OUTPUT_DIR
+  MAC_INSTALLER_SIGNING_CERTIFICATE
 )
 if [[ "$mode" == "upload" ]]; then
   required+=(ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID)
@@ -119,7 +120,10 @@ write_export_options() {
 readonly ios_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-iOS.plist"
 readonly macos_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-macOS.plist"
 write_export_options "$ios_export_options" "$ios_profile_uuid"
-write_export_options "$macos_export_options" "$macos_profile_uuid" "Mac Installer Distribution"
+write_export_options \
+  "$macos_export_options" \
+  "$macos_profile_uuid" \
+  "$MAC_INSTALLER_SIGNING_CERTIFICATE"
 
 archive_platform() {
   local scheme="$1"

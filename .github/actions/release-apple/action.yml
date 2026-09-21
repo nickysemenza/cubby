@@ -125,6 +125,16 @@ runs:
           echo "::error::The imported p12 does not contain a Mac Installer Distribution certificate."
           exit 1
         }
+        installer_certificate_sha="$(
+          sed -nE \
+            '/"(Mac Installer Distribution|3rd Party Mac Developer Installer): /s/^[[:space:]]*[0-9]+\) ([0-9A-F]{40}) .*/\1/p' \
+            <<< "$all_identities"
+        )"
+        [[ "$installer_certificate_sha" =~ ^[0-9A-F]{40}$ ]] || {
+          echo "::error::Expected exactly one Mac Installer Distribution identity."
+          exit 1
+        }
+        echo "MAC_INSTALLER_SIGNING_CERTIFICATE=$installer_certificate_sha" >> "$GITHUB_ENV"
 
     - name: Download iOS App Store profile
       id: ios-profiles
