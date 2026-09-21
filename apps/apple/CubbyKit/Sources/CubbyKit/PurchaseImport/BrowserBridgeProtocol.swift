@@ -77,8 +77,14 @@ extension BrowserCapturedLink {
 }
 
 extension BrowserCapturedImage {
-    public init(url: URL, alt: String?) {
+    public init(
+        url: URL, alt: String?, naturalWidth: Int? = nil, naturalHeight: Int? = nil,
+        highResolutionURL: URL? = nil
+    ) {
         self.init(url: url.absoluteString, alt: alt)
+        self.naturalWidth = naturalWidth
+        self.naturalHeight = naturalHeight
+        highResolutionUrl = highResolutionURL?.absoluteString
     }
 }
 
@@ -86,10 +92,17 @@ extension BrowserPageCapture {
     public init(
         sourceURL: URL, title: String, capturedAt: Date, captureVersion: Int, readableText: String,
         links: [BrowserCapturedLink], images: [BrowserCapturedImage],
-        paymentEvidence: [BrowserPaymentEvidence] = [], evidence: [BrowserEvidenceReference] = []
+        paymentEvidence: [BrowserPaymentEvidence] = [], evidence: [BrowserEvidenceReference] = [],
+        canonicalURL: URL? = nil, requestedAmazonASIN: String? = nil,
+        servedAmazonASIN: String? = nil, variantMarkers: [String] = []
     ) {
         self.init(
-            sourceURL: sourceURL.absoluteString, title: String(title.prefix(500)),
+            sourceURL: sourceURL.absoluteString,
+            canonicalUrl: canonicalURL?.absoluteString,
+            requestedAmazonAsin: requestedAmazonASIN,
+            servedAmazonAsin: servedAmazonASIN,
+            variantMarkers: Array(variantMarkers.prefix(50)),
+            title: String(title.prefix(500)),
             capturedAt: capturedAt, captureVersion: captureVersion,
             readableText: String(readableText.prefix(BrowserBridgeProtocol.maximumReadableTextCharacters)),
             links: Array(links.prefix(BrowserBridgeProtocol.maximumCapturedLinks)),
@@ -177,6 +190,10 @@ extension BrowserBridgeClientMessage {
 
 extension BrowserBridgeRunCompletion: Identifiable {
     public var id: String { runID }
+
+    /// A needs-review or failed targeted run must leave its account window available for the next
+    /// explicit action. Only a completed terminal result may minimize Cubby's owned window.
+    public var isSuccessful: Bool { terminalStatus == .completed }
 }
 
 extension BrowserBridgeServerMessage {
@@ -193,9 +210,17 @@ extension BrowserBridgeServerMessage {
     }
 
     public static func runCompleted(_ completion: BrowserBridgeRunCompletion) -> Self {
-        .runCompleted(
+        let terminalStatus: BrowserBridgeServerMessageRunCompleted.TerminalStatusPayload =
+            switch completion.terminalStatus {
+            case .completed: .completed
+            case .needsReview: .needsReview
+            case .failed: .failed
+            case .dispatchFailed: .dispatchFailed
+            }
+        return .runCompleted(
             BrowserBridgeServerMessageRunCompleted(
                 protocolVersion: ._2, _type: .runCompleted, runID: completion.runID,
+                terminalStatus: terminalStatus, outcome: completion.outcome,
                 imported: completion.imported, updated: completion.updated,
                 skipped: completion.skipped, findingCount: completion.findingCount))
     }

@@ -6,6 +6,9 @@ export const importRunPublicId = z
 
 const purchaseImportRunSummary = z.object({
   publicId: importRunPublicId,
+  purpose: z
+    .enum(["account_sync", "purchase_validation", "product_enrichment"])
+    .optional(),
   vendorAccountLabel: z.string().nullable(),
   vendorName: z.string().nullable(),
   trigger: z.string(),
@@ -119,9 +122,46 @@ const importRunFinding = z.object({
   expiresAt: z.iso.datetime().nullable(),
 });
 
+const importRunTarget = z.object({
+  id: z.string().min(1),
+  targetType: z.enum(["purchase", "product"]),
+  targetShortcode: z.string().min(1).nullable(),
+  targetName: z.string().nullable(),
+  sourceId: z.string().nullable(),
+  sourceLabel: z.string().nullable(),
+  vendorAccountLabel: z.string().nullable(),
+  state: z.string().min(1),
+  fingerprint: z.string().nullable(),
+  outcome: z.string().nullable(),
+  warning: z.string().nullable(),
+  diff: z.unknown().nullable(),
+  completedAt: z.iso.datetime().nullable(),
+});
+
+const importRunEvidence = z.object({
+  id: z.string().min(1),
+  targetId: z.string().nullable(),
+  sourceKind: z.string().min(1),
+  filename: z.string().nullable(),
+  mediaType: z.string().nullable(),
+  checksum: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+
+const importRunDispatch = z.object({
+  eventId: z.string().nullable(),
+  state: z.string().min(1),
+  attempts: z.number().int().nonnegative(),
+  error: z.string().nullable(),
+  coordinatorStartedAt: z.iso.datetime().nullable(),
+});
+
 /** The browser-facing detail contract. Private UUIDs never cross this boundary. */
 const purchaseImportRunDetail = z.object({
   publicId: importRunPublicId,
+  purpose: z
+    .enum(["account_sync", "purchase_validation", "product_enrichment"])
+    .optional(),
   status: z.string().min(1),
   trigger: z.string().min(1),
   startedAt: z.iso.datetime(),
@@ -162,6 +202,9 @@ const purchaseImportRunDetail = z.object({
   findings: z.array(importRunFinding).default([]),
   operations: z.array(importRunOperation),
   preparedOrders: z.array(importRunPreparedOrder),
+  targets: z.array(importRunTarget).default([]),
+  evidence: z.array(importRunEvidence).default([]),
+  dispatch: importRunDispatch.nullable().optional(),
   progress: z.array(importRunProgress).default([]),
   latestProgress: importRunProgress.nullable(),
   approvals: z.array(importRunApproval),
@@ -182,6 +225,10 @@ export const purchaseImportRunControlInput = z.object({
     "reject",
     "retry",
     "escalate_sol",
+    "retry_dispatch",
+    "abort",
+    "upload_evidence",
+    "no_evidence_available",
   ]),
   operationId: z.string().min(1).optional(),
   approvalId: z.string().min(1).optional(),

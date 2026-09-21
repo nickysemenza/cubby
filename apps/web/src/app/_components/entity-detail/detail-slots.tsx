@@ -77,6 +77,11 @@ export const detailSlots = {
         })),
       (product) => product.ingredient !== null,
     ),
+    "import-runs": slot(() =>
+      import("~/app/products/product-import-runs").then((m) => ({
+        default: m.ProductImportRuns,
+      })),
+    ),
   },
   recipe: {
     workflow: slot(() =>

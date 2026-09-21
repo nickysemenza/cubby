@@ -15,8 +15,17 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     }
     private struct FixedCapturePayload: Decodable {
         struct Link: Decodable { let url: String; let label: String? }
-        struct Image: Decodable { let url: String; let alt: String? }
+        struct Image: Decodable {
+            let url: String
+            let alt: String?
+            let naturalWidth: Int?
+            let naturalHeight: Int?
+            let highResolutionUrl: String?
+        }
         let url: String
+        let canonicalUrl: String?
+        let servedAmazonAsin: String?
+        let variantMarkers: [String]
         let title: String
         let text: String
         let links: [Link]
@@ -25,6 +34,9 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     }
 
     private let browser: BrowserChoice
+    /// The executor is instantiated once per VendorAccount. Keeping this identity on the executor
+    /// makes every window lifecycle event attributable without ever logging page content or URLs.
+    private let accountID: String
     private let evidenceUploader: any BrowserEvidenceUploading
     private let appleScript: SerializedAppleScriptExecutor
     private var ownedWindowID: Int?
@@ -32,8 +44,12 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     private var capturedLinks: [String: URL] = [:]
     private var cancelled: Set<UUID> = []
 
-    init(browser: BrowserChoice, evidenceUploader: any BrowserEvidenceUploading) {
+    init(
+        browser: BrowserChoice, accountID: String,
+        evidenceUploader: any BrowserEvidenceUploading
+    ) {
         self.browser = browser
+        self.accountID = accountID
         self.evidenceUploader = evidenceUploader
         appleScript = SerializedAppleScriptExecutor(
             targetBundleIdentifier: browser == .safari ? "com.apple.Safari" : "com.google.Chrome")
@@ -70,8 +86,15 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 end tell
                 """
         }
-        Task { [appleScript, browser] in
-            _ = try? await appleScript.execute(script, action: "raise_auth_window")
+        Task { [appleScript, browser, accountID] in
+            do {
+                _ = try await appleScript.execute(script, action: "raise_auth_window")
+                BrowserBridgeDebugLog.emit(
+                    .windowRaised, browser: browser, accountID: accountID)
+            } catch {
+                BrowserBridgeDebugLog.emit(
+                    .windowRaiseFailed, browser: browser, accountID: accountID, error: error)
+            }
             let bundleIdentifier = browser == .safari ? "com.apple.Safari" : "com.google.Chrome"
             NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first?
                 .activate(options: [.activateAllWindows])
@@ -103,9 +126,11 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         }
         do {
             _ = try await appleScript.execute(script, action: "background_window")
-            BrowserBridgeDebugLog.emit(.windowBackgrounded, browser: browser)
+            BrowserBridgeDebugLog.emit(
+                .windowBackgrounded, browser: browser, accountID: accountID)
         } catch {
-            BrowserBridgeDebugLog.emit(.windowBackgroundFailed, browser: browser, error: error)
+            BrowserBridgeDebugLog.emit(
+                .windowBackgroundFailed, browser: browser, accountID: accountID, error: error)
         }
     }
 
@@ -116,12 +141,14 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             browser == .safari
             ? "tell application \"Safari\" to set minimized of window id \(ownedWindowID) to true"
             : "tell application \"Google Chrome\" to set minimized of window id \(ownedWindowID) to true"
-        Task { [appleScript, browser] in
+        Task { [appleScript, browser, accountID] in
             do {
                 _ = try await appleScript.execute(script, action: "minimize_window")
-                BrowserBridgeDebugLog.emit(.windowMinimized, browser: browser)
+                BrowserBridgeDebugLog.emit(
+                    .windowMinimized, browser: browser, accountID: accountID)
             } catch {
-                BrowserBridgeDebugLog.emit(.windowMinimizeFailed, browser: browser, error: error)
+                BrowserBridgeDebugLog.emit(
+                    .windowMinimizeFailed, browser: browser, accountID: accountID, error: error)
             }
         }
     }
@@ -176,7 +203,11 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                     recoveryURL: recoveryURL, allowedHosts: allowedHosts)
                 let result = try await capture(
                     command: command, allowedHosts: allowedHosts,
-                    enhancedEvidence: payload.enhancedEvidence, targetURL: targetURL)
+                    enhancedEvidence: payload.enhancedEvidence, targetURL: targetURL,
+                    evidenceScope: payload.evidenceScope.map {
+                        BrowserEvidenceUploadScope(
+                            runPublicID: $0.runPublicId, targetID: $0.targetId)
+                    })
                 await returnOwnedWindowToBackground()
                 return .completed(capture: result)
             }
@@ -328,7 +359,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
 
     private func capture(
         command: BrowserBridgeCommand, allowedHosts: Set<String>, enhancedEvidence: Bool,
-        targetURL: URL?
+        targetURL: URL?, evidenceScope: BrowserEvidenceUploadScope?
     ) async throws -> BrowserPageCapture {
         try await waitForPageReady(targetURL: targetURL)
         let raw = try await runFixedJavaScript(Self.captureScript)
@@ -355,7 +386,15 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             guard let url = URL(string: image.url),
                 (try? BrowserBridgeURLPolicy.validate(url, allowedHosts: allowedHosts)) != nil
             else { return nil }
-            return BrowserCapturedImage(url: url, alt: image.alt)
+            let highResolutionURL = image.highResolutionUrl.flatMap(URL.init(string:)).flatMap { candidate in
+                (try? BrowserBridgeURLPolicy.validate(candidate, allowedHosts: allowedHosts))
+            }
+            return BrowserCapturedImage(
+                url: url, alt: image.alt, naturalWidth: image.naturalWidth,
+                naturalHeight: image.naturalHeight, highResolutionURL: highResolutionURL)
+        }
+        let canonicalURL = payload.canonicalUrl.flatMap(URL.init(string:)).flatMap { candidate in
+            (try? BrowserBridgeURLPolicy.validate(candidate, allowedHosts: allowedHosts))
         }
         let capturedAt = Date.now
         let normalized = try await NormalizedEvidencePDF.makeFile(
@@ -370,14 +409,20 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         guard Self.supportsRenderedPDF else {
             let references: [BrowserEvidenceReference]
             do {
-                references = [try await evidenceUploader.upload(normalized, runID: command.runID)]
+                references = [
+                    try await evidenceUploader.upload(
+                        normalized, runID: command.runID, scope: evidenceScope)
+                ]
             } catch {
                 throw ExecutionFailure.uploadFailed
             }
             return BrowserPageCapture(
                 sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt, captureVersion: 1,
                 readableText: payload.text, links: Array(links), images: images,
-                evidence: references)
+                evidence: references, canonicalURL: canonicalURL,
+                requestedAmazonASIN: Self.amazonASIN(in: targetURL),
+                servedAmazonASIN: payload.servedAmazonAsin,
+                variantMarkers: payload.variantMarkers)
         }
 
         BrowserBridgeDebugLog.emit(.visualCaptureStarted, command: command)
@@ -397,12 +442,17 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
 
         var references: [BrowserEvidenceReference] = []
         do {
-            references.append(try await evidenceUploader.upload(normalized, runID: command.runID))
+            references.append(
+                try await evidenceUploader.upload(
+                    normalized, runID: command.runID, scope: evidenceScope))
             if enhancedEvidence {
                 references.append(
-                    try await evidenceUploader.upload(screenshot.evidence, runID: command.runID))
+                    try await evidenceUploader.upload(
+                        screenshot.evidence, runID: command.runID, scope: evidenceScope))
             }
-            references.append(try await evidenceUploader.upload(rendered, runID: command.runID))
+            references.append(
+                try await evidenceUploader.upload(
+                    rendered, runID: command.runID, scope: evidenceScope))
             BrowserBridgeDebugLog.emit(.visualCaptureFinished, command: command)
         } catch {
             BrowserBridgeDebugLog.emit(.visualCaptureFailed, command: command, error: error)
@@ -411,7 +461,10 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         return BrowserPageCapture(
             sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt, captureVersion: 1,
             readableText: payload.text, links: Array(links), images: images,
-            evidence: references)
+            evidence: references, canonicalURL: canonicalURL,
+            requestedAmazonASIN: Self.amazonASIN(in: targetURL),
+            servedAmazonASIN: payload.servedAmazonAsin,
+            variantMarkers: payload.variantMarkers)
     }
 
     private func captureBrowserScreenshot() async throws -> BrowserScreenshot {
@@ -514,6 +567,31 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
             .replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
+    /// The requested ASIN belongs to the broker-selected recovery URL; the served ASIN is
+    /// extracted from the page separately so an Amazon redirect or variant switch stays visible.
+    private static func amazonASIN(in url: URL?) -> String? {
+        guard let url else { return nil }
+        let components = url.pathComponents
+        guard
+            let marker = components.indices.first(where: { index in
+                let lowercased = components[index].lowercased()
+                return lowercased == "dp"
+                    || (lowercased == "product" && markerHasAmazonGPParent(components, at: index))
+            }),
+            components.indices.contains(marker + 1)
+        else { return nil }
+        let value = components[marker + 1].uppercased()
+        guard value.range(of: "^[A-Z0-9]{10}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
+    }
+
+    private static func markerHasAmazonGPParent(_ components: [String], at index: Int?) -> Bool {
+        guard let index, components.indices.contains(index - 1) else { return false }
+        return components[index - 1].lowercased() == "gp"
+    }
+
     /// Fixed and versioned. Page text is treated only as data; it cannot introduce a selector,
     /// script, navigation, click, or form action into the browser executor.
     private static let captureScript = #"""
@@ -521,16 +599,46 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
           const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
           return JSON.stringify({
             url: location.href,
+            canonicalUrl: (() => {
+              const raw = document.querySelector('link[rel="canonical"]')?.href;
+              try { return raw ? new URL(raw, location.href).href : null; } catch { return null; }
+            })(),
+            servedAmazonAsin: (() => {
+              const match = location.pathname.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:[/?]|$)/i);
+              return match ? match[1].toUpperCase() : null;
+            })(),
+            variantMarkers: Array.from(document.querySelectorAll(
+              '#variation_color_name .selection, #variation_size_name .selection, [data-asin][aria-checked="true"], select[name*="variation"] option:checked'
+            )).map(node => clean(node.getAttribute('data-asin') || node.textContent)).filter(Boolean).slice(0, 50),
             title: clean(document.title).slice(0, 500),
             text: clean(document.body?.innerText).slice(0, 24576),
             links: Array.from(document.querySelectorAll('a[href]')).slice(0, 200).map(a => ({
               url: a.href,
               label: clean(a.innerText || a.getAttribute('aria-label')).slice(0, 300) || null
             })),
-            images: Array.from(document.images).slice(0, 200).map(image => ({
-              url: image.currentSrc || image.src,
-              alt: clean(image.alt).slice(0, 500) || null
-            })),
+            images: Array.from(document.images).slice(0, 200).map(image => {
+              const attributeURLs = [
+                image.getAttribute('data-a-hires'), image.getAttribute('data-old-hires'),
+                image.getAttribute('data-hires'), image.getAttribute('data-zoom-image')
+              ].filter(Boolean);
+              const dynamicURL = (() => {
+                try {
+                  const dynamic = JSON.parse(image.getAttribute('data-a-dynamic-image') || '{}');
+                  return Object.entries(dynamic).sort((left, right) => {
+                    const leftSize = Array.isArray(left[1]) ? left[1][0] * left[1][1] : 0;
+                    const rightSize = Array.isArray(right[1]) ? right[1][0] * right[1][1] : 0;
+                    return rightSize - leftSize;
+                  })[0]?.[0] || null;
+                } catch { return null; }
+              })();
+              return {
+                url: image.currentSrc || image.src,
+                alt: clean(image.alt).slice(0, 500) || null,
+                naturalWidth: image.naturalWidth || null,
+                naturalHeight: image.naturalHeight || null,
+                highResolutionUrl: attributeURLs[0] || dynamicURL
+              };
+            }),
             authenticationRequired: Boolean(document.querySelector('input[type="password"]'))
           });
         })();

@@ -47,6 +47,7 @@ import {
   cookbook,
   expense,
   image,
+  importRunTarget,
   ingredient,
   inventoryEntry,
   location,
@@ -100,6 +101,13 @@ type ProductWithUpcGapCandidate = {
 
 /** Orphan suggestions are not a saved predicate: delete eligibility must use the canonical incoming-edge policy. */
 const PRODUCT_RETAINING_NOT_EXISTS = {
+  "ImportRunTarget.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(importRunTarget)
+        .where(eq(importRunTarget.productId, product.id)),
+    ),
   "Planting.sourceProductId": (dbClient) =>
     notExists(
       dbClient

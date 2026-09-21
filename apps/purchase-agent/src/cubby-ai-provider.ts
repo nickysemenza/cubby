@@ -22,6 +22,7 @@ const gatewayQuerySchema = z.record(z.string(), z.json());
 type GatewayProvider = "openai" | "anthropic";
 type Gateway = Pick<AiGateway, "run">;
 type GatewayHost = { gateway(id: string): Gateway };
+export type PurchaseAgentTestModelBinding = Pick<Fetcher, "fetch">;
 
 function gatewayBaseUrl(provider: GatewayProvider) {
   return `https://ai-gateway.invalid/${provider}`;
@@ -117,10 +118,33 @@ function selectedModels<const TIds extends readonly string[]>(
 /** All coordinator and optional escalation models, forced through Gateway. */
 export function cubbyAiGatewayProviders(
   aiForRequest: () => GatewayHost,
+  testModel?: PurchaseAgentTestModelBinding,
 ): Provider[] {
   const gateway = () => aiForRequest().gateway(CUBBY_GATEWAY_ID);
-  const openaiFetch = createCubbyGatewayFetch("openai", gateway);
-  const anthropicFetch = createCubbyGatewayFetch("anthropic", gateway);
+  // This binding is intentionally absent from the deployed worker. Workerd
+  // harnesses can supply a deterministic Responses peer here, while every
+  // normal request still goes through the binding-authenticated Gateway.
+  const testFetch: typeof fetch | undefined = testModel
+    ? (input, init) => {
+        // Flue passes an AbortSignal to provider fetch. Unlike the production
+        // Gateway binding, a test service binding cannot clone it.
+        const source = input instanceof Request ? input : undefined;
+        return testModel.fetch(
+          new Request(requestUrl(input), {
+            method: init?.method ?? source?.method,
+            headers: init?.headers ?? source?.headers,
+            body:
+              init?.body ??
+              (source?.method === "GET" || source?.method === "HEAD"
+                ? undefined
+                : source?.body),
+          }),
+        );
+      }
+    : undefined;
+  const openaiFetch = testFetch ?? createCubbyGatewayFetch("openai", gateway);
+  const anthropicFetch =
+    testFetch ?? createCubbyGatewayFetch("anthropic", gateway);
   return [
     createProvider({
       id: "openai",

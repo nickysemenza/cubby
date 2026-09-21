@@ -17,8 +17,10 @@ describe("purchase-import agent tool authority", () => {
     expect(tools.map((tool) => tool.name)).toEqual([
       "claim_next_import_work",
       "extract_receipt_evidence",
+      "extract_run_evidence",
       "issue_browser_command",
       "read_browser_command_result",
+      "import_browser_order_evidence",
       "report_agent_progress",
       "save_navigation_hints",
       "mark_history_expired",

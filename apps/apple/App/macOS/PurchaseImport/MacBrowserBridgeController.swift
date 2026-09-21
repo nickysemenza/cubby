@@ -137,7 +137,10 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             renderedPDF: MacBrowserCommandExecutor.supportsRenderedPDF)
 
         for account in listedAccounts {
-            let executor = MacBrowserCommandExecutor(browser: browser, evidenceUploader: uploader)
+            // There is exactly one executor for each account connection. Its owned window and
+            // active tab are consequently never shared with another VendorAccount.
+            let executor = MacBrowserCommandExecutor(
+                browser: browser, accountID: account.id, evidenceUploader: uploader)
             let replayStore = try FileBrowserBridgeReplayStore.applicationSupport(
                 namespace: "\(CubbyBaseURL.host(of: baseURL))-\(account.id)")
             let bridge = URLSessionBrowserBridge(
@@ -230,7 +233,9 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         _ completion: BrowserBridgeRunCompletion, accountID: String, generation: UUID
     ) {
         guard generation == self.generation, bridges[accountID] != nil else { return }
-        executors[accountID]?.minimizeOwnedWindow()
+        if completion.isSuccessful {
+            executors[accountID]?.minimizeOwnedWindow()
+        }
         settings?.markRunCompleted(accountID: accountID, runID: completion.runID)
         Task { [notifier = self.notifier] in await notifier.notifyRunCompleted(completion) }
     }

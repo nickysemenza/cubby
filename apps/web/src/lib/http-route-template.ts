@@ -38,6 +38,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/import/merchant-rules",
   "/api/import/run-logs",
   "/api/import/runs",
+  "/api/import/targeted",
   "/api/mcp",
   "/api/settings/member-logins",
   "/api/v1/docs",

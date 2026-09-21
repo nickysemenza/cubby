@@ -3,10 +3,12 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  controlImportRun,
   finishImportRun,
   issueBrowserCommand,
   runImportOperation,
   startOrResumeImportRun,
+  startTargetedImportRun,
 } from "./run-service";
 
 describe("purchase import run admission", () => {
@@ -58,6 +60,65 @@ describe("purchase import run admission", () => {
 
     expect(first.id).toBe(second.id);
     expect([first.created, second.created].sort()).toEqual([false, true]);
+  });
+
+  it("creates an evidence-only validation successor without mutating the Purchase", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const { insertWithShortcode } =
+      await import("~/server/repo/shortcode-utils");
+    const target = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: account.vendorId,
+      vendorAccountId: account.id,
+      date: "2026-09-20",
+      displayLabel: "Validation target",
+    });
+    const started = await startTargetedImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      purpose: "purchase_validation",
+      vendorId: account.vendorId,
+      vendorAccountId: account.id,
+      trigger: "manual",
+      targets: [
+        {
+          kind: "purchase",
+          purchaseId: target.id,
+          vendorAccountId: account.id,
+          targetFingerprint: "a".repeat(64),
+        },
+      ],
+    });
+    if (!started.created) throw new Error("Expected validation admission");
+    const { importRun, importRunTarget } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    await getDb(ctx.db)
+      .update(importRun)
+      .set({ status: "needs_review", endedAt: new Date() })
+      .where(eq(importRun.id, started.run.id));
+
+    const result = await controlImportRun(ctx.db, ctx.actor, {
+      runPublicId: started.run.publicId,
+      action: "upload_evidence",
+    });
+
+    expect(result).toMatchObject({
+      created: true,
+      successorStatus: "dispatch_failed",
+      dispatchRunId: null,
+      dispatchEventId: expect.any(String),
+    });
+    const [successorTarget] = await getDb(ctx.db)
+      .select({
+        purchaseId: importRunTarget.purchaseId,
+        state: importRunTarget.state,
+      })
+      .from(importRunTarget)
+      .where(eq(importRunTarget.runId, result.successorRunId!));
+    expect(successorTarget).toEqual({
+      purchaseId: target.id,
+      state: "needs_evidence",
+    });
   });
 
   it("returns the recorded tool result without replaying its effect", async () => {

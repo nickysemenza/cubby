@@ -585,7 +585,8 @@ public enum EntityCatalog {
         DetailSection(id: "product.unit-mappings", title: "Unit mappings", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "product.fits-with", title: "Fits with", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
         DetailSection(id: "product.cookbooks", title: "Cookbooks", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
-        DetailSection(id: "product.recipe-appearances", title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .slot)
+        DetailSection(id: "product.recipe-appearances", title: "Appears in recipes", placement: .primary, collapsed: false, explanationField: nil, kind: .slot),
+        DetailSection(id: "product.import-runs", title: "Import runs", placement: .primary, collapsed: false, explanationField: nil, kind: .slot)
       ],
       listViews: [.table, .shelf, .timeline],
       shelfSubtitle: ["price", "category"],

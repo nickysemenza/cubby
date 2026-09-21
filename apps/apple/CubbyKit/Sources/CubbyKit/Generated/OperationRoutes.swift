@@ -194,6 +194,7 @@ extension OperationRoute {
         OperationRoute(operationID: "purchase.merge", method: .post, path: "/api/v1/purchase/merge", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "purchase.products", method: .get, path: "/api/v1/purchase/products", pathParameters: [], queryParameters: ["purchaseId"], hasBody: false),
         OperationRoute(operationID: "purchase.split", method: .post, path: "/api/v1/purchase/split", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "purchaseImport.initiateRunEvidenceUpload", method: .post, path: "/api/v1/purchaseImport/initiateRunEvidenceUpload", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "purchaseImport.listReceiptHunts", method: .get, path: "/api/v1/purchaseImport/listReceiptHunts", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "purchaseImport.submitReceiptEvidence", method: .post, path: "/api/v1/purchaseImport/submitReceiptEvidence", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "recipe.attachCookbookRecipePhoto", method: .post, path: "/api/v1/recipe/attachCookbookRecipePhoto", pathParameters: [], queryParameters: [], hasBody: true),

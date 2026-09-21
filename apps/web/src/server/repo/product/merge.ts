@@ -32,6 +32,8 @@ import {
   cookbook,
   expense,
   inventoryEntry,
+  importRunTarget,
+  importRunEvidence,
   location,
   mealFoodEntry,
   planting,
@@ -71,6 +73,11 @@ import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
+  "ImportRunTarget.productId": {
+    code: "repoint-targeted-import-history",
+    effect: "repoint",
+    description: "Targeted enrichment history follows the surviving Product.",
+  },
   "ProductExternalId.productId": {
     code: "repoint-or-discard-conflicting-slot",
     effect: "move-dedupe",
@@ -1518,6 +1525,39 @@ export const mergeProducts = async (
       )
       .returning({ id: expense.id });
     summary.expensesMoved = movedExpenses.length;
+    // Preserve the keeper's target when both Products were inspected in the
+    // same run; re-pointing all rows at once would violate the partial unique
+    // `(runId, productId)` index.
+    const targetedRuns = await tx
+      .select({ id: importRunTarget.id, runId: importRunTarget.runId })
+      .from(importRunTarget)
+      .where(inArray(importRunTarget.productId, plan.loserIds));
+    for (const target of targetedRuns) {
+      const [existing] = await tx
+        .select({ id: importRunTarget.id })
+        .from(importRunTarget)
+        .where(
+          and(
+            eq(importRunTarget.runId, target.runId),
+            eq(importRunTarget.productId, keepId),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        await tx
+          .update(importRunEvidence)
+          .set({ targetId: existing.id })
+          .where(eq(importRunEvidence.targetId, target.id));
+        await tx
+          .delete(importRunTarget)
+          .where(eq(importRunTarget.id, target.id));
+      } else {
+        await tx
+          .update(importRunTarget)
+          .set({ productId: keepId, updatedAt: new Date() })
+          .where(eq(importRunTarget.id, target.id));
+      }
+    }
     await logAuditEntries(
       tx,
       actor,

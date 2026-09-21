@@ -206,10 +206,13 @@ export async function submitReceiptEvidence(
           runId: existingRun.id,
           publicId: existingRun.publicId,
           shouldEnqueue: true,
+          created: false,
+          dispatchEventId: null,
         };
       }
     }
     const runId = crypto.randomUUID();
+    const dispatchEventId = `receipt:${input.huntId}:${row.imageChecksum}`;
     const [run] = await tx
       .insert(importRun)
       .values({
@@ -227,6 +230,7 @@ export async function submitReceiptEvidence(
         predecessorRunId: row.receiptRunId,
         trigger: "discovery",
         agentSessionId: `import-run:${runId}`,
+        dispatchEventId,
       })
       .returning({ id: importRun.id });
     if (!run) throw new Error("Receipt import run was not created.");
@@ -252,6 +256,8 @@ export async function submitReceiptEvidence(
       runId: run.id,
       publicId: createdRun.publicId,
       shouldEnqueue: true,
+      created: true,
+      dispatchEventId,
     };
   });
 
@@ -270,8 +276,11 @@ export async function submitReceiptEvidence(
     version: 1,
     runId: claimed.runId,
     publicId: claimed.publicId,
-    eventId: `receipt:${input.huntId}:${claimed.imageChecksum}`,
-    type: "start_or_resume",
+    eventId: claimed.created
+      ? (claimed.dispatchEventId ??
+        `receipt:${input.huntId}:${claimed.imageChecksum}`)
+      : `receipt-retry:${input.huntId}:${claimed.imageChecksum}`,
+    type: claimed.created ? "start_or_resume" : "retry",
   });
 
   return submitReceiptEvidenceOut.parse({

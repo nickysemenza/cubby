@@ -29,5 +29,6 @@ export const schemaTemplateInputs = [
   "../../packages/schemas/src/product.ts",
   "../../packages/schemas/src/project.ts",
   "../../packages/schemas/src/purchase.ts",
+  "../../packages/schemas/src/purchase-import.ts",
   "../../packages/schemas/src/recipe-shared.ts",
 ];

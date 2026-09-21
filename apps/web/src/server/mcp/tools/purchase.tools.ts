@@ -32,12 +32,18 @@ import {
 import {
   commitPurchaseImportInput,
   commitPurchaseImportOut,
+  commitProductEnrichmentInput,
+  commitProductEnrichmentOut,
+  overwriteProductEnrichmentInput,
+  overwriteProductEnrichmentOut,
   confirmMerchantVendorRuleInput,
   confirmMerchantVendorRuleOut,
   preparePurchaseImportInput,
   preparePurchaseImportOut,
   purchaseImportOperationStatusInput,
   purchaseImportOperationStatusOut,
+  validatePurchaseImportInput,
+  validatePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import { vendorCoverageInput, vendorCoverageOut } from "@cubby/schemas/vendor";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -48,8 +54,11 @@ import { executeEntity } from "~/server/entity-kernel";
 import { confirmMerchantVendorRule } from "~/server/purchase-import/hunts";
 import {
   commitPurchaseImport,
+  commitProductEnrichment,
+  overwriteProductEnrichment,
   preparePurchaseImport,
   purchaseImportOperationStatus,
+  validatePurchaseImport,
 } from "~/server/purchase-import/import-orders";
 import { getVendorCoverage } from "~/server/repo/vendor";
 
@@ -105,6 +114,51 @@ const purchaseProductsMcpOut = mcpItemsEnvelope(
 );
 
 export function registerPurchaseTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "overwrite_product_enrichment",
+    description:
+      "Propose one populated manufacturer, category, or model replacement. Every call pauses for exact typed human approval and revalidates the Product before applying.",
+    inputSchema: overwriteProductEnrichmentInput,
+    outputSchema: overwriteProductEnrichmentOut,
+    annotations: WRITE_CLOSED,
+    handler: (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      return overwriteProductEnrichment(
+        context.db,
+        params,
+        context.actorContext,
+      );
+    },
+  });
+
+  registerMcpTool(server, {
+    name: "commit_product_enrichment",
+    description:
+      "Apply a bounded, fill-only Product enrichment to one explicit target. Price, attachments, source claims, identifier reassignment, and populated-field overwrites are forbidden.",
+    inputSchema: commitProductEnrichmentInput,
+    outputSchema: commitProductEnrichmentOut,
+    annotations: WRITE_CLOSED,
+    purchaseAgentMutationHandled: true,
+    handler: (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      return commitProductEnrichment(context.db, params, context.actorContext);
+    },
+  });
+
+  registerMcpTool(server, {
+    name: "validate_purchase_import",
+    description:
+      "Compare an immutable prepared plan to its live Purchase. This read-only validation records a target diff and never invokes the import writer, source claims, attachments, or audit repair.",
+    inputSchema: validatePurchaseImportInput,
+    outputSchema: validatePurchaseImportOut,
+    annotations: WRITE_CLOSED,
+    purchaseAgentMutationHandled: true,
+    handler: (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      return validatePurchaseImport(context.db, params, context.actorContext);
+    },
+  });
+
   registerMcpTool(server, {
     name: "confirm_purchase_merchant_vendor",
     description:

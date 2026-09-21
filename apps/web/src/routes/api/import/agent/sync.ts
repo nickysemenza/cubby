@@ -50,8 +50,10 @@ export const Route = createFileRoute("/api/import/agent/sync")({
           version: 1,
           runId: run.id,
           publicId: run.publicId,
-          eventId: crypto.randomUUID(),
-          type: "start_or_resume",
+          eventId: run.created
+            ? (run.dispatchEventId ?? crypto.randomUUID())
+            : crypto.randomUUID(),
+          type: run.created ? "start_or_resume" : "retry",
         });
         return Response.json({ runId: run.publicId, resumed: !run.created });
       },

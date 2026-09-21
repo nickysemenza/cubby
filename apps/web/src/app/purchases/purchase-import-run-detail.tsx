@@ -1,3 +1,4 @@
+import { initiateImportRunEvidenceUploadOut } from "@cubby/schemas/purchase-import";
 import {
   createFlueClient,
   type AgentConversationObservationSnapshot,
@@ -40,7 +41,13 @@ const ACTIVE_RUN_STATUSES = new Set([
   "paused",
 ]);
 
-const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "needs_review"]);
+const TERMINAL_RUN_STATUSES = new Set([
+  "completed",
+  "failed",
+  "needs_review",
+  "dispatch_failed",
+  "aborted",
+]);
 
 const statusBadgeVariant = (status: string): BadgeVariant => {
   if (status === "completed") return "positive";
@@ -176,7 +183,11 @@ function TerminalRunControls({ run }: { run: PurchaseImportRunDetail }) {
       });
     },
   });
-  if (!TERMINAL_RUN_STATUSES.has(run.status) || run.successorRunPublicId)
+  if (
+    !TERMINAL_RUN_STATUSES.has(run.status) ||
+    run.successorRunPublicId ||
+    run.status === "dispatch_failed"
+  )
     return null;
   return (
     <div className="grid justify-items-end gap-2">
@@ -203,6 +214,217 @@ function TerminalRunControls({ run }: { run: PurchaseImportRunDetail }) {
         <StatusText tone="destructive">{retry.error.message}</StatusText>
       ) : null}
     </div>
+  );
+}
+
+/** A committed run without Flue admission is recoverable, not silently stuck. */
+function DispatchRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
+  const queryClient = useQueryClient();
+  const dispatch = run.dispatch;
+  const action = useMutation({
+    mutationFn: async (next: "retry_dispatch" | "abort") => {
+      const response = await fetch(
+        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: next }),
+        },
+      );
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const parsed = purchaseImportRunDetailError.safeParse(body);
+        throw new Error(
+          parsed.success ? parsed.data.error : "Run could not be updated.",
+        );
+      }
+      return purchaseImportRunControlResponse.parse(body).run;
+    },
+    onSuccess: () => {
+      void queryClient.refetchQueries({
+        queryKey: ["purchase-import", "run", run.publicId],
+      });
+    },
+  });
+  if (
+    !dispatch ||
+    dispatch.coordinatorStartedAt ||
+    dispatch.state === "started"
+  )
+    return null;
+  return (
+    <div className="grid justify-items-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => action.mutate("retry_dispatch")}
+          disabled={
+            action.isPending ||
+            dispatch.error === "Awaiting manual evidence upload"
+          }
+        >
+          Retry dispatch
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => action.mutate("abort")}
+          disabled={action.isPending}
+        >
+          Abort
+        </Button>
+      </div>
+      {action.isError ? (
+        <StatusText tone="destructive">{action.error.message}</StatusText>
+      ) : null}
+    </div>
+  );
+}
+
+/** A terminal validation without usable evidence is retried as an immutable successor. */
+function EvidenceRecoveryControls({ run }: { run: PurchaseImportRunDetail }) {
+  const action = useMutation({
+    mutationFn: async (next: "upload_evidence" | "no_evidence_available") => {
+      const response = await fetch(
+        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: next }),
+        },
+      );
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const parsed = purchaseImportRunDetailError.safeParse(body);
+        throw new Error(
+          parsed.success
+            ? parsed.data.error
+            : "Evidence retry could not start.",
+        );
+      }
+      return purchaseImportRunControlResponse.parse(body);
+    },
+    onSuccess: ({ successor }) => {
+      if (successor)
+        window.location.assign(purchaseImportRunHref(successor.publicId));
+    },
+  });
+  if (
+    run.purpose !== "purchase_validation" ||
+    !new Set(["needs_review", "failed"]).has(run.status) ||
+    !run.targets.some((target) =>
+      new Set(["needs_evidence", "unavailable", "unresolved"]).has(
+        target.state,
+      ),
+    )
+  )
+    return null;
+  return (
+    <div className="grid justify-items-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => action.mutate("upload_evidence")}
+          disabled={action.isPending}
+        >
+          Upload evidence
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => action.mutate("no_evidence_available")}
+          disabled={action.isPending}
+        >
+          No evidence available
+        </Button>
+      </div>
+      {action.isError ? (
+        <StatusText tone="destructive">{action.error.message}</StatusText>
+      ) : null}
+    </div>
+  );
+}
+
+function ManualEvidenceUpload({ run }: { run: PurchaseImportRunDetail }) {
+  const target = run.targets.find((item) => item.state === "needs_evidence");
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      if (!target) throw new Error("This run has no evidence target.");
+      const bytes = await file.arrayBuffer();
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      const checksum = [...new Uint8Array(digest)]
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+      const initiated = await fetch(
+        "/api/v1/purchaseImport/initiateRunEvidenceUpload",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            runPublicId: run.publicId,
+            targetId: target.id,
+            kind: "manual_upload",
+            contentType: file.type || "application/octet-stream",
+            byteSize: file.size,
+            checksum,
+            filename: file.name,
+            sourceMetadata: { filename: file.name },
+          }),
+        },
+      );
+      if (!initiated.ok)
+        throw new Error("Evidence upload could not be staged.");
+      const staged = initiateImportRunEvidenceUploadOut.parse(
+        await initiated.json(),
+      );
+      const stored = await fetch(staged.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: bytes,
+      });
+      if (!stored.ok) throw new Error("Evidence bytes could not be stored.");
+      const dispatched = await fetch(
+        `/api/import/runs/${encodeURIComponent(run.publicId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "retry_dispatch" }),
+        },
+      );
+      if (!dispatched.ok)
+        throw new Error("Evidence was stored, but dispatch failed.");
+      return purchaseImportRunControlResponse.parse(await dispatched.json());
+    },
+    onSuccess: () => window.location.reload(),
+  });
+  if (
+    run.purpose !== "purchase_validation" ||
+    run.status !== "dispatch_failed" ||
+    !target
+  )
+    return null;
+  return (
+    <label className="grid min-h-11 cursor-pointer items-center border border-border px-3 py-2 text-sm font-medium">
+      <span>
+        {upload.isPending ? "Uploading evidence…" : "Choose evidence file"}
+      </span>
+      <input
+        className="sr-only"
+        type="file"
+        disabled={upload.isPending}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          if (file) upload.mutate(file);
+        }}
+      />
+      {upload.isError ? (
+        <StatusText tone="destructive">{upload.error.message}</StatusText>
+      ) : null}
+    </label>
   );
 }
 
@@ -620,6 +842,97 @@ function RunTimeline({ run }: { run: PurchaseImportRunDetail }) {
   );
 }
 
+function RunTargets({ run }: { run: PurchaseImportRunDetail }) {
+  return (
+    <section className="grid gap-3 border border-border bg-card p-4">
+      <div>
+        <h2 className="font-medium">Targets and outcome</h2>
+        <p className="text-sm text-muted-foreground">
+          The selected source and target are frozen for this run.
+        </p>
+      </div>
+      {run.targets.length ? (
+        <div className="grid gap-2">
+          {run.targets.map((target) => (
+            <article
+              key={target.id}
+              className="grid gap-1 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={statusBadgeVariant(target.state)}>
+                  {target.state}
+                </Badge>
+                <span className="font-medium">
+                  {target.targetName ??
+                    target.targetShortcode ??
+                    target.targetType}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {target.sourceLabel ?? "No source selected"}
+                {target.vendorAccountLabel
+                  ? ` · ${target.vendorAccountLabel}`
+                  : ""}
+              </p>
+              {target.outcome ? <p>Outcome: {target.outcome}</p> : null}
+              {target.warning ? (
+                <StatusText tone="warning">{target.warning}</StatusText>
+              ) : null}
+              {target.diff !== null ? (
+                <details className="border border-border bg-muted/30 p-2 text-xs">
+                  <summary className="cursor-pointer font-medium">
+                    Review semantic difference
+                  </summary>
+                  <ToolValue label="Difference" value={target.diff} />
+                </details>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <StatusText>
+          No explicit targets were recorded for this account sync.
+        </StatusText>
+      )}
+    </section>
+  );
+}
+
+function RunEvidence({ run }: { run: PurchaseImportRunDetail }) {
+  return (
+    <section className="grid gap-3 border border-border bg-card p-4">
+      <div>
+        <h2 className="font-medium">Run evidence</h2>
+        <p className="text-sm text-muted-foreground">
+          This evidence belongs to the run. Validation does not attach it to a
+          purchase or product.
+        </p>
+      </div>
+      {run.evidence.length ? (
+        <div className="grid gap-2">
+          {run.evidence.map((evidence) => (
+            <div
+              key={evidence.id}
+              className="grid gap-0.5 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
+            >
+              <span className="font-medium">
+                {evidence.filename ?? evidence.sourceKind}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {evidence.sourceKind}
+                {evidence.mediaType ? ` · ${evidence.mediaType}` : ""}
+                {evidence.checksum ? ` · ${evidence.checksum}` : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <StatusText>No run-scoped evidence was retained.</StatusText>
+      )}
+    </section>
+  );
+}
+
 function PendingApprovalActions({
   publicId,
   operationId,
@@ -832,10 +1145,17 @@ function PurchaseImportRunContent({
           </div>
           <div className="flex flex-wrap items-start justify-end gap-2">
             <RunControl run={run} />
+            <DispatchRecoveryControls run={run} />
+            <EvidenceRecoveryControls run={run} />
+            <ManualEvidenceUpload run={run} />
             <TerminalRunControls run={run} />
           </div>
         </div>
         <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Metadata
+            label="Purpose"
+            value={run.purpose?.replaceAll("_", " ") ?? "account sync"}
+          />
           <Metadata label="Source" value={run.source?.kind ?? run.trigger} />
           <Metadata
             label="Vendor"
@@ -850,6 +1170,12 @@ function PurchaseImportRunContent({
           <Metadata label="Runtime revision" value={run.runtimeRevision} />
           <Metadata label="Started" value={formatMoment(run.startedAt)} />
           <Metadata label="Finished" value={formatMoment(run.endedAt)} />
+          {run.dispatch ? (
+            <Metadata
+              label="Dispatch"
+              value={`${run.dispatch.state} · ${run.dispatch.attempts} attempt${run.dispatch.attempts === 1 ? "" : "s"}`}
+            />
+          ) : null}
         </dl>
         <div className="grid grid-cols-2 border border-border sm:grid-cols-4">
           {[
@@ -878,6 +1204,9 @@ function PurchaseImportRunContent({
         ) : null}
         {run.failureCode ? (
           <StatusText tone="destructive">{run.failureCode}</StatusText>
+        ) : null}
+        {run.dispatch?.error ? (
+          <StatusText tone="destructive">{run.dispatch.error}</StatusText>
         ) : null}
       </section>
 
@@ -1002,6 +1331,13 @@ function PurchaseImportRunContent({
           <StatusText>No findings were recorded for this run.</StatusText>
         )}
       </section>
+
+      {(run.targets.length > 0 || run.evidence.length > 0) && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <RunTargets run={run} />
+          <RunEvidence run={run} />
+        </div>
+      )}
 
       <section className="grid gap-3 border border-border bg-card p-4">
         <h2 className="font-medium">Prepared orders</h2>

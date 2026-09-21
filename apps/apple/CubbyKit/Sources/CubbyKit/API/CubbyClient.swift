@@ -392,6 +392,16 @@ public actor CubbyClient {
         }
     }
 
+    /// Stages immutable browser/manual evidence for one explicit targeted-import scope. The
+    /// server allocates R2 directly; this must never use the shared Image/Document pathways.
+    public func initiateRunEvidenceUpload(_ input: InitiateImportRunEvidenceUploadInput) async throws
+        -> InitiateImportRunEvidenceUploadOut
+    {
+        try await perform {
+            try await api.purchaseImport_initiateRunEvidenceUpload(body: .json(input)).ok.body.json
+        }
+    }
+
     /// The server's hash index, or `HashIndex.Failure.unsupportedRevision` when it was computed
     /// with a different algorithm than this build carries.
     public func imageHashIndex() async throws -> ImageHashIndex {

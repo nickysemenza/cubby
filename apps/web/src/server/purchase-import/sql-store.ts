@@ -15,6 +15,14 @@ type CommandRow = {
 
 export type RunCompletionSummary = {
   runID: string;
+  terminalStatus: "completed" | "needs_review" | "failed" | "dispatch_failed";
+  outcome?:
+    | "replayed"
+    | "raw_evidence_drift"
+    | "semantic_drift"
+    | "enriched"
+    | "unavailable"
+    | "skipped";
   imported: number;
   updated: number;
   skipped: number;
@@ -23,6 +31,19 @@ export type RunCompletionSummary = {
 
 const runCompletionSummary = z.object({
   runID: z.string(),
+  terminalStatus: z
+    .enum(["completed", "needs_review", "failed", "dispatch_failed"])
+    .default("completed"),
+  outcome: z
+    .enum([
+      "replayed",
+      "raw_evidence_drift",
+      "semantic_drift",
+      "enriched",
+      "unavailable",
+      "skipped",
+    ])
+    .optional(),
   imported: z.number().int().nonnegative(),
   updated: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),

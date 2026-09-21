@@ -281,8 +281,15 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
-          workspace-filter: "@cubby/web..."
+          workspace-filter: "@cubby/web... @cubby/purchase-agent..."
       - uses: ./.github/actions/setup-web-env
+      - name: Build coupled workerd Workers
+        env:
+          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+          CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+        run: |
+          pnpm --filter @cubby/purchase-agent run build
+          pnpm --filter @cubby/web run build:cf
       - name: Run PostgreSQL integration tests
         shell: bash
         env:

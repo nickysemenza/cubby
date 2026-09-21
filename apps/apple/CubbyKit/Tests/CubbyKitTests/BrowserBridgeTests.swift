@@ -112,6 +112,31 @@ struct BrowserBridgeTests {
                 currentURL: target, targetURL: target, documentReadyState: "complete"))
     }
 
+    @Test("Capture metadata preserves variant identity and high-resolution image evidence")
+    func captureMetadataContract() throws {
+        let sourceURL = try #require(URL(string: "https://www.amazon.com/dp/B012345678"))
+        let canonicalURL = try #require(URL(string: "https://www.amazon.com/dp/B012345678"))
+        let imageURL = try #require(URL(string: "https://images.amazon.com/example.jpg"))
+        let highResolutionURL = try #require(URL(string: "https://images.amazon.com/example-hires.jpg"))
+        let image = BrowserCapturedImage(
+            url: imageURL, alt: "Example", naturalWidth: 1200, naturalHeight: 900,
+            highResolutionURL: highResolutionURL)
+        let capture = BrowserPageCapture(
+            sourceURL: sourceURL, title: "Example", capturedAt: .now, captureVersion: 1,
+            readableText: "Example", links: [], images: [image], canonicalURL: canonicalURL,
+            requestedAmazonASIN: "B012345678", servedAmazonASIN: "B012345678",
+            variantMarkers: ["Blue", "Large"])
+
+        #expect(capture.canonicalUrl == canonicalURL.absoluteString)
+        #expect(capture.requestedAmazonAsin == "B012345678")
+        #expect(capture.servedAmazonAsin == "B012345678")
+        #expect(capture.variantMarkers == ["Blue", "Large"])
+        #expect(capture.images == [image])
+        #expect(capture.images[0].naturalWidth == 1200)
+        #expect(capture.images[0].naturalHeight == 900)
+        #expect(capture.images[0].highResolutionUrl == highResolutionURL.absoluteString)
+    }
+
     @Test("Completed results replay until acknowledged")
     func replayLifecycle() {
         let uuid = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
@@ -273,7 +298,8 @@ struct BrowserBridgeTests {
     @Test("A run completion persists its acknowledgement and only creates one notification edge")
     func runCompletionReplayLifecycle() {
         let completion = BrowserBridgeRunCompletion(
-            runID: "RUN-EXAMPLE", imported: 1, updated: 2, skipped: 3, findingCount: 4)
+            runID: "RUN-EXAMPLE", terminalStatus: .completed, imported: 1, updated: 2,
+            skipped: 3, findingCount: 4)
         var ledger = BrowserBridgeReplayLedger()
 
         let firstRecord = ledger.recordRunCompletion(completion)
@@ -303,7 +329,8 @@ struct BrowserBridgeTests {
     @Test("Run completion and authentication controls preserve their bounded payloads")
     func controlMessagesRoundTrip() throws {
         let completion = BrowserBridgeRunCompletion(
-            runID: "RUN-EXAMPLE", imported: 1, updated: 2, skipped: 3, findingCount: 4)
+            runID: "RUN-EXAMPLE", terminalStatus: .completed, imported: 1, updated: 2,
+            skipped: 3, findingCount: 4)
         for message in [
             BrowserBridgeServerMessage.raiseAuthWindow(runID: "RUN-EXAMPLE"),
             BrowserBridgeServerMessage.runCompleted(completion),

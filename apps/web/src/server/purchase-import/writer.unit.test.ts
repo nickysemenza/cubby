@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lineExternalIdentity } from "./writer";
+import { buildPurchaseImportPlan, lineExternalIdentity } from "./writer";
 
 describe("purchase import line identity", () => {
   it("groups duplicate vendor SKUs before independent identity decisions", () => {
@@ -40,5 +40,44 @@ describe("purchase import line identity", () => {
         vendorId,
       ),
     );
+  });
+});
+
+describe("purchase import semantic plan", () => {
+  const candidate = {
+    orderId: "ORDER-1",
+    orderedAt: "2026-09-20T12:00:00.000Z",
+    merchant: "Example",
+    currency: "USD",
+    printedGrandTotal: 12.34,
+    lines: [
+      {
+        title: "Example item",
+        amount: 12.34,
+        lineKind: "principal" as const,
+      },
+    ],
+    payments: [],
+    allShipmentsDelivered: true,
+  };
+
+  it("carries the writer's foreign-currency refusal into validation", () => {
+    expect(
+      buildPurchaseImportPlan({
+        status: "ready",
+        candidate: { ...candidate, currency: "EUR" },
+      }).writeBlockReason,
+    ).toBe("foreign_currency");
+  });
+
+  it("carries extraction review refusals into validation", () => {
+    expect(
+      buildPurchaseImportPlan({
+        status: "needs_review",
+        candidate,
+        reason: "sum_mismatch",
+        detail: "The printed total does not match the extracted lines.",
+      }).writeBlockReason,
+    ).toBe("sum_mismatch");
   });
 });

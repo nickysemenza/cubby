@@ -311,8 +311,16 @@ public actor URLSessionBrowserBridge {
             await executor.raiseAuthenticationWindow()
             authWindowObserver?(payload.runID)
         case .runCompleted(let payload):
+            let terminalStatus: BrowserBridgeRunCompletion.TerminalStatusPayload =
+                switch payload.terminalStatus {
+                case .completed: .completed
+                case .needsReview: .needsReview
+                case .failed: .failed
+                case .dispatchFailed: .dispatchFailed
+                }
             let completion = BrowserBridgeRunCompletion(
-                runID: payload.runID, imported: payload.imported, updated: payload.updated,
+                runID: payload.runID, terminalStatus: terminalStatus,
+                outcome: payload.outcome, imported: payload.imported, updated: payload.updated,
                 skipped: payload.skipped, findingCount: payload.findingCount)
             BrowserBridgeDebugLog.emit(.runCompleted, runID: completion.runID)
             let isNew = ledger.recordRunCompletion(completion)

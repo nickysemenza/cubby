@@ -43,14 +43,14 @@ describe("integrity catalog", () => {
     expect(catalog.coverage.auditedEdges + catalog.coverage.exemptEdges).toBe(
       edges.length,
     );
-    expect(catalog.coverage.exemptEdges).toBe(1);
+    expect(catalog.coverage.exemptEdges).toBe(2);
     expect(
       edges
         .filter(
           (edge) => edge.semantics.liveness.kind === "allow-target-deleted",
         )
         .map((edge) => edge.edgeKey),
-    ).toEqual(["Ingredient.recipeId"]);
+    ).toEqual(["Ingredient.recipeId", "ImportRunTarget.purchaseId"]);
   });
 
   it("counts declared relationships, operations, and dispositions", () => {

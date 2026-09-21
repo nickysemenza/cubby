@@ -31,8 +31,23 @@ public struct BrowserLocalEvidence: Sendable, Hashable {
     }
 }
 
+/// The server grants this scope only for an explicit target in a targeted import run. It is
+/// intentionally distinct from the opaque broker run UUID: the public run code and target UUID
+/// are both required to stage immutable R2 evidence without creating an Image or Document.
+public struct BrowserEvidenceUploadScope: Sendable, Hashable {
+    public let runPublicID: String
+    public let targetID: String
+
+    public init(runPublicID: String, targetID: String) {
+        self.runPublicID = runPublicID
+        self.targetID = targetID
+    }
+}
+
 public protocol BrowserEvidenceUploading: Sendable {
-    func upload(_ evidence: BrowserLocalEvidence, runID: String) async throws
+    func upload(
+        _ evidence: BrowserLocalEvidence, runID: String, scope: BrowserEvidenceUploadScope?
+    ) async throws
         -> BrowserEvidenceReference
 }
 

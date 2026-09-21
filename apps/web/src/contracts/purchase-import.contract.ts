@@ -1,4 +1,6 @@
 import {
+  initiateImportRunEvidenceUploadInput,
+  initiateImportRunEvidenceUploadOut,
   listReceiptHuntsInput,
   listReceiptHuntsOut,
   submitReceiptEvidenceInput,
@@ -8,6 +10,12 @@ import {
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const purchaseImportContract = defineContract("purchaseImport", {
+  initiateRunEvidenceUpload: mutation({
+    input: initiateImportRunEvidenceUploadInput,
+    output: initiateImportRunEvidenceUploadOut,
+    native:
+      "Stage an immutable run-scoped purchase validation or enrichment evidence upload",
+  }),
   listReceiptHunts: query({
     input: listReceiptHuntsInput,
     output: listReceiptHuntsOut,

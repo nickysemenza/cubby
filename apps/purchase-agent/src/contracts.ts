@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+const importRunPurpose = z.enum([
+  "account_sync",
+  "purchase_validation",
+  "product_enrichment",
+]);
+
 const nonEmptyId = z.string().trim().min(1).max(256);
 
 const purchaseAgentEventBaseSchema = z.object({
@@ -10,6 +16,7 @@ const purchaseAgentEventBaseSchema = z.object({
     .regex(/^PIR-[A-Z0-9]{10}$/u)
     .optional(),
   coordinatorModel: z.enum(["gpt-5.6-terra", "gpt-5.6-sol"]).optional(),
+  purpose: importRunPurpose.optional(),
   eventId: nonEmptyId,
 });
 
@@ -36,6 +43,7 @@ type PurchaseAgentEventCandidateObject = {
   runId?: string;
   publicId?: string;
   coordinatorModel?: "gpt-5.6-terra" | "gpt-5.6-sol";
+  purpose?: z.infer<typeof importRunPurpose>;
   eventId?: string;
   type?: string;
   connectionId?: string;

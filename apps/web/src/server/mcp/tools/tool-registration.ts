@@ -8,10 +8,12 @@ import type {
   CallToolResult,
   ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import { importRun } from "~/server/db/schema";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { parseMcpWorkflowCaller } from "~/server/mcp/caller-contract";
 import { getEntityKernelContext } from "~/server/mcp/kernel-context";
@@ -22,7 +24,12 @@ import {
   trustedPurchaseAgent,
 } from "~/server/mcp/purchase-agent-protocol";
 import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
+import {
+  assertImportRunCapabilityById,
+  capabilityForPurchaseAgentTool,
+} from "~/server/purchase-import/capabilities";
 import type { ReadPolicy } from "~/server/read-policy";
+import { getDb } from "~/server/repo/database-helpers";
 
 import { declareToolOutputSchema } from "./tool-catalog";
 import { requireObjectInputSchema, sdkOutputSchema } from "./tool-json-schema";
@@ -256,6 +263,7 @@ export function registerMcpTool<
   }
   declareToolOutputSchema(server, config.name, config.outputSchema);
 
+  // eslint-disable-next-line complexity -- Registration centralizes auth, capability, approval, telemetry, and error contracts.
   const callback = async (
     params: ToolArguments,
     extra: ToolExtra,
@@ -275,10 +283,39 @@ export function registerMcpTool<
       enteredHandler = true;
       const trusted = trustedPurchaseAgent(preparedExtra);
       const operationContext = operationContextFromExtra(preparedExtra);
+      if (trusted) {
+        const capability = capabilityForPurchaseAgentTool(
+          config.name,
+          mutation,
+        );
+        if (capability) {
+          const parsedKernel = getEntityKernelContext(preparedExtra);
+          await assertImportRunCapabilityById(
+            parsedKernel.db,
+            trusted.runId,
+            capability,
+          );
+        }
+      }
       const autoAllowedPurchaseImportTool =
         config.name === "prepare_purchase_import" ||
         config.name === "commit_purchase_import" ||
         config.purchaseAgentMutationHandled === true;
+      if (trusted && mutation && autoAllowedPurchaseImportTool) {
+        const execution = z
+          .object({ _runExecution: purchaseImportRunExecution })
+          .parse(params)._runExecution;
+        const parsedKernel = getEntityKernelContext(preparedExtra);
+        const [delegatedRun] = await getDb(parsedKernel.db)
+          .select({ publicId: importRun.publicId })
+          .from(importRun)
+          .where(eq(importRun.id, trusted.runId))
+          .limit(1);
+        if (delegatedRun?.publicId !== execution.runPublicId)
+          throw new Error(
+            "Purchase-agent run execution does not match its delegation",
+          );
+      }
       const result =
         trusted && mutation && !autoAllowedPurchaseImportTool
           ? await (async () => {

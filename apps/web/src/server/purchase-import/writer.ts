@@ -59,6 +59,7 @@ import {
   product,
   productExternalId,
 } from "~/server/db/schema";
+import { assertImportRunCapabilityById } from "~/server/purchase-import/capabilities";
 import {
   getDb,
   notDeleted,
@@ -89,6 +90,38 @@ const sha256 = async (value: string): Promise<string> => {
 
 const dateOnly = (value: string | null): string =>
   (value ? new Date(value) : new Date()).toISOString().slice(0, 10);
+
+/**
+ * Deterministic semantic projection shared by the writer and validation.
+ * It deliberately excludes evidence bytes and mutable source-claim state.
+ */
+export function buildPurchaseImportPlan(
+  extraction: ImportWriterInput["extraction"],
+) {
+  const candidate = extraction.candidate;
+  const writeBlockReason = !candidate
+    ? "unreadable"
+    : candidate.currency !== "USD"
+      ? "foreign_currency"
+      : extraction.status === "needs_review" &&
+          ["sum_mismatch", "foreign_currency", "missing_total"].includes(
+            extraction.reason,
+          )
+        ? extraction.reason
+        : null;
+  return {
+    orderId: candidate?.orderId ?? null,
+    currency: candidate?.currency ?? null,
+    statedTotal: candidate?.printedGrandTotal ?? null,
+    writeBlockReason,
+    lines: (candidate?.lines ?? []).map((line) => ({
+      title: line.title,
+      amount: line.amount,
+      lineKind: line.lineKind,
+      quantity: line.quantity ?? null,
+    })),
+  };
+}
 
 async function assertImportOwnership(
   db: Database,
@@ -715,15 +748,12 @@ export async function importVendorOrder(
   actorUserId: string,
 ): Promise<ImportWriterOutput> {
   const input = importWriterInput.parse(rawInput);
+  // Validation consumes this exact deterministic projection before any writer
+  // side effect. Keep it on the mutation path so plan drift is explicit.
+  const semanticPlan = buildPurchaseImportPlan(input.extraction);
+  await assertImportRunCapabilityById(db, input.runId, "business_writer");
   await assertImportOwnership(db, input, actorUserId);
-  const candidate = input.extraction.candidate;
-  const skipsLineWrites =
-    !candidate ||
-    candidate.currency !== "USD" ||
-    (input.extraction.status === "needs_review" &&
-      ["sum_mismatch", "foreign_currency", "missing_total"].includes(
-        input.extraction.reason,
-      ));
+  const skipsLineWrites = semanticPlan.writeBlockReason !== null;
   const explicitResolutions = input.productResolutions;
   const identityDecisions = skipsLineWrites
     ? []

@@ -114,6 +114,7 @@ import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiImportMerchantRulesRouteImport } from './routes/api/import/merchant-rules'
 import { Route as ApiImportRunLogsRouteImport } from './routes/api/import/run-logs'
 import { Route as ApiImportRunsRouteImport } from './routes/api/import/runs'
+import { Route as ApiImportTargetedRouteImport } from './routes/api/import/targeted'
 import { Route as ApiSettingsMemberLoginsRouteImport } from './routes/api/settings/member-logins'
 import { Route as ApiV1ResourceRouteImport } from './routes/api/v1/$resource'
 import { Route as ApiV1DocsRouteImport } from './routes/api/v1/docs'
@@ -733,6 +734,11 @@ const ApiImportRunsRoute = ApiImportRunsRouteImport.update({
   path: '/api/import/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiImportTargetedRoute = ApiImportTargetedRouteImport.update({
+  id: '/api/import/targeted',
+  path: '/api/import/targeted',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSettingsMemberLoginsRoute = ApiSettingsMemberLoginsRouteImport.update({
   id: '/api/settings/member-logins',
   path: '/api/settings/member-logins',
@@ -948,6 +954,7 @@ export interface FileRoutesByFullPath {
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRouteWithChildren
+  '/api/import/targeted': typeof ApiImportTargetedRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -1077,6 +1084,7 @@ export interface FileRoutesByTo {
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRouteWithChildren
+  '/api/import/targeted': typeof ApiImportTargetedRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -1209,6 +1217,7 @@ export interface FileRoutesById {
   '/api/import/merchant-rules': typeof ApiImportMerchantRulesRoute
   '/api/import/run-logs': typeof ApiImportRunLogsRoute
   '/api/import/runs': typeof ApiImportRunsRouteWithChildren
+  '/api/import/targeted': typeof ApiImportTargetedRoute
   '/api/settings/member-logins': typeof ApiSettingsMemberLoginsRoute
   '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
@@ -1341,6 +1350,7 @@ export interface FileRouteTypes {
     | '/api/import/merchant-rules'
     | '/api/import/run-logs'
     | '/api/import/runs'
+    | '/api/import/targeted'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
@@ -1470,6 +1480,7 @@ export interface FileRouteTypes {
     | '/api/import/merchant-rules'
     | '/api/import/run-logs'
     | '/api/import/runs'
+    | '/api/import/targeted'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
@@ -1601,6 +1612,7 @@ export interface FileRouteTypes {
     | '/api/import/merchant-rules'
     | '/api/import/run-logs'
     | '/api/import/runs'
+    | '/api/import/targeted'
     | '/api/settings/member-logins'
     | '/api/v1/$resource'
     | '/api/v1/docs'
@@ -1669,6 +1681,7 @@ export interface RootRouteChildren {
   ApiImportMerchantRulesRoute: typeof ApiImportMerchantRulesRoute
   ApiImportRunLogsRoute: typeof ApiImportRunLogsRoute
   ApiImportRunsRoute: typeof ApiImportRunsRouteWithChildren
+  ApiImportTargetedRoute: typeof ApiImportTargetedRoute
   ApiSettingsMemberLoginsRoute: typeof ApiSettingsMemberLoginsRoute
   ApiV1ResourceRoute: typeof ApiV1ResourceRouteWithChildren
   ApiV1DocsRoute: typeof ApiV1DocsRoute
@@ -2421,6 +2434,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImportRunsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/import/targeted': {
+      id: '/api/import/targeted'
+      path: '/api/import/targeted'
+      fullPath: '/api/import/targeted'
+      preLoaderRoute: typeof ApiImportTargetedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/settings/member-logins': {
       id: '/api/settings/member-logins'
       path: '/api/settings/member-logins'
@@ -2920,6 +2940,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiImportMerchantRulesRoute: ApiImportMerchantRulesRoute,
   ApiImportRunLogsRoute: ApiImportRunLogsRoute,
   ApiImportRunsRoute: ApiImportRunsRouteWithChildren,
+  ApiImportTargetedRoute: ApiImportTargetedRoute,
   ApiSettingsMemberLoginsRoute: ApiSettingsMemberLoginsRoute,
   ApiV1ResourceRoute: ApiV1ResourceRouteWithChildren,
   ApiV1DocsRoute: ApiV1DocsRoute,

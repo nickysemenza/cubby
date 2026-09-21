@@ -14,11 +14,26 @@ const mcpAccess = z.object({
 // by Cubby's run-bound access grant, then sends it over the service binding.
 const MCP_PLACEHOLDER_URL = "https://cubby-mcp.invalid/mcp";
 
-function rewriteMcpRequest(request: Request, mcpUrl: string): Request {
+async function rewriteMcpRequest(
+  request: Request,
+  mcpUrl: string,
+): Promise<Request> {
   const target = new URL(mcpUrl);
   const requested = new URL(request.url);
   target.search = requested.search;
-  return new Request(target, request);
+  // A transport-owned AbortSignal cannot be structured-cloned across a
+  // Worker RPC service binding. Rebuild the small MCP request from bytes so
+  // cancellation remains local to the agent submission instead of making the
+  // private web entrypoint uncallable in workerd.
+  return new Request(target, {
+    method: request.method,
+    headers: request.headers,
+    body:
+      request.method === "GET" || request.method === "HEAD"
+        ? undefined
+        : await request.arrayBuffer(),
+    redirect: request.redirect,
+  });
 }
 
 /**
@@ -48,7 +63,7 @@ export function cubbyMcpConnection(
         authorizedUrl ??
         mcpAccess.parse(await serviceForRun().acquireMcpAccess({ runId }))
           .mcpUrl;
-      return serviceForRun().mcpFetch(rewriteMcpRequest(request, mcpUrl));
+      return serviceForRun().mcpFetch(await rewriteMcpRequest(request, mcpUrl));
     },
   };
 }

@@ -401,6 +401,19 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires thought or evidence
 
+- **Apply a reviewed purchase-validation diff.** Targeted validation now
+  records a read-only semantic diff and stops for review. Design the explicit
+  human confirmation, stale-target revalidation, and transactional application
+  path before allowing any proposed validation change to touch Purchases,
+  Expenses, Product assignments, settlement, or shared evidence.
+
+- **Generalize evidence-backed Product enrichment beyond Amazon.** The bounded
+  commit currently proves ASINs and exact-variant images from the typed Amazon
+  capture fields. Add vendor-specific, fixed capture adapters for retailer SKU,
+  catalog/item number, and GTIN evidence before allowing those identifiers or
+  non-Amazon images to write; readable page text and free-text source hints are
+  not sufficient authority.
+
 - **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its owned window,
   cannot avoid Chrome's JavaScript-from-Apple-Events setting, or otherwise

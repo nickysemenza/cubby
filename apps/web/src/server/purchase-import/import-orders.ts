@@ -7,15 +7,25 @@ import {
 import {
   commitPurchaseImportInput,
   commitPurchaseImportOut,
+  commitProductEnrichmentInput,
+  commitProductEnrichmentOut,
   extractedPurchaseLine,
   importExtractionOutcome,
   importSourceKind,
+  importRunPurpose,
+  validatePurchaseImportInput,
+  validatePurchaseImportOut,
   preparePurchaseImportInput,
   preparePurchaseImportOut,
   purchaseImportOperationStatusInput,
   purchaseImportOperationStatusOut,
+  overwriteProductEnrichmentInput,
+  overwriteProductEnrichmentOut,
   type CommitPurchaseImportInput,
+  type CommitProductEnrichmentInput,
+  type OverwriteProductEnrichmentInput,
   type PreparePurchaseImportInput,
+  type ValidatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
 import { and, asc, eq, ilike, inArray, or } from "drizzle-orm";
 import { z } from "zod";
@@ -27,22 +37,34 @@ import {
   importPreparedOrder,
   importHunt,
   importRun,
+  importRunEvidence,
+  importRunTarget,
+  importRunMutation,
   importRunOperation,
   importSourceClaim,
   product,
   productExternalId,
+  productImage,
   purchase,
 } from "~/server/db/schema";
 import {
   getDb,
   notDeleted,
+  withTransaction,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
+import { deleteImages } from "~/server/repo/image";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  deleteStoredObjects,
+  importImageFromUrl,
+} from "~/server/services/image-storage.service";
 
+import { assertImportRunCapability } from "./capabilities";
+import { learnPurchaseProductExternalId } from "./external-id-learning";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { auditAllImportBatches, loadRunScopeByPublicId } from "./run-service";
-import { importVendorOrder } from "./writer";
+import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
 
 const sha256 = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest(
@@ -295,6 +317,24 @@ export async function preparePurchaseImport(
     actor,
     input._runExecution.runPublicId,
   );
+  const [purposeRow] = await getDb(db)
+    .select({ purpose: importRun.purpose })
+    .from(importRun)
+    .where(eq(importRun.id, scope.public.runId))
+    .limit(1);
+  assertImportRunCapability(
+    importRunPurpose.parse(purposeRow?.purpose),
+    "prepare",
+  );
+  if (
+    purposeRow?.purpose === "purchase_validation" &&
+    input.orders.some(
+      (order) => order.primaryDocumentImageId || order.screenshotImageId,
+    )
+  )
+    throw new Error(
+      "Purchase validation accepts only run-scoped evidence, never shared images",
+    );
   if (!scope.vendorId) throw new Error("Purchase import run has no vendor");
   const vendorId = scope.vendorId;
   const inputFingerprint = await sha256(JSON.stringify(input.orders));
@@ -496,6 +536,15 @@ export async function commitPurchaseImport(
     actor,
     input._runExecution.runPublicId,
   );
+  const [purposeRow] = await getDb(db)
+    .select({ purpose: importRun.purpose })
+    .from(importRun)
+    .where(eq(importRun.id, scope.public.runId))
+    .limit(1);
+  assertImportRunCapability(
+    importRunPurpose.parse(purposeRow?.purpose),
+    "commit_purchase_import",
+  );
   if (!scope.vendorId) throw new Error("Purchase import run has no vendor");
   const vendorId = scope.vendorId;
   const args = operationArgs(input);
@@ -602,10 +651,13 @@ export async function commitPurchaseImport(
           const resolution = resolutionMap.get(
             `${order.stableOrderId}:${line.stableLineId}`,
           );
-          if (!resolution)
-            throw new Error(
-              `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
-            );
+          if (!resolution) {
+            if (parsedLine.lineKind === "principal")
+              throw new Error(
+                `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
+              );
+            continue;
+          }
           if (resolution.kind === "existing") {
             productResolutions.push({
               kind: "existing" as const,
@@ -728,6 +780,639 @@ export async function commitPurchaseImport(
     );
   }
   return transactionResult.result;
+}
+
+/** Compare an immutable prepared plan to its live Purchase without invoking the writer. */
+export async function validatePurchaseImport(
+  db: Database,
+  rawInput: ValidatePurchaseImportInput,
+  actor: ActorContext,
+) {
+  const input = validatePurchaseImportInput.parse(rawInput);
+  const scope = await assertOwnedRun(
+    db,
+    actor,
+    input._runExecution.runPublicId,
+  );
+  if (scope.public.purpose !== "purchase_validation")
+    throw new Error(
+      "validate_purchase_import requires a purchase validation run",
+    );
+  if (scope.public.status !== "running")
+    throw new Error(`Import run is fenced in status ${scope.public.status}`);
+  const argsFingerprint = await sha256(JSON.stringify(input));
+  return withTransactionDatabase(
+    db,
+    // eslint-disable-next-line complexity -- Validation compares the complete immutable plan inside one read-only transaction.
+    async (transactionDb) => {
+      const database = getDb(transactionDb);
+      const [lockedRun] = await database
+        .select({ status: importRun.status })
+        .from(importRun)
+        .where(eq(importRun.id, scope.public.runId))
+        .limit(1)
+        .for("update");
+      if (lockedRun?.status !== "running")
+        throw new Error(
+          `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
+        );
+      const [existing] = await database
+        .select({
+          inputFingerprint: importRunOperation.inputFingerprint,
+          result: importRunOperation.result,
+        })
+        .from(importRunOperation)
+        .where(
+          and(
+            eq(importRunOperation.runId, scope.public.runId),
+            eq(importRunOperation.operationId, input._runExecution.operationId),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        if (existing.inputFingerprint !== argsFingerprint)
+          throw new Error("Operation id was replayed with different input");
+        return validatePurchaseImportOut.parse(existing.result);
+      }
+      const prepared = await loadPreparation(
+        transactionDb,
+        scope.public.runId,
+        input.prepareOperationId,
+      );
+      const resolutionMap = new Map(
+        input.resolutions.map((resolution) => [
+          `${resolution.stableOrderId}:${resolution.stableLineId}`,
+          resolution.resolution,
+        ]),
+      );
+      if (resolutionMap.size !== input.resolutions.length)
+        throw new Error("Product resolutions contain duplicate line ids");
+      const results = [];
+      const canonical = (value: unknown[]) =>
+        [...value].sort((left, right) =>
+          JSON.stringify(left).localeCompare(JSON.stringify(right)),
+        );
+      for (const { order, lines } of prepared) {
+        const extraction = importExtractionOutcome.parse(order.extraction);
+        const plan = buildPurchaseImportPlan(extraction);
+        const [target] = await database
+          .select({
+            id: importRunTarget.id,
+            purchaseId: importRunTarget.purchaseId,
+            evidenceFingerprint: importRunTarget.evidenceFingerprint,
+          })
+          .from(importRunTarget)
+          .where(
+            and(
+              eq(importRunTarget.runId, scope.public.runId),
+              eq(importRunTarget.sourceExternalKey, order.sourceExternalKey),
+            ),
+          )
+          .limit(1);
+        if (!target?.purchaseId)
+          throw new Error("Prepared validation order has no Purchase target");
+        const [livePurchase] = await database
+          .select({
+            orderId: purchase.orderId,
+            statedTotal: purchase.statedTotal,
+          })
+          .from(purchase)
+          .where(eq(purchase.id, target.purchaseId))
+          .limit(1);
+        const liveLines = await database
+          .select({
+            title: expense.name,
+            amount: expense.cost,
+            lineKind: expense.lineKind,
+            quantity: expense.productQuantity,
+            productId: product.shortcode,
+          })
+          .from(expense)
+          .leftJoin(
+            product,
+            and(eq(product.id, expense.productId), notDeleted(product)),
+          )
+          .where(
+            and(eq(expense.purchaseId, target.purchaseId), notDeleted(expense)),
+          );
+        const expected = canonical(
+          lines.map((line) => {
+            const parsed = extractedPurchaseLine.parse(line.line);
+            const resolution = resolutionMap.get(
+              `${order.stableOrderId}:${line.stableLineId}`,
+            );
+            if (!resolution && parsed.lineKind === "principal")
+              throw new Error(
+                `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
+              );
+            return {
+              title: parsed.title,
+              amount: parsed.amount,
+              lineKind: parsed.lineKind,
+              quantity: parsed.quantity ?? null,
+              productId:
+                parsed.lineKind !== "principal"
+                  ? null
+                  : resolution?.kind === "existing"
+                    ? resolution.productId
+                    : resolution?.kind,
+            };
+          }),
+        );
+        const actual = canonical(
+          liveLines.map(({ title, amount, lineKind, quantity, productId }) => ({
+            title,
+            amount,
+            lineKind,
+            quantity,
+            productId: productId ?? null,
+          })),
+        );
+        const semanticEqual =
+          plan.writeBlockReason === null &&
+          JSON.stringify({
+            orderId: livePurchase?.orderId ?? null,
+            currency: "USD",
+            statedTotal: livePurchase?.statedTotal ?? null,
+            lines: actual,
+          }) ===
+            JSON.stringify({
+              orderId: plan.orderId,
+              currency: plan.currency,
+              statedTotal: plan.statedTotal,
+              lines: expected,
+            });
+        const rawEvidenceDrift =
+          semanticEqual &&
+          target.evidenceFingerprint !== null &&
+          target.evidenceFingerprint !== order.sourceChecksum;
+        const diff = semanticEqual
+          ? null
+          : {
+              expected: {
+                orderId: plan.orderId,
+                currency: plan.currency,
+                statedTotal: plan.statedTotal,
+                lines: expected,
+                writeBlockReason: plan.writeBlockReason,
+              },
+              actual: {
+                orderId: livePurchase?.orderId ?? null,
+                currency: "USD",
+                statedTotal: livePurchase?.statedTotal ?? null,
+                lines: actual,
+              },
+            };
+        const outcome = semanticEqual
+          ? rawEvidenceDrift
+            ? "raw_evidence_drift"
+            : "replayed"
+          : "semantic_drift";
+        await database
+          .update(importRunTarget)
+          .set({
+            state: semanticEqual ? "completed" : "unresolved",
+            outcome,
+            diff,
+            warning: rawEvidenceDrift
+              ? "The source evidence changed, but the resulting Purchase plan is semantically identical."
+              : null,
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(importRunTarget.id, target.id));
+        results.push({ stableOrderId: order.stableOrderId, outcome, diff });
+      }
+      const status = results.every(
+        (result) => result.outcome !== "semantic_drift",
+      )
+        ? "completed"
+        : "needs_review";
+      const result = validatePurchaseImportOut.parse({
+        runPublicId: scope.public.publicId,
+        operationId: input._runExecution.operationId,
+        status,
+        targets: results,
+      });
+      await database.insert(importRunOperation).values({
+        runId: scope.public.runId,
+        operationId: input._runExecution.operationId,
+        kind: "validate_purchase_import",
+        inputFingerprint: argsFingerprint,
+        state: "completed",
+        result,
+        completedAt: new Date(),
+      });
+      return result;
+    },
+  );
+}
+
+/** Fill only blank Product identity fields for an explicit enrichment target. */
+export async function commitProductEnrichment(
+  db: Database,
+  rawInput: CommitProductEnrichmentInput,
+  actor: ActorContext,
+) {
+  const input = commitProductEnrichmentInput.parse(rawInput);
+  const scope = await assertOwnedRun(
+    db,
+    actor,
+    input._runExecution.runPublicId,
+  );
+  if (scope.public.purpose !== "product_enrichment")
+    throw new Error(
+      "Product enrichment commit requires a product enrichment run",
+    );
+  if (scope.public.status !== "running")
+    throw new Error(`Import run is fenced in status ${scope.public.status}`);
+  const productId = await resolveOrThrow(db, "product", input.productId);
+  const database = getDb(db);
+  const changes = input.changes;
+  const operationId = input._runExecution.operationId;
+  const fingerprint = await sha256(JSON.stringify(input));
+  const [existing] = await database
+    .select({
+      inputFingerprint: importRunOperation.inputFingerprint,
+      result: importRunOperation.result,
+    })
+    .from(importRunOperation)
+    .where(
+      and(
+        eq(importRunOperation.runId, scope.public.runId),
+        eq(importRunOperation.operationId, operationId),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    if (existing.inputFingerprint !== fingerprint)
+      throw new Error("Operation id was replayed with different input");
+    return commitProductEnrichmentOut.parse(existing.result);
+  }
+  const changedFields = z
+    .array(
+      z.enum(["manufacturer", "category", "model", "identifiers", "image"]),
+    )
+    .parse(Object.keys(changes));
+  const [targetRef] = await database
+    .select({ id: importRunTarget.id })
+    .from(importRunTarget)
+    .where(
+      and(
+        eq(importRunTarget.runId, scope.public.runId),
+        eq(importRunTarget.productId, productId),
+      ),
+    )
+    .limit(1);
+  if (!targetRef) throw new Error("Product enrichment target was not found");
+  let importedImageId: Awaited<ReturnType<typeof resolveOrThrow>> | null = null;
+  if (changes.image) {
+    const [evidence] = await database
+      .select({ metadata: importRunEvidence.sourceMetadata })
+      .from(importRunEvidence)
+      .where(
+        and(
+          eq(importRunEvidence.id, changes.image.evidenceId),
+          eq(importRunEvidence.runId, scope.public.runId),
+          eq(importRunEvidence.targetId, targetRef.id),
+          eq(importRunEvidence.kind, "browser_capture"),
+        ),
+      )
+      .limit(1);
+    const metadata = z
+      .object({
+        requestedAmazonAsin: z.string().nullable(),
+        servedAmazonAsin: z.string().nullable(),
+        variantMarkers: z.array(z.string()),
+        images: z.array(
+          z.object({
+            url: z.url(),
+            naturalWidth: z.number().int().positive().nullable(),
+            naturalHeight: z.number().int().positive().nullable(),
+            highResolutionUrl: z.url().nullable(),
+          }),
+        ),
+      })
+      .safeParse(evidence?.metadata);
+    const exactVariant =
+      metadata.success &&
+      metadata.data.requestedAmazonAsin !== null &&
+      metadata.data.requestedAmazonAsin === metadata.data.servedAmazonAsin;
+    const verified =
+      metadata.success && exactVariant
+        ? metadata.data.images.some(
+            (image) =>
+              (image.url === changes.image?.url ||
+                image.highResolutionUrl === changes.image?.url) &&
+              image.naturalWidth === changes.image?.naturalWidth &&
+              image.naturalHeight === changes.image?.naturalHeight,
+          )
+        : false;
+    if (!verified)
+      throw new Error(
+        "Product image was not verified by this target's browser evidence",
+      );
+    const imported = await importImageFromUrl(db, {
+      sourceUrl: changes.image.url,
+      filenamePrefix: `product-enrichment-${input.productId}`,
+    });
+    if (!imported)
+      throw new Error("Verified Product image could not be stored");
+    importedImageId = await resolveOrThrow(db, "image", imported.imageId);
+  }
+  try {
+    await withTransaction(
+      db,
+      // eslint-disable-next-line complexity -- The bounded commit revalidates every approved field and evidence class atomically.
+      async (tx) => {
+        const [lockedRun] = await tx
+          .select({ status: importRun.status })
+          .from(importRun)
+          .where(eq(importRun.id, scope.public.runId))
+          .limit(1)
+          .for("update");
+        if (lockedRun?.status !== "running")
+          throw new Error(
+            `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
+          );
+        const [target] = await tx
+          .select({
+            id: importRunTarget.id,
+            targetFingerprint: importRunTarget.targetFingerprint,
+          })
+          .from(importRunTarget)
+          .where(
+            and(
+              eq(importRunTarget.runId, scope.public.runId),
+              eq(importRunTarget.productId, productId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (!target || target.targetFingerprint !== input.targetFingerprint)
+          throw new Error("Product enrichment target changed before commit");
+        const [live] = await tx
+          .select({
+            name: product.name,
+            manufacturer: product.manufacturer,
+            category: product.category,
+            model: product.model,
+            updatedAt: product.updatedAt,
+          })
+          .from(product)
+          .where(and(eq(product.id, productId), notDeleted(product)))
+          .limit(1)
+          .for("update");
+        if (!live) throw new Error("Product enrichment target was not found");
+        const currentTargetFingerprint = await sha256(
+          JSON.stringify({ product: live }),
+        );
+        if (currentTargetFingerprint !== input.targetFingerprint)
+          throw new Error("Product enrichment target changed before commit");
+        if (
+          (changes.manufacturer && live.manufacturer.trim()) ||
+          (changes.category && live.category) ||
+          (changes.model && live.model)
+        )
+          throw new Error(
+            "Overwriting a populated Product field requires typed approval",
+          );
+        if (changes.image) {
+          const [existingImage] = await tx
+            .select({ id: productImage.id })
+            .from(productImage)
+            .where(
+              and(
+                eq(productImage.productId, productId),
+                notDeleted(productImage),
+              ),
+            )
+            .limit(1);
+          if (existingImage)
+            throw new Error(
+              "Overwriting a populated Product image requires typed approval",
+            );
+        }
+        await tx.insert(importRunOperation).values({
+          runId: scope.public.runId,
+          operationId,
+          kind: "commit_product_enrichment",
+          inputFingerprint: fingerprint,
+          state: "started",
+        });
+        await tx
+          .update(product)
+          .set({
+            manufacturer: changes.manufacturer,
+            category: changes.category,
+            model: changes.model,
+            updatedAt: new Date(),
+          })
+          .where(eq(product.id, productId));
+        for (const identifier of changes.identifiers ?? []) {
+          const [identifierEvidence] = await tx
+            .select({ metadata: importRunEvidence.sourceMetadata })
+            .from(importRunEvidence)
+            .where(
+              and(
+                eq(importRunEvidence.id, identifier.evidenceId),
+                eq(importRunEvidence.runId, scope.public.runId),
+                eq(importRunEvidence.targetId, target.id),
+                eq(importRunEvidence.kind, "browser_capture"),
+              ),
+            )
+            .limit(1);
+          const observed = z
+            .object({
+              requestedAmazonAsin: z.string().nullable(),
+              servedAmazonAsin: z.string().nullable(),
+            })
+            .safeParse(identifierEvidence?.metadata);
+          const externalId = identifier.externalId.toUpperCase();
+          if (
+            !observed.success ||
+            identifier.kind !== "asin" ||
+            observed.data.requestedAmazonAsin?.toUpperCase() !== externalId ||
+            observed.data.servedAmazonAsin?.toUpperCase() !== externalId
+          )
+            throw new Error(
+              "Product identifier was not proven by this target's retained evidence",
+            );
+          await learnPurchaseProductExternalId(tx, {
+            productId,
+            source: identifier.source,
+            kind: identifier.kind,
+            externalId,
+            url: identifier.url,
+          });
+        }
+        if (importedImageId)
+          await tx.insert(productImage).values({
+            productId,
+            imageId: importedImageId,
+            sortOrder: 0,
+          });
+        await tx.insert(importRunMutation).values({
+          runId: scope.public.runId,
+          targetType: "product",
+          targetId: productId,
+          mutationKind: "update",
+          fields: changedFields,
+          postFingerprint: await sha256(JSON.stringify({ productId, changes })),
+        });
+        await tx
+          .update(importRunTarget)
+          .set({
+            state: "completed",
+            outcome: "enriched",
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(importRunTarget.id, target.id));
+        const result = commitProductEnrichmentOut.parse({
+          runPublicId: scope.public.publicId,
+          operationId,
+          productId: input.productId,
+          status: "running",
+          changedFields,
+        });
+        await tx
+          .update(importRunOperation)
+          .set({
+            state: "completed",
+            result,
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(importRunOperation.runId, scope.public.runId),
+              eq(importRunOperation.operationId, operationId),
+            ),
+          );
+      },
+    );
+  } catch (error) {
+    if (importedImageId) {
+      const removed = await deleteImages(db, [importedImageId]);
+      await deleteStoredObjects(removed.deletedKeys);
+    }
+    throw error;
+  }
+  return commitProductEnrichmentOut.parse({
+    runPublicId: scope.public.publicId,
+    operationId,
+    productId: input.productId,
+    status: "running",
+    changedFields,
+  });
+}
+
+/** One populated-field replacement, executed only by the exact-argument approval wrapper. */
+export async function overwriteProductEnrichment(
+  db: Database,
+  rawInput: OverwriteProductEnrichmentInput,
+  actor: ActorContext,
+) {
+  const input = overwriteProductEnrichmentInput.parse(rawInput);
+  const scope = await assertOwnedRun(
+    db,
+    actor,
+    input._runExecution.runPublicId,
+  );
+  if (scope.public.purpose !== "product_enrichment")
+    throw new Error("Product overwrite requires a product enrichment run");
+  const resolvedProductId = await resolveOrThrow(
+    db,
+    "product",
+    input.productId,
+  );
+  const database = getDb(db);
+  const [target] = await database
+    .select({ targetFingerprint: importRunTarget.targetFingerprint })
+    .from(importRunTarget)
+    .where(
+      and(
+        eq(importRunTarget.runId, scope.public.runId),
+        eq(importRunTarget.productId, resolvedProductId),
+      ),
+    )
+    .limit(1);
+  if (!target || target.targetFingerprint !== input.targetFingerprint)
+    throw new Error("Product enrichment target changed before approval");
+  const [live] = await database
+    .select({
+      name: product.name,
+      manufacturer: product.manufacturer,
+      category: product.category,
+      model: product.model,
+      updatedAt: product.updatedAt,
+    })
+    .from(product)
+    .where(and(eq(product.id, resolvedProductId), notDeleted(product)))
+    .limit(1);
+  if (!live) throw new Error("Product enrichment target was not found");
+  if (
+    (await sha256(JSON.stringify({ product: live }))) !==
+    input.targetFingerprint
+  )
+    throw new Error("Product enrichment target changed after proposal");
+  const [updated] =
+    input.change.field === "manufacturer"
+      ? await database
+          .update(product)
+          .set({
+            manufacturer: input.change.value ?? "",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(product.id, resolvedProductId),
+              eq(product.updatedAt, live.updatedAt),
+            ),
+          )
+          .returning({ id: product.id })
+      : input.change.field === "category"
+        ? await database
+            .update(product)
+            .set({ category: input.change.value, updatedAt: new Date() })
+            .where(
+              and(
+                eq(product.id, resolvedProductId),
+                eq(product.updatedAt, live.updatedAt),
+              ),
+            )
+            .returning({ id: product.id })
+        : await database
+            .update(product)
+            .set({ model: input.change.value, updatedAt: new Date() })
+            .where(
+              and(
+                eq(product.id, resolvedProductId),
+                eq(product.updatedAt, live.updatedAt),
+              ),
+            )
+            .returning({ id: product.id });
+  if (!updated) throw new Error("Product changed while applying approval");
+  await database
+    .update(importRunTarget)
+    .set({
+      state: "completed",
+      outcome: "enriched",
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(importRunTarget.runId, scope.public.runId),
+        eq(importRunTarget.productId, resolvedProductId),
+      ),
+    );
+  return overwriteProductEnrichmentOut.parse({
+    runPublicId: scope.public.publicId,
+    productId: input.productId,
+    changedField: input.change.field,
+  });
 }
 
 export async function purchaseImportOperationStatus(

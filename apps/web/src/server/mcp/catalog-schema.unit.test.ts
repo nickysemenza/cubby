@@ -398,6 +398,13 @@ describe("MCP catalog schemas", () => {
       "commit_purchase_import.prepareOperationId",
       "commit_purchase_import.resolutions[].stableOrderId",
       "commit_purchase_import.resolutions[].stableLineId",
+      "validate_purchase_import.prepareOperationId",
+      "validate_purchase_import.resolutions[].stableOrderId",
+      "validate_purchase_import.resolutions[].stableLineId",
+      // Run-scoped evidence ids address immutable operational captures, not
+      // public Cubby entities.
+      "commit_product_enrichment.changes.identifiers[].evidenceId",
+      "commit_product_enrichment.changes.image.evidenceId",
     ]);
     const freeTextIds = new Set([
       "orderId",

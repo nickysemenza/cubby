@@ -3,7 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { purchaseImportRunsResponse } from "~/lib/purchase-import-run-detail";
 import {
+  listProductImportRuns,
   listPurchaseImportRuns,
+  resolveProductImportTarget,
   resolvePurchaseImportTarget,
 } from "~/server/purchase-import/run-target";
 import { createRequestContext, requireActor } from "~/server/request-context";
@@ -33,6 +35,15 @@ export const Route = createFileRoute("/api/import/runs")({
         const purchaseShortcode = new URL(request.url).searchParams.get(
           "purchaseId",
         );
+        const productShortcode = new URL(request.url).searchParams.get(
+          "productId",
+        );
+        if (purchaseShortcode && productShortcode) {
+          return Response.json(
+            { error: "Choose either a Purchase or a Product" },
+            { status: 400 },
+          );
+        }
         let purchaseId: EntityId<"purchase"> | undefined;
         if (purchaseShortcode) {
           purchaseId =
@@ -47,11 +58,21 @@ export const Route = createFileRoute("/api/import/runs")({
             );
           }
         }
-        const runs = await listPurchaseImportRuns(
-          context.db,
-          party.id,
-          purchaseId,
-        );
+        let productId: EntityId<"product"> | undefined;
+        if (productShortcode) {
+          productId =
+            (await resolveProductImportTarget(context.db, productShortcode)) ??
+            undefined;
+          if (!productId) {
+            return Response.json(
+              { error: "Product was not found" },
+              { status: 404 },
+            );
+          }
+        }
+        const runs = productId
+          ? await listProductImportRuns(context.db, party.id, productId)
+          : await listPurchaseImportRuns(context.db, party.id, purchaseId);
         return Response.json(
           purchaseImportRunsResponse.parse({
             runs: runs.map((run) => ({
@@ -59,6 +80,7 @@ export const Route = createFileRoute("/api/import/runs")({
               vendorAccountLabel: run.vendorAccountLabel,
               vendorName: run.vendorName,
               trigger: run.trigger,
+              purpose: run.purpose,
               status: run.status,
               startedAt: run.startedAt.toISOString(),
               endedAt: run.endedAt?.toISOString() ?? null,

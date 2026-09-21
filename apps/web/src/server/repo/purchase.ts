@@ -60,6 +60,8 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   image,
+  importRunTarget,
+  importRunEvidence,
   importSourceClaim,
   ledgerSourceClaim,
   purchase,
@@ -151,6 +153,12 @@ import {
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
+  "ImportRunTarget.purchaseId": {
+    code: "preserve-targeted-import-history",
+    effect: "preserve",
+    description:
+      "Targeted validation history keeps the deleted purchase tombstone.",
+  },
   "ImportSourceClaim.purchaseId": {
     code: "preserve-import-claim",
     effect: "preserve",
@@ -190,6 +198,11 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
+  "ImportRunTarget.purchaseId": {
+    code: "repoint-targeted-import-history",
+    effect: "repoint",
+    description: "Targeted validation history follows the surviving purchase.",
+  },
   "ImportSourceClaim.purchaseId": {
     code: "repoint-import-claim",
     effect: "repoint",
@@ -1770,6 +1783,39 @@ export const mergePurchases = async (
     for (const loser of losers) {
       await foldChargeInto(tx, loser, keepId, actor);
     }
+    // A run can already target the keeper. Preserve that canonical target and
+    // drop the colliding loser row before re-pointing the remaining history;
+    // the partial unique index makes a bulk update unsafe here.
+    const targetedRuns = await tx
+      .select({ id: importRunTarget.id, runId: importRunTarget.runId })
+      .from(importRunTarget)
+      .where(inArray(importRunTarget.purchaseId, losers));
+    for (const target of targetedRuns) {
+      const [existing] = await tx
+        .select({ id: importRunTarget.id })
+        .from(importRunTarget)
+        .where(
+          and(
+            eq(importRunTarget.runId, target.runId),
+            eq(importRunTarget.purchaseId, keepId),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        await tx
+          .update(importRunEvidence)
+          .set({ targetId: existing.id })
+          .where(eq(importRunEvidence.targetId, target.id));
+        await tx
+          .delete(importRunTarget)
+          .where(eq(importRunTarget.id, target.id));
+      } else {
+        await tx
+          .update(importRunTarget)
+          .set({ purchaseId: keepId, updatedAt: new Date() })
+          .where(eq(importRunTarget.id, target.id));
+      }
+    }
 
     await logAuditEntries(tx, actor, [
       {
@@ -2068,6 +2114,20 @@ export const previewMergePurchases = async (
   );
 
   const changes = present([
+    impact({
+      disposition: PURCHASE_MERGE_EDGE_POLICY["ImportRunTarget.purchaseId"],
+      edgeKey: "ImportRunTarget.purchaseId",
+      label: "targeted import runs re-pointed",
+      byTargetId: await countByTarget(
+        dbClient,
+        importRunTarget,
+        importRunTarget.purchaseId,
+        losers,
+        // ImportRunTarget is hard-delete-only operational history: every
+        // retained target must be previewed before merge repoints it.
+        { includeDeleted: true },
+      ),
+    }),
     impact({
       disposition: PURCHASE_MERGE_EDGE_POLICY["Expense.purchaseId"],
       edgeKey: "Expense.purchaseId",

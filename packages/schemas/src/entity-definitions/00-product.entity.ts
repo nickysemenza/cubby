@@ -151,6 +151,7 @@ export default defineEntity({
         { kind: "slot", id: "fits-with", title: "Fits with" },
         { kind: "slot", id: "cookbooks", title: "Cookbooks" },
         { kind: "slot", id: "recipe-appearances", title: "Appears in recipes" },
+        { kind: "slot", id: "import-runs", title: "Import runs" },
       ],
     },
     list: {
