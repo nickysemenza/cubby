@@ -75,7 +75,7 @@ struct ImageEncodingTests {
     }
 }
 
-@Suite("SubjectLift")
+@Suite("SubjectLift", .requiresVisionHardware)
 struct SubjectLiftTests {
     @Test func liftsADarkSquareOffAPaleCanvas() async throws {
         let image = TestImages.canvas(width: 600, height: 600, subject: true)

@@ -18,8 +18,8 @@ inputs:
     default: "true"
   web-env:
     description: >-
-      Copy apps/web/.env.example to apps/web/.env with a NEXTAUTH_SECRET, for
-      jobs that build or test the web app.
+      Copy apps/web/.env.example to apps/web/.env for jobs that build or test
+      the web app.
     required: false
     default: "false"
 
@@ -134,4 +134,3 @@ runs:
       shell: bash
       run: |
         cp apps/web/.env.example apps/web/.env
-        echo "NEXTAUTH_SECRET=supersecret" >> apps/web/.env

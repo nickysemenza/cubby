@@ -475,12 +475,39 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # A hosted runner's first simulator boot took about six silent minutes
+      # between the build and the first test; start it now so it overlaps the
+      # FFI restore and the compile. apple-check.sh waits on bootstatus.
+      - name: Boot the iOS Simulator in the background
+        run: |
+          udid="$(sh scripts/apple-sim-udid.sh)"
+          xcrun simctl boot "$udid"
+          echo "CUBBY_SIM_UDID=$udid" >> "$GITHUB_ENV"
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
+        id: apple-tools
       - name: Run iOS app checks
         run: sh scripts/apple-check.sh ci
+      # Saved here rather than by actions/cache's post step so a red test run
+      # still keeps the generator build and SPM clones for the next attempt.
+      # A concurrent job may have saved the same key first; that 409 is
+      # harmless and must never fail the check.
+      - name: Save OpenAPI generator cache
+        if: always() && steps.apple-tools.outputs.openapi-generator-cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
+          key: ${{ steps.apple-tools.outputs.openapi-generator-cache-key }}
+      - name: Save SPM clone cache
+        if: always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/apple/SourcePackages
+          key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
       - name: Save failed test results
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

@@ -8,7 +8,7 @@ import Testing
 
 @Suite("Companion image processor")
 struct CompanionImageProcessorTests {
-    @Test("Uploads a transparent PNG derived from an unchanged source")
+    @Test("Uploads a transparent PNG derived from an unchanged source", .requiresVisionHardware)
     func uploadsTransparentPNGFromUnchangedSource() async throws {
         let sourceBytes = try ImageEncoding.encode(
             TestImages.canvas(width: 600, height: 600, subject: true), as: .png)

@@ -5,6 +5,20 @@ description: >-
   jobs, so a warm cache never rebuilds the generator from source or reclones
   Sentry/GRDB/Nuke.
 
+outputs:
+  openapi-generator-cache-hit:
+    description: "true when the generator binary cache matched exactly"
+    value: ${{ steps.generator-cache.outputs.cache-hit }}
+  openapi-generator-cache-key:
+    description: "Key to save the generator binary under (see ci.yaml's explicit save steps)"
+    value: ${{ steps.generator-cache.outputs.cache-primary-key }}
+  spm-clones-cache-hit:
+    description: "true when the SPM clone cache matched exactly"
+    value: ${{ steps.spm-cache.outputs.cache-hit }}
+  spm-clones-cache-key:
+    description: "Key to save the SPM clones under"
+    value: ${{ steps.spm-cache.outputs.cache-primary-key }}
+
 inputs:
   sentry-cli:
     description: "Also install getsentry/tools/sentry-cli (needed only for archive builds)"
@@ -53,8 +67,13 @@ runs:
     # Exact key only, matching the OpenAPI generator's own content-stamp
     # logic in generate-openapi.sh: the cached directory holds only the
     # binary and its `.inputs` stamp, never the full SwiftPM scratch tree.
+    # Restore only: actions/cache's post-job save is skipped when the job
+    # fails, which would throw away a multi-minute generator build every time
+    # a test goes red. Callers save explicitly with `if: always()` using the
+    # key outputs above.
     - name: Restore cached OpenAPI generator binary
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      id: generator-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
         key: openapi-gen-v1-${{ runner.os }}-${{ hashFiles('apps/apple/.generator/Package.swift', 'apps/apple/.generator/Package.resolved') }}-${{ steps.swift-version.outputs.hash }}
@@ -64,7 +83,8 @@ runs:
     # cache is fine because `xcodebuild`'s SPM resolver only fetches the
     # delta.
     - name: Restore cached SPM clones
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      id: spm-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: apps/apple/SourcePackages
         key: spm-clones-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved', 'apps/apple/project.yml') }}

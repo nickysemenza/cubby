@@ -50,6 +50,9 @@ enum PhotoRecordSearch {
             }
             .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.count >= 3 }
+        // With nothing left after trimming, the joined query would be "" and
+        // still be returned (Cubby-iOS-Tests caught this once CI ran it).
+        guard !text.isEmpty else { return [] }
         let combined = text.prefix(4).joined(separator: " ")
         var seen = Set<String>()
         return ([combined] + text).filter { seen.insert($0.lowercased()).inserted }

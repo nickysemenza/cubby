@@ -81,21 +81,15 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
 fi
 
 if [ "$mode" = "ci" ]; then
-  # Pick a concrete simulator: the booted one if any, else the first iPhone —
-  # mirrors scripts/apple.ts's `sim` command. `xcodebuild test` needs a
-  # resolved device id; the `app`/`full` build below uses the generic
-  # destination instead, which `build` (but not `test`) accepts.
-  simulators_json="$(xcrun simctl list devices available -j)"
-  udid="$(SIMULATORS_JSON="$simulators_json" node -e '
-    const devices = Object.values(JSON.parse(process.env.SIMULATORS_JSON).devices).flat();
-    const iphones = devices.filter((d) => d.name.includes("iPhone"));
-    const chosen = iphones.find((d) => d.state === "Booted") ?? iphones[0];
-    if (!chosen) {
-      process.stderr.write("no available iPhone simulator\n");
-      process.exit(1);
-    }
-    process.stdout.write(chosen.udid);
-  ')"
+  # `xcodebuild test` needs a resolved device id (the `app`/`full` build below
+  # uses the generic destination, which `build` accepts but `test` does not).
+  # CI boots the simulator as its first step (CUBBY_SIM_UDID, see ci.yaml)
+  # so the multi-minute first boot on a hosted runner overlaps the FFI restore
+  # and the compile instead of sitting between them; otherwise pick the booted
+  # simulator, else the first iPhone — mirrors scripts/apple.ts's `sim`.
+  udid="${CUBBY_SIM_UDID:-$(sh scripts/apple-sim-udid.sh)}"
+  xcrun simctl boot "$udid" 2>/dev/null || true
+  xcrun simctl bootstatus "$udid" -b
 
   xcodebuild \
     -project apps/apple/Cubby.xcodeproj \
