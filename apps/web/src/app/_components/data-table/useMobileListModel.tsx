@@ -303,6 +303,7 @@ function collectMobileSlots<TItem extends RowData>(
           record={row.original}
           field={colId}
           interactive={false}
+          compact
         />
       </span>
     ) : (

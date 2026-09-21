@@ -12,6 +12,7 @@ import {
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import { parsePlainDate } from "~/lib/plain-date";
@@ -63,7 +64,9 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   // Called unconditionally, before the no-purchase return below: `purchaseId` can
   // change under the same component instance (clearing a vendor detaches the
   // Expense), and a conditional hook would break the hook order when it does.
-  const { data, isPending } = useQuery(operations.chargeContext(expense.id));
+  const { data, isPending, isError, isFetching, refetch } = useQuery(
+    operations.chargeContext(expense.id),
+  );
   const others = data?.siblings ?? NO_OTHER_EXPENSES;
   const imageRefs = useMemo(
     () => [
@@ -88,6 +91,22 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   // flashes on every load, which reads as an answer rather than a pending state.
   if (isPending) {
     return <Description>Loading purchase…</Description>;
+  }
+
+  if (isError) {
+    return (
+      <Stack gap="sm">
+        <p role="alert">Could not load the purchase items.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isFetching}
+          onClick={() => void refetch()}
+        >
+          Retry purchase items
+        </Button>
+      </Stack>
+    );
   }
 
   // The expense can be detached (or its purchase deleted) after this detail

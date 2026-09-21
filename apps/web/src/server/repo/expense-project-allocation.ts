@@ -42,18 +42,38 @@ type RawAllocationRow = Omit<
  * The weight CTE deliberately sees every live principal in a live Purchase.
  * Consumers apply date, product, project, and other ledger filters only to the
  * final rows; narrowing the denominator first would reassign tax and shipping
- * when a chart filter hides one principal line.
+ * when a chart filter hides one principal line. ID-scoped reads select complete
+ * purchases first, so detail/list hydration never resolves unrelated purchases.
  */
 export const expenseProjectAllocationSql = (
   expenseIds?: readonly ExpenseId[],
 ): SQL => sql`
-  WITH principal_fact AS (
+  WITH ${
+    expenseIds
+      ? sql`selected_expense AS (
+    SELECT allocation_target."id", allocation_target."purchaseId" FROM "Expense" allocation_target
+    WHERE allocation_target."deletedAt" IS NULL AND allocation_target."id" = ANY(${uuidArrayParam(expenseIds)})
+  ),`
+      : sql``
+  } principal_fact AS (
     SELECT
       e."id" AS "expenseId",
       e."purchaseId",
       ${effectiveExpenseProjectSql("e")} AS "projectId",
       round((e."cost")::numeric * 100)::bigint AS cost_cents
-    FROM "Expense" e
+    FROM ${
+      expenseIds
+        ? sql`(
+      SELECT sibling.* FROM "Expense" sibling
+      WHERE sibling."deletedAt" IS NULL
+        AND sibling."purchaseId" IN (SELECT "purchaseId" FROM selected_expense)
+      UNION ALL
+      SELECT standalone.* FROM "Expense" standalone
+      WHERE standalone."deletedAt" IS NULL AND standalone."purchaseId" IS NULL
+        AND standalone."id" IN (SELECT "id" FROM selected_expense)
+    )`
+        : sql`"Expense"`
+    } e
     LEFT JOIN "Purchase" live_purchase
       ON live_purchase."id" = e."purchaseId"
      AND live_purchase."deletedAt" IS NULL
@@ -104,6 +124,7 @@ export const expenseProjectAllocationSql = (
       ON default_project."id" = p."defaultProjectId"
      AND default_project."deletedAt" IS NULL
     WHERE p."deletedAt" IS NULL
+      ${expenseIds ? sql`AND p."id" IN (SELECT "purchaseId" FROM selected_expense)` : sql``}
       AND NOT EXISTS (
         SELECT 1 FROM project_weight w WHERE w."purchaseId" = p."id"
       )
@@ -131,6 +152,7 @@ export const expenseProjectAllocationSql = (
     LEFT JOIN "Project" pj
       ON pj."id" = w."projectId" AND pj."deletedAt" IS NULL
     WHERE e."deletedAt" IS NULL AND e."lineKind" <> 'principal'
+      ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
   ), adjustment_floor AS (
     SELECT
       *,
@@ -191,13 +213,7 @@ export const expenseProjectAllocationSql = (
   FROM allocated a
   LEFT JOIN "Project" p
     ON p."id" = a."projectId" AND p."deletedAt" IS NULL
-  ${
-    expenseIds
-      ? expenseIds.length === 0
-        ? sql`WHERE false`
-        : sql`WHERE a."expenseId" = ANY(${uuidArrayParam(expenseIds)})`
-      : sql``
-  }
+  ${expenseIds ? sql`WHERE a."expenseId" IN (SELECT "id" FROM selected_expense)` : sql``}
 `;
 
 export type ExpenseAllocationProjectScope = {

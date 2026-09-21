@@ -9,6 +9,8 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   expenseAllocatedCostSql,
   expenseAllocationExistsSql,
+  expenseProjectAllocationSql,
+  expenseProjectNamesSql,
   loadExpenseProjectAllocations,
 } from "./expense-project-allocation";
 
@@ -77,6 +79,41 @@ describe("expense project allocation", () => {
       purchaseId: purchase.id,
     });
 
+    const unrelatedPurchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-20",
+    });
+    const unrelated = await insertWithShortcode(ctx.db, "expense", {
+      name: "Unrelated principal",
+      cost: 100,
+      date: "2026-09-20",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+      purchaseId: unrelatedPurchase.id,
+    });
+    const standalone = await insertWithShortcode(ctx.db, "expense", {
+      name: "Standalone credit",
+      cost: -5,
+      date: "2026-09-20",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+      projectId: smallProject.id,
+    });
+
+    // A detail read must weight the whole target purchase, without resolving
+    // unrelated ledger rows and holding the shared pool for ledger-wide work.
+    const plan = await unwrapDb(ctx.db).execute<{ "QUERY PLAN": string }>(
+      sql`EXPLAIN (ANALYZE, COSTS OFF) ${expenseProjectAllocationSql([tax.id])}`,
+    );
+    const planText = plan.rows.map((row) => row["QUERY PLAN"]).join("\n");
+    expect(
+      planText.match(/CTE principal_fact\n[^\n]*rows=(\d+) loops=1/u)?.[1],
+    ).toBe("3");
+
     const rows = (await loadExpenseProjectAllocations(ctx.db, [tax.id])).sort(
       (a, b) => (a.projectName ?? "").localeCompare(b.projectName ?? ""),
     );
@@ -88,6 +125,37 @@ describe("expense project allocation", () => {
     ).toBe(5n);
     expect(rows.every((row) => row.sourceCents === 5n)).toBe(true);
     expect(rows.every((row) => row.basis === "positive")).toBe(true);
+
+    const selected = [tax.id, unrelated.id, standalone.id];
+    const global = await loadExpenseProjectAllocations(ctx.db);
+    const scoped = await loadExpenseProjectAllocations(ctx.db, selected);
+    expect(scoped).toEqual(
+      expect.arrayContaining(
+        global.filter((row) => selected.includes(row.expenseId)),
+      ),
+    );
+    expect(scoped).toHaveLength(4);
+    expect(await loadExpenseProjectAllocations(ctx.db, [])).toEqual([]);
+
+    const correlated = await unwrapDb(ctx.db).execute<{
+      names: string;
+      cost: number;
+      included: boolean;
+    }>(sql`
+      SELECT
+        ${expenseProjectNamesSql(sql`outer_expense."id"`)} AS names,
+        ${expenseAllocatedCostSql(sql`outer_expense."id"`, { projectIds: [smallProject.id] })} AS cost,
+        ${expenseAllocationExistsSql(sql`outer_expense."id"`, { projectIds: [smallProject.id] })} AS included
+      FROM "Expense" outer_expense
+      WHERE outer_expense."id" = ${tax.id} AND outer_expense."deletedAt" IS NULL
+    `);
+    expect(correlated.rows).toEqual([
+      {
+        names: "Large allocation project, Small allocation project",
+        cost: 0.02,
+        included: true,
+      },
+    ]);
 
     const summary = await loadRelatedSummary(ctx.db, {
       relationKey: "purchase.projects",
@@ -268,7 +336,7 @@ describe("expense project allocation", () => {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    const fee = await insertWithShortcode(ctx.db, "expense", {
       name: "Unweighted shared fee",
       cost: 2.5,
       date: "2026-09-20",
@@ -278,6 +346,15 @@ describe("expense project allocation", () => {
       future: false,
       purchaseId: purchase.id,
     });
+
+    expect(await loadExpenseProjectAllocations(ctx.db, [fee.id])).toEqual([
+      expect.objectContaining({
+        projectId: null,
+        attributedCents: 250n,
+        basis: "default",
+        incomplete: true,
+      }),
+    ]);
 
     const summary = await loadRelatedSummary(ctx.db, {
       relationKey: "purchase.projects",

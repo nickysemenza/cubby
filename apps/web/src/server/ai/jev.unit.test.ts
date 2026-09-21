@@ -32,12 +32,113 @@ function jevFor(choice: string, probabilities: Record<string, number>) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.resetModules();
 });
 
 describe("runJevChoice", () => {
+  it.each(["2", "Tue, 01 Sep 2026 00:00:02 GMT"])(
+    "recovers after Retry-After %s without changing the choice request",
+    async (retryAfter) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-01T00:00:00Z"));
+      vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+      vi.resetModules();
+      const { runJevChoice: request } = await import("./jev");
+      const fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response("Wholesale Rate limited", {
+            status: 429,
+            headers: { "Retry-After": retryAfter },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              result: answerFor("c0", { c0: 0.9, none: 0.1 }),
+            }),
+          ),
+        );
+      vi.stubGlobal("fetch", fetch);
+      await Promise.all([
+        expect(request({ ...base, choices: ["one"] })).resolves.toMatchObject({
+          selectedIndex: 0,
+        }),
+        (async () => {
+          await vi.advanceTimersByTimeAsync(1_999);
+          expect(fetch).toHaveBeenCalledTimes(1);
+          await vi.runAllTimersAsync();
+        })(),
+      ]);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch.mock.calls[0]?.[1].body).toEqual(
+        fetch.mock.calls[1]?.[1].body,
+      );
+    },
+  );
+
+  it.each([
+    { status: 429, retryAfter: null, attempts: 3 },
+    { status: 429, retryAfter: "invalid", attempts: 3 },
+    { status: 429, retryAfter: "60", attempts: 1 },
+    { status: 401, retryAfter: null, attempts: 1 },
+    { status: 503, retryAfter: null, attempts: 1 },
+  ])(
+    "bounds retries for $status with Retry-After $retryAfter",
+    async ({ status, retryAfter, attempts }) => {
+      vi.useFakeTimers();
+      vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+      vi.resetModules();
+      const { runJevChoice: request } = await import("./jev");
+      const fetch = vi.fn(
+        async () =>
+          new Response("Provider unavailable", {
+            status,
+            headers:
+              retryAfter === null ? undefined : { "Retry-After": retryAfter },
+          }),
+      );
+      vi.stubGlobal("fetch", fetch);
+      await Promise.all([
+        expect(request({ ...base, choices: ["one"] })).rejects.toThrow(
+          `Jev request failed (${status})`,
+        ),
+        vi.runAllTimersAsync(),
+      ]);
+      expect(fetch).toHaveBeenCalledTimes(attempts);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it("aborts a stalled gateway request at the overall deadline", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runJevChoice: request } = await import("./jev");
+    const fetch = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener(
+            "abort",
+            () => reject(init.signal?.reason),
+            { once: true },
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    await Promise.all([
+      expect(request({ ...base, choices: ["one"] })).rejects.toThrow(
+        "30-second deadline",
+      ),
+      vi.advanceTimersByTimeAsync(30_000),
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("throws on a roster beyond the choice limit instead of truncating it", async () => {
     const choices = Array.from(
       { length: JEV_MAX_CANDIDATES + 1 },

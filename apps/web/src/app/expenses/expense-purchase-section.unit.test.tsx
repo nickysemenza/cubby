@@ -3,7 +3,7 @@ import {
   type ExpenseOut,
 } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -76,6 +76,32 @@ afterEach(() => {
 });
 
 describe("ExpensePurchaseSection", () => {
+  it("shows an inline error and recovers purchase items on retry", async () => {
+    let unavailable = true;
+    const operation = expenseOperations.chargeContext.withTransport(
+      async () => {
+        if (unavailable) throw new Error("Temporary connection failure");
+        return expenseChargeContextOut.parse({ purchase, siblings: [] });
+      },
+    );
+    render(
+      <ExpensePurchaseSection
+        expense={expense}
+        operations={{ chargeContext: operation.queryOptions }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load the purchase items.",
+    );
+    unavailable = false;
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry purchase items" }),
+    );
+    expect(
+      await screen.findByText("This is the only expense in the purchase."),
+    ).toBeVisible();
+  });
   it("renders the canonical purchase label as the only purchase link", async () => {
     render(
       <ExpensePurchaseSection

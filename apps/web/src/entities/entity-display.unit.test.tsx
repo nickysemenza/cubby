@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { CellData } from "@tanstack/react-table";
 import { render, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -17,6 +18,7 @@ import {
   createEntityDisplayColumns,
   EntityBasicInfo,
   entitySectionFields,
+  renderDetailFieldValue,
 } from "./entity-display";
 
 /**
@@ -45,6 +47,15 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 }
 
 describe("declared entity displays", () => {
+  it("formats purchase expense totals as money despite floating point residue", () => {
+    const field = entityFieldModels.purchase.fields.find(
+      (field) => field.key === "expenseTotal",
+    )!;
+    render(
+      <>{renderDetailFieldValue({ expenseTotal: 12.299999999999 }, field)}</>,
+    );
+    expect(screen.getByText("$12.30")).toBeVisible();
+  });
   it("has a picker path for every updateable singular reference shown in a manifest list", () => {
     // Current list-visible update references span these targets: the roster is
     // intentionally target-based because several entities reuse the same

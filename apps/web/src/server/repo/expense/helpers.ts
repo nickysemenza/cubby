@@ -236,7 +236,7 @@ const expenseProjectFieldResolution = (
   >[string]["sourceEntity"] = effectiveProjectShortcode
     ? { entityType: "project" as const, entityId: effectiveProjectShortcode }
     : null;
-  if (source === "purchase default" && purchaseRow) {
+  if ((source === "purchase default" || mode === "allocated") && purchaseRow) {
     sourceEntity = {
       entityType: "purchase" as const,
       entityId: purchaseRow.shortcode,

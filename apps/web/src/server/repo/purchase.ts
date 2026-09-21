@@ -256,7 +256,7 @@ const purchaseExpenseCount = correlated<number>(
 );
 
 const purchaseExpenseTotal = correlated<number>(
-  `(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e
+  `(SELECT COALESCE(sum(e."cost"::numeric), 0)::double precision FROM "Expense" e
      WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL)`,
 );
 
