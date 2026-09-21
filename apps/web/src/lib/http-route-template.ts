@@ -42,6 +42,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/settings/member-logins",
   "/api/v1/docs",
   "/api/v1/openapi.json",
+  "/auth/native",
   "/background-jobs",
   "/calendar",
   "/collections",
