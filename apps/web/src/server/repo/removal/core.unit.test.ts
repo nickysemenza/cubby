@@ -7,7 +7,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { DrizzleTransaction } from "~/server/db";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
-import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
+import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 
 import { cascadeRemoval, type RemovableEntity } from "./core";
 
