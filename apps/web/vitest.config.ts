@@ -136,6 +136,13 @@ export default defineConfig({
     coverage: {
       exclude: ["src/components/reui/**"],
     },
+    // Vitest 5 makes file ordering a root-only concern. Every project still
+    // inherits the same deterministic shuffle; project sequence config only
+    // controls which groups may run together.
+    sequence: {
+      shuffle: { files: true, tests: false },
+      seed: sharedIsolationSeed,
+    },
     projects: (
       [
         {
@@ -163,11 +170,7 @@ export default defineConfig({
             // cannot starve the others. The environment override supports
             // uncached tuning measurements and participates in the Nx cache key.
             maxWorkers: groupZeroMaxWorkers,
-            sequence: {
-              groupOrder: 0,
-              shuffle: { files: true, tests: false },
-              seed: sharedIsolationSeed,
-            },
+            sequence: { groupOrder: 0 },
           },
         },
         {
@@ -216,11 +219,7 @@ export default defineConfig({
             clearMocks: true,
             unstubGlobals: true,
             unstubEnvs: true,
-            sequence: {
-              groupOrder: 0,
-              shuffle: { files: true, tests: false },
-              seed: sharedIsolationSeed,
-            },
+            sequence: { groupOrder: 0 },
           },
         },
         {
@@ -256,11 +255,7 @@ export default defineConfig({
             // Larger IntegreSQL pools do not reduce CREATE latency; sequencing
             // stays a distinct serial group so its shared-worker singletons
             // above never interleave with the unit/UI/mcp-contract group.
-            sequence: {
-              groupOrder: 3,
-              shuffle: { files: true, tests: false },
-              seed: sharedIsolationSeed,
-            },
+            sequence: { groupOrder: 3 },
           },
         },
       ] satisfies TestProjectConfiguration[]

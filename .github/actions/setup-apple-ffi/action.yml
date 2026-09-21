@@ -37,7 +37,7 @@ runs:
           echo "CUBBY_FFI_TARGETS=${{ inputs.targets }}"
         } >> "$GITHUB_ENV"
 
-    - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+    - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
       with:
         cache: true
         cache-workspaces: cubby-ffi -> target-${{ inputs.targets }}-${{ inputs.profile }}

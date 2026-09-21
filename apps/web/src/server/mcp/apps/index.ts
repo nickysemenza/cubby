@@ -12,13 +12,10 @@ import {
   USDA_PICKER_HTML_URL,
   withCubbyOrigin,
 } from "@cubby/mcp-apps";
-import {
-  RESOURCE_MIME_TYPE,
-  registerAppResource,
-} from "@modelcontextprotocol/ext-apps/server";
+import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { APP_ORIGIN } from "~/lib/auth";
+import { APP_ORIGIN } from "~/lib/auth-constants";
 import { getAssetsFetcher } from "~/server/cf-env";
 
 let usdaPickerHtmlPromise: Promise<string> | undefined;
@@ -61,11 +58,16 @@ async function loadUsdaPickerHtml(): Promise<string> {
 }
 
 export function registerMcpApps(server: McpServer) {
-  registerAppResource(
-    server,
+  // ext-apps v2's helper is typed against the split MCP v2 server package,
+  // while Cubby's server remains on the compatible v1 SDK. The helper only
+  // adds this MIME type before delegating to registerResource.
+  server.registerResource(
     USDA_PICKER.name,
     USDA_PICKER.uri,
-    { description: USDA_PICKER.description },
+    {
+      description: USDA_PICKER.description,
+      mimeType: RESOURCE_MIME_TYPE,
+    },
     async () => {
       const html = await loadUsdaPickerHtml();
       return {

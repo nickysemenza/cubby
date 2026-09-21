@@ -31,7 +31,7 @@
     "es-toolkit": "^1.49.0",
     "hono": "^4.12.31",
     "p-map": "^7.0.5",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.45.1",
@@ -40,7 +40,7 @@
     "drizzle-kit": "^0.31.10",
     "vite": "^8.1.5",
     "vite-ssr-components": "^0.6.1",
-    "vitest": "^4.1.10",
+    "vitest": "^5.0.1",
     "wrangler": "^4.112.0"
   }
 }

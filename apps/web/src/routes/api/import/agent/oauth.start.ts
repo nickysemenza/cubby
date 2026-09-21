@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { env } from "~/env";
-import { APP_ORIGIN } from "~/lib/auth";
+import { APP_ORIGIN } from "~/lib/auth-constants";
 import {
   createPkcePair,
   createPurchaseAgentOAuthState,

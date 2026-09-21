@@ -10,30 +10,29 @@ import { env } from "~/env";
 import { drizzle } from "~/server/db";
 import * as schema from "~/server/db/auth.schema";
 
+import {
+  APP_ORIGIN,
+  MCP_RESOURCE,
+  OAUTH_ISSUER,
+  OAUTH_SCOPES,
+} from "./auth-constants";
+
 const isDev = process.env.NODE_ENV !== "production";
 
-// The OAuth server needs a concrete origin at config time (unlike the rest of
-// better-auth, which infers baseURL per request): `validAudiences` gates which
-// `resource` an MCP client may request a token for. Same isDev switch the
-// passkey rpID below uses, for the same reason — one known host per env, no new
-// env var. Preview deploys get unique hosts that can't be enumerated here, so
-// OAuth-MCP is prod + local dev only (previews keep the rest of auth; only
-// /api/mcp is unreachable there).
-const appUrl = isDev
-  ? "http://localhost:3000"
-  : "https://cubby.nickysemenza.com";
-
-/** Origin the app is reachable at, per the same one-host-per-env rule above. */
-export const APP_ORIGIN = appUrl;
-/** The `aud` an MCP access token must carry. Also the RFC 9728 `resource`. */
-export const MCP_RESOURCE = `${appUrl}/api/mcp`;
-/** Issuer / `iss` of MCP access tokens, and the RFC 8414 authorization server. */
-export const OAUTH_ISSUER = `${appUrl}/api/auth`;
-
-// Scopes advertised by the OAuth server. `offline_access` is load-bearing: it's
-// what mints the refresh token that lets a non-interactive Claude Code run
-// (`claude -p`, Agent SDK) keep working after the one interactive login.
-export const OAUTH_SCOPES = ["openid", "profile", "email", "offline_access"];
+// Better Auth 1.7 seeds configured resources during plugin initialization.
+// Unit tests import auth through broad server modules without starting the
+// Postgres harness, so leave seeding to integration/E2E and real runtimes.
+const oauthResourceOptions =
+  process.env.VITEST === "true"
+    ? {}
+    : ({
+        resources: [{ identifier: MCP_RESOURCE, name: "Cubby MCP" }],
+        enforcePerClientResources: true,
+        // Claude does not send Better Auth's DCR `resources` extension, so link
+        // Cubby's sole protected resource to every newly registered client.
+        clientRegistrationDefaultResources: [MCP_RESOURCE],
+        clientRegistrationAllowedResources: [MCP_RESOURCE],
+      } satisfies Partial<Parameters<typeof oauthProvider>[0]>);
 
 // Preview deploys (`wrangler versions upload`) each get a unique host, so a
 // host-only session cookie forces a fresh login on every preview. CI injects
@@ -115,9 +114,7 @@ export const auth = betterAuth({
     passkey({
       rpID: isDev ? "localhost" : "cubby.nickysemenza.com",
       rpName: "Cubby",
-      origin: isDev
-        ? "http://localhost:3000"
-        : "https://cubby.nickysemenza.com",
+      origin: isDev ? "http://localhost:3000" : APP_ORIGIN,
     }),
     // Signs OAuth access tokens (and publishes JWKS at /api/auth/jwks) so
     // /api/mcp can verify them locally without a round trip to the DB.
@@ -141,10 +138,7 @@ export const auth = betterAuth({
       allowDynamicClientRegistration: true,
       allowUnauthenticatedClientRegistration: true,
       scopes: OAUTH_SCOPES,
-      validAudiences: [MCP_RESOURCE],
-      // The discovery documents live in routes/.well-known/ — TanStack Start's
-      // /api/auth/$ catch-all can't serve the root-level RFC 8414 aliases.
-      silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
+      ...oauthResourceOptions,
     }),
     // Scalar reference for the auth surface. Dev-only UI: the JSON schema
     // endpoint (/api/auth/open-api/generate-schema) stays available in both.

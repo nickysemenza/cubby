@@ -331,8 +331,8 @@ const metadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
-      display: entityFieldDisplayMetadataSchema.optional().prefault({}),
-      validation: entityFieldValidationMetadataSchema.optional().prefault({}),
+      display: entityFieldDisplayMetadataSchema.prefault({}),
+      validation: entityFieldValidationMetadataSchema.prefault({}),
     })
     .strict();
 
@@ -600,12 +600,10 @@ const metadataSchemas = () => {
               actions: z.array(actionKey).optional(),
             })
             .strict()
-            .optional()
             .prefault({}),
           sections: z.array(detailSectionSchema).optional().default([]),
         })
         .strict()
-        .optional()
         .prefault({}),
       list: z
         .object({
@@ -656,7 +654,6 @@ const metadataSchemas = () => {
             .default(null),
         })
         .strict()
-        .optional()
         .prefault({}),
       edit: z
         .object({
@@ -712,7 +709,6 @@ const metadataSchemas = () => {
             .default([]),
         })
         .strict()
-        .optional()
         .prefault({}),
     })
     .strict();

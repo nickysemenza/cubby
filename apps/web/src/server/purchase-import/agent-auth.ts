@@ -2,7 +2,7 @@ import { signJWT, verifyJWT } from "better-auth/crypto";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 
-import { APP_ORIGIN, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
+import { APP_ORIGIN, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
 import type { Database } from "~/server/db";
 import { oauthClient, oauthRefreshToken, session } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";

@@ -1,5 +1,5 @@
 {
-  "originHash" : "155eeea5365a734fcf32d0fbecb55823f8f3ed34a7671221f09883406c9d28b7",
+  "originHash" : "ccc2ab933234553fc49fb77c2e8a483f0756423873305e3202fb3e38455b02f7",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kean/Nuke",
       "state" : {
-        "revision" : "83e19143355b02e9261edb2323b3e1e93287ebb9",
-        "version" : "12.9.0"
+        "revision" : "30f7a7e72e0607d304fbf69c799474bd5fb6d1ce",
+        "version" : "13.2.0"
       }
     },
     {

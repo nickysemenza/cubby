@@ -1,16 +1,23 @@
+import { fileURLToPath } from "node:url";
+
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
+const webRoot = fileURLToPath(new URL("../web", import.meta.url));
+
 /**
- * Calendar protocol tests run in workerd with real Durable Object SQLite
- * storage. They intentionally use a narrow Worker entrypoint rather than the
- * full application Worker, whose unrelated bindings would obscure calendar
- * storage and HTTP behavior.
+ * Cloudflare's latest test plugin still relies on Vitest 4 internals. Keep its
+ * workerd-only harness isolated while the rest of the monorepo runs Vitest 5.
  */
 export default defineConfig({
+  root: webRoot,
   plugins: [
     cloudflareTest({
-      wrangler: { configPath: "./wrangler.calendar-test.jsonc" },
+      wrangler: {
+        configPath: fileURLToPath(
+          new URL("../web/wrangler.calendar-test.jsonc", import.meta.url),
+        ),
+      },
     }),
   ],
   resolve: { tsconfigPaths: true },

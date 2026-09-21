@@ -71,6 +71,7 @@ const NON_ENTITY_FK_TARGETS = {
   user: "Better-Auth's own table, referenced only by AuditLog.userId",
   session: "Better-Auth's own table (login sessions)",
   oauth_client: "OAuth 2.1 provider table (registered MCP clients)",
+  oauth_resource: "OAuth 2.1 provider table (protected resource policy)",
   oauth_refresh_token: "OAuth 2.1 provider table (issued refresh tokens)",
   // The provider-statement ledger: verbatim evidence Cubby is compared
   // against, deliberately not entities. At 15k+ rows they would swamp global

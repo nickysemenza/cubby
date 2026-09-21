@@ -40,7 +40,7 @@ packages:
     from: "9.28.0"
   Nuke:
     url: https://github.com/kean/Nuke
-    from: "12.9.0"
+    from: "13.2.0"
 
 targetTemplates:
   CubbyApp:

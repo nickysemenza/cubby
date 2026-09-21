@@ -2,7 +2,8 @@ import { userId } from "@cubby/schemas/identifiers";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 
 import { env } from "~/env";
-import { auth, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
+import { auth } from "~/lib/auth";
+import { MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
 import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
   verifyPurchaseAgentDelegation,

@@ -13,7 +13,7 @@
       "description": "Keep the Playwright container assertion aligned with @playwright/test",
       "managerFilePatterns": ["/^\\.github\\/workflows\\/ci\\.yaml$/"],
       "matchStrings": [
-        "PLAYWRIGHT_IMAGE_VERSION:\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
+        "PLAYWRIGHT_VERSION:\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
       ],
       "depNameTemplate": "@playwright/test",
       "datasourceTemplate": "npm"
@@ -29,6 +29,12 @@
     {
       "description": "The Cloudflare dev toolchain is last-green pinned and Wrangler carries an exact-version pnpm patch",
       "matchPackageNames": ["@cloudflare/vite-plugin", "wrangler"],
+      "enabled": false
+    },
+    {
+      "description": "Cloudflare's Vitest plugin uses Vitest 4 internals; only the isolated Worker harness stays on 4",
+      "matchFileNames": ["apps/web-worker-tests/package.json"],
+      "matchPackageNames": ["vitest"],
       "enabled": false
     },
     {
