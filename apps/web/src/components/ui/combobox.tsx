@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { cn } from "~/lib/utils";
 import { focusOnMount as focusElementOnMount } from "~/hooks/focus-on-mount";
+import { useHydrationGate } from "~/hooks/useHydrated";
 
 /**
  * FilterableCombobox wraps Combobox with manual filtering.
@@ -91,6 +92,7 @@ export function FilterableCombobox({
   const [inputValue, setInputValue] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const anchorRef = React.useRef<HTMLDivElement>(null);
+  const gate = useHydrationGate(disabled);
 
   const serverSearch = onSearchChange != null;
 
@@ -119,13 +121,14 @@ export function FilterableCombobox({
         setOpen(nextOpen);
         onOpenChange?.(nextOpen);
       }}
-      disabled={disabled}
+      disabled={gate.disabled}
     >
       {/* Keep the editable input and popup button as siblings. Nesting the
           textbox inside a button creates invalid, inaccessible interactive
           markup. */}
       <ComboboxPrimitive.InputGroup
         ref={anchorRef}
+        data-hydrating={gate["data-hydrating"]}
         className={cn(
           // Structure
           "flex h-9 max-sm:h-11 w-full items-center justify-between gap-1.5 rounded-md border bg-card px-2.5",
@@ -140,6 +143,7 @@ export function FilterableCombobox({
           "transition-colors duration-150 outline-none",
           // Disabled
           "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50",
+          gate["data-hydrating"] !== undefined && "has-[:disabled]:opacity-100",
           className,
         )}
       >

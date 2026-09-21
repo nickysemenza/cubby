@@ -1,6 +1,7 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
+import { useHydrationGate } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
 
 // Porcelain Transit controls use modest radii, compact desktop heights, and a
@@ -70,11 +71,16 @@ function Button({
   mobileSize = "touch",
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  const gate = useHydrationGate(props.disabled);
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, mobileSize, className }))}
+      className={cn(
+        buttonVariants({ variant, size, mobileSize, className }),
+        gate["data-hydrating"] !== undefined && "disabled:opacity-100",
+      )}
       {...props}
+      {...gate}
     />
   );
 }

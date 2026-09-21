@@ -42,3 +42,27 @@ export function useHydrated(): boolean {
 export function useHydratedLoading(isLoading: boolean): boolean {
   return !useHydrated() || isLoading;
 }
+
+/**
+ * Hold an SSR-rendered control inert until React has attached its handlers.
+ *
+ * Streamed route content hydrates after the shell, boundary by boundary, so a
+ * server-rendered button is briefly focusable yet deaf: the DOM accepts the
+ * click and no `onClick` runs. Rendering it `disabled` until this component's
+ * own boundary hydrates closes that window — for a person on a slow phone,
+ * whose tap would otherwise vanish, and for Playwright, whose actionability
+ * checks wait for `enabled` before every click and `fill`. `useHydrated` is
+ * read inside the component, so it flips for the boundary that owns it rather
+ * than for the shell.
+ *
+ * `data-hydrating` marks the pre-hydration disabled state so a primitive can
+ * keep its normal look instead of flashing its disabled styling on every load.
+ */
+export function useHydrationGate(disabled: boolean | undefined) {
+  const hydrated = useHydrated();
+  const gated = !hydrated && !disabled;
+  return {
+    disabled: disabled || !hydrated,
+    "data-hydrating": gated ? "" : undefined,
+  } as const;
+}

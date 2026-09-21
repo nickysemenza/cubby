@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { useHydrationGate } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
 
 /** Normal-density select with the phone touch floor from DESIGN.md. */
@@ -6,6 +7,7 @@ export function NativeSelect({
   className,
   ...props
 }: React.ComponentProps<"select">) {
+  const gate = useHydrationGate(props.disabled);
   return (
     <select
       data-slot="native-select"
@@ -14,6 +16,7 @@ export function NativeSelect({
         className,
       )}
       {...props}
+      {...gate}
     />
   );
 }

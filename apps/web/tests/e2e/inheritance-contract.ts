@@ -22,24 +22,10 @@ export function inheritanceContract() {
     await expect(
       page.getByText("Matches inherited value", { exact: true }).first(),
     ).toBeVisible();
-    // The shell's hydrated marker precedes the streamed detail subtree, so on
-    // a slow WebKit run the first click can land on a server-rendered button
-    // whose React onClick is not attached yet: the DOM focuses it and nothing
-    // happens. The handler flips `disabled` while the mutation is pending and
-    // the button unmounts once the mode is `inherit`, so retry the click until
-    // one of those is observed. Repeating the reset patch is idempotent.
-    const useInherited = page
+    await page
       .getByRole("button", { name: "Use inherited value", exact: true })
-      .first();
-    await expect(async () => {
-      await useInherited.click({ timeout: 2_000 });
-      await expect(async () => {
-        const responded =
-          (await useInherited.count()) === 0 ||
-          (await useInherited.isDisabled());
-        expect(responded).toBe(true);
-      }).toPass({ timeout: 2_000 });
-    }).toPass({ timeout: 15_000 });
+      .first()
+      .click();
     await expect
       .poll(async () => {
         const response = await page.request.get(
