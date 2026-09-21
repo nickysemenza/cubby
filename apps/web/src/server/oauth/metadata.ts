@@ -1,4 +1,5 @@
-import { auth, MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "~/lib/auth";
+import { auth } from "~/lib/auth";
+import { MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "~/lib/auth-constants";
 
 /**
  * Discovery documents for the OAuth 2.1 authorization server and the MCP
@@ -65,9 +66,9 @@ export const openIdConfigHandler = proxyToAuthHandler(
  * Hand-rolled rather than using the plugin's `oauthProviderResourceClient`,
  * which derives everything from `auth.options.baseURL` — deliberately unset
  * here so the rest of better-auth can infer the origin per request. Advertising
- * the same constants the server validates against (rather than the request
- * origin) means the `resource` a client asks for is always one
- * `validAudiences` accepts.
+ * the same constants the server persists and validates (rather than the request
+ * origin) means the `resource` a client asks for is always the configured
+ * protected resource.
  */
 export function protectedResourceHandler() {
   return withCors(

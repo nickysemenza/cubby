@@ -140,7 +140,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
         with:
           cache: true
           components: ${{ needs.scope.outputs.coverage == 'true' && 'llvm-tools-preview' || '' }}
@@ -356,7 +356,7 @@ jobs:
             test-script: test:e2e:ci:webkit
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      PLAYWRIGHT_VERSION: "1.62.1"
+      PLAYWRIGHT_VERSION: "1.63.0"
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9

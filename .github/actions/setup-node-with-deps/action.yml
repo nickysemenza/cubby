@@ -69,7 +69,7 @@ runs:
         # Exact key only: a prefix hit would restore the wrong parser revision.
         key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml', 'recipebridge/Cargo.lock', 'recipebridge/src/**', 'rust-toolchain.toml') }}
 
-    - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+    - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
       with:
         cache: true

@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { env } from "~/env";
-import { APP_ORIGIN, auth, MCP_RESOURCE } from "~/lib/auth";
+import { auth } from "~/lib/auth";
+import { APP_ORIGIN, MCP_RESOURCE } from "~/lib/auth-constants";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import {
   clearPurchaseAgentOAuthCookie,

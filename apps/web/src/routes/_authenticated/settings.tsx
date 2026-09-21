@@ -527,9 +527,10 @@ function GmailAccessCard() {
       return result.data ?? [];
     },
   });
-  const connected = accounts.data?.some(
+  const googleAccount = accounts.data?.find(
     (account) => account.providerId === "google",
   );
+  const connected = Boolean(googleAccount);
   const [busy, setBusy] = useState(false);
 
   const connect = async () => {
@@ -545,8 +546,11 @@ function GmailAccessCard() {
     }
   };
   const disconnect = async () => {
+    if (!googleAccount) return;
     setBusy(true);
-    const result = await authClient.unlinkAccount({ providerId: "google" });
+    const result = await authClient.unlinkAccount({
+      accountId: googleAccount.id,
+    });
     if (result.error) {
       toast.error(result.error.message || "Gmail could not be disconnected.");
     } else {

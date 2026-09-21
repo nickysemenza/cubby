@@ -26,7 +26,6 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -38,35 +37,17 @@ import {
   isTransaction,
   unwrapDb,
 } from "./database-helpers";
-import { SHORTCODE_TABLE as GENERATED_SHORTCODE_TABLE } from "./generated/shortcode-tables.gen";
+import {
+  SHORTCODE_TABLE,
+  type ShortcodeTable,
+  type ShortcodeTableFor,
+} from "./shortcode-tables";
+
+export { SHORTCODE_TABLE } from "./shortcode-tables";
+export type { ShortcodeTable, ShortcodeTableFor } from "./shortcode-tables";
 
 /** How many fresh codes to try before giving up. */
 const MAX_RETRIES = 10;
-
-/**
- * A table carrying a public shortcode column. Structural rather than a union of
- * the twelve concrete tables: indexing {@link SHORTCODE_TABLE} with a non-literal
- * entity yields that union, and drizzle can't pick a `select`/`inArray` overload
- * against a union of twelve differently-branded `id` columns.
- */
-export type ShortcodeTable = PgTable & {
-  id: PgColumn;
-  shortcode: PgColumn;
-  deletedAt: PgColumn;
-};
-
-/**
- * Every table with a public shortcode, keyed by the entity name used across the
- * manifest, the prefix registry, and the resolvers. Generated from the entity
- * manifest (`dbTable` + `shortcodePrefix`) — see `scripts/generator/entities/`.
- */
-export const SHORTCODE_TABLE = GENERATED_SHORTCODE_TABLE satisfies Record<
-  ShortcodeType,
-  ShortcodeTable
->;
-
-export type ShortcodeTableFor<T extends ShortcodeType> =
-  (typeof SHORTCODE_TABLE)[T];
 
 export interface ShortcodeGeneratorPort {
   readonly generate: typeof generateShortcode;

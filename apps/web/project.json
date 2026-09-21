@@ -123,7 +123,8 @@
       "inputs": [
         "{projectRoot}/src/server/calendar/**",
         "{projectRoot}/src/server/database-freshness/**",
-        "{projectRoot}/vitest.calendar.config.ts"
+        "{projectRoot}/src/server/purchase-import/**/*.workers.test.ts",
+        "{workspaceRoot}/apps/web-worker-tests/**"
       ]
     }
   }

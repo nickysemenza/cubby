@@ -329,19 +329,6 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires database changes
 
-- **better-auth 1.7 upgrade.** The family is pinned to 1.6.25 in
-  `apps/web/package.json` (plus the `@better-auth/core` override in
-  `pnpm-workspace.yaml`) and grouped alone in Renovate. 1.7 rewrites
-  `@better-auth/oauth-provider`, which the MCP sign-in runs on: `validAudiences`
-  and `silenceWarnings` in `apps/web/src/lib/auth.ts` are removed (tsc does not
-  flag them), the resource model moves to `resources` +
-  `oauth_client_resource`, and the schema gains `oauth_client_assertion`,
-  `applicationType`/`clientDiscoveryId`, drops `type`/`public`, and needs a
-  `(clientId, resourceId)` dedupe backfill. Regenerate `auth.schema.ts`, write
-  the migration, port `withDefaultResource` (`server/oauth/default-resource.ts`)
-  to the new resource contract, and verify the claude.ai connector flow by hand
-  — no E2E covers it. Also lifts the nested `better-call` peer rule.
-
 - **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
   by giving cookbooks durable identity plus a merge/repoint path.
 

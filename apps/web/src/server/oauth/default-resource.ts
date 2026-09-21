@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { MCP_RESOURCE } from "~/lib/auth";
+import { MCP_RESOURCE } from "~/lib/auth-constants";
 
 const tokenRequestBodySchema = z.record(z.string(), z.json());
 
@@ -27,7 +27,8 @@ const productionDefaultResourcePort: DefaultResourcePort = {
  * this server advertises exactly one resource in its RFC 9728 metadata, filling
  * it in when the client omits it is just applying the value the client should
  * have sent. An explicit `resource` from the client always wins, and anything
- * invalid still gets rejected by the plugin's own `validAudiences` check.
+ * invalid still gets rejected against the plugin's persisted resource and
+ * client-resource linkage.
  */
 export async function withDefaultResource(
   request: Request,
