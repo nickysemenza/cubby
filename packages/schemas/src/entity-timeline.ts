@@ -41,7 +41,7 @@ export type EntityTimelineEvent = z.infer<typeof entityTimelineEvent>;
 
 export const entityTimelineGroup = z.object({
   key: z.string().min(1),
-  date: plainDate,
+  date: plainDate.nullable(),
   label: z.string().nullable().optional(),
   link: entityTimelineLink.nullable().optional(),
   events: z.array(entityTimelineEvent),

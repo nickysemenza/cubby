@@ -115,6 +115,9 @@ type EditableSelectConfig = {
 
 type EditableDateConfig = {
   type: "date";
+  clearable?: boolean;
+  clearLabel?: string;
+  clearDisabledReason?: string | undefined;
   placeholder?: string;
 };
 
@@ -203,6 +206,9 @@ export function EditableCell(props: EditableCellProps) {
     const { config } = props;
     return (
       <EditableDateCellInternal
+        clearable={config.clearable}
+        clearLabel={config.clearLabel}
+        clearDisabledReason={config.clearDisabledReason}
         value={props.value}
         onSave={props.onSave}
         placeholder={config.placeholder}
@@ -797,6 +803,9 @@ function EditableDateCellInternal({
   value,
   onSave,
   placeholder,
+  clearable = true,
+  clearLabel,
+  clearDisabledReason,
   renderValue,
   clipboard,
   trigger,
@@ -805,6 +814,9 @@ function EditableDateCellInternal({
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
   placeholder?: string;
+  clearable?: boolean;
+  clearLabel?: string;
+  clearDisabledReason?: string | undefined;
   renderValue: (value: string | null) => React.ReactNode;
   clipboard?: CellClipboardSpec<string | null>;
   trigger: EditTriggerMode;
@@ -839,6 +851,9 @@ function EditableDateCellInternal({
           cancelOnOutside={false}
         >
           <EditableDateEditor
+            clearable={clearable}
+            clearLabel={clearLabel}
+            clearDisabledReason={clearDisabledReason}
             value={value}
             onSave={onSave}
             placeholder={placeholder}
@@ -859,6 +874,9 @@ function EditableDateEditor({
   value,
   onSave,
   placeholder,
+  clearable = true,
+  clearLabel,
+  clearDisabledReason,
   initialText,
   onCancel,
   onCommit,
@@ -866,6 +884,9 @@ function EditableDateEditor({
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
   placeholder?: string;
+  clearable?: boolean;
+  clearLabel?: string;
+  clearDisabledReason?: string | undefined;
   initialText?: string;
   onCancel: () => void;
   onCommit: (value: string | null) => void;
@@ -892,10 +913,27 @@ function EditableDateEditor({
         onChange={(next) => void handleChange(next)}
         placeholder={placeholder}
         initialText={initialText}
-        clearable
+        clearable={clearable}
+        required={!clearable}
         focusOnMount
         className={cn("w-40", isPending && "pointer-events-none opacity-50")}
       />
+      {clearable && clearLabel ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={isPending}
+          onClick={() => void handleChange(null)}
+        >
+          {clearLabel}
+        </Button>
+      ) : null}
+      {clearDisabledReason ? (
+        <span className="text-xs text-muted-foreground">
+          {clearDisabledReason}
+        </span>
+      ) : null}
     </div>
   );
 }

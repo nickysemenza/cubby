@@ -123,6 +123,7 @@ export async function loadProductOwnershipTimelines(
   const today = options.today ?? householdLocalDate();
   for (const productId of productIds) {
     const productRows = rowsByProduct.get(productId) ?? [];
+    if (productRows.some((row) => row.expenseDate === null)) continue;
     const acquisitionDates = productRows.flatMap((row) =>
       row.cost !== null && row.cost > 0 && row.lineKind === "principal"
         ? [row.purchaseDate ?? row.expenseDate]

@@ -159,7 +159,6 @@ export const expenseListOverride = defineListOverride<
             expenseDateColumn(
               columnHelper,
               async (date, row) => {
-                if (date === null) return;
                 await updateExpenseMutation.mutateAsync({
                   id: row.id,
                   data: { date },

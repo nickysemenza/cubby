@@ -654,9 +654,10 @@ function genericPresentation<E extends EditableEntity>(input: {
 }): EntityEditorPresentation<E> {
   const { singular } = entitySummary[input.entity];
   const isUpdate = input.operation === "update";
-  const Fields = () => (
+  const Fields = ({ record }: EntityEditorFieldsProps) => (
     <EntityIntentFields
       entity={input.entity}
+      record={record}
       intent={input.intent}
       mode={isUpdate ? "edit" : "create"}
     />

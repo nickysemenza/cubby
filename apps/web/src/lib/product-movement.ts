@@ -9,7 +9,7 @@ export type ProductMovementClassification = {
 };
 
 export type ProductMovementMarker = {
-  date: string;
+  date: string | null;
   signedQuantity: number | null;
 };
 
@@ -87,6 +87,8 @@ export function buildConfidentOwnershipIntervals(
 ): ProductOwnershipEvidence {
   const totalsByDate = new Map<string, number | null>();
   for (const marker of markers) {
+    // An undated movement could fall anywhere in the balance history.
+    if (marker.date === null) return { intervals: [], confidenceLostAt: null };
     const current = totalsByDate.get(marker.date);
     if (marker.signedQuantity === null || current === null) {
       totalsByDate.set(marker.date, null);

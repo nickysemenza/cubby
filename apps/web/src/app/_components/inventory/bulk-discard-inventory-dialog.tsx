@@ -45,7 +45,7 @@ import { PlainDateField, SelectField, UnifiedTextField } from "../form-utils";
 
 const formSchema = z.object({
   trade: tradeSchema,
-  date: z.string(),
+  date: z.string().nullable(),
   reason: z.string(),
   quantities: z.record(inventoryShortcode, z.number().nullable()),
 });
@@ -238,7 +238,12 @@ export const BulkDiscardInventoryDialog: FC<
       error={error}
     >
       <Stack gap="sm">
-        <PlainDateField form={form} name="date" label="Date" />
+        <PlainDateField
+          form={form}
+          name="date"
+          label="Date"
+          clearLabel="Date unknown"
+        />
         <SelectField
           form={form}
           name="trade"

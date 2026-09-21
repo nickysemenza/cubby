@@ -68,6 +68,99 @@ describe("bulkEditEntities", () => {
 });
 
 describe("BulkEditDialogBody", () => {
+  it("does not turn Set value with an empty control into an accidental clear", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BulkEditDialogBody
+        entity="expense"
+        items={[{ id: "EXP-ABCD", name: "Free supplies", cost: 0 }]}
+        fieldKeys={["date"]}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        isPending={false}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Set value" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    expect(await screen.findByText("Enter a value for Date.")).toBeVisible();
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Date unknown" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith({ date: null }));
+  });
+
+  it.each([
+    {
+      entity: "expense" as const,
+      key: "date",
+      label: "Date",
+      action: "Date unknown",
+      item: { id: "EXP-ABCD", name: "Free supplies", cost: 0 },
+    },
+    {
+      entity: "planting" as const,
+      key: "finishedOn",
+      label: "Finished",
+      action: "Clear",
+      item: { id: "PLT-ABCD", name: "Seedlings" },
+    },
+    {
+      entity: "location" as const,
+      key: "parentId",
+      label: "Parent Location",
+      action: "Clear",
+      item: { id: "LOC-ABCD", name: "Storage bin" },
+    },
+  ])(
+    "explicitly clears an untouched $entity.$key and can return to unchanged",
+    async ({ entity, key, label, action, item }) => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      render(
+        <BulkEditDialogBody
+          entity={entity}
+          items={[item]}
+          fieldKeys={[key]}
+          onOpenChange={vi.fn()}
+          onSubmit={onSubmit}
+          isPending={false}
+          searchProviderFor={stubSearchProviderFor}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      const modes = within(
+        screen.getByRole("group", { name: `${label} change` }),
+      );
+      fireEvent.click(modes.getByRole("button", { name: action }));
+      expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
+      fireEvent.click(modes.getByRole("button", { name: "Leave unchanged" }));
+      expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+      fireEvent.click(modes.getByRole("button", { name: action }));
+      fireEvent.click(screen.getByRole("button", { name: "Update" }));
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith({ [key]: null }),
+      );
+    },
+  );
+
+  it("does not offer unknown dates for a selection containing a paid expense", () => {
+    render(
+      <BulkEditDialogBody
+        entity="expense"
+        items={[
+          { id: "EXP-ABCD", name: "Free supplies", cost: 0 },
+          { id: "EXP-BCDE", name: "Paid supplies", cost: 1 },
+        ]}
+        fieldKeys={["date"]}
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn()}
+        isPending={false}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByRole("button", { name: "Date unknown" })).toBeDisabled();
+  });
+
   // One dirtied field, several untouched siblings, across entities with
   // different bulk-update rosters (task's five vs. planting's three) — the
   // payload must carry exactly the touched key either way.
@@ -165,6 +258,35 @@ describe("BulkEditDialogBody", () => {
       );
     },
   );
+
+  it("leaves both assignment and inheritance mode unchanged after cancelling a clear", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BulkEditDialogBody
+        entity="task"
+        items={[{ id: "TSK-1", name: "Install shelf" }]}
+        fieldKeys={["projectId", "projectMode", "trade"]}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        isPending={false}
+        searchProviderFor={stubSearchProviderFor}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const modes = within(screen.getByRole("group", { name: "Project change" }));
+    fireEvent.click(modes.getByRole("button", { name: "Clear" }));
+    fireEvent.click(modes.getByRole("button", { name: "Leave unchanged" }));
+    expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
+    const input = screen.getByRole("combobox", { name: "trade" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.click(
+      screen.getByRole("option", { name: "Electrical & Lighting" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({ trade: "electrical" }),
+    );
+  });
 
   it("renders a nullable reference field with a search picker, and clearing it sends null", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);

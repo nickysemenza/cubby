@@ -127,7 +127,7 @@ const expenseSource = (row: {
   shortcode: string;
   name: string;
   cost: number | null;
-  date: string;
+  date: string | null;
   lineKind: string;
   future: boolean;
   productQuantity: number | null;

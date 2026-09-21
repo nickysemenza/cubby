@@ -31,8 +31,10 @@ import { EntityValueField } from "~/app/_components/form-utils/entity-value-fiel
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Row } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { entityFieldPresentation } from "~/entities/editing/entity-field-presentation";
+import { fieldClearing } from "~/entities/editing/field-clearing";
 import { presentEntitySelectOptions } from "~/entities/editing/select-options";
 import { entityLabel } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
@@ -69,10 +71,11 @@ type BulkEditFieldModel = (typeof entityFieldModels)[Entity]["fields"][number];
 /**
  * What a bulk-edit form field actually produces: select and reference
  * controls write a string (a select's value, or a picker's shortcode/`""`
- * for "cleared"); checkbox writes a boolean; every control's untouched or
- * explicitly-cleared state is `null`.
+ * for "cleared"); checkbox writes a boolean. Explicit modes distinguish an
+ * untouched empty control from a requested clear.
  */
-type BulkEditFieldValue = string | boolean | null;
+type BulkEditFieldValue = string | number | boolean | null;
+type BulkFieldMode = "unchanged" | "set" | "clear";
 
 /** The submit payload: `capabilities.bulkUpdate.fields` keys the dirty subset. */
 export type BulkEditDraft = Record<string, BulkEditFieldValue>;
@@ -168,6 +171,7 @@ function renderBulkEditField(
   entity: Entity,
   field: BulkEditFieldModel,
   form: UseFormReturn<FieldValues>,
+  clearCost: number | null,
 ) {
   const presentation = entityFieldPresentation(entity, field.key, "edit");
   const control = presentation.control;
@@ -231,6 +235,8 @@ function renderBulkEditField(
         name={field.key as never}
         label={presentation.label}
         description={description}
+        {...fieldClearing(entity, field.key, field.nullable, clearCost)}
+        showClearAction={false}
       />
     );
   }
@@ -252,11 +258,17 @@ function BulkEditFields({
   fieldKeys,
   form,
   searchProviderFor = referenceEntitySearch,
+  modes,
+  onModeChange,
+  clearCost,
 }: {
   entity: Entity;
   fieldKeys: readonly string[];
   form: UseFormReturn<FieldValues>;
   searchProviderFor?: SearchProviderFor;
+  modes: Readonly<Record<string, BulkFieldMode>>;
+  onModeChange: (field: BulkEditFieldModel, mode: BulkFieldMode) => void;
+  clearCost: number | null;
 }) {
   const model = entityFieldModels[entity];
   return (
@@ -270,41 +282,81 @@ function BulkEditFields({
         }
         // Companion assignment modes are written by the value field controls.
         if (!field.control) return null;
-        if (field.reference && !field.reference.multiple) {
-          return (
-            <fieldset key={field.key} aria-label={`${field.label} assignment`}>
-              <EntityValueField
-                form={form}
-                // SAFETY: `field.key` is one of this entity's own declared
-                // model field keys; RHF's conditional path type cannot express
-                // a runtime-selected field roster.
-                name={field.key as never}
-                // SAFETY: `field.reference.entity` is a manifest-declared
-                // reference target, always one of the picker's supported
-                // entities.
-                entity={field.reference.entity as never}
-                label={field.label}
-                clearable={field.nullable}
-                description={<FieldProvenance provenance={field.provenance} />}
-                SearchProvider={searchProviderFor(field.reference.entity)}
-                suggestField={field.control?.suggest ? field.key : undefined}
-              />
+        const clearing = fieldClearing(
+          entity,
+          field.key,
+          field.nullable,
+          clearCost,
+        );
+        const mode =
+          modes[key] ?? (form.formState.dirtyFields[key] ? "set" : "unchanged");
+        return (
+          <fieldset key={field.key} aria-label={`${field.label} assignment`}>
+            <fieldset className="mb-2" aria-label={`${field.label} change`}>
+              <Row gap="xs" wrap>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-pressed={mode === "unchanged"}
+                  onClick={() => onModeChange(field, "unchanged")}
+                >
+                  Leave unchanged
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-pressed={mode === "set"}
+                  onClick={() => onModeChange(field, "set")}
+                >
+                  Set value
+                </Button>
+                {field.nullable ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-pressed={mode === "clear"}
+                    disabled={!clearing.clearable}
+                    title={clearing.clearDisabledReason}
+                    onClick={() => onModeChange(field, "clear")}
+                  >
+                    {clearing.clearLabel}
+                  </Button>
+                ) : null}
+              </Row>
+            </fieldset>
+            {clearing.clearDisabledReason ? (
+              <p className="text-xs text-muted-foreground">
+                {clearing.clearDisabledReason}
+              </p>
+            ) : null}
+            <fieldset disabled={mode === "clear"}>
+              {field.reference && !field.reference.multiple ? (
+                <EntityValueField
+                  form={form}
+                  // SAFETY: this is a manifest-declared reference field.
+                  name={field.key as never}
+                  // SAFETY: reference.entity comes from the manifest reference roster.
+                  entity={field.reference.entity as never}
+                  label={field.label}
+                  clearable={field.nullable}
+                  description={
+                    <FieldProvenance provenance={field.provenance} />
+                  }
+                  SearchProvider={searchProviderFor(field.reference.entity)}
+                  suggestField={field.control?.suggest ? field.key : undefined}
+                />
+              ) : (
+                renderBulkEditField(entity, field, form, clearCost)
+              )}
               <FormFieldResolution
                 entity={entity}
                 form={form}
                 field={field.key}
               />
             </fieldset>
-          );
-        }
-        return (
-          <fieldset key={field.key} aria-label={`${field.label} assignment`}>
-            {renderBulkEditField(entity, field, form)}
-            <FormFieldResolution
-              entity={entity}
-              form={form}
-              field={field.key}
-            />
           </fieldset>
         );
       })}
@@ -367,7 +419,44 @@ export function BulkEditDialogBody({
   // touched fields.
   const { dirtyFields } = form.formState;
   const model = entityFieldModels[entity];
-  const dirtyKeys = fieldKeys.filter((key) => Boolean(dirtyFields[key]));
+  const [modes, setModes] = useState<Record<string, BulkFieldMode>>({});
+  const dirtyKeys = fieldKeys.filter(
+    (key) =>
+      modes[key] === "clear" ||
+      modes[key] === "set" ||
+      Boolean(dirtyFields[key]),
+  );
+  const clearCost = items.every((item) => item.cost === 0) ? 0 : null;
+  const onModeChange = (field: BulkEditFieldModel, mode: BulkFieldMode) => {
+    form.clearErrors(field.key);
+    const companions = new Set([
+      field.key,
+      ...Object.keys(field.resolution?.reset ?? {}),
+      ...Object.keys(field.resolution?.none ?? {}),
+    ]);
+    if (mode === "unchanged") {
+      for (const key of companions) {
+        // Companion modes are programmatic writes, with no registered input
+        // for resetField to reset. Unregister removes their pending patch.
+        if (model.fields.find((candidate) => candidate.key === key)?.control)
+          form.resetField(key);
+        else form.unregister(key);
+      }
+      setModes((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([key]) => !companions.has(key)),
+        ),
+      );
+      return;
+    }
+    setModes((current) => ({ ...current, [field.key]: mode }));
+    if (mode === "clear") {
+      const patch = field.resolution?.none ?? { [field.key]: null };
+      for (const [key, value] of Object.entries(patch)) {
+        form.setValue(key, value, { shouldDirty: true, shouldTouch: true });
+      }
+    }
+  };
 
   // Multi-row basis is ambiguous (which row's `name`/`vendor`/... would Jev
   // read?) — suggestions are offered only when exactly one row is staged, and
@@ -390,7 +479,21 @@ export function BulkEditDialogBody({
   const handleSubmit = form.handleSubmit(async (values) => {
     const data: BulkEditDraft = {};
     for (const key of dirtyKeys) {
-      const value = values[key];
+      const value = modes[key] === "clear" ? null : values[key];
+      const field = model.fields.find((candidate) => candidate.key === key);
+      const resolutionChosen = Object.keys(field?.resolution?.none ?? {}).some(
+        (companion) => companion !== key && dirtyFields[companion],
+      );
+      if (
+        modes[key] === "set" &&
+        (value === null || value === undefined || value === "") &&
+        !resolutionChosen
+      ) {
+        form.setError(key, {
+          message: `Enter a value for ${field?.label ?? key}.`,
+        });
+        return;
+      }
       // `EntityValueField` (used for every reference field here) writes ""
       // for "cleared", never `null` — its own convention for "no selection".
       // No bulk-edit field kind is free text, so folding "" into null here is
@@ -423,7 +526,8 @@ export function BulkEditDialogBody({
               (candidate) => candidate.key === key,
             );
             if (!field) return { current: "—", next: "—", unchanged: true };
-            const nextValue = form.getValues(key);
+            const nextValue =
+              modes[key] === "clear" ? null : form.getValues(key);
             return {
               current: formatBulkEditValue(entity, field, item[key]),
               next: formatBulkEditValue(entity, field, nextValue),
@@ -454,6 +558,9 @@ export function BulkEditDialogBody({
               fieldKeys={fieldKeys}
               form={form}
               searchProviderFor={searchProviderFor}
+              modes={modes}
+              onModeChange={onModeChange}
+              clearCost={clearCost}
             />
           </FieldSuggestionProvider>
         ) : (
@@ -462,6 +569,9 @@ export function BulkEditDialogBody({
             fieldKeys={fieldKeys}
             form={form}
             searchProviderFor={searchProviderFor}
+            modes={modes}
+            onModeChange={onModeChange}
+            clearCost={clearCost}
           />
         )}
       </BulkActionDialog>

@@ -61,6 +61,7 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
 
+import { recordFieldClearing } from "./editing/field-clearing";
 import { presentEntitySelectOptions } from "./editing/select-options";
 import {
   entities,
@@ -625,7 +626,17 @@ function renderEditableField<TRecord extends object>(
       return (
         <EditableCell
           value={value === null ? null : String(value)}
-          config={{ type: "date" }}
+          config={{
+            type: "date",
+            ...recordFieldClearing(
+              entity,
+              key,
+              entityFieldModels[entity].fields.find(
+                (field) => field.key === key,
+              )?.nullable ?? false,
+              record,
+            ),
+          }}
           onSave={save}
           renderValue={(v) => v ?? <NoneValue />}
         />
@@ -1084,7 +1095,15 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 value={copyScalarField(row.original, field)}
                 onSave={(value) => save(row.original, value)}
                 clipboard={specFromCellData(cellData, row.original)}
-                config={{ type: "date" }}
+                config={{
+                  type: "date",
+                  ...recordFieldClearing(
+                    entity,
+                    field.key,
+                    field.nullable,
+                    row.original,
+                  ),
+                }}
                 renderValue={(value) =>
                   value ? (
                     renderFormattedScalar(format, { kind: "date", raw: value })

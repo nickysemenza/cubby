@@ -57,7 +57,7 @@ export type DiscardProductInput = {
   trade: Trade;
   productId: ProductId;
   quantity: number;
-  date: string;
+  date: string | null;
   reason: string | null;
   /** Null leaves inventory alone — the operator cleared the checkbox. */
   inventoryEntryId: InventoryId | null;
@@ -257,7 +257,7 @@ export const discardProductUnits = async (
 export type DiscardFromInventoryInput = {
   trade: Trade;
   items: readonly { inventoryEntryId: InventoryId; quantity: number }[];
-  date: string;
+  date: string | null;
   reason: string | null;
 };
 

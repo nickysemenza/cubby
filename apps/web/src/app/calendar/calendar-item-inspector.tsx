@@ -23,6 +23,7 @@ import {
   PopoverTitle,
 } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import { fieldClearing } from "~/entities/editing/field-clearing";
 import type { EntityMutationPort } from "~/entities/editing/types";
 import { useEntityEditSession } from "~/entities/editing/use-entity-edit-session";
 import { entityDetailLink } from "~/entities/entities";
@@ -183,6 +184,12 @@ function EditableCalendarItem({
         form={session.form}
         name={item.kind === "task" ? "dueDate" : "date"}
         label={item.kind === "task" ? "Due date" : "Date"}
+        {...fieldClearing(
+          edit.entity,
+          "date",
+          item.kind === "expense",
+          session.form.watch("cost"),
+        )}
       />
       {item.kind === "meal" && (
         <FieldSuggestionProvider

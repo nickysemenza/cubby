@@ -1668,7 +1668,9 @@ async function loadSoftwareExpenseRows(
     );
 
   return rows.flatMap((row) =>
-    row.cost === null ? [] : [{ ...row, cost: row.cost }],
+    row.cost === null || row.date === null
+      ? []
+      : [{ ...row, date: row.date, cost: row.cost }],
   );
 }
 

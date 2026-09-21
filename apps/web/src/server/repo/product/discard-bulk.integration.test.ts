@@ -58,59 +58,63 @@ describe("discardFromInventoryEntries", () => {
       where: eq(inventoryEntry.id, id),
     });
 
-  it("writes one ledger line per row, drawing each entry down by its own amount", async () => {
-    // One partial and one full in the same call: the full row is the case the
-    // shelf row does not survive, and both must land under one transaction.
-    const partial = await seedStockedProduct(5);
-    const full = await seedStockedProduct(2);
+  it.each(["2026-06-03", null])(
+    "writes ledger lines with date %s and draws down each entry atomically",
+    async (date) => {
+      // One partial and one full in the same call: the full row is the case the
+      // shelf row does not survive, and both must land under one transaction.
+      const partial = await seedStockedProduct(5);
+      const full = await seedStockedProduct(2);
 
-    const result = await discardFromInventoryEntries(
-      ctx.db,
-      {
-        items: [
-          { inventoryEntryId: partial.entry.entityId, quantity: 2 },
-          { inventoryEntryId: full.entry.entityId, quantity: 2 },
-        ],
-        date: "2026-06-03",
-        trade: "other",
-        reason: "Water damage",
-      },
-      ctx.actor,
-    );
+      const result = await discardFromInventoryEntries(
+        ctx.db,
+        {
+          items: [
+            { inventoryEntryId: partial.entry.entityId, quantity: 2 },
+            { inventoryEntryId: full.entry.entityId, quantity: 2 },
+          ],
+          date,
+          trade: "other",
+          reason: "Water damage",
+        },
+        ctx.actor,
+      );
 
-    expect(result.items).toHaveLength(2);
+      expect(result.items).toHaveLength(2);
 
-    const lines = await getDb(ctx.db).query.expense.findMany({
-      where: inArray(
-        expense.id,
-        result.items.map((item) => item.expenseId),
-      ),
-    });
-    expect(lines).toHaveLength(2);
-    for (const line of lines) {
-      expect(line).toMatchObject({
-        cost: 0,
-        productQuantity: -2,
-        purchaseId: null,
-        notes: "Water damage",
+      const lines = await getDb(ctx.db).query.expense.findMany({
+        where: inArray(
+          expense.id,
+          result.items.map((item) => item.expenseId),
+        ),
       });
-    }
-    // Two products, two lines — not one line carrying the whole selection.
-    expect(new Set(lines.map((line) => line.productId)).size).toBe(2);
+      expect(lines).toHaveLength(2);
+      for (const line of lines) {
+        expect(line).toMatchObject({
+          cost: 0,
+          date,
+          productQuantity: -2,
+          purchaseId: null,
+          notes: "Water damage",
+        });
+      }
+      // Two products, two lines — not one line carrying the whole selection.
+      expect(new Set(lines.map((line) => line.productId)).size).toBe(2);
 
-    expect(result.items[0]).toMatchObject({
-      storedQuantity: -2,
-      inventory: { removed: false, remainingValue: 3 },
-    });
-    expect((await loadEntry(partial.entry.entityId))?.amount.value).toBe(3);
+      expect(result.items[0]).toMatchObject({
+        storedQuantity: -2,
+        inventory: { removed: false, remainingValue: 3 },
+      });
+      expect((await loadEntry(partial.entry.entityId))?.amount.value).toBe(3);
 
-    // Emptied, so soft-deleted rather than left claiming zero stock.
-    expect(result.items[1]).toMatchObject({
-      storedQuantity: -2,
-      inventory: { removed: true, remainingValue: null },
-    });
-    expect((await loadEntry(full.entry.entityId))?.deletedAt).not.toBeNull();
-  });
+      // Emptied, so soft-deleted rather than left claiming zero stock.
+      expect(result.items[1]).toMatchObject({
+        storedQuantity: -2,
+        inventory: { removed: true, remainingValue: null },
+      });
+      expect((await loadEntry(full.entry.entityId))?.deletedAt).not.toBeNull();
+    },
+  );
 
   it("refuses more than a row holds, and writes nothing at all", async () => {
     // The deliberate divergence from the single-row path, which ALLOWS

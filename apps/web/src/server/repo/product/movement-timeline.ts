@@ -60,7 +60,7 @@ export type ProductMovementLine = {
   cost: number | null;
   quantity: number | null;
   signedQuantity: number | null;
-  expenseDate: string;
+  expenseDate: string | null;
   chargedTo: MovementProject | null;
   provenanceOnly: boolean;
 };
@@ -73,7 +73,7 @@ export type ProductMovementPurchase = {
 };
 export type ProductMovementGroup = {
   key: string;
-  date: string;
+  date: string | null;
   purchase: ProductMovementPurchase | null;
   movements: ProductMovementLine[];
 };
@@ -254,9 +254,10 @@ export async function getProductMovementTimeline(
     const productId = row.productId ? codeById.get(row.productId) : undefined;
     if (!productId) return [];
     const classification = classifyProductMovement(row.cost, row.quantity);
-    const date = row.purchaseDate ?? row.expenseDate;
-    if (input.from && date < input.from) return [];
-    if (input.to && date > input.to) return [];
+    const date =
+      row.expenseDate === null ? null : (row.purchaseDate ?? row.expenseDate);
+    if (input.from && (date === null || date < input.from)) return [];
+    if (input.to && (date === null || date > input.to)) return [];
     const movement: ProductMovementLine = {
       expenseId: parseShortcodeFor("expense", row.expenseCode),
       productId,
@@ -277,9 +278,12 @@ export async function getProductMovementTimeline(
     };
     return [
       {
-        key: row.purchaseId
-          ? `purchase:${row.purchaseCode}`
-          : `expense:${row.expenseCode}`,
+        key:
+          date === null
+            ? `undated:${row.purchaseCode ?? row.expenseCode}`
+            : row.purchaseId
+              ? `purchase:${row.purchaseCode}`
+              : `expense:${row.expenseCode}`,
         date,
         purchase:
           row.purchaseId && row.purchaseCode
@@ -356,6 +360,9 @@ export async function getProductMovementTimeline(
     }),
   );
   groups.sort((left, right) => {
+    if (left.date === null)
+      return right.date === null ? left.key.localeCompare(right.key) : 1;
+    if (right.date === null) return -1;
     const direction = left.date.localeCompare(right.date);
     return input.order === "asc" ? direction : -direction;
   });
@@ -405,7 +412,10 @@ export async function getProductMovementTimeline(
     if (!privateId) return [];
     const markers = [
       ...(markersByProduct[privateId] ?? []).map((row) => ({
-        date: row.purchaseDate ?? row.expenseDate,
+        date:
+          row.expenseDate === null
+            ? null
+            : (row.purchaseDate ?? row.expenseDate),
         signedQuantity: classifyProductMovement(row.cost, row.quantity)
           .signedQuantity,
       })),
@@ -442,7 +452,9 @@ export async function getProductMovementTimeline(
     movement.cost !== null && movement.cost < 0 ? -movement.cost : 0,
   );
   const productsWithMovements = productCodesWithMovements.size;
-  const dates = groups.map((group) => group.date).sort();
+  const dates = groups
+    .flatMap((group) => (group.date === null ? [] : [group.date]))
+    .sort();
 
   return {
     products,
@@ -519,7 +531,10 @@ export function toEntityTimeline(
         KIND_LABEL[movement.kind],
         unitsLabel(movement),
         movement.chargedTo ? `Charged to ${movement.chargedTo.name}` : null,
-        movement.expenseDate !== group.date
+        group.date === null && group.purchase
+          ? `Purchase date ${group.purchase.date}`
+          : null,
+        movement.expenseDate !== null && movement.expenseDate !== group.date
           ? `Ledger date ${movement.expenseDate}`
           : null,
       ]
@@ -532,6 +547,7 @@ export function toEntityTimeline(
     { date: string; kind: string; link: { entity: string; id: string } }[]
   >();
   for (const group of timeline.groups) {
+    if (group.date === null) continue;
     for (const movement of group.movements) {
       const marker = {
         date: group.date,

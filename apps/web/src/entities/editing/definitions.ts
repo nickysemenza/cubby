@@ -6,6 +6,10 @@ import {
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  canClearExpenseDate,
+  EXPENSE_DATE_REQUIRED_MESSAGE,
+} from "@cubby/schemas/expense-fields";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -570,6 +574,22 @@ const requiredDate =
           },
         ];
 
+const validateExpenseDate: NonNullable<
+  EntityEditIntentDefinition<EditableEntity, EntityEditRecord>["validate"]
+> = ({ values, record }) => {
+  const cost = values.cost === undefined ? record?.cost : values.cost;
+  const date = values.date === undefined ? record?.date : values.date;
+  return date || canClearExpenseDate(cost)
+    ? noIssues()
+    : [
+        {
+          field: Object.hasOwn(values, "date") ? "date" : "cost",
+          message: EXPENSE_DATE_REQUIRED_MESSAGE,
+          source: "client",
+        },
+      ];
+};
+
 const sourceAliasDraft = z.object({
   source: z.string(),
   alias: z.string(),
@@ -834,14 +854,11 @@ export const entityEditRegistry: EntityEditRegistry = {
   })),
   expense: buildDefinition("expense", (f) => ({
     fields: f.fieldsFrom(["full"], {
-      // The create schema requires a date (`requiredOnCreate` would derive
-      // `{ required: true }`), but the blanket field-level check would fire
-      // for every intent — the `planned` update intent below already has its
-      // own conditional, better-worded `requiredDate("date")` check.
       date: { required: false },
     }),
     create: {
       capture: {
+        validate: validateExpenseDate,
         // `lineKind`'s `"auto"` is a client-only sentinel `buildData` strips
         // before validation. Trade stays unresolved until chosen or inherited.
         // `costType` genuinely depends on runtime context (disposition
@@ -871,12 +888,12 @@ export const entityEditRegistry: EntityEditRegistry = {
           notes: null,
         }),
       },
-      full: {},
+      full: { validate: validateExpenseDate },
     },
     update: {
-      full: {},
-      cost: {},
-      date: {},
+      full: { validate: validateExpenseDate },
+      cost: { validate: validateExpenseDate },
+      date: { validate: validateExpenseDate },
       project: {},
       product: {},
       planned: {
@@ -884,7 +901,7 @@ export const entityEditRegistry: EntityEditRegistry = {
           surface === "calendar" && valueFor(record, "future") !== true
             ? readOnly("Recorded expenses stay read-only in the calendar.")
             : editable,
-        validate: requiredDate("date"),
+        validate: validateExpenseDate,
       },
     },
   })),

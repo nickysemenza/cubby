@@ -1,6 +1,6 @@
 import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -50,6 +50,28 @@ afterEach(() => {
 });
 
 describe("SettleExpenseDialog", () => {
+  it("preserves the final-cost draft when an unknown date becomes ineligible", async () => {
+    render(
+      <SettleExpenseDialog open onOpenChange={() => {}} expense={expense} />,
+      { wrapper: harness.wrapper },
+    );
+    const cost = screen.getByLabelText("Final cost");
+    fireEvent.change(cost, { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Date unknown" }));
+    fireEvent.change(cost, { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mark purchased" }));
+    expect(
+      await screen.findAllByText(/A date is required unless the cost is \$0/),
+    ).not.toHaveLength(0);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Expense date")).toBeInvalid(),
+    );
+    expect(cost).toHaveValue(12);
+    expect(
+      screen.getByRole("button", { name: "Mark purchased" }),
+    ).toBeEnabled();
+  });
+
   it("renders", () => {
     render(
       <SettleExpenseDialog open onOpenChange={() => {}} expense={expense} />,

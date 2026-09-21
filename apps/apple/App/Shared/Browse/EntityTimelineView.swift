@@ -46,7 +46,11 @@ struct EntityTimelineView: View {
                 }
             } header: {
                 HStack {
-                    Text(EntityFieldValue.formattedDate(group.date.rawValue) ?? group.date.rawValue)
+                    if let date = group.date {
+                        Text(EntityFieldValue.formattedDate(date.rawValue) ?? date.rawValue)
+                    } else {
+                        Text("Date unknown")
+                    }
                     if let label = group.label {
                         if let link = group.link, let key = EntityKey(rawValue: link.entity) {
                             NavigationLink(value: Route.entityDetail(key, id: link.id)) {

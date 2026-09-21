@@ -511,11 +511,19 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
   name,
   label,
   description,
+  clearable = true,
+  clearLabel = "Clear date",
+  clearDisabledReason,
+  showClearAction = true,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
   description?: ReactNode;
+  clearable?: boolean;
+  clearLabel?: string;
+  clearDisabledReason?: string | undefined;
+  showClearAction?: boolean;
 }) {
   const controlId = useId();
   const descriptionId = `${controlId}-description`;
@@ -532,17 +540,35 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
-          <DatePickerInput
-            id={controlId}
-            name={name}
-            value={field.value ?? null}
-            onChange={(v) => field.onChange(v)}
-            onBlur={field.onBlur}
-            clearable
-            aria-label={label}
-            aria-invalid={fieldState.invalid}
-            aria-describedby={description ? descriptionId : undefined}
-          />
+          <Stack gap="xs">
+            <DatePickerInput
+              id={controlId}
+              name={name}
+              value={field.value ?? null}
+              onChange={(v) => field.onChange(v)}
+              onBlur={field.onBlur}
+              clearable={clearable}
+              required={!clearable}
+              aria-label={label}
+              aria-invalid={fieldState.invalid}
+              aria-describedby={description ? descriptionId : undefined}
+            />
+            {clearable && showClearAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="self-start"
+                onClick={() => field.onChange(null)}
+              >
+                {clearLabel}
+              </Button>
+            ) : showClearAction && clearDisabledReason ? (
+              <span className="text-xs text-muted-foreground">
+                {clearDisabledReason}
+              </span>
+            ) : null}
+          </Stack>
         </FormFieldGroup>
       )}
     />

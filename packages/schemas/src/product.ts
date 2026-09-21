@@ -447,7 +447,7 @@ export const productDiscardInput = z.object({
     .describe(
       "Units leaving the household, as a positive count. May be fractional — half a coil is 0.5. Stored on the Expense as a NEGATIVE productQuantity.",
     ),
-  date: plainDate,
+  date: plainDate.nullable().describe("Discard date; null when unknown."),
   reason: z
     .string()
     .max(500)
