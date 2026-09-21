@@ -11,7 +11,7 @@ const migration = (phase: "expand" | "enable") =>
   readFileSync(
     resolve(
       process.cwd(),
-      `../../docs/rollouts/inventory-ownership-image-processing.${phase}.sql`,
+      `../../scripts/cutovers/inventory-ownership-image-processing.${phase}.sql`,
     ),
     "utf8",
   ).replace(/^BEGIN;|^COMMIT;/gm, "");
@@ -19,7 +19,7 @@ const migration = (phase: "expand" | "enable") =>
 const ctx = withTestDb();
 
 it("expands legacy inventory without assigning owners and enables distinct owner slots", async () => {
-  // A separate schema exercises the checked-in rollout against its pre-change
+  // A separate schema exercises the checked-in SQL cutover against its pre-change
   // contract, rather than merely pushing the final Drizzle schema.
   await withTransaction(ctx.db, async (tx) => {
     await tx.execute(

@@ -1,4 +1,6 @@
--- Run only after ownership-aware server/callers are deployed and verified.
+-- Run with legacy inventory/photo-import writers stopped until the new server
+-- and callers are deployed and verified, or after that deployment. The old
+-- photo-import ON CONFLICT target is incompatible with the new AI index.
 -- This changes uniqueness, not image processing activation (which stays off).
 BEGIN;
 LOCK TABLE "InventoryEntry" IN SHARE ROW EXCLUSIVE MODE;

@@ -1,4 +1,4 @@
--- Expand only. Run under the rollout's single migration owner, before new code.
+-- Additive schema preparation. Run before deploying the new code.
 BEGIN;
 ALTER TABLE "InventoryEntry" ADD COLUMN IF NOT EXISTS "ownershipMode" text NOT NULL DEFAULT 'inherit';
 ALTER TABLE "InventoryEntry" ADD COLUMN IF NOT EXISTS "ownerLedgerPartyId" uuid REFERENCES "LedgerParty"(id);
