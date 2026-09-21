@@ -237,24 +237,44 @@ describe("suggestFields", () => {
     expect(jev).not.toHaveBeenCalled();
   });
 
-  it("forbids project suggestions for purchase-level adjustment lines", async () => {
-    const jev = jevPortPicking("Kitchen Remodel");
-    await expect(
-      suggestFields(
-        fakeDb,
-        {
-          basisMode: "provided",
-          entity: "expense",
-          targets: ["projectId"],
-          basis: { name: "Sales tax", lineKind: "tax" },
-        },
-        { jev, registry: { "expense.projectId": fakeProjectSpec() } },
-      ),
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      reason: "SUGGEST_FIELD_FORBIDDEN",
-    });
-    expect(jev).not.toHaveBeenCalled();
+  it.each(["tax", "auto", null])(
+    "forbids project suggestions for adjustment drafts with line kind %s",
+    async (lineKind) => {
+      const jev = jevPortPicking("Kitchen Remodel");
+      await expect(
+        suggestFields(
+          fakeDb,
+          {
+            basisMode: "provided",
+            entity: "expense",
+            targets: ["projectId"],
+            basis: { name: "Sales tax", lineKind },
+          },
+          { jev, registry: { "expense.projectId": fakeProjectSpec() } },
+        ),
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        reason: "SUGGEST_FIELD_FORBIDDEN",
+      });
+      expect(jev).not.toHaveBeenCalled();
+    },
+  );
+
+  it("resolves automatic principal line kinds before asking for projects", async () => {
+    const result = await suggestFields(
+      fakeDb,
+      {
+        basisMode: "suggested",
+        entity: "expense",
+        targets: ["projectId"],
+        basis: { name: "Kitchen shelf", lineKind: "auto" },
+      },
+      {
+        jev: jevPortPicking("Kitchen Remodel"),
+        registry: { "expense.projectId": fakeProjectSpec() },
+      },
+    );
+    expect(result.suggestions.projectId?.value).toBe("PRJ-AAAA");
   });
 
   it("excludes an inherited target using the authoritative draft snapshot", async () => {

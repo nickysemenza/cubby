@@ -21,6 +21,25 @@ describe("previewEntity field suggestions", () => {
     vi.clearAllMocks();
   });
 
+  it("detects adjustment drafts before requesting project suggestions", async () => {
+    mocks.resolveExpense.mockResolvedValue({});
+    mocks.suggestFields.mockResolvedValue({ suggestions: {} });
+    await previewEntity(
+      fromPartial<EntityKernelContext>({ db: {} }),
+      {
+        entity: "expense",
+        data: { name: "Sales tax", lineKind: "auto" },
+        context: { suggest: true, targets: ["projectId"] },
+      },
+      ports,
+    );
+    expect(mocks.resolveExpense).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ lineKind: "tax" }),
+    );
+    expect(mocks.suggestFields).not.toHaveBeenCalled();
+  });
+
   it("autofills only unresolved inherited targets and reviews explicit None in a provided batch", async () => {
     const fieldResolutions = {
       projectId: {

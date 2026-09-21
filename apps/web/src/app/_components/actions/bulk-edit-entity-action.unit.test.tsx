@@ -1,5 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WithEntitySearchProps } from "~/app/_components/combobox/with-search-hook";
@@ -74,7 +81,9 @@ describe("BulkEditDialogBody", () => {
   }>([
     {
       entity: "task",
-      fieldKeys: ["projectId", "status", "trade", "dueDate", "dueEndDate"],
+      fieldKeys: [
+        ...(entityInspectorMetadata.task.lifecycle.bulkUpdate?.fields ?? []),
+      ],
       item: { id: "TSK-1", name: "Hang drywall" },
       fieldLabel: "trade",
       optionLabel: "Electrical & Lighting",
@@ -114,6 +123,46 @@ describe("BulkEditDialogBody", () => {
 
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
       expect(onSubmit).toHaveBeenCalledWith(expected);
+    },
+  );
+
+  it.each([
+    ["Use inherited", "inherit"],
+    ["None", "explicit"],
+  ])(
+    "bulk project %s writes the companion mode without rendering metadata",
+    async (action, mode) => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      render(
+        <BulkEditDialogBody
+          entity="task"
+          items={[
+            { id: "TSK-1", name: "First" },
+            { id: "TSK-2", name: "Second" },
+          ]}
+          fieldKeys={[
+            ...(entityInspectorMetadata.task.lifecycle.bulkUpdate?.fields ??
+              []),
+          ]}
+          onOpenChange={vi.fn()}
+          onSubmit={onSubmit}
+          isPending={false}
+          searchProviderFor={stubSearchProviderFor}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      fireEvent.click(
+        within(
+          screen.getByRole("group", { name: "Project assignment" }),
+        ).getByRole("button", { name: action }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Update" }));
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith({
+          projectId: null,
+          projectMode: mode,
+        }),
+      );
     },
   );
 

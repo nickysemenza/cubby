@@ -44,6 +44,31 @@ const explicitNoneResolution = () => ({
 });
 
 describe("entity edit definitions", () => {
+  it.each(["task", "expense"] as const)(
+    "leaves %s capture trade unresolved until chosen or inherited",
+    (entity) => {
+      const request = {
+        entity,
+        operation: "create" as const,
+        intent: "capture" as const,
+        surface: "dialog" as const,
+      };
+      const resolved = resolveEntityEdit(entityEditRegistry, request);
+      if (!("definition" in resolved)) throw new Error("Capture must resolve");
+      const values = initialEntityEditValues(resolved, request);
+      const result = buildEntityEdit(resolved, request, {
+        ...values,
+        name: "Synthetic work",
+      });
+      if (
+        !result.ok ||
+        !result.changed ||
+        result.command.operation !== "create"
+      )
+        throw new Error("Capture must build a create");
+      expect(result.command.data.trade).toBeNull();
+    },
+  );
   it.each([
     {
       entity: "task" as const,

@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { useEffect, useMemo, useRef } from "react";
 import {
@@ -23,19 +24,22 @@ const patchSchema = z.record(z.string(), z.json());
 export function FormFieldResolution<TValues extends FieldValues>({
   form,
   field,
+  entity,
 }: {
   form: UseFormReturn<TValues>;
   field: string;
+  entity?: Entity;
 }) {
   const context = useFieldSuggestionContext();
+  const resolvedEntity = entity ?? context?.entity;
   const policy = useMemo(
     () =>
-      context
-        ? entityFieldModels[context.entity].fields.find(
+      resolvedEntity
+        ? entityFieldModels[resolvedEntity].fields.find(
             (candidate) => candidate.key === field,
           )?.resolution
         : null,
-    [context, field],
+    [resolvedEntity, field],
   );
   // SAFETY: `field` comes from the mounted entity's declared form field model.
   const name = field as Path<TValues>;
@@ -71,14 +75,14 @@ export function FormFieldResolution<TValues extends FieldValues>({
     }
   }, [changed.isDirty, changed.isTouched, field, form, nonePatch, value]);
 
-  if (!context || !policy) return null;
-  const resolution = context.resolutionFor(field);
+  if (!policy) return null;
+  const resolution = context?.resolutionFor(field);
   const applyPatch = (input: unknown) => {
     const patch = patchSchema.parse(input);
     if (Object.hasOwn(patch, field)) {
       actionValue.current = JSON.stringify(patch[field]);
     }
-    context.clearAutoFilled(field);
+    context?.clearAutoFilled(field);
     for (const [key, next] of Object.entries(patch)) {
       // SAFETY: the declaration-owned resolution patch is parsed above and
       // names fields in the same generated intent as this form.

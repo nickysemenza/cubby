@@ -1,4 +1,7 @@
-import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import {
+  type ExpenseLineKind,
+  resolveExpenseLineKind,
+} from "@cubby/schemas/expense-line-kind";
 import type {
   FieldResolution,
   FieldResolutions,
@@ -183,7 +186,8 @@ export type ResolvedExpenseInheritance = {
 };
 
 export type ExpenseFieldDraft = {
-  lineKind?: ExpenseLineKind;
+  name?: string | null;
+  lineKind?: ExpenseLineKind | "auto";
   projectId?: string | null;
   productId?: string | null;
   purchaseId?: string | null;
@@ -295,7 +299,7 @@ export async function resolveDraftExpenseFields(
   const purchaseId = draft.purchaseId
     ? await resolveLiveShortcode(db, draft.purchaseId, "purchase")
     : null;
-  const lineKind = draft.lineKind ?? "principal";
+  const lineKind = resolveExpenseLineKind(draft);
   const trade = draft.trade ?? null;
 
   const result = await unwrapDb(db).execute<DraftResolutionRow>(sql`

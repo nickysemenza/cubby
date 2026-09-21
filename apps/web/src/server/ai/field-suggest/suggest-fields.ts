@@ -15,6 +15,7 @@ import type {
  */
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   fieldResolutionsSchema,
   type FieldResolution,
@@ -376,9 +377,19 @@ async function resolveOneTarget(
 
 export async function suggestFields(
   db: Database,
-  input: FieldSuggestionsInput,
+  rawInput: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
+  const input =
+    rawInput.entity === "expense"
+      ? {
+          ...rawInput,
+          basis: {
+            ...rawInput.basis,
+            lineKind: resolveExpenseLineKind(rawInput.basis),
+          },
+        }
+      : rawInput;
   if (
     input.entity === "expense" &&
     input.targets.includes("projectId") &&

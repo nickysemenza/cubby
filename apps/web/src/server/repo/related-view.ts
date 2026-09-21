@@ -630,7 +630,7 @@ export async function loadRelatedSummary(
       if (input.relationKey === "vendor.projects") {
         return sql`scoped_expenses AS (
           SELECT e."id" AS "expenseId",
-            (allocation."attributedCents"::bigint / 100.0)::double precision AS "cost",
+            (allocation."attributedCents"::bigint / 100.0) AS "cost",
             CASE WHEN allocation.basis = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
             allocation.incomplete AS "allocationIncomplete",
             e."productQuantity", e."future", e."date" AS "expenseDate",
@@ -660,7 +660,7 @@ export async function loadRelatedSummary(
       if (input.relationKey === "purchase.projects") {
         return sql`scoped_expenses AS (
           SELECT e."id" AS "expenseId",
-            (allocation."attributedCents"::bigint / 100.0)::double precision AS "cost",
+            (allocation."attributedCents"::bigint / 100.0) AS "cost",
             CASE WHEN allocation.basis = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
             allocation.incomplete AS "allocationIncomplete",
             e."productQuantity", e."future", e."date" AS "expenseDate",
@@ -708,7 +708,7 @@ export async function loadRelatedSummary(
         WHERE child."deletedAt" IS NULL
       ), scoped_expenses AS (
         SELECT e."id" AS "expenseId",
-          (allocation."attributedCents"::bigint / 100.0)::double precision AS "cost",
+          (allocation."attributedCents"::bigint / 100.0) AS "cost",
           CASE WHEN allocation.basis = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
           allocation.incomplete AS "allocationIncomplete",
           e."productQuantity", e."future",
@@ -724,7 +724,7 @@ export async function loadRelatedSummary(
     }
     return sql`scoped_expenses AS (
       SELECT e."id" AS "expenseId",
-        (allocation."attributedCents"::bigint / 100.0)::double precision AS "cost",
+        (allocation."attributedCents"::bigint / 100.0) AS "cost",
         CASE WHEN allocation.basis = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
         allocation.incomplete AS "allocationIncomplete",
         e."productQuantity", e."future",

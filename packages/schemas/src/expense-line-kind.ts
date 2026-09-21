@@ -166,3 +166,17 @@ export function inferExpenseLineKind(input: {
 }): ExpenseLineKind {
   return inspectExpenseLineKind(input).lineKind;
 }
+
+/** Resolve a draft's optional auto-detection exactly as the persisted write does. */
+export function resolveExpenseLineKind(input: {
+  lineKind?: string | null;
+  name?: string | null;
+  productId?: string | null;
+}): ExpenseLineKind {
+  return input.lineKind == null || input.lineKind === "auto"
+    ? inferExpenseLineKind({
+        name: input.name ?? "",
+        productId: input.productId,
+      })
+    : expenseLineKindSchema.parse(input.lineKind);
+}

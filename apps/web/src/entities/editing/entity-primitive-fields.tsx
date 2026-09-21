@@ -4,6 +4,7 @@ import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ComponentType,
   type ReactNode,
@@ -652,14 +653,17 @@ export function EntityIntentFields({
     });
     return hidden;
   }, [hiddenWhen, hiddenWhenValues]);
-  const lineKind = basisValueOf(
-    useWatch({ control: form.control, name: "lineKind" }),
-  );
+  const [lineKind, expenseName, expenseProduct]: unknown[] = useWatch({
+    control: form.control,
+    name: ["lineKind", "name", "productId"],
+  });
   const projectIsAllocated =
     entity === "expense" &&
-    lineKind !== null &&
-    lineKind !== "principal" &&
-    lineKind !== "auto";
+    resolveExpenseLineKind({
+      lineKind: basisValueOf(lineKind),
+      name: basisValueOf(expenseName),
+      productId: basisValueOf(expenseProduct),
+    }) !== "principal";
   useEffect(() => {
     if (projectIsAllocated && basisValueOf(form.getValues("projectId"))) {
       form.setValue("projectId", null, { shouldDirty: true });

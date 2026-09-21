@@ -815,7 +815,7 @@ export const entityEditRegistry: EntityEditRegistry = {
           subjectProductId: patch.subjectProductId
             ? parseShortcodeFor("product", patch.subjectProductId)
             : null,
-          trade: patch.trade ?? "other",
+          trade: patch.trade ?? null,
           dueEndDate: null,
         }),
       },
@@ -840,13 +840,12 @@ export const entityEditRegistry: EntityEditRegistry = {
     create: {
       capture: {
         // `lineKind`'s `"auto"` is a client-only sentinel `buildData` strips
-        // before validation, and `trade` has no schema default despite being
-        // required on create — neither is derivable from the declaration.
+        // before validation. Trade stays unresolved until chosen or inherited.
         // `costType` genuinely depends on runtime context (disposition
         // capture vs. ordinary spend), not on anything the schema knows.
         defaults: (context) => ({
           lineKind: "auto",
-          trade: "other",
+          trade: null,
           costType: context.disposition ? "tools" : "materials",
         }),
         buildData: (patch) => ({

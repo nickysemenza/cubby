@@ -1,5 +1,6 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   fieldResolutionsSchema,
   type FieldResolution,
@@ -69,14 +70,12 @@ function resolutionModeField(entity: ShortcodeEntity, field: string) {
 function isAllocatedExpenseProject(
   entity: ShortcodeEntity,
   field: string,
-  lineKind: string | null,
+  basis: FieldSuggestionSource["basis"],
 ) {
   return (
     entity === "expense" &&
     field === "projectId" &&
-    lineKind !== null &&
-    lineKind !== "principal" &&
-    lineKind !== "auto"
+    resolveExpenseLineKind(basis) !== "principal"
   );
 }
 
@@ -291,9 +290,7 @@ export function FieldSuggestionProvider({
     const suggestedTargets: string[] = [];
     const alternativeTargets: string[] = [];
     targets.targets.forEach((target, index) => {
-      if (
-        isAllocatedExpenseProject(entity, target.key, basis.lineKind ?? null)
-      ) {
+      if (isAllocatedExpenseProject(entity, target.key, basis)) {
         return;
       }
       const value = basisValueOf(targetValues[index]);

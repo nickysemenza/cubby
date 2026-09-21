@@ -324,18 +324,37 @@ export async function hydrateTaskInheritanceRows<
   T extends TaskAssignment & { id: TaskId },
 >(db: Database, rows: readonly T[]) {
   if (!rows.length) return [];
-  const extras = await getDb(db)
-    .select({ id: task.id, ...taskResolutionExtras("Task") })
-    .from(task)
-    .where(
-      and(
-        inArray(
-          task.id,
-          rows.map((row) => row.id),
-        ),
-        notDeleted(task),
-      ),
-    );
+  // Standalone tasks without a project have no inheritance source to query.
+  // Avoid planning recursive project resolution for large unassigned lists.
+  const sourcedRows = rows.filter((row) => row.parentTaskId || row.projectId);
+  const extras = sourcedRows.length
+    ? await getDb(db)
+        .select({ id: task.id, ...taskResolutionExtras("Task") })
+        .from(task)
+        .where(
+          and(
+            inArray(
+              task.id,
+              sourcedRows.map((row) => row.id),
+            ),
+            notDeleted(task),
+          ),
+        )
+    : [];
+  for (const row of rows) {
+    if (row.parentTaskId || row.projectId) continue;
+    extras.push({
+      id: row.id,
+      effectiveProjectId: null,
+      effectiveSubjectProductId: row.subjectProductId,
+      effectiveTrade: row.trade,
+      fallbackProjectId: null,
+      fallbackSubjectProductId: null,
+      fallbackTrade: null,
+      parentTrade: null,
+      parentShortcode: null,
+    });
+  }
   const byId = new Map(extras.map((row) => [row.id, row]));
   const refs = await assignmentReferences(db, rows, extras);
   return rows.map((row) => {

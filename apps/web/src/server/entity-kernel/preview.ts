@@ -1,4 +1,5 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { z } from "zod";
 
@@ -190,6 +191,7 @@ async function applyPreviewSuggestions(args: {
 }
 
 const inheritanceDraftSchema = z.looseObject({
+  name: z.string().nullable().optional(),
   lineKind: z.string().optional(),
   projectId: z.string().nullable().optional(),
   projectMode: z.string().optional(),
@@ -255,6 +257,11 @@ export async function previewEntity(
   const seeds = input.context.seeds;
   const explicit = input.data;
   const merged = { ...seeds, ...explicit };
+  if (input.entity === "expense") {
+    merged.lineKind = resolveExpenseLineKind(
+      inheritanceDraftSchema.parse(merged),
+    );
+  }
   const errors: z.infer<typeof previewIssueSchema>[] = [];
   const warnings: string[] = [];
 

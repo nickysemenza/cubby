@@ -132,6 +132,14 @@ describe("purchase inheritance lifecycle", () => {
       }),
     ).toMatchObject({ trade: { fallbackValue: "building" } });
 
+    expect(
+      await resolveDraftExpenseFields(ctx.db, {
+        name: "Sales tax",
+        lineKind: "auto",
+        purchaseId: source.shortcode,
+      }),
+    ).toMatchObject({ projectId: { mode: "allocated", value: null } });
+
     await updateExpense(ctx.db, expenseCode, { trade: null }, ctx.actor);
     expect(await getExpenseByShortcode(ctx.db, expenseCode)).toMatchObject({
       projectId: explicitProject.shortcode,
