@@ -307,6 +307,7 @@ export const renderEntityOperations = (
   swiftRoutes: readonly SwiftRoute[],
   resourceEntities: ReadonlyMap<string, ReadonlySet<string>>,
   generatedOperationIds: ReadonlySet<string>,
+  nativeOperations: readonly string[],
 ): EntityArtifacts => {
   const bodyHas = (entity: string, property: string) =>
     updateBodyHas(document, components, swiftRoutes, entity, property);
@@ -317,6 +318,24 @@ export const renderEntityOperations = (
     generatedOperationIds.has(`resources.${entity}.${action}`);
   const withGenerated = (action: string) =>
     entities.filter(([entity]) => generated(entity, action));
+
+  // Resource routes use the generic bridge below. A small set of explicitly
+  // flagged read RPCs are represented separately so Browse can choose their
+  // typed adapters without pretending they are resources.
+  const nativeActionsByEntity = new Map<string, Set<string>>();
+  for (const [entity, actions] of entities) {
+    nativeActionsByEntity.set(
+      entity,
+      new Set([...actions].filter((action) => generated(entity, action))),
+    );
+  }
+  for (const id of nativeOperations) {
+    const match = /^([^.]+)\.(list|detail)$/u.exec(id);
+    if (!match) continue;
+    const actions = nativeActionsByEntity.get(match[1]!) ?? new Set<string>();
+    actions.add(match[2] === "detail" ? "get" : "list");
+    nativeActionsByEntity.set(match[1]!, actions);
+  }
 
   const listParameters = new Map(
     withGenerated("list").map(([entity]) => {
@@ -359,16 +378,30 @@ export const renderEntityOperations = (
           .join(", ")}]`,
     )
     .join("\n");
-  const nativeActionCases = entities
+  const nativeActionCases = [...nativeActionsByEntity]
+    .sort(([left], [right]) => left.localeCompare(right))
     .map(([entity, actions]) => {
-      const native = [...actions]
-        .filter((action) => generated(entity, action))
-        .sort();
+      const native = [...actions].sort();
       return native.length === 0
         ? null
         : `        case .${swiftCase(entity)}: [${native.map((action) => `.${action}`).join(", ")}]`;
     })
     .filter((line) => line !== null)
+    .join("\n");
+  const nativeReadCases = [...nativeActionsByEntity]
+    .filter(([, actions]) => actions.has("list"))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([entity]) => {
+      const kind =
+        entity === "cookbook"
+          ? "cookbook"
+          : entity === "image"
+            ? "image"
+            : entity === "usda-food"
+              ? "usdaFood"
+              : "resource";
+      return `        case .${swiftCase(entity)}: .${kind}`;
+    })
     .join("\n");
   const listCases = [...listParameters]
     .map(
@@ -469,6 +502,13 @@ public enum EntityOperationError: Error, Sendable, Hashable {
     case missingCreatedID(EntityKey)
 }
 
+/// The generated client may read an entity through a resource route or one
+/// declared exceptional RPC adapter. This stays separate from \`httpActions\`:
+/// native read support does not claim a resource capability the server lacks.
+public enum NativeReadKind: Sendable, Hashable {
+    case unavailable, resource, cookbook, image, usdaFood
+}
+
 extension EntityKey {
     /// The resource actions the HTTP document exposes for this entity, whether or not the
     /// generated client carries them (\`delete\` is exposed but not generated).
@@ -485,6 +525,13 @@ ${actionCases}
         switch self {
 ${nativeActionCases}
         default: []
+        }
+    }
+
+    public var nativeReadKind: NativeReadKind {
+        switch self {
+${nativeReadCases}
+        default: .unavailable
         }
     }
 }

@@ -48,8 +48,11 @@ struct SearchContent: View {
     @Bindable var search: SearchModel
     @Environment(AppModel.self) private var model
     @Environment(\.dismissSearch) private var dismissSearch
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var scanning = false
     @State private var creatingProduct = false
+    @State private var presentation = ListPresentationChoice.list
     @FocusState private var searchFieldFocused: Bool
     /// The last `navigator.focusSearchRequest` this view already acted on, so a fresh mount (the
     /// common case: switching to the Search tab normally) doesn't steal focus, while a request
@@ -131,6 +134,9 @@ struct SearchContent: View {
                         Label("Scan a code", systemImage: "barcode.viewfinder")
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    presentationPicker
+                }
             }
             .sheet(isPresented: $scanning) {
                 ScanLookupSheet(onTextResolved: { search.query = $0 }).nativeSheet(.picker)
@@ -164,7 +170,11 @@ struct SearchContent: View {
             case .searching:
                 List { LoadingIndicator(label: "Searching") }.listStyle(.plain)
             case .results(let groups):
-                resultsList(groups)
+                if presentation == .list {
+                    resultsList(groups)
+                } else {
+                    resultsGrid(groups, density: presentation)
+                }
             case .empty:
                 ContentUnavailableView.search(text: search.query)
             case .failed(let message):
@@ -177,6 +187,36 @@ struct SearchContent: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var presentationPicker: some View {
+        if prefersSegmentedPresentationPicker {
+            Picker("View", selection: $presentation) {
+                ForEach(ListPresentationChoice.allCases, id: \.self) { choice in
+                    Text(choice.label).tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("View")
+        } else {
+            Picker("View", selection: $presentation) {
+                ForEach(ListPresentationChoice.allCases, id: \.self) { choice in
+                    Label(choice.label, systemImage: choice.symbol).tag(choice)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityLabel("View")
+        }
+    }
+
+    private var prefersSegmentedPresentationPicker: Bool {
+        guard !dynamicTypeSize.isAccessibilitySize else { return false }
+        #if os(macOS)
+            return true
+        #else
+            return horizontalSizeClass == .regular
+        #endif
     }
 
     /// The un-searched state: recents alone don't need a big empty view (they show as
@@ -217,6 +257,34 @@ struct SearchContent: View {
             }
         }
         .listStyle(.plain)
+    }
+
+    private func resultsGrid(
+        _ groups: [SearchModel.ResultGroup], density: ListPresentationChoice
+    ) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
+                ForEach(groups) { group in
+                    let descriptor = EntityCatalog[group.key]
+                    Text(descriptor.plural)
+                        .font(.headline)
+                        .padding(.horizontal, PorcelainTokens.Space.md)
+                        .accessibilityAddTraits(.isHeader)
+                    EntityShelfView(
+                        descriptor: descriptor,
+                        rows: group.hits.map(Self.row),
+                        density: density,
+                        section: .search)
+                }
+            }
+            .padding(.vertical, PorcelainTokens.Space.sm)
+        }
+    }
+
+    private static func row(_ hit: SearchHit) -> EntityRow {
+        EntityRow(
+            id: hit.id, title: hit.title, subtitle: hit.subtitle, imageURL: hit.imageURL,
+            raw: .object([:]))
     }
 
     @ViewBuilder

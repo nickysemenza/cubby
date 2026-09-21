@@ -38,6 +38,8 @@ filter:
     - BrowserPaymentEvidence
     - BrowserChoice
   operations:
+    - cookbook.detail
+    - cookbook.list
     - dashboard.counts
     - entity.explore
     - entity.graph
@@ -45,6 +47,7 @@ filter:
     - image.analysis
     - image.detail
     - image.hashIndex
+    - image.list
     - image.markUploaded
     - image.recordAnalysis
     - image.setPerceptualHashes
@@ -153,3 +156,5 @@ filter:
     - search.find
     - task.todayBriefing
     - upc.lookup
+    - usda-food.detail
+    - usda-food.list

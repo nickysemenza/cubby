@@ -64,10 +64,11 @@ test("declared record lists retain identities, relationships and amounts on mobi
     page,
     `/locations?name=${encodeURIComponent(`${name} shelf`)}`,
   );
-  await page.getByRole("button", { name: "Table view", exact: true }).click();
+  await page.getByRole("button", { name: /^Locations view:/ }).click();
+  await page.getByRole("menuitem", { name: "List", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Table view", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("button", { name: "Locations view: List", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("link", { name: `${name} room · room`, exact: true }),
   ).toHaveAttribute("href", `/locations/${fixture.location.id}`);

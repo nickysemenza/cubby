@@ -17,7 +17,12 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
+import { shelfGridClass } from "~/app/_components/data-table/shelf";
+import { EntityWorkbenchInspector } from "~/app/_components/entity-workbench-inspector";
+import {
+  type EntityPreviewRendererProps,
+  useEntityPreview,
+} from "~/app/_components/hooks/useEntityPreview";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Badge } from "~/components/ui/badge";
@@ -101,12 +106,9 @@ export function toolPlacementSummary(
   };
 }
 
-function GallerySkeleton() {
+function GallerySkeleton({ compact }: { compact: boolean }) {
   return (
-    <div
-      aria-label="Loading tool gallery"
-      className="grid grid-cols-2 gap-2 min-[480px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-    >
+    <div aria-label="Loading tool gallery" className={shelfGridClass(compact)}>
       {Array.from({ length: 12 }, (_, index) => (
         <div key={index} className="border border-[var(--border)] bg-card">
           <Skeleton className="aspect-square w-full rounded-none" />
@@ -123,12 +125,14 @@ function GallerySkeleton() {
 
 export function ToolCard({
   item,
+  compact = false,
   current,
   onInspect,
   onHover,
   onHoverEnd,
 }: {
   item: ToolGalleryItemOut;
+  compact?: boolean;
   current: boolean;
   onInspect: () => void;
   onHover: () => void;
@@ -163,7 +167,7 @@ export function ToolCard({
           // 6-column grid: ~270px per card on screens up to 1920px wide. Only an
           // ultra-wide monitor exceeds 320 (the 640-rung ceiling); accept a
           // softer tile there rather than fetching 2048 everywhere.
-          displayWidth={320}
+          displayWidth={compact ? 192 : 320}
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.015]"
           fallback={
             <div className="flex h-full w-full items-center justify-center bg-[var(--domain-house-surface)] text-[var(--domain-house)]">
@@ -186,8 +190,14 @@ export function ToolCard({
         ) : null}
       </div>
 
-      <div className="flex min-h-36 flex-1 flex-col p-2">
-        <h3 className="line-clamp-2 min-h-9 text-sm/4.5 font-semibold text-foreground">
+      <div className={cn("flex flex-1 flex-col p-2", !compact && "min-h-36")}>
+        <h3
+          title={item.productName}
+          className={cn(
+            "line-clamp-2 min-h-9 font-semibold text-foreground",
+            compact ? "text-xs/4.5" : "text-sm/4.5",
+          )}
+        >
           {item.productName}
         </h3>
         <p
@@ -197,49 +207,95 @@ export function ToolCard({
           {identity || "Unspecified maker"}
         </p>
 
-        <div className="mt-2 min-h-13 border-t border-[var(--border)] pt-2">
-          {shownEntries.map((entry) => (
-            <div
-              key={entry.id}
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2 text-2xs/4"
-            >
-              <span
-                className="truncate text-muted-foreground"
-                title={toolLocationPath(entry)}
-              >
-                {toolLocationPath(entry)}
-              </span>
-              <span className="font-mono text-foreground tabular-nums">
-                {tryFormatAmount(entry.amount)}
-              </span>
+        {compact ? (
+          <p className="mt-1 text-2xs text-muted-foreground">
+            {item.inventoryEntries.length} placement
+            {item.inventoryEntries.length === 1 ? "" : "s"}
+          </p>
+        ) : (
+          <>
+            <div className="mt-2 min-h-13 border-t border-[var(--border)] pt-2">
+              {shownEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2 text-2xs/4"
+                >
+                  <span
+                    className="truncate text-muted-foreground"
+                    title={toolLocationPath(entry)}
+                  >
+                    {toolLocationPath(entry)}
+                  </span>
+                  <span className="font-mono text-foreground tabular-nums">
+                    {tryFormatAmount(entry.amount)}
+                  </span>
+                </div>
+              ))}
+              {item.inventoryEntries.length > shownEntries.length ? (
+                <p className="text-2xs text-muted-foreground">
+                  +{item.inventoryEntries.length - shownEntries.length} more
+                </p>
+              ) : null}
             </div>
-          ))}
-          {item.inventoryEntries.length > shownEntries.length ? (
-            <p className="text-2xs text-muted-foreground">
-              +{item.inventoryEntries.length - shownEntries.length} more
-            </p>
-          ) : null}
-        </div>
 
-        <div className="mt-auto flex items-end justify-between gap-2 border-t border-[var(--border)] pt-2">
-          <div className="min-w-0">
-            <p className="font-mono text-2xs text-foreground tabular-nums">
-              {placements.label}
-            </p>
-            <p className="text-2xs text-muted-foreground">
-              {item.projectUseCount === 0
-                ? "No project uses"
-                : `${item.projectUseCount} project use${item.projectUseCount === 1 ? "" : "s"}`}
-            </p>
-          </div>
-          {item.costPerProjectUse !== null ? (
-            <span className="shrink-0 font-mono text-xs font-medium text-primary tabular-nums">
-              {formatCurrency(item.costPerProjectUse)}/use
-            </span>
-          ) : null}
-        </div>
+            <div className="mt-auto flex items-end justify-between gap-2 border-t border-[var(--border)] pt-2">
+              <div className="min-w-0">
+                <p className="font-mono text-2xs text-foreground tabular-nums">
+                  {placements.label}
+                </p>
+                <p className="text-2xs text-muted-foreground">
+                  {item.projectUseCount === 0
+                    ? "No project uses"
+                    : `${item.projectUseCount} project use${item.projectUseCount === 1 ? "" : "s"}`}
+                </p>
+              </div>
+              {item.costPerProjectUse !== null ? (
+                <span className="shrink-0 font-mono text-xs font-medium text-primary tabular-nums">
+                  {formatCurrency(item.costPerProjectUse)}/use
+                </span>
+              ) : null}
+            </div>
+          </>
+        )}
       </div>
     </button>
+  );
+}
+
+export function ToolInspectorSummary({ item }: { item: ToolGalleryItemOut }) {
+  return (
+    <section
+      aria-label="Tool placements and usage"
+      className="space-y-3 border-b border-border p-3"
+    >
+      <div className="space-y-2">
+        {item.inventoryEntries.map((entry) => (
+          <div
+            key={entry.id}
+            className="flex items-start justify-between gap-2"
+          >
+            <span className="min-w-0 text-xs text-muted-foreground">
+              {toolLocationPath(entry)}
+            </span>
+            <span className="shrink-0 font-mono text-xs tabular-nums">
+              {tryFormatAmount(entry.amount)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
+        <span>
+          {item.projectUseCount === 0
+            ? "No project uses"
+            : `${item.projectUseCount} project use${item.projectUseCount === 1 ? "" : "s"}`}
+        </span>
+        {item.costPerProjectUse !== null ? (
+          <span className="font-mono text-primary tabular-nums">
+            {formatCurrency(item.costPerProjectUse)}/use
+          </span>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -464,6 +520,7 @@ function useToolGroupNavigation({
 
 function GalleryGroups({
   groups,
+  compact,
   groupMetadata,
   isPlaceholderData,
   error,
@@ -476,6 +533,7 @@ function GalleryGroups({
   onRetryMore,
 }: {
   groups: Map<string, ToolGalleryItemOut[]>;
+  compact: boolean;
   groupMetadata: Map<string, ToolGalleryGroupOut>;
   isPlaceholderData: boolean;
   error: Error | null;
@@ -518,11 +576,12 @@ function GalleryGroups({
                 {metadata?.itemCount ?? groupItems.length}
               </span>
             </div>
-            <div className="grid grid-cols-2 items-stretch gap-2 min-[480px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className={shelfGridClass(compact)}>
               {groupItems.map((item) => (
                 <ToolCard
                   key={item.productId}
                   item={item}
+                  compact={compact}
                   current={currentProductId === item.productId}
                   onInspect={() => onInspect(item)}
                   onHover={() => onHover(item)}
@@ -560,6 +619,7 @@ function GalleryGroups({
 
 export function ToolGalleryPage({
   query,
+  compact = false,
   groupBy,
   section,
   onQueryChange,
@@ -568,6 +628,7 @@ export function ToolGalleryPage({
   operations = productionOperations,
 }: {
   query: string;
+  compact?: boolean;
   groupBy: ToolGalleryGroupBy;
   section?: string;
   onQueryChange: (query: string | undefined) => void;
@@ -578,16 +639,9 @@ export function ToolGalleryPage({
   const hydrated = useHydrated();
   const [draftQuery, setDraftQuery] = useState(query);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const {
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    preview,
-    PreviewSheet,
-    dockedInspector,
-    inspectorToggle,
-  } = useEntityPreview("product", { responsiveInspector: true });
-
+  const [inspectedItem, setInspectedItem] = useState<ToolGalleryItemOut | null>(
+    null,
+  );
   useEffect(() => setDraftQuery(query), [query]);
   useEffect(() => {
     if (draftQuery === query) return;
@@ -666,6 +720,36 @@ export function ToolGalleryPage({
         return true;
       });
   }, [pages]);
+  const currentItem =
+    items.find((item) => item.productId === inspectedItem?.productId) ??
+    inspectedItem;
+  const renderInspector = useCallback(
+    ({ preview, onClose }: EntityPreviewRendererProps) => (
+      <EntityWorkbenchInspector
+        entity="product"
+        id={preview.id}
+        onClose={onClose}
+        overviewSupplement={
+          currentItem?.productId === preview.id ? (
+            <ToolInspectorSummary item={currentItem} />
+          ) : undefined
+        }
+      />
+    ),
+    [currentItem],
+  );
+  const {
+    inspectRow,
+    onRowHover,
+    onRowHoverEnd,
+    preview,
+    PreviewSheet,
+    dockedInspector,
+    inspectorToggle,
+  } = useEntityPreview("product", {
+    responsiveInspector: true,
+    renderInspector,
+  });
   const groups = useMemo(() => {
     const result = new Map<string, ToolGalleryItemOut[]>();
     for (const item of items) {
@@ -698,7 +782,7 @@ export function ToolGalleryPage({
 
   let content;
   if (!hydrated || (isLoading && items.length === 0)) {
-    content = <GallerySkeleton />;
+    content = <GallerySkeleton compact={compact} />;
   } else if (error && items.length === 0) {
     content = (
       <div className="space-y-3">
@@ -714,15 +798,17 @@ export function ToolGalleryPage({
     content = (
       <GalleryGroups
         groups={groups}
+        compact={compact}
         groupMetadata={groupMetadata}
         isPlaceholderData={isPlaceholderData}
         error={error}
         isFetchingNextPage={isFetchingNextPage}
         sentinelRef={sentinelRef}
         currentProductId={preview?.id}
-        onInspect={(item) =>
-          inspectRow({ id: item.productId, original: { id: item.productId } })
-        }
+        onInspect={(item) => {
+          setInspectedItem(item);
+          inspectRow({ id: item.productId, original: { id: item.productId } });
+        }}
         onHover={(item) =>
           onRowHover({ id: item.productId, original: { id: item.productId } })
         }

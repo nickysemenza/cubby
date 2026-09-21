@@ -63,7 +63,7 @@ public final class GenericEntityDetailModel {
     }
 
     private func request(id: String, retainingContent: Bool) async {
-        guard descriptor.key.httpActions.contains(.get) else {
+        guard descriptor.key.nativeActions.contains(.get) else {
             cancelRequest()
             let message = "No detail route for \(descriptor.singular)"
             initialError = message

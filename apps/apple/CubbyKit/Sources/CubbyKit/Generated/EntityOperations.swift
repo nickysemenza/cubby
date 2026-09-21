@@ -10,6 +10,13 @@ public enum EntityOperationError: Error, Sendable, Hashable {
     case missingCreatedID(EntityKey)
 }
 
+/// The generated client may read an entity through a resource route or one
+/// declared exceptional RPC adapter. This stays separate from `httpActions`:
+/// native read support does not claim a resource capability the server lacks.
+public enum NativeReadKind: Sendable, Hashable {
+    case unavailable, resource, cookbook, image, usdaFood
+}
+
 extension EntityKey {
     /// The resource actions the HTTP document exposes for this entity, whether or not the
     /// generated client carries them (`delete` is exposed but not generated).
@@ -43,11 +50,12 @@ extension EntityKey {
     /// operations below can perform (create/update/timeline gate the generic editor and views).
     public var nativeActions: Set<EntityAction> {
         switch self {
+        case .cookbook: [.get, .list]
         case .expense: [.create, .get, .list, .update]
         case .financialAccount: [.create, .get, .list, .update]
         case .financialTransaction: [.create, .get, .list, .update]
         case .gardenEntry: [.create, .get, .list, .timeline, .update]
-        case .image: [.update]
+        case .image: [.get, .list, .update]
         case .ingredient: [.create, .get, .list, .update]
         case .inventory: [.create, .get, .list, .update]
         case .ledgerParty: [.create, .get, .list, .update]
@@ -60,10 +68,39 @@ extension EntityKey {
         case .purchase: [.create, .get, .list, .update]
         case .recipe: [.create, .get, .list, .update]
         case .task: [.create, .get, .list, .timeline, .update]
+        case .usdaFood: [.get, .list]
         case .vendor: [.create, .get, .list, .update]
         case .vendorAccount: [.create, .get, .list, .update]
         case .wish: [.create, .get, .list, .update]
         default: []
+        }
+    }
+
+    public var nativeReadKind: NativeReadKind {
+        switch self {
+        case .cookbook: .cookbook
+        case .expense: .resource
+        case .financialAccount: .resource
+        case .financialTransaction: .resource
+        case .gardenEntry: .resource
+        case .image: .image
+        case .ingredient: .resource
+        case .inventory: .resource
+        case .ledgerParty: .resource
+        case .ledgerTransfer: .resource
+        case .location: .resource
+        case .meal: .resource
+        case .planting: .resource
+        case .product: .resource
+        case .project: .resource
+        case .purchase: .resource
+        case .recipe: .resource
+        case .task: .resource
+        case .usdaFood: .usdaFood
+        case .vendor: .resource
+        case .vendorAccount: .resource
+        case .wish: .resource
+        default: .unavailable
         }
     }
 }

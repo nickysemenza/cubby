@@ -1,3 +1,4 @@
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { useCallback, useEffect, useMemo } from "react";
 
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
@@ -70,6 +71,12 @@ interface UseClientEntityListOptions<
   /** Query state when the caller-provided rows still come from an async read. */
   isLoading?: boolean;
   error?: unknown;
+  /** Refreshes the caller-owned projection when a shelf retry is requested. */
+  refetch?: () => Promise<void>;
+  /** True while a loaded caller-owned projection is refreshing. */
+  isRefreshing?: boolean;
+  /** Matches the entity's generated primary-search query against one row. */
+  matchesSearch?: (row: TData, query: string) => boolean;
   /** Filter definitions (optional; defaults to none). */
   filters?: FilterInput[];
   /** Opt-in expandable tree (TanStack getSubRows/getExpandedRowModel). */
@@ -116,6 +123,9 @@ export function useClientEntityList<TData extends BaseListRow>({
   data,
   isLoading,
   error,
+  refetch,
+  isRefreshing,
+  matchesSearch,
   columns: customColumns,
   filters,
   hiddenFilterColumns,
@@ -166,13 +176,38 @@ export function useClientEntityList<TData extends BaseListRow>({
     selectionScope: (state) => state.allFilters,
   });
   const { tableState } = presentationState;
+  const primarySearchKey = entityInspectorMetadata[entity].primarySearch?.key;
+  const primarySearchQuery = primarySearchKey
+    ? tableState.getColumnFilter(primarySearchKey)
+    : undefined;
+  const locallySearchedData = useMemo(() => {
+    return filterClientRows(data, primarySearchQuery, matchesSearch);
+  }, [data, matchesSearch, primarySearchQuery]);
+  // The generated primary-search field is a query input, not a physical
+  // client-side column. Remove it before TanStack resolves column filters so
+  // the typed callback above owns matching without an unknown-column warning.
+  const tableStateWithoutPrimarySearch = useMemo(() => {
+    if (!matchesSearch || !primarySearchKey) return tableState;
+    const columnFilters = tableState.columnFilters.filter(
+      (filter) => filter.id !== primarySearchKey,
+    );
+    const allFilters = tableState.allFilters.filter(
+      (filter) => filter.id !== primarySearchKey,
+    );
+    if (
+      columnFilters.length === tableState.columnFilters.length &&
+      allFilters.length === tableState.allFilters.length
+    )
+      return tableState;
+    return { ...tableState, columnFilters, allFilters };
+  }, [matchesSearch, primarySearchKey, tableState]);
   const presentation = useEntityListPresentation<TData>({
     entity,
-    data,
+    data: locallySearchedData,
     columns: customColumns,
     filters,
     initialColumnVisibility,
-    state: presentationState,
+    state: { ...presentationState, tableState: tableStateWithoutPrimarySearch },
     supportsServerSorting: false,
     hiddenFilterColumns,
     nameEditable,
@@ -226,10 +261,10 @@ export function useClientEntityList<TData extends BaseListRow>({
   // Client-side everything: manual* all false. Expansion wired only when a
   // tree config is provided (getSubRows presence gates getExpandedRowModel).
   const table = useTableConfig({
-    data,
+    data: locallySearchedData,
     columns: allColumns,
-    tableState,
-    totalCount: data.length,
+    tableState: tableStateWithoutPrimarySearch,
+    totalCount: locallySearchedData.length,
     manualPagination: false,
     manualSorting: false,
     manualFiltering: false,
@@ -262,6 +297,14 @@ export function useClientEntityList<TData extends BaseListRow>({
       table,
       isLoading,
       error,
+      refreshControls: refetch
+        ? {
+            onRefresh: async () => {
+              await refetch();
+            },
+            isRefreshing: isRefreshing ?? false,
+          }
+        : undefined,
       bulkActionBar,
       rowActions: presentationState.listBulkActions.rowActions,
       actionDialogs: presentationState.listBulkActions.actionDialogs,
@@ -271,4 +314,14 @@ export function useClientEntityList<TData extends BaseListRow>({
     requestDelete: presentationState.requestDelete,
     inspection,
   };
+}
+
+/** Apply a caller-owned primary search before the table performs pagination. */
+export function filterClientRows<T>(
+  rows: readonly T[],
+  query: string | undefined,
+  matchesSearch?: (row: T, query: string) => boolean,
+): T[] {
+  if (!matchesSearch || !query?.trim()) return [...rows];
+  return rows.filter((row) => matchesSearch(row, query));
 }

@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { USDAFoodList } from "~/app/usda/usdafoodlist";
+import { entitySearch } from "~/entities/generated/entity-search.gen";
 import { pageTitle } from "~/lib/page-title";
 
 // Bound to a const, not inlined into the options object: the router plugin's
@@ -14,6 +15,10 @@ const USDAPage = listChromePage({
 });
 
 export const Route = createFileRoute("/_authenticated/usda/")({
+  validateSearch: entitySearch["usda-food"].schema,
+  search: {
+    middlewares: [stripSearchParams(entitySearch["usda-food"].defaults)],
+  },
   head: () => ({ meta: [{ title: pageTitle("USDA") }] }),
   component: USDAPage,
 });

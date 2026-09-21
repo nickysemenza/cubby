@@ -1346,11 +1346,6 @@ describe("typed entity compiler", () => {
         "without capabilities.timeline",
       ],
       [
-        "a shelf view without images",
-        { list: { views: ["shelf"] } },
-        "needs stored images",
-      ],
-      [
         "a readOnlyWhen value outside the control options",
         {
           edit: {
@@ -1373,6 +1368,56 @@ describe("typed entity compiler", () => {
         { timeline: "default" },
       ),
     ).toThrow("must be a date or timestamp field");
+  });
+
+  it("compiles a card view for an entity without stored images and preserves captions", () => {
+    const [compiled] = compileEntityDeclarations([
+      {
+        ...base,
+        model,
+        capabilities: {
+          ...base.capabilities,
+          images: { storage: false },
+        },
+        presentation: {
+          ...base.presentation,
+          list: {
+            views: ["table", "shelf"],
+            shelf: { subtitle: ["name"] },
+          },
+        },
+      },
+    ]);
+
+    expect(compiled?.inspector.list.views).toEqual(["table", "shelf"]);
+    expect(compiled?.inspector.list.shelf).toEqual({ subtitle: ["name"] });
+
+    const [fallbackCompiled] = compileEntityDeclarations([
+      {
+        ...base,
+        model: {
+          ...model,
+          fields: [
+            ...model.fields,
+            {
+              key: "kind",
+              kind: "text" as const,
+              display: { mobile: { slot: "subtitle", priority: 10 } },
+              validation: { read: z.string(), create: null, update: null },
+            },
+          ],
+          output: ["name", "kind"],
+        },
+        capabilities: {
+          ...base.capabilities,
+          images: { storage: false },
+        },
+      },
+    ]);
+
+    expect(fallbackCompiled?.inspector.list.shelf).toEqual({
+      subtitle: ["kind"],
+    });
   });
 
   it("splits browser route modules between the generator and hand-written files", () => {

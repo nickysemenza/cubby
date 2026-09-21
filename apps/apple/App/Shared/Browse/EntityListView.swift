@@ -20,8 +20,18 @@ private struct EntityListSearchModifier: ViewModifier {
 /// its filters as a sheet, and `+` when the generated client can create the entity. A declared
 /// slot view has no native fill, so the picker offers only the views this file renders.
 struct EntityListView: View {
+    private struct PresentationChoice: Identifiable {
+        let id: String
+        let label: String
+        let symbol: String
+        let view: ListView
+        let density: ListPresentationChoice?
+    }
+
     let key: EntityKey
     @Environment(AppModel.self) private var appModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var model: GenericEntityListModel?
     @State private var showingFilters = false
     @State private var creating = false
@@ -30,6 +40,7 @@ struct EntityListView: View {
     @State private var searchText = ""
     @State private var confirmingDelete = false
     @State private var deleteError: String?
+    @State private var cardDensity = ListPresentationChoice.cards
     private let initialFilters: EntityFilterState
 
     init(
@@ -61,6 +72,41 @@ struct EntityListView: View {
 
     private var canDelete: Bool { key.nativeActions.contains(.delete) }
 
+    private var presentationChoices: [PresentationChoice] {
+        let shared = renderableViews.filter { $0 == .table } + renderableViews.filter { $0 == .shelf }
+        let specialist = renderableViews.filter { $0 != .table && $0 != .shelf }
+        return (shared + specialist).flatMap { view -> [PresentationChoice] in
+            switch view {
+            case .table:
+                [
+                    PresentationChoice(
+                        id: ListPresentationChoice.list.rawValue,
+                        label: ListPresentationChoice.list.label,
+                        symbol: ListPresentationChoice.list.symbol, view: view,
+                        density: nil)
+                ]
+            case .shelf:
+                [ListPresentationChoice.cards, .compact].map { density in
+                    PresentationChoice(
+                        id: density.rawValue, label: density.label, symbol: density.symbol,
+                        view: view, density: density)
+                }
+            case .timeline:
+                [
+                    PresentationChoice(
+                        id: view.id, label: view.label, symbol: "calendar.day.timeline.left",
+                        view: view, density: nil)
+                ]
+            case .slot:
+                [
+                    PresentationChoice(
+                        id: view.id, label: view.label, symbol: "rectangle.dashed", view: view,
+                        density: nil)
+                ]
+            }
+        }
+    }
+
     var body: some View {
         Group {
             if let model {
@@ -89,8 +135,7 @@ struct EntityListView: View {
             if model == nil {
                 model = GenericEntityListModel(
                     descriptor: descriptor, client: appModel.client, filters: initialFilters,
-                    view: renderableViews.first ?? .table,
-                    searchLoader: searchLoader(for: initialFilters))
+                    view: renderableViews.first ?? .table)
             }
             await model?.loadInitial()
         }
@@ -99,9 +144,11 @@ struct EntityListView: View {
                 appModel.entityMutationKeys.contains(key),
                 model?.phase == .loaded
             else { return }
-            await model?.refresh()
+            if let model { await refreshVisible(model) }
         }
-        .refreshControl { await model?.refresh() }
+        .refreshControl { [model] in
+            if let model { await refreshVisible(model) }
+        }
         .sheet(isPresented: $showingFilters) {
             if let model {
                 EntityFilterSheet(descriptor: descriptor, filters: model.filters) { filters in
@@ -112,7 +159,9 @@ struct EntityListView: View {
         }
         .sheet(isPresented: $creating) {
             EntityEditorSheet(key: key, mode: .create(prefill: [:])) { _ in
-                Task { await model?.refresh() }
+                Task {
+                    if let model { await refreshVisible(model) }
+                }
             }
             .environment(appModel)
         }
@@ -126,25 +175,9 @@ struct EntityListView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        if let model, renderableViews.count > 1 {
+        if let model, presentationChoices.count > 1 {
             ToolbarItem(placement: .primaryAction) {
-                Picker(
-                    "View",
-                    selection: Binding(
-                        get: { model.view.id },
-                        set: { id in
-                            guard let view = renderableViews.first(where: { $0.id == id }) else {
-                                return
-                            }
-                            Task { await model.select(view: view) }
-                        })
-                ) {
-                    ForEach(renderableViews) { view in
-                        Label(view.label, systemImage: Self.symbol(for: view)).tag(view.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .accessibilityLabel("View")
+                presentationPicker(model)
             }
         }
         if !descriptor.filters.isEmpty {
@@ -190,27 +223,61 @@ struct EntityListView: View {
         return count == 0 ? "Filter" : "Filter, \(count) active"
     }
 
-    /// Binds the initial relation/date scope to the generic search state. The list model rebuilds
-    /// this loader when filters change; passing it here also makes the first query work before a
-    /// filter-sheet round trip can occur.
-    private func searchLoader(for filters: EntityFilterState) -> EntityListSearchModel.PageLoader? {
-        guard descriptor.primarySearch != nil else { return nil }
-        let client = appModel.client
-        return { query, page in
-            var scopedFilters = filters
-            scopedFilters.set(.single(query), for: "searchQuery")
-            return try await client.list(
-                descriptor, page: page, pageSize: 50, sort: nil, filters: scopedFilters)
+    private func refreshVisible(_ model: GenericEntityListModel) async {
+        if model.isSearching {
+            await model.searchModel?.refresh()
+        } else {
+            await model.refresh()
         }
     }
 
-    private static func symbol(for view: ListView) -> String {
-        switch view {
-        case .table: "list.bullet"
-        case .shelf: "square.grid.2x2"
-        case .timeline: "calendar.day.timeline.left"
-        case .slot: "rectangle.dashed"
+    @ViewBuilder
+    private func presentationPicker(_ model: GenericEntityListModel) -> some View {
+        let selection = Binding(
+            get: {
+                switch model.view {
+                case .table: ListPresentationChoice.list.rawValue
+                case .shelf: cardDensity.rawValue
+                case .timeline, .slot: model.view.id
+                }
+            },
+            set: { id in selectPresentation(id, model: model) })
+        if prefersSegmentedPresentationPicker {
+            Picker("View", selection: selection) {
+                ForEach(presentationChoices) { choice in Text(choice.label).tag(choice.id) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("View")
+        } else {
+            Picker("View", selection: selection) {
+                ForEach(presentationChoices) { choice in
+                    Label(choice.label, systemImage: choice.symbol).tag(choice.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityLabel("View")
         }
+    }
+
+    private var prefersSegmentedPresentationPicker: Bool {
+        guard !dynamicTypeSize.isAccessibilitySize, presentationChoices.count <= 3 else {
+            return false
+        }
+        #if os(macOS)
+            return true
+        #else
+            return horizontalSizeClass == .regular
+        #endif
+    }
+
+    private func selectPresentation(_ id: String, model: GenericEntityListModel) {
+        guard let choice = presentationChoices.first(where: { $0.id == id }) else { return }
+        if let density = choice.density { cardDensity = density }
+        if choice.view != .table {
+            selecting = false
+            selectedIDs = []
+        }
+        Task { await model.select(view: choice.view) }
     }
 
     @ViewBuilder
@@ -246,11 +313,7 @@ struct EntityListView: View {
                 }
             }
         } else if model.view == .shelf {
-            ScrollView {
-                if hasBanner(model) { banner(model).padding(.horizontal) }
-                EntityShelfView(descriptor: descriptor, rows: model.rows)
-                loadMore(model).padding()
-            }
+            cardGrid(model, rows: model.rows, meta: model.meta)
         } else {
             rowList(model)
         }
@@ -274,11 +337,34 @@ struct EntityListView: View {
                 case .loaded:
                     ContentUnavailableView("No matching \(descriptor.plural)", systemImage: "magnifyingglass")
                 }
+            } else if model.view == .shelf {
+                cardGrid(model, rows: search.rows, meta: search.meta)
             } else {
                 rowList(model)
             }
         } else {
             ContentUnavailableView("Search unavailable", systemImage: "magnifyingglass")
+        }
+    }
+
+    private func cardGrid(
+        _ model: GenericEntityListModel, rows: [EntityRow], meta: ListPageMeta?
+    ) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if hasBanner(model) { banner(model).padding(.horizontal) }
+                if let meta {
+                    Text("\(meta.totalCount.formatted()) total · \(rows.count.formatted()) shown")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, PorcelainTokens.Space.md)
+                        .padding(.top, PorcelainTokens.Space.sm)
+                }
+                EntityShelfView(
+                    descriptor: descriptor, rows: rows, density: cardDensity,
+                    section: .browse)
+                loadMore(model).padding()
+            }
         }
     }
 
@@ -300,7 +386,7 @@ struct EntityListView: View {
     }
 
     private func hasBanner(_ model: GenericEntityListModel) -> Bool {
-        model.refreshError != nil || deleteError != nil
+        model.refreshError != nil || model.searchModel?.refreshError != nil || deleteError != nil
     }
 
     @ViewBuilder
@@ -309,6 +395,14 @@ struct EntityListView: View {
             HStack {
                 Text(error).foregroundStyle(.secondary)
                 Button("Retry refresh") { Task { await model.refresh() } }
+            }
+        }
+        if let error = model.searchModel?.refreshError {
+            HStack {
+                Text(error).foregroundStyle(.secondary)
+                Button("Retry search refresh") {
+                    Task { await model.searchModel?.refresh() }
+                }
             }
         }
         if let deleteError {
@@ -348,10 +442,10 @@ struct EntityListView: View {
             rowContent(row)
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {
-                        Clipboard.copy(appModel.webURL(for: row.id).absoluteString)
+                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
                     }
                     Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                    ShareLink(item: appModel.webURL(for: row.id))
+                    ShareLink(item: appModel.webURL(for: key, id: row.id))
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
         }
@@ -437,7 +531,7 @@ struct EntityListView: View {
         selectedIDs = []
         selecting = false
         appModel.recordEntityMutation(keys: [key])
-        await model.refresh()
+        await refreshVisible(model)
     }
 }
 

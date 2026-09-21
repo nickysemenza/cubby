@@ -105,9 +105,8 @@ public actor CubbyClient {
 
     // MARK: - Generic entity access
 
-    /// One page of rows for any entity the HTTP document lists. `filters` are keyed by the list
-    /// route's query parameter names (`FilterDescriptor.wire`); an unknown name throws
-    /// `EntityFilterError` before any request.
+    /// One page of rows through the entity's generated native read kind. `filters` are keyed by
+    /// `FilterDescriptor.wire`; an unknown name throws `EntityFilterError` before any request.
     public func list(
         _ descriptor: EntityDescriptor,
         page: Int = 1,
@@ -116,9 +115,24 @@ public actor CubbyClient {
         filters: EntityFilterState = EntityFilterState()
     ) async throws -> ListPage<EntityRow> {
         try await perform {
-            let result = try await descriptor.listPage(
-                client: api, page: page, pageSize: pageSize, sort: sort, filters: filters)
-            return ListPage(items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
+            switch descriptor.key.nativeReadKind {
+            case .cookbook:
+                return try await cookbookPage(
+                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
+            case .image:
+                return try await imagePage(
+                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
+            case .usdaFood:
+                return try await usdaFoodPage(
+                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
+            case .resource:
+                let result = try await descriptor.listPage(
+                    client: api, page: page, pageSize: pageSize, sort: sort, filters: filters)
+                return ListPage(
+                    items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
+            case .unavailable:
+                throw EntityOperationError.unsupported(descriptor.key, .list)
+            }
         }
     }
 
@@ -158,7 +172,27 @@ public actor CubbyClient {
     /// One row by id, or `nil` when the server does not have it.
     public func row(_ descriptor: EntityDescriptor, id: String) async throws -> EntityRow? {
         do {
-            return descriptor.row(from: try await descriptor.getRow(client: api, id: id))
+            let raw: JSONValue
+            switch descriptor.key.nativeReadKind {
+            case .cookbook:
+                raw = try cookbookJSON(
+                    try await api.cookbook_detail(query: .init(shortcode: id)).ok.body.json)
+            case .image:
+                raw = try imageJSON(
+                    try await api.image_detail(query: .init(id: id)).ok.body.json)
+            case .usdaFood:
+                guard let fdcID = Int(id) else {
+                    throw EntityFilterError.invalidValue(
+                        parameter: "id", value: id, expected: "a numeric FDC ID")
+                }
+                raw = try usdaFoodJSON(
+                    try await api.usdaFood_detail(query: .init(id: fdcID)).ok.body.json)
+            case .resource:
+                raw = try await descriptor.getRow(client: api, id: id)
+            case .unavailable:
+                throw EntityOperationError.unsupported(descriptor.key, .get)
+            }
+            return descriptor.row(from: raw)
         } catch {
             let error = CubbyAPIError.unwrapping(error)
             if let error = error as? CubbyAPIError, error.status == 404 { return nil }
@@ -616,6 +650,234 @@ public actor CubbyClient {
                 meta: result.meta
             )
         }
+    }
+
+    // MARK: - Non-resource entity reads
+
+    /// Cookbooks predate the generic resource list and intentionally return the complete set.
+    /// Keep paging and search local so the generic list model retains one paging contract.
+    private func cookbookPage(
+        _ descriptor: EntityDescriptor,
+        page: Int,
+        pageSize: Int,
+        sort: String?,
+        filters: EntityFilterState
+    ) async throws -> ListPage<EntityRow> {
+        var query: String?
+        for name in filters.names {
+            guard let value = filters[name] else { continue }
+            switch name {
+            case "searchQuery": query = try value.string(name)
+            default: throw EntityFilterError.unknownParameter(.cookbook, name)
+            }
+        }
+
+        let all = try await api.cookbook_list().ok.body.json
+        let filtered = all.filter { cookbook in
+            guard let query = query?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty else {
+                return true
+            }
+            let haystack = [cookbook.id, cookbook.book] + cookbook.author + cookbook.subjects
+            return haystack.contains { $0.localizedCaseInsensitiveContains(query) }
+        }
+        let sorted = try sortedCookbooks(filtered, by: sort)
+        let safePage = max(1, page)
+        let safePageSize = max(1, pageSize)
+        let start = min(sorted.count, (safePage - 1) * safePageSize)
+        let end = min(sorted.count, start + safePageSize)
+        return ListPage(
+            items: try sorted[start..<end].compactMap {
+                descriptor.row(from: try cookbookJSON($0))
+            },
+            meta: .init(
+                pageIndex: safePage - 1,
+                pageSize: safePageSize,
+                totalCount: sorted.count
+            )
+        )
+    }
+
+    private func imagePage(
+        _ descriptor: EntityDescriptor,
+        page: Int,
+        pageSize: Int,
+        sort: String?,
+        filters: EntityFilterState
+    ) async throws -> ListPage<EntityRow> {
+        var typedFilters = ImageListFilters()
+        for name in filters.names {
+            guard let value = filters[name] else { continue }
+            switch name {
+            case "createdAtFrom": typedFilters.createdFrom = PlainDate(rawValue: try value.string(name))
+            case "createdAtTo": typedFilters.createdTo = PlainDate(rawValue: try value.string(name))
+            case "updatedAtFrom": typedFilters.updatedFrom = PlainDate(rawValue: try value.string(name))
+            case "updatedAtTo": typedFilters.updatedTo = PlainDate(rawValue: try value.string(name))
+            case "nameFilter": typedFilters.nameFilter = try value.string(name)
+            case "status": typedFilters.status = .init(value2: try value.enumCases(name))
+            case "referencePresenceFilter":
+                typedFilters.referencePresenceFilter = try value.enumCase(name)
+            case "uploadedAgeHoursMin": typedFilters.uploadedAgeHoursMin = try value.double(name)
+            default: throw EntityFilterError.unknownParameter(.image, name)
+            }
+        }
+
+        var input = ImageBrowserListInput(filters: typedFilters)
+        input.pagination = .init(pageIndex: max(0, page - 1), pageSize: max(1, pageSize))
+        input.sort = try imageSort(sort)
+        let result = try await api.image_list(body: .json(input)).ok.body.json
+        return ListPage(
+            items: try result.items.compactMap { descriptor.row(from: try imageJSON($0)) },
+            meta: result.meta
+        )
+    }
+
+    private func usdaFoodPage(
+        _ descriptor: EntityDescriptor,
+        page: Int,
+        pageSize: Int,
+        sort: String?,
+        filters: EntityFilterState
+    ) async throws -> ListPage<EntityRow> {
+        var typedFilters = UsdaListInput.FiltersPayload(foodsOnly: true)
+        for name in filters.names {
+            guard let value = filters[name] else { continue }
+            switch name {
+            case "nameFilter": typedFilters.nameFilter = try value.string(name)
+            case "dataTypeFilter": typedFilters.dataTypeFilter = try value.enumCase(name)
+            case "dataTypes": typedFilters.dataTypes = try value.enumCases(name)
+            case "foodsOnly": typedFilters.foodsOnly = try value.bool(name)
+            case "linkedProductsOnly": typedFilters.linkedProductsOnly = try value.bool(name)
+            default: throw EntityFilterError.unknownParameter(.usdaFood, name)
+            }
+        }
+
+        var input = UsdaListInput(filters: typedFilters)
+        input.pagination = .init(pageIndex: max(0, page - 1), pageSize: max(1, pageSize))
+        input.sort = try usdaFoodSort(sort)
+        let result = try await api.usdaFood_list(body: .json(input)).ok.body.json
+        return ListPage(
+            items: try result.items.compactMap { descriptor.row(from: try usdaFoodJSON($0)) },
+            meta: result.meta
+        )
+    }
+
+    /// Sort payloads are generated as named operation contracts around anonymous item schemas.
+    /// Decode through the named contract so handwritten code never depends on positional
+    /// `InputSchemaNN` aliases.
+    private func imageSort(_ sort: String?) throws -> ImageBrowserListInput.SortPayload? {
+        try decodedSort(sort, as: ImageBrowserListInput.SortPayload.self)
+    }
+
+    private func usdaFoodSort(_ sort: String?) throws -> UsdaListInput.SortPayload? {
+        try decodedSort(sort, as: UsdaListInput.SortPayload.self)
+    }
+
+    private func sortedCookbooks(_ values: [CookbookSummary], by sort: String?) throws
+        -> [CookbookSummary]
+    {
+        guard let sort, !sort.isEmpty else { return values }
+        let allowed = Set([
+            "id", "shortcode", "book", "name", "author", "subjects", "recipeCount",
+            "coverUrl", "sourceRecipeCount", "needsReextract", "product",
+        ])
+        let terms = try sort.split(separator: ",").map { token -> (field: String, descending: Bool) in
+            let descending = token.hasPrefix("-")
+            let field = String(descending ? token.dropFirst() : token[...])
+            guard allowed.contains(field) else {
+                throw EntityFilterError.invalidValue(
+                    parameter: "sort", value: field,
+                    expected: "a declared cookbook list field")
+            }
+            return (field, descending)
+        }
+        return values.enumerated().sorted { lhs, rhs in
+            for term in terms {
+                let comparison = cookbookComparison(lhs.element, rhs.element, field: term.field)
+                guard comparison != .orderedSame else { continue }
+                return term.descending
+                    ? comparison == .orderedDescending
+                    : comparison == .orderedAscending
+            }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
+    private func cookbookComparison(
+        _ lhs: CookbookSummary, _ rhs: CookbookSummary, field: String
+    ) -> ComparisonResult {
+        switch field {
+        case "id", "shortcode": lhs.id.localizedCaseInsensitiveCompare(rhs.id)
+        case "book", "name": lhs.book.localizedCaseInsensitiveCompare(rhs.book)
+        case "author":
+            lhs.author.joined(separator: " ").localizedCaseInsensitiveCompare(
+                rhs.author.joined(separator: " "))
+        case "subjects":
+            lhs.subjects.joined(separator: " ").localizedCaseInsensitiveCompare(
+                rhs.subjects.joined(separator: " "))
+        case "recipeCount": comparison(lhs.recipeCount, rhs.recipeCount)
+        case "coverUrl": (lhs.coverUrl ?? "").localizedCaseInsensitiveCompare(rhs.coverUrl ?? "")
+        case "sourceRecipeCount": comparison(lhs.sourceRecipeCount, rhs.sourceRecipeCount)
+        case "needsReextract": comparison(lhs.needsReextract ? 1 : 0, rhs.needsReextract ? 1 : 0)
+        case "product":
+            (lhs.product?.name ?? "").localizedCaseInsensitiveCompare(rhs.product?.name ?? "")
+        default: .orderedSame
+        }
+    }
+
+    private func comparison<Value: Comparable>(_ lhs: Value, _ rhs: Value) -> ComparisonResult {
+        if lhs < rhs { return .orderedAscending }
+        if lhs > rhs { return .orderedDescending }
+        return .orderedSame
+    }
+
+    private func decodedSort<Sort: Decodable>(_ sort: String?, as _: Sort.Type) throws -> Sort? {
+        guard let sort, !sort.isEmpty else { return nil }
+        let values = sort.split(separator: ",").map { token -> JSONValue in
+            let descending = token.hasPrefix("-")
+            let field = descending ? token.dropFirst() : token[...]
+            return .object([
+                "orderBy": .string(String(field)),
+                "direction": .string(descending ? "desc" : "asc"),
+            ])
+        }
+        let raw: JSONValue = values.count == 1 ? values[0] : .array(values)
+        return try JSONDecoder.cubby().decode(Sort.self, from: JSONEncoder.cubby().encode(raw))
+    }
+
+    private func cookbookJSON(_ cookbook: CookbookSummary) throws -> JSONValue {
+        try normalizedJSON(cookbook) { object in
+            object["name"] = .string(cookbook.book)
+            object["shortcode"] = .string(cookbook.id)
+        }
+    }
+
+    private func imageJSON(_ image: ImageWithEntity) throws -> JSONValue {
+        try normalizedJSON(image) { object in
+            object["displayImages"] =
+                image.status == .uploaded
+                ? .array([
+                    .object(["id": .string(image.id.rawValue), "url": .string(image.url)])
+                ])
+                : .array([])
+        }
+    }
+
+    private func usdaFoodJSON(_ food: FoodSummaryWithLinkedProducts) throws -> JSONValue {
+        try normalizedJSON(food) { object in
+            object["id"] = .string(String(food.fdcId))
+            object["description"] = .string(food.foodInfo.description)
+        }
+    }
+
+    private func normalizedJSON<Value: Encodable>(
+        _ value: Value,
+        mutate: (inout [String: JSONValue]) -> Void
+    ) throws -> JSONValue {
+        guard case .object(var object) = try JSONValue(encoding: value) else {
+            throw URLError(.cannotParseResponse)
+        }
+        mutate(&object)
+        return .object(object)
     }
 
     /// OpenAPIRuntime wraps whatever a middleware throws in a `ClientError`, which would hide the

@@ -115,6 +115,31 @@ struct EntityListSearchModelTests {
         #expect(model.page == 1)
     }
 
+    @Test func failedRefreshKeepsVisibleSearchRowsAndCanRecover() async {
+        let recorder = Recorder()
+        let model = EntityListSearchModel(
+            debounceNanoseconds: 1,
+            sleeper: { _ in },
+            loader: { _, _ in
+                switch recorder.increment() {
+                case 1: return Self.page(Self.row("original"))
+                case 2: throw TestFailure.failed
+                default: return Self.page(Self.row("refreshed"))
+                }
+            })
+        model.setQuery("sample")
+        #expect(await waitUntil { model.phase == .loaded })
+
+        await model.refresh()
+        #expect(model.phase == .loaded)
+        #expect(model.rows.map(\.title) == ["original"])
+        #expect(model.refreshError == "failed")
+
+        await model.refresh()
+        #expect(model.rows.map(\.title) == ["refreshed"])
+        #expect(model.refreshError == nil)
+    }
+
     private nonisolated static func row(_ title: String) -> EntityRow {
         EntityRow(
             id: "PRD-\(title)", title: title, subtitle: nil, imageURL: nil,

@@ -82,10 +82,18 @@ export const renderSearchArtifacts = (
   const entries = filterEntities
     .map((entity) => {
       const primarySearch =
-        entity.contract !== null && entity.descriptor.searchable === true;
+        entity.inspector.list.primarySearch ??
+        (entity.contract !== null && entity.descriptor.searchable === true
+          ? { key: "searchQuery" }
+          : null);
+      const filterDescriptors = entity.filterDescriptors.filter(
+        (descriptor) => descriptor.urlKey !== primarySearch?.key,
+      );
       const fields = [
-        ...(primarySearch ? ['"searchQuery":urlStringParam,'] : []),
-        ...entity.filterDescriptors.map(
+        ...(primarySearch
+          ? [`${JSON.stringify(primarySearch.key)}:urlStringParam,`]
+          : []),
+        ...filterDescriptors.map(
           (descriptor) =>
             `${JSON.stringify(descriptor.urlKey)}:${searchCodec(descriptor, alias)},`,
         ),
@@ -97,6 +105,7 @@ export const renderSearchArtifacts = (
       // timeline view (list or detail) reads the shared timeline window.
       const views = entity.inspector.list.views;
       const viewIds = views.map(listViewId);
+      const viewAliases = Object.keys(entity.inspector.list.viewAliases);
       // Two slot views may share a key (a calendar and its nutrition view
       // both read `date`); one key is emitted once.
       const slotKeys = [
@@ -114,7 +123,7 @@ export const renderSearchArtifacts = (
           ));
       const viewField =
         viewIds.length > 1
-          ? `view:z.enum(${JSON.stringify(viewIds)}).optional().catch(undefined),\n`
+          ? `view:z.enum(${JSON.stringify([...viewIds, ...viewAliases])}).optional().catch(undefined),\n`
           : "";
       const slotFields = slotKeys
         .map((key) => `${JSON.stringify(key)}:urlStringParam,`)
@@ -123,8 +132,8 @@ export const renderSearchArtifacts = (
         ? 'timelineFrom:urlPlainDateParam,\ntimelineTo:urlPlainDateParam,\ntimelineOrder:z.enum(["asc","desc"]).optional().catch(undefined),\ntimelineMode:z.enum(["events","lifecycles"]).optional().catch(undefined),\n'
         : "";
       const keys = [
-        ...(primarySearch ? ["searchQuery"] : []),
-        ...entity.filterDescriptors.map(({ urlKey }) => urlKey),
+        ...(primarySearch ? [primarySearch.key] : []),
+        ...filterDescriptors.map(({ urlKey }) => urlKey),
         ...tableKeys,
         ...(dialog ? ["create"] : []),
         ...(viewIds.length > 1 ? ["view"] : []),
@@ -157,10 +166,16 @@ export const renderSearchArtifacts = (
           name: "entityFilterUrlKeyRoster",
           entries: Object.fromEntries(
             filterEntities.map(
-              ({ key, filterUrlKeys, contract, descriptor }) => [
+              ({ key, filterUrlKeys, contract, descriptor, inspector }) => [
                 key,
-                contract !== null && descriptor.searchable === true
-                  ? ["searchQuery", ...filterUrlKeys]
+                inspector.list.primarySearch !== null ||
+                (contract !== null && descriptor.searchable === true)
+                  ? [
+                      ...new Set([
+                        inspector.list.primarySearch?.key ?? "searchQuery",
+                        ...filterUrlKeys,
+                      ]),
+                    ]
                   : filterUrlKeys,
               ],
             ),

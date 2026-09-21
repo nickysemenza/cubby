@@ -26,6 +26,17 @@ import { defineListOverride } from "./types";
 
 const columnHelper = createCubbyColumnHelper<CookbookSummary>();
 
+const matchesCookbookSearch = (
+  row: CookbookSummary,
+  query: string,
+): boolean => {
+  const normalized = query.trim();
+  if (!normalized) return true;
+  return [row.id, row.book, ...row.author, ...row.subjects].some((value) =>
+    value.toLocaleLowerCase().includes(normalized.toLocaleLowerCase()),
+  );
+};
+
 function CookbookProductLink({
   product,
 }: {
@@ -134,13 +145,19 @@ export const cookbookListOverride = defineListOverride<CookbookSummary, object>(
     mode: "client",
     use() {
       const query = useQuery(cookbook.list.queryOptions(null));
+      const { data, error, isFetching, isLoading, refetch } = query;
       const client = useMemo(
         () => ({
-          data: query.data ?? EMPTY_COOKBOOKS,
-          isLoading: query.isLoading,
-          error: query.error,
+          data: data ?? EMPTY_COOKBOOKS,
+          isLoading,
+          error,
+          refetch: async () => {
+            await refetch();
+          },
+          isRefreshing: isFetching,
+          matchesSearch: matchesCookbookSearch,
         }),
-        [query.data, query.isLoading, query.error],
+        [data, error, isFetching, isLoading, refetch],
       );
       return {
         overrides,

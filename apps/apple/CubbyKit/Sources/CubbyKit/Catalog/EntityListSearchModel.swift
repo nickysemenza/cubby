@@ -28,6 +28,7 @@ public final class EntityListSearchModel {
     public private(set) var meta: ListPageMeta?
     public private(set) var page = 1
     public private(set) var phase: Phase = .idle
+    public private(set) var refreshError: String?
     public private(set) var nextPageError: String?
 
     public var hasMore: Bool {
@@ -63,6 +64,7 @@ public final class EntityListSearchModel {
         requestTask = nil
         requestGeneration += 1
         query = normalized
+        refreshError = nil
         nextPageError = nil
 
         guard !normalized.isEmpty else {
@@ -88,6 +90,7 @@ public final class EntityListSearchModel {
         guard !query.isEmpty else { return }
         requestTask?.cancel()
         requestGeneration += 1
+        refreshError = nil
         nextPageError = nil
         startSearch(query: query)
     }
@@ -99,6 +102,7 @@ public final class EntityListSearchModel {
         guard !query.isEmpty else { return }
         requestTask?.cancel()
         requestGeneration += 1
+        refreshError = nil
         nextPageError = nil
         startSearch(query: query)
     }
@@ -129,11 +133,44 @@ public final class EntityListSearchModel {
         setQuery("")
     }
 
+    /// Reloads page one for the visible query without clearing the rows already on screen. A
+    /// failed refresh keeps those rows available and exposes a retryable error beside them.
+    public func refresh() async {
+        guard !query.isEmpty else { return }
+        requestTask?.cancel()
+        requestTask = nil
+        requestGeneration += 1
+        let generation = requestGeneration
+        refreshError = nil
+        nextPageError = nil
+        phase = .loading
+        do {
+            let result = try await loader(query, 1)
+            guard generation == requestGeneration, !Task.isCancelled else { return }
+            rows = result.items
+            meta = result.meta
+            page = 1
+            phase = .loaded
+        } catch is CancellationError {
+            guard generation == requestGeneration else { return }
+            phase = rows.isEmpty ? .idle : .loaded
+        } catch {
+            guard generation == requestGeneration else { return }
+            if rows.isEmpty {
+                failInitial(error, generation: generation)
+            } else {
+                refreshError = Self.describe(error)
+                phase = .loaded
+            }
+        }
+    }
+
     /// Pages the active query. A failed page leaves the already loaded rows and page untouched.
     public func loadNextPage() async {
         guard !query.isEmpty, phase == .loaded, hasMore else { return }
         let generation = requestGeneration
         let nextPage = page + 1
+        refreshError = nil
         nextPageError = nil
         phase = .loading
         do {

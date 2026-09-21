@@ -440,10 +440,14 @@ export const renderEntityArtifacts = (
     )
     .join(",\n  ");
   const listFilterSchemas = browserCrudEntitySpecs
-    .map(({ key, filterSchema }) =>
+    .map(({ key, filterSchema, descriptor }) =>
       filterSchema === null
         ? `const ${key}ListFiltersSchema = z.record(z.string(), z.unknown());`
-        : `const ${key}ListFiltersSchema = z.object(${key}ListFilterFields);`,
+        : `const ${key}ListFiltersSchema = ${
+            descriptor.searchable === true
+              ? `z.object(${key}ListFilterFields).extend({searchQuery:z.string().trim().min(1).max(100).optional()})`
+              : `z.object(${key}ListFilterFields)`
+          };`,
     )
     .join("\n");
   const listFilterSchemaBindings = browserCrudEntitySpecs
@@ -777,12 +781,13 @@ export const renderEntityArtifacts = (
           // this descriptor beside the generated list metadata gives web and
           // native one transport key without teaching either about `name`.
           primarySearch:
-            entity.contract !== null && entity.descriptor.searchable === true
+            entity.inspector.list.primarySearch ??
+            (entity.contract !== null && entity.descriptor.searchable === true
               ? {
                   key: "searchQuery",
                   placeholder: `Search ${(entity.inspector.plural ?? entity.inspector.singular).toLowerCase()} or shortcode`,
                 }
-              : null,
+              : null),
           browserRouted: entity.descriptor.browserRoutes !== false,
           auditable: entity.descriptor.auditable === true,
           hasImages: entity.descriptor.hasImages === true,
@@ -1181,7 +1186,7 @@ export const renderEntityArtifacts = (
         "  plural: string | null;\n" +
         "  shortcodePrefix: string | null;\n" +
         "  searchable: boolean;\n" +
-        '  primarySearch: { key: "searchQuery"; placeholder: string } | null;\n' +
+        "  primarySearch: { key: string; placeholder: string } | null;\n" +
         "  browserRouted: boolean;\n" +
         "  auditable: boolean;\n" +
         "  hasImages: boolean;\n" +

@@ -39,9 +39,9 @@ public final class GenericEntityListModel {
     public private(set) var timelineError: String?
     public private(set) var isLoadingTimeline = false
 
-    /// Optional rich search state supplied by the host when the entity's generated list route
-    /// supports `searchQuery`. Keeping it separate from the base list preserves loaded pages,
-    /// selection, and a shelf/timeline view while a query is active.
+    /// Optional rich search state supplied by the host when the entity declares a primary search
+    /// wire. Keeping it separate from the base list preserves loaded pages, selection, and the
+    /// selected cards/timeline view while a query is active.
     public let searchModel: EntityListSearchModel?
 
     public var isSearching: Bool { !(searchModel?.query.isEmpty ?? true) }
@@ -81,7 +81,8 @@ public final class GenericEntityListModel {
             ?? descriptor.primarySearch.map { _ in
                 EntityListSearchModel(
                     loader: Self.searchLoader(
-                        descriptor: descriptor, client: client, filters: filters, pageSize: pageSize))
+                        descriptor: descriptor, client: client, filters: filters,
+                        pageSize: pageSize, sort: sort))
             }
     }
 
@@ -106,7 +107,8 @@ public final class GenericEntityListModel {
         filters = newFilters
         searchModel?.setLoader(
             Self.searchLoader(
-                descriptor: descriptor, client: client, filters: newFilters, pageSize: pageSize))
+                descriptor: descriptor, client: client, filters: newFilters,
+                pageSize: pageSize, sort: sort))
         await refresh()
     }
 
@@ -188,7 +190,7 @@ public final class GenericEntityListModel {
     }
 
     private func loadFirstPage(as requestedActivity: Activity) async {
-        guard descriptor.key.httpActions.contains(.list) else {
+        guard descriptor.key.nativeActions.contains(.list) else {
             cancelRequest()
             let message = "No list route for \(descriptor.plural)"
             initialError = message
@@ -258,13 +260,17 @@ public final class GenericEntityListModel {
     }
 
     private static func searchLoader(
-        descriptor: EntityDescriptor, client: CubbyClient, filters: EntityFilterState, pageSize: Int
+        descriptor: EntityDescriptor, client: CubbyClient, filters: EntityFilterState, pageSize: Int,
+        sort: String?
     ) -> EntityListSearchModel.PageLoader {
         { query, page in
+            guard let primarySearch = descriptor.primarySearch else {
+                throw EntityOperationError.unsupported(descriptor.key, .search)
+            }
             var scopedFilters = filters
-            scopedFilters.set(.single(query), for: "searchQuery")
+            scopedFilters.set(.single(query), for: primarySearch.key)
             return try await client.list(
-                descriptor, page: page, pageSize: pageSize, sort: nil, filters: scopedFilters)
+                descriptor, page: page, pageSize: pageSize, sort: sort, filters: scopedFilters)
         }
     }
 

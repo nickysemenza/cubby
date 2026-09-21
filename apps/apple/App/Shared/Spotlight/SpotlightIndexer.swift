@@ -35,9 +35,8 @@ actor SpotlightIndexer {
         defer { running = false }
         let index = CSSearchableIndex.default()
         do {
-            // `httpActions` is the set the HTTP document routes; `nativeActions` is the subset the
-            // generated client carries for create/update/delete/timeline.
-            for descriptor in EntityCatalog.intentExposed where descriptor.key.httpActions.contains(.list) {
+            // Native actions include generic resources and explicitly enabled typed RPC reads.
+            for descriptor in EntityCatalog.intentExposed where descriptor.key.nativeActions.contains(.list) {
                 let items = try await Self.items(for: descriptor, client: client)
                 try await index.deleteSearchableItems(withDomainIdentifiers: [
                     "cubby.\(descriptor.key.rawValue)"

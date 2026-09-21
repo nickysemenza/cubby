@@ -12,6 +12,12 @@ public import struct Foundation.Date
 public import CubbyAPISupport
 /// A type that performs HTTP operations defined by the OpenAPI document.
 public protocol APIProtocol: Sendable {
+    /// - Remark: HTTP `GET /api/v1/cookbook/detail`.
+    /// - Remark: Generated from `#/paths//api/v1/cookbook/detail/get(cookbook.detail)`.
+    func cookbook_detail(_ input: Operations.Cookbook_detail.Input) async throws -> Operations.Cookbook_detail.Output
+    /// - Remark: HTTP `GET /api/v1/cookbook/list`.
+    /// - Remark: Generated from `#/paths//api/v1/cookbook/list/get(cookbook.list)`.
+    func cookbook_list(_ input: Operations.Cookbook_list.Input) async throws -> Operations.Cookbook_list.Output
     /// - Remark: HTTP `GET /api/v1/dashboard/counts`.
     /// - Remark: Generated from `#/paths//api/v1/dashboard/counts/get(dashboard.counts)`.
     func dashboard_counts(_ input: Operations.Dashboard_counts.Input) async throws -> Operations.Dashboard_counts.Output
@@ -92,6 +98,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/image/hashIndex`.
     /// - Remark: Generated from `#/paths//api/v1/image/hashIndex/get(image.hashIndex)`.
     func image_hashIndex(_ input: Operations.Image_hashIndex.Input) async throws -> Operations.Image_hashIndex.Output
+    /// - Remark: HTTP `POST /api/v1/image/list`.
+    /// - Remark: Generated from `#/paths//api/v1/image/list/post(image.list)`.
+    func image_list(_ input: Operations.Image_list.Input) async throws -> Operations.Image_list.Output
     /// - Remark: HTTP `POST /api/v1/image/markUploaded`.
     /// - Remark: Generated from `#/paths//api/v1/image/markUploaded/post(image.markUploaded)`.
     func image_markUploaded(_ input: Operations.Image_markUploaded.Input) async throws -> Operations.Image_markUploaded.Output
@@ -353,6 +362,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/upc/lookup`.
     /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)`.
     func upc_lookup(_ input: Operations.Upc_lookup.Input) async throws -> Operations.Upc_lookup.Output
+    /// - Remark: HTTP `GET /api/v1/usda-food/detail`.
+    /// - Remark: Generated from `#/paths//api/v1/usda-food/detail/get(usda-food.detail)`.
+    func usdaFood_detail(_ input: Operations.UsdaFood_detail.Input) async throws -> Operations.UsdaFood_detail.Output
+    /// - Remark: HTTP `POST /api/v1/usda-food/list`.
+    /// - Remark: Generated from `#/paths//api/v1/usda-food/list/post(usda-food.list)`.
+    func usdaFood_list(_ input: Operations.UsdaFood_list.Input) async throws -> Operations.UsdaFood_list.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/vendor-accounts`.
@@ -399,6 +414,22 @@ public protocol APIProtocol: Sendable {
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// - Remark: HTTP `GET /api/v1/cookbook/detail`.
+    /// - Remark: Generated from `#/paths//api/v1/cookbook/detail/get(cookbook.detail)`.
+    public func cookbook_detail(
+        query: Operations.Cookbook_detail.Input.Query,
+        headers: Operations.Cookbook_detail.Input.Headers = .init()
+    ) async throws -> Operations.Cookbook_detail.Output {
+        try await cookbook_detail(Operations.Cookbook_detail.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/cookbook/list`.
+    /// - Remark: Generated from `#/paths//api/v1/cookbook/list/get(cookbook.list)`.
+    public func cookbook_list(headers: Operations.Cookbook_list.Input.Headers = .init()) async throws -> Operations.Cookbook_list.Output {
+        try await cookbook_list(Operations.Cookbook_list.Input(headers: headers))
+    }
     /// - Remark: HTTP `GET /api/v1/dashboard/counts`.
     /// - Remark: Generated from `#/paths//api/v1/dashboard/counts/get(dashboard.counts)`.
     public func dashboard_counts(headers: Operations.Dashboard_counts.Input.Headers = .init()) async throws -> Operations.Dashboard_counts.Output {
@@ -666,6 +697,17 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//api/v1/image/hashIndex/get(image.hashIndex)`.
     public func image_hashIndex(headers: Operations.Image_hashIndex.Input.Headers = .init()) async throws -> Operations.Image_hashIndex.Output {
         try await image_hashIndex(Operations.Image_hashIndex.Input(headers: headers))
+    }
+    /// - Remark: HTTP `POST /api/v1/image/list`.
+    /// - Remark: Generated from `#/paths//api/v1/image/list/post(image.list)`.
+    public func image_list(
+        headers: Operations.Image_list.Input.Headers = .init(),
+        body: Operations.Image_list.Input.Body? = nil
+    ) async throws -> Operations.Image_list.Output {
+        try await image_list(Operations.Image_list.Input(
+            headers: headers,
+            body: body
+        ))
     }
     /// - Remark: HTTP `POST /api/v1/image/markUploaded`.
     /// - Remark: Generated from `#/paths//api/v1/image/markUploaded/post(image.markUploaded)`.
@@ -1560,6 +1602,28 @@ extension APIProtocol {
         try await upc_lookup(Operations.Upc_lookup.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/usda-food/detail`.
+    /// - Remark: Generated from `#/paths//api/v1/usda-food/detail/get(usda-food.detail)`.
+    public func usdaFood_detail(
+        query: Operations.UsdaFood_detail.Input.Query,
+        headers: Operations.UsdaFood_detail.Input.Headers = .init()
+    ) async throws -> Operations.UsdaFood_detail.Output {
+        try await usdaFood_detail(Operations.UsdaFood_detail.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/usda-food/list`.
+    /// - Remark: Generated from `#/paths//api/v1/usda-food/list/post(usda-food.list)`.
+    public func usdaFood_list(
+        headers: Operations.UsdaFood_list.Input.Headers = .init(),
+        body: Operations.UsdaFood_list.Input.Body? = nil
+    ) async throws -> Operations.UsdaFood_list.Output {
+        try await usdaFood_list(Operations.UsdaFood_list.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.

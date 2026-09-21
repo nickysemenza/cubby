@@ -36,6 +36,16 @@ struct BrowseRootView: View {
                     }
                 }
             }
+            let media = descriptorsMatchingQuery.filter {
+                $0.domain == nil && $0.key.nativeActions.contains(.list)
+            }.sorted { $0.plural < $1.plural }
+            if !media.isEmpty {
+                Section {
+                    ForEach(media, id: \.key) { descriptor in row(for: descriptor) }
+                } header: {
+                    headerTitle("Media")
+                }
+            }
         }
         .listStyle(.plain)
         .porcelainScreen()
@@ -96,9 +106,8 @@ struct BrowseRootView: View {
         #endif
     }
 
-    /// A single quiet line for entities with no list route (cookbooks, USDA foods, images): naming
-    /// them here means they still show up in search and in the domain they belong to, without
-    /// pretending to be tappable rows.
+    /// A single quiet line for entities with no native list operation. Generated native actions
+    /// include both resource routes and the explicitly enabled RPC list exceptions.
     private func unlistedFootnote(names: [String]) -> some View {
         Text("Also: \(names.joined(separator: ", ")) — available in Search")
             .font(.porcelainLabel)
@@ -123,14 +132,14 @@ struct BrowseRootView: View {
     }
 
     /// Split for one domain: `rows` are listable (real `NavigationLink`s), `unlisted` are the
-    /// plural names of everything else in the domain, for the footnote line. `httpActions` is the
-    /// set the HTTP document routes (`nativeActions` is the subset the generated client carries
-    /// for create/update/delete/timeline; see `GenericEntityListModel.load`).
+    /// plural names of everything else in the domain, for the footnote line.
     private func descriptors(in domain: AppDomain) -> (rows: [EntityDescriptor], unlisted: [String]) {
         let matches = descriptorsMatchingQuery.filter { $0.key.domain == domain }
-        let rows = matches.filter { $0.key.httpActions.contains(.list) }.sorted { $0.plural < $1.plural }
-        let unlisted = matches.filter { !$0.key.httpActions.contains(.list) }.sorted { $0.plural < $1.plural }
-            .map(\.plural)
+        let rows = matches.filter { $0.key.nativeActions.contains(.list) }.sorted { $0.plural < $1.plural }
+        let unlisted = matches.filter { !$0.key.nativeActions.contains(.list) }.sorted {
+            $0.plural < $1.plural
+        }
+        .map(\.plural)
         return (rows, unlisted)
     }
 }

@@ -17,6 +17,7 @@ import {
   type ReactNode,
 } from "react";
 import { vi } from "vitest";
+import type { z } from "zod";
 
 class BrowserTestResizeObserver {
   constructor(readonly callback: ResizeObserverCallback) {}
@@ -65,10 +66,15 @@ class BrowserTestMediaQueryList implements MediaQueryList {
 }
 
 const BROWSER_TEST_VIEWPORT = { width: 1280, height: 800 } as const;
+type BrowserTestSearch = Record<
+  string,
+  z.infer<ReturnType<typeof z.json>> | undefined
+>;
 
 interface BrowserTestRoute {
   readonly path: string;
   readonly component: RouteComponent;
+  readonly validateSearch?: (search: BrowserTestSearch) => BrowserTestSearch;
   readonly notFoundComponent?: NotFoundRouteComponent;
 }
 
@@ -195,6 +201,7 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
         getParentRoute: () => rootRoute,
         path: options.route.path,
         component: options.route.component,
+        validateSearch: options.route.validateSearch,
         notFoundComponent: options.route.notFoundComponent,
       })
     : null;

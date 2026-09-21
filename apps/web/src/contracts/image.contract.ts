@@ -23,6 +23,7 @@ import {
 
 export const imageContract = defineContract("image", {
   list: query({
+    native: "Native photo browse",
     input: imageBrowserListInput,
     output: imageBrowserListOut,
   }),
