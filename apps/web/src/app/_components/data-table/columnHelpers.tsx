@@ -2197,6 +2197,9 @@ export function createPlainDateColumn<
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
+      clearable?: (row: T) => boolean;
+      clearLabel?: string;
+      clearDisabledReason?: string;
     };
     /**
      * Override the value placed in the date editor. Use with `displayValue`
@@ -2257,7 +2260,15 @@ export function createPlainDateColumn<
               value={editableValue}
               onSave={(newValue) => editable.onSave(newValue, row)}
               clipboard={clipboard}
-              config={{ type: "date" }}
+              config={{
+                type: "date",
+                clearable: editable.clearable?.(row),
+                clearLabel: editable.clearLabel,
+                clearDisabledReason:
+                  editable.clearable?.(row) === false
+                    ? editable.clearDisabledReason
+                    : undefined,
+              }}
               // EditableCell only calls renderValue in closed/display mode
               // (never while the editor is open), so substituting the
               // row-derived `display` is safe. The optimistic value still

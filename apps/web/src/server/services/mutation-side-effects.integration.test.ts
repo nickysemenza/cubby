@@ -141,6 +141,7 @@ describe("mutation side effects integration", () => {
       mock(expenseCreateInput, {
         overrides: {
           name: "Manifest Tracker Expense",
+          date: "2026-01-02",
           projectId: project.id,
           trade: "other",
         },

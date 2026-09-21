@@ -58,6 +58,7 @@ import {
   type EditMode,
   type EntityFieldPresentation,
 } from "./entity-field-presentation";
+import { fieldClearing } from "./field-clearing";
 import { LedgerAttributionsField } from "./ledger-attributions-field";
 import { referenceScopeFields, referenceScopeFor } from "./reference-scope";
 import {
@@ -65,6 +66,7 @@ import {
   presentEntitySelectOptions,
   type EntitySelectOption,
 } from "./select-options";
+import type { EntityEditRecord } from "./types";
 import { entityEditValueBagSchema } from "./value-schema";
 type PrimitiveFieldOptions = {
   placeholder?: string;
@@ -103,6 +105,42 @@ function suggestFieldFor(hasSuggest: boolean, key: string): string | undefined {
   return hasSuggest ? key : undefined;
 }
 
+function EntityDateField({
+  entity,
+  field,
+  name,
+  costName,
+  form,
+  label,
+  description,
+  record,
+}: {
+  entity: Entity;
+  field: PrimitiveFieldModel;
+  name: string;
+  costName: string;
+  form: UseFormReturn<FieldValues>;
+  label: string;
+  description: ReactNode;
+  record?: EntityEditRecord | undefined;
+}) {
+  const cost = useWatch({ control: form.control, name: costName });
+  return (
+    <PlainDateField
+      form={form}
+      name={name}
+      label={label}
+      description={description}
+      {...fieldClearing(
+        entity,
+        field.key,
+        field.nullable,
+        cost === undefined ? record?.cost : cost,
+      )}
+    />
+  );
+}
+
 /** Same reasoning as `suggestFieldFor`: an override (e.g. a select field
  * forced disabled with its own reason) beats the presentation's own
  * description, kept out of `renderPrimitiveField`'s own complexity budget. */
@@ -137,6 +175,8 @@ function renderPrimitiveField({
   fieldOptions,
   name,
   mode,
+  record,
+  costName = "cost",
 }: {
   entity: Entity;
   field: PrimitiveFieldModel;
@@ -146,6 +186,8 @@ function renderPrimitiveField({
   fieldOptions: PrimitiveFieldOptions;
   name: string;
   mode: EditMode;
+  record?: EntityEditRecord | undefined;
+  costName?: string;
 }) {
   const control = presentation.control;
   if (control.kind === "specialized") {
@@ -283,14 +325,15 @@ function renderPrimitiveField({
     );
   }
   if (control.kind === "date") {
-    // SAFETY: The date declaration selects a plain-date string path; RHF
-    // cannot correlate a runtime model key with its conditional path type.
-    const dateName = name as never;
     return (
-      <PlainDateField
+      <EntityDateField
         key={field.key}
+        record={record}
+        entity={entity}
+        field={field}
+        name={name}
+        costName={costName}
         form={form}
-        name={dateName}
         label={presentation.label}
         description={description}
       />
@@ -417,6 +460,7 @@ export function EntityPrimitiveFields({
           idPrefix,
           fieldOptions,
           name,
+          costName: paths.cost ?? "cost",
           mode,
         });
       })}
@@ -598,10 +642,12 @@ export function EntityIntentFields({
   entity,
   intent,
   mode = "create",
+  record,
 }: {
   entity: Entity;
   intent: string;
   mode?: EditMode;
+  record?: EntityEditRecord | undefined;
 }) {
   const form = useFormContext<FieldValues>();
   const idPrefix = useId();
@@ -780,6 +826,7 @@ export function EntityIntentFields({
           );
         }
         const rendered = renderPrimitiveField({
+          record,
           entity,
           field,
           presentation,

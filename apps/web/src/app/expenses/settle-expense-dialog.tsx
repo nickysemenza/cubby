@@ -1,3 +1,7 @@
+import {
+  EXPENSE_DATE_REQUIRED_MESSAGE,
+  hasValidExpenseDate,
+} from "@cubby/schemas/expense-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   costTypeSchema,
@@ -16,6 +20,7 @@ import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { tradeOptions } from "~/app/projects/shared";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+import { fieldClearing } from "~/entities/editing/field-clearing";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 
 import {
@@ -38,19 +43,24 @@ import { costTypeOptions } from "./expense-options";
 // `undefined`) for `NullableNumericField` while still being rejected as
 // required — same idiom as the costType/trade refines below and in
 // the generic Expense editor.
-const settleExpenseSchema = z.object({
-  cost: z
-    .number()
-    .nullable()
-    .refine((v): boolean => v !== null, "Final cost is required"),
-  date: plainDate,
-  projectId: z.string().nullable(),
-  costType: costTypeSchema,
-  trade: tradeSchema.nullable(),
-  notes: z.string().nullable(),
-  vendor: z.string(),
-  orderId: z.string(),
-});
+const settleExpenseSchema = z
+  .object({
+    cost: z
+      .number()
+      .nullable()
+      .refine((v): boolean => v !== null, "Final cost is required"),
+    date: plainDate.nullable(),
+    projectId: z.string().nullable(),
+    costType: costTypeSchema,
+    trade: tradeSchema.nullable(),
+    notes: z.string().nullable(),
+    vendor: z.string(),
+    orderId: z.string(),
+  })
+  .refine(hasValidExpenseDate, {
+    path: ["date"],
+    message: EXPENSE_DATE_REQUIRED_MESSAGE,
+  });
 type SettleExpenseValues = z.infer<typeof settleExpenseSchema>;
 
 interface SettleExpenseDialogProps {
@@ -173,7 +183,12 @@ export function SettleExpenseDialog({
             step="0.01"
             prefix="$"
           />
-          <PlainDateField form={form} name="date" label="Expense date" />
+          <PlainDateField
+            form={form}
+            name="date"
+            label="Expense date"
+            {...fieldClearing("expense", "date", true, form.watch("cost"))}
+          />
           <SelectField
             form={form}
             name="costType"

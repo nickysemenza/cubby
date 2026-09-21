@@ -1290,7 +1290,7 @@
           "name": "date",
           "type": "date",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "lineKind": {
           "name": "lineKind",
@@ -1586,6 +1586,10 @@
         "Expense_lineKind_productId_check": {
           "name": "Expense_lineKind_productId_check",
           "value": "\"Expense\".\"lineKind\" = 'principal' OR \"Expense\".\"productId\" IS NULL"
+        },
+        "Expense_date_cost_check": {
+          "name": "Expense_date_cost_check",
+          "value": "\"Expense\".\"date\" IS NOT NULL OR (\"Expense\".\"cost\" IS NOT NULL AND \"Expense\".\"cost\" = 0)"
         }
       },
       "isRLSEnabled": false

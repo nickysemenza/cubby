@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  hasValidExpenseDate,
+  EXPENSE_DATE_REQUIRED_MESSAGE,
+} from "./expense-fields";
 import { inventoryPlacementValues, locationTypeValues } from "@cubby/shared";
 import { amount } from "./codec";
 import { financialReconciliationSummary } from "./financial-reconciliation";
@@ -500,7 +504,12 @@ export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;
 
 export { PRODUCT_QUANTITY_DESCRIPTION } from "./expense-fields";
 
-export const expenseCreateInput = z.object(generatedExpenseFieldSchemas.create);
+export const expenseCreateInput = z
+  .object(generatedExpenseFieldSchemas.create)
+  .refine(hasValidExpenseDate, {
+    path: ["date"],
+    message: EXPENSE_DATE_REQUIRED_MESSAGE,
+  });
 export type ExpenseCreateInput = z.infer<typeof expenseCreateInput>;
 
 export const expenseUpdateData = z.object(generatedExpenseFieldSchemas.update);

@@ -52,7 +52,7 @@ import {
 const formSchema = z.object({
   trade: tradeSchema,
   quantity: z.number().positive(),
-  date: z.string(),
+  date: z.string().nullable(),
   reason: z.string(),
   adjustInventory: z.boolean(),
   /** "" means unpicked — the server never guesses which shelf. */
@@ -234,7 +234,12 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
             placeholder="1"
             fraction
           />
-          <PlainDateField form={form} name="date" label="Date" />
+          <PlainDateField
+            form={form}
+            name="date"
+            label="Date"
+            clearLabel="Date unknown"
+          />
           <SelectField
             form={form}
             name="trade"

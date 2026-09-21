@@ -1,4 +1,5 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
 import { projectOut, taskOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
@@ -392,7 +393,7 @@ describe("entity edit definitions", () => {
       ),
     ).toMatchObject({
       ok: false,
-      issues: [{ field: "date", message: "Date is required" }],
+      issues: [{ field: "date", message: EXPENSE_DATE_REQUIRED_MESSAGE }],
     });
   });
 });

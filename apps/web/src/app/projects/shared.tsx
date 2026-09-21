@@ -1,4 +1,8 @@
 import {
+  canClearExpenseDate,
+  EXPENSE_DATE_REQUIRED_MESSAGE,
+} from "@cubby/schemas/expense-fields";
+import {
   expenseLineBasisSchema,
   expenseLineKindSchema,
   type ExpenseLineBasis,
@@ -370,6 +374,9 @@ export function expenseDateColumn(
     mobile: opts?.mobile,
     filterConfig: opts?.filterConfig,
     editable: {
+      clearable: (row) => canClearExpenseDate(row.cost),
+      clearLabel: "Date unknown",
+      clearDisabledReason: EXPENSE_DATE_REQUIRED_MESSAGE,
       onSave: async (newDate, expense) => {
         await save(newDate, expense);
       },

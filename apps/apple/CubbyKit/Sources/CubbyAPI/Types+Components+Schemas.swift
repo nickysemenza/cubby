@@ -6091,7 +6091,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/EntityTimelineGroup/key`.
             public var key: Swift.String
             /// - Remark: Generated from `#/components/schemas/EntityTimelineGroup/date`.
-            public var date: Components.Schemas.PlainDate
+            public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/EntityTimelineGroup/label`.
             public var label: Swift.String?
             /// - Remark: Generated from `#/components/schemas/EntityTimelineGroup/link`.
@@ -6108,7 +6108,7 @@ extension Components {
             ///   - events:
             public init(
                 key: Swift.String,
-                date: Components.Schemas.PlainDate,
+                date: Components.Schemas.PlainDate? = nil,
                 label: Swift.String? = nil,
                 link: Components.Schemas.EntityTimelineLink? = nil,
                 events: [Components.Schemas.EntityTimelineEvent]
@@ -6132,7 +6132,7 @@ extension Components {
                     Swift.String.self,
                     forKey: .key
                 )
-                self.date = try container.decode(
+                self.date = try container.decodeIfPresent(
                     Components.Schemas.PlainDate.self,
                     forKey: .date
                 )
@@ -6584,7 +6584,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseCreateInput/cost`.
             public var cost: Components.Schemas.WholeCentAmount?
             /// - Remark: Generated from `#/components/schemas/ExpenseCreateInput/date`.
-            public var date: Components.Schemas.PlainDate
+            public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseCreateInput/lineKind`.
             public var lineKind: Components.Schemas.ExpenseLineKind?
             /// - Remark: Generated from `#/components/schemas/ExpenseCreateInput/lineBasis`.
@@ -6644,7 +6644,7 @@ extension Components {
             public init(
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
-                date: Components.Schemas.PlainDate,
+                date: Components.Schemas.PlainDate? = nil,
                 lineKind: Components.Schemas.ExpenseLineKind? = nil,
                 lineBasis: Components.Schemas.ExpenseLineBasis? = nil,
                 costType: Components.Schemas.CostType,
@@ -6719,11 +6719,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/cost`.
             public var cost: Components.Schemas.WholeCentAmount?
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/date`.
-            public var date: Components.Schemas.PlainDate
+            public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema342
+            public var lineKind: Components.Schemas.OutputSchema343
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema343
+            public var lineBasis: Components.Schemas.OutputSchema344
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/trade`.
@@ -6775,7 +6775,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ExpenseDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `ExpenseDetail`.
             ///
             /// - Parameters:
@@ -6818,9 +6818,9 @@ extension Components {
                 id: Components.Schemas.ExpenseShortcode,
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
-                date: Components.Schemas.PlainDate,
-                lineKind: Components.Schemas.OutputSchema342,
-                lineBasis: Components.Schemas.OutputSchema343,
+                date: Components.Schemas.PlainDate? = nil,
+                lineKind: Components.Schemas.OutputSchema343,
+                lineBasis: Components.Schemas.OutputSchema344,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -6845,7 +6845,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.projectAllocations = projectAllocations
@@ -6938,16 +6938,16 @@ extension Components {
                     Components.Schemas.WholeCentAmount.self,
                     forKey: .cost
                 )
-                self.date = try container.decode(
+                self.date = try container.decodeIfPresent(
                     Components.Schemas.PlainDate.self,
                     forKey: .date
                 )
                 self.lineKind = try container.decode(
-                    Components.Schemas.OutputSchema342.self,
+                    Components.Schemas.OutputSchema343.self,
                     forKey: .lineKind
                 )
                 self.lineBasis = try container.decode(
-                    Components.Schemas.OutputSchema343.self,
+                    Components.Schemas.OutputSchema344.self,
                     forKey: .lineBasis
                 )
                 self.costType = try container.decode(
@@ -7047,7 +7047,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -7117,11 +7117,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/cost`.
             public var cost: Components.Schemas.WholeCentAmount?
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/date`.
-            public var date: Components.Schemas.PlainDate
+            public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema342
+            public var lineKind: Components.Schemas.OutputSchema343
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema343
+            public var lineBasis: Components.Schemas.OutputSchema344
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseListItem/trade`.
@@ -7213,9 +7213,9 @@ extension Components {
                 id: Components.Schemas.ExpenseShortcode,
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
-                date: Components.Schemas.PlainDate,
-                lineKind: Components.Schemas.OutputSchema342,
-                lineBasis: Components.Schemas.OutputSchema343,
+                date: Components.Schemas.PlainDate? = nil,
+                lineKind: Components.Schemas.OutputSchema343,
+                lineBasis: Components.Schemas.OutputSchema344,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -7330,16 +7330,16 @@ extension Components {
                     Components.Schemas.WholeCentAmount.self,
                     forKey: .cost
                 )
-                self.date = try container.decode(
+                self.date = try container.decodeIfPresent(
                     Components.Schemas.PlainDate.self,
                     forKey: .date
                 )
                 self.lineKind = try container.decode(
-                    Components.Schemas.OutputSchema342.self,
+                    Components.Schemas.OutputSchema343.self,
                     forKey: .lineKind
                 )
                 self.lineBasis = try container.decode(
-                    Components.Schemas.OutputSchema343.self,
+                    Components.Schemas.OutputSchema344.self,
                     forKey: .lineBasis
                 )
                 self.costType = try container.decode(
@@ -7527,11 +7527,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/cost`.
             public var cost: Components.Schemas.WholeCentAmount?
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/date`.
-            public var date: Components.Schemas.PlainDate
+            public var date: Components.Schemas.PlainDate?
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/lineKind`.
-            public var lineKind: Components.Schemas.OutputSchema342
+            public var lineKind: Components.Schemas.OutputSchema343
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/lineBasis`.
-            public var lineBasis: Components.Schemas.OutputSchema343
+            public var lineBasis: Components.Schemas.OutputSchema344
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/costType`.
             public var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/trade`.
@@ -7620,9 +7620,9 @@ extension Components {
                 id: Components.Schemas.ExpenseShortcode,
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
-                date: Components.Schemas.PlainDate,
-                lineKind: Components.Schemas.OutputSchema342,
-                lineBasis: Components.Schemas.OutputSchema343,
+                date: Components.Schemas.PlainDate? = nil,
+                lineKind: Components.Schemas.OutputSchema343,
+                lineBasis: Components.Schemas.OutputSchema344,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade? = nil,
                 url: Swift.String? = nil,
@@ -7734,16 +7734,16 @@ extension Components {
                     Components.Schemas.WholeCentAmount.self,
                     forKey: .cost
                 )
-                self.date = try container.decode(
+                self.date = try container.decodeIfPresent(
                     Components.Schemas.PlainDate.self,
                     forKey: .date
                 )
                 self.lineKind = try container.decode(
-                    Components.Schemas.OutputSchema342.self,
+                    Components.Schemas.OutputSchema343.self,
                     forKey: .lineKind
                 )
                 self.lineBasis = try container.decode(
-                    Components.Schemas.OutputSchema343.self,
+                    Components.Schemas.OutputSchema344.self,
                     forKey: .lineBasis
                 )
                 self.costType = try container.decode(
@@ -8838,7 +8838,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialAccountDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `FinancialAccountDetail`.
             ///
             /// - Parameters:
@@ -8870,7 +8870,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -8958,7 +8958,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -10571,7 +10571,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/FinancialTransactionDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `FinancialTransactionDetail`.
             ///
             /// - Parameters:
@@ -10619,7 +10619,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.accountId = accountId
@@ -10755,7 +10755,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -11981,7 +11981,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/GardenEntryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `GardenEntryDetail`.
             ///
             /// - Parameters:
@@ -12015,7 +12015,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.locationId = locationId
@@ -12109,7 +12109,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -19782,7 +19782,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/IngredientDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `IngredientDetail`.
             ///
             /// - Parameters:
@@ -19818,7 +19818,7 @@ extension Components {
                 appearsInRecipes: Components.Schemas.OutputSchema165,
                 product: Components.Schemas.OutputSchema166,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -19918,7 +19918,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -21157,7 +21157,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/InventoryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `InventoryDetail`.
             ///
             /// - Parameters:
@@ -21191,7 +21191,7 @@ extension Components {
                 location: Components.Schemas.LocationOut,
                 displayName: Swift.String,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.amount = amount
@@ -21285,7 +21285,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -22929,7 +22929,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerPartyDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `LedgerPartyDetail`.
             ///
             /// - Parameters:
@@ -22949,7 +22949,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -23001,7 +23001,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -23889,7 +23889,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LedgerTransferDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `LedgerTransferDetail`.
             ///
             /// - Parameters:
@@ -23923,7 +23923,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.fromPartyId = fromPartyId
@@ -24017,7 +24017,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -24811,7 +24811,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/LocationDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `LocationDetail`.
             ///
             /// - Parameters:
@@ -24857,7 +24857,7 @@ extension Components {
                 totalItemCount: Swift.Int? = nil,
                 inventoryItems: Components.Schemas.OutputSchema208? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -24987,7 +24987,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -26293,7 +26293,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MealDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/MealDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `MealDetail`.
             ///
             /// - Parameters:
@@ -26327,7 +26327,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.date = date
@@ -26421,7 +26421,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -30046,16 +30046,16 @@ extension Components {
         public typealias OutputSchema333 = [Components.Schemas.ProjectShortcode]
         /// Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema342`.
-        public typealias OutputSchema342 = Components.Schemas.ExpenseLineKind
+        /// - Remark: Generated from `#/components/schemas/output_schema343`.
+        public typealias OutputSchema343 = Components.Schemas.ExpenseLineKind
         /// Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema343`.
-        public typealias OutputSchema343 = Components.Schemas.ExpenseLineBasis
-        /// - Remark: Generated from `#/components/schemas/output_schema431`.
-        public typealias OutputSchema431 = [Components.Schemas.WishCandidateOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema437`.
-        public typealias OutputSchema437 = [Components.Schemas.EntityAttachmentRead]
+        /// - Remark: Generated from `#/components/schemas/output_schema344`.
+        public typealias OutputSchema344 = Components.Schemas.ExpenseLineBasis
+        /// - Remark: Generated from `#/components/schemas/output_schema432`.
+        public typealias OutputSchema432 = [Components.Schemas.WishCandidateOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema438`.
+        public typealias OutputSchema438 = [Components.Schemas.EntityAttachmentRead]
         /// - Remark: Generated from `#/components/schemas/output_schema51`.
         public typealias OutputSchema51 = [Components.Schemas.ExternalIdOut]
         /// - Remark: Generated from `#/components/schemas/output_schema68`.
@@ -31318,7 +31318,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PlantingDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `PlantingDetail`.
             ///
             /// - Parameters:
@@ -31370,7 +31370,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.ingredientId = ingredientId
@@ -31518,7 +31518,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -33009,7 +33009,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductCategoryDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `ProductCategoryDetail`.
             ///
             /// - Parameters:
@@ -33039,7 +33039,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -33121,7 +33121,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -33937,7 +33937,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProductDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `ProductDetail`.
             ///
             /// - Parameters:
@@ -34023,7 +34023,7 @@ extension Components {
                 onHandUnits: Swift.Double? = nil,
                 quantityVariance: Swift.Double? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -34273,7 +34273,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -37086,7 +37086,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/ProjectDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `ProjectDetail`.
             ///
             /// - Parameters:
@@ -37140,7 +37140,7 @@ extension Components {
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
                 dates: Components.Schemas.ProjectOutputFieldsProjectDateWindow,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -37294,7 +37294,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -38520,7 +38520,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/PurchaseDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `PurchaseDetail`.
             ///
             /// - Parameters:
@@ -38576,7 +38576,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.vendorId = vendorId
@@ -38736,7 +38736,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -39771,7 +39771,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/RecipeDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `RecipeDetail`.
             ///
             /// - Parameters:
@@ -39809,7 +39809,7 @@ extension Components {
                 forkedFromRecipeId: Components.Schemas.RecipeShortcode? = nil,
                 forkedFromRecipeName: Swift.String? = nil,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -39915,7 +39915,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -43730,7 +43730,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/TaskDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `TaskDetail`.
             ///
             /// - Parameters:
@@ -43780,7 +43780,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.fieldResolutions = fieldResolutions
                 self.id = id
@@ -43922,7 +43922,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -45900,7 +45900,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorAccountDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `VendorAccountDetail`.
             ///
             /// - Parameters:
@@ -45936,7 +45936,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.label = label
@@ -46036,7 +46036,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -46707,7 +46707,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/VendorDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/VendorDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `VendorDetail`.
             ///
             /// - Parameters:
@@ -46747,7 +46747,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -46859,7 +46859,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -47530,7 +47530,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishDetail/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishDetail/candidates`.
-            public var candidates: Components.Schemas.OutputSchema431
+            public var candidates: Components.Schemas.OutputSchema432
             /// - Remark: Generated from `#/components/schemas/WishDetail/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishDetail/priceRange`.
@@ -47542,7 +47542,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishDetail/displayImages`.
             public var displayImages: Components.Schemas.DisplayImagesField
             /// - Remark: Generated from `#/components/schemas/WishDetail/attachments`.
-            public var attachments: Components.Schemas.OutputSchema437
+            public var attachments: Components.Schemas.OutputSchema438
             /// Creates a new `WishDetail`.
             ///
             /// - Parameters:
@@ -47562,13 +47562,13 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema431,
+                candidates: Components.Schemas.OutputSchema432,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
-                attachments: Components.Schemas.OutputSchema437
+                attachments: Components.Schemas.OutputSchema438
             ) {
                 self.id = id
                 self.name = name
@@ -47614,7 +47614,7 @@ extension Components {
                     forKey: .acquiredAt
                 )
                 self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema431.self,
+                    Components.Schemas.OutputSchema432.self,
                     forKey: .candidates
                 )
                 self.candidateCount = try container.decode(
@@ -47638,7 +47638,7 @@ extension Components {
                     forKey: .displayImages
                 )
                 self.attachments = try container.decode(
-                    Components.Schemas.OutputSchema437.self,
+                    Components.Schemas.OutputSchema438.self,
                     forKey: .attachments
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -47667,7 +47667,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishListItem/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishListItem/candidates`.
-            public var candidates: Components.Schemas.OutputSchema431
+            public var candidates: Components.Schemas.OutputSchema432
             /// - Remark: Generated from `#/components/schemas/WishListItem/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishListItem/priceRange`.
@@ -47696,7 +47696,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema431,
+                candidates: Components.Schemas.OutputSchema432,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
@@ -47745,7 +47745,7 @@ extension Components {
                     forKey: .acquiredAt
                 )
                 self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema431.self,
+                    Components.Schemas.OutputSchema432.self,
                     forKey: .candidates
                 )
                 self.candidateCount = try container.decode(
@@ -47831,7 +47831,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishOut/acquiredAt`.
             public var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishOut/candidates`.
-            public var candidates: Components.Schemas.OutputSchema431
+            public var candidates: Components.Schemas.OutputSchema432
             /// - Remark: Generated from `#/components/schemas/WishOut/candidateCount`.
             public var candidateCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/WishOut/priceRange`.
@@ -47857,7 +47857,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema431,
+                candidates: Components.Schemas.OutputSchema432,
                 candidateCount: Swift.Int,
                 priceRange: Components.Schemas.WishPriceRangeOut? = nil,
                 createdAt: Foundation.Date,
@@ -47903,7 +47903,7 @@ extension Components {
                     forKey: .acquiredAt
                 )
                 self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema431.self,
+                    Components.Schemas.OutputSchema432.self,
                     forKey: .candidates
                 )
                 self.candidateCount = try container.decode(

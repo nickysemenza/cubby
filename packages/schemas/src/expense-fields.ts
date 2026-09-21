@@ -4,6 +4,18 @@ export const costTypeValues = ["materials", "tools", "services"] as const;
 export const costTypeSchema = z.enum(costTypeValues);
 export type CostType = z.infer<typeof costTypeSchema>;
 
+export const EXPENSE_DATE_REQUIRED_MESSAGE =
+  "A date is required unless the cost is $0. Set the cost to $0 or enter a date.";
+
+const zeroCost = z.literal(0);
+export const canClearExpenseDate = (cost: unknown): boolean =>
+  zeroCost.safeParse(cost).success;
+
+export const hasValidExpenseDate = (expense: {
+  cost: number | null;
+  date: string | null;
+}): boolean => expense.date !== null || canClearExpenseDate(expense.cost);
+
 /**
  * The one place the signed-quantity rule is spelled out for callers. MCP
  * advertises this string verbatim, so an agent has no other way to learn that a

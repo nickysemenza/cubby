@@ -2446,6 +2446,11 @@ export const expense = pgTable(
   }),
   (table) => [
     shortcodeUnique("Expense", table.shortcode),
+    // Apply explicitly in production: drizzle-kit push does not diff CHECKs.
+    check(
+      "Expense_date_cost_check",
+      sql`${table.date} IS NOT NULL OR (${table.cost} IS NOT NULL AND ${table.cost} = 0)`,
+    ),
     check(
       "Expense_live_charge_assignment_check",
       sql`${table.deletedAt} IS NOT NULL OR ${table.lineKind} = 'principal' OR (${table.projectId} IS NULL AND ${table.purchaseId} IS NOT NULL)`,

@@ -1,5 +1,5 @@
 import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityTimeline } from "~/entities/entity-timeline.functions";
@@ -93,6 +93,42 @@ const operationsFor = (out: EntityTimelineOut) => ({
  * unconfident interval is drawn differently from a proven one.
  */
 describe("EntityTimeline", () => {
+  it("keeps unknown-date events after dated history in both views", async () => {
+    const out: EntityTimelineOut = {
+      ...withRows,
+      groups: [
+        ...withRows.groups,
+        {
+          key: "undated:EXP-4444",
+          date: null,
+          events: [
+            { id: "EXP-4444", kind: "exited", label: "Discarded free tool" },
+          ],
+        },
+      ],
+    };
+    render(
+      <EntityTimeline
+        entity="product"
+        ids={["PRD-2222"]}
+        operations={operationsFor(out)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const unknown = await screen.findByRole("region", { name: "Date unknown" });
+    expect(within(unknown).getByText("Discarded free tool")).toBeVisible();
+    expect(
+      screen.getByText("Toolco · Order 42").compareDocumentPosition(unknown) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Lifecycles view" }));
+    expect(
+      within(screen.getByRole("region", { name: "Date unknown" })).getByText(
+        "Discarded free tool",
+      ),
+    ).toBeVisible();
+  });
+
   it("renders date groups with signed amounts and hides the mode switch without rows", async () => {
     render(
       <EntityTimeline

@@ -173,12 +173,13 @@ export default defineEntity({
       {
         key: "date",
         kind: "date",
+        nullable: true,
         control: { kind: "date", section: "schedule", initial: "today" },
         display: { list: true, detail: true, detailOrder: 30 },
         validation: {
-          read: plainDate,
-          create: plainDate,
-          update: plainDate.optional(),
+          read: plainDate.nullable(),
+          create: plainDate.nullable(),
+          update: plainDate.nullable().optional(),
         },
       },
       {
@@ -1336,7 +1337,7 @@ export default defineEntity({
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: { fields: ["projectId", "trade", "costType"] },
+    bulkUpdate: { fields: ["projectId", "trade", "costType", "date"] },
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],

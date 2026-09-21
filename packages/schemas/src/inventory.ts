@@ -398,7 +398,7 @@ const inventoryBulkDiscardItem = z.object({
 export const inventoryBulkDiscardPayload = z.object({
   trade: tradeSchema,
   items: z.array(inventoryBulkDiscardItem).min(1),
-  date: plainDate,
+  date: plainDate.nullable().describe("Discard date; null when unknown."),
   reason: z
     .string()
     .max(500)

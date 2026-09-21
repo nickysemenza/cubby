@@ -100,7 +100,7 @@ export type ExpenseRow = {
   shortcode: string;
   name: string;
   cost: number | null;
-  date: string;
+  date: string | null;
   lineKind: ExpenseOut["lineKind"];
   lineBasis: ExpenseOut["lineBasis"];
   costType: ExpenseOut["costType"];

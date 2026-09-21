@@ -108,7 +108,7 @@ export async function expenseAnalytics(
     whereClause,
     ne(expense.lineKind, "principal"),
   );
-  // `expense.date` is nullable (a `future` expense commonly has none yet) —
+  // $0 events can have an unknown date —
   // exclude null-date rows from the month-bucketed breakdowns only (can't
   // bucket what has no date); summary/byCostType/byTrade/byProject still
   // include them.

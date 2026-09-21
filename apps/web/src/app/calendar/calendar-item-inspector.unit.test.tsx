@@ -120,6 +120,29 @@ afterEach(() => {
 });
 
 describe("EditableCalendarItem", () => {
+  it("clears the date when the same edit sets a planned expense to zero", async () => {
+    const calendar = createCalendarOperations();
+    render(
+      <EditableCalendarItem
+        item={expense}
+        edit={editableDescriptor(expense)}
+        onCancel={() => undefined}
+        operations={calendar.inspectorOperations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.queryByRole("button", { name: "Date unknown" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Planned cost"), {
+      target: { value: "0" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Date unknown" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calendar.requests).toHaveLength(1));
+    expect(calendar.requests[0]).toMatchObject({
+      data: { cost: 0, date: null },
+    });
+  });
+
   it("submits one complete atomic update", async () => {
     const calendar = createCalendarOperations();
     render(

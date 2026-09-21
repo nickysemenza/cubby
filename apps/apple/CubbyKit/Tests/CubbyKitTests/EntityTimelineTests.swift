@@ -5,6 +5,17 @@ import Testing
 
 @Suite("EntityTimelineOut")
 struct EntityTimelineTests {
+    @Test func decodesUnknownDateWithoutInventingTimelineBounds() throws {
+        let data = Data(
+            #"{"groups":[{"key":"undated:EXP-2345","date":null,"events":[{"id":"EXP-2345","kind":"exited","label":"Discarded tool"}]}],"stats":[],"notes":[]}"#
+                .utf8
+        )
+        let timeline = try JSONDecoder.cubby().decode(EntityTimelineOut.self, from: data)
+        #expect(timeline.groups.first?.date == nil)
+        #expect(timeline.groups.first?.events.first?.label == "Discarded tool")
+        #expect(timeline.extent == nil)
+    }
+
     /// The one timeline shape every entity's timeline returns: grouped events, optional lifecycle
     /// rows, stat tiles, notes and the extent. `confident: false` on an open interval must
     /// survive the decode — the lifecycle view draws it differently from a confirmed one.

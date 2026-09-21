@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
@@ -28,6 +29,14 @@ import {
 
 const includesAction = (actions: readonly string[], action: string) =>
   actions.includes(action);
+
+// Generic schema mocks cannot infer cross-field refinement invariants.
+const createOverrides = (entity: Entity) =>
+  entity === "financialTransaction"
+    ? { kind: "purchase", amount: 1 }
+    : entity === "expense"
+      ? { date: "2026-01-02" }
+      : undefined;
 
 describe("entity kernel bindings", () => {
   describe("live MCP product commands", () => {
@@ -232,10 +241,7 @@ describe("entity kernel bindings", () => {
           actionInput = {
             data: mock(schema, {
               seed: 1,
-              overrides:
-                entity === "financialTransaction"
-                  ? { kind: "purchase", amount: 1 }
-                  : undefined,
+              overrides: createOverrides(entity),
             }),
           };
         } else if (action === "update") {
@@ -286,7 +292,9 @@ describe("entity kernel bindings", () => {
           const schema = binding.schemas.createInput;
           if (schema === null)
             throw new Error(`${entity} has no create schema`);
-          actionInput = { data: mock(schema, { seed: 2 }) };
+          actionInput = {
+            data: mock(schema, { seed: 2, overrides: createOverrides(entity) }),
+          };
         } else if (action === "update") {
           const schema = binding.schemas.updateInput;
           if (schema === null)

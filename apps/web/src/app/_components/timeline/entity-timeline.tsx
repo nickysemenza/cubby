@@ -268,13 +268,21 @@ function EventLine({ event }: { event: EntityTimelineEvent }) {
   );
 }
 
-function EventGroup({ group }: { group: EntityTimelineGroup }) {
+function EventGroup({
+  group,
+  showDate = true,
+}: {
+  group: EntityTimelineGroup;
+  showDate?: boolean;
+}) {
   return (
     <section>
       <Row align="baseline" wrap gap="sm" className="pb-1">
-        <span className="font-mono text-sm tabular-nums">
-          {formatDate(group.date)}
-        </span>
+        {showDate ? (
+          <span className="font-mono text-sm tabular-nums">
+            {group.date === null ? "Date unknown" : formatDate(group.date)}
+          </span>
+        ) : null}
         {group.label && (
           <TimelineLink link={group.link} className="text-sm">
             {group.label}
@@ -298,9 +306,23 @@ function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
     );
   return (
     <Stack gap="md">
-      {groups.map((group) => (
-        <EventGroup key={group.key} group={group} />
-      ))}
+      {groups
+        .filter((group) => group.date !== null)
+        .map((group) => (
+          <EventGroup key={group.key} group={group} />
+        ))}
+      {groups.some((group) => group.date === null) ? (
+        <section aria-label="Date unknown">
+          <h3 className="mb-2 text-sm font-medium">Date unknown</h3>
+          <Stack gap="md">
+            {groups
+              .filter((group) => group.date === null)
+              .map((group) => (
+                <EventGroup key={group.key} group={group} showDate={false} />
+              ))}
+          </Stack>
+        </section>
+      ) : null}
     </Stack>
   );
 }
@@ -580,7 +602,14 @@ export function EntityTimeline<E extends TimelineEntity>({
         <Description>{data.notes.join(" ")}</Description>
       )}
       {activeMode === "lifecycles" && data.rows ? (
-        <LifecyclesView rows={data.rows} extent={data.extent} />
+        <>
+          <LifecyclesView rows={data.rows} extent={data.extent} />
+          {data.groups.some((group) => group.date === null) ? (
+            <EventsView
+              groups={data.groups.filter((group) => group.date === null)}
+            />
+          ) : null}
+        </>
       ) : (
         <EventsView groups={data.groups} />
       )}

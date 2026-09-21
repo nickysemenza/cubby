@@ -50,37 +50,41 @@ describe("discardProductUnits", () => {
       where: eq(expense.shortcode, id),
     });
 
-  it("mints a $0 negative-quantity line with no vendor charge behind it", async () => {
-    const { prod } = await seedStockedProduct(3);
+  it.each(["2026-06-03", null])(
+    "mints a $0 negative-quantity line with date %s and no vendor charge",
+    async (date) => {
+      const { prod } = await seedStockedProduct(3);
 
-    const result = await discardProductUnits(
-      ctx.db,
-      {
-        productId: prod.entityId,
-        quantity: 1,
-        date: "2026-06-03",
-        trade: "other",
-        reason: "Thrown away",
-        inventoryEntryId: null,
-      },
-      ctx.actor,
-    );
+      const result = await discardProductUnits(
+        ctx.db,
+        {
+          productId: prod.entityId,
+          quantity: 1,
+          date,
+          trade: "other",
+          reason: "Thrown away",
+          inventoryEntryId: null,
+        },
+        ctx.actor,
+      );
 
-    const row = await loadExpense(result.expenseShortcode);
-    expect(row).toMatchObject({
-      cost: 0,
-      productQuantity: -1,
-      lineKind: "principal",
-      // The whole point: a discard is not part of any order, so it must not
-      // inherit a vendor or an order id from the purchase that bought the item.
-      purchaseId: null,
-      projectId: null,
-      notes: "Thrown away",
-      future: false,
-    });
-    expect(row?.name).toContain("Discarded");
-    expect(result.storedQuantity).toBe(-1);
-  });
+      const row = await loadExpense(result.expenseShortcode);
+      expect(row).toMatchObject({
+        cost: 0,
+        date,
+        productQuantity: -1,
+        lineKind: "principal",
+        // The whole point: a discard is not part of any order, so it must not
+        // inherit a vendor or an order id from the purchase that bought the item.
+        purchaseId: null,
+        projectId: null,
+        notes: "Thrown away",
+        future: false,
+      });
+      expect(row?.name).toContain("Discarded");
+      expect(result.storedQuantity).toBe(-1);
+    },
+  );
 
   it("decrements the named shelf when asked", async () => {
     const { prod, entry } = await seedStockedProduct(3);

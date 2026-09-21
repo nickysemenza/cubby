@@ -1,6 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import {
+  EXPENSE_DATE_REQUIRED_MESSAGE,
+  hasValidExpenseDate,
+} from "@cubby/schemas/expense-fields";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
@@ -103,6 +107,12 @@ export const EXPENSE_DELETE_EDGE_POLICY = {
 
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
 
+const assertExpenseDate = (cost: number | null, date: string | null) => {
+  if (!hasValidExpenseDate({ cost, date })) {
+    throw createAppError("CONSTRAINT_VIOLATION", EXPENSE_DATE_REQUIRED_MESSAGE);
+  }
+};
+
 type ResolvedExpenseUpdate = Omit<
   ExpenseUpdateData,
   | "vendor"
@@ -149,7 +159,7 @@ const resolveLiveExpenseIds = (
 
 type ExpenseBulkPatch = Pick<
   ExpenseUpdateData,
-  "projectId" | "trade" | "costType"
+  "projectId" | "trade" | "costType" | "date"
 >;
 
 export const updateExpensesInBulk = async (
@@ -170,7 +180,8 @@ export const updateExpensesInBulk = async (
   if (
     data.projectId === undefined &&
     data.trade === undefined &&
-    data.costType === undefined
+    data.costType === undefined &&
+    data.date === undefined
   ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -193,6 +204,8 @@ export const updateExpensesInBulk = async (
         projectId: expense.projectId,
         trade: expense.trade,
         costType: expense.costType,
+        cost: expense.cost,
+        date: expense.date,
         lineKind: expense.lineKind,
         productId: expense.productId,
         purchaseId: expense.purchaseId,
@@ -211,8 +224,13 @@ export const updateExpensesInBulk = async (
       projectId,
       trade: data.trade,
       costType: data.costType,
+      date: data.date,
     });
     for (const row of before) {
+      assertExpenseDate(
+        row.cost,
+        values.date === undefined ? row.date : values.date,
+      );
       await validateExpenseInheritance(tx, {
         lineKind: row.lineKind,
         projectId:
@@ -575,6 +593,7 @@ export const updateExpense = async (
       extras: expenseInheritanceReadExtras(),
       columns: {
         cost: true,
+        date: true,
         productId: true,
         productQuantity: true,
         purchaseId: true,
@@ -586,6 +605,10 @@ export const updateExpense = async (
     });
     const nextCost =
       data.cost === undefined ? (qualityBefore?.cost ?? null) : data.cost;
+    assertExpenseDate(
+      nextCost,
+      data.date === undefined ? (qualityBefore?.date ?? null) : data.date,
+    );
     await assertExplicitSourceClaimsForAmountChange(
       tx,
       { expenseId: id },
@@ -937,6 +960,7 @@ export const createExpense = async (
         "Product quantity requires a linked product.",
       );
     }
+    assertExpenseDate(data.cost, data.date);
     assertQuantitySignMatchesCost(data.cost, data.productQuantity);
     await validateExpenseInheritance(tx, {
       lineKind,
