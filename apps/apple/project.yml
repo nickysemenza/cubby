@@ -120,6 +120,12 @@ targetTemplates:
         Release:
           # Xcode's Release default, pinned so Sentry symbolication cannot silently break.
           DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          # Keep signing overrides on the app target. Passing these as global xcodebuild
+          # settings also applies the app profile to SwiftPM resource-bundle targets.
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          DEVELOPMENT_TEAM: Y9A97FXT63
+          PROVISIONING_PROFILE_SPECIFIER: "$(CUBBY_PROVISIONING_PROFILE_SPECIFIER)"
     postBuildScripts:
       # Archives only (`runOnlyWhenInstalling`): a Debug build has no dSYM to upload. Org + auth
       # come from the org token in ~/.sentryclirc — Xcode run scripts do not inherit the shell
