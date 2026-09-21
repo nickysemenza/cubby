@@ -115,7 +115,10 @@ type EntityFieldControl = Readonly<{
   width: "half" | null;
   placeholder: string | null;
   initial: "today" | null;
-  suggest: Readonly<{ basis: readonly string[] }> | null;
+  suggest: Readonly<{
+    basis: readonly string[];
+    mode: "fill" | "prune";
+  }> | null;
 }>;
 type EntityFieldProvenance = Readonly<{
   kind: "reference" | "relation" | "derived";
