@@ -24,10 +24,8 @@ as soon as the upstream range is corrected.
 - Wrangler 4.112 requires Workers Types 5 while Sentry 10.66 still declares
   Workers Types 4. Cubby uses Workers Types 5, regenerates all Worker bindings,
   and typechecks clean on TypeScript 7. The peer exception accepts only majors 4–5.
-- `@cubby/web-worker-tests` pins Vitest 4.1.10 and
-  `@cloudflare/vitest-plugin` 1.1.5. The plugin still peers on `vitest ^4.1.0`
-  and depends on its internal APIs; plugin 1.1.13's Miniflare/workerd pair
-  fails before collection with `SyntaxError: Unexpected identifier 'file'`.
+- `@cubby/web-worker-tests` pins Vitest 4.1.10 because the latest Cloudflare
+  Vitest plugin still peers on `vitest ^4.1.0` and depends on its internal APIs.
   The isolated package runs only the workerd suites; every application and
   library test suite runs Vitest 5.
 

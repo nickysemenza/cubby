@@ -3,14 +3,13 @@ import { fileURLToPath } from "node:url";
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
-const webRoot = fileURLToPath(new URL("../web", import.meta.url));
-
 /**
- * Cloudflare's latest test plugin still relies on Vitest 4 internals. Keep its
- * workerd-only harness isolated while the rest of the monorepo runs Vitest 5.
+ * Cloudflare's test plugin still relies on Vitest 4 internals. Keep this
+ * package as the resolver root so `/vitest/worker` cannot resolve the web
+ * app's Vitest 5 installation; the suites themselves remain beside the code.
  */
 export default defineConfig({
-  root: webRoot,
+  root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [
     cloudflareTest({
       wrangler: {
@@ -24,9 +23,9 @@ export default defineConfig({
   test: {
     name: "calendar-worker",
     include: [
-      "src/server/calendar/**/*.workers.test.ts",
-      "src/server/database-freshness/**/*.workers.test.ts",
-      "src/server/purchase-import/**/*.workers.test.ts",
+      "../web/src/server/calendar/**/*.workers.test.ts",
+      "../web/src/server/database-freshness/**/*.workers.test.ts",
+      "../web/src/server/purchase-import/**/*.workers.test.ts",
     ],
     testTimeout: 30_000,
     hookTimeout: 30_000,

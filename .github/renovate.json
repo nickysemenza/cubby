@@ -32,9 +32,9 @@
       "enabled": false
     },
     {
-      "description": "The isolated Worker harness stays on the last-green Cloudflare plugin and Vitest 4 pair",
+      "description": "Cloudflare's Vitest plugin uses Vitest 4 internals; only the isolated Worker harness stays on 4",
       "matchFileNames": ["apps/web-worker-tests/package.json"],
-      "matchPackageNames": ["@cloudflare/vitest-plugin", "vitest"],
+      "matchPackageNames": ["vitest"],
       "enabled": false
     },
     {
