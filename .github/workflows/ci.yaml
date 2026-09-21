@@ -324,16 +324,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Public ubuntu-latest runners have 4 vCPU; chromium runs 2
-          # Playwright workers, webkit stays at 1 (apps/web/tooling/e2e-workers.ts).
-          - lane: chromium
+          # Two Playwright workers on one runner flaked (2026-09-21,
+          # inventory-session.spec, a 15s toBeVisible timeout under
+          # CUBBY_E2E_WORKERS=2), so chromium instead shards across two
+          # runners at one worker each; webkit stays a single unsharded lane.
+          # The historical "3 shards did not beat 2" note in docs/ci.md
+          # predates today's 370s suite.
+          - lane: "chromium 1/2"
+            slug: chromium-1
             browser: chromium
             test-script: test:e2e:ci:chromium
-            workers: 2
+            shard: "1/2"
+          - lane: "chromium 2/2"
+            slug: chromium-2
+            browser: chromium
+            test-script: test:e2e:ci:chromium
+            shard: "2/2"
           - lane: webkit
+            slug: webkit
             browser: webkit
             test-script: test:e2e:ci:webkit
-            workers: 1
+            shard: "1/1"
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       PLAYWRIGHT_VERSION: "1.63.0"
@@ -341,7 +352,6 @@ jobs:
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
       CUBBY_E2E_DATABASE: postgres
-      CUBBY_E2E_WORKERS: ${{ matrix.workers }}
     # Deliberately duplicated from test-postgres above: GitHub Actions YAML
     # has no anchors and no reusable "services" construct that fits a
     # per-job block like this.
@@ -458,14 +468,58 @@ jobs:
           name: recipebridge-wasm
           path: packages/wasm
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run ${{ matrix.test-script }}
+        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }}
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-report-${{ matrix.lane }}
+          name: playwright-report-${{ matrix.slug }}
           path: apps/web/playwright-report/
           retention-days: 1
+
+  # Host `swift test` for CubbyKit's package tests; not folded into test-apple
+  # below. Measured 2026-09-21: running these on the iOS Simulator inside the
+  # build job cost about 6 minutes to boot plus ~10 minutes of CPU starvation
+  # on a hosted macOS runner's 3 cores (a 5s script took 2.6 min, the compile
+  # doubled) — the merged job took 13 min even with warm caches. Two jobs beat
+  # one.
+  test-apple-package:
+    name: Apple package tests
+    needs: scope
+    if: needs.scope.outputs.verify == 'true' && needs.scope.outputs.apple == 'true'
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-apple-ffi
+        with:
+          targets: mac
+      # SPM fetch+resolve was 53s of this job's ~5 minutes; CubbyKit's
+      # Package.resolved pins exact versions, so an exact-key cache of the
+      # checkouts and git-object cache is safe to reuse unchanged.
+      - name: Restore cached SPM checkouts
+        id: spm-checkouts
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            apps/apple/CubbyKit/.build/checkouts
+            apps/apple/CubbyKit/.build/repositories
+          key: spm-checkouts-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}
+      - name: Run CubbyKit Swift tests
+        run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+      # Saved here rather than by actions/cache's post step so a red test run
+      # still keeps the checkouts for the next attempt. A concurrent job may
+      # have saved the same key first; that 409 is harmless and must never
+      # fail the check.
+      - name: Save SPM checkouts cache
+        if: always() && steps.spm-checkouts.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            apps/apple/CubbyKit/.build/checkouts
+            apps/apple/CubbyKit/.build/repositories
+          key: spm-checkouts-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}
 
   test-apple:
     name: Apple checks
@@ -480,19 +534,9 @@ jobs:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
         id: apple-tools
-      # A hosted runner's first simulator boot took about six silent minutes
-      # between the build and the first test; start it here so it overlaps
-      # the compile. Not earlier: booting alongside the cache restores above
-      # starved them (a 40s FFI restore took 4m41s). apple-check.sh waits on
-      # bootstatus before `xcodebuild test`.
-      - name: Boot the iOS Simulator in the background
-        run: |
-          udid="$(sh scripts/apple-sim-udid.sh)"
-          xcrun simctl boot "$udid"
-          echo "CUBBY_SIM_UDID=$udid" >> "$GITHUB_ENV"
       - name: Run iOS app checks
         run: sh scripts/apple-check.sh ci
-      # Saved here rather than by actions/cache's post step so a red test run
+      # Saved here rather than by actions/cache's post step so a red build
       # still keeps the generator build and SPM clones for the next attempt.
       # A concurrent job may have saved the same key first; that 409 is
       # harmless and must never fail the check.
@@ -510,13 +554,6 @@ jobs:
         with:
           path: apps/apple/SourcePackages
           key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
-      - name: Save failed test results
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: apple-xcresult
-          path: apps/apple/DerivedData/Logs/Test/*.xcresult
-          retention-days: 3
 
   report-coverage:
     name: Report scheduled coverage

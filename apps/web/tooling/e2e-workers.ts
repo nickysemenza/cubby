@@ -13,9 +13,11 @@ export function resolveE2EWorkers(
   // Two, not three: at three the iPhone WebKit project flaked across four
   // unrelated specs whenever other sessions' gates loaded the host (2026-09-17),
   // and every run at two was clean. Each worker owns a browser, a Worker
-  // harness, and a database, so they contend for the same finite CPU. On CI
-  // (public ubuntu-latest, 4 vCPU) the workflow sets CUBBY_E2E_WORKERS
-  // explicitly per lane — 2 for chromium, 1 for webkit — so this fallback of
-  // 1 only applies if that env var is ever left unset there.
+  // harness, and a database, so they contend for the same finite CPU. CI
+  // (public ubuntu-latest, 4 vCPU) leaves CUBBY_E2E_WORKERS unset and instead
+  // runs one worker per runner, sharding chromium across two runners
+  // (--shard) rather than running multiple workers on one: CUBBY_E2E_WORKERS=2
+  // on a single runner flaked (2026-09-21, inventory-session.spec, a 15s
+  // toBeVisible timeout).
   return !env.CI && platform === "darwin" ? 2 : 1;
 }

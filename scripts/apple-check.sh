@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # Body of the former `runAppleCheck` (scripts/ci-scope.ts, deleted): native
-# formatting, package tests, OpenAPI drift, and a build or test run. Backs
+# formatting, OpenAPI drift, and a build (plus, locally, package tests). Backs
 # the `apple` Nx target (apps/apple/project.json) and `pnpm apple check`. Run
 # from the workspace root.
 #
 #   full  local default: swift test (CubbyKit package) + a generic-simulator build
 #   app   local, skips swift test: a generic-simulator build only
-#   ci    hosted `Apple checks` job: xcodebuild test on a concrete simulator,
-#         which runs CubbyKit's package tests via the Cubby-iOS scheme's local
-#         `package: CubbyKit/CubbyKitTests` test target (apps/apple/project.yml)
-#         alongside Cubby-iOS-Tests, instead of a separate `swift test` job
+#   ci    hosted `Apple checks` job: a generic-simulator build only, using the
+#         CI-cached SPM clone directory (-clonedSourcePackagesDirPath).
+#         CubbyKit's package tests run separately, on the macOS host, in the
+#         hosted `Apple package tests` job (`swift test`) — running them on
+#         the iOS Simulator inside this build job cost about 6 minutes to
+#         boot plus ~10 minutes of CPU starvation on a hosted runner
+#         (measured 2026-09-21), so they stay out of it.
 set -euo pipefail
 
 mode="${1:-full}"
@@ -57,8 +60,8 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 # --force-resolved-versions: a bare `swift test` re-resolves and rewrites
 # CubbyKit/Package.resolved (only the originHash), leaving the tree dirty
 # after every run. Pins change only via a deliberate `swift package update`.
-# `ci` mode instead runs these package tests through the Cubby-iOS scheme
-# below, so it does not need this local `swift test` pass.
+# `ci` mode skips this: hosted CI runs CubbyKit's package tests separately,
+# on the host, in the `Apple package tests` job.
 if [ "$mode" = "full" ]; then
   swift test --package-path apps/apple/CubbyKit --force-resolved-versions
 fi
@@ -80,38 +83,22 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
 fi
 
+# CI-only: reuse the SPM clone directory .github/actions/setup-apple-tools
+# cached, instead of resolving Sentry/GRDB/Nuke from scratch every run. Local
+# builds keep SPM clones inside the DerivedData `pnpm apple` also uses, so the
+# two never thrash each other.
+clone_args=()
 if [ "$mode" = "ci" ]; then
-  # `xcodebuild test` needs a resolved device id (the `app`/`full` build below
-  # uses the generic destination, which `build` accepts but `test` does not).
-  # CI boots the simulator as its first step (CUBBY_SIM_UDID, see ci.yaml)
-  # so the multi-minute first boot on a hosted runner overlaps the FFI restore
-  # and the compile instead of sitting between them; otherwise pick the booted
-  # simulator, else the first iPhone — mirrors scripts/apple.ts's `sim`.
-  udid="${CUBBY_SIM_UDID:-$(sh scripts/apple-sim-udid.sh)}"
-  xcrun simctl boot "$udid" 2>/dev/null || true
-  xcrun simctl bootstatus "$udid" -b
-
-  xcodebuild \
-    -project apps/apple/Cubby.xcodeproj \
-    -scheme Cubby-iOS \
-    -destination "platform=iOS Simulator,id=$udid" \
-    -derivedDataPath apps/apple/DerivedData \
-    -clonedSourcePackagesDirPath apps/apple/SourcePackages \
-    -skipPackagePluginValidation \
-    -skipMacroValidation \
-    -parallel-testing-enabled NO \
-    "${build_settings[@]}" \
-    test
-else
-  # No -clonedSourcePackagesDirPath here: local builds keep SPM clones inside the
-  # DerivedData `pnpm apple` also uses, so the two never thrash each other.
-  xcodebuild \
-    -project apps/apple/Cubby.xcodeproj \
-    -scheme Cubby-iOS \
-    -destination "generic/platform=iOS Simulator" \
-    -derivedDataPath apps/apple/DerivedData \
-    -skipPackagePluginValidation \
-    -skipMacroValidation \
-    "${build_settings[@]}" \
-    build
+  clone_args+=(-clonedSourcePackagesDirPath apps/apple/SourcePackages)
 fi
+
+xcodebuild \
+  -project apps/apple/Cubby.xcodeproj \
+  -scheme Cubby-iOS \
+  -destination "generic/platform=iOS Simulator" \
+  -derivedDataPath apps/apple/DerivedData \
+  "${clone_args[@]}" \
+  -skipPackagePluginValidation \
+  -skipMacroValidation \
+  "${build_settings[@]}" \
+  build
