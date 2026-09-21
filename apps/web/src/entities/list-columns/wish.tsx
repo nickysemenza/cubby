@@ -10,13 +10,13 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/app/_components/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
 } from "~/app/_components/products/product-image-summaries";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
-import { wishPriceRange } from "~/app/wishes/wish-price-range";
 import {
   buildWishRows,
   type WishRow,
@@ -215,17 +215,26 @@ export const wishListOverride = defineListOverride<
           );
           add(
             columnHelper.accessor(
-              (row) =>
-                row.kind === "wish" ? row.wish.candidates.length : null,
+              (row) => (row.kind === "wish" ? row.wish.candidateCount : null),
               {
                 id: "candidateCount",
                 header: "Options",
-                meta: {
+                meta: attachCubbyColumnMeta<WishRow>({
                   provenance: relationshipFieldProvenance("wish", "candidates"),
                   numeric: true,
                   className: "w-24",
                   mobile: { slot: "meta", priority: 20 },
-                },
+                  explanation: {
+                    resolve: (row) =>
+                      row.kind === "wish"
+                        ? {
+                            entity: "wish",
+                            field: "candidateCount",
+                            label: "Options",
+                          }
+                        : undefined,
+                  },
+                }),
                 cell: (info) => {
                   const count = info.getValue();
                   if (count === null) return null;
@@ -244,19 +253,29 @@ export const wishListOverride = defineListOverride<
             columnHelper.accessor(
               (row) => {
                 if (row.kind === "candidate") return row.candidate.price;
-                const range = wishPriceRange(row.wish.candidates);
+                const range = row.wish.priceRange;
                 return range ? rangeMidpoint(range.low, range.high) : null;
               },
               {
                 id: "priceRange",
                 header: "Price range",
-                meta: {
+                meta: attachCubbyColumnMeta<WishRow>({
                   provenance: relationshipFieldProvenance("wish", "candidates"),
                   numeric: true,
                   // Wide enough for two five-figure amounts plus the en-dash.
                   className: "w-48",
                   mobile: { slot: "trailing", priority: 20 },
-                },
+                  explanation: {
+                    resolve: (row) =>
+                      row.kind === "wish"
+                        ? {
+                            entity: "wish",
+                            field: "priceRange",
+                            label: "Price range",
+                          }
+                        : undefined,
+                  },
+                }),
                 footer: (info) => {
                   // Server sums span the whole filtered set, never the page.
                   const sums = info.table.options.meta?.serverTotals?.sums;
@@ -278,7 +297,7 @@ export const wishListOverride = defineListOverride<
                       </span>
                     );
                   }
-                  const range = wishPriceRange(row.wish.candidates);
+                  const range = row.wish.priceRange;
                   if (!range) return <NoneValue />;
                   const unpriced =
                     row.wish.candidates.length - range.pricedCount;

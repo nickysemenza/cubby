@@ -63,7 +63,7 @@ function cloneDefinition(
 
 function toDraft(definition: SmartCollectionDefinition): SmartCollectionDraft {
   return {
-    key: definition.key,
+    key: smartCollectionKey.parse(definition.key),
     name: definition.name,
     rules: definition.rules.map((rule, index) => ({
       id: `starter-${definition.key}-${index}`,

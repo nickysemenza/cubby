@@ -1177,6 +1177,47 @@
         }
       }
     },
+    "/api/v1/collection/referenceDetail": {
+      "post": {
+        "tags": [
+          "collection"
+        ],
+        "parameters": [],
+        "operationId": "collection.referenceDetail",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartCollectionReferenceInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartCollectionDetailOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/collection/set": {
       "post": {
         "tags": [
@@ -1799,6 +1840,47 @@
         }
       }
     },
+    "/api/v1/expense/confirmInventoryBeneficiary": {
+      "post": {
+        "tags": [
+          "expense"
+        ],
+        "parameters": [],
+        "operationId": "expense.confirmInventoryBeneficiary",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmInventoryExpenseBeneficiaryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmInventoryExpenseBeneficiaryOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/expense/facetCounts": {
       "post": {
         "tags": [
@@ -1823,6 +1905,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ExpenseFacetCountsOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/expense/inventoryOwnershipContext": {
+      "get": {
+        "tags": [
+          "expense"
+        ],
+        "parameters": [
+          {
+            "name": "inventoryEntryId",
+            "in": "query",
+            "description": "inventory shortcode, e.g. INV-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^INV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "expense.inventoryOwnershipContext",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseInventoryOwnershipContextOut"
                 }
               }
             }
@@ -2762,6 +2888,107 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GeneratedEntityMutationUpdateResultExpense"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fieldExplanation/explain": {
+      "get": {
+        "tags": [
+          "fieldExplanation"
+        ],
+        "parameters": [
+          {
+            "name": "entityType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "product",
+                "recipe",
+                "ingredient",
+                "cookbook",
+                "location",
+                "inventory",
+                "meal",
+                "ledgerParty",
+                "ledgerTransfer",
+                "project",
+                "task",
+                "vendor",
+                "purchase",
+                "financialAccount",
+                "financialTransaction",
+                "wish",
+                "expense",
+                "usda-food",
+                "image",
+                "planting",
+                "gardenEntry",
+                "vendorAccount"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "field",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "list",
+                "detail",
+                "summary"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "fieldExplanation.explain",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldExplanationOutput"
                 }
               }
             }
@@ -5380,6 +5607,214 @@
         }
       }
     },
+    "/api/v1/imageProcessing/correctDescription": {
+      "post": {
+        "tags": [
+          "imageProcessing"
+        ],
+        "parameters": [],
+        "operationId": "imageProcessing.correctDescription",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageDescriptionCorrectionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageDescriptionCorrectionOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imageProcessing/evaluateAppleDescription": {
+      "post": {
+        "tags": [
+          "imageProcessing"
+        ],
+        "parameters": [],
+        "operationId": "imageProcessing.evaluateAppleDescription",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateAppleImageDescriptionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluateAppleImageDescriptionOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imageProcessing/schedule": {
+      "post": {
+        "tags": [
+          "imageProcessing"
+        ],
+        "parameters": [],
+        "operationId": "imageProcessing.schedule",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleImageProcessingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleImageProcessingOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imageProcessing/status": {
+      "get": {
+        "tags": [
+          "imageProcessing"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "image shortcode, e.g. IMG-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "imageProcessing.status",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageProcessingStatusOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imageProcessing/validateCompanionMessage": {
+      "post": {
+        "tags": [
+          "imageProcessing"
+        ],
+        "parameters": [],
+        "operationId": "imageProcessing.validateCompanionMessage",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateImageProcessingCompanionMessageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateImageProcessingCompanionMessageOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/images/{id}": {
       "delete": {
         "tags": [
@@ -6926,6 +7361,47 @@
         }
       }
     },
+    "/api/v1/inventory/confirmOwnership": {
+      "post": {
+        "tags": [
+          "inventory"
+        ],
+        "parameters": [],
+        "operationId": "inventory.confirmOwnership",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmInventoryOwnershipInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryOwnershipMutationOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/inventory/findDuplicates": {
       "get": {
         "tags": [
@@ -7013,6 +7489,64 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InventoryWithLocationAndProductListOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/locationSnapshot": {
+      "get": {
+        "tags": [
+          "inventory"
+        ],
+        "parameters": [
+          {
+            "name": "locationId",
+            "in": "query",
+            "description": "location shortcode, e.g. LOC-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "placement",
+            "in": "query",
+            "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stock",
+                "installed"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "inventory.locationSnapshot",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryLocationSnapshotOut"
                 }
               }
             }
@@ -7177,6 +7711,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScanAtLocationOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/setOwnership": {
+      "post": {
+        "tags": [
+          "inventory"
+        ],
+        "parameters": [],
+        "operationId": "inventory.setOwnership",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetInventoryOwnershipInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryOwnershipMutationOut"
                 }
               }
             }
@@ -8921,6 +9496,119 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AwaitingWork"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maintenance/backfillImageProcessing": {
+      "post": {
+        "tags": [
+          "maintenance"
+        ],
+        "parameters": [],
+        "operationId": "maintenance.backfillImageProcessing",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageProcessingBatchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageProcessingBatchOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maintenance/configureImageProcessing": {
+      "post": {
+        "tags": [
+          "maintenance"
+        ],
+        "parameters": [],
+        "operationId": "maintenance.configureImageProcessing",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageProcessingSettingsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageProcessingSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maintenance/imageProcessing": {
+      "get": {
+        "tags": [
+          "maintenance"
+        ],
+        "parameters": [],
+        "operationId": "maintenance.imageProcessing",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageProcessingMaintenanceOutput"
                 }
               }
             }
@@ -20253,6 +20941,7 @@
                   "financialTransaction",
                   "wish",
                   "expense",
+                  "image",
                   "planting",
                   "gardenEntry"
                 ]
@@ -20340,6 +21029,7 @@
                   "financialTransaction",
                   "wish",
                   "expense",
+                  "image",
                   "planting",
                   "gardenEntry"
                 ]
@@ -20427,6 +21117,7 @@
                   "financialTransaction",
                   "wish",
                   "expense",
+                  "image",
                   "planting",
                   "gardenEntry"
                 ]
@@ -20514,6 +21205,7 @@
                   "financialTransaction",
                   "wish",
                   "expense",
+                  "image",
                   "planting",
                   "gardenEntry"
                 ]
@@ -20601,6 +21293,7 @@
                   "financialTransaction",
                   "wish",
                   "expense",
+                  "image",
                   "planting",
                   "gardenEntry"
                 ]
@@ -24150,10 +24843,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema275"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema275"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "subtaskCount": {
             "type": "integer",
@@ -25467,7 +26160,7 @@
             "const": "capture"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema152"
+            "$ref": "#/components/schemas/input_schema156"
           },
           "enhancedEvidence": {
             "type": "boolean"
@@ -25497,7 +26190,7 @@
             "maxLength": 200
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema152"
+            "$ref": "#/components/schemas/input_schema156"
           }
         },
         "required": [
@@ -25519,7 +26212,7 @@
             "format": "uri"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema152"
+            "$ref": "#/components/schemas/input_schema156"
           }
         },
         "required": [
@@ -26337,13 +27030,13 @@
             "type": "object",
             "properties": {
               "meals": {
-                "$ref": "#/components/schemas/output_schema58"
+                "$ref": "#/components/schemas/output_schema59"
               },
               "tasks": {
-                "$ref": "#/components/schemas/output_schema58"
+                "$ref": "#/components/schemas/output_schema59"
               },
               "all": {
-                "$ref": "#/components/schemas/output_schema58"
+                "$ref": "#/components/schemas/output_schema59"
               }
             },
             "required": [],
@@ -27236,6 +27929,29 @@
             "items": {
               "$ref": "#/components/schemas/CollectionProductPurchaseOut"
             }
+          },
+          "inventory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/InventoryShortcode"
+                },
+                "locationId": {
+                  "$ref": "#/components/schemas/LocationShortcode"
+                },
+                "amount": {
+                  "$ref": "#/components/schemas/Amount"
+                }
+              },
+              "required": [
+                "id",
+                "locationId",
+                "amount"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -27458,6 +28174,65 @@
           "high",
           "medium",
           "low"
+        ]
+      },
+      "ConfirmInventoryExpenseBeneficiaryInput": {
+        "type": "object",
+        "properties": {
+          "inventoryEntryId": {
+            "$ref": "#/components/schemas/InventoryShortcode"
+          },
+          "expenseId": {
+            "$ref": "#/components/schemas/ExpenseShortcode"
+          },
+          "evidenceFingerprint": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "inventoryEntryId",
+          "expenseId",
+          "evidenceFingerprint"
+        ]
+      },
+      "ConfirmInventoryExpenseBeneficiaryOut": {
+        "type": "object",
+        "properties": {
+          "expenseId": {
+            "$ref": "#/components/schemas/ExpenseShortcode"
+          },
+          "beneficiaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LedgerAttributionInput"
+            }
+          }
+        },
+        "required": [
+          "expenseId",
+          "beneficiaries"
+        ],
+        "additionalProperties": false
+      },
+      "ConfirmInventoryOwnershipInput": {
+        "type": "object",
+        "properties": {
+          "inventoryEntryId": {
+            "$ref": "#/components/schemas/InventoryShortcode"
+          },
+          "evidenceFingerprint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "inventoryEntryId",
+          "evidenceFingerprint"
         ]
       },
       "ConnectedAppOut": {
@@ -29869,6 +30644,9 @@
           "url": {
             "type": "string",
             "format": "uri"
+          },
+          "representations": {
+            "$ref": "#/components/schemas/ImageRepresentations"
           }
         },
         "required": [
@@ -30267,6 +31045,43 @@
         ],
         "additionalProperties": false
       },
+      "EffectiveInventoryOwnership": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/InventoryOwnershipMode"
+          },
+          "explicitOwner": {
+            "$ref": "#/components/schemas/InventoryOwner"
+          },
+          "effectiveOwner": {
+            "$ref": "#/components/schemas/InventoryOwner"
+          },
+          "source": {
+            "$ref": "#/components/schemas/InventoryOwnershipSource"
+          },
+          "basis": {
+            "type": "string",
+            "const": "Inferred from the only recorded acquisition"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/InventoryOwnershipEvidence"
+          },
+          "evidenceFingerprint": {
+            "type": "string"
+          },
+          "matchesInheritedOwner": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "source",
+          "evidenceFingerprint",
+          "matchesInheritedOwner"
+        ],
+        "additionalProperties": false
+      },
       "EmbeddedProjectScope": {
         "type": "object",
         "properties": {
@@ -30292,10 +31107,10 @@
             "type": "string"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "completionYear": {
             "type": "string",
@@ -30394,10 +31209,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema124"
+            "$ref": "#/components/schemas/output_schema132"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -30617,6 +31432,9 @@
       "EntityAttachmentRead": {
         "type": "object",
         "properties": {
+          "representations": {
+            "$ref": "#/components/schemas/OptionalImageRepresentations"
+          },
           "id": {
             "$ref": "#/components/schemas/ImageShortcode"
           },
@@ -30675,6 +31493,9 @@
           "storageStatus": {
             "$ref": "#/components/schemas/ImageStorageStatus"
           },
+          "useOriginal": {
+            "type": "boolean"
+          },
           "verifiedAt": {
             "type": [
               "string",
@@ -30714,6 +31535,7 @@
           "height",
           "detectedContentType",
           "sha256",
+          "useOriginal",
           "verifiedAt",
           "createdAt",
           "updatedAt",
@@ -31607,10 +32429,10 @@
                 "minLength": 1
               },
               "itemSchema": {
-                "$ref": "#/components/schemas/output_schema83"
+                "$ref": "#/components/schemas/output_schema84"
               },
               "adapter": {
-                "$ref": "#/components/schemas/output_schema83"
+                "$ref": "#/components/schemas/output_schema84"
               },
               "audiences": {
                 "minItems": 1,
@@ -31927,6 +32749,34 @@
         "required": [
           "candidates",
           "hiddenCovered"
+        ],
+        "additionalProperties": false
+      },
+      "EvaluateAppleImageDescriptionInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "EvaluateAppleImageDescriptionOutput": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "jobId"
         ],
         "additionalProperties": false
       },
@@ -32270,10 +33120,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema301"
+                "$ref": "#/components/schemas/output_schema315"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema301"
+                "$ref": "#/components/schemas/output_schema315"
               }
             },
             "required": [
@@ -32286,19 +33136,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema301"
+                "$ref": "#/components/schemas/output_schema315"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema301"
+                    "$ref": "#/components/schemas/output_schema315"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema301"
+                    "$ref": "#/components/schemas/output_schema315"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema301"
+                    "$ref": "#/components/schemas/output_schema315"
                   }
                 },
                 "required": [
@@ -32612,10 +33462,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema304"
+            "$ref": "#/components/schemas/output_schema318"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema305"
+            "$ref": "#/components/schemas/output_schema319"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -32720,7 +33570,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -32841,16 +33691,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "financialTransactionId": {
             "anyOf": [
@@ -32965,12 +33815,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema121"
+                "$ref": "#/components/schemas/input_schema125"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema121"
+                  "$ref": "#/components/schemas/input_schema125"
                 }
               }
             ]
@@ -33001,12 +33851,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema124"
+                "$ref": "#/components/schemas/input_schema128"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema124"
+                  "$ref": "#/components/schemas/input_schema128"
                 }
               }
             ]
@@ -33065,12 +33915,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema128"
+                "$ref": "#/components/schemas/input_schema132"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema128"
+                  "$ref": "#/components/schemas/input_schema132"
                 }
               }
             ]
@@ -33079,6 +33929,29 @@
             "$ref": "#/components/schemas/EmbeddedProjectScope"
           }
         }
+      },
+      "ExpenseInventoryOwnershipContextOut": {
+        "type": "object",
+        "properties": {
+          "inventoryEntryId": {
+            "$ref": "#/components/schemas/InventoryShortcode"
+          },
+          "effectiveOwnership": {
+            "$ref": "#/components/schemas/EffectiveInventoryOwnership"
+          },
+          "suggestedBeneficiaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LedgerAttributionInput"
+            }
+          }
+        },
+        "required": [
+          "inventoryEntryId",
+          "effectiveOwnership",
+          "suggestedBeneficiaries"
+        ],
+        "additionalProperties": false
       },
       "ExpenseLineBasis": {
         "type": "string",
@@ -33117,10 +33990,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema304"
+            "$ref": "#/components/schemas/output_schema318"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema305"
+            "$ref": "#/components/schemas/output_schema319"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -33329,10 +34202,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema304"
+            "$ref": "#/components/schemas/output_schema318"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema305"
+            "$ref": "#/components/schemas/output_schema319"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -33950,6 +34823,125 @@
           "id"
         ]
       },
+      "FieldExplanationOutput": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "$ref": "#/components/schemas/EntityRef"
+          },
+          "field": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "evaluatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "rule": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision",
+              "description"
+            ],
+            "additionalProperties": false
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldExplanationSource"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "evidenceFingerprint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "confirmOwner",
+                    "inheritOwner",
+                    "editSource"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "target": {
+                  "$ref": "#/components/schemas/EntityRef"
+                }
+              },
+              "required": [
+                "kind",
+                "label",
+                "target"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "subject",
+          "field",
+          "label",
+          "value",
+          "evaluatedAt",
+          "rule",
+          "sources",
+          "truncated",
+          "evidenceFingerprint",
+          "actions"
+        ],
+        "additionalProperties": false
+      },
+      "FieldExplanationSource": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "entity": {
+            "$ref": "#/components/schemas/EntityRef"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "additionalProperties": false
+      },
       "FilterOptionEntity": {
         "$ref": "#/components/schemas/Entity"
       },
@@ -33999,7 +34991,7 @@
                 "pattern": "^\\d+$"
               },
               "selectedIds": {
-                "$ref": "#/components/schemas/input_schema32"
+                "$ref": "#/components/schemas/input_schema34"
               },
               "limit": {
                 "default": 25,
@@ -34032,7 +35024,7 @@
                 "pattern": "^\\d+$"
               },
               "selectedIds": {
-                "$ref": "#/components/schemas/input_schema32"
+                "$ref": "#/components/schemas/input_schema34"
               },
               "limit": {
                 "default": 25,
@@ -34099,6 +35091,10 @@
             "$ref": "#/components/schemas/LedgerPartyShortcode",
             "default": null
           },
+          "inventoryOwnerDefaultEnabled": {
+            "default": false,
+            "type": "boolean"
+          },
           "notes": {
             "default": null,
             "type": [
@@ -34134,6 +35130,9 @@
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
           },
+          "inventoryOwnerDefaultEnabled": {
+            "type": "boolean"
+          },
           "notes": {
             "type": [
               "string",
@@ -34165,7 +35164,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -34174,6 +35173,7 @@
           "identity",
           "provisional",
           "sourceAliases",
+          "inventoryOwnerDefaultEnabled",
           "notes",
           "ledgerPartyName",
           "transactionCount",
@@ -34514,6 +35514,9 @@
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
           },
+          "inventoryOwnerDefaultEnabled": {
+            "type": "boolean"
+          },
           "notes": {
             "type": [
               "string",
@@ -34551,6 +35554,7 @@
           "identity",
           "provisional",
           "sourceAliases",
+          "inventoryOwnerDefaultEnabled",
           "notes",
           "ledgerPartyName",
           "transactionCount",
@@ -34626,6 +35630,9 @@
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
           },
+          "inventoryOwnerDefaultEnabled": {
+            "type": "boolean"
+          },
           "notes": {
             "type": [
               "string",
@@ -34660,6 +35667,7 @@
           "identity",
           "provisional",
           "sourceAliases",
+          "inventoryOwnerDefaultEnabled",
           "notes",
           "ledgerPartyName",
           "transactionCount",
@@ -34755,6 +35763,9 @@
           },
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "inventoryOwnerDefaultEnabled": {
+            "type": "boolean"
           },
           "notes": {
             "type": [
@@ -35118,7 +36129,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -35738,7 +36749,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "plantingIds": {
-            "$ref": "#/components/schemas/output_schema113"
+            "$ref": "#/components/schemas/output_schema117"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -35770,7 +36781,7 @@
             "type": "string"
           },
           "plantings": {
-            "$ref": "#/components/schemas/output_schema118"
+            "$ref": "#/components/schemas/output_schema122"
           },
           "createdAt": {
             "type": "string",
@@ -35786,7 +36797,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -35825,7 +36836,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "plantingIds": {
-            "$ref": "#/components/schemas/output_schema113"
+            "$ref": "#/components/schemas/output_schema117"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -35857,7 +36868,7 @@
             "type": "string"
           },
           "plantings": {
-            "$ref": "#/components/schemas/output_schema118"
+            "$ref": "#/components/schemas/output_schema122"
           },
           "createdAt": {
             "type": "string",
@@ -35920,7 +36931,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "plantingIds": {
-            "$ref": "#/components/schemas/output_schema113"
+            "$ref": "#/components/schemas/output_schema117"
           },
           "kind": {
             "$ref": "#/components/schemas/GardenEntryKind"
@@ -35952,7 +36963,7 @@
             "type": "string"
           },
           "plantings": {
-            "$ref": "#/components/schemas/output_schema118"
+            "$ref": "#/components/schemas/output_schema122"
           },
           "createdAt": {
             "type": "string",
@@ -37152,10 +38163,10 @@
             "type": "object",
             "properties": {
               "confirmed": {
-                "$ref": "#/components/schemas/output_schema206"
+                "$ref": "#/components/schemas/output_schema215"
               },
               "projected": {
-                "$ref": "#/components/schemas/output_schema206"
+                "$ref": "#/components/schemas/output_schema215"
               }
             },
             "required": [
@@ -37622,14 +38633,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema41"
+                "$ref": "#/components/schemas/input_schema44"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema41"
+                  "$ref": "#/components/schemas/input_schema44"
                 }
               }
             ]
@@ -37639,7 +38650,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema42"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "groupBy": {
             "type": "string",
@@ -37688,6 +38699,233 @@
         "required": [
           "id",
           "data"
+        ]
+      },
+      "ImageCutoutEligibility": {
+        "type": "string",
+        "enum": [
+          "eligible",
+          "ineligible",
+          "review"
+        ]
+      },
+      "ImageDerivativeStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "ready",
+          "skipped",
+          "failed",
+          "abandoned"
+        ]
+      },
+      "ImageDescriptionAnalysis": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "promptRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "resultSchemaRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "inputFingerprint": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ImageDescriptionResult"
+          },
+          "runtime": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "preferred": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "promptRevision",
+          "resultSchemaRevision",
+          "inputFingerprint",
+          "result",
+          "runtime",
+          "createdAt",
+          "preferred"
+        ],
+        "additionalProperties": false
+      },
+      "ImageDescriptionClaim": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "evidenceKind": {
+            "type": "string",
+            "enum": [
+              "label",
+              "ocr",
+              "visual"
+            ]
+          },
+          "imageId": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          }
+        },
+        "required": [
+          "text",
+          "evidenceKind"
+        ],
+        "additionalProperties": false
+      },
+      "ImageDescriptionClaimInput": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "evidenceKind": {
+            "type": "string",
+            "enum": [
+              "label",
+              "ocr",
+              "visual"
+            ]
+          },
+          "imageId": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          }
+        },
+        "required": [
+          "text",
+          "evidenceKind"
+        ]
+      },
+      "ImageDescriptionCorrection": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "confirmedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "description",
+          "confirmedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ImageDescriptionCorrectionInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "id",
+          "description"
+        ]
+      },
+      "ImageDescriptionCorrectionOutput": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "saved"
+        ],
+        "additionalProperties": false
+      },
+      "ImageDescriptionResult": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "cutoutEligibility": {
+            "$ref": "#/components/schemas/ImageCutoutEligibility"
+          },
+          "claims": {
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageDescriptionClaim"
+            }
+          }
+        },
+        "required": [
+          "description",
+          "cutoutEligibility",
+          "claims"
+        ],
+        "additionalProperties": false
+      },
+      "ImageDescriptionResultInput": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "cutoutEligibility": {
+            "$ref": "#/components/schemas/ImageCutoutEligibility"
+          },
+          "claims": {
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageDescriptionClaimInput"
+            }
+          }
+        },
+        "required": [
+          "description",
+          "cutoutEligibility",
+          "claims"
         ]
       },
       "ImageHashIndex": {
@@ -37779,16 +39017,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "nameFilter": {
             "type": "string",
@@ -37796,7 +39034,10 @@
           },
           "status": {
             "description": "Filter by upload status",
-            "$ref": "#/components/schemas/input_schema39"
+            "$ref": "#/components/schemas/input_schema41"
+          },
+          "processingIssue": {
+            "$ref": "#/components/schemas/ImageProcessingIssueFilter"
           },
           "referencePresenceFilter": {
             "type": "string",
@@ -37817,6 +39058,9 @@
       "ImageOut": {
         "type": "object",
         "properties": {
+          "representations": {
+            "$ref": "#/components/schemas/OptionalImageRepresentations"
+          },
           "id": {
             "$ref": "#/components/schemas/ImageShortcode"
           },
@@ -37875,6 +39119,9 @@
           "storageStatus": {
             "$ref": "#/components/schemas/ImageStorageStatus"
           },
+          "useOriginal": {
+            "type": "boolean"
+          },
           "verifiedAt": {
             "type": [
               "string",
@@ -37906,9 +39153,769 @@
           "height",
           "detectedContentType",
           "sha256",
+          "useOriginal",
           "verifiedAt",
           "createdAt",
           "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingBatchInput": {
+        "type": "object",
+        "properties": {
+          "batchSize": {
+            "default": 25,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "retryFailures": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "ImageProcessingBatchOutput": {
+        "type": "object",
+        "properties": {
+          "scheduled": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scheduled",
+          "paused"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingCapabilities": {
+        "type": "object",
+        "properties": {
+          "visionSubjectLift": {
+            "type": "object",
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "revision": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "actualImageDescription": {
+            "type": "object",
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "revision": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "foreground": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "visionSubjectLift",
+          "actualImageDescription",
+          "foreground"
+        ]
+      },
+      "ImageProcessingClientMessage": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ImageProcessingHello"
+          },
+          {
+            "$ref": "#/components/schemas/ImageProcessingClientMessageResult"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "hello": "#/components/schemas/ImageProcessingHello",
+            "result": "#/components/schemas/ImageProcessingClientMessageResult"
+          }
+        }
+      },
+      "ImageProcessingClientMessageResult": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "result"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ImageProcessingResult"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "result"
+        ]
+      },
+      "ImageProcessingCommand": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ImageProcessingCommandSubjectLift"
+          },
+          {
+            "$ref": "#/components/schemas/ImageProcessingCommandDescribeImage"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "subject_lift": "#/components/schemas/ImageProcessingCommandSubjectLift",
+            "describe_image": "#/components/schemas/ImageProcessingCommandDescribeImage"
+          }
+        }
+      },
+      "ImageProcessingCommandDescribeImage": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "attemptId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImageProcessingSource"
+          },
+          "kind": {
+            "type": "string",
+            "const": "describe_image"
+          },
+          "promptRevision": {
+            "type": "integer",
+            "const": 1
+          },
+          "resultSchemaRevision": {
+            "type": "integer",
+            "const": 1
+          }
+        },
+        "required": [
+          "jobId",
+          "attemptId",
+          "deadline",
+          "source",
+          "kind",
+          "promptRevision",
+          "resultSchemaRevision"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingCommandSubjectLift": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "attemptId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImageProcessingSource"
+          },
+          "kind": {
+            "type": "string",
+            "const": "subject_lift"
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "uploadUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "contentType": {
+                "type": "string",
+                "const": "image/png"
+              }
+            },
+            "required": [
+              "key",
+              "uploadUrl",
+              "contentType"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "jobId",
+          "attemptId",
+          "deadline",
+          "source",
+          "kind",
+          "output"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingCompletedOutcome": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ImageProcessingCompletedOutcomeSubjectLift"
+          },
+          {
+            "$ref": "#/components/schemas/ImageProcessingCompletedOutcomeDescribeImage"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "subject_lift": "#/components/schemas/ImageProcessingCompletedOutcomeSubjectLift",
+            "describe_image": "#/components/schemas/ImageProcessingCompletedOutcomeDescribeImage"
+          }
+        }
+      },
+      "ImageProcessingCompletedOutcomeDescribeImage": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "describe_image"
+          },
+          "status": {
+            "type": "string",
+            "const": "completed"
+          },
+          "description": {
+            "$ref": "#/components/schemas/ImageDescriptionResultInput"
+          },
+          "runtime": {
+            "type": "object",
+            "properties": {
+              "platform": {
+                "type": "string",
+                "enum": [
+                  "cloud",
+                  "macos",
+                  "ios"
+                ]
+              },
+              "osVersion": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "model": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "platform"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "description",
+          "runtime"
+        ]
+      },
+      "ImageProcessingCompletedOutcomeSubjectLift": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "subject_lift"
+          },
+          "status": {
+            "type": "string",
+            "const": "completed"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "contentType": {
+            "type": "string",
+            "const": "image/png"
+          },
+          "width": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "height": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "sha256",
+          "contentType",
+          "width",
+          "height"
+        ]
+      },
+      "ImageProcessingFailedOutcome": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ImageProcessingJobKind"
+          },
+          "status": {
+            "type": "string",
+            "const": "failed"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "retryable",
+          "reason"
+        ]
+      },
+      "ImageProcessingHello": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "hello"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "macos",
+              "ios"
+            ]
+          },
+          "appVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ImageProcessingCapabilities"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "deviceId",
+          "platform",
+          "appVersion",
+          "capabilities"
+        ]
+      },
+      "ImageProcessingIssue": {
+        "type": "string",
+        "enum": [
+          "failed",
+          "review_needed"
+        ]
+      },
+      "ImageProcessingIssueFilter": {
+        "description": "Filter to images whose current processing failed or needs eligibility review.",
+        "$ref": "#/components/schemas/input_schema42"
+      },
+      "ImageProcessingJobKind": {
+        "type": "string",
+        "enum": [
+          "subject_lift",
+          "describe_image"
+        ]
+      },
+      "ImageProcessingJobState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "waiting_for_device",
+          "leased",
+          "ready",
+          "skipped",
+          "failed"
+        ]
+      },
+      "ImageProcessingMaintenanceCounts": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "waiting": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reviewNeeded": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "remaining": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "current",
+          "pending",
+          "waiting",
+          "skipped",
+          "failed",
+          "reviewNeeded",
+          "remaining"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingMaintenanceOutput": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/ImageProcessingSettings"
+          },
+          "description": {
+            "$ref": "#/components/schemas/ImageProcessingMaintenanceCounts"
+          },
+          "cutout": {
+            "$ref": "#/components/schemas/ImageProcessingMaintenanceCounts"
+          }
+        },
+        "required": [
+          "settings",
+          "description",
+          "cutout"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingProblem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "processingIssue": {
+            "$ref": "#/components/schemas/ImageProcessingIssue"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "processingIssue"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingResult": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "attemptId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageProcessingCompletedOutcome"
+              },
+              {
+                "$ref": "#/components/schemas/ImageProcessingSkippedOutcome"
+              },
+              {
+                "$ref": "#/components/schemas/ImageProcessingFailedOutcome"
+              }
+            ]
+          }
+        },
+        "required": [
+          "jobId",
+          "attemptId",
+          "completedAt",
+          "outcome"
+        ]
+      },
+      "ImageProcessingServerMessage": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ImageProcessingServerMessageCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ImageProcessingServerMessageAcknowledge"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "command": "#/components/schemas/ImageProcessingServerMessageCommand",
+            "acknowledge": "#/components/schemas/ImageProcessingServerMessageAcknowledge"
+          }
+        }
+      },
+      "ImageProcessingServerMessageAcknowledge": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "acknowledge"
+          },
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "attemptId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "jobId",
+          "attemptId"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingServerMessageCommand": {
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "command"
+          },
+          "command": {
+            "$ref": "#/components/schemas/ImageProcessingCommand"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "type",
+          "command"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingSettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "paused"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingSettingsInput": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "paused"
+        ]
+      },
+      "ImageProcessingSkippedOutcome": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ImageProcessingJobKind"
+          },
+          "status": {
+            "type": "string",
+            "const": "skipped"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "no_subject",
+              "not_suitable",
+              "unsupported_format"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "reason"
+        ]
+      },
+      "ImageProcessingSource": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/heic",
+              "image/heif"
+            ]
+          }
+        },
+        "required": [
+          "url",
+          "sha256",
+          "contentType"
+        ],
+        "additionalProperties": false
+      },
+      "ImageProcessingStatus": {
+        "type": "object",
+        "properties": {
+          "cutout": {
+            "$ref": "#/components/schemas/ImageDerivativeStatus"
+          },
+          "description": {
+            "$ref": "#/components/schemas/ImageProcessingJobState"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "ImageProcessingStatusOutput": {
+        "type": "object",
+        "properties": {
+          "representations": {
+            "$ref": "#/components/schemas/ImageRepresentations"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ImageProcessingStatus"
+          },
+          "analyses": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageDescriptionAnalysis"
+            }
+          },
+          "correction": {
+            "$ref": "#/components/schemas/ImageDescriptionCorrection"
+          }
+        },
+        "required": [
+          "representations",
+          "status",
+          "analyses"
         ],
         "additionalProperties": false
       },
@@ -38081,6 +40088,40 @@
           "failed"
         ]
       },
+      "ImageRepresentations": {
+        "type": "object",
+        "properties": {
+          "original": {
+            "type": "string",
+            "format": "uri"
+          },
+          "transparent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "preferred": {
+            "type": "string",
+            "format": "uri"
+          },
+          "preferredKind": {
+            "type": "string",
+            "enum": [
+              "original",
+              "transparent"
+            ]
+          }
+        },
+        "required": [
+          "original",
+          "transparent",
+          "preferred",
+          "preferredKind"
+        ],
+        "additionalProperties": false
+      },
       "ImageShortcode": {
         "type": "string",
         "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
@@ -38143,6 +40184,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 255
+          },
+          "useOriginal": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -38155,6 +40199,9 @@
           "url": {
             "type": "string",
             "format": "uri"
+          },
+          "representations": {
+            "$ref": "#/components/schemas/OptionalImageRepresentations"
           }
         },
         "required": [
@@ -38223,6 +40270,12 @@
           "storageStatus": {
             "$ref": "#/components/schemas/ImageStorageStatus"
           },
+          "useOriginal": {
+            "type": "boolean"
+          },
+          "representations": {
+            "$ref": "#/components/schemas/OptionalImageRepresentations"
+          },
           "verifiedAt": {
             "type": [
               "string",
@@ -38258,6 +40311,9 @@
             "items": {
               "$ref": "#/components/schemas/ImageAssociation"
             }
+          },
+          "processingIssue": {
+            "$ref": "#/components/schemas/ImageProcessingIssue"
           }
         },
         "required": [
@@ -38272,6 +40328,7 @@
           "height",
           "detectedContentType",
           "sha256",
+          "useOriginal",
           "verifiedAt",
           "createdAt",
           "updatedAt",
@@ -38666,10 +40723,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema156"
+            "$ref": "#/components/schemas/output_schema165"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -38714,10 +40771,10 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "children": {
-            "$ref": "#/components/schemas/output_schema181"
+            "$ref": "#/components/schemas/output_schema190"
           },
           "parent": {
-            "$ref": "#/components/schemas/output_schema182"
+            "$ref": "#/components/schemas/output_schema191"
           },
           "childCount": {
             "type": "integer",
@@ -38735,7 +40792,7 @@
             "maximum": 9007199254740991
           },
           "inventoryItems": {
-            "$ref": "#/components/schemas/output_schema186"
+            "$ref": "#/components/schemas/output_schema195"
           }
         },
         "required": [
@@ -39003,10 +41060,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema124"
+            "$ref": "#/components/schemas/output_schema132"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -39083,19 +41140,19 @@
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
           "recipeUsages": {
-            "$ref": "#/components/schemas/output_schema143"
+            "$ref": "#/components/schemas/output_schema151"
           },
           "appearsInRecipes": {
-            "$ref": "#/components/schemas/output_schema144"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "product": {
-            "$ref": "#/components/schemas/output_schema145"
+            "$ref": "#/components/schemas/output_schema153"
           },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -39136,10 +41193,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema124"
+            "$ref": "#/components/schemas/output_schema132"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -39409,10 +41466,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema124"
+            "$ref": "#/components/schemas/output_schema132"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -39632,7 +41689,7 @@
           },
           "aliases": {
             "description": "New aliases (replaces existing list)",
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           }
         }
       },
@@ -39689,10 +41746,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema124"
+            "$ref": "#/components/schemas/output_schema132"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -39797,10 +41854,10 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema124"
+            "$ref": "#/components/schemas/output_schema132"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -39877,13 +41934,13 @@
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
           "recipeUsages": {
-            "$ref": "#/components/schemas/output_schema143"
+            "$ref": "#/components/schemas/output_schema151"
           },
           "appearsInRecipes": {
-            "$ref": "#/components/schemas/output_schema144"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "product": {
-            "$ref": "#/components/schemas/output_schema145"
+            "$ref": "#/components/schemas/output_schema153"
           }
         },
         "required": [
@@ -39938,10 +41995,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema124"
+                "$ref": "#/components/schemas/output_schema132"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema124"
+                "$ref": "#/components/schemas/output_schema132"
               }
             },
             "required": [
@@ -39987,7 +42044,7 @@
             "maximum": 52428800
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema48"
           },
           "contentType": {
             "type": "string",
@@ -40018,7 +42075,7 @@
             "maximum": 52428800
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema48"
           },
           "contentType": {
             "type": "string",
@@ -40084,7 +42141,7 @@
         ],
         "additionalProperties": false
       },
-      "input_schema104": {
+      "input_schema108": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -40098,7 +42155,7 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema112": {
+      "input_schema116": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -40138,7 +42195,7 @@
           }
         }
       },
-      "input_schema121": {
+      "input_schema125": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -40152,7 +42209,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema124": {
+      "input_schema128": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -40166,7 +42223,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema128": {
+      "input_schema132": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -40180,7 +42237,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema141": {
+      "input_schema145": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -40197,7 +42254,7 @@
           }
         }
       },
-      "input_schema142": {
+      "input_schema146": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -40211,7 +42268,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema152": {
+      "input_schema156": {
         "minItems": 1,
         "maxItems": 20,
         "type": "array",
@@ -40221,7 +42278,7 @@
           "maxLength": 253
         }
       },
-      "input_schema160": {
+      "input_schema164": {
         "type": "object",
         "properties": {
           "kind": {
@@ -40237,7 +42294,7 @@
           "value"
         ]
       },
-      "input_schema164": {
+      "input_schema168": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -40261,7 +42318,7 @@
           }
         }
       },
-      "input_schema165": {
+      "input_schema169": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -40285,7 +42342,7 @@
           }
         }
       },
-      "input_schema32": {
+      "input_schema34": {
         "default": [],
         "maxItems": 50,
         "type": "array",
@@ -40294,10 +42351,10 @@
           "minLength": 1
         }
       },
-      "input_schema36": {
+      "input_schema38": {
         "$ref": "#/components/schemas/PlainDate"
       },
-      "input_schema39": {
+      "input_schema41": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ImageStatus"
@@ -40310,7 +42367,20 @@
           }
         ]
       },
-      "input_schema41": {
+      "input_schema42": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ImageProcessingIssue"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageProcessingIssue"
+            }
+          }
+        ]
+      },
+      "input_schema44": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -40334,7 +42404,7 @@
           }
         }
       },
-      "input_schema42": {
+      "input_schema45": {
         "type": "object",
         "properties": {
           "pageIndex": {
@@ -40351,22 +42421,22 @@
           }
         }
       },
-      "input_schema45": {
+      "input_schema48": {
         "$ref": "#/components/schemas/EntityImage"
       },
-      "input_schema49": {
+      "input_schema53": {
         "type": "array",
         "items": {
           "type": "string"
         }
       },
-      "input_schema59": {
+      "input_schema63": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageShortcode"
         }
       },
-      "input_schema63": {
+      "input_schema67": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -40380,7 +42450,7 @@
         "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "product shortcode, e.g. PRD-4K7M"
       },
-      "input_schema65": {
+      "input_schema69": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/LocationShortcode"
@@ -40394,10 +42464,10 @@
         "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "location shortcode, e.g. LOC-4K7M"
       },
-      "input_schema76": {
+      "input_schema80": {
         "$ref": "#/components/schemas/MealFoodEntryId"
       },
-      "input_schema93": {
+      "input_schema97": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductCategory"
@@ -40410,7 +42480,7 @@
           }
         ]
       },
-      "input_schema95": {
+      "input_schema99": {
         "anyOf": [
           {
             "type": "string"
@@ -40639,6 +42709,9 @@
                 "placement": {
                   "description": "Defaults to 'stock'; pass 'installed' for a fixed fixture.",
                   "$ref": "#/components/schemas/InventoryPlacement"
+                },
+                "ownership": {
+                  "$ref": "#/components/schemas/InventoryOwnershipSelection"
                 }
               },
               "required": [
@@ -40769,6 +42842,9 @@
                 },
                 "amount": {
                   "$ref": "#/components/schemas/PositiveAmountInput"
+                },
+                "ownership": {
+                  "$ref": "#/components/schemas/InventoryOwnershipSelection"
                 }
               },
               "required": [
@@ -40782,6 +42858,10 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "snapshotToken": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -40804,6 +42884,14 @@
           "placement": {
             "description": "Defaults to 'stock'; pass 'installed' for a fixed fixture.",
             "$ref": "#/components/schemas/InventoryPlacement"
+          },
+          "ownershipMode": {
+            "default": "inherit",
+            "$ref": "#/components/schemas/InventoryOwnershipMode"
+          },
+          "ownerLedgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode",
+            "default": null
           }
         },
         "required": [
@@ -40819,7 +42907,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -40834,7 +42922,16 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema150"
+            "$ref": "#/components/schemas/output_schema158"
+          },
+          "ownershipMode": {
+            "$ref": "#/components/schemas/InventoryOwnershipMode"
+          },
+          "ownerLedgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "effectiveOwnership": {
+            "$ref": "#/components/schemas/EffectiveInventoryOwnership"
           },
           "createdAt": {
             "type": "string",
@@ -40859,7 +42956,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -40867,6 +42964,8 @@
           "amount",
           "verifiedAt",
           "placement",
+          "ownershipMode",
+          "effectiveOwnership",
           "createdAt",
           "updatedAt",
           "product",
@@ -40985,7 +43084,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -41000,7 +43099,16 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema150"
+            "$ref": "#/components/schemas/output_schema158"
+          },
+          "ownershipMode": {
+            "$ref": "#/components/schemas/InventoryOwnershipMode"
+          },
+          "ownerLedgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "effectiveOwnership": {
+            "$ref": "#/components/schemas/EffectiveInventoryOwnership"
           },
           "createdAt": {
             "type": "string",
@@ -41018,6 +43126,8 @@
           "amount",
           "verifiedAt",
           "placement",
+          "ownershipMode",
+          "effectiveOwnership",
           "createdAt",
           "updatedAt"
         ],
@@ -41030,7 +43140,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -41045,7 +43155,16 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema150"
+            "$ref": "#/components/schemas/output_schema158"
+          },
+          "ownershipMode": {
+            "$ref": "#/components/schemas/InventoryOwnershipMode"
+          },
+          "ownerLedgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "effectiveOwnership": {
+            "$ref": "#/components/schemas/EffectiveInventoryOwnership"
           },
           "createdAt": {
             "type": "string",
@@ -41075,6 +43194,8 @@
           "amount",
           "verifiedAt",
           "placement",
+          "ownershipMode",
+          "effectiveOwnership",
           "createdAt",
           "updatedAt",
           "displayImages",
@@ -41176,6 +43297,169 @@
           "usdaUnavailable"
         ],
         "additionalProperties": false
+      },
+      "InventoryLocationSnapshotOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "$ref": "#/components/schemas/InventoryWithLocationAndProductListOut"
+          },
+          "snapshotToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "items",
+          "snapshotToken"
+        ],
+        "additionalProperties": false
+      },
+      "InventoryOwner": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "member",
+              "guest"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "InventoryOwnershipEvidence": {
+        "type": "object",
+        "properties": {
+          "purchaseId": {
+            "$ref": "#/components/schemas/PurchaseShortcode"
+          },
+          "expenseIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExpenseShortcode"
+            }
+          },
+          "acquisitionKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "expenseIds",
+          "acquisitionKey"
+        ],
+        "additionalProperties": false
+      },
+      "InventoryOwnershipMode": {
+        "type": "string",
+        "enum": [
+          "inherit",
+          "person",
+          "unassigned"
+        ]
+      },
+      "InventoryOwnershipMutationOut": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InventoryShortcode"
+            }
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "additionalProperties": false
+      },
+      "InventoryOwnershipSelection": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/InventoryOwnershipSelectionInherit"
+          },
+          {
+            "$ref": "#/components/schemas/InventoryOwnershipSelectionUnassigned"
+          },
+          {
+            "$ref": "#/components/schemas/InventoryOwnershipSelectionPerson"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "mode",
+          "mapping": {
+            "inherit": "#/components/schemas/InventoryOwnershipSelectionInherit",
+            "unassigned": "#/components/schemas/InventoryOwnershipSelectionUnassigned",
+            "person": "#/components/schemas/InventoryOwnershipSelectionPerson"
+          }
+        }
+      },
+      "InventoryOwnershipSelectionInherit": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "inherit"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "description": "Always null on the wire: ownerId."
+      },
+      "InventoryOwnershipSelectionPerson": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "person"
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          }
+        },
+        "required": [
+          "mode",
+          "ownerId"
+        ]
+      },
+      "InventoryOwnershipSelectionUnassigned": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "unassigned"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "description": "Always null on the wire: ownerId."
+      },
+      "InventoryOwnershipSource": {
+        "type": "string",
+        "enum": [
+          "explicit",
+          "unassigned",
+          "inherited_beneficiary",
+          "inherited_vendor_account",
+          "inherited_payment_account",
+          "unresolved"
+        ]
       },
       "InventoryPlacement": {
         "type": "string",
@@ -41329,6 +43613,12 @@
           "placement": {
             "description": "Flip between movable stock and a fixed installation. Installing something does not move it — the row keeps its location, it just stops being counted.",
             "$ref": "#/components/schemas/InventoryPlacement"
+          },
+          "ownershipMode": {
+            "$ref": "#/components/schemas/InventoryOwnershipMode"
+          },
+          "ownerLedgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
           }
         }
       },
@@ -41361,7 +43651,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema146"
+            "$ref": "#/components/schemas/output_schema154"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -41376,7 +43666,16 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema150"
+            "$ref": "#/components/schemas/output_schema158"
+          },
+          "ownershipMode": {
+            "$ref": "#/components/schemas/InventoryOwnershipMode"
+          },
+          "ownerLedgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "effectiveOwnership": {
+            "$ref": "#/components/schemas/EffectiveInventoryOwnership"
           },
           "createdAt": {
             "type": "string",
@@ -41403,6 +43702,8 @@
           "amount",
           "verifiedAt",
           "placement",
+          "ownershipMode",
+          "effectiveOwnership",
           "createdAt",
           "updatedAt",
           "product",
@@ -41759,7 +44060,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -42299,7 +44600,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema178"
+            "$ref": "#/components/schemas/output_schema187"
           },
           "createdAt": {
             "type": "string",
@@ -42315,7 +44616,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -42381,7 +44682,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema178"
+            "$ref": "#/components/schemas/output_schema187"
           },
           "createdAt": {
             "type": "string",
@@ -42471,7 +44772,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema178"
+            "$ref": "#/components/schemas/output_schema187"
           },
           "createdAt": {
             "type": "string",
@@ -42707,14 +45008,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema164"
+                "$ref": "#/components/schemas/input_schema168"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema164"
+                  "$ref": "#/components/schemas/input_schema168"
                 }
               }
             ]
@@ -42724,7 +45025,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema42"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "groupBy": {
             "type": "string",
@@ -42801,10 +45102,10 @@
           "aliases": {
             "default": [],
             "description": "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -42823,7 +45124,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema59"
+            "$ref": "#/components/schemas/input_schema63"
           }
         },
         "required": [
@@ -42841,10 +45142,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema156"
+            "$ref": "#/components/schemas/output_schema165"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -42889,10 +45190,10 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "children": {
-            "$ref": "#/components/schemas/output_schema181"
+            "$ref": "#/components/schemas/output_schema190"
           },
           "parent": {
-            "$ref": "#/components/schemas/output_schema182"
+            "$ref": "#/components/schemas/output_schema191"
           },
           "childCount": {
             "type": "integer",
@@ -42910,13 +45211,13 @@
             "maximum": 9007199254740991
           },
           "inventoryItems": {
-            "$ref": "#/components/schemas/output_schema186"
+            "$ref": "#/components/schemas/output_schema195"
           },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -42943,16 +45244,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "ingredientId": {
             "anyOf": [
@@ -43005,12 +45306,12 @@
           "productId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema63"
+                "$ref": "#/components/schemas/input_schema67"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema63"
+                  "$ref": "#/components/schemas/input_schema67"
                 }
               }
             ]
@@ -43026,12 +45327,12 @@
           "parentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema65"
+                "$ref": "#/components/schemas/input_schema69"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema65"
+                  "$ref": "#/components/schemas/input_schema69"
                 }
               }
             ]
@@ -43186,10 +45487,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema156"
+            "$ref": "#/components/schemas/output_schema165"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -43434,10 +45735,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema156"
+            "$ref": "#/components/schemas/output_schema165"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -43664,10 +45965,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -43686,15 +45987,15 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema59"
+            "$ref": "#/components/schemas/input_schema63"
           },
           "removeImageIds": {
             "description": "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema59"
+            "$ref": "#/components/schemas/input_schema63"
           },
           "imageOrder": {
             "description": "existing image ids in display order; first = cover",
-            "$ref": "#/components/schemas/input_schema59"
+            "$ref": "#/components/schemas/input_schema63"
           }
         }
       },
@@ -43718,10 +46019,10 @@
             "maximum": 9007199254740991
           },
           "direct": {
-            "$ref": "#/components/schemas/output_schema165"
+            "$ref": "#/components/schemas/output_schema174"
           },
           "total": {
-            "$ref": "#/components/schemas/output_schema165"
+            "$ref": "#/components/schemas/output_schema174"
           },
           "installed": {
             "type": "object",
@@ -43864,10 +46165,10 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema156"
+            "$ref": "#/components/schemas/output_schema165"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -44057,16 +46358,16 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema359"
+                  "$ref": "#/components/schemas/output_schema373"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema359"
+                  "$ref": "#/components/schemas/output_schema373"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema361"
+                  "$ref": "#/components/schemas/output_schema375"
                 },
                 "_meta": {
-                  "$ref": "#/components/schemas/output_schema359"
+                  "$ref": "#/components/schemas/output_schema373"
                 }
               },
               "required": [
@@ -44137,10 +46438,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema362"
+                  "$ref": "#/components/schemas/output_schema376"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema363"
+                  "$ref": "#/components/schemas/output_schema377"
                 }
               },
               "required": [
@@ -44241,7 +46542,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema364"
+              "$ref": "#/components/schemas/output_schema378"
             }
           },
           "tools": {
@@ -44265,13 +46566,13 @@
                   ]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema359"
+                  "$ref": "#/components/schemas/output_schema373"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema359"
+                  "$ref": "#/components/schemas/output_schema373"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema361"
+                  "$ref": "#/components/schemas/output_schema375"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -44324,19 +46625,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema364"
+                    "$ref": "#/components/schemas/output_schema378"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema362"
+                    "$ref": "#/components/schemas/output_schema376"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema363"
+                    "$ref": "#/components/schemas/output_schema377"
                   }
                 }
               },
@@ -44363,25 +46664,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema365"
+              "$ref": "#/components/schemas/output_schema379"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema365"
+              "$ref": "#/components/schemas/output_schema379"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema365"
+              "$ref": "#/components/schemas/output_schema379"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema365"
+              "$ref": "#/components/schemas/output_schema379"
             }
           }
         },
@@ -44528,7 +46829,7 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema210"
+            "$ref": "#/components/schemas/output_schema219"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
@@ -44540,7 +46841,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "createdAt": {
             "type": "string",
@@ -44556,7 +46857,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -44694,7 +46995,7 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema210"
+            "$ref": "#/components/schemas/output_schema219"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
@@ -44706,7 +47007,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "createdAt": {
             "type": "string",
@@ -45137,7 +47438,7 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema210"
+            "$ref": "#/components/schemas/output_schema219"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
@@ -45149,7 +47450,7 @@
             "type": "string"
           },
           "recipeNames": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "createdAt": {
             "type": "string",
@@ -45829,7 +48130,7 @@
             "minimum": 0
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema55"
+            "$ref": "#/components/schemas/output_schema56"
           }
         },
         "required": [
@@ -45859,7 +48160,7 @@
             "minimum": 0
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema55"
+            "$ref": "#/components/schemas/output_schema56"
           }
         },
         "required": [
@@ -45907,7 +48208,7 @@
             ]
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema55"
+            "$ref": "#/components/schemas/output_schema56"
           }
         },
         "required": [
@@ -46654,6 +48955,9 @@
           "preserve"
         ]
       },
+      "OptionalImageRepresentations": {
+        "$ref": "#/components/schemas/ImageRepresentations"
+      },
       "OrphanedOAuthClientsOut": {
         "type": "number"
       },
@@ -46683,13 +48987,13 @@
         ],
         "additionalProperties": false
       },
-      "output_schema113": {
+      "output_schema117": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/PlantingShortcode"
         }
       },
-      "output_schema118": {
+      "output_schema122": {
         "type": "array",
         "items": {
           "type": "object",
@@ -46708,31 +49012,31 @@
           "additionalProperties": false
         }
       },
-      "output_schema124": {
+      "output_schema132": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/BaseKind"
         }
       },
-      "output_schema143": {
+      "output_schema151": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/RecipeUsageOut"
         }
       },
-      "output_schema144": {
+      "output_schema152": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/RecipeTopLevel"
         }
       },
-      "output_schema145": {
+      "output_schema153": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProductWithMappingsAndFoodOut"
         }
       },
-      "output_schema146": {
+      "output_schema154": {
         "type": "object",
         "properties": {
           "value": {
@@ -46754,13 +49058,9 @@
         "additionalProperties": false,
         "description": "Quantity on hand"
       },
-      "output_schema150": {
+      "output_schema158": {
         "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
         "$ref": "#/components/schemas/InventoryPlacement"
-      },
-      "output_schema156": {
-        "description": "Namespaced Collection tags assigned directly to this location",
-        "$ref": "#/components/schemas/input_schema49"
       },
       "output_schema16": {
         "oneOf": [
@@ -46784,6 +49084,10 @@
         }
       },
       "output_schema165": {
+        "description": "Namespaced Collection tags assigned directly to this location",
+        "$ref": "#/components/schemas/input_schema53"
+      },
+      "output_schema174": {
         "type": "object",
         "properties": {
           "priced": {
@@ -46809,22 +49113,22 @@
         ],
         "additionalProperties": false
       },
-      "output_schema178": {
+      "output_schema187": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/FinancialTransactionShortcode"
         }
       },
-      "output_schema181": {
+      "output_schema190": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/InfLocation"
         }
       },
-      "output_schema182": {
+      "output_schema191": {
         "$ref": "#/components/schemas/InfLocation"
       },
-      "output_schema186": {
+      "output_schema195": {
         "type": "array",
         "items": {
           "type": "object",
@@ -46851,13 +49155,13 @@
           "additionalProperties": false
         }
       },
-      "output_schema198": {
+      "output_schema207": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Amount"
         }
       },
-      "output_schema206": {
+      "output_schema215": {
         "type": "object",
         "properties": {
           "portionCount": {
@@ -46875,19 +49179,19 @@
         ],
         "additionalProperties": false
       },
-      "output_schema210": {
+      "output_schema219": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/MealRecipeOut"
         }
       },
-      "output_schema252": {
+      "output_schema261": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/UnitMappingOut"
         }
       },
-      "output_schema254": {
+      "output_schema268": {
         "type": "object",
         "properties": {
           "id": {
@@ -46929,13 +49233,13 @@
         ],
         "additionalProperties": false
       },
-      "output_schema255": {
+      "output_schema269": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProductListInventoryEntryOut"
         }
       },
-      "output_schema261": {
+      "output_schema275": {
         "type": "object",
         "properties": {
           "id": {
@@ -46983,10 +49287,10 @@
                 "description": "name of location"
               },
               "aliases": {
-                "$ref": "#/components/schemas/input_schema49"
+                "$ref": "#/components/schemas/input_schema53"
               },
               "tags": {
-                "$ref": "#/components/schemas/output_schema156"
+                "$ref": "#/components/schemas/output_schema165"
               },
               "type": {
                 "$ref": "#/components/schemas/LocationType"
@@ -47036,7 +49340,7 @@
               "ancestors": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/output_schema262"
+                  "$ref": "#/components/schemas/output_schema276"
                 }
               }
             },
@@ -47066,7 +49370,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema262": {
+      "output_schema276": {
         "type": "object",
         "properties": {
           "id": {
@@ -47088,7 +49392,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema263": {
+      "output_schema277": {
         "type": "object",
         "properties": {
           "id": {
@@ -47106,7 +49410,7 @@
           "ancestors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema262"
+              "$ref": "#/components/schemas/output_schema276"
             }
           }
         },
@@ -47117,25 +49421,25 @@
         ],
         "additionalProperties": false
       },
-      "output_schema275": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/TaskShortcode"
-        }
-      },
       "output_schema28": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageOut"
         }
       },
-      "output_schema295": {
+      "output_schema289": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/TaskShortcode"
+        }
+      },
+      "output_schema309": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectShortcode"
         }
       },
-      "output_schema301": {
+      "output_schema315": {
         "type": "object",
         "properties": {
           "current": {
@@ -47150,15 +49454,15 @@
         ],
         "additionalProperties": false
       },
-      "output_schema304": {
+      "output_schema318": {
         "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
         "$ref": "#/components/schemas/ExpenseLineKind"
       },
-      "output_schema305": {
+      "output_schema319": {
         "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
         "$ref": "#/components/schemas/ExpenseLineBasis"
       },
-      "output_schema348": {
+      "output_schema362": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -47187,7 +49491,7 @@
           }
         }
       },
-      "output_schema349": {
+      "output_schema363": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -47197,7 +49501,7 @@
           }
         ]
       },
-      "output_schema359": {
+      "output_schema373": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -47206,7 +49510,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema361": {
+      "output_schema375": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -47224,7 +49528,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema362": {
+      "output_schema376": {
         "type": "object",
         "properties": {
           "id": {
@@ -47247,7 +49551,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema363": {
+      "output_schema377": {
         "type": "object",
         "properties": {
           "id": {
@@ -47269,7 +49573,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema364": {
+      "output_schema378": {
         "type": "object",
         "properties": {
           "day": {
@@ -47299,7 +49603,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema365": {
+      "output_schema379": {
         "type": "object",
         "properties": {
           "key": {
@@ -47321,25 +49625,25 @@
         ],
         "additionalProperties": false
       },
-      "output_schema387": {
+      "output_schema402": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WishCandidateOut"
         }
       },
-      "output_schema391": {
+      "output_schema408": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/EntityAttachmentRead"
         }
       },
-      "output_schema43": {
+      "output_schema44": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ExternalIdOut"
         }
       },
-      "output_schema55": {
+      "output_schema56": {
         "type": "object",
         "properties": {
           "covered": {
@@ -47359,7 +49663,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema58": {
+      "output_schema59": {
         "type": "object",
         "properties": {
           "etag": {
@@ -47411,7 +49715,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema83": {
+      "output_schema84": {
         "type": "object",
         "properties": {
           "module": {
@@ -48413,7 +50717,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -48882,6 +51186,9 @@
               "productsWithNoImages": {
                 "type": "number"
               },
+              "imageProcessingIssues": {
+                "type": "number"
+              },
               "entitiesMissingEmbeddings": {
                 "type": "number"
               },
@@ -49018,6 +51325,7 @@
               "purchaselessExitExpenses",
               "toolsUsedOutsideOwnership",
               "productsWithNoImages",
+              "imageProcessingIssues",
               "entitiesMissingEmbeddings",
               "staleParentRecipes",
               "understatedCostMeals",
@@ -49174,6 +51482,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ProductWithNoImages"
+            }
+          },
+          "imageProcessingIssues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageProcessingProblem"
             }
           },
           "entitiesMissingEmbeddings": {
@@ -49339,6 +51653,7 @@
           "purchaselessExitExpenses",
           "toolsUsedOutsideOwnership",
           "productsWithNoImages",
+          "imageProcessingIssues",
           "entitiesMissingEmbeddings",
           "staleParentRecipes",
           "understatedCostMeals",
@@ -49854,6 +52169,12 @@
           "duplicate_external_id"
         ]
       },
+      "ProductDataGaps": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ProductDataCheck"
+        }
+      },
       "ProductDetail": {
         "type": "object",
         "properties": {
@@ -49865,10 +52186,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -49907,7 +52228,7 @@
             "$ref": "#/components/schemas/output_schema28"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema43"
+            "$ref": "#/components/schemas/output_schema44"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -49952,7 +52273,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema254"
+            "$ref": "#/components/schemas/output_schema268"
           },
           "unitMappings": {
             "type": "array",
@@ -49963,13 +52284,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema261"
+              "$ref": "#/components/schemas/output_schema275"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema263"
+              "$ref": "#/components/schemas/output_schema277"
             }
           },
           "componentCount": {
@@ -50011,7 +52332,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -50157,16 +52478,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "vendorId": {
             "anyOf": [
@@ -50433,7 +52754,7 @@
           },
           "categoryFilter": {
             "description": "Filter by category",
-            "$ref": "#/components/schemas/input_schema93"
+            "$ref": "#/components/schemas/input_schema97"
           },
           "expectedQuantityMin": {
             "type": "number"
@@ -50457,7 +52778,7 @@
           },
           "tagFilters": {
             "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema95"
+            "$ref": "#/components/schemas/input_schema99"
           },
           "kitId": {
             "anyOf": [
@@ -50556,12 +52877,12 @@
           "locationIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema65"
+                "$ref": "#/components/schemas/input_schema69"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema65"
+                  "$ref": "#/components/schemas/input_schema69"
                 }
               }
             ]
@@ -50572,12 +52893,12 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema104"
+                "$ref": "#/components/schemas/input_schema108"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema104"
+                  "$ref": "#/components/schemas/input_schema108"
                 }
               }
             ]
@@ -50585,12 +52906,12 @@
           "growsIngredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema104"
+                "$ref": "#/components/schemas/input_schema108"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema104"
+                  "$ref": "#/components/schemas/input_schema108"
                 }
               }
             ]
@@ -50612,10 +52933,10 @@
             "type": "boolean"
           },
           "taskDueFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "taskDueTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "tagsPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
@@ -51031,10 +53352,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -51073,7 +53394,7 @@
             "$ref": "#/components/schemas/output_schema28"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema43"
+            "$ref": "#/components/schemas/output_schema44"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -51114,13 +53435,69 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "unitMappings": {
-            "$ref": "#/components/schemas/output_schema252"
+            "$ref": "#/components/schemas/output_schema261"
+          },
+          "unitPriceMappings": {
+            "$ref": "#/components/schemas/ProductUnitPriceMappings"
+          },
+          "unitPrice": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "natural": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "price": {
+                    "type": "number"
+                  },
+                  "unit": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "price",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              "perGram": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "natural",
+              "perGram"
+            ],
+            "additionalProperties": false
+          },
+          "food": {
+            "$ref": "#/components/schemas/FoodSummary"
+          },
+          "modelPresence": {
+            "type": "boolean"
+          },
+          "upcPresence": {
+            "type": "boolean"
+          },
+          "notesPresence": {
+            "type": "boolean"
+          },
+          "dataGaps": {
+            "$ref": "#/components/schemas/ProductDataGaps"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema254"
+            "$ref": "#/components/schemas/output_schema268"
           },
           "inventoryEntry": {
-            "$ref": "#/components/schemas/output_schema255"
+            "$ref": "#/components/schemas/output_schema269"
           },
           "expenseCount": {
             "type": "integer",
@@ -51173,6 +53550,12 @@
           "updatedAt",
           "displayImages",
           "unitMappings",
+          "unitPriceMappings",
+          "unitPrice",
+          "modelPresence",
+          "upcPresence",
+          "notesPresence",
+          "dataGaps",
           "inventoryEntry",
           "expenseCount",
           "componentCount",
@@ -51194,10 +53577,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -51236,7 +53619,7 @@
             "$ref": "#/components/schemas/output_schema28"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema43"
+            "$ref": "#/components/schemas/output_schema44"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -51277,13 +53660,69 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "unitMappings": {
-            "$ref": "#/components/schemas/output_schema252"
+            "$ref": "#/components/schemas/output_schema261"
+          },
+          "unitPriceMappings": {
+            "$ref": "#/components/schemas/ProductUnitPriceMappings"
+          },
+          "unitPrice": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "natural": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "price": {
+                    "type": "number"
+                  },
+                  "unit": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "price",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              "perGram": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "natural",
+              "perGram"
+            ],
+            "additionalProperties": false
+          },
+          "food": {
+            "$ref": "#/components/schemas/FoodSummary"
+          },
+          "modelPresence": {
+            "type": "boolean"
+          },
+          "upcPresence": {
+            "type": "boolean"
+          },
+          "notesPresence": {
+            "type": "boolean"
+          },
+          "dataGaps": {
+            "$ref": "#/components/schemas/ProductDataGaps"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema254"
+            "$ref": "#/components/schemas/output_schema268"
           },
           "inventoryEntry": {
-            "$ref": "#/components/schemas/output_schema255"
+            "$ref": "#/components/schemas/output_schema269"
           },
           "expenseCount": {
             "type": "integer",
@@ -51336,6 +53775,12 @@
           "updatedAt",
           "displayImages",
           "unitMappings",
+          "unitPriceMappings",
+          "unitPrice",
+          "modelPresence",
+          "upcPresence",
+          "notesPresence",
+          "dataGaps",
           "inventoryEntry",
           "expenseCount",
           "componentCount",
@@ -52134,14 +54579,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema112"
+                "$ref": "#/components/schemas/input_schema116"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema112"
+                  "$ref": "#/components/schemas/input_schema116"
                 }
               }
             ]
@@ -52151,7 +54596,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema42"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "groupBy": {
             "type": "string",
@@ -52261,10 +54706,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -52303,7 +54748,7 @@
             "$ref": "#/components/schemas/output_schema28"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema43"
+            "$ref": "#/components/schemas/output_schema44"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -52379,6 +54824,12 @@
           "items": {
             "$ref": "#/components/schemas/UnitMappingWithMetadata"
           }
+        }
+      },
+      "ProductUnitPriceMappings": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/UnitMappingWithMetadata"
         }
       },
       "ProductUpdateData": {
@@ -52551,10 +55002,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -52593,7 +55044,7 @@
             "$ref": "#/components/schemas/output_schema28"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema43"
+            "$ref": "#/components/schemas/output_schema44"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -52638,7 +55089,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema254"
+            "$ref": "#/components/schemas/output_schema268"
           },
           "unitMappings": {
             "type": "array",
@@ -52649,13 +55100,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema261"
+              "$ref": "#/components/schemas/output_schema275"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema263"
+              "$ref": "#/components/schemas/output_schema277"
             }
           },
           "food": {
@@ -52756,10 +55207,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema124"
+                "$ref": "#/components/schemas/output_schema132"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema124"
+                "$ref": "#/components/schemas/output_schema132"
               }
             },
             "required": [
@@ -52790,10 +55241,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -52832,7 +55283,7 @@
             "$ref": "#/components/schemas/output_schema28"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema43"
+            "$ref": "#/components/schemas/output_schema44"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -52919,10 +55370,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -52961,7 +55412,7 @@
             "$ref": "#/components/schemas/output_schema28"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema43"
+            "$ref": "#/components/schemas/output_schema44"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -54221,7 +56672,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -54273,13 +56724,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "createdAt": {
             "type": "string",
@@ -54301,7 +56752,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -54364,16 +56815,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "projectId": {
             "anyOf": [
@@ -54567,13 +57018,13 @@
           },
           "location": {
             "description": "Any exact match against locations[]",
-            "$ref": "#/components/schemas/input_schema95"
+            "$ref": "#/components/schemas/input_schema99"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "completionYear": {
             "type": "string",
@@ -54596,12 +57047,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema121"
+                "$ref": "#/components/schemas/input_schema125"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema121"
+                  "$ref": "#/components/schemas/input_schema125"
                 }
               }
             ]
@@ -54699,7 +57150,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -54751,13 +57202,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "createdAt": {
             "type": "string",
@@ -54815,7 +57266,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -54867,13 +57318,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "createdAt": {
             "type": "string",
@@ -54985,7 +57436,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema49"
+            "$ref": "#/components/schemas/input_schema53"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -55037,13 +57488,13 @@
             ]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema295"
+            "$ref": "#/components/schemas/output_schema309"
           },
           "createdAt": {
             "type": "string",
@@ -56051,14 +58502,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema141"
+                "$ref": "#/components/schemas/input_schema145"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema141"
+                  "$ref": "#/components/schemas/input_schema145"
                 }
               }
             ]
@@ -56068,7 +58519,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema42"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "groupBy": {
             "type": "string"
@@ -56391,7 +58842,7 @@
             ]
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "statedTotal": {
             "$ref": "#/components/schemas/WholeCentAmount"
@@ -56465,7 +58916,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -56682,7 +59133,7 @@
             ]
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "statedTotal": {
             "$ref": "#/components/schemas/WholeCentAmount"
@@ -56885,7 +59336,7 @@
             ]
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "statedTotal": {
             "$ref": "#/components/schemas/WholeCentAmount"
@@ -57110,11 +59561,11 @@
           },
           "removeImageIds": {
             "description": "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema59"
+            "$ref": "#/components/schemas/input_schema63"
           },
           "imageOrder": {
             "description": "existing document ids in display order",
-            "$ref": "#/components/schemas/input_schema59"
+            "$ref": "#/components/schemas/input_schema63"
           }
         }
       },
@@ -57534,7 +59985,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -58780,7 +61231,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema198"
+            "$ref": "#/components/schemas/output_schema207"
           },
           "rawLine": {
             "type": [
@@ -58863,7 +61314,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema198"
+            "$ref": "#/components/schemas/output_schema207"
           },
           "rawLine": {
             "type": [
@@ -59733,6 +62184,10 @@
             ],
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "snapshotToken": {
+            "type": "string",
+            "minLength": 1
           },
           "resolutions": {
             "type": "array",
@@ -60743,13 +63198,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema348"
+                "$ref": "#/components/schemas/output_schema362"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema348"
+                "$ref": "#/components/schemas/output_schema362"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema348"
+                "$ref": "#/components/schemas/output_schema362"
               }
             },
             "required": [
@@ -60766,10 +63221,10 @@
             ]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema349"
+            "$ref": "#/components/schemas/output_schema363"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema349"
+            "$ref": "#/components/schemas/output_schema363"
           },
           "nutrient": {
             "oneOf": [
@@ -61051,7 +63506,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema76"
+            "$ref": "#/components/schemas/input_schema80"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -61088,7 +63543,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema76"
+            "$ref": "#/components/schemas/input_schema80"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -61131,7 +63586,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema76"
+            "$ref": "#/components/schemas/input_schema80"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -61226,7 +63681,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema160"
+                "$ref": "#/components/schemas/input_schema164"
               }
             ],
             "description": "The scanned code."
@@ -61343,6 +63798,46 @@
           "already-here"
         ]
       },
+      "ScheduleImageProcessingInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          },
+          "kinds": {
+            "default": [
+              "subject_lift",
+              "describe_image"
+            ],
+            "minItems": 1,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageProcessingJobKind"
+            }
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "ScheduleImageProcessingOutput": {
+        "type": "object",
+        "properties": {
+          "jobIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "required": [
+          "jobIds"
+        ],
+        "additionalProperties": false
+      },
       "ScrapeRecipeInput": {
         "type": "string",
         "format": "uri"
@@ -61365,13 +63860,14 @@
           "financialTransaction",
           "wish",
           "expense",
+          "image",
           "planting",
           "gardenEntry"
         ]
       },
       "SearchableEntityId": {
         "type": "string",
-        "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+        "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
       },
       "SearchComponentPlacement": {
         "type": "object",
@@ -61707,7 +64203,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema198"
+            "$ref": "#/components/schemas/output_schema207"
           },
           "rawLine": {
             "type": [
@@ -61790,7 +64286,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema198"
+            "$ref": "#/components/schemas/output_schema207"
           },
           "rawLine": {
             "type": [
@@ -61856,6 +64352,25 @@
         },
         "required": [
           "cookbookId"
+        ]
+      },
+      "SetInventoryOwnershipInput": {
+        "type": "object",
+        "properties": {
+          "inventoryEntryId": {
+            "$ref": "#/components/schemas/InventoryShortcode"
+          },
+          "ownership": {
+            "$ref": "#/components/schemas/InventoryOwnershipSelection"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "inventoryEntryId",
+          "ownership"
         ]
       },
       "SetPerceptualHashesInput": {
@@ -62207,7 +64722,13 @@
         "type": "object",
         "properties": {
           "key": {
-            "$ref": "#/components/schemas/SmartCollectionKey"
+            "type": "string",
+            "enum": [
+              "painting",
+              "measuring",
+              "festool",
+              "wardrobe"
+            ]
           },
           "name": {
             "type": "string",
@@ -62220,6 +64741,13 @@
             "items": {
               "$ref": "#/components/schemas/SmartCollectionRule"
             }
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ]
           }
         },
         "required": [
@@ -62240,24 +64768,7 @@
             "maxLength": 200
           },
           "pagination": {
-            "type": "object",
-            "properties": {
-              "pageIndex": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "pageSize": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 100
-              }
-            },
-            "required": [
-              "pageIndex",
-              "pageSize"
-            ],
-            "additionalProperties": false
+            "$ref": "#/components/schemas/SmartCollectionPagination"
           }
         },
         "required": [
@@ -62291,14 +64802,6 @@
         ],
         "additionalProperties": false
       },
-      "SmartCollectionKey": {
-        "type": "string",
-        "enum": [
-          "painting",
-          "measuring",
-          "festool"
-        ]
-      },
       "SmartCollectionListInput": {
         "type": "object",
         "properties": {
@@ -62326,6 +64829,8 @@
           "kind": {
             "type": "string",
             "enum": [
+              "effectiveOwnerEquals",
+              "categoryEquals",
               "productTagEquals",
               "manufacturerEquals",
               "locationNameContains",
@@ -62350,8 +64855,108 @@
         ],
         "additionalProperties": false
       },
+      "SmartCollectionPagination": {
+        "type": "object",
+        "properties": {
+          "pageIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "pageIndex",
+          "pageSize"
+        ],
+        "additionalProperties": false
+      },
+      "SmartCollectionReference": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SmartCollectionReferenceStarter"
+          },
+          {
+            "$ref": "#/components/schemas/SmartCollectionReferenceWardrobe"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "starter": "#/components/schemas/SmartCollectionReferenceStarter",
+            "wardrobe": "#/components/schemas/SmartCollectionReferenceWardrobe"
+          }
+        }
+      },
+      "SmartCollectionReferenceInput": {
+        "type": "object",
+        "properties": {
+          "search": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/SmartCollectionPagination"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/SmartCollectionReference"
+          }
+        },
+        "required": [
+          "pagination",
+          "reference"
+        ],
+        "additionalProperties": false
+      },
+      "SmartCollectionReferenceStarter": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "starter"
+          },
+          "key": {
+            "type": "string",
+            "enum": [
+              "painting",
+              "measuring",
+              "festool"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "key"
+        ]
+      },
+      "SmartCollectionReferenceWardrobe": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "wardrobe"
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          }
+        },
+        "required": [
+          "kind",
+          "ownerId"
+        ]
+      },
       "SmartCollectionRule": {
         "oneOf": [
+          {
+            "$ref": "#/components/schemas/SmartCollectionRuleEffectiveOwnerEquals"
+          },
+          {
+            "$ref": "#/components/schemas/SmartCollectionRuleCategoryEquals"
+          },
           {
             "$ref": "#/components/schemas/SmartCollectionRuleProductTagEquals"
           },
@@ -62368,12 +64973,48 @@
         "discriminator": {
           "propertyName": "kind",
           "mapping": {
+            "effectiveOwnerEquals": "#/components/schemas/SmartCollectionRuleEffectiveOwnerEquals",
+            "categoryEquals": "#/components/schemas/SmartCollectionRuleCategoryEquals",
             "productTagEquals": "#/components/schemas/SmartCollectionRuleProductTagEquals",
             "manufacturerEquals": "#/components/schemas/SmartCollectionRuleManufacturerEquals",
             "locationNameContains": "#/components/schemas/SmartCollectionRuleLocationNameContains",
             "historicalExpenseTrade": "#/components/schemas/SmartCollectionRuleHistoricalExpenseTrade"
           }
         }
+      },
+      "SmartCollectionRuleCategoryEquals": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "categoryEquals"
+          },
+          "value": {
+            "$ref": "#/components/schemas/ProductCategory"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "SmartCollectionRuleEffectiveOwnerEquals": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "effectiveOwnerEquals"
+          },
+          "value": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "additionalProperties": false
       },
       "SmartCollectionRuleHistoricalExpenseTrade": {
         "type": "object",
@@ -62453,7 +65094,13 @@
         "type": "object",
         "properties": {
           "key": {
-            "$ref": "#/components/schemas/SmartCollectionKey"
+            "type": "string",
+            "enum": [
+              "painting",
+              "measuring",
+              "festool",
+              "wardrobe"
+            ]
           },
           "name": {
             "type": "string"
@@ -62466,6 +65113,16 @@
           "sourceCounts": {
             "type": "object",
             "properties": {
+              "effectiveOwnerEquals": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "categoryEquals": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
               "productTagEquals": {
                 "type": "integer",
                 "minimum": 0,
@@ -62488,6 +65145,8 @@
               }
             },
             "required": [
+              "effectiveOwnerEquals",
+              "categoryEquals",
               "productTagEquals",
               "manufacturerEquals",
               "locationNameContains",
@@ -62817,10 +65476,10 @@
             "type": "string"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "amountMin": {
             "type": "number"
@@ -63368,10 +66027,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema275"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema275"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "subtaskCount": {
             "type": "integer",
@@ -63400,7 +66059,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -63428,16 +66087,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema38"
           },
           "blockedByTaskId": {
             "anyOf": [
@@ -63465,12 +66124,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema142"
+                "$ref": "#/components/schemas/input_schema146"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema142"
+                  "$ref": "#/components/schemas/input_schema146"
                 }
               }
             ]
@@ -63513,12 +66172,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema121"
+                "$ref": "#/components/schemas/input_schema125"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema121"
+                  "$ref": "#/components/schemas/input_schema125"
                 }
               }
             ]
@@ -63526,12 +66185,12 @@
           "subjectProductId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema63"
+                "$ref": "#/components/schemas/input_schema67"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema63"
+                  "$ref": "#/components/schemas/input_schema67"
                 }
               }
             ]
@@ -63637,10 +66296,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema275"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema275"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "subtaskCount": {
             "type": "integer",
@@ -63765,10 +66424,10 @@
             ]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema275"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema275"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "subtaskCount": {
             "type": "integer",
@@ -65307,14 +67966,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema165"
+                "$ref": "#/components/schemas/input_schema169"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema165"
+                  "$ref": "#/components/schemas/input_schema169"
                 }
               }
             ]
@@ -65324,7 +67983,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema42"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "groupBy": {
             "type": "string",
@@ -65340,6 +67999,27 @@
         "required": [
           "filters"
         ]
+      },
+      "ValidateImageProcessingCompanionMessageInput": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/ImageProcessingClientMessage"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "ValidateImageProcessingCompanionMessageOutput": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/ImageProcessingServerMessage"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
       },
       "VendorAccountBrowser": {
         "type": "string",
@@ -65360,6 +68040,10 @@
           },
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "inventoryOwnerDefaultEnabled": {
+            "default": false,
+            "type": "boolean"
           },
           "status": {
             "default": "active",
@@ -65436,6 +68120,9 @@
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
           },
+          "inventoryOwnerDefaultEnabled": {
+            "type": "boolean"
+          },
           "status": {
             "$ref": "#/components/schemas/VendorAccountStatus"
           },
@@ -65481,7 +68168,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -65489,6 +68176,7 @@
           "label",
           "vendorId",
           "ledgerPartyId",
+          "inventoryOwnerDefaultEnabled",
           "status",
           "browser",
           "cursor",
@@ -65518,6 +68206,9 @@
           },
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "inventoryOwnerDefaultEnabled": {
+            "type": "boolean"
           },
           "status": {
             "$ref": "#/components/schemas/VendorAccountStatus"
@@ -65569,6 +68260,7 @@
           "label",
           "vendorId",
           "ledgerPartyId",
+          "inventoryOwnerDefaultEnabled",
           "status",
           "browser",
           "cursor",
@@ -65617,6 +68309,9 @@
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
           },
+          "inventoryOwnerDefaultEnabled": {
+            "type": "boolean"
+          },
           "status": {
             "$ref": "#/components/schemas/VendorAccountStatus"
           },
@@ -65664,6 +68359,7 @@
           "label",
           "vendorId",
           "ledgerPartyId",
+          "inventoryOwnerDefaultEnabled",
           "status",
           "browser",
           "cursor",
@@ -65702,6 +68398,9 @@
           },
           "ledgerPartyId": {
             "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "inventoryOwnerDefaultEnabled": {
+            "type": "boolean"
           },
           "status": {
             "$ref": "#/components/schemas/VendorAccountStatus"
@@ -65931,7 +68630,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -66491,7 +69190,15 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema387"
+            "$ref": "#/components/schemas/output_schema402"
+          },
+          "candidateCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "priceRange": {
+            "$ref": "#/components/schemas/WishPriceRangeOut"
           },
           "createdAt": {
             "type": "string",
@@ -66507,7 +69214,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema391"
+            "$ref": "#/components/schemas/output_schema408"
           }
         },
         "required": [
@@ -66516,6 +69223,7 @@
           "notes",
           "acquiredAt",
           "candidates",
+          "candidateCount",
           "createdAt",
           "updatedAt",
           "displayImages",
@@ -66549,7 +69257,15 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema387"
+            "$ref": "#/components/schemas/output_schema402"
+          },
+          "candidateCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "priceRange": {
+            "$ref": "#/components/schemas/WishPriceRangeOut"
           },
           "createdAt": {
             "type": "string",
@@ -66571,6 +69287,7 @@
           "notes",
           "acquiredAt",
           "candidates",
+          "candidateCount",
           "createdAt",
           "updatedAt",
           "displayImages"
@@ -66622,7 +69339,15 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema387"
+            "$ref": "#/components/schemas/output_schema402"
+          },
+          "candidateCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "priceRange": {
+            "$ref": "#/components/schemas/WishPriceRangeOut"
           },
           "createdAt": {
             "type": "string",
@@ -66641,8 +69366,31 @@
           "notes",
           "acquiredAt",
           "candidates",
+          "candidateCount",
           "createdAt",
           "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "WishPriceRangeOut": {
+        "type": "object",
+        "properties": {
+          "low": {
+            "type": "number"
+          },
+          "high": {
+            "type": "number"
+          },
+          "pricedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "low",
+          "high",
+          "pricedCount"
         ],
         "additionalProperties": false
       },

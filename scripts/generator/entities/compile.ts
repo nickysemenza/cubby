@@ -215,6 +215,7 @@ const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
   context: string,
   relations: EntityDeclarationMetadata["relations"],
+  entityKey: string,
 ): EntityFieldModel => {
   if (value === undefined) {
     return {
@@ -259,6 +260,18 @@ const compileFieldModel = (
       readKey: field.readKey === undefined ? key : field.readKey,
       reference: field.reference,
       provenance,
+      explanation:
+        field.explanation ??
+        (provenance?.kind === "derived"
+          ? {
+              ruleId: `${entityKey}.${key}`,
+              version: 1,
+              description:
+                field.description ??
+                `Derived from ${provenance.sources.map((source) => source.label ?? source.relation ?? source.entity).join(" and ")}.`,
+              resolver: "field",
+            }
+          : null),
       control: field.control,
       display: {
         columnId: field.display.columnId,
@@ -421,7 +434,17 @@ const compileFieldModel = (
   };
   const storedFields = new Set(storageKeys);
   for (const field of fields) {
-    const exposed = field.display.list || field.control !== null;
+    const exposed =
+      field.display.list || field.display.detail || field.control !== null;
+    if (
+      field.explanation?.resolver === "field" &&
+      field.readKey === null &&
+      !field.explanation.readPath &&
+      !field.explanation.projections
+    )
+      throw new EntityDeclarationError(
+        `${context}.${field.key} needs an explicit explanation readPath or projections.`,
+      );
     if (exposed && !storedFields.has(field.key) && field.provenance === null)
       throw new EntityDeclarationError(
         `${context}.${field.key} is exposed without storage, a reference, or declared provenance.`,
@@ -1073,6 +1096,7 @@ export const compileEntity = (
     declaration.model,
     `${context}.model`,
     declaration.relations,
+    key,
   );
   const operationOwners = {
     delete: declaration.capabilities.operationOwners.delete,

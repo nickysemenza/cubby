@@ -39,7 +39,8 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 
 import { notDeleted, unwrapDb } from "./database-helpers";
-import { SHORTCODE_TABLE, type ShortcodeTable } from "./shortcode-tables";
+import { SHORTCODE_TABLE } from "./generated/shortcode-tables.gen";
+import type { ShortcodeTable } from "./shortcode-utils";
 
 export type { EntityRef } from "@cubby/schemas/identifiers";
 

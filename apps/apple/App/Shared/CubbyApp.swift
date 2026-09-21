@@ -6,6 +6,7 @@ import SwiftUI
 @main
 struct CubbyApp: App {
     @State private var model: AppModel
+    @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
         // Home-screen Quick Actions (`UIApplicationShortcutItems`): the adaptor constructs
         // `AppDelegate` — and this app value's other stored properties, including `model` above —
@@ -55,6 +56,10 @@ struct CubbyApp: App {
             .environment(model)
             .tint(PorcelainTokens.cobalt)
             .task { await model.restoreSession() }
+            .onAppear { model.setCompanionSceneActive(scenePhase == .active) }
+            .onChange(of: scenePhase) { _, phase in
+                model.setCompanionSceneActive(phase == .active)
+            }
             .onOpenURL { url in
                 if let link = CubbyLink(url: url) { model.navigator.open(link) }
             }

@@ -69,6 +69,7 @@ const enumColumnExpression = (
     "inventory.placement": `inventoryPlacementEnum(${column})`,
     "meal.mealKind": `text(${column},{enum:mealKindValues})`,
     "meal.mealType": `text(${column},{enum:mealTypeValues})`,
+    "inventory.ownershipMode": `text(${column},{enum:inventoryOwnershipModeValues})`,
     "product.category": `text(${column},{enum:productCategoryValues})`,
     "project.kind": `text(${column},{enum:projectKindValues})`,
     "project.status": `text(${column},{enum:projectStatusValues})`,
@@ -206,6 +207,7 @@ export const renderEntityColumnsArtifact = (
     'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +
     'import type { RecipeStoredMeta, RecipeYield, StoredRecipeTotals } from "@cubby/schemas/recipe-shared";\n' +
     'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
+    'import { inventoryOwnershipModeValues } from "@cubby/schemas/inventory-ownership";\n' +
     'import { inventoryPlacementValues } from "@cubby/shared";\n' +
     'import { sql } from "drizzle-orm";\n' +
     'import { type AnyPgColumn, boolean, date, doublePrecision, integer, jsonb, pgEnum, real, text, timestamp, uuid } from "drizzle-orm/pg-core";\n\n' +

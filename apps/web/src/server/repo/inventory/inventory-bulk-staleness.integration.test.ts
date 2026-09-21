@@ -9,7 +9,9 @@ import { getDb } from "~/server/repo/database-helpers";
 import {
   bulkProcessInventoryEntries,
   createInventoryEntry,
+  getInventoryLocationSnapshotToken,
 } from "~/server/repo/inventory";
+import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 import {
@@ -36,7 +38,13 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
     return entityId;
   };
 
-  const addEntry = async (locationId: LocationId, productName: string) => {
+  const addEntry = async (
+    locationId: LocationId,
+    productName: string,
+    ownerLedgerPartyId?: Parameters<
+      typeof createInventoryEntry
+    >[1]["ownerLedgerPartyId"],
+  ) => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: `Bolt ${productName}` }),
@@ -46,11 +54,16 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       "product",
       await requireResolvedId(product.id, "product"),
     );
-    const entry = await createInventoryEntry(
-      ctx.db,
-      { productId: productEntityId, locationId, amount },
-      TEST_ACTOR,
-    );
+    const input: Parameters<typeof createInventoryEntry>[1] = {
+      productId: productEntityId,
+      locationId,
+      amount,
+    };
+    if (ownerLedgerPartyId) {
+      input.ownershipMode = "person";
+      input.ownerLedgerPartyId = ownerLedgerPartyId;
+    }
+    const entry = await createInventoryEntry(ctx.db, input, TEST_ACTOR);
     const entryEntityId = parseEntityId(
       "inventory",
       await requireResolvedId(entry.id, "inventory"),
@@ -143,5 +156,39 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       TEST_ACTOR,
     );
     expect((await readEntry(other.id))?.deletedAt).not.toBeNull();
+  });
+
+  it("requires a complete token before ownership-aware delete-on-omit", async () => {
+    const { locationEntityId, first } = await seedLocation("Owned snapshot");
+    const owner = await createLedgerParty(
+      ctx.db,
+      { name: "Inventory owner", kind: "member", notes: null },
+      TEST_ACTOR,
+    );
+    const owned = await addEntry(locationEntityId, "owned", owner.entityId);
+
+    await expect(
+      bulkProcessInventoryEntries(
+        ctx.db,
+        locationEntityId,
+        [first.item],
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/complete snapshot token/i);
+    expect((await readEntry(owned.id))?.deletedAt).toBeNull();
+
+    const snapshotToken = await getInventoryLocationSnapshotToken(
+      ctx.db,
+      locationEntityId,
+    );
+    await bulkProcessInventoryEntries(
+      ctx.db,
+      locationEntityId,
+      [first.item],
+      TEST_ACTOR,
+      undefined,
+      snapshotToken,
+    );
+    expect((await readEntry(owned.id))?.deletedAt).not.toBeNull();
   });
 });

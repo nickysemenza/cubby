@@ -31,6 +31,7 @@ import {
   entityEmbedding,
   financialAccount,
   gardenEntry,
+  image,
   ingredient,
   inventoryEntry,
   location,
@@ -59,9 +60,9 @@ type DbClient = ReturnType<typeof getDb>;
 type EmbeddingSource = {
   table: PgTable;
   idColumn: AnyPgColumn;
-  // Every searchable entity is one of the twelve shortcode entities, so a
-  // missing-embedding row (unlike an orphaned one, whose entity may already be
-  // gone) can always be resolved to a link.
+  // Every embeddable entity has a shortcode, so a missing-embedding row
+  // (unlike an orphaned one, whose entity may already be gone) can always be
+  // resolved to a link.
   shortcodeColumn: AnyPgColumn;
   deletedAtColumn: AnyPgColumn;
   /**
@@ -193,6 +194,12 @@ const embeddingSources = {
     idColumn: gardenEntry.id,
     shortcodeColumn: gardenEntry.shortcode,
     deletedAtColumn: gardenEntry.deletedAt,
+  },
+  image: {
+    table: image,
+    idColumn: image.id,
+    shortcodeColumn: image.shortcode,
+    deletedAtColumn: image.deletedAt,
   },
 } satisfies Record<EmbeddableEntity, EmbeddingSource>;
 

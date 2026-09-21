@@ -193,6 +193,21 @@ export default defineEntity({
           detail: true,
           renderer: { detail: "ledger-transfer-classification" },
         },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Transfer parties and evidence" }],
+        },
+        explanation: {
+          ruleId: "ledger-transfer.classification",
+          description:
+            "Classification is derived from the transfer's source and destination party roles together with its recorded evidence.",
+          readPath: "classification",
+          sourceDependencies: [
+            { path: "fromPartyId", label: "Source party" },
+            { path: "toPartyId", label: "Destination party" },
+            { path: "evidenceTransactionIds", label: "Evidence transactions" },
+          ],
+        },
         validation: {
           read: ledgerTransferClassification,
           create: null,

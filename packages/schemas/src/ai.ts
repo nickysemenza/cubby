@@ -356,3 +356,9 @@ export const fieldSuggestionsOut = z.object({
   suggestions: z.record(z.string(), fieldSuggestionSchema.nullable()),
 });
 export type FieldSuggestionsOut = z.infer<typeof fieldSuggestionsOut>;
+
+/** JSON-safe provider runtime details, independent of any feature result schema. */
+export type AiAnalysisRuntime = Record<
+  string,
+  z.infer<ReturnType<typeof z.json>>
+>;

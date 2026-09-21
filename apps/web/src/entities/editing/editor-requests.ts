@@ -90,12 +90,15 @@ export const expenseCaptureRequest = (input?: {
   date?: string;
   future?: boolean;
   disposition?: boolean;
+  beneficiaries?: EntityEditDraft<"expense">["beneficiaries"];
 }): DialogRequest<"expense"> => {
   const seed: MutableDraft<"expense"> = {};
   if (input?.projectId !== undefined) seed.projectId = input.projectId;
   if (input?.productId !== undefined) seed.productId = input.productId;
   if (input?.date) seed.date = input.date;
   if (input?.future !== undefined) seed.future = input.future;
+  if (input?.beneficiaries !== undefined)
+    seed.beneficiaries = input.beneficiaries;
   if (input?.disposition) {
     seed.projectId = null;
     seed.costType = "tools";

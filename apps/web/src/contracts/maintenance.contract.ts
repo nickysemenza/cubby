@@ -1,4 +1,8 @@
 import {
+  imageProcessingMaintenanceOutput,
+  imageProcessingBatchInput,
+  imageProcessingBatchOutput,
+  imageProcessingSettings,
   awaitingWorkSchema,
   settleAwaitingWorkOutSchema,
   repairImageDimensionsInputSchema,
@@ -14,6 +18,18 @@ import { defineContract, mutation, query } from "~/contracts/define";
  * run history: the counts are the truth, and they shrink as the queue lands.
  */
 export const maintenanceContract = defineContract("maintenance", {
+  backfillImageProcessing: mutation({
+    input: imageProcessingBatchInput,
+    output: imageProcessingBatchOutput,
+  }),
+  imageProcessing: query({
+    input: z.undefined(),
+    output: imageProcessingMaintenanceOutput,
+  }),
+  configureImageProcessing: mutation({
+    input: imageProcessingSettings,
+    output: imageProcessingSettings,
+  }),
   awaitingWork: query({
     input: z.undefined(),
     output: awaitingWorkSchema,

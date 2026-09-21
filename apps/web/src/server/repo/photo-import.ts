@@ -211,7 +211,26 @@ export async function persistLocalImageAnalysis(
   analysisVersion: number,
   inputFingerprint: string,
 ): Promise<void> {
-  await getDb(db)
+  const store = getDb(db);
+  const activeLegacyAnalysis = and(
+    eq(aiAnalysis.entityType, "image"),
+    eq(aiAnalysis.entityId, imageId),
+    eq(aiAnalysis.feature, "photo-local-analysis"),
+    eq(aiAnalysis.model, "vision-local"),
+    eq(aiAnalysis.promptVersion, `analysis-v${analysisVersion}`),
+    eq(aiAnalysis.inputFingerprint, inputFingerprint),
+    isNull(aiAnalysis.provider),
+    isNull(aiAnalysis.resultSchemaRevision),
+    isNull(aiAnalysis.deletedAt),
+  );
+  const updated = await store
+    .update(aiAnalysis)
+    .set({ result: analysis, updatedAt: new Date() })
+    .where(activeLegacyAnalysis)
+    .returning({ id: aiAnalysis.id });
+  if (updated.length > 0) return;
+
+  const inserted = await store
     .insert(aiAnalysis)
     .values({
       entityType: "image",
@@ -222,18 +241,17 @@ export async function persistLocalImageAnalysis(
       inputFingerprint,
       result: analysis,
     })
-    .onConflictDoUpdate({
-      target: [
-        aiAnalysis.entityType,
-        aiAnalysis.entityId,
-        aiAnalysis.feature,
-        aiAnalysis.model,
-        aiAnalysis.promptVersion,
-        aiAnalysis.inputFingerprint,
-      ],
-      targetWhere: isNull(aiAnalysis.deletedAt),
-      set: { result: analysis, updatedAt: new Date() },
-    });
+    .onConflictDoNothing()
+    .returning({ id: aiAnalysis.id });
+  if (inserted.length > 0) return;
+
+  // A concurrent writer won the partial unique index after our first update.
+  // Apply this payload to that canonical active row rather than failing the
+  // idempotent import replay.
+  await store
+    .update(aiAnalysis)
+    .set({ result: analysis, updatedAt: new Date() })
+    .where(activeLegacyAnalysis);
 }
 
 /**

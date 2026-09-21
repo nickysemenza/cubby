@@ -29,7 +29,10 @@ import {
   findTransactionEmbeddingRefsForAccounts,
   findWishEmbeddingRefsForProducts,
 } from "~/server/repo/entity-embedding";
-import { refreshSearchDocuments } from "~/server/repo/search-document";
+import {
+  findDirectImageSearchOwnerRefs,
+  refreshSearchDocuments,
+} from "~/server/repo/search-document";
 
 const mutationSideEffectEntities = [
   "product",
@@ -98,6 +101,7 @@ export interface MutationSideEffectPorts {
   readonly findEmbeddingRefsForPurchases: typeof findEmbeddingRefsForPurchases;
   readonly findTransactionEmbeddingRefsForAccounts: typeof findTransactionEmbeddingRefsForAccounts;
   readonly findCommercialEmbeddingRefsForExpenses: typeof findCommercialEmbeddingRefsForExpenses;
+  readonly findDirectImageSearchOwnerRefs: typeof findDirectImageSearchOwnerRefs;
   readonly refreshSearchDocuments: (
     db: Database | DrizzleTransaction,
     refs: SearchableEntityRef[],
@@ -121,6 +125,7 @@ const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   findEmbeddingRefsForPurchases,
   findTransactionEmbeddingRefsForAccounts,
   findCommercialEmbeddingRefsForExpenses,
+  findDirectImageSearchOwnerRefs,
   refreshSearchDocuments: async (...args) => {
     await refreshSearchDocuments(...args);
   },
@@ -389,6 +394,17 @@ const collectCommercialEmbeddingRefsForExpense: EmbeddingRefCollector = async (
   ]);
 };
 
+/** Image metadata and derived text affect only its direct owners. */
+const collectDirectImageSearchOwnerRefs: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entity !== "image") return [];
+  return await ctx.ports.findDirectImageSearchOwnerRefs(
+    ctx.db,
+    ctx.event.entity.id,
+  );
+};
+
 async function refreshOwnEmbedding(ctx: HandlerContext): Promise<void> {
   const refs = await collectOwnEmbeddingRef(ctx);
   return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
@@ -510,6 +526,13 @@ async function refreshCommercialEmbeddingsForExpense(
   return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
+async function refreshDirectImageOwnerEmbeddings(
+  ctx: HandlerContext,
+): Promise<void> {
+  const refs = await collectDirectImageSearchOwnerRefs(ctx);
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
+}
+
 // Maps each embedding-refresh handler to its ref-only collector, so the bulk
 // path (runMutationSideEffectsForEntities) can bypass the handler's own
 // per-event dispatch and instead accumulate refs for one wave-wide dispatch.
@@ -560,6 +583,7 @@ const embeddingRefCollectorByHandler = new Map<
     refreshCommercialEmbeddingsForExpense,
     collectCommercialEmbeddingRefsForExpense,
   ],
+  [refreshDirectImageOwnerEmbeddings, collectDirectImageSearchOwnerRefs],
 ]);
 
 async function enqueueLocationAiRefresh(ctx: HandlerContext): Promise<void> {
@@ -698,8 +722,8 @@ export const mutationSideEffectManifest = {
     onDelete: [],
   },
   image: {
-    onCreate: [],
-    onUpdate: [],
+    onCreate: [refreshDirectImageOwnerEmbeddings],
+    onUpdate: [refreshDirectImageOwnerEmbeddings],
     onDelete: [],
   },
 } satisfies MutationSideEffectManifest;

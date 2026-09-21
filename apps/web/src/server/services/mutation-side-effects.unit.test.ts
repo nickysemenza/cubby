@@ -52,6 +52,7 @@ class InMemoryMutationSideEffectPorts {
     findEmbeddingRefsForPurchases: async () => [],
     findTransactionEmbeddingRefsForAccounts: async () => [],
     findCommercialEmbeddingRefsForExpenses: async () => [],
+    findDirectImageSearchOwnerRefs: async () => [],
     refreshSearchDocuments: async (_db, refs) => {
       this.refreshed.push(...refs);
     },

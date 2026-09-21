@@ -53,6 +53,7 @@ import {
   readRecordField,
   readReferenceField,
 } from "~/entities/entity-references";
+import { FieldExplanation } from "~/entities/field-explanation";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
@@ -454,11 +455,20 @@ function declaredSections<E extends GenericDetailEntity>(
         if (slot === undefined || slot.applies?.(record as never) === false)
           return [];
         const Slot = slot.component;
+        const title = section.title ?? singular;
         // SAFETY: the slot is this entity's own (see above).
         return [
           {
             ...base,
-            title: section.title ?? singular,
+            title,
+            headerAction: section.explanationField ? (
+              <FieldExplanation
+                entity={entity}
+                id={bag.id}
+                field={section.explanationField}
+                label={title}
+              />
+            ) : undefined,
             surface: section.title === null ? ("plain" as const) : undefined,
             content: (
               <Suspense fallback={<SlotFallback />}>

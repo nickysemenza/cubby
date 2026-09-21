@@ -83,6 +83,9 @@ export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
 
 export const getPurchaseImportNamespace = () => cfEnv?.PURCHASE_IMPORT;
 
+/** Connected native image workers share this transport; job authority stays in Postgres. */
+export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
+
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
 // for the gateway binding (below) and the gateway-REST base URL built in
 // `~/server/clients/ai-gateway`.

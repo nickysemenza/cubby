@@ -9,7 +9,7 @@ public protocol AuditService: Sendable {
     func ensureGlobalUnknown() async throws -> LocationCode
     /// The bin's expected rows: movable stock only. Installed rows are fixed installations the
     /// server excludes from counting and audits (`placement.ts`).
-    func stockRows(at location: LocationCode) async throws -> [RecountRow]
+    func stockSnapshot(at location: LocationCode) async throws -> RecountSnapshot
     /// Products stocked in more than one location, for the Duplicate badge.
     func duplicateProductIDs() async throws -> Set<ProductCode>
     func reconcile(_ body: ReconcileSessionPayload) async throws -> [RecountRow]
@@ -24,8 +24,8 @@ extension CubbyClient: AuditService {
         try await ensureGlobalUnknownLocation()
     }
 
-    public func stockRows(at location: LocationCode) async throws -> [RecountRow] {
-        try await inventory(atLocations: [location])
+    public func stockSnapshot(at location: LocationCode) async throws -> RecountSnapshot {
+        try await inventorySnapshot(at: location)
     }
 
     public func duplicateProductIDs() async throws -> Set<ProductCode> {

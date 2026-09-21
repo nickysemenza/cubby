@@ -85,6 +85,11 @@ export function isUniqueViolation(
   return constraint ? pg.constraint === constraint : true;
 }
 
+/** True when Postgres aborted a SERIALIZABLE transaction as a stale snapshot. */
+export function isSerializationFailure(error: UnparsedDatabaseError): boolean {
+  return findPgError(error)?.code === "40001";
+}
+
 /**
  * Run a compound creator with cross-request race recovery. For find-then-create
  * flows where the create is NOT a single insert (so `findOrCreate`'s ON CONFLICT

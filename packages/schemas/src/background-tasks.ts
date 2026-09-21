@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
 import { locationId, parseEntityRef, recipeId } from "./identifiers";
+import { imageProcessingResult } from "./image-processing";
 
 /**
  * Background tasks are self-contained queue payloads: the message carries
@@ -17,6 +18,8 @@ export const backgroundTaskKinds = [
   "entity-embedding.refresh",
   "location-ai.description.refresh",
   "location-ai.inventory.refresh",
+  "image-processing.wakeup",
+  "image-processing.result",
 ] as const;
 
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
@@ -70,11 +73,27 @@ export const locationAiInventoryRefreshTaskSchema = z.object({
   locationId,
 });
 
+/** A job id is only a wakeup; Postgres remains the authoritative queue. */
+export const imageProcessingWakeupTaskSchema = z.object({
+  kind: z.literal("image-processing.wakeup"),
+  ...taskEnvelopeFields,
+  jobId: z.uuid(),
+});
+
+/** A companion result is replay-safe because the lease attempt gates adoption. */
+export const imageProcessingResultTaskSchema = z.object({
+  kind: z.literal("image-processing.result"),
+  ...taskEnvelopeFields,
+  result: imageProcessingResult,
+});
+
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
+  imageProcessingWakeupTaskSchema,
+  imageProcessingResultTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */

@@ -8,7 +8,7 @@ import Testing
 /// made" is observable, and can fail the next reconcile as stale.
 final class StubRecountService: RecountService, Sendable {
     enum Call: Equatable, Sendable {
-        case tree, unknown, rows(LocationCode), duplicates, reconcile(LocationCode, snapshot: Date?), adopt(
+        case tree, unknown, rows(LocationCode), duplicates, reconcile(LocationCode, snapshot: String?), adopt(
             [LocationCode], LocationCode), scan(String, LocationCode), resolve(LocationCode)
     }
 
@@ -46,11 +46,13 @@ final class StubRecountService: RecountService, Sendable {
         return LocationCode("LOC-9ABC")
     }
 
-    func stockRows(at location: LocationCode) async throws -> [RecountRow] {
+    func stockSnapshot(at location: LocationCode) async throws -> RecountSnapshot {
         record(.rows(location))
         let delay = state.withLock { $0.rowsDelay }
         if delay > .zero { try await Task.sleep(for: delay) }
-        return state.withLock { $0.rows[location] ?? [] }
+        return RecountSnapshot(
+            rows: state.withLock { $0.rows[location] ?? [] },
+            token: "snapshot-\(location.rawValue)")
     }
 
     func duplicateProductIDs() async throws -> Set<ProductCode> {
@@ -59,7 +61,7 @@ final class StubRecountService: RecountService, Sendable {
     }
 
     func reconcile(_ body: ReconcileSessionPayload) async throws -> [RecountRow] {
-        record(.reconcile(body.locationId, snapshot: body.snapshotUpdatedAt))
+        record(.reconcile(body.locationId, snapshot: body.snapshotToken))
         let stale: Bool = state.withLock { state in
             state.lastReconcile = body
             guard state.staleReconciles > 0 else { return false }
@@ -299,14 +301,14 @@ struct RecountSessionTests {
         #expect(session.pendingCount == 0)
     }
 
-    @Test func doneFillsVerifyUsesTheVerbatimSnapshotAdoptsThenAdvances() async throws {
+    @Test func doneFillsVerifyUsesTheOpaqueSnapshotAdoptsThenAdvances() async throws {
         let (session, service) = try await makeSession()
         session.stage(.remove, for: InventoryEntryCode("INV-3456"))
         session.submit("LOC-89AB")
         await session.commitBin()
         let body = try #require(service.state.withLock { $0.lastReconcile })
-        #expect(
-            body.snapshotUpdatedAt == (try LenientISO8601DateTranscoder().decode("2026-03-03T10:00:00.000Z")))
+        #expect(body.snapshotUpdatedAt == nil)
+        #expect(body.snapshotToken == "snapshot-LOC-5678")
         #expect(body.expectedInventoryEntryIds.map(\.rawValue) == ["INV-2345", "INV-3456"])
         #expect(
             body.resolutions.map { resolution -> String in
@@ -338,7 +340,7 @@ struct RecountSessionTests {
         #expect(session.completed == [bin1, bin2])
     }
 
-    @Test func emptyBinSendsNullSnapshot() async throws {
+    @Test func emptyBinStillSendsSnapshotToken() async throws {
         let tree = try LocationTreeTests.tree()
         let service = StubRecountService(tree: tree, rows: [:])
         let session = RecountSession(service: service)
@@ -347,6 +349,7 @@ struct RecountSessionTests {
         await session.commitBin()
         let body = try #require(service.state.withLock { $0.lastReconcile })
         #expect(body.snapshotUpdatedAt == nil)
+        #expect(body.snapshotToken == "snapshot-LOC-6789")
         #expect(body.expectedInventoryEntryIds.isEmpty)
         #expect(session.phase == .complete)
     }

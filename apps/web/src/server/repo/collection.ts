@@ -1,3 +1,4 @@
+import type { Amount } from "@cubby/schemas/codec";
 import {
   collectionMatrixRowOut,
   type CollectionCellState,
@@ -14,11 +15,14 @@ import {
 } from "@cubby/schemas/collection";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  type InventoryId,
+  type LedgerPartyId,
   type LocationId,
   type ProductId,
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import type { Trade } from "@cubby/schemas/project";
 import { setCollectionTag } from "@cubby/shared/collection-tag";
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
@@ -49,6 +53,7 @@ import {
   deriveCollectionMembership,
   directCollectionMembership,
 } from "./collection-membership";
+import { loadEffectiveInventoryOwnership } from "./inventory/ownership";
 import { evaluateSmartCollections } from "./smart-collection-membership";
 
 interface GraphLocation {
@@ -65,13 +70,24 @@ interface GraphProduct {
   shortcode: string;
   name: string;
   manufacturer: string;
+  category: string | null;
   tags: string[];
 }
 
 interface CollectionGraph {
   products: GraphProduct[];
   locations: GraphLocation[];
-  inventory: Array<{ productId: string; locationId: string }>;
+  inventory: Array<{
+    id: InventoryId;
+    shortcode: string;
+    productId: ProductId;
+    locationId: string;
+    placement: "stock" | "installed";
+    amount: Amount;
+    ownershipMode: InventoryOwnershipMode;
+    ownerLedgerPartyId: LedgerPartyId | null;
+    effectiveOwnerId?: string | null;
+  }>;
   collections: CollectionSlug[];
   locationsById: Map<string, GraphLocation>;
   productInherited: Map<string, Set<CollectionSlug>>;
@@ -236,6 +252,7 @@ const loadCollectionGraph = async (db: Database): Promise<CollectionGraph> => {
         shortcode: product.shortcode,
         name: product.name,
         manufacturer: product.manufacturer,
+        category: product.category,
         tags: product.tags,
       })
       .from(product)
@@ -255,6 +272,12 @@ const loadCollectionGraph = async (db: Database): Promise<CollectionGraph> => {
       .orderBy(asc(location.name)),
     client
       .select({
+        id: inventoryEntry.id,
+        shortcode: inventoryEntry.shortcode,
+        amount: inventoryEntry.amount,
+        placement: inventoryEntry.placement,
+        ownershipMode: inventoryEntry.ownershipMode,
+        ownerLedgerPartyId: inventoryEntry.ownerLedgerPartyId,
         productId: inventoryEntry.productId,
         locationId: inventoryEntry.locationId,
       })
@@ -320,6 +343,23 @@ async function loadSmartCollections(
           )
       : Promise.resolve([]),
   ]);
+  if (
+    definitions.some((definition) =>
+      definition.rules.some((rule) => rule.kind === "effectiveOwnerEquals"),
+    )
+  ) {
+    const ownership = await loadEffectiveInventoryOwnership(
+      db,
+      graph.inventory,
+    );
+    graph.inventory = graph.inventory.map((entry) => ({
+      ...entry,
+      effectiveOwnerId:
+        entry.placement === "stock" && entry.amount.value > 0
+          ? (ownership.get(entry.id)?.effectiveOwner?.id ?? null)
+          : null,
+    }));
+  }
   return {
     graph,
     evaluated: evaluateSmartCollections({ ...graph, expenses }, definitions),
@@ -356,7 +396,18 @@ export async function getSmartCollectionDetail(
     (pagination.pageIndex + 1) * pagination.pageSize,
   );
   const productIds = page.map((item) => item.id);
-  const placements = placementsByProductId(graph, true);
+  const ownerRules = definition.rules.filter(
+    (rule) => rule.kind === "effectiveOwnerEquals",
+  );
+  const visibleInventory = graph.inventory.filter(
+    (entry) =>
+      !ownerRules.length ||
+      ownerRules.some((rule) => entry.effectiveOwnerId === rule.value),
+  );
+  const placements = placementsByProductId(
+    { ...graph, inventory: visibleInventory },
+    true,
+  );
   const [images, purchases] = await Promise.all([
     getProductCoverImageUrlsByProductIds(db, productIds),
     loadPurchasesByProductId(db, productIds),
@@ -372,6 +423,20 @@ export async function getSmartCollectionDetail(
       direct: false,
       inherited: false,
       matches: result.members.get(item.id) ?? [],
+      inventory: visibleInventory
+        .filter((entry) => entry.productId === item.id)
+        .flatMap((entry) => {
+          const loc = graph.locationsById.get(entry.locationId);
+          return loc
+            ? [
+                {
+                  id: parseShortcodeFor("inventory", entry.shortcode),
+                  locationId: parseShortcodeFor("location", loc.shortcode),
+                  amount: entry.amount,
+                },
+              ]
+            : [];
+        }),
       placements: placements.get(item.id) ?? [],
       purchases: purchases.get(item.id) ?? [],
     })),

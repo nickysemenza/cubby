@@ -1,3 +1,4 @@
+import { optionalImageRepresentations } from "../image-summary.js";
 import { defineEntity } from "./definition.js";
 import { imageShortcode } from "../identifier-fields.js";
 import { z } from "zod";
@@ -64,6 +65,7 @@ export default defineEntity({
             "sha256",
             "renderStatus",
             "storageStatus",
+            "useOriginal",
             "verifiedAt",
             "createdAt",
             "updatedAt",
@@ -97,10 +99,48 @@ export default defineEntity({
         },
       },
       {
+        key: "representations",
+        kind: "json",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Original and validated image derivatives" }],
+        },
+        explanation: {
+          ruleId: "image.representations",
+          description:
+            "The original is preserved. A validated transparent derivative of the current original is preferred unless Use original is selected.",
+          resolver: "imageRepresentation",
+          sourceDependencies: [
+            { path: "representations.original", label: "Original image" },
+            {
+              path: "representations.transparent",
+              label: "Validated transparent derivative",
+            },
+            {
+              path: "representations.preferredKind",
+              label: "Selected representation",
+            },
+            { path: "useOriginal", label: "Use original preference" },
+          ],
+        },
+        validation: {
+          read: optionalImageRepresentations,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "url",
         kind: "text",
         display: { list: true, detail: true, listHidden: true },
         provenance: { kind: "derived", sources: [{ label: "Image storage" }] },
+        explanation: {
+          ruleId: "image.url",
+          description:
+            "The public image URL is generated from this Image record's current object-storage key.",
+          readPath: "url",
+          sourceDependencies: [{ path: "key", label: "Image storage key" }],
+        },
         validation: {
           read: z.url(),
           create: null,
@@ -232,6 +272,17 @@ export default defineEntity({
         },
       },
       {
+        key: "useOriginal",
+        kind: "boolean",
+        label: "Use original",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.boolean(),
+          create: null,
+          update: z.boolean().optional(),
+        },
+      },
+      {
         key: "verifiedAt",
         kind: "timestamp",
         nullable: true,
@@ -295,6 +346,7 @@ export default defineEntity({
       "sha256",
       { key: "renderStatus", specialized: "enum:ImageRenderStatus" },
       { key: "storageStatus", specialized: "enum:ImageStorageStatus" },
+      { key: "useOriginal", default: "literal", defaultValue: false },
       "verifiedAt",
       { key: "targetType", specialized: "enum:targetType" },
       "targetId",
@@ -304,7 +356,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [],
-    update: ["filename"],
+    update: ["filename", "useOriginal"],
     bulk: [],
     audit: [],
     sort: {
@@ -312,6 +364,7 @@ export default defineEntity({
       default: "createdAt",
     },
     output: [
+      "representations",
       "id",
       "url",
       "key",
@@ -325,6 +378,7 @@ export default defineEntity({
       "sha256",
       "renderStatus",
       "storageStatus",
+      "useOriginal",
       "verifiedAt",
       "createdAt",
       "updatedAt",
@@ -367,6 +421,20 @@ export default defineEntity({
           { value: "PENDING", label: "Pending", color: "var(--slate)" },
           { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
           { value: "FAILED", label: "Failed", color: "var(--destructive)" },
+        ],
+      },
+      {
+        columnId: "processingIssue",
+        field: "processingIssue",
+        kind: "multiselect",
+        placeholder: "Filter processing issues...",
+        options: [
+          { value: "failed", label: "Failed", color: "var(--destructive)" },
+          {
+            value: "review_needed",
+            label: "Needs review",
+            color: "var(--warning)",
+          },
         ],
       },
       {
@@ -413,7 +481,9 @@ export default defineEntity({
     ],
   },
   relations: [],
-  search: { enabled: false },
+  // Image filenames and the current preferred description/correction are
+  // searchable. The shared search document loader adds only direct owners.
+  search: { enabled: true },
   capabilities: {
     auditable: false,
     images: { storage: false },

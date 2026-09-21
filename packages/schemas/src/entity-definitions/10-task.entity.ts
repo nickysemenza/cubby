@@ -307,6 +307,19 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
         },
+        explanation: {
+          ruleId: "task.images",
+          description:
+            "Task images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
+          projections: {
+            list: "displayImages",
+            detail: "images",
+            summary: "displayImages",
+          },
+          sourceDependencies: [
+            { path: "displayImages", label: "Selected task images" },
+          ],
+        },
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {

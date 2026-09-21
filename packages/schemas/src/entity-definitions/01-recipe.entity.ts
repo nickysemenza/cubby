@@ -179,6 +179,19 @@ export default defineEntity({
         readKey: null,
         display: { list: true, listOrder: 2 },
         provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
+        explanation: {
+          ruleId: "recipe.cost-total",
+          description:
+            "Recipe cost is the stored costing result for the current recipe inputs, including its range and coverage state.",
+          resolver: "recipeTotals",
+          projections: {
+            list: "totals.cost",
+            summary: "totals.cost",
+          },
+          sourceDependencies: [
+            { path: "totals.cost", label: "Computed cost result" },
+          ],
+        },
       },
       {
         key: "caloriesTotal",
@@ -189,6 +202,19 @@ export default defineEntity({
         readKey: null,
         display: { list: true, listOrder: 3 },
         provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
+        explanation: {
+          ruleId: "recipe.calories-total",
+          description:
+            "Recipe calories are the stored nutrition result for the current recipe inputs, including its range and coverage state.",
+          resolver: "recipeTotals",
+          projections: {
+            list: "totals.nutrition.kcal",
+            summary: "totals.nutrition.kcal",
+          },
+          sourceDependencies: [
+            { path: "totals.nutrition.kcal", label: "Computed calorie result" },
+          ],
+        },
       },
       {
         key: "meals",
@@ -200,6 +226,12 @@ export default defineEntity({
         readKey: "mealCount",
         reference: { entity: "meal", multiple: true },
         display: { list: true, listOrder: 6 },
+        explanation: {
+          ruleId: "recipe.meal-count",
+          description:
+            "Meal count is the number of live meal-recipe links that currently include this recipe.",
+          readPath: "mealCount",
+        },
       },
       {
         key: "sections",
@@ -209,6 +241,15 @@ export default defineEntity({
         provenance: {
           kind: "relation",
           sources: [{ label: "Recipe sections" }],
+        },
+        explanation: {
+          ruleId: "recipe.sections",
+          description:
+            "Recipe contents are the current live sections and ingredient lines in their recorded order.",
+          readPath: "sections",
+          sourceDependencies: [
+            { path: "sections", label: "Recipe sections and ingredient lines" },
+          ],
         },
         validation: {
           read: recipeSectionsOut,
@@ -300,6 +341,15 @@ export default defineEntity({
           renderer: { list: "recipe-source", detail: "recipe-source" },
         },
         provenance: { kind: "derived", sources: [{ label: "Recipe source" }] },
+        explanation: {
+          ruleId: "recipe.source",
+          description:
+            "The source display is normalized from the recipe's cookbook, website, or free-form source record.",
+          readPath: "source",
+          sourceDependencies: [
+            { path: "source", label: "Normalized recipe source" },
+          ],
+        },
         validation: {
           read: recipeSource.nullable().optional(),
           create: null,
@@ -311,6 +361,16 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         display: { detail: true, renderer: { detail: "recipe-totals" } },
+        explanation: {
+          ruleId: "recipe.totals",
+          description:
+            "These cost and nutrition totals are the stored costing result exposed for the current recipe inputs.",
+          resolver: "recipeTotals",
+          readPath: "totals",
+          sourceDependencies: [
+            { path: "totals", label: "Computed recipe totals" },
+          ],
+        },
         validation: {
           read: recipeTotals.nullable().optional(),
           create: null,
@@ -324,6 +384,19 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
+        },
+        explanation: {
+          ruleId: "recipe.images",
+          description:
+            "Recipe images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
+          projections: {
+            list: "displayImages",
+            detail: "images",
+            summary: "displayImages",
+          },
+          sourceDependencies: [
+            { path: "displayImages", label: "Selected recipe images" },
+          ],
         },
         validation: {
           read: z.array(imageOut),
@@ -388,6 +461,15 @@ export default defineEntity({
         // override recipelist.tsx supplies.
         readKey: null,
         display: { list: true, listOrder: 4 },
+        explanation: {
+          ruleId: "recipe.total-time",
+          description:
+            "The time cell shows the recipe source's time text together with its normalized total-minute value when available.",
+          projections: { list: "meta.times", summary: "meta.times" },
+          sourceDependencies: [
+            { path: "meta.times", label: "Recipe time metadata" },
+          ],
+        },
       },
     ],
     storage: [

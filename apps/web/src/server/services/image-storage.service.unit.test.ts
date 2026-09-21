@@ -129,7 +129,7 @@ class MemoryImageStorage {
         this.culls.push(olderThanHours);
         return {
           count: this.cullable.length,
-          deletedIds: this.cullable.map((key) => `id:${key}`),
+          deletedIds: this.cullable.map((key) => testEntityId("image", key)),
           deletedKeys: this.cullable,
         };
       },

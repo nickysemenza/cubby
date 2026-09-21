@@ -6,7 +6,7 @@ import type {
 import type { InventorySessionResolution } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { ProductQuantitySummariesOut } from "@cubby/schemas/product";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCircle2, ListChecks, RotateCcw } from "lucide-react";
@@ -208,6 +208,23 @@ export function InventorySessionWorkbench({
     }),
     enabled: locationIds.length > 0,
   });
+  const snapshotInput = currentLocation
+    ? { locationId: currentLocation.id, placement: "stock" as const }
+    : undefined;
+  const snapshotPolicy = snapshotInput
+    ? inventory.locationSnapshot.policy(snapshotInput)
+    : undefined;
+  const currentSnapshotQuery = useQuery({
+    queryKey: snapshotInput
+      ? inventory.locationSnapshot.queryKey(snapshotInput)
+      : ["inventory", "locationSnapshot", "no-current-location"],
+    queryFn: snapshotInput
+      ? ({ signal }) =>
+          inventory.locationSnapshot.call(snapshotInput, { signal })
+      : skipToken,
+    meta: snapshotPolicy?.meta,
+    ...snapshotPolicy?.freshness,
+  });
 
   // Products flagged as duplicate-unique (expected once, but present in >1
   // location) — badged inline so a recount can catch the stray copy.
@@ -251,9 +268,7 @@ export function InventorySessionWorkbench({
     staleTime: Infinity,
   });
 
-  const currentItems = currentLocation
-    ? (inventoryByLocation.get(currentLocation.id) ?? [])
-    : [];
+  const currentItems = currentSnapshotQuery.data?.items ?? [];
   const unknownItems = unknownLocation
     ? (inventoryByLocation.get(unknownLocation.id) ?? [])
     : [];
@@ -296,6 +311,7 @@ export function InventorySessionWorkbench({
       },
       onError: (error) => {
         void inventoryQuery.refetch();
+        void currentSnapshotQuery.refetch();
         toast.error(getErrorMessage(error));
       },
     }),
@@ -476,6 +492,10 @@ export function InventorySessionWorkbench({
 
   const handleDone = () => {
     if (!currentLocation) return;
+    if (!currentSnapshotQuery.data) {
+      toast.error("The inventory snapshot is still loading. Try again.");
+      return;
+    }
     const resolutions: InventorySessionResolution[] = [];
     for (const item of currentItems) {
       const r = itemResolutions.get(item.id) ?? { kind: "verify" as const };
@@ -511,6 +531,7 @@ export function InventorySessionWorkbench({
           latest === null || item.updatedAt > latest ? item.updatedAt : latest,
         null,
       ),
+      snapshotToken: currentSnapshotQuery.data.snapshotToken,
       resolutions,
     });
   };

@@ -1,8 +1,13 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import {
   type expenseShortcode,
   type PurchaseId,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
+import {
+  confirmInventoryExpenseBeneficiaryInput,
+  expenseInventoryOwnershipContextInput,
+} from "@cubby/schemas/inventory-ownership";
 import {
   expenseAnalyzeInput,
   expenseAnalyzeOut,
@@ -40,6 +45,10 @@ import {
 } from "~/server/repo/expense/analyze";
 import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import {
+  confirmInventoryExpenseBeneficiary,
+  loadEffectiveInventoryOwnershipById,
+} from "~/server/repo/inventory";
+import {
   getPurchaseExpenses,
   getPurchaseLinkIdentityByID,
 } from "~/server/repo/purchase";
@@ -47,6 +56,10 @@ import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import { TraceNames, withTrace } from "~/server/tracing";
 import {
   bindWorkflow,
@@ -343,6 +356,66 @@ export const expenseTradeAffinityWorkflow = defineWorkflowOperation(
   "expense.tradeAffinity",
   expenseTradeAffinity,
 );
+
+export const expenseInventoryOwnershipContextWorkflow = defineWorkflowOperation(
+  "expense.inventoryOwnershipContext",
+  async (
+    db: Database,
+    input: z.output<typeof expenseInventoryOwnershipContextInput>,
+  ) => {
+    const inventoryId = await resolveOrThrow(
+      db,
+      "inventory",
+      input.inventoryEntryId,
+    );
+    const effectiveOwnership = await loadEffectiveInventoryOwnershipById(
+      db,
+      inventoryId,
+    );
+    if (!effectiveOwnership) {
+      throw new Error("Resolved inventory entry disappeared");
+    }
+    return {
+      inventoryEntryId: input.inventoryEntryId,
+      effectiveOwnership,
+      suggestedBeneficiaries: effectiveOwnership.effectiveOwner
+        ? [{ partyId: effectiveOwnership.effectiveOwner.id, weight: 1 }]
+        : [],
+    };
+  },
+);
+
+export const confirmInventoryExpenseBeneficiaryWorkflow =
+  defineWorkflowOperation(
+    "expense.confirmInventoryBeneficiary",
+    async (
+      context: { db: Database; actorContext: ActorContext },
+      input: z.output<typeof confirmInventoryExpenseBeneficiaryInput>,
+    ) => {
+      const [inventoryId, expenseId] = await Promise.all([
+        resolveOrThrow(context.db, "inventory", input.inventoryEntryId),
+        resolveOrThrow(context.db, "expense", input.expenseId),
+      ]);
+      const result = await confirmInventoryExpenseBeneficiary(
+        context.db,
+        inventoryId,
+        expenseId,
+        input.evidenceFingerprint,
+        context.actorContext,
+      );
+      await runMutationSideEffectsForEntities(
+        context.db,
+        mutationEvents(
+          "expense",
+          "updated",
+          [expenseId],
+          "expense.confirmInventoryBeneficiary",
+        ),
+      );
+      return { expenseId: input.expenseId, ...result };
+    },
+  );
+
 export const expenseMatchWorkflow = defineWorkflowOperation(
   "expense.match",
   matchExpenses,

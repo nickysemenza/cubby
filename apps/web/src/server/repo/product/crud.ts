@@ -14,6 +14,7 @@ import type {
   ProductId,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -50,6 +51,7 @@ import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import { startOperationDefinition } from "~/lib/start-operation-observability";
+import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
@@ -132,6 +134,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { hydrateImageReadProjection } from "../image-read-projection";
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,
@@ -146,6 +149,7 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "./gtin";
+import { enrichProductListItems } from "./list-enrichment";
 import {
   dbProductToAPI,
   dbProductToListAPI,
@@ -460,7 +464,7 @@ export const getProductImagesByProductIds = async (
     if (mapped) result[row.productId]?.push(mapped);
   }
 
-  return result;
+  return hydrateImageReadProjection(db, result);
 };
 
 /**
@@ -944,6 +948,7 @@ export const productList = async (
   pagination: PaginationParams,
   groupBy?: string,
   readIntent: ListReadIntent = "page",
+  usdaClient?: Pick<USDAClient, "findFoodsBatch">,
 ) => {
   const whereClause = await buildProductWhere(db, filters);
 
@@ -1041,12 +1046,16 @@ export const productList = async (
         displayImages,
       ),
   );
+  const productsWithUnitPrices = await enrichProductListItems(
+    products,
+    usdaClient,
+  );
 
   const priceSum = Number(aggregates[0]?.priceSum ?? 0);
   const expenseTotalSum = Number(expenseAggregates[0]?.expenseTotalSum ?? 0);
 
   return {
-    data: products,
+    data: productsWithUnitPrices,
     count: totalCount,
     sums: {
       price: Number.isNaN(priceSum) ? 0 : priceSum,
@@ -1149,7 +1158,7 @@ export const getProductCoverImageUrlsByProductIds = async (
   return new Map(
     ids.flatMap((id) => {
       const cover = covers.get(entityRefKey("product", id));
-      return cover ? [[id, cover.url]] : [];
+      return cover ? [[id, preferredImageUrl(cover)]] : [];
     }),
   );
 };

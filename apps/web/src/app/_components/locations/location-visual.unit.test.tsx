@@ -33,6 +33,7 @@ const image = (id: string): ImageOut =>
     size: 100,
     contentType: "image/jpeg",
     status: "UPLOADED",
+    useOriginal: false,
     width: 800,
     height: 600,
     detectedContentType: null,

@@ -8,8 +8,8 @@ import Observation
 /// Tenets, in order of how much they cost to get wrong:
 /// - Nothing auto-decrements. A row you did not touch commits as `verify`; Done says so first.
 /// - Skip writes nothing.
-/// - The snapshot guard is the only concurrency control: every commit sends the server's own
-///   `updatedAt` back; a stale answer refetches the bin and keeps what you staged, and a second
+/// - The snapshot guard is the only concurrency control: every commit sends the server's opaque
+///   location snapshot token back; a stale answer refetches the bin and keeps what you staged, and a second
 ///   consecutive stale stops retrying and asks you to reload.
 /// - An expected product scanned in its bin is matched locally, with no request. Only an
 ///   unexpected code goes to the server, through the same `ScanDrain` the sweep uses.
@@ -87,6 +87,7 @@ public final class RecountSession {
     private let service: any RecountService
     private let drain: ScanDrain<Event>
     private var duplicates: Set<ProductCode> = []
+    private var snapshotToken: String?
     private var consecutiveStale = 0
     private var unknownLocation: LocationCode?
     private var lastLocalMatch: (raw: String, at: Date)?
@@ -257,11 +258,15 @@ public final class RecountSession {
         defer { busy = false }
         lastError = nil
 
+        guard let snapshotToken else {
+            lastError = "This bin needs a fresh inventory snapshot before it can be counted."
+            return
+        }
         let resolutions = rows.map { ($0.id, $0.resolution ?? RecountResolution.verify) }
         let body = ReconcileSessionPayload(
             locationId: bin.id,
             expectedInventoryEntryIds: rows.map(\.id),
-            snapshotUpdatedAt: RecountRow.snapshotTimestamp(rows.map(\.row)),
+            snapshotToken: snapshotToken,
             resolutions: resolutions.map { $0.1.resolution(for: $0.0) }
         )
         do {
@@ -330,7 +335,10 @@ public final class RecountSession {
     /// one. Returns the task that will finish every refetch requested so far.
     @discardableResult
     private func requestRefetch(keepingResolutions: Bool) -> Task<Void, Never> {
-        if !keepingResolutions { dropResolutionsOnRefetch = true }
+        if !keepingResolutions {
+            dropResolutionsOnRefetch = true
+            snapshotToken = nil
+        }
         if let refetchTask {
             refetchWanted = true
             return refetchTask
@@ -354,20 +362,21 @@ public final class RecountSession {
         guard let bin = currentBin else { return }
         if !keepingResolutions { pendingVerify = [] }
         do {
-            let fresh = try await service.stockRows(at: bin.id)
+            let fresh = try await service.stockSnapshot(at: bin.id)
             guard currentBin?.id == bin.id else { return }
             // Snapshot after the await: anything staged while the fetch was in flight is kept.
             var staged: [InventoryEntryCode: RecountResolution] = [:]
             if keepingResolutions {
                 for state in rows { staged[state.id] = state.resolution }
             }
-            rows = fresh.map { row in
+            rows = fresh.rows.map { row in
                 RowState(
                     row: row,
                     resolution: staged[row.id] ?? (pendingVerify.contains(row.product.id) ? .verify : nil),
                     isDuplicate: duplicates.contains(row.product.id))
             }
-            pendingVerify.subtract(fresh.map(\.product.id))
+            snapshotToken = fresh.token
+            pendingVerify.subtract(fresh.rows.map(\.product.id))
             report()
         } catch {
             lastError = Self.message(for: error)
@@ -399,6 +408,7 @@ public final class RecountSession {
         lastLocalMatch = nil
         lastError = nil
         pendingVerify = []
+        snapshotToken = nil
     }
 
     func row(matchingScanned raw: String) -> RowState? {

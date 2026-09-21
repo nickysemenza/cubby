@@ -83,6 +83,7 @@ const NON_ENTITY_FK_TARGETS = {
   ImportPreparedOrder:
     "immutable purchase-import evidence preparation, not a domain entity",
   ImportSourceClaim: "idempotency provenance for imported evidence",
+  ImageDerivative: "a non-gallery representation owned by its original Image",
   OrderMail: "normalized mailbox evidence, not a domain entity",
 };
 
@@ -174,6 +175,18 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "OrderMailAttachment.imageId": {
     classification: "metadata",
     reason: "normalized mail attachment stored as image evidence",
+  },
+  "ImageDerivative.imageId": {
+    classification: "ownership",
+    reason: "a non-gallery transparent representation is owned by its original",
+  },
+  "ImageProcessingJob.imageId": {
+    classification: "metadata",
+    reason: "durable processing state is operational metadata for the original",
+  },
+  "ImageDescriptionCorrection.imageId": {
+    classification: "metadata",
+    reason: "a user-confirmed description is owned by the image it describes",
   },
   "PurchasePaymentEvidence.purchaseId": {
     classification: "metadata",

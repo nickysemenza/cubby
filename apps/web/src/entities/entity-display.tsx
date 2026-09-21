@@ -68,10 +68,12 @@ import {
   isBrowserRoutedEntity,
 } from "./entities";
 import { readReferenceField, type ReferenceItem } from "./entity-references";
+import { FieldExplanation } from "./field-explanation";
 import { listRendererColumns } from "./list-field-renderers";
 
 type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
+const explainedRecordSchema = z.object({ id: z.string() });
 const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
   entityFieldModels[entity].fields.filter((field) => field.display[surface]);
 
@@ -471,6 +473,7 @@ export function EntityBasicInfo<TRecord extends object>({
   footer?: ReactNode;
 }) {
   const fields = entityDetailFields(entity, fieldKeys);
+  const explainedRecord = explainedRecordSchema.safeParse(record);
   for (const key of [...Object.keys(overrides), ...Object.keys(afterFields)]) {
     if (!fields.some((field) => field.key === key)) {
       throw new Error(`Undeclared detail renderer for ${entity}.${key}`);
@@ -493,8 +496,27 @@ export function EntityBasicInfo<TRecord extends object>({
             : cohortLinks
               ? cohortFilterAction(entity, record, field)
               : undefined;
+        const explanationAction =
+          field.explanation && explainedRecord.success ? (
+            <FieldExplanation
+              entity={entity}
+              id={explainedRecord.data.id}
+              field={field.key}
+              label={field.label}
+            />
+          ) : undefined;
         return [
-          { label: field.label, ...rendered, filterAction },
+          {
+            label: field.label,
+            ...rendered,
+            filterAction:
+              filterAction || explanationAction ? (
+                <>
+                  {filterAction}
+                  {explanationAction}
+                </>
+              ) : undefined,
+          },
           ...(afterFields[field.key] ?? []),
         ];
       })}
@@ -847,6 +869,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             ...column.meta,
             entityColumnRole: "fact",
             provenance: field.provenance ?? undefined,
+            explanation: field.explanation
+              ? { entity, field: field.key, label: field.label }
+              : undefined,
           }),
           header:
             column.header === undefined ||
@@ -894,6 +919,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
+              explanation: field.explanation
+                ? { entity, field: field.key, label: field.label }
+                : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -940,6 +968,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
+              explanation: field.explanation
+                ? { entity, field: field.key, label: field.label }
+                : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
             }),
@@ -979,6 +1010,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
+              explanation: field.explanation
+                ? { entity, field: field.key, label: field.label }
+                : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -1012,6 +1046,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
+              explanation: field.explanation
+                ? { entity, field: field.key, label: field.label }
+                : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -1059,6 +1096,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
+              explanation: field.explanation
+                ? { entity, field: field.key, label: field.label }
+                : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               numeric: true,
@@ -1122,6 +1162,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
+              explanation: field.explanation
+                ? { entity, field: field.key, label: field.label }
+                : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -1155,6 +1198,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
+              explanation: field.explanation
+                ? { entity, field: field.key, label: field.label }
+                : undefined,
               className: widthClassName(field.display.width),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
@@ -1184,6 +1230,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
           meta: attachCubbyColumnMeta({
             entityColumnRole: "fact",
             provenance: field.provenance ?? undefined,
+            explanation: field.explanation
+              ? { entity, field: field.key, label: field.label }
+              : undefined,
             className: widthClassName(field.display.width),
             numeric:
               format === "currency" || format === "signedCurrency"

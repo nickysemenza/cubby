@@ -15,6 +15,7 @@ import type {
   WishOut,
   WishUpdateData,
 } from "@cubby/schemas/wish";
+import { wishPriceRange } from "@cubby/schemas/wish-fields";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -119,22 +120,27 @@ const candidateRowsForWishes = async (
   return byWish;
 };
 
-const toWishOut = (row: WishRow, candidates: CandidateRow[]): WishOut => ({
-  id: parseShortcodeFor("wish", row.shortcode),
-  name: row.name,
-  notes: row.notes,
-  acquiredAt: row.acquiredAt,
-  candidates: candidates.map((candidate) => ({
+const toWishOut = (row: WishRow, candidates: CandidateRow[]): WishOut => {
+  const publicCandidates = candidates.map((candidate) => ({
     id: parseShortcodeFor("product", candidate.shortcode),
     name: candidate.name,
     manufacturer: candidate.manufacturer,
     model: candidate.model,
     price: candidate.price,
     inventoried: candidate.inventoried,
-  })),
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});
+  }));
+  return {
+    id: parseShortcodeFor("wish", row.shortcode),
+    name: row.name,
+    notes: row.notes,
+    acquiredAt: row.acquiredAt,
+    candidates: publicCandidates,
+    candidateCount: publicCandidates.length,
+    priceRange: wishPriceRange(publicCandidates),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
 
 const hydrateWishes = async (
   db: Database | DrizzleTransaction,

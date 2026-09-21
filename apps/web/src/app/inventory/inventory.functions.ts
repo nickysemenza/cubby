@@ -17,4 +17,7 @@ export const inventory = defineOperationDomain(inventoryContract, {
   resolveScanStrays: { invalidates: ripple.inventory },
   findDuplicates: { tags: [["inventory", "findDuplicates"]] },
   getByLocationIds: { tags: [["inventory", "getByLocationIds"]] },
+  locationSnapshot: { tags: [["inventory", "locationSnapshot"]] },
+  setOwnership: { invalidates: ripple.inventory },
+  confirmOwnership: { invalidates: ripple.inventory },
 });

@@ -1,3 +1,4 @@
+import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 
@@ -48,7 +49,7 @@ export function PhotoViewer<TImage extends PhotoGridImage>({
         <div className="relative flex min-h-0 flex-1 items-center justify-center bg-muted/30 p-3 sm:p-5">
           <Image
             key={image.id}
-            src={image.url}
+            src={preferredImageUrl(image)}
             alt={image.filename}
             displayWidth={1600}
             className="max-h-[calc(100dvh-13rem)] w-full object-contain"

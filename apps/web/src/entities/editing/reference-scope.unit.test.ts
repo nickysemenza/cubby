@@ -10,6 +10,7 @@ describe("referenceScopeFor", () => {
   const reference = {
     entity: "planting",
     multiple: true,
+    filters: [],
     scope: [
       { sourceField: "locationId", targetField: "locationId" },
       { sourceField: "observedOn", targetField: "activeOn" },
@@ -43,5 +44,22 @@ describe("referenceScopeFor", () => {
       { id: "PLT-OLD", name: "PLT-OLD" },
       { id: "PLT-NEW", name: "New planting" },
     ]);
+  });
+});
+
+describe("fixed reference restrictions", () => {
+  it("intersects dependent filters so a picker cannot broaden declared owner kinds", () => {
+    const reference = {
+      entity: "ledgerParty",
+      multiple: false,
+      filters: [{ field: "kind", values: ["member", "guest"] }],
+      scope: [{ sourceField: "chosenKinds", targetField: "kind" }],
+    };
+    expect(
+      referenceScopeFor(reference, { chosenKinds: ["household", "guest"] }),
+    ).toEqual({ kind: ["guest"] });
+    expect(
+      referenceScopeFor(reference, { chosenKinds: "household" }),
+    ).toBeNull();
   });
 });

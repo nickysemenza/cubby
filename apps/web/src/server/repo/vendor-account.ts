@@ -75,6 +75,7 @@ const columns = {
   ledgerPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "VendorAccount"."ledgerPartyId")`,
   status: vendorAccount.status,
   browser: vendorAccount.browser,
+  inventoryOwnerDefaultEnabled: vendorAccount.inventoryOwnerDefaultEnabled,
   cursor: vendorAccount.cursor,
   lastRunAt: vendorAccount.lastRunAt,
   lastSuccessAt: vendorAccount.lastSuccessAt,
@@ -92,6 +93,7 @@ type VendorAccountRow = {
   ledgerPartyName: string;
   status: typeof vendorAccount.$inferSelect.status;
   browser: typeof vendorAccount.$inferSelect.browser;
+  inventoryOwnerDefaultEnabled: boolean;
   cursor: typeof vendorAccount.$inferSelect.cursor;
   lastRunAt: Date | null;
   lastSuccessAt: Date | null;
@@ -220,6 +222,7 @@ export async function createVendorAccount(
       ...refs,
       status: data.status,
       browser: data.browser,
+      inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
     });
     await logAuditEntry(tx, actor, {
       entityType: "vendorAccount",
@@ -259,6 +262,7 @@ export async function updateVendorAccount(
     label: data.label?.trim(),
     status: data.status,
     browser: data.browser,
+    inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
     ...refs,
   };
   await patchEntityRows(

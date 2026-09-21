@@ -215,6 +215,26 @@ const fieldRendererMetadata = (
   mobileInteractive: field.display.mobile?.interactive ?? false,
 });
 
+const renderFieldExplanationLiteral = (
+  explanation: CompiledEntity["fieldModel"]["fields"][number]["explanation"],
+): string => {
+  if (explanation === null) return "nil";
+  const projections = Object.entries(explanation.projections ?? {});
+  const projectionLiteral = projections.length
+    ? `[${projections
+        .map(([key, value]) => `${swiftString(key)}: ${swiftString(value)}`)
+        .join(", ")}]`
+    : "[:]";
+  const dependencies = (explanation.sourceDependencies ?? [])
+    .map(
+      (source) =>
+        `FieldExplanationDependency(path: ${swiftString(source.path)}, label: ${swiftString(source.label)})`,
+    )
+    .join(", ");
+  const actions = (explanation.actions ?? []).map(swiftString).join(", ");
+  return `FieldExplanation(ruleId: ${swiftString(explanation.ruleId)}, version: ${explanation.version}, description: ${swiftString(explanation.description)}, readPath: ${swiftOptionalString(explanation.readPath)}, resolver: ${swiftString(explanation.resolver)}, projections: ${projectionLiteral}, sourceDependencies: [${dependencies}], actions: [${actions}])`;
+};
+
 const renderFieldDescriptorLiteral = (
   field: CompiledEntity["fieldModel"]["fields"][number],
   fieldModel: CompiledEntity["fieldModel"],
@@ -227,7 +247,7 @@ const renderFieldDescriptorLiteral = (
   const reference =
     field.reference === null
       ? "nil"
-      : `FieldReference(entity: .${entityKey(field.reference.entity, `${context}.fields.${field.key}.reference`)}, multiple: ${swiftBool(field.reference.multiple)}, scope: [${field.reference.scope.map((binding) => `FieldReferenceScope(sourceField: ${swiftString(binding.sourceField)}, targetField: ${swiftString(binding.targetField)})`).join(", ")}])`;
+      : `FieldReference(entity: .${entityKey(field.reference.entity, `${context}.fields.${field.key}.reference`)}, multiple: ${swiftBool(field.reference.multiple)}, scope: [${field.reference.scope.map((binding) => `FieldReferenceScope(sourceField: ${swiftString(binding.sourceField)}, targetField: ${swiftString(binding.targetField)})`).join(", ")}], filters: [${field.reference.filters.map((filter) => `FieldReferenceFilter(field: ${swiftString(filter.field)}, values: ${swiftStringArray(filter.values)})`).join(", ")}])`;
   return (
     "FieldDescriptor(" +
     `key: ${swiftString(field.key)}, ` +
@@ -236,6 +256,7 @@ const renderFieldDescriptorLiteral = (
     `kind: .${swiftCaseName(field.kind)}, ` +
     `nullable: ${swiftBool(field.nullable)}, ` +
     `reference: ${reference}, ` +
+    `explanation: ${renderFieldExplanationLiteral(field.explanation)}, ` +
     `controlKind: ${controlKind}, ` +
     `controlRenderer: ${swiftOptionalRenderer(rendererMetadata.control)}, ` +
     `controlSection: ${swiftOptionalString(field.control?.section ?? null)}, ` +
@@ -276,7 +297,8 @@ const renderDetailSectionLiteral = (
     `id: ${swiftString(id)}, ` +
     `title: ${swiftOptionalString(section.title)}, ` +
     `placement: .${section.placement}, ` +
-    `collapsed: ${swiftBool(section.collapsed)}`;
+    `collapsed: ${swiftBool(section.collapsed)}, ` +
+    `explanationField: ${swiftOptionalString(section.kind === "slot" ? section.explanationField : null)}`;
   switch (section.kind) {
     case "fields":
       return `DetailSection(${common}, kind: .fields(${swiftStringArray(section.fields)}))`;
@@ -544,10 +566,29 @@ export const renderSwiftEntityCatalog = (
     "  public let entity: EntityKey\n" +
     "  public let multiple: Bool\n" +
     "  public let scope: [FieldReferenceScope]\n" +
+    "  public let filters: [FieldReferenceFilter]\n" +
     "}\n\n" +
     "public struct FieldReferenceScope: Codable, Sendable, Hashable {\n" +
     "  public let sourceField: String\n" +
     "  public let targetField: String\n" +
+    "}\n\n" +
+    "public struct FieldReferenceFilter: Codable, Sendable, Hashable {\n" +
+    "  public let field: String\n" +
+    "  public let values: [String]\n" +
+    "}\n\n" +
+    "public struct FieldExplanationDependency: Codable, Sendable, Hashable {\n" +
+    "  public let path: String\n" +
+    "  public let label: String\n" +
+    "}\n\n" +
+    "public struct FieldExplanation: Codable, Sendable {\n" +
+    "  public let ruleId: String\n" +
+    "  public let version: Int\n" +
+    "  public let description: String\n" +
+    "  public let readPath: String?\n" +
+    "  public let resolver: String\n" +
+    "  public let projections: [String: String]\n" +
+    "  public let sourceDependencies: [FieldExplanationDependency]\n" +
+    "  public let actions: [String]\n" +
     "}\n\n" +
     "public struct FieldDescriptor: Codable, Sendable {\n" +
     "  public let key: String\n" +
@@ -558,6 +599,7 @@ export const renderSwiftEntityCatalog = (
     "  /// Whether the server accepts `null` for this field; only a nullable key may be cleared.\n" +
     "  public let nullable: Bool\n" +
     "  public let reference: FieldReference?\n" +
+    "  public let explanation: FieldExplanation?\n" +
     "  public let controlKind: EntityControlKind?\n" +
     "  /// Semantic specialized-control id; the platform registry owns its implementation.\n" +
     "  public let controlRenderer: ControlRendererID?\n" +
@@ -655,6 +697,7 @@ export const renderSwiftEntityCatalog = (
     "  public let title: String?\n" +
     "  public let placement: SectionPlacement\n" +
     "  public let collapsed: Bool\n" +
+    "  public let explanationField: String?\n" +
     "  public let kind: Kind\n" +
     "}\n\n" +
     "public enum DetailVariant: String, Codable, Sendable, Hashable {\n" +

@@ -440,7 +440,7 @@ export const listKitComponentRowsWorkflow = bindWorkflow(
       productShortcodes.all(context.readDb, input.parentProductIds),
     )
     .call("rows", async ({ context }, { productIds }) =>
-      listKitComponentRows(context.readDb, productIds),
+      listKitComponentRows(context.readDb, productIds, context.usdaClient),
     )
     .output(({ rows }) => rows),
   (

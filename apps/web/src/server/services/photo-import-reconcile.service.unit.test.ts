@@ -19,6 +19,7 @@ const uploadedImage: ImageWithEntity = {
   size: 1,
   contentType: "image/jpeg",
   status: "UPLOADED",
+  useOriginal: false,
   createdAt: new Date("2026-09-17T00:00:00Z"),
   updatedAt: new Date("2026-09-17T00:00:00Z"),
   entityType: "PRODUCT",

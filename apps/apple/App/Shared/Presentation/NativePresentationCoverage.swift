@@ -21,7 +21,7 @@ enum NativePresentationCoverage {
 
     static func control(_ renderer: ControlRendererID) -> Status {
         switch renderer {
-        case .amount, .entityMultiSelect, .tagList, .vendorName:
+        case .amount, .entityMultiSelect, .ledgerAttributions, .tagList, .vendorName:
             .implemented
         case .entitySelect, .money, .url:
             .generic
@@ -41,6 +41,8 @@ enum NativePresentationCoverage {
     static func detail(_ renderer: DetailRendererID) -> Status {
         switch renderer {
         case .expenseProject,
+            .ownerLedgerPartyId,
+            .ownershipMode,
             .productFdcId,
             .productExternalIds,
             .productId,
@@ -51,6 +53,8 @@ enum NativePresentationCoverage {
             .generic
         case .recipeSource:
             .implemented
+        case .effectiveOwnership:
+            .ownedElsewhere
         case .financialAccountIdentity,
             .financialAccountSourceAliases,
             .financialTransactionSourceRefs,
@@ -71,7 +75,7 @@ enum NativePresentationCoverage {
     /// a newly copied slot cannot accidentally select the wrong entity's implementation.
     static func detailSlot(_ id: String) -> Status {
         switch id {
-        case "meal.nutrition": .implemented
+        case "ledgerParty.wardrobe", "meal.nutrition": .implemented
         case "product.nutrition",
             "product.unit-mappings",
             "product.fits-with",
@@ -118,7 +122,6 @@ enum NativePresentationCoverage {
             .unsupported("Unknown native list slot.")
         }
     }
-
     static func unsupportedControl(_ field: FieldDescriptor) -> String? {
         guard let renderer = field.controlRenderer else { return nil }
         guard case .unsupported(let reason) = control(renderer) else { return nil }
@@ -135,5 +138,4 @@ enum NativePresentationCoverage {
         guard case .unsupported(let reason) = detailSlot(slot) else { return nil }
         return reason
     }
-
 }

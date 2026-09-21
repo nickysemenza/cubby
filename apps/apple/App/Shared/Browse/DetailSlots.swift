@@ -11,6 +11,8 @@ enum DetailSlotRegistry {
         switch (key, slot) {
         case (.meal, "meal.nutrition"):
             AnyView(MealNutritionSlot(mealID: row.id))
+        case (.ledgerParty, "ledgerParty.wardrobe"):
+            AnyView(WardrobeDetailSlot(ownerID: row.id, ownerName: row.title))
         default:
             nil
         }
@@ -24,7 +26,25 @@ enum DetailSlotRegistry {
     static func heroActions(
         for key: EntityKey, declared: [String], row: EntityRow, onChanged: @escaping () -> Void
     ) -> AnyView? {
-        nil
+        switch key {
+        case .inventory:
+            guard let detail = try? row.decode(InventoryDetail.self) else { return nil }
+            return AnyView(InventoryOwnershipControl(detail: detail, onChanged: onChanged))
+        default:
+            return nil
+        }
+    }
+}
+
+private struct WardrobeDetailSlot: View {
+    let ownerID: String
+    let ownerName: String
+
+    var body: some View {
+        NavigationLink(value: Route.wardrobe(ownerID: ownerID, ownerName: ownerName)) {
+            Label("Browse wardrobe", systemImage: "tshirt")
+        }
+        .accessibilityIdentifier("detail.ledgerParty.wardrobe")
     }
 }
 

@@ -47,6 +47,7 @@ const imageRecord = imageWithEntitySchema.parse({
   size: 1024,
   contentType: "image/jpeg",
   status: "UPLOADED",
+  useOriginal: false,
   width: 640,
   height: 480,
   detectedContentType: "image/jpeg",

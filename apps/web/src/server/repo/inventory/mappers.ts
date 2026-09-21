@@ -4,6 +4,7 @@ import {
   type inventoryListItemOut,
   type inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
+import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import type { z } from "zod";
 
 import {
@@ -31,16 +32,36 @@ type InventoryEntryBaseDB = Pick<
   | "valuation"
   | "verifiedAt"
   | "placement"
+  | "ownershipMode"
   | "createdAt"
   | "updatedAt"
 >;
 
-const inventoryEntryBaseFields = (entry: InventoryEntryBaseDB) => ({
+const unresolvedOwnership = (
+  entry: InventoryEntryBaseDB,
+): EffectiveInventoryOwnership => ({
+  mode: entry.ownershipMode,
+  explicitOwner: null,
+  effectiveOwner: null,
+  source: entry.ownershipMode === "unassigned" ? "unassigned" : "unresolved",
+  basis: null,
+  evidence: null,
+  evidenceFingerprint: "unresolved",
+  matchesInheritedOwner: false,
+});
+
+const inventoryEntryBaseFields = (
+  entry: InventoryEntryBaseDB,
+  ownership: EffectiveInventoryOwnership = unresolvedOwnership(entry),
+) => ({
   id: parseShortcodeFor("inventory", entry.shortcode),
   amount: parseInventoryAmount(entry.amount, entry.id),
   valuation: entry.valuation,
   verifiedAt: entry.verifiedAt,
   placement: entry.placement,
+  ownershipMode: entry.ownershipMode,
+  ownerLedgerPartyId: ownership.explicitOwner?.id ?? null,
+  effectiveOwnership: ownership,
   createdAt: entry.createdAt,
   updatedAt: entry.updatedAt,
 });
@@ -61,14 +82,16 @@ export const requireLoadedProductPricing = (
 export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
   pricing: ProductPricing,
+  ownership?: EffectiveInventoryOwnership,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (
   inventoryentry,
   pricing,
+  ownership,
 ) => {
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseFields(inventoryentry),
+    ...inventoryEntryBaseFields(inventoryentry, ownership),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       lastBulkInventory: location.lastBulkInventory,
@@ -114,14 +137,16 @@ export const dbInventoryEntryToAPI: (
 export const dbInventoryEntryToListAPI: (
   inventoryentry: InventoryEntryListDB,
   pricing: ProductPricing,
+  ownership?: EffectiveInventoryOwnership,
 ) => Omit<z.infer<typeof inventoryListItemOut>, "displayImages"> = (
   inventoryentry,
   pricing,
+  ownership,
 ) => {
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseFields(inventoryentry),
+    ...inventoryEntryBaseFields(inventoryentry, ownership),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       name: location.name,

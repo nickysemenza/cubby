@@ -1,3 +1,7 @@
+import {
+  preferredImageUrl,
+  type ImageRepresentations,
+} from "@cubby/schemas/image-summary";
 import { type ReactNode } from "react";
 
 import { Image } from "~/components/ui/image";
@@ -6,6 +10,7 @@ import { cn } from "~/lib/utils";
 export interface PhotoGridImage {
   id: string;
   url: string;
+  representations?: ImageRepresentations;
   filename: string;
 }
 
@@ -51,7 +56,7 @@ export function PhotoGrid<TImage extends PhotoGridImage>({
             />
           ) : null}
           <Image
-            src={image.url}
+            src={preferredImageUrl(image)}
             alt={image.filename}
             displayWidth={320}
             className={cn(

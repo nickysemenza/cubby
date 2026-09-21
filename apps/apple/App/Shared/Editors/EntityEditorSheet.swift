@@ -8,8 +8,8 @@ import SwiftUI
 /// Structured fields the catalog declares that native does not render remain in the web editor
 /// (product `unitMappings`, recipe `sections`/`yield`/`meta`, expense evidence, financial-account
 /// identity, and financial-transaction source refs). Typed generic controls, entity references,
-/// amounts, tags, and vendor names render through `EntityFieldControl`; image keys render through
-/// `EntityImageBlock`.
+/// amounts, tags, vendor names, and expense attributions render through `EntityFieldControl`;
+/// image keys render through `EntityImageBlock`.
 struct EntityEditorSheet: View {
     let key: EntityKey
     let mode: GenericEntityEditModel.Mode

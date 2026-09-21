@@ -18,7 +18,9 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
+import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import type { MergeProductsInput } from "@cubby/schemas/product";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
@@ -295,12 +297,19 @@ type InventoryRow = {
   productId: ProductId;
   locationId: string;
   placement: InventoryPlacement;
+  ownershipMode: InventoryOwnershipMode;
+  ownerLedgerPartyId: LedgerPartyId | null;
   amount: Amount;
 };
 
-/** `(locationId, placement)` — the shelf slot two rows must share to fold. */
-const inventorySlot = (row: { locationId: string; placement: string }) =>
-  `${row.locationId}\u0000${row.placement}`;
+/** Raw ownership is part of the slot; inferred ownership never is. */
+const inventorySlot = (row: InventoryRow) =>
+  [
+    row.locationId,
+    row.placement,
+    row.ownershipMode,
+    row.ownerLedgerPartyId ?? "none",
+  ].join("\u0000");
 
 /**
  * The same-location fold, computed without writing so both the mutation and
@@ -751,6 +760,8 @@ async function buildProductMergePlan(
         productId: true,
         locationId: true,
         placement: true,
+        ownershipMode: true,
+        ownerLedgerPartyId: true,
         amount: true,
       },
     })

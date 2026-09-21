@@ -37,6 +37,10 @@ import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import {
+  handleImageProcessingSocketUpgrade,
+  isImageProcessingSocketUpgrade,
+} from "./server/image-processing/direct-socket-route";
+import {
   resolvePurchaseAgentBrowserOperation,
   type PurchaseAgentCommand,
 } from "./server/purchase-import/agent-browser-command";
@@ -213,13 +217,21 @@ const handler = {
                       boundedStale: env.HYPERDRIVE_CACHED.connectionString,
                     },
                     async () => {
-                      if (isDirectBrowserSocketUpgrade(request)) {
+                      if (
+                        isDirectBrowserSocketUpgrade(request) ||
+                        isImageProcessingSocketUpgrade(request)
+                      ) {
                         const response = await withTrace(
-                          "cf.purchaseImportSocket",
+                          isImageProcessingSocketUpgrade(request)
+                            ? "cf.imageProcessingSocket"
+                            : "cf.purchaseImportSocket",
                           () =>
                             runWithExecutionCtx(
                               ctx,
-                              () => handleDirectBrowserSocketUpgrade(request),
+                              () =>
+                                isImageProcessingSocketUpgrade(request)
+                                  ? handleImageProcessingSocketUpgrade(request)
+                                  : handleDirectBrowserSocketUpgrade(request),
                               url.origin,
                             ),
                         );
@@ -406,6 +418,18 @@ const handler = {
     env: Env,
   ) {
     setCfEnv(env);
+    // Durable image rows repair queue loss and expired device leases independently
+    // of Gmail credentials. Pausing preserves queued work; cleanup remains safe.
+    if (controller.cron === "*/5 * * * *") {
+      await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+        const [{ db }, { repairImageProcessingWork }] = await Promise.all([
+          import("./server/db"),
+          import("./server/repo/image-processing-maintenance"),
+        ]);
+        await repairImageProcessingWork(db);
+      });
+      return;
+    }
     if (controller.cron === "0 * * * *") {
       // SAFETY: Worker secrets are runtime bindings intentionally absent from
       // generated Wrangler types; both values are checked before use.
@@ -927,6 +951,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
 
 export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
 export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
+export { ImageProcessingDurableObject } from "./server/image-processing/durable-object";
 export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
 
 export default Sentry.withSentry(

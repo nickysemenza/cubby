@@ -258,6 +258,7 @@ const vendorColumns = {
     sha256: image.sha256,
     renderStatus: image.renderStatus,
     storageStatus: image.storageStatus,
+    useOriginal: image.useOriginal,
     verifiedAt: image.verifiedAt,
     createdAt: image.createdAt,
     updatedAt: image.updatedAt,
@@ -299,6 +300,7 @@ type VendorRow = {
       | "missing"
       | "metadata_mismatch"
       | null;
+    useOriginal: boolean;
     verifiedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;

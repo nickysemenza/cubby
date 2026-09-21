@@ -24,6 +24,7 @@ export const schemaTemplateInputs = [
   "./src/server/db/generated/**/*.ts",
   "../../packages/schemas/src/expense-line-kind.ts",
   "../../packages/schemas/src/image.ts",
+  "../../packages/schemas/src/inventory-ownership.ts",
   "../../packages/schemas/src/meal-classification.ts",
   "../../packages/schemas/src/product.ts",
   "../../packages/schemas/src/project.ts",

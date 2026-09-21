@@ -157,6 +157,13 @@ const checkSections = (
         timelineSection = true;
         break;
       case "slot":
+        if (section.explanationField !== null) {
+          const field = lookup.read(section.explanationField, where);
+          if (field.explanation === null)
+            throw new EntityDeclarationError(
+              `${context}.${where} explanationField ${section.explanationField} has no declared explanation.`,
+            );
+        }
         break;
     }
   }

@@ -729,10 +729,28 @@ export type ProductInventoryEntriesByIdOut = z.infer<
   typeof productInventoryEntriesByIdOut
 >;
 
+export const productUnitPriceMappings = z
+  .array(unitMappingWithMetadata)
+  .default([]);
+export const productDataGaps = z.array(productDataCheck);
+
 export const productListItemOut = z.object({
   ...productTopLevelFields,
   displayImages: displayImagesField,
   unitMappings: z.array(unitMappingOut),
+  unitPriceMappings: productUnitPriceMappings,
+  unitPrice: z
+    .object({
+      natural: z.object({ price: z.number(), unit: z.string() }).nullable(),
+      perGram: z.number().nullable(),
+    })
+    .nullable()
+    .default(null),
+  food: foodSummary.nullable().default(null),
+  modelPresence: z.boolean(),
+  upcPresence: z.boolean(),
+  notesPresence: z.boolean(),
+  dataGaps: productDataGaps,
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
   expenseCount: z.number().int(),
@@ -754,6 +772,7 @@ export type ProductListItem = z.infer<typeof productListItemOut>;
 export const productListItemMcpEntityOut = productListItemOut.extend({
   externalIds: z.array(productExternalIdMcpEntityOut),
   unitMappings: z.array(productUnitMappingMcpEntityOut),
+  food: foodSummaryMcpOut.nullable(),
 });
 
 export const productWithFoodOut = z.object({

@@ -84,5 +84,20 @@ export async function handleBackgroundTask(
       }
       return "succeeded";
     }
+    case "image-processing.wakeup": {
+      const { dispatchImageProcessingWakeup } =
+        await import("~/server/image-processing/dispatch");
+      const outcome = await dispatchImageProcessingWakeup(db, task.jobId);
+      return outcome === "skipped" ? "skipped" : "succeeded";
+    }
+    case "image-processing.result": {
+      const { completeCompanionImageProcessingResult } =
+        await import("~/server/services/image-processing.service");
+      const completion = await completeCompanionImageProcessingResult(
+        db,
+        task.result,
+      );
+      return completion.adopted ? "succeeded" : "skipped";
+    }
   }
 }

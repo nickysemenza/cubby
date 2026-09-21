@@ -19,6 +19,7 @@ import {
   markImageUploaded,
 } from "~/server/repo/image";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import {
   attachFileToEntity,
   createFileUpload,
@@ -37,6 +38,15 @@ export const markImageUploadedWorkflow = bindWorkflow(
     )
     .commit("markUploaded", async ({ context }, { resolveImage }) =>
       markImageUploaded(context, resolveImage),
+    )
+    .commit("scheduleImageProcessing", async ({ context }, { markUploaded }) =>
+      // Settings default disabled/paused, so rollout creates no automatic work
+      // until the owner explicitly enables it. Durable jobs repair missed wakes.
+      scheduleImageProcessingJobs(context, {
+        id: markUploaded.id,
+        kinds: ["describe_image", "subject_lift"],
+        automatic: true,
+      }),
     )
     .output(({ markUploaded }) => markUploaded),
   (db: Database, input: MarkUploadedInput) => ({ context: db, input }),

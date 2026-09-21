@@ -5,12 +5,15 @@ import {
   bulkDiscardInventoryWorkflow,
   bulkMoveInventoryWorkflow,
   bulkProcessInventoryWorkflow,
+  confirmInventoryOwnershipWorkflow,
   findInventoryDuplicatesWorkflow,
   getInventoryByLocationIdsWorkflow,
+  getInventoryLocationSnapshotWorkflow,
   moveInventoryEntriesWorkflow,
   reconcileInventorySessionWorkflow,
   resolveInventoryScanStraysWorkflow,
   scanInventoryAtLocationWorkflow,
+  setInventoryOwnershipWorkflow,
 } from "~/server/workflows/inventory.server";
 
 export const inventoryHandlers = implementOperationDomain(inventoryContract, {
@@ -33,4 +36,16 @@ export const inventoryHandlers = implementOperationDomain(inventoryContract, {
     findInventoryDuplicatesWorkflow(context.db, input),
   getByLocationIds: (context, input) =>
     getInventoryByLocationIdsWorkflow(context.db, input),
+  locationSnapshot: (context, input) =>
+    getInventoryLocationSnapshotWorkflow(context.db, input),
+  setOwnership: (context, input) =>
+    setInventoryOwnershipWorkflow(
+      { db: context.db, actorContext: context.actorContext },
+      input,
+    ),
+  confirmOwnership: (context, input) =>
+    confirmInventoryOwnershipWorkflow(
+      { db: context.db, actorContext: context.actorContext },
+      input,
+    ),
 });

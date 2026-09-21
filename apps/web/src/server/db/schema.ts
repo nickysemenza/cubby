@@ -1,4 +1,7 @@
-import type { AiAnalysisEntityType } from "@cubby/schemas/ai";
+import type {
+  AiAnalysisEntityType,
+  AiAnalysisRuntime,
+} from "@cubby/schemas/ai";
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
 import type { Entity } from "@cubby/schemas/entity-core";
@@ -811,6 +814,7 @@ export const suggestionDismissal = pgTable(
 export const inventoryEntry = pgTable(
   "InventoryEntry",
   generatedInventoryColumns({
+    ledgerParty: (): AnyPgColumn => ledgerParty.id,
     product: (): AnyPgColumn => product.id,
     location: (): AnyPgColumn => location.id,
   }),
@@ -821,8 +825,19 @@ export const inventoryEntry = pgTable(
     // Strictly more permissive than the old two-column form, so the CREATE can
     // never fail on existing data.
     uniqueIndex("InventoryEntry_productId_locationId_key")
-      .on(table.productId, table.locationId, table.placement)
+      .on(
+        table.productId,
+        table.locationId,
+        table.placement,
+        table.ownershipMode,
+        sql`coalesce(${table.ownerLedgerPartyId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      )
       .where(sql`${table.deletedAt} IS NULL`),
+    check(
+      "InventoryEntry_ownership_valid",
+      sql`(${table.ownershipMode} = 'person' AND ${table.ownerLedgerPartyId} IS NOT NULL) OR (${table.ownershipMode} IN ('inherit', 'unassigned') AND ${table.ownerLedgerPartyId} IS NULL)`,
+    ),
+    index("InventoryEntry_owner_idx").on(table.ownerLedgerPartyId),
     index("InventoryEntry_productId_idx").on(table.productId),
     index("InventoryEntry_locationId_idx").on(table.locationId),
     index("InventoryEntry_createdAt_idx").on(table.createdAt),
@@ -2736,6 +2751,10 @@ export const gardenEntryPlantingRelations = relations(
 );
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
+  owner: one(ledgerParty, {
+    fields: [inventoryEntry.ownerLedgerPartyId],
+    references: [ledgerParty.id],
+  }),
   product: one(product, {
     fields: [inventoryEntry.productId],
     references: [product.id],
@@ -3118,6 +3137,9 @@ export const aiAnalysis = pgTable(
     entityType: text("entityType").notNull().$type<AiAnalysisEntityType>(),
     entityId: uuid("entityId"),
     feature: text("feature").notNull(),
+    provider: text("provider"),
+    resultSchemaRevision: integer("resultSchemaRevision"),
+    runtime: jsonb("runtime").$type<AiAnalysisRuntime>(),
     model: text("model").notNull(),
     promptVersion: text("promptVersion").notNull(),
     inputFingerprint: text("inputFingerprint").notNull(),
@@ -3134,6 +3156,8 @@ export const aiAnalysis = pgTable(
         table.model,
         table.promptVersion,
         table.inputFingerprint,
+        sql`coalesce(${table.provider}, '')`,
+        sql`coalesce(${table.resultSchemaRevision}, 0)`,
       )
       .where(sql`${table.deletedAt} IS NULL`),
     index("AiAnalysis_entity_idx").on(table.entityType, table.entityId),
@@ -3294,3 +3318,10 @@ export const pgStatStatements = pgView("pg_stat_statements", {
 export const pgStatStatementsInfo = pgView("pg_stat_statements_info", {
   dealloc: text("dealloc"),
 }).existing();
+
+export {
+  imageDerivative,
+  imageProcessingJob,
+  imageDescriptionCorrection,
+  imageProcessingOrphan,
+} from "./image-processing-schema";

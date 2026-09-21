@@ -10,6 +10,7 @@ import {
   expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
+  imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -22,6 +23,7 @@ import {
   vendorShortcode,
   nonEmptyTuple,
 } from "./identifiers";
+import { imageProcessingIssue } from "./image";
 import {
   plainDate,
   type ProjectAttentionType,
@@ -71,6 +73,16 @@ export const partiallyImportedCookbookSchema = z.object({
 });
 export type PartiallyImportedCookbook = z.infer<
   typeof partiallyImportedCookbookSchema
+>;
+
+/** An uploaded image with a durable current-processing finding. */
+export const imageProcessingProblemSchema = z.object({
+  id: imageShortcode,
+  filename: z.string(),
+  processingIssue: imageProcessingIssue,
+});
+export type ImageProcessingProblem = z.infer<
+  typeof imageProcessingProblemSchema
 >;
 
 // A product that is stocked but carries no `price`, so its inventory entries
@@ -730,6 +742,7 @@ const problemsFastFields = {
   purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
+  imageProcessingIssues: z.array(imageProcessingProblemSchema),
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
   understatedCostMeals: z.array(understatedCostMealSchema),
@@ -1087,6 +1100,10 @@ export const PROBLEM_CLASS = {
   staleLocations: "coverage",
   neverVerifiedInventory: "coverage",
   productsWithNoImages: "coverage",
+  // Failed processing is actionable, while review-needed eligibility is an
+  // intentionally ambiguous human worklist; keep both under one attention
+  // section so the list and Problems page share one membership predicate.
+  imageProcessingIssues: "coverage",
   vendorsWithoutLogos: "coverage",
   // Advisory, not backlog (see the note above): a purchase whose expenses disagree
   // with its stated total is often correct as-is, and the only mechanical "fix"

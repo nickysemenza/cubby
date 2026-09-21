@@ -75,6 +75,7 @@ describe("consolidated household ledger", () => {
           provisional: false,
           sourceAliases: [],
           ledgerPartyId: guest.output.id,
+          inventoryOwnerDefaultEnabled: false,
           notes: null,
         },
         ctx.actor,
@@ -313,7 +314,7 @@ describe("consolidated household ledger", () => {
     await expect(
       deleteLedgerParties(ctx.db, [member.output.id], ctx.actor),
     ).rejects.toThrow(
-      "A ledger party with live attributions, accounts, transfers, meal portions, or meal food entries cannot be deleted.",
+      "A ledger party with live attributions, accounts, inventory ownership, transfers, meal portions, or meal food entries cannot be deleted.",
     );
     await expect(
       deleteFinancialTransactions(

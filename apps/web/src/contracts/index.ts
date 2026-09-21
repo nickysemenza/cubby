@@ -31,6 +31,7 @@ export {
 export { householdContributionContract } from "./household-contribution.contract";
 export { imageUploadContract } from "./image-upload.contract";
 export { imageContract } from "./image.contract";
+export { imageProcessingContract } from "./image-processing.contract";
 export { ingredientContract } from "./ingredient.contract";
 export { inventoryContract } from "./inventory.contract";
 export { locationContract } from "./location.contract";
@@ -59,3 +60,5 @@ export { taskContract } from "./task.contract";
 export { upcContract } from "./upc.contract";
 export { usdaFoodContract } from "./usda.contract";
 export { vendorContract } from "./vendor.contract";
+
+export { fieldExplanationContract } from "./field-explanation.contract";

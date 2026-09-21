@@ -89,3 +89,30 @@ export const searchIndexRepairEventSchema = z.discriminatedUnion("type", [
 export type SearchIndexRepairEvent = z.infer<
   typeof searchIndexRepairEventSchema
 >;
+
+export const imageProcessingSettings = z.object({
+  enabled: z.boolean(),
+  paused: z.boolean(),
+});
+export const imageProcessingMaintenanceCounts = z.object({
+  current: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+  waiting: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  reviewNeeded: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+});
+export const imageProcessingMaintenanceOutput = z.object({
+  settings: imageProcessingSettings,
+  description: imageProcessingMaintenanceCounts,
+  cutout: imageProcessingMaintenanceCounts,
+});
+export const imageProcessingBatchInput = z.object({
+  batchSize: z.number().int().min(1).max(100).default(25),
+  retryFailures: z.boolean().default(false),
+});
+export const imageProcessingBatchOutput = z.object({
+  scheduled: z.number().int().nonnegative(),
+  paused: z.boolean(),
+});

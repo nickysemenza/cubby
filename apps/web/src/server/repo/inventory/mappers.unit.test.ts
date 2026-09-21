@@ -78,6 +78,8 @@ const baseInventoryEntry = {
   valuation: 9,
   verifiedAt: null,
   placement: "stock" as const,
+  ownershipMode: "inherit" as const,
+  ownerLedgerPartyId: null,
 };
 
 describe("inventory mappers", () => {
@@ -190,6 +192,18 @@ describe("inventory mappers", () => {
       valuation: 9,
       verifiedAt: null,
       placement: "stock" as const,
+      ownershipMode: "inherit" as const,
+      ownerLedgerPartyId: null,
+      effectiveOwnership: {
+        mode: "inherit",
+        explicitOwner: null,
+        effectiveOwner: null,
+        source: "unresolved",
+        basis: null,
+        evidence: null,
+        evidenceFingerprint: "unresolved",
+        matchesInheritedOwner: false,
+      },
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
       location: {

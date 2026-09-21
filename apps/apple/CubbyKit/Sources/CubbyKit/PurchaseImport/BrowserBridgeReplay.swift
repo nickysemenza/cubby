@@ -92,24 +92,16 @@ public actor FileBrowserBridgeReplayStore: BrowserBridgeReplayStoring {
     public static func applicationSupport(namespace: String = "default") throws
         -> FileBrowserBridgeReplayStore
     {
-        let support = try FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let safeNamespace = namespace.map { character in
-            character.isLetter || character.isNumber || character == "-" ? character : "_"
-        }
-        let directory = support.appendingPathComponent(
-            "Cubby/BrowserBridge/\(String(safeNamespace.prefix(80)))", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return FileBrowserBridgeReplayStore(fileURL: directory.appendingPathComponent("replay.json"))
+        let fileURL = try AtomicCodableReplayFile.applicationSupportURL(
+            directory: "BrowserBridge", namespace: namespace, fileName: "replay.json")
+        return FileBrowserBridgeReplayStore(fileURL: fileURL)
     }
 
     public func load() throws -> BrowserBridgeReplayLedger {
-        guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else {
-            return BrowserBridgeReplayLedger()
-        }
         do {
-            return try JSONDecoder.browserBridge.decode(
-                BrowserBridgeReplayLedger.self, from: Data(contentsOf: fileURL))
+            return try AtomicCodableReplayFile.load(
+                BrowserBridgeReplayLedger.self, from: fileURL, decoder: .browserBridge)
+                ?? BrowserBridgeReplayLedger()
         } catch is DecodingError {
             // v1 results cannot safely be replayed to the v2 Flue broker. Those old runs are
             // terminalized in the server migration, so start this account's new ledger cleanly.
@@ -119,8 +111,7 @@ public actor FileBrowserBridgeReplayStore: BrowserBridgeReplayStoring {
     }
 
     public func save(_ ledger: BrowserBridgeReplayLedger) throws {
-        let data = try JSONEncoder.browserBridge.encode(ledger)
-        try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+        try AtomicCodableReplayFile.save(ledger, to: fileURL, encoder: .browserBridge)
     }
 }
 

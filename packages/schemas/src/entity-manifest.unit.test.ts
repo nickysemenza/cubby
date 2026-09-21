@@ -260,6 +260,7 @@ describe("entity manifest", () => {
       "financialTransaction",
       "wish",
       "expense",
+      "image",
       "planting",
       "gardenEntry",
     ]);
@@ -278,6 +279,7 @@ describe("entity manifest", () => {
       "vendor",
       "financialAccount",
       "wish",
+      "image",
       "planting",
       "gardenEntry",
     ]);

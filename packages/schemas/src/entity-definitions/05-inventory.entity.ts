@@ -9,6 +9,11 @@ import {
   inventoryPlacement,
   inventoryValuation,
 } from "@cubby/schemas/inventory-fields";
+import {
+  effectiveInventoryOwnership,
+  inventoryOwnershipMode,
+} from "@cubby/schemas/inventory-ownership";
+import { ledgerPartyShortcode } from "../identifier-fields.js";
 import { z } from "zod";
 export default defineEntity({
   key: "inventory",
@@ -43,6 +48,9 @@ export default defineEntity({
             "locationId",
             "amount",
             "placement",
+            "ownershipMode",
+            "ownerLedgerPartyId",
+            "effectiveOwnership",
             "verifiedAt",
           ],
         },
@@ -130,6 +138,83 @@ export default defineEntity({
         },
       },
       {
+        key: "ownershipMode",
+        kind: "enum",
+        label: "Ownership",
+        control: {
+          kind: "select",
+          options: [
+            { value: "inherit", label: "Use inherited owner" },
+            { value: "person", label: "Person" },
+            { value: "unassigned", label: "No individual owner" },
+          ],
+        },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 5,
+          renderer: { detail: "ownershipMode" },
+        },
+        validation: {
+          read: inventoryOwnershipMode,
+          create: inventoryOwnershipMode.default("inherit"),
+          update: inventoryOwnershipMode.optional(),
+        },
+      },
+      {
+        key: "ownerLedgerPartyId",
+        kind: "identifier",
+        nullable: true,
+        label: "Explicit owner",
+        reference: {
+          entity: "ledgerParty",
+          filters: [{ field: "kind", values: ["member", "guest"] }],
+        },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: {
+          detail: true,
+          detailOrder: 6,
+          renderer: { detail: "ownerLedgerPartyId" },
+        },
+        validation: {
+          read: ledgerPartyShortcode.nullable(),
+          create: ledgerPartyShortcode.nullable().default(null),
+          update: ledgerPartyShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "effectiveOwnership",
+        kind: "json",
+        label: "Effective owner",
+        explanation: {
+          ruleId: "inventory.effective-owner",
+          version: 1,
+          description:
+            "Explicit ownership wins; otherwise one recorded acquisition may supply an unambiguous beneficiary or enabled account default.",
+          readPath: "effectiveOwnership",
+          resolver: "inventoryOwnership",
+          actions: ["confirmOwner", "inheritOwner", "editSource"],
+        },
+        display: {
+          detail: true,
+          detailOrder: 7,
+          renderer: { detail: "effectiveOwnership" },
+        },
+        provenance: {
+          kind: "derived",
+          sources: [
+            { label: "Stored ownership choice" },
+            { label: "Recorded acquisition and beneficiary evidence" },
+            { label: "Enabled vendor or payment account default" },
+          ],
+        },
+        validation: {
+          read: effectiveInventoryOwnership,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: {
@@ -143,6 +228,25 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         display: { list: true },
+        provenance: {
+          kind: "derived",
+          sources: [
+            { label: "Stored inventory valuation" },
+            { label: "Current product price and unit mappings" },
+          ],
+        },
+        explanation: {
+          ruleId: "inventory.valuation",
+          description:
+            "This is the stored valuation produced when Cubby last evaluated the inventory amount against the product's pricing and unit mappings. Current inputs are shown as reference evidence and do not recompute the stored value.",
+          resolver: "productValuation",
+          readPath: "valuation",
+          sourceDependencies: [
+            { path: "amount", label: "Inventory amount" },
+            { path: "product.unitMappings", label: "Current unit mappings" },
+            { path: "product.price", label: "Current effective product price" },
+          ],
+        },
         validation: {
           read: inventoryValuation.describe(
             "Precomputed value: amount × product price",
@@ -217,11 +321,39 @@ export default defineEntity({
         defaultValue: "'stock'",
         specialized: "enum:InventoryPlacement",
       },
+      {
+        key: "ownershipMode",
+        default: "literal",
+        defaultValue: "inherit",
+        specialized: "enum:ownershipMode",
+      },
+      { key: "ownerLedgerPartyId", reference: "ledgerParty" },
     ],
-    create: ["productId", "locationId", "amount", "placement"],
-    update: ["amount", "productId", "locationId", "placement"],
+    create: [
+      "productId",
+      "locationId",
+      "amount",
+      "placement",
+      "ownershipMode",
+      "ownerLedgerPartyId",
+    ],
+    update: [
+      "amount",
+      "productId",
+      "locationId",
+      "placement",
+      "ownershipMode",
+      "ownerLedgerPartyId",
+    ],
     bulk: [],
-    audit: ["amount", "productId", "locationId", "placement"],
+    audit: [
+      "amount",
+      "productId",
+      "locationId",
+      "placement",
+      "ownershipMode",
+      "ownerLedgerPartyId",
+    ],
     sort: {
       fields: [
         "createdAt",
@@ -238,15 +370,37 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["productId", "locationId", "amount", "placement"],
-        full: ["amount", "productId", "locationId", "placement"],
+        capture: [
+          "productId",
+          "locationId",
+          "amount",
+          "placement",
+          "ownershipMode",
+          "ownerLedgerPartyId",
+        ],
+        full: [
+          "amount",
+          "productId",
+          "locationId",
+          "placement",
+          "ownershipMode",
+          "ownerLedgerPartyId",
+        ],
         amount: ["amount"],
         product: ["productId"],
         location: ["locationId"],
         placement: ["placement"],
+        ownership: ["ownershipMode", "ownerLedgerPartyId"],
       },
       create: ["capture", "full"],
-      update: ["full", "amount", "product", "location", "placement"],
+      update: [
+        "full",
+        "amount",
+        "product",
+        "location",
+        "placement",
+        "ownership",
+      ],
     },
     output: [
       "id",
@@ -254,6 +408,9 @@ export default defineEntity({
       "valuation",
       "verifiedAt",
       "placement",
+      "ownershipMode",
+      "ownerLedgerPartyId",
+      "effectiveOwnership",
       "createdAt",
       "updatedAt",
     ],
@@ -433,6 +590,29 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "InventoryEntry.locationId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "owner",
+      label: "Owner",
+      target: "ledgerParty",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "InventoryEntry.ownerLedgerPartyId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "InventoryEntry.ownerLedgerPartyId",
+            direction: "incoming",
+          },
+        ],
       },
     },
     {

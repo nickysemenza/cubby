@@ -1,7 +1,7 @@
 import CubbyAPI
 import Foundation
 
-/// One expected inventory row in a bin, from `inventory.getByLocationIds`, with the product
+/// One expected inventory row in a bin, from `inventory.locationSnapshot`, with the product
 /// reduced to what the walk matches and shows.
 public struct RecountRow: Sendable, Hashable, Identifiable {
     public struct Product: Sendable, Hashable {
@@ -32,8 +32,8 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
 
     public let id: InventoryEntryCode
     public let amount: Amount
-    /// The server's own timestamp, sent back verbatim as `snapshotUpdatedAt`: the reconcile guard
-    /// compares it to the millisecond, and the generated client's transcoder keeps milliseconds.
+    /// The server's row timestamp, retained for display and diagnostics. Reconcile concurrency is
+    /// guarded by `RecountSnapshot.token`, which also covers membership and ownership changes.
     public let updatedAt: Date
     public let placement: String
     public let product: Product
@@ -67,7 +67,9 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
         // `displayImages` nor `coverImageUrl` — only this status-tagged `images` array. Switch to
         // `out.product.displayImages.first?.url` once that field lands here, matching the
         // list-row image ladder in EntityRow.imageURL(from:).
-        let cover = out.product.images.first { $0.status == .uploaded }.flatMap { URL(string: $0.url) }
+        let cover = out.product.images.first { $0.status == .uploaded }.flatMap {
+            URL(string: $0.representations?.preferred ?? $0.url)
+        }
         self.init(
             id: out.id,
             amount: Amount(value: out.amount.value, unit: out.amount.unit, upperValue: out.amount.upperValue),
@@ -86,10 +88,17 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
         )
     }
 
-    /// The `snapshotUpdatedAt` for a bin: the most recently updated row's timestamp, or `nil` for
-    /// an empty bin.
-    public static func snapshotTimestamp(_ rows: [RecountRow]) -> Date? {
-        rows.map(\.updatedAt).max()
+}
+
+/// One atomic server view of a bin. The opaque token covers row membership and ownership state,
+/// including facts that are not represented by the visible recount rows.
+public struct RecountSnapshot: Sendable, Hashable {
+    public let rows: [RecountRow]
+    public let token: String
+
+    public init(rows: [RecountRow], token: String) {
+        self.rows = rows
+        self.token = token
     }
 }
 

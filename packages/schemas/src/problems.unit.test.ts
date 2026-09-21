@@ -67,6 +67,7 @@ describe("PROBLEM_CLASS", () => {
     negativeExpectedQuantity: "coverage",
     neverVerifiedInventory: "coverage",
     productsWithNoImages: "coverage",
+    imageProcessingIssues: "coverage",
     purchaseFinancialSettlementMismatches: "coverage",
     purchaselessExitExpenses: "coverage",
     purchasesNotReconciling: "coverage",

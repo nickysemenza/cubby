@@ -1,4 +1,5 @@
 import {
+  smartCollectionReferenceInput,
   collectionCreateInput,
   collectionDetailInput,
   collectionDetailOut,
@@ -17,6 +18,11 @@ import { z } from "zod";
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const collectionContract = defineContract("collection", {
+  referenceDetail: query({
+    native: "Collection by reference",
+    input: smartCollectionReferenceInput,
+    output: smartCollectionDetailOut,
+  }),
   smartList: query({
     input: smartCollectionListInput,
     output: z.array(smartCollectionSummary),

@@ -30,6 +30,7 @@ describe("image workflow commit ownership", () => {
     expect(markImageUploadedWorkflow.definition.steps).toMatchObject([
       { type: "call", name: "resolveImage" },
       { type: "committedCall", name: "markUploaded" },
+      { type: "committedCall", name: "scheduleImageProcessing" },
     ]);
   });
 });

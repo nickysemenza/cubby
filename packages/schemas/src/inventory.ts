@@ -33,6 +33,7 @@ import { unitMappingOut } from "./unitmapping";
 import { inventoryPlacement as cycleSafeInventoryPlacement } from "./inventory-fields";
 import { generatedInventoryItemFieldSchemas } from "./generated/entity-field-schemas.inventory.gen";
 import { displayImagesField } from "./display-images";
+import { inventoryOwnershipSelection } from "./inventory-ownership";
 
 export { positiveAmount } from "./codec";
 
@@ -255,9 +256,21 @@ export const inventoryCountsByLocationOut = z.record(
   z.number().int().nonnegative(),
 );
 
-export const inventoryUpdatePayloadData = z.object(
-  generatedInventoryItemFieldSchemas.update,
-);
+export const inventoryUpdatePayloadData = z
+  .object(generatedInventoryItemFieldSchemas.update)
+  .superRefine((value, context) => {
+    if (
+      value.ownershipMode !== undefined &&
+      value.ownerLedgerPartyId !== undefined &&
+      (value.ownershipMode === "person") !== (value.ownerLedgerPartyId !== null)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["ownerLedgerPartyId"],
+        message: "Person ownership requires an owner; other modes clear it",
+      });
+    }
+  });
 
 export const inventoryUpdateInput = z.object({
   id: inventoryShortcode,
@@ -266,15 +279,27 @@ export const inventoryUpdateInput = z.object({
 
 export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
 
-export const inventoryCreatePayloadData = z.object(
-  generatedInventoryItemFieldSchemas.create,
-);
+export const inventoryCreatePayloadData = z
+  .object(generatedInventoryItemFieldSchemas.create)
+  .superRefine((value, context) => {
+    if (
+      (value.ownershipMode === "person") !==
+      (value.ownerLedgerPartyId !== null)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["ownerLedgerPartyId"],
+        message: "Person ownership requires an owner; other modes clear it",
+      });
+    }
+  });
 
 const inventoryBulkOperationItem = z.object({
   id: inventoryShortcode.optional(),
   productId: productShortcode,
   locationId: locationShortcode,
   amount: positiveAmount,
+  ownership: inventoryOwnershipSelection.optional(),
 });
 
 export type InventoryBulkOperationItem = z.infer<
@@ -288,6 +313,7 @@ export const inventoryBulkOperationPayload = z.object({
   // would delete-on-omit entries another surface added since. Optional so other
   // callers (MCP, tests) are unaffected.
   loadedAt: z.coerce.date<Date | string>().optional(),
+  snapshotToken: z.string().min(1).optional(),
 });
 
 /**
@@ -305,6 +331,7 @@ const inventoryBulkAddItem = z.object({
   placement: inventoryPlacement
     .optional()
     .describe("Defaults to 'stock'; pass 'installed' for a fixed fixture."),
+  ownership: inventoryOwnershipSelection.optional(),
 });
 
 export type InventoryBulkAddItem = z.infer<typeof inventoryBulkAddItem>;
@@ -480,7 +507,18 @@ export const reconcileSessionPayload = z.object({
     .date<Date | string>()
     .nullish()
     .transform((value) => value ?? null),
+  snapshotToken: z.string().min(1).optional(),
   resolutions: z.array(inventorySessionResolution),
+});
+
+export const inventoryLocationSnapshotInput = z.object({
+  locationId: locationShortcode,
+  placement: generatedInventoryItemFieldSchemas.read.placement.default("stock"),
+});
+
+export const inventoryLocationSnapshotOut = z.object({
+  items: inventoryWithLocationAndProductListOut,
+  snapshotToken: z.string().min(1),
 });
 
 export type ReconcileSessionPayload = z.infer<typeof reconcileSessionPayload>;

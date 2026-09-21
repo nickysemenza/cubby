@@ -147,6 +147,11 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                 enableSorting: false,
                 meta: attachCubbyColumnMeta<MealOut>({
                   provenance: relationshipFieldProvenance("meal", "recipes"),
+                  explanation: {
+                    entity: "meal",
+                    field: "recipes",
+                    label: "Recipes",
+                  },
                   className: "min-w-0 w-56 overflow-hidden",
                   mobile: { slot: "meta", priority: 20 },
                   entityRefs: (row) =>
@@ -180,6 +185,11 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                 enableSorting: false,
                 meta: {
                   provenance: relationshipFieldProvenance("meal", "recipes"),
+                  explanation: {
+                    entity: "meal",
+                    field: "costTotal",
+                    label: "Cost",
+                  },
                   numeric: true,
                   className: "w-20",
                   mobile: { slot: "trailing", priority: 10 },

@@ -25,6 +25,10 @@ import {
   productIdentificationSchema,
 } from "@cubby/schemas/ai";
 import {
+  type ImageDescriptionResult,
+  imageDescriptionResult,
+} from "@cubby/schemas/image-processing";
+import {
   type ImportAuditOutput,
   type ImportExtractionModelOutput,
   type OrderMailClassification,
@@ -310,6 +314,18 @@ export const LOCATION_DESCRIPTION_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<LocationDescription> &
   AiAnalysisFeature<LocationDescription>;
 
+/** Cloud is the preferred image-description provider until an explicit policy changes it. */
+export const IMAGE_DESCRIPTION_FEATURE = defineFeature({
+  feature: "image-description",
+  tier: "visionBatch",
+  maxTokens: 1_500,
+  cache: true,
+  promptVersion: "1",
+  schema: imageDescriptionResult,
+  analysisSchema: imageDescriptionResult,
+}) satisfies AiStructuredFeature<ImageDescriptionResult> &
+  AiAnalysisFeature<ImageDescriptionResult>;
+
 // ---------------------------------------------------------------------------
 // Reasoning tier — Claude Sonnet 5. The accuracy tier.
 // ---------------------------------------------------------------------------
@@ -375,6 +391,7 @@ export const AI_FEATURES = [
   PURCHASE_IMPORT_RECEIPT_FEATURE,
   PURCHASE_IMPORT_MAIL_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
+  IMAGE_DESCRIPTION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,

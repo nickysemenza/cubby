@@ -2,6 +2,7 @@ import {
   type AllProblems,
   EMPTY_PROBLEM_ARRAYS,
   PROBLEM_CLASS,
+  imageProcessingProblemSchema,
   type ProblemKey,
   understatedCostMealSchema,
 } from "@cubby/schemas/problems";
@@ -149,6 +150,39 @@ describe("PROBLEM_SECTIONS", () => {
     ).toHaveAttribute(
       "href",
       `/recipes/${meal.affectedRecipes[1]!.id}?costingGap=true`,
+    );
+    harness.dispose();
+  });
+
+  it("renders current image processing findings as image links", async () => {
+    const harness = createBrowserTestHarness();
+    await act(async () => {
+      await harness.loadRouter();
+    });
+    const section = PROBLEM_SECTIONS.find(
+      (candidate) => candidate.id === "image-processing",
+    );
+    if (!section) throw new Error("Missing image-processing Problems section");
+    const issue = imageProcessingProblemSchema.parse({
+      id: testShortcode("image", "needs-review"),
+      filename: "garden-photo.jpg",
+      processingIssue: "review_needed",
+    });
+    const problems: AllProblems = {
+      ...EMPTY_PROBLEM_ARRAYS,
+      imageProcessingIssues: [issue],
+      sectionTotals: {},
+      totalProblems: 0,
+    };
+
+    render(section.node(problems, undefined), { wrapper: harness.wrapper });
+
+    expect(
+      screen.getByText("Needs review", { selector: '[data-slot="badge"]' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open image" })).toHaveAttribute(
+      "href",
+      `/images/${issue.id}`,
     );
     harness.dispose();
   });

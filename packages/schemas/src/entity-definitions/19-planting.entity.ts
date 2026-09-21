@@ -295,6 +295,19 @@ export default defineEntity({
         nullable: true,
         label: "Guide sow window",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "ingredient", relation: "ingredient" }],
+        },
+        explanation: {
+          ruleId: "planting.guide-sow-window",
+          description:
+            "The sowing window comes from this planting's crop guide adjusted to the household microclimate.",
+          readPath: "guideSowWindow",
+          sourceDependencies: [
+            { path: "ingredientId", label: "Crop ingredient" },
+          ],
+        },
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
@@ -303,6 +316,19 @@ export default defineEntity({
         nullable: true,
         label: "Guide transplant window",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "ingredient", relation: "ingredient" }],
+        },
+        explanation: {
+          ruleId: "planting.guide-transplant-window",
+          description:
+            "The transplanting window comes from this planting's crop guide adjusted to the household microclimate.",
+          readPath: "guideTransplantWindow",
+          sourceDependencies: [
+            { path: "ingredientId", label: "Crop ingredient" },
+          ],
+        },
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {

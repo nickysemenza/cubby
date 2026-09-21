@@ -22,16 +22,21 @@ const candidate = (
 const wish = (
   shortcode: string,
   candidates: WishCandidateOut[] = [],
-): WishListItemOut => ({
-  id: testShortcode("wish", shortcode),
-  name: `Wish ${shortcode}`,
-  notes: null,
-  acquiredAt: null,
-  candidates,
-  displayImages: [],
-  createdAt: new Date("2026-01-01"),
-  updatedAt: new Date("2026-01-01"),
-});
+): WishListItemOut => {
+  const priceRange = wishPriceRange(candidates);
+  return {
+    id: testShortcode("wish", shortcode),
+    name: `Wish ${shortcode}`,
+    notes: null,
+    acquiredAt: null,
+    candidates,
+    candidateCount: candidates.length,
+    priceRange,
+    displayImages: [],
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  };
+};
 
 describe("buildWishRows", () => {
   it("namespaces candidate row ids by their parent wish", () => {

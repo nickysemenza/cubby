@@ -142,6 +142,12 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "recipe", relation: "recipes" }],
         },
+        explanation: {
+          ruleId: "cookbook.recipe-count",
+          description:
+            "Recipe count is the number of live recipes imported from this cookbook.",
+          readPath: "recipeCount",
+        },
         validation: {
           read: z.number().int().min(0),
           create: null,
@@ -158,6 +164,15 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "image", relation: "cover" }],
         },
+        explanation: {
+          ruleId: "cookbook.cover",
+          description:
+            "The cover uses the cookbook's current cover image attachment when one is available.",
+          readPath: "coverUrl",
+          sourceDependencies: [
+            { path: "displayImages", label: "Selected cookbook cover" },
+          ],
+        },
         validation: {
           read: z.string().nullable(),
           create: null,
@@ -169,6 +184,16 @@ export default defineEntity({
         kind: "number",
         label: "Source recipes",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Imported cookbook source" }],
+        },
+        explanation: {
+          ruleId: "cookbook.source-recipe-count",
+          description:
+            "Source recipes counts recipe entries present in the cookbook's imported source data.",
+          readPath: "sourceRecipeCount",
+        },
         validation: {
           read: z.number().int().min(0),
           create: null,
@@ -180,6 +205,19 @@ export default defineEntity({
         kind: "boolean",
         label: "Needs re-extraction",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Imported cookbook source format" }],
+        },
+        explanation: {
+          ruleId: "cookbook.needs-reextract",
+          description:
+            "A cookbook needs re-extraction when its stored import payload uses the legacy shape.",
+          readPath: "needsReextract",
+          sourceDependencies: [
+            { path: "sourceRecipeCount", label: "Source recipe count" },
+          ],
+        },
         validation: {
           read: z.boolean(),
           create: null,

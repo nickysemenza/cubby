@@ -15,6 +15,7 @@ function img(overrides: Partial<ImageOut> = {}): ImageOut {
     size: 1024,
     contentType: "image/jpeg",
     status: "UPLOADED",
+    useOriginal: false,
     width: 800,
     height: 600,
     detectedContentType: null,

@@ -3,9 +3,13 @@ import { z } from "zod";
 import { plainDate } from "./base-entity";
 import {
   locationShortcode,
+  ledgerPartyShortcode,
+  inventoryShortcode,
   productShortcode,
   purchaseShortcode,
 } from "./identifiers";
+import { amount } from "./codec";
+import { productCategory } from "./product-fields";
 import { tradeSchema } from "./project";
 
 export const collectionSlug = z
@@ -58,6 +62,11 @@ export type CollectionProductPurchaseOut = z.infer<
 
 const ruleText = z.string().trim().min(1).max(200);
 export const smartCollectionRule = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("effectiveOwnerEquals"),
+    value: ledgerPartyShortcode,
+  }),
+  z.strictObject({ kind: z.literal("categoryEquals"), value: productCategory }),
   z.strictObject({ kind: z.literal("productTagEquals"), value: ruleText }),
   z.strictObject({ kind: z.literal("manufacturerEquals"), value: ruleText }),
   z.strictObject({ kind: z.literal("locationNameContains"), value: ruleText }),
@@ -68,11 +77,16 @@ export const smartCollectionRule = z.discriminatedUnion("kind", [
 ]);
 export type SmartCollectionRule = z.infer<typeof smartCollectionRule>;
 export const smartCollectionKey = z.enum(["painting", "measuring", "festool"]);
+const smartCollectionDefinitionKey = z.enum([
+  ...smartCollectionKey.options,
+  "wardrobe",
+]);
 export type SmartCollectionKey = z.infer<typeof smartCollectionKey>;
 export const smartCollectionDefinition = z.strictObject({
-  key: smartCollectionKey,
+  key: smartCollectionDefinitionKey,
   name: z.string().trim().min(1).max(100),
   rules: z.array(smartCollectionRule).max(20),
+  match: z.enum(["all", "any"]).optional(),
 });
 export type SmartCollectionDefinition = z.infer<
   typeof smartCollectionDefinition
@@ -104,6 +118,8 @@ export const SMART_COLLECTION_STARTERS: readonly SmartCollectionDefinition[] = [
 export const smartCollectionMatch = z.object({
   ruleIndex: z.number().int().nonnegative(),
   kind: z.enum([
+    "effectiveOwnerEquals",
+    "categoryEquals",
     "productTagEquals",
     "manufacturerEquals",
     "locationNameContains",
@@ -124,6 +140,15 @@ export const collectionProductOut = z.object({
   matches: z.array(smartCollectionMatch).optional(),
   placements: z.array(collectionProductPlacementOut),
   purchases: z.array(collectionProductPurchaseOut),
+  inventory: z
+    .array(
+      z.object({
+        id: inventoryShortcode,
+        locationId: locationShortcode,
+        amount,
+      }),
+    )
+    .optional(),
 });
 export type CollectionProductOut = z.infer<typeof collectionProductOut>;
 
@@ -220,10 +245,12 @@ export const collectionCreateInput = collectionSubject.and(
 );
 
 export const smartCollectionSummary = z.object({
-  key: smartCollectionKey,
+  key: smartCollectionDefinitionKey,
   name: z.string(),
   totalCount: z.number().int().nonnegative(),
   sourceCounts: z.object({
+    effectiveOwnerEquals: z.number().int().nonnegative(),
+    categoryEquals: z.number().int().nonnegative(),
     productTagEquals: z.number().int().nonnegative(),
     manufacturerEquals: z.number().int().nonnegative(),
     locationNameContains: z.number().int().nonnegative(),
@@ -242,13 +269,14 @@ export const smartCollectionListInput = z.strictObject({
       "Starter keys must be unique",
     ),
 });
+export const smartCollectionPagination = z.strictObject({
+  pageIndex: z.number().int().nonnegative(),
+  pageSize: z.number().int().min(1).max(100),
+});
 export const smartCollectionDetailInput = z.strictObject({
   definition: smartCollectionDefinition,
   search: z.string().trim().max(200).optional(),
-  pagination: z.strictObject({
-    pageIndex: z.number().int().nonnegative(),
-    pageSize: z.number().int().min(1).max(100),
-  }),
+  pagination: smartCollectionPagination,
 });
 export const smartCollectionDetailOut = z.object({
   summary: smartCollectionSummary,
@@ -256,3 +284,33 @@ export const smartCollectionDetailOut = z.object({
   totalCount: z.number().int().nonnegative(),
 });
 export type SmartCollectionDetailOut = z.infer<typeof smartCollectionDetailOut>;
+
+export const smartCollectionReference = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("starter"),
+    key: z.enum(["painting", "measuring", "festool"]),
+  }),
+  z.object({ kind: z.literal("wardrobe"), ownerId: ledgerPartyShortcode }),
+]);
+export const smartCollectionReferenceInput = smartCollectionDetailInput
+  .omit({ definition: true })
+  .extend({ reference: smartCollectionReference });
+export function collectionDefinitionForReference(
+  reference: z.infer<typeof smartCollectionReference>,
+): SmartCollectionDefinition {
+  if (reference.kind === "wardrobe")
+    return {
+      key: "wardrobe",
+      name: "Wardrobe",
+      match: "all",
+      rules: [
+        { kind: "effectiveOwnerEquals", value: reference.ownerId },
+        { kind: "categoryEquals", value: "apparel" },
+      ],
+    };
+  const starter = SMART_COLLECTION_STARTERS.find(
+    (definition) => definition.key === reference.key,
+  );
+  if (!starter) throw new Error("Unknown collection reference");
+  return starter;
+}

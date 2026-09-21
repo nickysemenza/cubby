@@ -38,6 +38,9 @@ import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { loadImageRepresentations } from "./image-processing";
+import { hydrateImageReadProjection } from "./image-read-projection";
+
 /** A private database identity used only while hydrating public read models. */
 export interface EntityDisplayImageRef {
   entityType: Entity;
@@ -288,14 +291,20 @@ async function resolveUniversalEntityDisplayImageLists(
     FROM refs
   `);
 
+  const rows = z.array(displayImageRowSchema).parse(result.rows);
+  const representations = await loadImageRepresentations(
+    db,
+    rows.flatMap((row) => row.images.map((img) => img.id)),
+  );
   return new Map(
-    z
-      .array(displayImageRowSchema)
-      .parse(result.rows)
-      .map((row) => [
-        entityRefKey(row.entityType, row.entityId),
-        row.images.map((img) => ({ id: img.id, url: getR2PublicUrl(img.key) })),
-      ]),
+    rows.map((row) => [
+      entityRefKey(row.entityType, row.entityId),
+      row.images.map((img) => ({
+        id: img.id,
+        url: getR2PublicUrl(img.key),
+        representations: representations.get(img.id),
+      })),
+    ]),
   );
 }
 
@@ -364,12 +373,21 @@ const galleryAttachments = async (
       asc(image.id),
     );
   const attachments = new Map<string, EntityAttachmentRead[]>();
+  const representations = await loadImageRepresentations(
+    db,
+    rows.map((row) => row.shortcode),
+  );
   mapImages(rows).forEach((item, index) => {
     const row = rows[index];
     if (!row) return;
     const entityId = String(row.entityId);
     const list = attachments.get(entityId) ?? [];
-    list.push({ ...item, role: "attachment", position: list.length });
+    list.push({
+      ...item,
+      representations: representations.get(item.id),
+      role: "attachment",
+      position: list.length,
+    });
     attachments.set(entityId, list);
   });
   return attachments;
@@ -397,11 +415,20 @@ const singleImageAttachments = async (
       ),
     );
   const attachments = new Map<string, EntityAttachmentRead[]>();
+  const representations = await loadImageRepresentations(
+    db,
+    rows.map((row) => row.shortcode),
+  );
   mapImages(rows).forEach((item, index) => {
     const row = rows[index];
     if (!row) return;
     attachments.set(String(row.entityId), [
-      { ...item, role: binding.role, position: 0 },
+      {
+        ...item,
+        representations: representations.get(item.id),
+        role: binding.role,
+        position: 0,
+      },
     ]);
   });
   return attachments;
@@ -460,19 +487,27 @@ export async function withUniversalEntityMedia<
         )
       : Promise.resolve(new Map<string, EntityAttachmentRead[]>()),
   ]);
-  return publicRows.map((row) => {
-    const entityId = resolved.get(row.id);
-    const displayImages = entityId
-      ? (lists.get(entityRefKey(entityType, entityId)) ?? [])
-      : [];
-    return detail
-      ? {
-          ...row,
-          displayImages,
-          attachments: entityId ? (attachments.get(entityId) ?? []) : [],
-        }
-      : { ...row, displayImages };
-  });
+  return hydrateImageReadProjection(
+    db,
+    publicRows.map((row) => {
+      const entityId = resolved.get(row.id);
+      const displayImages = entityId
+        ? (lists.get(entityRefKey(entityType, entityId)) ?? [])
+        : [];
+      if (!detail) return { ...row, displayImages };
+      const projected = {
+        ...row,
+        displayImages,
+        attachments: entityId ? (attachments.get(entityId) ?? []) : [],
+      };
+      // Purchase images carry document classification from PurchaseImage.
+      // Keep that specialized projection while exposing the same files through
+      // the entity-generic attachment surface.
+      return entityType !== "purchase" && "images" in row
+        ? { ...projected, images: projected.attachments }
+        : projected;
+    }),
+  );
 }
 
 /**
@@ -487,7 +522,17 @@ export async function resolveEntityDisplayImages(
   const lists = await resolveEntityDisplayImageLists(db, refs);
   return new Map(
     [...lists].flatMap(([key, images]) =>
-      images[0] ? [[key, { url: images[0].url }]] : [],
+      images[0]
+        ? [
+            [
+              key,
+              {
+                url: images[0].representations?.preferred ?? images[0].url,
+                representations: images[0].representations,
+              },
+            ],
+          ]
+        : [],
     ),
   );
 }
@@ -510,8 +555,11 @@ export async function withDisplayImages<Row extends { id: string }, Out>(
     db,
     rows.map((row) => ({ entityType, entityId: row.id })),
   );
-  return rows.map((row) => {
-    const displayImages = lists.get(entityRefKey(entityType, row.id)) ?? [];
-    return { ...toOut(row, displayImages), displayImages };
-  });
+  return hydrateImageReadProjection(
+    db,
+    rows.map((row) => {
+      const displayImages = lists.get(entityRefKey(entityType, row.id)) ?? [];
+      return { ...toOut(row, displayImages), displayImages };
+    }),
+  );
 }

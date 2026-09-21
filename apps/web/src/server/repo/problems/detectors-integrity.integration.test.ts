@@ -14,6 +14,9 @@ import {
   financialTransactionAllocation,
   gardenEntryImage,
   gardenEntryPlanting,
+  imageDerivative,
+  imageDescriptionCorrection,
+  imageProcessingJob,
   importFinding,
   importHunt,
   importPreparedOrder,
@@ -409,6 +412,28 @@ const TARGET_FACTORIES = {
  * (named by the edge key) points at `targetId`. Every other required column on
  * the source row is filled with an unrelated, always-live fixture. */
 const SOURCE_FACTORIES = {
+  "ImageDerivative.imageId": (db, targetId) =>
+    insertAndReturn(db, imageDerivative, {
+      imageId: parseEntityId("image", targetId),
+      purpose: "transparent",
+      status: "pending",
+      key: uniq("test/derivative"),
+      sourceContentHash: uniq("source-hash"),
+      processorRevision: 1,
+    }),
+  "ImageProcessingJob.imageId": (db, targetId) =>
+    insertAndReturn(db, imageProcessingJob, {
+      imageId: parseEntityId("image", targetId),
+      kind: "subject_lift",
+      state: "pending",
+      sourceContentHash: uniq("source-hash"),
+      processorRevision: 1,
+    }),
+  "ImageDescriptionCorrection.imageId": (db, targetId) =>
+    insertAndReturn(db, imageDescriptionCorrection, {
+      imageId: parseEntityId("image", targetId),
+      description: "Confirmed liveness fixture description",
+    }),
   "ImportPreparedOrder.primaryDocumentImageId": (db, targetId) =>
     mkImportPreparedOrder(db, { primaryDocumentImageId: targetId }),
   "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
@@ -595,6 +620,19 @@ const SOURCE_FACTORIES = {
       identity: { kind: "cash" },
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
+  "InventoryEntry.ownerLedgerPartyId": async (db, targetId) => {
+    const [product, location] = await Promise.all([
+      mkProduct(db),
+      mkLocation(db),
+    ]);
+    return insertWithShortcode(db, "inventory", {
+      productId: product.id,
+      locationId: location.id,
+      amount: { value: 1, unit: "each" },
+      ownershipMode: "person",
+      ownerLedgerPartyId: parseEntityId("ledgerParty", targetId),
+    });
+  },
   "LedgerTransfer.fromPartyId": async (db, targetId) => {
     const to = await mkLedgerParty(db);
     return insertWithShortcode(db, "ledgerTransfer", {
@@ -1291,6 +1329,7 @@ const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
   "ImportPreparedOrder",
   "ImportRun",
   "ImportSourceClaim",
+  "ImageProcessingJob",
   "MailboxCursor",
   "MerchantVendorRule",
   "OrderMail",
@@ -1337,11 +1376,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 103 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 107 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(103);
+    expect(derivedMustTargetLiveEdges).toHaveLength(107);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

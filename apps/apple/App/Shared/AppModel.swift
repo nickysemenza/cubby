@@ -42,6 +42,8 @@ final class AppModel {
         let browserBridge = BrowserBridgeSettingsModel()
         @ObservationIgnored private var browserBridgeController: MacBrowserBridgeController?
     #endif
+    @ObservationIgnored private var companionImageWorker: CompanionImageWorker?
+    @ObservationIgnored private var companionSceneActive = false
     /// The SQLite cache opens away from the UI actor and attaches matching/classification once
     /// available. Local photo browsing never waits for it.
     @ObservationIgnored private var storedPhotoAnalysisStore: PhotoAnalysisStore?
@@ -128,6 +130,7 @@ final class AppModel {
         #if os(macOS)
             configureBrowserBridge()
         #endif
+        configureCompanionImageWorker()
     }
 
     /// Opens the SQLite cache at `Application Support/Cubby/PhotoAnalysis.sqlite`, falling back
@@ -164,6 +167,7 @@ final class AppModel {
         #if os(macOS)
             model.configureBrowserBridge()
         #endif
+        model.configureCompanionImageWorker()
         model.credential = signedIn ? credential : nil
         model.phase = signedIn ? .signedIn : .signedOut
         return model
@@ -180,6 +184,7 @@ final class AppModel {
         phase = current == nil ? .signedOut : .signedIn
         if current != nil {
             warmBrowseCounts()
+            await companionImageWorker?.start()
             #if os(macOS)
                 await browserBridge.connectConfigured()
             #endif
@@ -192,6 +197,7 @@ final class AppModel {
             credential = try await auth.signIn(email: email, password: password)
             phase = .signedIn
             warmBrowseCounts()
+            await companionImageWorker?.start()
             #if os(macOS)
                 await browserBridge.connectConfigured()
             #endif
@@ -205,6 +211,11 @@ final class AppModel {
     }
 
     func signOut() async {
+        do {
+            try await companionImageWorker?.stopAndDiscardPendingResults()
+        } catch {
+            Diagnostics.report(error, context: "imageProcessing.outbox.signOut")
+        }
         #if os(macOS)
             await browserBridge.disconnect()
         #endif
@@ -239,6 +250,9 @@ final class AppModel {
                 photoLibrary.reset()
                 credential = nil
                 phase = .signedOut
+                Task {
+                    try? await companionImageWorker?.stopAndDiscardPendingResults()
+                }
                 #if os(macOS)
                     Task { await browserBridge.disconnect() }
                 #endif
@@ -285,6 +299,43 @@ final class AppModel {
         #if os(macOS)
             configureBrowserBridge()
         #endif
+        configureCompanionImageWorker()
+    }
+
+    func setCompanionSceneActive(_ active: Bool) {
+        companionSceneActive = active
+        Task { await companionImageWorker?.setForeground(active) }
+    }
+
+    private func configureCompanionImageWorker() {
+        let previous = companionImageWorker
+        do {
+            let outbox = try CompanionResultOutbox<ImageProcessingResult>.applicationSupport(
+                namespace: host)
+            companionImageWorker = CompanionImageWorker(
+                baseURL: baseURL,
+                credentials: credentials,
+                deviceID: Self.companionDeviceID,
+                foreground: companionSceneActive,
+                outbox: outbox,
+                failureObserver: { error in
+                    Diagnostics.report(error, context: "imageProcessing.socket")
+                })
+        } catch {
+            companionImageWorker = nil
+            Diagnostics.report(error, context: "imageProcessing.outbox")
+        }
+        if let previous { Task { await previous.stop() } }
+    }
+
+    private static var companionDeviceID: UUID {
+        let key = "cubby.companionImageProcessing.deviceID"
+        if let value = UserDefaults.standard.string(forKey: key), let id = UUID(uuidString: value) {
+            return id
+        }
+        let id = UUID()
+        UserDefaults.standard.set(id.uuidString.lowercased(), forKey: key)
+        return id
     }
 
     #if os(macOS)

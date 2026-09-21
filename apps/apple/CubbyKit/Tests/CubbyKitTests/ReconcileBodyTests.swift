@@ -20,16 +20,14 @@ struct ReconcileBodyTests {
         #expect(first.locationID == LocationCode("LOC-5678"))
         #expect(rows[1].product.barcodes.isEmpty)
         #expect(rows[1].product.coverImageURL == nil)
-        // The snapshot is the newest row's own timestamp; an empty bin has none.
-        #expect(RecountRow.snapshotTimestamp(rows) == rows[1].updatedAt)
-        #expect(RecountRow.snapshotTimestamp([]) == nil)
     }
 
-    @Test func bodyEncodesEachArmWithOnlyItsKeysAndOmitsAnEmptySnapshot() throws {
+    @Test func bodyEncodesEachArmAndPreservesCompleteSnapshotToken() throws {
         let body = ReconcileSessionPayload(
             locationId: LocationCode("LOC-5678"),
             expectedInventoryEntryIds: [InventoryEntryCode("INV-2345"), InventoryEntryCode("INV-3456")],
             snapshotUpdatedAt: nil,
+            snapshotToken: "complete-server-snapshot",
             resolutions: [
                 RecountResolution.verify.resolution(for: InventoryEntryCode("INV-2345")),
                 RecountResolution.adjust(Amount(value: 2, unit: "each")).resolution(
@@ -42,6 +40,7 @@ struct ReconcileBodyTests {
         let json = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder.cubby().encode(body))
         #expect(json["locationId"] == "LOC-5678")
         #expect(json["expectedInventoryEntryIds"]?.arrayValue?.count == 2)
+        #expect(json["snapshotToken"] == "complete-server-snapshot")
         // `packages/schemas/src/inventory.ts` documents this on purpose: the generated payload's
         // synthesized encoder omits an Optional key instead of sending explicit `null`, so the
         // server accepts the field `.nullish()`, not `.nullable()`, for an empty-bin commit.

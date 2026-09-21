@@ -12,7 +12,7 @@ import {
   type PaginationState,
 } from "@tanstack/react-table";
 import { MapPin, PackageSearch, Search } from "lucide-react";
-import { useCallback, useId, useMemo } from "react";
+import { useCallback, useEffect, useId, useMemo } from "react";
 
 import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
 import {
@@ -25,6 +25,7 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
+import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -112,6 +113,10 @@ function formatSmartMatch(match: SmartCollectionMatch): string {
   const evidence = match.evidence.join(" · ");
   if (evidence) return evidence;
   switch (match.kind) {
+    case "effectiveOwnerEquals":
+      return `Owner is ${match.value}`;
+    case "categoryEquals":
+      return `Category is ${match.value}`;
     case "manufacturerEquals":
       return `Manufacturer is ${match.value}`;
     case "productTagEquals":
@@ -136,6 +141,10 @@ export function CollectionProductsTable({
   page: number;
   onSearchChange: (next: { q?: string; page?: number }) => void;
 }) {
+  const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  useEffect(() => {
+    if (page > lastPage) onSearchChange({ page: lastPage });
+  }, [lastPage, page, onSearchChange]);
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<CollectionProductOut>((add) => {
@@ -185,6 +194,37 @@ export function CollectionProductsTable({
               },
             },
             cell: ({ row }) => <CollectionMembership {...row.original} />,
+          }),
+        );
+        add(
+          productColumnHelper.display({
+            id: "inventoryQuantity",
+            header: "Quantity",
+            enableSorting: false,
+            enableCellSelection: false,
+            meta: {
+              className: "w-28",
+              mobile: {
+                slot: "meta",
+                priority: 25,
+                label: "Quantity",
+              },
+            },
+            cell: ({ row }) => {
+              const totals = new Map<string, number>();
+              for (const entry of row.original.inventory ?? []) {
+                totals.set(
+                  entry.amount.unit,
+                  (totals.get(entry.amount.unit) ?? 0) + entry.amount.value,
+                );
+              }
+              return (
+                [...totals]
+                  .sort(([left], [right]) => left.localeCompare(right))
+                  .map(([unit, value]) => tryFormatAmount({ value, unit }))
+                  .join(" + ") || "—"
+              );
+            },
           }),
         );
         add(
@@ -270,7 +310,8 @@ export function CollectionProductsTable({
       scrollRestorationId: PRODUCT_TABLE_LAYOUT_KEY,
     },
   });
-  const rangeStart = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeStart =
+    totalCount === 0 ? 0 : Math.min((page - 1) * PAGE_SIZE + 1, totalCount);
   const rangeEnd = Math.min(page * PAGE_SIZE, totalCount);
   const toolbar = (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">

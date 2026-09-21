@@ -33,11 +33,7 @@ public struct BrowserBridgeConnectionConfiguration: Sendable {
     func currentBearerToken() async -> String? { await bearerTokenProvider() }
 
     public var isSecureOrLocalDevelopment: Bool {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-            let scheme = components.scheme?.lowercased(), let host = components.host?.lowercased()
-        else { return false }
-        if scheme == "wss" { return true }
-        return scheme == "ws" && (host == "localhost" || host == "127.0.0.1" || host == "::1")
+        AuthenticatedSocketSupport.isSecureOrLocalDevelopment(url)
     }
 }
 
@@ -184,7 +180,8 @@ public actor URLSessionBrowserBridge {
                 socket = nil
                 publish(.waitingToReconnect(attempt: attempt))
                 do {
-                    try await Task.sleep(for: Self.reconnectDelay(attempt: attempt))
+                    try await Task.sleep(
+                        for: AuthenticatedSocketSupport.reconnectDelay(attempt: attempt))
                 } catch {
                     break
                 }
@@ -199,12 +196,10 @@ public actor URLSessionBrowserBridge {
         guard let bearerToken = await configuration.currentBearerToken(), !bearerToken.isEmpty else {
             throw URLError(.userAuthenticationRequired)
         }
-        var request = URLRequest(url: configuration.url)
-        request.timeoutInterval = 30
-        request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(
-            "cubby-apple/\(BrowserBridgeProtocol.currentProtocolVersion)",
-            forHTTPHeaderField: "User-Agent")
+        let request = try AuthenticatedSocketSupport.request(
+            url: configuration.url,
+            bearerToken: bearerToken,
+            userAgent: "cubby-apple/\(BrowserBridgeProtocol.currentProtocolVersion)")
         let socket = session.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
@@ -226,13 +221,9 @@ public actor URLSessionBrowserBridge {
         BrowserBridgeDebugLog.emit(.connectionReady, browser: configuration.browser)
 
         while !Task.isCancelled, self.socket === socket {
-            let message = try await socket.receive()
-            let data: Data
-            switch message {
-            case .data(let payload): data = payload
-            case .string(let text): data = Data(text.utf8)
-            @unknown default: continue
-            }
+            guard
+                let data = AuthenticatedSocketSupport.data(from: try await socket.receive())
+            else { continue }
             let serverMessage = try JSONDecoder.browserBridge.decode(
                 BrowserBridgeServerMessage.self, from: data)
             BrowserBridgeDebugLog.emit(
@@ -370,10 +361,6 @@ public actor URLSessionBrowserBridge {
         guard status != value else { return }
         status = value
         statusObserver?(value)
-    }
-
-    private static func reconnectDelay(attempt: Int) -> Duration {
-        .seconds(min(30, 1 << min(max(0, attempt - 1), 5)))
     }
 
     private static func messageType(_ message: BrowserBridgeServerMessage) -> String {

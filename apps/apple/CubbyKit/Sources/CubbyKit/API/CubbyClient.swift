@@ -105,6 +105,59 @@ public actor CubbyClient {
 
     // MARK: - Generic entity access
 
+    public func wardrobe(
+        ownerID: LedgerPartyShortcode, search: String? = nil, pageIndex: Int = 0,
+        pageSize: Int = 50
+    ) async throws -> SmartCollectionDetailOut {
+        try await perform {
+            try await api.collection_referenceDetail(
+                body: .json(
+                    SmartCollectionReferenceInput(
+                        search: search?.isEmpty == false ? search : nil,
+                        pagination: .init(pageIndex: max(0, pageIndex), pageSize: min(100, max(1, pageSize))),
+                        reference: .wardrobe(.init(kind: .wardrobe, ownerId: ownerID))
+                    )
+                )
+            ).ok.body.json
+        }
+    }
+
+    public func fieldExplanation(
+        subject: EntityRef, field: String
+    ) async throws -> FieldExplanationOutput {
+        let entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload =
+            switch subject.entity {
+            case .product: .product
+            case .recipe: .recipe
+            case .ingredient: .ingredient
+            case .cookbook: .cookbook
+            case .location: .location
+            case .inventory: .inventory
+            case .meal: .meal
+            case .ledgerParty: .ledgerParty
+            case .ledgerTransfer: .ledgerTransfer
+            case .project: .project
+            case .task: .task
+            case .vendor: .vendor
+            case .purchase: .purchase
+            case .financialAccount: .financialAccount
+            case .financialTransaction: .financialTransaction
+            case .wish: .wish
+            case .expense: .expense
+            case .usdaFood: .usdaFood
+            case .image: .image
+            case .planting: .planting
+            case .gardenEntry: .gardenEntry
+            case .vendorAccount: .vendorAccount
+            }
+        return try await perform {
+            try await api.fieldExplanation_explain(
+                query: .init(
+                    entityType: entityType, entityId: subject.id, field: field)
+            ).ok.body.json
+        }
+    }
+
     /// One page of rows through the entity's generated native read kind. `filters` are keyed by
     /// `FilterDescriptor.wire`; an unknown name throws `EntityFilterError` before any request.
     public func list(
@@ -510,14 +563,14 @@ public actor CubbyClient {
         }
     }
 
-    /// The stock rows at these locations. `placement` is `stock`: installed rows are fixed
-    /// fixtures the server keeps out of counting and audits.
-    public func inventory(atLocations locations: [LocationCode]) async throws -> [RecountRow] {
+    /// An atomic view of one bin. The opaque token guards both row membership and ownership facts
+    /// that a row timestamp cannot cover.
+    public func inventorySnapshot(at location: LocationCode) async throws -> RecountSnapshot {
         try await perform {
-            let output = try await api.inventory_getByLocationIds(
-                query: .init(locationIds: locations.map(\.rawValue), placement: .stock)
-            )
-            return try output.ok.body.json.map(RecountRow.init)
+            let output = try await api.inventory_locationSnapshot(
+                query: .init(locationId: location.rawValue, placement: .stock)
+            ).ok.body.json
+            return RecountSnapshot(rows: output.items.map(RecountRow.init), token: output.snapshotToken)
         }
     }
 
@@ -534,6 +587,28 @@ public actor CubbyClient {
         try await perform {
             try await api.inventory_reconcileSession(body: .json(body)).ok.body.json.items.map(
                 RecountRow.init)
+        }
+    }
+
+    /// Applies a stored ownership choice to all or part of one inventory row. A partial quantity
+    /// may split the row; callers must refresh the returned entry ids rather than assuming the
+    /// original row is the only record changed.
+    public func setInventoryOwnership(_ input: SetInventoryOwnershipInput) async throws
+        -> InventoryOwnershipMutationOut
+    {
+        try await perform {
+            try await api.inventory_setOwnership(body: .json(input)).ok.body.json
+        }
+    }
+
+    /// Pins the currently inferred owner using the evidence fingerprint returned with the detail.
+    /// The server rejects stale evidence so native cannot confirm a different acquisition than the
+    /// one the person reviewed.
+    public func confirmInventoryOwnership(_ input: ConfirmInventoryOwnershipInput) async throws
+        -> InventoryOwnershipMutationOut
+    {
+        try await perform {
+            try await api.inventory_confirmOwnership(body: .json(input)).ok.body.json
         }
     }
 

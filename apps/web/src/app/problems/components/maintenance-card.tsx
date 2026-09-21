@@ -28,6 +28,7 @@ import {
 import { openSearchIndexRepairStream } from "~/lib/search.functions";
 
 import { BACKFILL } from "./backfill-registry";
+import { ImageProcessingMaintenance } from "./image-processing-maintenance";
 import { BackfillButton } from "./problem-backfill-action";
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */
@@ -349,6 +350,7 @@ export function MaintenanceCard() {
       </CardHeader>
       <CardContent>
         <Stack gap="lg">
+          <ImageProcessingMaintenance />
           {MAINTENANCE_GROUPS.map(({ group, tools }) => (
             <Stack key={group} gap="tight">
               <Eyebrow>{group}</Eyebrow>

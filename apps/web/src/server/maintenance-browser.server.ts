@@ -1,6 +1,11 @@
 import { maintenanceContract } from "~/contracts/maintenance.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
+  backfillImageProcessing,
+  imageProcessingMaintenanceSummary,
+  updateImageProcessingSettings,
+} from "~/server/repo/image-processing-maintenance";
+import {
   countAwaitingWork,
   settleAwaitingWork,
 } from "~/server/services/awaiting-work.service";
@@ -10,6 +15,11 @@ import { repairImageDimensions } from "~/server/services/image-dimension-repair.
 export const maintenanceHandlers = implementOperationDomain(
   maintenanceContract,
   {
+    backfillImageProcessing: (context, input) =>
+      backfillImageProcessing(context.db, input),
+    imageProcessing: (context) => imageProcessingMaintenanceSummary(context.db),
+    configureImageProcessing: (context, input) =>
+      updateImageProcessingSettings(context.db, input),
     awaitingWork: (context) => countAwaitingWork(context.db),
     settleAwaitingWork: (context) => settleAwaitingWork(context.db),
     repairImageDimensions: (context, input) =>

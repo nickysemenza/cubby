@@ -64,6 +64,15 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "USDA identifiers" }],
         },
+        explanation: {
+          ruleId: "usda-food.fdc-id",
+          description:
+            "This identifier comes from the current USDA food record.",
+          readPath: "fdc_id",
+          sourceDependencies: [
+            { path: "fdc_id", label: "USDA food identifier" },
+          ],
+        },
         validation: {
           read: fdcId,
           create: null,
@@ -89,6 +98,22 @@ export default defineEntity({
         nullable: true,
         label: "Branded food information",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "USDA food record" }],
+        },
+        explanation: {
+          ruleId: "usda-food.branded-food-info",
+          description:
+            "Branded food information is normalized from the current USDA food record when the record is branded.",
+          readPath: "brandedFoodInfo",
+          sourceDependencies: [
+            {
+              path: "brandedFoodInfo",
+              label: "Current USDA branded food record",
+            },
+          ],
+        },
         validation: {
           read: brandedFoodInfo.nullable(),
           create: null,
@@ -104,6 +129,15 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "USDA food record" }],
         },
+        explanation: {
+          ruleId: "usda-food.food-info",
+          description:
+            "Food information is normalized from the current USDA food record returned by the USDA reader.",
+          readPath: "foodInfo",
+          sourceDependencies: [
+            { path: "foodInfo", label: "Current USDA food record" },
+          ],
+        },
         validation: {
           read: foodInfo,
           create: null,
@@ -116,6 +150,22 @@ export default defineEntity({
         nullable: true,
         label: "Legacy food information",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "USDA food record" }],
+        },
+        explanation: {
+          ruleId: "usda-food.legacy-food-info",
+          description:
+            "Legacy food information is normalized from the current USDA food record when that legacy shape is present.",
+          readPath: "legacyFoodInfo",
+          sourceDependencies: [
+            {
+              path: "legacyFoodInfo",
+              label: "Current USDA legacy food record",
+            },
+          ],
+        },
         validation: {
           read: legacyFoodInfo.nullable(),
           create: null,
@@ -127,6 +177,19 @@ export default defineEntity({
         kind: "json",
         label: "Nutrition",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "USDA food record" }],
+        },
+        explanation: {
+          ruleId: "usda-food.nutrition",
+          description:
+            "Nutrition is normalized from the nutrient values in the current USDA food record.",
+          readPath: "nutritionInfo",
+          sourceDependencies: [
+            { path: "nutritionInfo", label: "Current USDA nutrient values" },
+          ],
+        },
         validation: {
           read: nutritionInfo,
           create: null,
@@ -138,6 +201,19 @@ export default defineEntity({
         kind: "json",
         label: "Portions",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "USDA food record" }],
+        },
+        explanation: {
+          ruleId: "usda-food.portions",
+          description:
+            "Portions are the serving measures supplied by the current USDA food record.",
+          readPath: "portionInfoRaw",
+          sourceDependencies: [
+            { path: "portionInfoRaw", label: "Current USDA portions" },
+          ],
+        },
         validation: {
           read: z.array(foodPortion),
           create: null,
@@ -149,6 +225,19 @@ export default defineEntity({
         kind: "json",
         label: "Inferred unit mappings",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "USDA portion inference" }],
+        },
+        explanation: {
+          ruleId: "usda-food.inferred-unit-mappings",
+          description:
+            "Unit mappings are inferred from the portions in the current USDA food record.",
+          readPath: "inferredUnitMappings",
+          sourceDependencies: [
+            { path: "portionInfoRaw", label: "USDA portions" },
+          ],
+        },
         validation: {
           read: z.array(unitMappingWithMetadata),
           create: null,
@@ -161,6 +250,15 @@ export default defineEntity({
         label: "Linked products",
         reference: { entity: "product", multiple: true },
         display: { list: true, detail: true },
+        explanation: {
+          ruleId: "usda-food.linked-products",
+          description:
+            "Linked products are live Cubby products whose food identifier resolves to this USDA record.",
+          readPath: "linkedProducts",
+          sourceDependencies: [
+            { path: "linkedProducts", label: "Linked Cubby products" },
+          ],
+        },
         validation: {
           read: z.array(productTopLevelOut),
           create: null,

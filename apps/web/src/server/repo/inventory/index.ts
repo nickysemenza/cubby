@@ -22,9 +22,16 @@ export {
   addInventoryEntries,
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
+  getInventoryLocationSnapshotToken,
   moveInventoryEntries,
   reconcileLocationSession,
 } from "./bulk";
+export {
+  confirmInventoryExpenseBeneficiary,
+  confirmInventoryOwnership,
+  setInventoryOwnership,
+} from "./ownership-mutations";
+export { loadEffectiveInventoryOwnershipById } from "./ownership";
 export {
   createInventoryEntry,
   deleteInventoryEntries,

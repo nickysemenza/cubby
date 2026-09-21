@@ -335,6 +335,15 @@ export default defineEntity({
           kind: "relation",
           sources: [{ label: "Financial allocations" }],
         },
+        explanation: {
+          ruleId: "financial-transaction.allocations",
+          description:
+            "Allocations are the current confirmed links that assign this transaction to purchases or expenses.",
+          readPath: "allocations",
+          sourceDependencies: [
+            { path: "allocations", label: "Confirmed allocations" },
+          ],
+        },
         validation: {
           read: financialTransactionAllocations,
           create: financialTransactionAllocations.default([]),
@@ -389,6 +398,20 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "vendor", relation: "vendor" }],
+        },
+        explanation: {
+          ruleId: "financial-transaction.vendor-inference",
+          description:
+            "Possible vendors come from prior settled transactions with the same normalized merchant label; confirmed allocations, transfers, and void transactions suppress the suggestion.",
+          resolver: "merchantVendorInference",
+          readPath: "vendorInference",
+          sourceDependencies: [
+            { path: "merchant", label: "Merchant label" },
+            { path: "status", label: "Transaction status" },
+            { path: "allocations", label: "Confirmed allocations" },
+            { path: "ledgerTransferId", label: "Transfer link" },
+            { path: "vendorInference", label: "Matching settled transactions" },
+          ],
         },
         validation: {
           read: merchantVendorInference

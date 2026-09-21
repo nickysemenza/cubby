@@ -12,6 +12,9 @@ public import struct Foundation.Date
 public import CubbyAPISupport
 /// A type that performs HTTP operations defined by the OpenAPI document.
 public protocol APIProtocol: Sendable {
+    /// - Remark: HTTP `POST /api/v1/collection/referenceDetail`.
+    /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)`.
+    func collection_referenceDetail(_ input: Operations.Collection_referenceDetail.Input) async throws -> Operations.Collection_referenceDetail.Output
     /// - Remark: HTTP `GET /api/v1/cookbook/detail`.
     /// - Remark: Generated from `#/paths//api/v1/cookbook/detail/get(cookbook.detail)`.
     func cookbook_detail(_ input: Operations.Cookbook_detail.Input) async throws -> Operations.Cookbook_detail.Output
@@ -44,6 +47,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/expenses/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/patch(resources.expense.update)`.
     func resources_expense_update(_ input: Operations.Resources_expense_update.Input) async throws -> Operations.Resources_expense_update.Output
+    /// - Remark: HTTP `GET /api/v1/fieldExplanation/explain`.
+    /// - Remark: Generated from `#/paths//api/v1/fieldExplanation/explain/get(fieldExplanation.explain)`.
+    func fieldExplanation_explain(_ input: Operations.FieldExplanation_explain.Input) async throws -> Operations.FieldExplanation_explain.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/financial-accounts`.
@@ -116,6 +122,21 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/image/uploadImage`.
     /// - Remark: Generated from `#/paths//api/v1/image/uploadImage/post(image.uploadImage)`.
     func image_uploadImage(_ input: Operations.Image_uploadImage.Input) async throws -> Operations.Image_uploadImage.Output
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/correctDescription`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/correctDescription/post(imageProcessing.correctDescription)`.
+    func imageProcessing_correctDescription(_ input: Operations.ImageProcessing_correctDescription.Input) async throws -> Operations.ImageProcessing_correctDescription.Output
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/evaluateAppleDescription`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/evaluateAppleDescription/post(imageProcessing.evaluateAppleDescription)`.
+    func imageProcessing_evaluateAppleDescription(_ input: Operations.ImageProcessing_evaluateAppleDescription.Input) async throws -> Operations.ImageProcessing_evaluateAppleDescription.Output
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/schedule`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/schedule/post(imageProcessing.schedule)`.
+    func imageProcessing_schedule(_ input: Operations.ImageProcessing_schedule.Input) async throws -> Operations.ImageProcessing_schedule.Output
+    /// - Remark: HTTP `GET /api/v1/imageProcessing/status`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/status/get(imageProcessing.status)`.
+    func imageProcessing_status(_ input: Operations.ImageProcessing_status.Input) async throws -> Operations.ImageProcessing_status.Output
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/validateCompanionMessage`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/validateCompanionMessage/post(imageProcessing.validateCompanionMessage)`.
+    func imageProcessing_validateCompanionMessage(_ input: Operations.ImageProcessing_validateCompanionMessage.Input) async throws -> Operations.ImageProcessing_validateCompanionMessage.Output
     /// - Remark: HTTP `PATCH /api/v1/images/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/images/{id}/patch(resources.image.update)`.
     func resources_image_update(_ input: Operations.Resources_image_update.Input) async throws -> Operations.Resources_image_update.Output
@@ -147,12 +168,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/inventory/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/patch(resources.inventory.update)`.
     func resources_inventory_update(_ input: Operations.Resources_inventory_update.Input) async throws -> Operations.Resources_inventory_update.Output
+    /// - Remark: HTTP `POST /api/v1/inventory/confirmOwnership`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/confirmOwnership/post(inventory.confirmOwnership)`.
+    func inventory_confirmOwnership(_ input: Operations.Inventory_confirmOwnership.Input) async throws -> Operations.Inventory_confirmOwnership.Output
     /// - Remark: HTTP `GET /api/v1/inventory/findDuplicates`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/findDuplicates/get(inventory.findDuplicates)`.
     func inventory_findDuplicates(_ input: Operations.Inventory_findDuplicates.Input) async throws -> Operations.Inventory_findDuplicates.Output
     /// - Remark: HTTP `GET /api/v1/inventory/getByLocationIds`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/getByLocationIds/get(inventory.getByLocationIds)`.
     func inventory_getByLocationIds(_ input: Operations.Inventory_getByLocationIds.Input) async throws -> Operations.Inventory_getByLocationIds.Output
+    /// - Remark: HTTP `GET /api/v1/inventory/locationSnapshot`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/locationSnapshot/get(inventory.locationSnapshot)`.
+    func inventory_locationSnapshot(_ input: Operations.Inventory_locationSnapshot.Input) async throws -> Operations.Inventory_locationSnapshot.Output
     /// - Remark: HTTP `POST /api/v1/inventory/moveEntries`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/moveEntries/post(inventory.moveEntries)`.
     func inventory_moveEntries(_ input: Operations.Inventory_moveEntries.Input) async throws -> Operations.Inventory_moveEntries.Output
@@ -165,6 +192,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/inventory/scanAtLocation`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/scanAtLocation/post(inventory.scanAtLocation)`.
     func inventory_scanAtLocation(_ input: Operations.Inventory_scanAtLocation.Input) async throws -> Operations.Inventory_scanAtLocation.Output
+    /// - Remark: HTTP `POST /api/v1/inventory/setOwnership`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/setOwnership/post(inventory.setOwnership)`.
+    func inventory_setOwnership(_ input: Operations.Inventory_setOwnership.Input) async throws -> Operations.Inventory_setOwnership.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/ledger-parties`.
@@ -414,6 +444,17 @@ public protocol APIProtocol: Sendable {
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// - Remark: HTTP `POST /api/v1/collection/referenceDetail`.
+    /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)`.
+    public func collection_referenceDetail(
+        headers: Operations.Collection_referenceDetail.Input.Headers = .init(),
+        body: Operations.Collection_referenceDetail.Input.Body? = nil
+    ) async throws -> Operations.Collection_referenceDetail.Output {
+        try await collection_referenceDetail(Operations.Collection_referenceDetail.Input(
+            headers: headers,
+            body: body
+        ))
+    }
     /// - Remark: HTTP `GET /api/v1/cookbook/detail`.
     /// - Remark: Generated from `#/paths//api/v1/cookbook/detail/get(cookbook.detail)`.
     public func cookbook_detail(
@@ -514,6 +555,17 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/fieldExplanation/explain`.
+    /// - Remark: Generated from `#/paths//api/v1/fieldExplanation/explain/get(fieldExplanation.explain)`.
+    public func fieldExplanation_explain(
+        query: Operations.FieldExplanation_explain.Input.Query,
+        headers: Operations.FieldExplanation_explain.Input.Headers = .init()
+    ) async throws -> Operations.FieldExplanation_explain.Output {
+        try await fieldExplanation_explain(Operations.FieldExplanation_explain.Input(
+            query: query,
+            headers: headers
         ))
     }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
@@ -764,6 +816,61 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/correctDescription`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/correctDescription/post(imageProcessing.correctDescription)`.
+    public func imageProcessing_correctDescription(
+        headers: Operations.ImageProcessing_correctDescription.Input.Headers = .init(),
+        body: Operations.ImageProcessing_correctDescription.Input.Body? = nil
+    ) async throws -> Operations.ImageProcessing_correctDescription.Output {
+        try await imageProcessing_correctDescription(Operations.ImageProcessing_correctDescription.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/evaluateAppleDescription`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/evaluateAppleDescription/post(imageProcessing.evaluateAppleDescription)`.
+    public func imageProcessing_evaluateAppleDescription(
+        headers: Operations.ImageProcessing_evaluateAppleDescription.Input.Headers = .init(),
+        body: Operations.ImageProcessing_evaluateAppleDescription.Input.Body? = nil
+    ) async throws -> Operations.ImageProcessing_evaluateAppleDescription.Output {
+        try await imageProcessing_evaluateAppleDescription(Operations.ImageProcessing_evaluateAppleDescription.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/schedule`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/schedule/post(imageProcessing.schedule)`.
+    public func imageProcessing_schedule(
+        headers: Operations.ImageProcessing_schedule.Input.Headers = .init(),
+        body: Operations.ImageProcessing_schedule.Input.Body? = nil
+    ) async throws -> Operations.ImageProcessing_schedule.Output {
+        try await imageProcessing_schedule(Operations.ImageProcessing_schedule.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/imageProcessing/status`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/status/get(imageProcessing.status)`.
+    public func imageProcessing_status(
+        query: Operations.ImageProcessing_status.Input.Query,
+        headers: Operations.ImageProcessing_status.Input.Headers = .init()
+    ) async throws -> Operations.ImageProcessing_status.Output {
+        try await imageProcessing_status(Operations.ImageProcessing_status.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/validateCompanionMessage`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/validateCompanionMessage/post(imageProcessing.validateCompanionMessage)`.
+    public func imageProcessing_validateCompanionMessage(
+        headers: Operations.ImageProcessing_validateCompanionMessage.Input.Headers = .init(),
+        body: Operations.ImageProcessing_validateCompanionMessage.Input.Body? = nil
+    ) async throws -> Operations.ImageProcessing_validateCompanionMessage.Output {
+        try await imageProcessing_validateCompanionMessage(Operations.ImageProcessing_validateCompanionMessage.Input(
+            headers: headers,
+            body: body
+        ))
+    }
     /// - Remark: HTTP `PATCH /api/v1/images/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/images/{id}/patch(resources.image.update)`.
     public func resources_image_update(
@@ -873,6 +980,17 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// - Remark: HTTP `POST /api/v1/inventory/confirmOwnership`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/confirmOwnership/post(inventory.confirmOwnership)`.
+    public func inventory_confirmOwnership(
+        headers: Operations.Inventory_confirmOwnership.Input.Headers = .init(),
+        body: Operations.Inventory_confirmOwnership.Input.Body? = nil
+    ) async throws -> Operations.Inventory_confirmOwnership.Output {
+        try await inventory_confirmOwnership(Operations.Inventory_confirmOwnership.Input(
+            headers: headers,
+            body: body
+        ))
+    }
     /// - Remark: HTTP `GET /api/v1/inventory/findDuplicates`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/findDuplicates/get(inventory.findDuplicates)`.
     public func inventory_findDuplicates(
@@ -891,6 +1009,17 @@ extension APIProtocol {
         headers: Operations.Inventory_getByLocationIds.Input.Headers = .init()
     ) async throws -> Operations.Inventory_getByLocationIds.Output {
         try await inventory_getByLocationIds(Operations.Inventory_getByLocationIds.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/inventory/locationSnapshot`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/locationSnapshot/get(inventory.locationSnapshot)`.
+    public func inventory_locationSnapshot(
+        query: Operations.Inventory_locationSnapshot.Input.Query,
+        headers: Operations.Inventory_locationSnapshot.Input.Headers = .init()
+    ) async throws -> Operations.Inventory_locationSnapshot.Output {
+        try await inventory_locationSnapshot(Operations.Inventory_locationSnapshot.Input(
             query: query,
             headers: headers
         ))
@@ -935,6 +1064,17 @@ extension APIProtocol {
         body: Operations.Inventory_scanAtLocation.Input.Body? = nil
     ) async throws -> Operations.Inventory_scanAtLocation.Output {
         try await inventory_scanAtLocation(Operations.Inventory_scanAtLocation.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/inventory/setOwnership`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/setOwnership/post(inventory.setOwnership)`.
+    public func inventory_setOwnership(
+        headers: Operations.Inventory_setOwnership.Input.Headers = .init(),
+        body: Operations.Inventory_setOwnership.Input.Body? = nil
+    ) async throws -> Operations.Inventory_setOwnership.Output {
+        try await inventory_setOwnership(Operations.Inventory_setOwnership.Input(
             headers: headers,
             body: body
         ))
