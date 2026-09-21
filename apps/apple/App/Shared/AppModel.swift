@@ -193,14 +193,11 @@ final class AppModel {
 
     func signIn(email: String, password: String) async {
         lastError = nil
+        let flow = auth
         do {
-            credential = try await auth.signIn(email: email, password: password)
-            phase = .signedIn
-            warmBrowseCounts()
-            await companionImageWorker?.start()
-            #if os(macOS)
-                await browserBridge.connectConfigured()
-            #endif
+            let credential = try await flow.signIn(email: email, password: password)
+            guard auth === flow else { return }
+            await finishSignIn(with: credential)
         } catch let error as AuthError {
             lastError = error.message
             Diagnostics.report(error, context: "auth.signIn")
@@ -208,6 +205,37 @@ final class AppModel {
             lastError = String(describing: error)
             Diagnostics.report(error, context: "auth.signIn")
         }
+    }
+
+    func signInWithGoogle(
+        authenticate: @escaping AuthFlow.WebAuthenticationHandler
+    ) async {
+        lastError = nil
+        let flow = auth
+        do {
+            let credential = try await flow.signInWithGoogle(authenticate: authenticate)
+            guard auth === flow else { return }
+            await finishSignIn(with: credential)
+        } catch AuthError.cancelled {
+            // Closing the system browser is a normal user action; remain signed out without an
+            // error banner or diagnostic event.
+        } catch let error as AuthError {
+            lastError = error.message
+            Diagnostics.report(error, context: "auth.googleSignIn")
+        } catch {
+            lastError = String(describing: error)
+            Diagnostics.report(error, context: "auth.googleSignIn")
+        }
+    }
+
+    private func finishSignIn(with credential: CubbyCredential) async {
+        self.credential = credential
+        phase = .signedIn
+        warmBrowseCounts()
+        await companionImageWorker?.start()
+        #if os(macOS)
+            await browserBridge.connectConfigured()
+        #endif
     }
 
     func signOut() async {

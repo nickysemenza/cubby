@@ -16,9 +16,13 @@ import { urlStringParam } from "~/lib/search-params";
 // on every other route.
 const searchSchema = z.object({
   redirect: urlStringParam,
+  google_error: z.boolean().optional().catch(undefined),
 });
 
-const searchDefaults = { redirect: undefined } as const;
+const searchDefaults = {
+  redirect: undefined,
+  google_error: undefined,
+} as const;
 
 export const Route = createFileRoute("/auth/$authView")({
   validateSearch: searchSchema,
@@ -29,9 +33,19 @@ export const Route = createFileRoute("/auth/$authView")({
 
 function AuthPage() {
   const { authView } = Route.useParams();
+  const { google_error: googleError } = Route.useSearch();
 
   return (
     <AuthEntryFrame>
+      {googleError ? (
+        <p
+          role="alert"
+          className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          Google sign-in requires read-only Gmail access. Try again and approve
+          the Gmail permission.
+        </p>
+      ) : null}
       <AuthView pathname={authView} />
     </AuthEntryFrame>
   );

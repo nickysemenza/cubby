@@ -1,14 +1,15 @@
 import CubbyKit
 import SwiftUI
 
-/// The one screen shown before a credential exists. A single centered working plane on the canvas:
-/// identity, two fields, one primary action, and the host it will talk to — nothing else.
+/// The one screen shown before a credential exists: a centered identity panel with password and
+/// Google sign-in plus the host both methods will use.
 struct LoginView: View {
     @Environment(AppModel.self) private var model
     @State private var email = ""
     @State private var password = ""
     @State private var submitting = false
     @State private var showServer = false
+    @State private var webAuthentication = SystemWebAuthenticationSession()
     @FocusState private var focused: Field?
 
     private enum Field {
@@ -57,6 +58,7 @@ struct LoginView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        .disabled(submitting)
 
                         Button {
                             Task { await submit() }
@@ -75,6 +77,33 @@ struct LoginView: View {
                         .tint(PorcelainTokens.cobalt)
                         .disabled(submitting || email.isEmpty || password.isEmpty)
 
+                        HStack(spacing: PorcelainTokens.Space.sm) {
+                            Rectangle()
+                                .fill(PorcelainTokens.hairline)
+                                .frame(maxWidth: .infinity, maxHeight: PorcelainTokens.hairlineWidth)
+                            Text("or")
+                                .font(.porcelainLabel)
+                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            Rectangle()
+                                .fill(PorcelainTokens.hairline)
+                                .frame(maxWidth: .infinity, maxHeight: PorcelainTokens.hairlineWidth)
+                        }
+
+                        Button {
+                            Task { await submitGoogle() }
+                        } label: {
+                            Text("Continue with Google")
+                                .font(.porcelainTitle)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    minHeight: PorcelainTokens.touchTarget - 12
+                                )
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: PorcelainTokens.radiusControl))
+                        .tint(PorcelainTokens.cobalt)
+                        .disabled(submitting)
+
                         Button {
                             showServer = true
                         } label: {
@@ -88,6 +117,7 @@ struct LoginView: View {
                             .frame(maxWidth: .infinity, minHeight: PorcelainTokens.touchTarget - 16)
                         }
                         .buttonStyle(.plain)
+                        .disabled(submitting)
                     }
                     .frame(maxWidth: 420)
                 }
@@ -103,9 +133,20 @@ struct LoginView: View {
     }
 
     private func submit() async {
+        guard !submitting else { return }
         submitting = true
         defer { submitting = false }
         await model.signIn(email: email, password: password)
+        if model.phase == .signedIn { password = "" }
+    }
+
+    private func submitGoogle() async {
+        guard !submitting else { return }
+        submitting = true
+        defer { submitting = false }
+        await model.signInWithGoogle { url in
+            try await webAuthentication.authenticate(url: url)
+        }
         if model.phase == .signedIn { password = "" }
     }
 }

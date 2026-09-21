@@ -37,6 +37,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedToolsRouteImport } from './routes/_authenticated/tools'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
+import { Route as AuthNativeRouteImport } from './routes/auth.native'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSectionRouteImport } from './routes/docs.$section'
 import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
@@ -282,6 +283,11 @@ const ApiMcpRoute = ApiMcpRouteImport.update({
 const AuthAuthViewRoute = AuthAuthViewRouteImport.update({
   id: '/auth/$authView',
   path: '/auth/$authView',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthNativeRoute = AuthNativeRouteImport.update({
+  id: '/auth/native',
+  path: '/auth/native',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsIndexRoute = DocsIndexRouteImport.update({
@@ -890,6 +896,7 @@ export interface FileRoutesByFullPath {
   '/tools': typeof AuthenticatedToolsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
+  '/auth/native': typeof AuthNativeRoute
   '/docs/$section': typeof DocsSectionRoute
   '/oauth/consent': typeof OauthConsentRoute
   '/docs/': typeof DocsIndexRoute
@@ -1018,6 +1025,7 @@ export interface FileRoutesByTo {
   '/tools': typeof AuthenticatedToolsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
+  '/auth/native': typeof AuthNativeRoute
   '/docs/$section': typeof DocsSectionRoute
   '/oauth/consent': typeof OauthConsentRoute
   '/docs': typeof DocsIndexRoute
@@ -1149,6 +1157,7 @@ export interface FileRoutesById {
   '/_authenticated/tools': typeof AuthenticatedToolsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
+  '/auth/native': typeof AuthNativeRoute
   '/docs/$section': typeof DocsSectionRoute
   '/oauth/consent': typeof OauthConsentRoute
   '/docs/': typeof DocsIndexRoute
@@ -1280,6 +1289,7 @@ export interface FileRouteTypes {
     | '/tools'
     | '/api/mcp'
     | '/auth/$authView'
+    | '/auth/native'
     | '/docs/$section'
     | '/oauth/consent'
     | '/docs/'
@@ -1408,6 +1418,7 @@ export interface FileRouteTypes {
     | '/tools'
     | '/api/mcp'
     | '/auth/$authView'
+    | '/auth/native'
     | '/docs/$section'
     | '/oauth/consent'
     | '/docs'
@@ -1538,6 +1549,7 @@ export interface FileRouteTypes {
     | '/_authenticated/tools'
     | '/api/mcp'
     | '/auth/$authView'
+    | '/auth/native'
     | '/docs/$section'
     | '/oauth/consent'
     | '/docs/'
@@ -1650,6 +1662,7 @@ export interface RootRouteChildren {
   DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
   ApiMcpRoute: typeof ApiMcpRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
+  AuthNativeRoute: typeof AuthNativeRoute
   OauthConsentRoute: typeof OauthConsentRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
@@ -1867,6 +1880,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/$authView'
       fullPath: '/auth/$authView'
       preLoaderRoute: typeof AuthAuthViewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/native': {
+      id: '/auth/native'
+      path: '/auth/native'
+      fullPath: '/auth/native'
+      preLoaderRoute: typeof AuthNativeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/': {
@@ -2893,6 +2913,7 @@ const rootRouteChildren: RootRouteChildren = {
   DotwellKnownOpenidConfigurationRoute: DotwellKnownOpenidConfigurationRoute,
   ApiMcpRoute: ApiMcpRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
+  AuthNativeRoute: AuthNativeRoute,
   OauthConsentRoute: OauthConsentRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
