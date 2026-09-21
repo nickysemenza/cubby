@@ -113,6 +113,8 @@ export const listRendererCoverage = {
   },
   product: scoredCoverage<"product">(),
   purchase: scoredCoverage<"purchase">(),
+  // pantry and garden entities
+  // finance and project entities
 } satisfies {
   [E in ListRendererEntity]: EntityListRendererCoverage<E>;
 };

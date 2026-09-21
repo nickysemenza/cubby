@@ -19,4 +19,6 @@ export type DataQualityEntries = {
 export const dataQualityEntries = {
   product: productChecks,
   purchase: purchaseChecks,
+  // pantry and garden entities
+  // finance and project entities
 } satisfies DataQualityEntries;
