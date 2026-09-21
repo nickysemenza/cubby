@@ -15,6 +15,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
 import {
   getOptionalIngredientId,
   getOptionalProductShortcode,
@@ -414,15 +415,25 @@ export function QuickInventoryAdd({
             )}
           >
             <div className="pt-4">
-              <ProductFormFields
+              {/* `ProductFormFields` renders Classification with
+                  `suggestField="categoryId"` — without a provider mounted
+                  here, `useAutoFieldSuggestion` now reports it loudly in dev
+                  (see the discard-dialog gap this guard exists to catch). */}
+              <FieldSuggestionProvider
+                entity="product"
                 mode="create"
-                form={createForm}
-                paths={createProductFormFieldPaths}
-                imageHandlers={imageState}
-                hideNameField
-                hidePrice
-                compact
-              />
+                fieldKeys={["categoryId"]}
+              >
+                <ProductFormFields
+                  mode="create"
+                  form={createForm}
+                  paths={createProductFormFieldPaths}
+                  imageHandlers={imageState}
+                  hideNameField
+                  hidePrice
+                  compact
+                />
+              </FieldSuggestionProvider>
             </div>
           </CollapsibleContent>
         </Collapsible>

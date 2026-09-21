@@ -11,6 +11,7 @@ import {
   approveDetectedInventoryItemOut,
   detectedInventorySchema,
   enrichmentProposalPrecomputeInput,
+  externalIdKindSuggestionInput,
   fieldSuggestionsInput,
   fieldSuggestionsOut,
   ingredientMergeSuggestionBatchInput,
@@ -18,6 +19,7 @@ import {
   locationDescriptionSchema,
   productIdentificationInput,
   productIdentificationSchema,
+  suggestExternalIdKindOut,
   usdaFoodSuggestionBatchInput,
   usdaFoodSuggestionBatchOut,
   usdaFoodSuggestionInput,
@@ -87,6 +89,10 @@ export const aiContract = defineContract("ai", {
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
     http: false,
+  }),
+  suggestExternalIdKind: query({
+    input: externalIdKindSuggestionInput,
+    output: suggestExternalIdKindOut,
   }),
   usageRecent: query({
     input: aiUsageRecentInput,

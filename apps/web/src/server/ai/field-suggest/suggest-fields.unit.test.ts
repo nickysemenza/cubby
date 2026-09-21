@@ -119,7 +119,17 @@ describe("suggestFields", () => {
           confidence: "high",
           probability: 0.9,
           reasoning: "",
+          // Every non-winning trade ties on probability under this fake
+          // port, so only the shape (top 3, winner excluded) is stable —
+          // not which three of 18 equal-probability ties land first.
+          alternatives: expect.any(Array),
+          operation: "set",
+          removals: [],
         });
+        expect(out.suggestions.trade?.alternatives).toHaveLength(3);
+        expect(
+          out.suggestions.trade?.alternatives.map((a) => a.value),
+        ).not.toContain("electrical");
       },
     },
     {
@@ -137,6 +147,16 @@ describe("suggestFields", () => {
           confidence: "high",
           probability: 0.9,
           reasoning: "",
+          alternatives: [
+            {
+              value: "PRJ-BBBB",
+              label: "Deck Build",
+              detail: null,
+              probability: (1 - 0.9) / 2,
+            },
+          ],
+          operation: "set",
+          removals: [],
         });
       },
     },

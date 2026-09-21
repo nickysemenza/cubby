@@ -103,6 +103,12 @@ export interface JevChoiceResult {
   confidence: Confidence;
   /** Jev's calibrated probability for the selected choice, before bucketing. */
   probability: number;
+  /**
+   * Every candidate's calibrated probability, desc by probability, `none`
+   * excluded — the winner is `ranked[0]` (barring a probability tie). A
+   * caller wanting runners-up filters out `selectedIndex` itself.
+   */
+  ranked: { index: number; probability: number }[];
 }
 
 /**
@@ -286,12 +292,17 @@ export async function runJevChoice(args: {
     throw new Error("Jev selected a key absent from its probability map.");
   }
   const confidence = decisionConfidence(selectedProbability);
+  const ranked = Object.entries(answer.probabilities)
+    .filter(([key]) => key !== NONE_KEY)
+    .map(([key, probability]) => ({ index: Number(key.slice(1)), probability }))
+    .sort((a, b) => b.probability - a.probability);
 
   if (answer.choice === NONE_KEY) {
     return {
       selectedIndex: null,
       confidence,
       probability: selectedProbability,
+      ranked,
     };
   }
   const selectedIndex = Number(answer.choice.slice(1));
@@ -301,5 +312,10 @@ export async function runJevChoice(args: {
   ) {
     throw new Error("Jev selected an unknown candidate key.");
   }
-  return { selectedIndex, confidence, probability: selectedProbability };
+  return {
+    selectedIndex,
+    confidence,
+    probability: selectedProbability,
+    ranked,
+  };
 }

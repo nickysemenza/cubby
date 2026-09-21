@@ -46,6 +46,9 @@ const food = {
   probability: 0.97,
   detail: null,
   reasoning: "",
+  alternatives: [],
+  operation: "set" as const,
+  removals: [],
 };
 
 function Surface({

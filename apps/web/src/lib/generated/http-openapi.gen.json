@@ -527,6 +527,87 @@
         }
       }
     },
+    "/api/v1/ai/suggestExternalIdKind": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "identifier",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "url",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "productName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "manufacturer",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "ai.suggestExternalIdKind",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldSuggestion"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/suggestIngredientMergeBatch": {
       "post": {
         "tags": [
@@ -36524,6 +36605,125 @@
         "required": [
           "entityType",
           "entityId"
+        ],
+        "additionalProperties": false
+      },
+      "FieldSuggestion": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/Confidence"
+          },
+          "probability": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "reasoning": {
+            "type": "string"
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSuggestionAlternative"
+            }
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "set",
+              "remove"
+            ]
+          },
+          "removals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSuggestionRemoval"
+            }
+          }
+        },
+        "required": [
+          "value",
+          "label",
+          "detail",
+          "confidence",
+          "probability",
+          "reasoning",
+          "alternatives",
+          "operation",
+          "removals"
+        ],
+        "additionalProperties": false
+      },
+      "FieldSuggestionAlternative": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "value",
+          "label",
+          "detail",
+          "probability"
+        ],
+        "additionalProperties": false
+      },
+      "FieldSuggestionRemoval": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "probability",
+          "reason"
         ],
         "additionalProperties": false
       },

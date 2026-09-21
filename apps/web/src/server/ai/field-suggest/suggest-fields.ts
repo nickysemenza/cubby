@@ -273,6 +273,14 @@ async function resolveEnumTarget(
       confidence: result.confidence,
       probability: result.probability,
       reasoning: result.reasoning,
+      alternatives: result.alternatives.map((alternative) => ({
+        value: alternative.value,
+        label: spec.labelOf?.(alternative.value) ?? alternative.value,
+        detail: null,
+        probability: alternative.probability,
+      })),
+      operation: "set",
+      removals: [],
     },
     rawValue: result.value,
   };
@@ -311,6 +319,14 @@ async function resolveReferenceTarget(
       confidence: outcome.confidence,
       probability: outcome.probability,
       reasoning: outcome.reasoning,
+      alternatives: outcome.alternatives.map((alternative) => ({
+        value: spec.idOf(alternative.candidate),
+        label: spec.labelOf(alternative.candidate),
+        detail: spec.detailOf?.(alternative.candidate) ?? null,
+        probability: alternative.probability,
+      })),
+      operation: "set",
+      removals: [],
     },
     rawValue: value,
   };
@@ -347,6 +363,14 @@ async function resolveTextTarget(
       confidence: outcome.confidence,
       probability: outcome.probability,
       reasoning: outcome.reasoning,
+      alternatives: outcome.alternatives.map((alternative) => ({
+        value: alternative.candidate,
+        label: alternative.candidate,
+        detail: null,
+        probability: alternative.probability,
+      })),
+      operation: "set",
+      removals: [],
     },
     rawValue: outcome.selected,
   };

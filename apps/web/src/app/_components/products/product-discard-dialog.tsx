@@ -28,8 +28,8 @@ import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { DiscardLineFields } from "~/app/_components/inventory/discard-line-fields";
 import { product as productOperations } from "~/app/products/product.functions";
-import { tradeOptions } from "~/app/projects/trade-options";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -42,12 +42,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 
-import {
-  NullableNumericField,
-  PlainDateField,
-  SelectField,
-  UnifiedTextField,
-} from "../form-utils";
+import { NullableNumericField, SelectField } from "../form-utils";
 
 const formSchema = z.object({
   trade: tradeSchema,
@@ -234,24 +229,10 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
             placeholder="1"
             fraction
           />
-          <PlainDateField
+          <DiscardLineFields
             form={form}
-            name="date"
-            label="Date"
-            clearLabel="Date unknown"
-          />
-          <SelectField
-            form={form}
-            name="trade"
-            label="Trade"
-            options={tradeOptions}
-            placeholder="Choose a trade…"
-          />
-          <UnifiedTextField
-            form={form}
-            name="reason"
-            label="Reason"
-            placeholder="Broke, worn out, given away…"
+            productId={product.id}
+            productName={product.name}
           />
 
           {entries.length === 0 ? (

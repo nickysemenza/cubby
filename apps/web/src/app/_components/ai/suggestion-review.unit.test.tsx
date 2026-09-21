@@ -15,6 +15,9 @@ const suggestion: FieldSuggestion = {
   probability: 0.97,
   detail: null,
   reasoning: "",
+  alternatives: [],
+  operation: "set",
+  removals: [],
 };
 
 describe("inline suggestion review", () => {

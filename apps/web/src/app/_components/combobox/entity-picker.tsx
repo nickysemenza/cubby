@@ -99,12 +99,13 @@ function EntityPickerItem<TId extends string>({
   const status = item.presentation?.status;
   const facts = item.presentation?.facts ?? [];
   const disabledReason = item.presentation?.disabledReason;
+  const depth = item.presentation?.depth ?? 0;
   return (
     <React.Fragment>
       {showGroup ? (
         <div
           role="presentation"
-          className="border-b border-[var(--border)] bg-muted/40 px-2 py-1 font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase first:border-t-0"
+          className="border-b border-[var(--border)] bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground first:border-t-0"
         >
           {group.label}
         </div>
@@ -129,6 +130,7 @@ function EntityPickerItem<TId extends string>({
           "data-disabled:cursor-not-allowed data-disabled:bg-muted/20 data-disabled:text-muted-foreground",
           renderItem && "items-start whitespace-normal",
         )}
+        style={depth > 0 ? { paddingLeft: 8 + depth * 12 } : undefined}
       >
         {item.color ? (
           <span

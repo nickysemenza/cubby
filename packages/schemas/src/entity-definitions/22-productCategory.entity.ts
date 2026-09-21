@@ -130,6 +130,7 @@ export default defineEntity({
             { value: "supplies", label: "Supplies" },
             { value: "apparel", label: "Apparel" },
           ],
+          suggest: { basis: ["name", "parentId"] },
         },
         display: { detail: true },
         validation: {

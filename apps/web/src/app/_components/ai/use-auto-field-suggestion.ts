@@ -32,7 +32,18 @@ export interface UseAutoFieldSuggestionResult {
    * field whose picker needs a label for an id it just silently wrote (the
    * id alone would otherwise render as a bare shortcode). */
   seedItem: ComboboxItem | null;
+  /** The winner plus every alternative, each carrying a pinned "Suggested"
+   * `presentation.group` (order -1, ahead of every other group) and a
+   * rounded-percent `status` — a picker merges these ahead of its own
+   * roster so a `suggestField` reference picker always shows Jev's ranking,
+   * not just the single value it silently wrote. Empty with no suggestion. */
+  seedItems: readonly ComboboxItem[];
 }
+
+/** Stable empty array — `NO_SUGGESTION`'s `seedItems` and the no-suggestion
+ * path below must never allocate a fresh `[]` per render (web-runtime
+ * hook-default rule). */
+const EMPTY_SEED_ITEMS: readonly ComboboxItem[] = [];
 
 const NO_SUGGESTION: UseAutoFieldSuggestionResult = {
   currentLabel: null,
@@ -43,7 +54,17 @@ const NO_SUGGESTION: UseAutoFieldSuggestionResult = {
   isPending: false,
   apply: () => {},
   seedItem: null,
+  seedItems: EMPTY_SEED_ITEMS,
 };
+
+/** "Suggested" pins ahead of every other picker group (`order: -1`, below
+ * every real group's `order >= 0`). */
+const SUGGESTED_GROUP = { id: "suggested", label: "Suggested", order: -1 };
+
+const suggestedStatus = (probability: number | null) =>
+  probability == null
+    ? undefined
+    : { label: `${Math.round(probability * 100)}%` };
 
 /** What a suggestion writes into a form field: a raw id for `valueKind:"id"`,
  * a full picker item for `"item"`. */
@@ -66,6 +87,34 @@ function suggestionSeedItem(suggestion: FieldSuggestion): ComboboxItem | null {
     name: suggestion.label ?? suggestion.value,
     detail: suggestion.detail ?? undefined,
   };
+}
+
+/** The winner plus every alternative, in Jev's ranked order, each pinned
+ * into the "Suggested" group. `[]` when there is no winner to seed from —
+ * `alternatives` alone (a stale winner, an unresolved target) is never
+ * seeded on its own. */
+function suggestionSeedItems(suggestion: FieldSuggestion): ComboboxItem[] {
+  const winner = suggestionSeedItem(suggestion);
+  if (!winner) return [];
+  return [
+    {
+      ...winner,
+      presentation: {
+        group: SUGGESTED_GROUP,
+        status: suggestedStatus(suggestion.probability),
+      },
+    },
+    ...suggestion.alternatives.map((alternative): ComboboxItem => ({
+      id: alternative.value,
+      shortcode: alternative.value,
+      name: alternative.label,
+      detail: alternative.detail ?? undefined,
+      presentation: {
+        group: SUGGESTED_GROUP,
+        status: suggestedStatus(alternative.probability),
+      },
+    })),
+  ];
 }
 
 function suggestionValueFor(
@@ -258,7 +307,19 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
     }
   }, [suggestion, valueKind, form, name, context, current, field]);
 
-  if (!context) return NO_SUGGESTION;
+  if (!context) {
+    // A `suggestField` control rendered outside a mounted
+    // `FieldSuggestionProvider` used to fail silently here (every suggestion
+    // is simply absent), which is exactly why the Discard dialogs' missing
+    // provider went unnoticed for as long as it did. Loud in dev only — a
+    // caller that intentionally has no provider yet passes `disabled`.
+    if (import.meta.env.DEV && !disabled) {
+      console.error(
+        `useAutoFieldSuggestion: field "${field}" has no FieldSuggestionProvider mounted above it. Wrap the form in one, or pass disabled to suppress this.`,
+      );
+    }
+    return NO_SUGGESTION;
+  }
 
   return {
     currentLabel:
@@ -276,5 +337,6 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
     isPending: context.isFetching,
     apply,
     seedItem: suggestion ? suggestionSeedItem(suggestion) : null,
+    seedItems: suggestion ? suggestionSeedItems(suggestion) : EMPTY_SEED_ITEMS,
   };
 }

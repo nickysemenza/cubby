@@ -24,6 +24,10 @@ import {
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
 import {
+  type ProductCategoryFeature,
+  productCategoryFeatureValues,
+} from "@cubby/schemas/product-category-fields";
+import {
   TRADE_LABELS,
   type Trade,
   tradeValues,
@@ -43,6 +47,8 @@ import {
   MEAL_KIND_RULES,
   MEAL_TYPE_DESCRIPTIONS,
   MEAL_TYPE_RULES,
+  PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS,
+  PRODUCT_CATEGORY_FEATURE_RULES,
   PROJECT_KIND_DESCRIPTIONS,
   PROJECT_KIND_RULES,
   TRADE_DESCRIPTIONS,
@@ -263,6 +269,13 @@ export const FIELD_SUGGEST_REGISTRY = {
     // Categories are a taxonomy rather than a household-sized roster. Show
     // every live node; `runAiSelection` uses its overflow path above Jev's
     // choice limit instead of silently dropping broad roots or their leaves.
+    //
+    // The picker's pinned "Suggested" section (`use-auto-field-suggestion.ts`
+    // `seedItems`) reads Jev's `alternatives`, which only the decision-tier
+    // path produces — the overflow chat-tier pick (`selection.ts`) always
+    // returns `alternatives: []`. Past `JEV_MAX_CANDIDATES` (254) live nodes
+    // this roster crosses into overflow and "Suggested" quietly degrades to
+    // the single winner. 29 nodes today; revisit if the taxonomy grows.
     maxCandidates: Number.MAX_SAFE_INTEGER,
     roster: async (db, basis) =>
       rankCategoryCandidates(await listProductCategoryTreeOptions(db), basis),
@@ -308,6 +321,14 @@ export const FIELD_SUGGEST_REGISTRY = {
     rules: PROJECT_KIND_RULES,
     subject: (basis) => renderSubject("project", basis),
   } satisfies EnumSuggestSpec<ProjectKind>,
+  "project.defaultTrade": {
+    kind: "enum",
+    values: tradeValues,
+    describe: (v) => TRADE_DESCRIPTIONS[v],
+    labelOf: (v) => TRADE_LABELS[v],
+    rules: TRADE_RULES,
+    subject: (basis) => renderSubject("project", basis),
+  } satisfies EnumSuggestSpec<Trade>,
   "meal.mealType": {
     kind: "enum",
     values: mealTypeValues,
@@ -413,6 +434,21 @@ export const FIELD_SUGGEST_REGISTRY = {
     },
     subject: (basis) => renderSubject("expense", basis),
   } satisfies TextRosterSuggestSpec,
+  "purchase.defaultTrade": {
+    kind: "enum",
+    values: tradeValues,
+    describe: (v) => TRADE_DESCRIPTIONS[v],
+    labelOf: (v) => TRADE_LABELS[v],
+    rules: TRADE_RULES,
+    subject: (basis) => renderSubject("purchase", basis),
+  } satisfies EnumSuggestSpec<Trade>,
+  "productCategory.feature": {
+    kind: "enum",
+    values: productCategoryFeatureValues,
+    describe: (v) => PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS[v],
+    rules: PRODUCT_CATEGORY_FEATURE_RULES,
+    subject: (basis) => renderSubject("productCategory", basis),
+  } satisfies EnumSuggestSpec<ProductCategoryFeature>,
 } satisfies Record<GeneratedSuggestFieldKey, FieldSuggestSpec>;
 
 export function fieldSuggestSpecFor(

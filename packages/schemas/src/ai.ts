@@ -396,6 +396,12 @@ export const externalIdKindSuggestionInput = z.object({
   productName: z.string().nullable().default(null),
   manufacturer: z.string().nullable().default(null),
 });
+/** A `FieldSuggestion` over the six non-legacy `ExternalIdKind` values, so
+ * the existing hint UI (`FieldSuggestionHint`) consumes it unchanged. `null`
+ * only when the identifier carries no usable signal at all. */
+export const suggestExternalIdKindOut = fieldSuggestionSchema.nullable();
+export type SuggestExternalIdKindOut = z.infer<typeof suggestExternalIdKindOut>;
+
 export type ExternalIdKindSuggestionInput = z.infer<
   typeof externalIdKindSuggestionInput
 >;

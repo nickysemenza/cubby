@@ -1,6 +1,7 @@
 import {
   inventoryShortcode,
   locationShortcode,
+  productShortcode,
 } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
@@ -21,7 +22,8 @@ export const inventoryDialogItemSchema = z.object({
   amount: z.object({ value: z.number(), unit: z.string() }),
   /** `name` renders the `current → target` projection, not just the row. */
   location: z.object({ id: locationShortcode, name: z.string() }),
-  /** Names the row in the delete confirmation. */
-  product: z.object({ name: z.string() }),
+  /** Names the row in the delete confirmation; `id` (bulk discard only) picks
+   * the trade-suggestion basis when a staged selection shares one product. */
+  product: z.object({ id: productShortcode, name: z.string() }),
 });
 export type InventoryDialogItem = z.infer<typeof inventoryDialogItemSchema>;

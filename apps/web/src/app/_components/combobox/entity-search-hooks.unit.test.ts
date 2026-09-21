@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveBlankFilterKey } from "./entity-search-hooks";
+import type { ComboboxItem } from "./combobox-types";
+import {
+  resolveBlankFilterKey,
+  stabilizeGroupOrder,
+} from "./entity-search-hooks";
 
 describe("resolveBlankFilterKey", () => {
   it("resolves ingredient's name filter to nameFilter", () => {
@@ -21,5 +25,43 @@ describe("resolveBlankFilterKey", () => {
     expect(resolveBlankFilterKey("location")).toBe("nameFilter");
     expect(resolveBlankFilterKey("product")).toBe("nameFilter");
     expect(resolveBlankFilterKey("project")).toBe("search");
+  });
+});
+
+function grouped(
+  id: string,
+  groupId: string,
+  groupLabel: string,
+): ComboboxItem {
+  return {
+    id,
+    name: id,
+    presentation: { group: { id: groupId, label: groupLabel, order: 0 } },
+  };
+}
+
+describe("stabilizeGroupOrder", () => {
+  it("renumbers by each group's first appearance, clustering interleaved rows", () => {
+    // A blank-query roster sorted by the row's OWN name interleaves roots —
+    // "Bin" (Garage) sorts before "Drawer" (Kitchen) sorts before "Shelf"
+    // (Garage again) — without this, the Garage/Kitchen header would repeat.
+    const items = [
+      grouped("bin", "garage", "Garage"),
+      grouped("drawer", "kitchen", "Kitchen"),
+      grouped("shelf", "garage", "Garage"),
+    ];
+
+    expect(
+      stabilizeGroupOrder(items).map((item) => item.presentation?.group),
+    ).toEqual([
+      { id: "garage", label: "Garage", order: 0 },
+      { id: "kitchen", label: "Kitchen", order: 1 },
+      { id: "garage", label: "Garage", order: 0 },
+    ]);
+  });
+
+  it("leaves ungrouped items untouched", () => {
+    const ungrouped: ComboboxItem = { id: "x", name: "X" };
+    expect(stabilizeGroupOrder([ungrouped])[0]).toBe(ungrouped);
   });
 });

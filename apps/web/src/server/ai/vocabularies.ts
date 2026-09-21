@@ -11,8 +11,10 @@
  * method.
  */
 import type { CostType } from "@cubby/schemas/expense-fields";
+import type { ExternalIdKind } from "@cubby/schemas/external-id";
 import type { LocationType } from "@cubby/schemas/location";
 import type { MealKind, MealType } from "@cubby/schemas/meal-classification";
+import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
 import type { ProjectKind } from "@cubby/schemas/project-fields";
 import type { Trade } from "@cubby/schemas/task-fields";
 
@@ -139,3 +141,50 @@ Rules:
 1. A named dish with no restaurant/delivery cue is "cooked".
 2. "leftovers" only when the name says so explicitly.
 3. Restaurant or delivery-service names indicate "eating_out" or "takeout" respectively.`;
+
+export const PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS = {
+  food: "Edible/consumable products tracked against nutrition (USDA-linkable)",
+  books: "Books, manuals, and other bound reading matter",
+  tools: "Durable hand or power tools",
+  "tool-consumables": "Consumed alongside tool use: blades, bits, abrasives",
+  "tool-accessories": "Non-consumed attachments and add-ons for tools",
+  storage: "Bins, totes, shelving, and other organizational containers",
+  hardware: "Fasteners, fittings, and small hardware components",
+  electronics: "Electronic devices and components",
+  software: "Software, licenses, and digital subscriptions",
+  household: "General household goods with no more specific feature",
+  supplies: "Consumable general-purpose supplies (tape, paper, cleaning, …)",
+  apparel: "Clothing, footwear, and wearable accessories",
+} satisfies Record<ProductCategoryFeature, string>;
+
+export const PRODUCT_CATEGORY_FEATURE_RULES = `You are a product-category classification assistant. Given a category's name and its parent category, determine which behavior namespace it belongs to.
+
+Rules:
+1. Match the category's own subject, not an ancestor's — a feature binds to the nearest category that carries one and descendants inherit it, so only assign a feature this category itself should own.
+2. Prefer the most specific feature that fits over "household", the catch-all — reserve "household" for a genuinely general-purpose category with no more specific behavior.
+3. A consumable used alongside a tool (blades, bits, abrasives) is "tool-consumables"; a durable attachment for one is "tool-accessories"; the tool itself is "tools".`;
+
+/** `legacy_unspecified` is excluded — it is a migration artifact, never a
+ * Jev answer (`external-id-kind.ts` classifies over the other six). */
+export const EXTERNAL_ID_KIND_DESCRIPTIONS = {
+  asin: "Amazon's own catalog id: 'B0' followed by 8 letters/digits",
+  retailer_sku:
+    "A consumer retailer's own item number (Lowe's, Target, Walmart, Costco, Home Depot's non-barcode SKU, …)",
+  internet_number:
+    'Home Depot\'s 9-digit "internet number", distinct from its barcode',
+  item_number:
+    "The manufacturer's own model/part number, as printed on the product or its packaging",
+  catalog_number:
+    "A professional distributor's catalog/part number (McMaster-Carr, Grainger, DigiKey, …)",
+  gtin_14: "A barcode — UPC, EAN, or GTIN — 8 to 14 digits",
+} satisfies Record<Exclude<ExternalIdKind, "legacy_unspecified">, string>;
+
+export const EXTERNAL_ID_KIND_RULES = `You are a product external-identifier classification assistant. Given an identifier's source, its value, and (when known) the URL it came from and the product's name/manufacturer, determine which kind of identifier it is.
+
+Rules:
+1. An Amazon identifier starting "B0" followed by 8 alphanumeric characters is "asin".
+2. 8-14 digits is normally a barcode ("gtin_14") — UNLESS the source is "home-depot" and it is exactly 9 digits, which is Home Depot's own "internet_number", not a barcode.
+3. An identifier that reads as the product's own manufacturer model/part number (matches or closely resembles the given manufacturer) is "item_number".
+4. A source that is a professional parts distributor (McMaster-Carr, Grainger, DigiKey, and similar) is "catalog_number".
+5. A source that is a consumer retailer (Lowe's, Target, Walmart, Costco, and similar) is "retailer_sku".
+6. A URL containing "/dp/" suggests Amazon ("asin"); "/p/" or "/pd/" suggest a retailer product page ("retailer_sku").`;

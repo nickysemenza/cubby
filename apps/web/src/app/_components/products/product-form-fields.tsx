@@ -7,7 +7,7 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { isMiscProduct } from "@cubby/shared";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 import { ChevronRight, Search } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import type {
   FieldPathByValue,
   FieldValues,
@@ -18,6 +18,7 @@ import type {
 import { useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { basisValueOf } from "~/app/_components/ai/field-suggestion";
 import { AliasesField } from "~/components/forms/aliases-field";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Row, Stack } from "~/components/layout";
@@ -55,6 +56,7 @@ import {
 } from "../PendingDocumentUpload";
 import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
 import { UnitMappingPairField } from "../units/unit-mapping-pair-field";
+import { ExternalIdKindSuggestion } from "./external-id-kind-suggestion";
 import { IdentifyProductButton } from "./identify-product-with-ai";
 
 const EMPTY_PENDING_IMAGES: PendingImage[] = [];
@@ -103,6 +105,10 @@ type ImageHandlers = Pick<
   | "handleExistingImagePurposesChange"
   | "handlePendingDocumentsChange"
   | "handleRemovedDocumentsChange"
+  // Read by `ProductMediaFields` to keep a just-removed existing image out of
+  // `IdentifyProductButton`'s read set — the removal is client-only until
+  // save, so the id would otherwise still resolve to a live R2 URL.
+  | "removedImageIds"
 >;
 
 type ProductTextPath<TFieldValues extends FieldValues> = FieldPathByValue<
@@ -695,6 +701,16 @@ function ProductMediaFields<TFieldValues extends ProductFormFieldValues>({
   pendingImages: PendingImage[];
   identityForm: Parameters<typeof IdentifyProductButton>[0]["form"];
 }) {
+  // A just-removed existing image is client-side only until save — keep it
+  // out of the identify read set so the button doesn't ask the model to read
+  // a photo the operator is in the middle of detaching.
+  const identifiableExistingImages = useMemo(
+    () =>
+      (existingImages ?? EMPTY_PENDING_IMAGES).filter(
+        (image) => !imageHandlers.removedImageIds.includes(image.id),
+      ),
+    [existingImages, imageHandlers.removedImageIds],
+  );
   return (
     <Stack gap="sm">
       <PendingImageUpload
@@ -711,6 +727,7 @@ function ProductMediaFields<TFieldValues extends ProductFormFieldValues>({
           photo unlocks it. */}
       <IdentifyProductButton
         form={identityForm}
+        existingImages={identifiableExistingImages}
         pendingImages={pendingImages}
       />
       {!compact && (
@@ -764,6 +781,12 @@ function ProductExternalIds<TFieldValues extends ProductFormFieldValues>({
   form,
   paths,
 }: Pick<ProductFormSectionProps<TFieldValues>, "form" | "paths">) {
+  const identityWatch = useWatch({
+    control: form.control,
+    name: [paths.name, paths.manufacturer],
+  });
+  const productName = basisValueOf(identityWatch[0]);
+  const manufacturer = basisValueOf(identityWatch[1]);
   if (!paths.externalIds || !paths.externalId) return null;
   return (
     <ArrayFieldManager<ExternalIdInput, TFieldValues>
@@ -792,6 +815,15 @@ function ProductExternalIds<TFieldValues extends ProductFormFieldValues>({
                   value: kind,
                   label: kind.replaceAll("_", " "),
                 }))}
+              />
+              <ExternalIdKindSuggestion
+                form={form}
+                kindPath={externalIdPaths.kind}
+                sourcePath={externalIdPaths.source}
+                externalIdPath={externalIdPaths.externalId}
+                urlPath={externalIdPaths.url}
+                productName={productName}
+                manufacturer={manufacturer}
               />
             </div>
             <div className="min-w-[8rem] flex-1">

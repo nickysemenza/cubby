@@ -1,4 +1,5 @@
 import type {
+  FieldSuggestion,
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
@@ -17,7 +18,7 @@ import {
   type FieldValues,
   type UseFormReturn,
 } from "react-hook-form";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ai } from "~/lib/ai.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -74,10 +75,12 @@ function Probe({
   form,
   target,
   valueKind = "id",
+  disabled,
 }: {
   form: UseFormReturn<FieldValues>;
   target: string;
   valueKind?: "id" | "item";
+  disabled?: boolean;
 }) {
   // Subscribed so this fiber re-renders on any write to `target` — mirrors
   // `AutoSuggestSlot` always being mounted inside the primitive's Controller,
@@ -90,11 +93,12 @@ function Probe({
   // of the raw object sidesteps that staleness entirely.
   const formState = useFormState({ control: form.control, name: target });
   const isDirty = form.getFieldState(target, formState).isDirty;
-  const { apply } = useAutoFieldSuggestion({
+  const { apply, seedItems } = useAutoFieldSuggestion({
     form,
     name: target,
     field: target,
     valueKind,
+    disabled,
   });
   return (
     <div>
@@ -105,6 +109,9 @@ function Probe({
       <button type="button" onClick={apply}>
         Apply {target}
       </button>
+      <output data-testid={`seed-items-${target}`}>
+        {JSON.stringify(seedItems)}
+      </output>
       <FormFieldResolution form={form} field={target} />
     </div>
   );
@@ -157,14 +164,17 @@ function Harness({
   );
 }
 
-const tradeSuggestion = {
+const tradeSuggestion: FieldSuggestion = {
   value: "cabinetry",
   label: "Cabinetry",
   detail: null,
   confidence: "high",
   probability: 0.95,
   reasoning: "",
-} as const;
+  alternatives: [],
+  operation: "set",
+  removals: [],
+};
 
 describe("useAutoFieldSuggestion", () => {
   it("keeps auto-filled Task intent out of Jev basis and resets its mode on retraction", async () => {
@@ -785,6 +795,9 @@ describe("useAutoFieldSuggestion", () => {
           confidence: "high",
           probability: 0.95,
           reasoning: "",
+          alternatives: [],
+          operation: "set",
+          removals: [],
         },
         trade: null,
       },
@@ -833,6 +846,9 @@ describe("useAutoFieldSuggestion", () => {
           confidence: "high",
           probability: 0.95,
           reasoning: "",
+          alternatives: [],
+          operation: "set",
+          removals: [],
         },
       },
     }));
@@ -856,5 +872,95 @@ describe("useAutoFieldSuggestion", () => {
     });
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]?.basis.productId).toBe("PRD-1");
+  });
+
+  it("seeds the winner and every alternative into a pinned Suggested group", async () => {
+    const operations = operationsReturning(() => ({
+      suggestions: {
+        projectId: {
+          value: "PRJ-KITCHEN",
+          label: "Kitchen Remodel",
+          detail: null,
+          confidence: "high",
+          probability: 0.92,
+          reasoning: "",
+          alternatives: [
+            {
+              value: "PRJ-DECK",
+              label: "Deck Build",
+              detail: null,
+              probability: 0.05,
+            },
+          ],
+          operation: "set",
+          removals: [],
+        },
+      },
+    }));
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["projectId"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={() => {}}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "paint kitchen" },
+    });
+
+    await waitFor(() => {
+      const seedItems: unknown = JSON.parse(
+        screen.getByTestId("seed-items-projectId").textContent ?? "[]",
+      );
+      expect(seedItems).toEqual([
+        expect.objectContaining({
+          id: "PRJ-KITCHEN",
+          name: "Kitchen Remodel",
+          presentation: {
+            group: { id: "suggested", label: "Suggested", order: -1 },
+            status: { label: "92%" },
+          },
+        }),
+        expect.objectContaining({
+          id: "PRJ-DECK",
+          name: "Deck Build",
+          presentation: {
+            group: { id: "suggested", label: "Suggested", order: -1 },
+            status: { label: "5%" },
+          },
+        }),
+      ]);
+    });
+  });
+
+  it("reports in dev when a suggestField control has no provider mounted above it", () => {
+    // Regression: this used to be a silent no-op, which is exactly why the
+    // Discard dialogs' missing provider went unnoticed for as long as it did.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    function Unwrapped() {
+      const form = useForm<FieldValues>({ defaultValues: { trade: "" } });
+      return <Probe form={form} target="trade" />;
+    }
+    render(<Unwrapped />, { wrapper: harness.wrapper });
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("trade"));
+    errorSpy.mockRestore();
+  });
+
+  it("stays silent when the caller explicitly passes disabled", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    function Unwrapped() {
+      const form = useForm<FieldValues>({ defaultValues: { trade: "" } });
+      return <Probe form={form} target="trade" disabled />;
+    }
+    render(<Unwrapped />, { wrapper: harness.wrapper });
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

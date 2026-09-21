@@ -99,6 +99,9 @@ describe("previewEntity field suggestions", () => {
                 confidence: "high" as const,
                 probability: 0.95,
                 reasoning: "Panel work",
+                alternatives: [],
+                operation: "set" as const,
+                removals: [],
               },
             }
           : {
@@ -109,6 +112,9 @@ describe("previewEntity field suggestions", () => {
                 confidence: "high" as const,
                 probability: 0.95,
                 reasoning: "Possible alternative",
+                alternatives: [],
+                operation: "set" as const,
+                removals: [],
               },
             };
       return { suggestions };
