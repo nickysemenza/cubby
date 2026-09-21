@@ -39,15 +39,13 @@ web build before E2E). It deploys nothing. `pnpm verify:local:full` sets
 regardless of cache state — use it for high-risk changes or before a release.
 Both print static actionable diagnostics and step timings.
 
-**Pre-push.** `.husky/pre-push` runs `pnpm verify:push`, which requires a clean
-tree before and after an affected graph over
-`generate,types,lint,format,knip,test`. It explicitly compares `origin/main`
-to `HEAD`, runs sequentially with `--nxBail
---outputStyle=static-failures-only`, and omits
-database, Worker-build, browser, Rust, and Apple work. Those full lanes run in
-GitHub Actions before a PR can merge. Refresh the local base first when needed
-(`git fetch origin main`); the local `origin/main` ref must represent the
-intended comparison point.
+**Git operations.** Pre-commit runs `pnpm check:staged`, which uses lint-staged
+with the existing Oxlint and Oxfmt rules on staged files only. Checks are
+read-only, preserve partial staging, and report issues for explicit correction.
+There is no pre-push hook or push-time verifier. A push does not require a clean
+working tree or refreshed base ref. The [validation policy](agents/validation.md)
+controls local feedback and handoff; GitHub checks on the final PR head remain
+the merge gate.
 
 Node 24, pnpm 12.3.4, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
@@ -55,7 +53,7 @@ PostgreSQL remains the authoritative integration tier; Playwright retains a
 single worker and no retries. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count.
 Browser verification always follows the current web build (the `e2e` target
-`dependsOn: ["build-cf"]`). Pre-commit still runs `pnpm check`.
+`dependsOn: ["build-cf"]`).
 
 These cache and dependency changes reduce duplicate work and stale generated
 artifacts, but do not promise that two simultaneous full verifications are
@@ -73,9 +71,8 @@ build. It skips itself (with a message, not a failure) when `xcode-select -p`
 fails, so a machine without Xcode still passes — `pnpm apple check` runs the
 same script directly. The `rust` target runs fmt/clippy/test per crate
 (`recipebridge/project.json`, `cubby-ffi/project.json`); `verify:local(:full)`
-runs both projects' `rust` target regardless of what changed, `verify:push`
-does not select either native target. The hosted `Apple checks` job runs
-`pnpm apple check` on macOS for every verification workflow; it has the same
+runs both projects' `rust` target regardless of what changed. The hosted
+`Apple checks` job runs `pnpm apple check` on macOS for every verification workflow; it has the same
 format, package-test, OpenAPI-drift, and simulator-build coverage as the local
 target.
 

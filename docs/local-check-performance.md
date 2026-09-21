@@ -79,6 +79,10 @@ or weakened to obtain these results.
 
 ## Declarative local tooling
 
+This section records the earlier hook and Nx rollout. Current commits use
+staged-file lint/format checks and pushes run no validation; see the
+[validation policy](agents/validation.md). Measurements below remain historical.
+
 `project.json` replaces the custom check runner, and `scripts/ci-scope.ts`
 (the hand-rolled path classifier `verify:local`/`verify:push` used to route
 through) is deleted: gates now live as Nx targets on the project whose files

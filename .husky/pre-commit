@@ -1,5 +1,4 @@
 #!/usr/bin/env sh
 set -e
 
-# Keep commit-time validation equivalent to the local handoff gate.
-pnpm check
+pnpm check:staged

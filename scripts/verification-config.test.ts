@@ -60,7 +60,7 @@ test("fast-test orchestration delegates caching to complete child targets", () =
 });
 
 test("every verifier is daemon-free and collapses successful cached output", () => {
-  for (const name of ["verify:local", "verify:local:full", "verify:push"]) {
+  for (const name of ["verify:local", "verify:local:full"]) {
     const command = required(rootPackage.scripts[name], `${name} script`);
     assert.match(command, /NX_DAEMON=false/);
     assert.match(command, /outputStyle=static-failures-only/);

@@ -12,16 +12,34 @@ test:file:postgres src/...`. Read a failed run's ending and
 `apps/web/.vitest-failures.txt` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
 
-One root agent owns the final join. Subagents run only focused `pnpm test:file`
-tests and return their result, command, duration, relevant output, and limits.
-The root runs affected tests and one `pnpm check`, reusing valid caches. Never
-run expensive gates in parallel. Hooks are mandatory: pre-commit runs `pnpm
-check`; pre-push runs `pnpm verify:push`; never bypass either.
+One root agent owns any broad validation that the change needs. Subagents run
+focused tests and return their result, command, duration, relevant output, and
+limits. Reuse valid results at handoff; choose checks for the changed behavior
+rather than running a blanket `pnpm check` or affected suite. Keep expensive
+local gates sequential.
 
+## Commit, push, and merge
+
+Commits run only `pnpm check:staged`: read-only Oxlint and Oxfmt checks on staged
+files, with the existing rules and ignore patterns. Partial staging is preserved;
+fix reported issues explicitly and stage the intended corrections. Use the
+commit hook normally; bypass it only when the user explicitly requests that.
+
+Pushes run no validation and do not require a clean working tree or a refreshed
+base ref. Committing, pushing, or handing off work does not trigger additional
+local checks. Report local results and anything unrun without implying that a
+successful push proves correctness.
+
+GitHub Actions must pass on the exact final PR head before merge. `main` runs CI
+after deployment starts, so post-merge CI does not replace this gate.
+
+## Explicit local diagnostics
+
+`pnpm check` remains available for repository-wide static validation.
 `pnpm verify:local` is the clean-tree full diagnostic, and
-`pnpm verify:local:full` forces uncached verification. GitHub Actions must pass
-on the exact final PR head before merge. Report unrun or unavailable checks as
-such.
+`pnpm verify:local:full` forces uncached verification. Use broad checks for
+relevant diagnosis, an explicitly requested audit, or full local verification.
+Coverage remains manually dispatchable in GitHub Actions.
 
 ## Load when needed
 

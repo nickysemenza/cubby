@@ -3,8 +3,9 @@
 `pnpm typecheck:web` is useful for web-only work. `pnpm check` runs the root
 static checks, type checking, entity freshness, Knip, and script types.
 `pnpm check:all` adds bindings, OpenAPI, orchestration tests, security checks,
-and calendar Worker tests. Run `pnpm dedupe:check` after a package manifest,
-workspace file, patch, or lockfile change; CI also checks dependency inputs.
+and calendar Worker tests. CI checks dependency inputs after package manifest,
+workspace file, patch, or lockfile changes; use `pnpm dedupe:check` locally when
+diagnosing dependency duplication.
 
 `pnpm verify:local` runs the clean-tree full graph sequentially. Its target
 order is not dependency order; Nx supplies generation and build prerequisites.
