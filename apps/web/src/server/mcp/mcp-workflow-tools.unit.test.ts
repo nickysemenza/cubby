@@ -213,7 +213,15 @@ describe("MCP workflow tools", () => {
         {
           index: 1,
           status: "failed",
-          error: { message: "Unsupported file type: text/plain" },
+          error: expect.objectContaining({
+            message: "Unsupported file type: text/plain",
+            code: "INTERNAL_SERVER_ERROR",
+            diagnostics: expect.objectContaining({
+              operation: "create_file_uploads",
+              batchIndex: 1,
+              stage: "run",
+            }),
+          }),
         },
         {
           index: 2,

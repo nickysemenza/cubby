@@ -24,7 +24,8 @@ describe("assertDistinctMergeTargets", () => {
       error = caught;
     }
     expect(error).toMatchObject({
-      cause: { reason: "MERGE_SELF_REFERENCE" },
+      code: "BAD_REQUEST",
+      reason: "MERGE_SELF_REFERENCE",
     });
   });
 });
