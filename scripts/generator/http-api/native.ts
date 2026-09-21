@@ -178,15 +178,28 @@ const renderNativeCoverage = (
         )
         .sort();
       const canUpdate = actions.includes("update");
+      const rpcIds = nativeOperations.filter(
+        (id) => !id.startsWith("resources.") && id.split(".")[0] === entity,
+      );
+      const nativeRead = actions.includes("list")
+        ? "resource"
+        : rpcIds.includes(`${entity}.list`)
+          ? entity === "cookbook"
+            ? "cookbook"
+            : entity === "image"
+              ? "image"
+              : entity === "usda-food"
+                ? "usdaFood"
+                : "custom"
+          : null;
       return [
         entity,
         {
           httpActions: actions,
+          nativeRead,
           imageAttach: canUpdate && bodyHas(entity, "pendingImageIds"),
           imageOrder: canUpdate && bodyHas(entity, "imageOrder"),
-          rpcIds: nativeOperations.filter(
-            (id) => !id.startsWith("resources.") && id.split(".")[0] === entity,
-          ),
+          rpcIds,
         },
       ];
     }),
@@ -228,6 +241,8 @@ type NativeHttpAction = "list" | "timeline" | "get" | "create" | "update" | "del
  */
 export interface NativeCoverage {
   httpActions: readonly NativeHttpAction[];
+  /** The generated native browse bridge; \`null\` means no native list. */
+  nativeRead: "resource" | "cookbook" | "image" | "usdaFood" | "custom" | null;
   imageAttach: boolean;
   imageOrder: boolean;
   rpcIds: readonly string[];
@@ -281,6 +296,7 @@ export const renderNativeArtifacts = (
       swiftRoutes,
       resourceEntities,
       generatedOperationIds,
+      nativeOperations,
     ),
     renderNativeCoverage(
       document,

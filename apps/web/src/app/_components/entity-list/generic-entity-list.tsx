@@ -8,9 +8,18 @@ import {
   entitySummary,
 } from "@cubby/schemas/entity-summary";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { useCallback, useMemo } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
 import { z } from "zod";
 
+import { DataTablePagination } from "~/app/_components/data-table/data-table-pagination";
 import { DataTableToolbar } from "~/app/_components/data-table/data-table-toolbar";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
@@ -65,6 +74,37 @@ import {
 } from "./list-slot-types";
 import { listSlotFor } from "./list-slots";
 
+type CardDensity = "cards" | "compact";
+const CardDensityContext = createContext<{
+  density: CardDensity;
+  setDensity: (density: CardDensity) => void;
+} | null>(null);
+
+/**
+ * Compactness belongs to the mounted list screen, not the URL or persistence.
+ * The provider is shared with the route chrome so its segmented control and
+ * the card renderer change together.
+ */
+export function EntityListCardDensityProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [density, setDensity] = useState<CardDensity>("cards");
+  return (
+    <CardDensityContext value={{ density, setDensity }}>
+      {children}
+    </CardDensityContext>
+  );
+}
+
+export function useEntityListCardDensity() {
+  const context = useContext(CardDensityContext);
+  if (!context)
+    throw new Error("EntityListCardDensityProvider is required for card lists");
+  return context;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Search + view                                                               */
 /* -------------------------------------------------------------------------- */
@@ -100,8 +140,13 @@ export function resolveListView(
 ) {
   const views: readonly EntityListView[] = entitySummary[entity].list.views;
   const requested = viewParam.parse(search.view);
+  // Retired view ids remain valid URLs while resolving to the shared renderer.
+  const aliases: Readonly<Record<string, string>> =
+    entitySummary[entity].list.viewAliases;
+  const requestedView =
+    (requested === undefined ? undefined : aliases[requested]) ?? requested;
   const view: EntityListView =
-    views.find((candidate) => listViewId(candidate) === requested) ??
+    views.find((candidate) => listViewId(candidate) === requestedView) ??
     views[0] ??
     "table";
   return { views, view };
@@ -217,6 +262,7 @@ export function GenericEntityList({
     return (
       <ClientListBody
         entity={entity}
+        view={view}
         override={override}
         context={{ search, navigate }}
       />
@@ -233,6 +279,7 @@ export function GenericEntityList({
   );
 }
 
+// oxlint-disable-next-line complexity -- one server list owns its shared query, inspector, and three manifest renderers so their state cannot drift.
 function ServerListBody({
   entity,
   view,
@@ -246,18 +293,16 @@ function ServerListBody({
   context: ListOverrideContext;
   operations: GenericEntityListProps["operations"];
 }) {
+  const { density } = useEntityListCardDensity();
   const parts = override.use(context);
   const referenceFilterOptions = useDeferredReferenceFilterOptions(entity);
   const filterOptions = useFilterOptions({
     ...referenceFilterOptions,
     ...parts.list?.filterOptions,
   });
-  // Shelf/timeline are alternate presentations of the same roster. Keep the
-  // selected view in the URL, but borrow the rich table projection while a
-  // primary entity search is active; clearing restores the prior view without
-  // reconstructing its navigation state.
-  const searching = Boolean(context.search.searchQuery);
-  const renderedView = searching ? "table" : view;
+  // Cards and Compact keep the same query, filtering, ordering, and page as
+  // List. A search changes the roster, never the chosen presentation.
+  const renderedView = view;
   const { columns, identityEditable } = useListColumns(entity, parts, true);
   const listOptions = useMemo(() => {
     if (parts.list?.nameEditable || !identityEditable) return parts.list;
@@ -293,11 +338,22 @@ function ServerListBody({
     onRowClick,
     onRowHover,
     onRowHoverEnd,
+    inspectRow,
     PreviewSheet,
     preview,
     dockedInspector,
     inspectorToggle,
   } = list.inspection;
+  // Bulk actions only exist in List. Do not leave a hidden selection behind
+  // when Cards or Compact becomes the active presentation.
+  useEffect(() => {
+    if (
+      renderedView !== "table" &&
+      Object.keys(list.workbench.table.atoms.rowSelection?.get() ?? {}).length >
+        0
+    )
+      list.workbench.table.resetRowSelection();
+  }, [list.workbench.table, renderedView]);
   const scopeChips = (
     <ListScopeChips
       entity={entity}
@@ -343,17 +399,73 @@ function ServerListBody({
           />
         )}
         {renderedView === "shelf" && (
-          <EntityShelf
-            entity={entity}
-            // The shelf has no nesting: a tree's child rows (a kit's
-            // components, a wish's candidates) are not a second thing on it.
-            items={list.workbench.table
-              .getRowModel()
-              .rows.filter((row) => row.depth === 0)
-              .map((row) => row.original)}
-            isLoading={list.workbench.isLoading}
-            error={list.workbench.error}
-            infiniteScroll={list.workbench.infiniteScroll}
+          <>
+            {inspectorToggle}
+            <div
+              className={
+                dockedInspector
+                  ? "grid min-w-0 grid-cols-[minmax(0,1fr)_25rem]"
+                  : "min-w-0"
+              }
+            >
+              <div className="min-w-0">
+                <EntityShelf
+                  entity={entity}
+                  // `data` is the canonical flat server projection before
+                  // tree nesting and synthetic grouping rows reach the table.
+                  // A shelf must never turn either into cards.
+                  items={list.data}
+                  isLoading={list.workbench.isLoading}
+                  error={list.workbench.error}
+                  infiniteScroll={list.workbench.infiniteScroll}
+                  compact={density === "compact"}
+                  onRetry={() =>
+                    void list.workbench.refreshControls.onRefresh()
+                  }
+                  onInspect={(record) =>
+                    inspectRow({
+                      id: record.id,
+                      original:
+                        entity === "wish"
+                          ? {
+                              ...record,
+                              entityType: entity,
+                              previewId: record.id,
+                            }
+                          : record,
+                    })
+                  }
+                  onRowHover={(record) =>
+                    onRowHover({
+                      id: record.id,
+                      original:
+                        entity === "wish"
+                          ? {
+                              ...record,
+                              entityType: entity,
+                              previewId: record.id,
+                            }
+                          : record,
+                    })
+                  }
+                  onRowHoverEnd={(record) =>
+                    onRowHoverEnd({ id: record.id, original: record })
+                  }
+                  currentRowId={preview?.rowKey ?? preview?.id}
+                />
+              </div>
+              {dockedInspector && (
+                <aside className="max-h-[calc(100vh-10rem)] overflow-y-auto border-l border-[var(--border)]">
+                  {dockedInspector}
+                </aside>
+              )}
+            </div>
+          </>
+        )}
+        {renderedView === "shelf" && !list.workbench.infiniteScroll && (
+          <DataTablePagination
+            table={list.workbench.table}
+            timing={list.workbench.timing}
           />
         )}
         {renderedView === "timeline" && isTimelineEntity(entity) && (
@@ -417,13 +529,16 @@ function ListTimeline({
 /** Client-paged rows (cookbook): same columns, workbench and preview seam. */
 function ClientListBody({
   entity,
+  view,
   override,
   context,
 }: {
   entity: BrowserRoutedEntity;
+  view: "table" | "shelf" | "timeline";
   override: AnyEntityListOverride;
   context: ListOverrideContext;
 }) {
+  const { density } = useEntityListCardDensity();
   const parts = override.use(context);
   const { columns } = useListColumns(entity, parts, false);
   const client = parts.client;
@@ -434,33 +549,96 @@ function ClientListBody({
     data: client.data,
     isLoading: client.isLoading,
     error: client.error,
+    refetch: client.refetch,
+    isRefreshing: client.isRefreshing,
+    matchesSearch: client.matchesSearch,
     columns,
     preview: DEFAULT_PREVIEW,
     ...parts.list,
   });
-  usePageCount(client.isLoading ? undefined : client.data.length);
+  usePageCount(
+    client.isLoading
+      ? undefined
+      : workbench.table.getFilteredRowModel().rows.length,
+  );
   const {
     onRowClick,
     onRowHover,
     onRowHoverEnd,
+    inspectRow,
     PreviewSheet,
     preview,
     dockedInspector,
     inspectorToggle,
   } = inspection;
-  return (
+  useEffect(() => {
+    if (
+      view !== "table" &&
+      Object.keys(workbench.table.atoms.rowSelection?.get() ?? {}).length > 0
+    )
+      workbench.table.resetRowSelection();
+  }, [view, workbench.table]);
+  const body = (
     <>
-      <ListWorkbench
-        model={workbench}
-        ariaLabel={`${entities[entity].pluralLabel} table`}
-        onRowClick={onRowClick}
-        onRowHover={onRowHover}
-        onRowHoverEnd={onRowHoverEnd}
-        currentRowId={preview?.id}
-        desktopInspector={dockedInspector}
-        inspectorToggle={inspectorToggle}
-      />
+      {view === "table" ? (
+        <ListWorkbench
+          model={workbench}
+          ariaLabel={`${entities[entity].pluralLabel} table`}
+          onRowClick={onRowClick}
+          onRowHover={onRowHover}
+          onRowHoverEnd={onRowHoverEnd}
+          currentRowId={preview?.id}
+          desktopInspector={dockedInspector}
+          inspectorToggle={inspectorToggle}
+        />
+      ) : (
+        <Stack gap="sm">
+          <DataTableToolbar table={workbench.table} entity={entity} />
+          {inspectorToggle}
+          <div
+            className={
+              dockedInspector
+                ? "grid min-w-0 grid-cols-[minmax(0,1fr)_25rem]"
+                : "min-w-0"
+            }
+          >
+            <div className="min-w-0">
+              <EntityShelf
+                entity={entity}
+                items={workbench.table
+                  .getRowModel()
+                  .rows.map((row) => row.original)}
+                isLoading={workbench.isLoading}
+                error={workbench.error}
+                compact={density === "compact"}
+                onRetry={
+                  workbench.refreshControls
+                    ? () => void workbench.refreshControls?.onRefresh()
+                    : undefined
+                }
+                onInspect={(record) =>
+                  inspectRow({ id: record.id, original: record })
+                }
+                onRowHover={(record) =>
+                  onRowHover({ id: record.id, original: record })
+                }
+                onRowHoverEnd={(record) =>
+                  onRowHoverEnd({ id: record.id, original: record })
+                }
+                currentRowId={preview?.rowKey ?? preview?.id}
+              />
+            </div>
+            {dockedInspector && (
+              <aside className="max-h-[calc(100vh-10rem)] overflow-y-auto border-l border-[var(--border)]">
+                {dockedInspector}
+              </aside>
+            )}
+          </div>
+          <DataTablePagination table={workbench.table} />
+        </Stack>
+      )}
       <PreviewSheet />
     </>
   );
+  return <>{parts.wrap ? parts.wrap(body, { data: client.data }) : body}</>;
 }

@@ -213,6 +213,24 @@ first one, supplied the start. `edit.readOnlyOnUpdate` and
 `resources.<entity>.timeline`. The compiler checks every named field,
 relation, descriptor, view and section id.
 
+Every listable entity receives the shared List (`table`) and Cards (`shelf`)
+presentations without requiring stored photos. Existing first-view defaults
+remain unchanged. Cards use the declared title and `list.shelf.subtitle`
+fields, falling back to declared mobile subtitle metadata when no shelf
+caption is specified; missing captions stay absent. Server-resolved display
+images are reused, with an entity icon when no image is available. Exceptional
+list projections use explicit adapters rather than per-card detail requests.
+Compact is the same card presentation with screen-local density state, not a
+stored preference or a URL parameter. Shared web and Swift grid components own
+tile sizing; declarations own record-specific presentation facts. All three
+presentations retain the list's query, filters, sort, and pagination. Bulk
+selection and editing are available only in List.
+`list.viewAliases` preserves retired view URLs by mapping them to a current
+renderer. `list.primarySearch` declares exceptional list search inputs without
+claiming that the entity participates in global search (for example USDA's
+`nameFilter`). Native read metadata distinguishes generated resource readers
+from explicitly declared read-RPC adapters; it does not expand `httpActions`.
+
 `capabilities.bulkUpdate` (`{ fields: [...] } | null`) is the only thing an
 entity declares for bulk editing — there is no per-entity bulk-edit verb to
 write. The web list registers one generic `bulkEdit` action

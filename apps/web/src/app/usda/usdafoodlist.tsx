@@ -2,22 +2,35 @@ import type {
   FoodSummaryWithLinkedProducts,
   USDAFoodSortField,
 } from "@cubby/schemas/usda";
+import { usdaListInput } from "@cubby/schemas/usda";
 import {
   type DataType,
   dataTypeEnum,
   dataTypeLabel,
 } from "@cubby/usda-schemas";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
+import { DataTableToolbar } from "~/app/_components/data-table/data-table-toolbar";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
+import { EntityShelf } from "~/app/_components/entity-list/entity-shelf";
+import {
+  resolveListView,
+  useEntityListCardDensity,
+  useListSearch,
+} from "~/app/_components/entity-list/generic-entity-list";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import {
+  buildFiltersFromManifest,
+  filterGetterFromColumnFilters,
+} from "~/entities/filters";
 import { usdaFood } from "~/entities/usda.functions";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
@@ -33,13 +46,14 @@ import { CoreNutrientCoverage } from "../_components/usda/core-nutrient-coverage
 type USDAListRow = FoodSummaryWithLinkedProducts & {
   id: string;
   name: string;
+  description: string;
 };
 
 type USDAListFilters = {
   nameFilter?: string;
   dataTypeFilter?: DataType;
   linkedProductsOnly?: boolean;
-  foodsOnly: true;
+  foodsOnly: boolean;
 };
 
 const USDA_TABLE_STATE = { initialSort: "fdc_id" } as const;
@@ -53,15 +67,28 @@ export interface USDAFoodListOperations {
 
 const productionOperations: USDAFoodListOperations = { list: usdaFood.list };
 
-const buildUSDAFilters = (tableState: TableStateReturn): USDAListFilters => ({
-  nameFilter: tableState.getColumnFilter("description"),
-  dataTypeFilter: dataTypeEnum
-    .optional()
-    .parse(tableState.getColumnFilter("foodInfo-data_type")),
-  linkedProductsOnly:
-    tableState.getColumnFilter("linkedProducts") === "linked" || undefined,
-  foodsOnly: true,
-});
+const buildUSDAFilters = (tableState: TableStateReturn): USDAListFilters => {
+  const declared = usdaListInput.shape.filters.parse(
+    buildFiltersFromManifest(
+      getEntityFilters("usda-food"),
+      filterGetterFromColumnFilters(tableState.allFilters),
+    ),
+  );
+  return {
+    ...declared,
+    nameFilter:
+      declared.nameFilter ?? tableState.getColumnFilter("description"),
+    dataTypeFilter:
+      declared.dataTypeFilter ??
+      dataTypeEnum
+        .optional()
+        .parse(tableState.getColumnFilter("foodInfo-data_type")),
+    linkedProductsOnly:
+      declared.linkedProductsOnly ??
+      (tableState.getColumnFilter("linkedProducts") === "linked" || undefined),
+    foodsOnly: declared.foodsOnly ?? true,
+  };
+};
 
 const USDA_SORT_FIELDS = new Map<string, USDAFoodSortField>([
   ["fdc_id", "fdc_id"],
@@ -74,10 +101,11 @@ export const withUSDAListIdentity = <
   TFood extends { fdc_id: number; foodInfo: { description: string } },
 >(
   food: TFood,
-): TFood & { id: string; name: string } => ({
+): TFood & { id: string; name: string; description: string } => ({
   ...food,
   id: String(food.fdc_id),
   name: food.foodInfo.description,
+  description: food.foodInfo.description,
 });
 
 export function USDAFoodList({
@@ -85,6 +113,9 @@ export function USDAFoodList({
 }: {
   operations?: USDAFoodListOperations;
 }) {
+  const { search } = useListSearch();
+  const { view } = resolveListView("usda-food", search);
+  const { density } = useEntityListCardDensity();
   const queryOptions = useCallback<
     ListQueryOptionsFn<USDAListFilters, USDAListRow>
   >(
@@ -290,6 +321,7 @@ export function USDAFoodList({
     },
   );
   const {
+    inspectRow,
     onRowClick,
     onRowHover,
     onRowHoverEnd,
@@ -299,18 +331,67 @@ export function USDAFoodList({
     inspectorToggle,
   } = inspection;
 
+  useEffect(() => {
+    if (
+      view !== "table" &&
+      Object.keys(workbench.table.atoms.rowSelection?.get() ?? {}).length > 0
+    )
+      workbench.table.resetRowSelection();
+  }, [view, workbench.table]);
+
   return (
     <>
-      <ListWorkbench
-        model={workbench}
-        ariaLabel="USDA Foods Table"
-        onRowClick={onRowClick}
-        onRowHover={onRowHover}
-        onRowHoverEnd={onRowHoverEnd}
-        currentRowId={preview?.rowKey ?? preview?.id}
-        desktopInspector={dockedInspector}
-        inspectorToggle={inspectorToggle}
-      />
+      {view === "table" ? (
+        <ListWorkbench
+          model={workbench}
+          ariaLabel="USDA Foods Table"
+          onRowClick={onRowClick}
+          onRowHover={onRowHover}
+          onRowHoverEnd={onRowHoverEnd}
+          currentRowId={preview?.rowKey ?? preview?.id}
+          desktopInspector={dockedInspector}
+          inspectorToggle={inspectorToggle}
+        />
+      ) : (
+        <Stack gap="sm">
+          <DataTableToolbar
+            table={workbench.table}
+            entity="usda-food"
+            portalWorkbenchUtilities
+          />
+          {inspectorToggle}
+          <div
+            className={
+              dockedInspector
+                ? "grid min-w-0 grid-cols-[minmax(0,1fr)_25rem]"
+                : "min-w-0"
+            }
+          >
+            <div className="min-w-0">
+              <EntityShelf
+                entity="usda-food"
+                items={workbench.table
+                  .getRowModel()
+                  .rows.map((row) => row.original)}
+                compact={density === "compact"}
+                isLoading={workbench.isLoading}
+                error={workbench.error}
+                infiniteScroll={workbench.infiniteScroll}
+                onRetry={() => void workbench.refreshControls.onRefresh()}
+                onInspect={(record) => inspectRow({ original: record })}
+                onRowHover={(record) => onRowHover({ original: record })}
+                onRowHoverEnd={(record) => onRowHoverEnd({ original: record })}
+                currentRowId={preview?.id}
+              />
+            </div>
+            {dockedInspector && (
+              <aside className="max-h-[calc(100vh-10rem)] overflow-y-auto border-l border-[var(--border)]">
+                {dockedInspector}
+              </aside>
+            )}
+          </div>
+        </Stack>
+      )}
       <PreviewSheet />
     </>
   );

@@ -44,7 +44,7 @@ struct EntityDetailView: View {
             .refreshControl { await refresh() }
             .userActivity(NSUserActivityTypeBrowsingWeb, isActive: model?.row != nil) { activity in
                 guard let row = model?.row else { return }
-                activity.webpageURL = appModel.webURL(for: row.id)
+                activity.webpageURL = appModel.webURL(for: key, id: row.id)
                 activity.title = row.title
                 activity.isEligibleForHandoff = true
                 // Spotlight indexing is a separate path (`SpotlightIndexer`); this activity is
@@ -63,14 +63,14 @@ struct EntityDetailView: View {
                         }
                     }
                     ToolbarItem {
-                        ShareLink(item: appModel.webURL(for: row.id)) {
+                        ShareLink(item: appModel.webURL(for: key, id: row.id)) {
                             Label("Share", systemImage: "square.and.arrow.up")
                         }
                     }
                     ToolbarItem {
                         Menu {
                             Button {
-                                Clipboard.copy(appModel.webURL(for: row.id).absoluteString)
+                                Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
                             } label: {
                                 Label("Copy link", systemImage: "link")
                             }
@@ -290,7 +290,7 @@ struct EntityDetailContent: View {
                 Section("More details") {
                     Text("Additional details are available on web.")
                         .foregroundStyle(.secondary)
-                    Link("Open on web", destination: appModel.webURL(for: row.id))
+                    Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
                 }
             }
             if let relationshipsModel {

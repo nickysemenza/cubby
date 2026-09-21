@@ -18,7 +18,7 @@ struct RootSplitView: View {
                     sidebar
                 } content: {
                     browserList
-                        .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 440)
+                        .navigationSplitViewColumnWidth(min: 260, ideal: 420, max: 760)
                 } detail: {
                     recordDetail
                 }
@@ -67,9 +67,20 @@ struct RootSplitView: View {
                 Section(domain.title) {
                     ForEach(
                         EntityCatalog.all.filter {
-                            $0.key.domain == domain && $0.key.httpActions.contains(.list)
+                            $0.key.domain == domain && $0.key.nativeActions.contains(.list)
                         }.sorted { $0.plural < $1.plural }, id: \.key
                     ) { descriptor in
+                        Label(descriptor.plural, systemImage: descriptor.sfSymbol)
+                            .tag(SidebarDestination.entity(descriptor.key))
+                    }
+                }
+            }
+            let media = EntityCatalog.all.filter {
+                $0.domain == nil && $0.key.nativeActions.contains(.list)
+            }.sorted { $0.plural < $1.plural }
+            if !media.isEmpty {
+                Section("Media") {
+                    ForEach(media, id: \.key) { descriptor in
                         Label(descriptor.plural, systemImage: descriptor.sfSymbol)
                             .tag(SidebarDestination.entity(descriptor.key))
                     }

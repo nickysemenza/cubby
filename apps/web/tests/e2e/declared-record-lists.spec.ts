@@ -55,9 +55,9 @@ test("declared record lists retain identities, relationships and amounts on desk
   // Children remains hidden by default in the existing display preferences.
   await page.goto(`/locations?name=${encodeURIComponent(`${name} shelf`)}`);
   await waitForAppHydration(page);
-  await page.getByRole("button", { name: "Table view", exact: true }).click();
+  await page.getByRole("button", { name: "List view", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Table view", exact: true }),
+    page.getByRole("button", { name: "List view", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByRole("columnheader").filter({

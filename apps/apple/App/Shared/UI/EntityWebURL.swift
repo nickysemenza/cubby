@@ -14,6 +14,15 @@ extension AppModel {
     func webURL(for id: String) -> URL {
         baseURL.appending(path: id)
     }
+
+    /// USDA foods use numeric FDC ids rather than Cubby shortcodes, so their canonical web route
+    /// needs the entity path. Every shortcode-backed entity keeps the root redirect above.
+    func webURL(for key: EntityKey, id: String) -> URL {
+        if key == .usdaFood {
+            return baseURL.appending(path: "usda").appending(path: id)
+        }
+        return webURL(for: id)
+    }
 }
 
 /// One cross-platform string-to-pasteboard call, so "Copy link"/"Copy shortcode" on

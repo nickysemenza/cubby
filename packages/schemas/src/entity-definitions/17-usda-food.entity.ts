@@ -2,6 +2,8 @@ import { defineEntity } from "./definition.js";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import {
   brandedFoodInfo,
+  dataTypeEnum,
+  dataTypeLabel,
   fdcId,
   foodInfo,
   foodPortion,
@@ -43,6 +45,12 @@ export default defineEntity({
           ],
         },
       ],
+    },
+    list: {
+      primarySearch: {
+        key: "nameFilter",
+        placeholder: "Search USDA foods...",
+      },
     },
   },
   model: {
@@ -196,7 +204,54 @@ export default defineEntity({
     ],
   },
   fields: null,
-  filters: { descriptors: [] },
+  filters: {
+    descriptors: [
+      {
+        columnId: "nameFilter",
+        field: "nameFilter",
+        kind: "text",
+        placeholder: "Search USDA foods...",
+        urlOnly: true,
+        wire: { kind: "param", name: "nameFilter" },
+      },
+      {
+        columnId: "dataTypeFilter",
+        field: "dataTypeFilter",
+        kind: "select",
+        placeholder: "Filter by USDA data type...",
+        options: dataTypeEnum.options.map((value) => ({
+          value,
+          label: dataTypeLabel(value),
+        })),
+        // USDA's standalone read keeps dataTypeFilter scalar and uses dataTypes
+        // for plural values; the generic derived select schema is one-or-many.
+        urlOnly: true,
+        wire: { kind: "param", name: "dataTypeFilter" },
+      },
+      {
+        columnId: "foodsOnly",
+        kind: "boolean",
+        placeholder: "Filter to foods...",
+        options: [
+          { value: "true", label: "Foods only" },
+          { value: "false", label: "All records" },
+        ],
+        urlOnly: true,
+        wire: { kind: "param", name: "foodsOnly" },
+      },
+      {
+        columnId: "linkedProductsOnly",
+        kind: "boolean",
+        placeholder: "Filter by linked products...",
+        options: [
+          { value: "true", label: "Linked to products" },
+          { value: "false", label: "Any linkage" },
+        ],
+        urlOnly: true,
+        wire: { kind: "param", name: "linkedProductsOnly" },
+      },
+    ],
+  },
   relations: [],
   search: { enabled: false },
   capabilities: {

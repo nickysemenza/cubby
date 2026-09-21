@@ -10,12 +10,7 @@ const ProjectOverviewSlot: ListSlotComponent = () => (
 const ProjectAnalyticsSlot: ListSlotComponent = () => (
   <ProjectsDashboard view="analytics" />
 );
-const ProjectGallerySlot: ListSlotComponent = () => (
-  <ProjectsDashboard view="gallery" />
-);
-
 export const projectListSlots = {
   overview: ProjectOverviewSlot,
   analytics: ProjectAnalyticsSlot,
-  gallery: ProjectGallerySlot,
 } satisfies Record<ListSlotId<"project">, ListSlotComponent>;

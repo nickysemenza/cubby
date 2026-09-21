@@ -2138,10 +2138,187 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/CookbookProductSummary`.
+        public struct CookbookProductSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CookbookProductSummary/id`.
+            public var id: Components.Schemas.ProductShortcode
+            /// - Remark: Generated from `#/components/schemas/CookbookProductSummary/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CookbookProductSummary/coverUrl`.
+            public var coverUrl: Swift.String?
+            /// Creates a new `CookbookProductSummary`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - coverUrl:
+            public init(
+                id: Components.Schemas.ProductShortcode,
+                name: Swift.String,
+                coverUrl: Swift.String? = nil
+            ) {
+                self.id = id
+                self.name = name
+                self.coverUrl = coverUrl
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case coverUrl
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.ProductShortcode.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.coverUrl = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .coverUrl
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name",
+                    "coverUrl"
+                ])
+            }
+        }
         /// cookbook shortcode, e.g. CKB-4K7M
         ///
         /// - Remark: Generated from `#/components/schemas/CookbookShortcode`.
         public typealias CookbookShortcode = Swift.String
+        /// - Remark: Generated from `#/components/schemas/CookbookSummariesOut`.
+        public typealias CookbookSummariesOut = [Components.Schemas.CookbookSummary]
+        /// - Remark: Generated from `#/components/schemas/CookbookSummary`.
+        public struct CookbookSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/id`.
+            public var id: Components.Schemas.CookbookShortcode
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/book`.
+            public var book: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/author`.
+            public var author: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/subjects`.
+            public var subjects: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/recipeCount`.
+            public var recipeCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/coverUrl`.
+            public var coverUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/sourceRecipeCount`.
+            public var sourceRecipeCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/needsReextract`.
+            public var needsReextract: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/product`.
+            public var product: Components.Schemas.CookbookProductSummary?
+            /// - Remark: Generated from `#/components/schemas/CookbookSummary/displayImages`.
+            public var displayImages: Components.Schemas.DisplayImagesField
+            /// Creates a new `CookbookSummary`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - book:
+            ///   - author:
+            ///   - subjects:
+            ///   - recipeCount:
+            ///   - coverUrl:
+            ///   - sourceRecipeCount:
+            ///   - needsReextract:
+            ///   - product:
+            ///   - displayImages:
+            public init(
+                id: Components.Schemas.CookbookShortcode,
+                book: Swift.String,
+                author: [Swift.String],
+                subjects: [Swift.String],
+                recipeCount: Swift.Int,
+                coverUrl: Swift.String? = nil,
+                sourceRecipeCount: Swift.Int,
+                needsReextract: Swift.Bool,
+                product: Components.Schemas.CookbookProductSummary? = nil,
+                displayImages: Components.Schemas.DisplayImagesField
+            ) {
+                self.id = id
+                self.book = book
+                self.author = author
+                self.subjects = subjects
+                self.recipeCount = recipeCount
+                self.coverUrl = coverUrl
+                self.sourceRecipeCount = sourceRecipeCount
+                self.needsReextract = needsReextract
+                self.product = product
+                self.displayImages = displayImages
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case book
+                case author
+                case subjects
+                case recipeCount
+                case coverUrl
+                case sourceRecipeCount
+                case needsReextract
+                case product
+                case displayImages
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.CookbookShortcode.self,
+                    forKey: .id
+                )
+                self.book = try container.decode(
+                    Swift.String.self,
+                    forKey: .book
+                )
+                self.author = try container.decode(
+                    [Swift.String].self,
+                    forKey: .author
+                )
+                self.subjects = try container.decode(
+                    [Swift.String].self,
+                    forKey: .subjects
+                )
+                self.recipeCount = try container.decode(
+                    Swift.Int.self,
+                    forKey: .recipeCount
+                )
+                self.coverUrl = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .coverUrl
+                )
+                self.sourceRecipeCount = try container.decode(
+                    Swift.Int.self,
+                    forKey: .sourceRecipeCount
+                )
+                self.needsReextract = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .needsReextract
+                )
+                self.product = try container.decodeIfPresent(
+                    Components.Schemas.CookbookProductSummary.self,
+                    forKey: .product
+                )
+                self.displayImages = try container.decode(
+                    Components.Schemas.DisplayImagesField.self,
+                    forKey: .displayImages
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "book",
+                    "author",
+                    "subjects",
+                    "recipeCount",
+                    "coverUrl",
+                    "sourceRecipeCount",
+                    "needsReextract",
+                    "product",
+                    "displayImages"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/CostType`.
         @frozen public enum CostType: String, Codable, Hashable, Sendable, CaseIterable {
             case materials = "materials"
@@ -9484,6 +9661,121 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts`.
+        public struct FoodSummaryWithLinkedProducts: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/fdc_id`.
+            public var fdcId: Components.Schemas.FdcId
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/brandedFoodInfo`.
+            public var brandedFoodInfo: Components.Schemas.BrandedFoodInfo?
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/foodInfo`.
+            public var foodInfo: Components.Schemas.FoodInfo
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/legacyFoodInfo`.
+            public var legacyFoodInfo: Components.Schemas.LegacyFoodInfo?
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/nutritionInfo`.
+            public var nutritionInfo: Components.Schemas.NutritionInfo
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/portionInfoRaw`.
+            public var portionInfoRaw: [Components.Schemas.FoodPortion]
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/inferredUnitMappings`.
+            public var inferredUnitMappings: [Components.Schemas.UnitMappingWithMetadata]
+            /// - Remark: Generated from `#/components/schemas/FoodSummaryWithLinkedProducts/linkedProducts`.
+            public var linkedProducts: [Components.Schemas.ProductTopLevelOut]
+            /// Creates a new `FoodSummaryWithLinkedProducts`.
+            ///
+            /// - Parameters:
+            ///   - fdcId:
+            ///   - description:
+            ///   - brandedFoodInfo:
+            ///   - foodInfo:
+            ///   - legacyFoodInfo:
+            ///   - nutritionInfo:
+            ///   - portionInfoRaw:
+            ///   - inferredUnitMappings:
+            ///   - linkedProducts:
+            public init(
+                fdcId: Components.Schemas.FdcId,
+                description: Swift.String,
+                brandedFoodInfo: Components.Schemas.BrandedFoodInfo? = nil,
+                foodInfo: Components.Schemas.FoodInfo,
+                legacyFoodInfo: Components.Schemas.LegacyFoodInfo? = nil,
+                nutritionInfo: Components.Schemas.NutritionInfo,
+                portionInfoRaw: [Components.Schemas.FoodPortion],
+                inferredUnitMappings: [Components.Schemas.UnitMappingWithMetadata],
+                linkedProducts: [Components.Schemas.ProductTopLevelOut]
+            ) {
+                self.fdcId = fdcId
+                self.description = description
+                self.brandedFoodInfo = brandedFoodInfo
+                self.foodInfo = foodInfo
+                self.legacyFoodInfo = legacyFoodInfo
+                self.nutritionInfo = nutritionInfo
+                self.portionInfoRaw = portionInfoRaw
+                self.inferredUnitMappings = inferredUnitMappings
+                self.linkedProducts = linkedProducts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case fdcId = "fdc_id"
+                case description
+                case brandedFoodInfo
+                case foodInfo
+                case legacyFoodInfo
+                case nutritionInfo
+                case portionInfoRaw
+                case inferredUnitMappings
+                case linkedProducts
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.fdcId = try container.decode(
+                    Components.Schemas.FdcId.self,
+                    forKey: .fdcId
+                )
+                self.description = try container.decode(
+                    Swift.String.self,
+                    forKey: .description
+                )
+                self.brandedFoodInfo = try container.decodeIfPresent(
+                    Components.Schemas.BrandedFoodInfo.self,
+                    forKey: .brandedFoodInfo
+                )
+                self.foodInfo = try container.decode(
+                    Components.Schemas.FoodInfo.self,
+                    forKey: .foodInfo
+                )
+                self.legacyFoodInfo = try container.decodeIfPresent(
+                    Components.Schemas.LegacyFoodInfo.self,
+                    forKey: .legacyFoodInfo
+                )
+                self.nutritionInfo = try container.decode(
+                    Components.Schemas.NutritionInfo.self,
+                    forKey: .nutritionInfo
+                )
+                self.portionInfoRaw = try container.decode(
+                    [Components.Schemas.FoodPortion].self,
+                    forKey: .portionInfoRaw
+                )
+                self.inferredUnitMappings = try container.decode(
+                    [Components.Schemas.UnitMappingWithMetadata].self,
+                    forKey: .inferredUnitMappings
+                )
+                self.linkedProducts = try container.decode(
+                    [Components.Schemas.ProductTopLevelOut].self,
+                    forKey: .linkedProducts
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "fdc_id",
+                    "description",
+                    "brandedFoodInfo",
+                    "foodInfo",
+                    "legacyFoodInfo",
+                    "nutritionInfo",
+                    "portionInfoRaw",
+                    "inferredUnitMappings",
+                    "linkedProducts"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput`.
         public struct GardenEntryCreateInput: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/GardenEntryCreateInput/locationId`.
@@ -13228,6 +13520,134 @@ extension Components {
             case cover = "cover"
             case logo = "logo"
         }
+        /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput`.
+        public struct ImageBrowserListInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/filters`.
+            public var filters: Components.Schemas.ImageListFilters
+            /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/sort`.
+            public struct SortPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/sort/value1`.
+                public var value1: Components.Schemas.InputSchema41?
+                /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/sort/value2`.
+                public var value2: [Components.Schemas.InputSchema41]?
+                /// Creates a new `SortPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.InputSchema41? = nil,
+                    value2: [Components.Schemas.InputSchema41]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value2
+                    ])
+                    try self.value1?.encode(to: encoder)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/sort`.
+            public var sort: Components.Schemas.ImageBrowserListInput.SortPayload?
+            /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/pagination`.
+            public var pagination: Components.Schemas.InputSchema42?
+            /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/groupBy`.
+            @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case createdAt = "createdAt"
+                case updatedAt = "updatedAt"
+                case filename = "filename"
+                case size = "size"
+                case status = "status"
+            }
+            /// - Remark: Generated from `#/components/schemas/ImageBrowserListInput/groupBy`.
+            public var groupBy: Components.Schemas.ImageBrowserListInput.GroupByPayload?
+            /// Creates a new `ImageBrowserListInput`.
+            ///
+            /// - Parameters:
+            ///   - filters:
+            ///   - sort:
+            ///   - pagination:
+            ///   - groupBy:
+            public init(
+                filters: Components.Schemas.ImageListFilters,
+                sort: Components.Schemas.ImageBrowserListInput.SortPayload? = nil,
+                pagination: Components.Schemas.InputSchema42? = nil,
+                groupBy: Components.Schemas.ImageBrowserListInput.GroupByPayload? = nil
+            ) {
+                self.filters = filters
+                self.sort = sort
+                self.pagination = pagination
+                self.groupBy = groupBy
+            }
+            public enum CodingKeys: String, CodingKey {
+                case filters
+                case sort
+                case pagination
+                case groupBy
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ImageBrowserListOut`.
+        public struct ImageBrowserListOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageBrowserListOut/meta`.
+            public var meta: Components.Schemas.ListPageMeta
+            /// - Remark: Generated from `#/components/schemas/ImageBrowserListOut/items`.
+            public var items: [Components.Schemas.ImageWithEntity]
+            /// Creates a new `ImageBrowserListOut`.
+            ///
+            /// - Parameters:
+            ///   - meta:
+            ///   - items:
+            public init(
+                meta: Components.Schemas.ListPageMeta,
+                items: [Components.Schemas.ImageWithEntity]
+            ) {
+                self.meta = meta
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case meta
+                case items
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.meta = try container.decode(
+                    Components.Schemas.ListPageMeta.self,
+                    forKey: .meta
+                )
+                self.items = try container.decode(
+                    [Components.Schemas.ImageWithEntity].self,
+                    forKey: .items
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "meta",
+                    "items"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ImageHashIndex`.
         public struct ImageHashIndex: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ImageHashIndex/algorithmRevision`.
@@ -13401,6 +13821,80 @@ extension Components {
                     "height",
                     "directOwnerShortcodes"
                 ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ImageListFilters`.
+        public struct ImageListFilters: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/createdFrom`.
+            public var createdFrom: Components.Schemas.InputSchema36?
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/createdTo`.
+            public var createdTo: Components.Schemas.InputSchema36?
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/updatedFrom`.
+            public var updatedFrom: Components.Schemas.InputSchema36?
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/updatedTo`.
+            public var updatedTo: Components.Schemas.InputSchema36?
+            /// Filter by filename (substring)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/nameFilter`.
+            public var nameFilter: Swift.String?
+            /// Filter by upload status
+            ///
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/status`.
+            public var status: Components.Schemas.InputSchema39?
+            /// Filter to images that are or are not referenced by any owning entity.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/referencePresenceFilter`.
+            @frozen public enum ReferencePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case has = "has"
+                case none = "none"
+            }
+            /// Filter to images that are or are not referenced by any owning entity.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/referencePresenceFilter`.
+            public var referencePresenceFilter: Components.Schemas.ImageListFilters.ReferencePresenceFilterPayload?
+            /// Only images uploaded more than this many hours ago.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ImageListFilters/uploadedAgeHoursMin`.
+            public var uploadedAgeHoursMin: Swift.Double?
+            /// Creates a new `ImageListFilters`.
+            ///
+            /// - Parameters:
+            ///   - createdFrom:
+            ///   - createdTo:
+            ///   - updatedFrom:
+            ///   - updatedTo:
+            ///   - nameFilter: Filter by filename (substring)
+            ///   - status: Filter by upload status
+            ///   - referencePresenceFilter: Filter to images that are or are not referenced by any owning entity.
+            ///   - uploadedAgeHoursMin: Only images uploaded more than this many hours ago.
+            public init(
+                createdFrom: Components.Schemas.InputSchema36? = nil,
+                createdTo: Components.Schemas.InputSchema36? = nil,
+                updatedFrom: Components.Schemas.InputSchema36? = nil,
+                updatedTo: Components.Schemas.InputSchema36? = nil,
+                nameFilter: Swift.String? = nil,
+                status: Components.Schemas.InputSchema39? = nil,
+                referencePresenceFilter: Components.Schemas.ImageListFilters.ReferencePresenceFilterPayload? = nil,
+                uploadedAgeHoursMin: Swift.Double? = nil
+            ) {
+                self.createdFrom = createdFrom
+                self.createdTo = createdTo
+                self.updatedFrom = updatedFrom
+                self.updatedTo = updatedTo
+                self.nameFilter = nameFilter
+                self.status = status
+                self.referencePresenceFilter = referencePresenceFilter
+                self.uploadedAgeHoursMin = uploadedAgeHoursMin
+            }
+            public enum CodingKeys: String, CodingKey {
+                case createdFrom
+                case createdTo
+                case updatedFrom
+                case updatedTo
+                case nameFilter
+                case status
+                case referencePresenceFilter
+                case uploadedAgeHoursMin
             }
         }
         /// - Remark: Generated from `#/components/schemas/ImageOut`.
@@ -15814,8 +16308,150 @@ extension Components {
                 case value
             }
         }
+        /// - Remark: Generated from `#/components/schemas/input_schema165`.
+        public struct InputSchema165: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema165/orderBy`.
+            @frozen public enum OrderByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case fdcId = "fdc_id"
+                case description = "description"
+                case dataType = "data_type"
+                case relevance = "relevance"
+                case linkedProducts = "linkedProducts"
+            }
+            /// - Remark: Generated from `#/components/schemas/input_schema165/orderBy`.
+            public var orderBy: Components.Schemas.InputSchema165.OrderByPayload?
+            /// - Remark: Generated from `#/components/schemas/input_schema165/direction`.
+            @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case asc = "asc"
+                case desc = "desc"
+            }
+            /// - Remark: Generated from `#/components/schemas/input_schema165/direction`.
+            public var direction: Components.Schemas.InputSchema165.DirectionPayload?
+            /// Creates a new `InputSchema165`.
+            ///
+            /// - Parameters:
+            ///   - orderBy:
+            ///   - direction:
+            public init(
+                orderBy: Components.Schemas.InputSchema165.OrderByPayload? = nil,
+                direction: Components.Schemas.InputSchema165.DirectionPayload? = nil
+            ) {
+                self.orderBy = orderBy
+                self.direction = direction
+            }
+            public enum CodingKeys: String, CodingKey {
+                case orderBy
+                case direction
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/input_schema36`.
         public typealias InputSchema36 = Components.Schemas.PlainDate
+        /// - Remark: Generated from `#/components/schemas/input_schema39`.
+        public struct InputSchema39: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema39/value1`.
+            public var value1: Components.Schemas.ImageStatus?
+            /// - Remark: Generated from `#/components/schemas/input_schema39/value2`.
+            public var value2: [Components.Schemas.ImageStatus]?
+            /// Creates a new `InputSchema39`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.ImageStatus? = nil,
+                value2: [Components.Schemas.ImageStatus]? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/input_schema41`.
+        public struct InputSchema41: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema41/orderBy`.
+            @frozen public enum OrderByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case createdAt = "createdAt"
+                case updatedAt = "updatedAt"
+                case filename = "filename"
+                case size = "size"
+                case status = "status"
+            }
+            /// - Remark: Generated from `#/components/schemas/input_schema41/orderBy`.
+            public var orderBy: Components.Schemas.InputSchema41.OrderByPayload?
+            /// - Remark: Generated from `#/components/schemas/input_schema41/direction`.
+            @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case asc = "asc"
+                case desc = "desc"
+            }
+            /// - Remark: Generated from `#/components/schemas/input_schema41/direction`.
+            public var direction: Components.Schemas.InputSchema41.DirectionPayload?
+            /// Creates a new `InputSchema41`.
+            ///
+            /// - Parameters:
+            ///   - orderBy:
+            ///   - direction:
+            public init(
+                orderBy: Components.Schemas.InputSchema41.OrderByPayload? = nil,
+                direction: Components.Schemas.InputSchema41.DirectionPayload? = nil
+            ) {
+                self.orderBy = orderBy
+                self.direction = direction
+            }
+            public enum CodingKeys: String, CodingKey {
+                case orderBy
+                case direction
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/input_schema42`.
+        public struct InputSchema42: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema42/pageIndex`.
+            public var pageIndex: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/input_schema42/pageSize`.
+            public var pageSize: Swift.Int?
+            /// Creates a new `InputSchema42`.
+            ///
+            /// - Parameters:
+            ///   - pageIndex:
+            ///   - pageSize:
+            public init(
+                pageIndex: Swift.Int? = nil,
+                pageSize: Swift.Int? = nil
+            ) {
+                self.pageIndex = pageIndex
+                self.pageSize = pageSize
+            }
+            public enum CodingKeys: String, CodingKey {
+                case pageIndex
+                case pageSize
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/input_schema45`.
         public typealias InputSchema45 = Components.Schemas.EntityImage
         /// - Remark: Generated from `#/components/schemas/input_schema49`.
@@ -36994,6 +37630,174 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata`.
+        public struct UnitMappingWithMetadata: Codable, Hashable, Sendable {
+            /// left side of the pair, e.g. { value: 8, unit: "oz" }
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/a`.
+            public struct APayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/a/value`.
+                public var value: Swift.Double
+                /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/a/unit`.
+                public var unit: Swift.String
+                /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/a/upperValue`.
+                public var upperValue: Swift.Double?
+                /// Creates a new `APayload`.
+                ///
+                /// - Parameters:
+                ///   - value:
+                ///   - unit:
+                ///   - upperValue:
+                public init(
+                    value: Swift.Double,
+                    unit: Swift.String,
+                    upperValue: Swift.Double? = nil
+                ) {
+                    self.value = value
+                    self.unit = unit
+                    self.upperValue = upperValue
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case value
+                    case unit
+                    case upperValue
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.value = try container.decode(
+                        Swift.Double.self,
+                        forKey: .value
+                    )
+                    self.unit = try container.decode(
+                        Swift.String.self,
+                        forKey: .unit
+                    )
+                    self.upperValue = try container.decodeIfPresent(
+                        Swift.Double.self,
+                        forKey: .upperValue
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "value",
+                        "unit",
+                        "upperValue"
+                    ])
+                }
+            }
+            /// left side of the pair, e.g. { value: 8, unit: "oz" }
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/a`.
+            public var a: Components.Schemas.UnitMappingWithMetadata.APayload
+            /// right side of the pair, e.g. { value: 10, unit: "dollar" }
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/b`.
+            public struct BPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/b/value`.
+                public var value: Swift.Double
+                /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/b/unit`.
+                public var unit: Swift.String
+                /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/b/upperValue`.
+                public var upperValue: Swift.Double?
+                /// Creates a new `BPayload`.
+                ///
+                /// - Parameters:
+                ///   - value:
+                ///   - unit:
+                ///   - upperValue:
+                public init(
+                    value: Swift.Double,
+                    unit: Swift.String,
+                    upperValue: Swift.Double? = nil
+                ) {
+                    self.value = value
+                    self.unit = unit
+                    self.upperValue = upperValue
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case value
+                    case unit
+                    case upperValue
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.value = try container.decode(
+                        Swift.Double.self,
+                        forKey: .value
+                    )
+                    self.unit = try container.decode(
+                        Swift.String.self,
+                        forKey: .unit
+                    )
+                    self.upperValue = try container.decodeIfPresent(
+                        Swift.Double.self,
+                        forKey: .upperValue
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "value",
+                        "unit",
+                        "upperValue"
+                    ])
+                }
+            }
+            /// right side of the pair, e.g. { value: 10, unit: "dollar" }
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/b`.
+            public var b: Components.Schemas.UnitMappingWithMetadata.BPayload
+            /// provenance note (null if unknown), e.g. "manual"
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/source`.
+            public var source: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadata/sourceMetadata`.
+            public var sourceMetadata: Components.Schemas.OutputSchema16
+            /// Creates a new `UnitMappingWithMetadata`.
+            ///
+            /// - Parameters:
+            ///   - a: left side of the pair, e.g. { value: 8, unit: "oz" }
+            ///   - b: right side of the pair, e.g. { value: 10, unit: "dollar" }
+            ///   - source: provenance note (null if unknown), e.g. "manual"
+            ///   - sourceMetadata:
+            public init(
+                a: Components.Schemas.UnitMappingWithMetadata.APayload,
+                b: Components.Schemas.UnitMappingWithMetadata.BPayload,
+                source: Swift.String? = nil,
+                sourceMetadata: Components.Schemas.OutputSchema16
+            ) {
+                self.a = a
+                self.b = b
+                self.source = source
+                self.sourceMetadata = sourceMetadata
+            }
+            public enum CodingKeys: String, CodingKey {
+                case a
+                case b
+                case source
+                case sourceMetadata
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.a = try container.decode(
+                    Components.Schemas.UnitMappingWithMetadata.APayload.self,
+                    forKey: .a
+                )
+                self.b = try container.decode(
+                    Components.Schemas.UnitMappingWithMetadata.BPayload.self,
+                    forKey: .b
+                )
+                self.source = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .source
+                )
+                self.sourceMetadata = try container.decode(
+                    Components.Schemas.OutputSchema16.self,
+                    forKey: .sourceMetadata
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "a",
+                    "b",
+                    "source",
+                    "sourceMetadata"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadataFood`.
         public struct UnitMappingWithMetadataFood: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/UnitMappingWithMetadataFood/type`.
@@ -37240,6 +38044,175 @@ extension Components {
                     "source",
                     "cached"
                 ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/UsdaFoodListOut`.
+        public struct UsdaFoodListOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/UsdaFoodListOut/meta`.
+            public var meta: Components.Schemas.ListPageMeta
+            /// - Remark: Generated from `#/components/schemas/UsdaFoodListOut/items`.
+            public var items: [Components.Schemas.FoodSummaryWithLinkedProducts]
+            /// Creates a new `UsdaFoodListOut`.
+            ///
+            /// - Parameters:
+            ///   - meta:
+            ///   - items:
+            public init(
+                meta: Components.Schemas.ListPageMeta,
+                items: [Components.Schemas.FoodSummaryWithLinkedProducts]
+            ) {
+                self.meta = meta
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case meta
+                case items
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.meta = try container.decode(
+                    Components.Schemas.ListPageMeta.self,
+                    forKey: .meta
+                )
+                self.items = try container.decode(
+                    [Components.Schemas.FoodSummaryWithLinkedProducts].self,
+                    forKey: .items
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "meta",
+                    "items"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/UsdaListInput`.
+        public struct UsdaListInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/UsdaListInput/filters`.
+            public struct FiltersPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/UsdaListInput/filters/nameFilter`.
+                public var nameFilter: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/UsdaListInput/filters/dataTypeFilter`.
+                public var dataTypeFilter: Components.Schemas.DataTypeEnum?
+                /// - Remark: Generated from `#/components/schemas/UsdaListInput/filters/dataTypes`.
+                public var dataTypes: [Components.Schemas.DataTypeEnum]?
+                /// - Remark: Generated from `#/components/schemas/UsdaListInput/filters/foodsOnly`.
+                public var foodsOnly: Swift.Bool?
+                /// - Remark: Generated from `#/components/schemas/UsdaListInput/filters/linkedProductsOnly`.
+                public var linkedProductsOnly: Swift.Bool?
+                /// Creates a new `FiltersPayload`.
+                ///
+                /// - Parameters:
+                ///   - nameFilter:
+                ///   - dataTypeFilter:
+                ///   - dataTypes:
+                ///   - foodsOnly:
+                ///   - linkedProductsOnly:
+                public init(
+                    nameFilter: Swift.String? = nil,
+                    dataTypeFilter: Components.Schemas.DataTypeEnum? = nil,
+                    dataTypes: [Components.Schemas.DataTypeEnum]? = nil,
+                    foodsOnly: Swift.Bool? = nil,
+                    linkedProductsOnly: Swift.Bool? = nil
+                ) {
+                    self.nameFilter = nameFilter
+                    self.dataTypeFilter = dataTypeFilter
+                    self.dataTypes = dataTypes
+                    self.foodsOnly = foodsOnly
+                    self.linkedProductsOnly = linkedProductsOnly
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case nameFilter
+                    case dataTypeFilter
+                    case dataTypes
+                    case foodsOnly
+                    case linkedProductsOnly
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/UsdaListInput/filters`.
+            public var filters: Components.Schemas.UsdaListInput.FiltersPayload
+            /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort`.
+            public struct SortPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort/value1`.
+                public var value1: Components.Schemas.InputSchema165?
+                /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort/value2`.
+                public var value2: [Components.Schemas.InputSchema165]?
+                /// Creates a new `SortPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.InputSchema165? = nil,
+                    value2: [Components.Schemas.InputSchema165]? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value2
+                    ])
+                    try self.value1?.encode(to: encoder)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/UsdaListInput/sort`.
+            public var sort: Components.Schemas.UsdaListInput.SortPayload?
+            /// - Remark: Generated from `#/components/schemas/UsdaListInput/pagination`.
+            public var pagination: Components.Schemas.InputSchema42?
+            /// - Remark: Generated from `#/components/schemas/UsdaListInput/groupBy`.
+            @frozen public enum GroupByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case fdcId = "fdc_id"
+                case description = "description"
+                case dataType = "data_type"
+                case relevance = "relevance"
+                case linkedProducts = "linkedProducts"
+            }
+            /// - Remark: Generated from `#/components/schemas/UsdaListInput/groupBy`.
+            public var groupBy: Components.Schemas.UsdaListInput.GroupByPayload?
+            /// Creates a new `UsdaListInput`.
+            ///
+            /// - Parameters:
+            ///   - filters:
+            ///   - sort:
+            ///   - pagination:
+            ///   - groupBy:
+            public init(
+                filters: Components.Schemas.UsdaListInput.FiltersPayload,
+                sort: Components.Schemas.UsdaListInput.SortPayload? = nil,
+                pagination: Components.Schemas.InputSchema42? = nil,
+                groupBy: Components.Schemas.UsdaListInput.GroupByPayload? = nil
+            ) {
+                self.filters = filters
+                self.sort = sort
+                self.pagination = pagination
+                self.groupBy = groupBy
+            }
+            public enum CodingKeys: String, CodingKey {
+                case filters
+                case sort
+                case pagination
+                case groupBy
             }
         }
         /// - Remark: Generated from `#/components/schemas/VendorAccountBrowser`.

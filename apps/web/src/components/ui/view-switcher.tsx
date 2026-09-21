@@ -64,7 +64,9 @@ export function ChoiceSwitcher<T extends string>({
                 className={cn("size-4", compactOnMobile ? "mr-2 md:hidden" : "mr-2")}
               />
             )}
-            <span className={cn(compactOnMobile && "max-md:sr-only")}>
+            <span
+              className={cn(compactOnMobile && Icon && "max-md:sr-only")}
+            >
               {opt.label}
             </span>
           </ToggleGroupItem>

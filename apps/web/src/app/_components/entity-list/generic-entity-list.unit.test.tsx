@@ -9,8 +9,14 @@ import {
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   identityListConfig,
@@ -23,8 +29,10 @@ import type {
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { entities } from "~/entities/entities";
 import {
+  ledgerPartyListItem,
   listEntities,
   mealListItem,
+  parseEntityListInput,
   productListItem,
 } from "~/entities/generated/entity-lists.gen";
 import { listOverrides } from "~/entities/list-columns";
@@ -37,9 +45,20 @@ import { listSlotFor } from "./list-slots";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 
+beforeEach(() => {
+  // jsdom has no observer for the shelf's infinite-scroll sentinel.
+  class TestIntersectionObserver {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  }
+  vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
+});
+
 afterEach(() => {
   harness?.dispose();
   harness = undefined;
+  vi.unstubAllGlobals();
 });
 
 /** The table's filter and pagination state stays real; only the read is canned. */
@@ -106,6 +125,10 @@ describe("resolveListView", () => {
     }
   });
 
+  it("keeps the old Projects gallery URL pointed at the shared Cards view", () => {
+    expect(resolveListView("project", { view: "gallery" }).view).toBe("shelf");
+  });
+
   it("an index route outside the kernel list roster pages its own rows", () => {
     // Neither has a generic list read: cookbook pages one projection in the
     // browser, image reads through its own module `source`.
@@ -119,7 +142,7 @@ describe("resolveListView", () => {
 });
 
 describe("listPage", () => {
-  it("renders the manifest's header links and a switcher only for several views", async () => {
+  it("renders the manifest's header links and universal List/Cards/Compact choices", async () => {
     await renderListPage("recipe", "/recipes", []);
     for (const link of entitySummary.recipe.list.links) {
       expect(screen.getByRole("button", { name: link.label })).toHaveAttribute(
@@ -127,7 +150,12 @@ describe("listPage", () => {
         link.path,
       );
     }
-    expect(screen.queryByRole("group", { name: "Recipes view" })).toBeNull();
+    const switcher = screen.getByRole("group", { name: "Recipes view" });
+    expect(
+      within(switcher)
+        .getAllByRole("button")
+        .map((option) => option.getAttribute("aria-label")),
+    ).toEqual(["List view", "Cards view", "Compact view"]);
   });
 
   it("offers every declared view and marks the `?view=` one selected", async () => {
@@ -136,18 +164,69 @@ describe("listPage", () => {
     const switcher = screen.getByRole("group", { name: "Tasks view" });
     const options = within(switcher).getAllByRole("button");
     expect(options.map((option) => option.getAttribute("aria-label"))).toEqual(
-      entitySummary.task.list.views.map(
-        (view) =>
-          `${isSlotListView(view) ? view.label : view.slice(0, 1).toUpperCase() + view.slice(1)} view`,
-      ),
+      entitySummary.task.list.views.flatMap((view) => {
+        const label = isSlotListView(view)
+          ? view.label
+          : view === "table"
+            ? "List"
+            : view === "shelf"
+              ? "Cards"
+              : "Timeline";
+        return view === "shelf"
+          ? [`${label} view`, "Compact view"]
+          : [`${label} view`];
+      }),
     );
     expect(
       within(switcher).getByRole("button", { name: "Timeline view" }),
     ).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("clears table selection and bulk actions after browsing Cards and returning to List", async () => {
+    // A plain roster isolates shared selection from Product's kit/media reads.
+    const party = mock(ledgerPartyListItem, {
+      overrides: {
+        id: testShortcode("ledgerParty", "LPY-4K7M"),
+        name: "Example party",
+        displayImages: [],
+      },
+    });
+    await renderListPage("ledgerParty", "/ledger-parties?view=table", [party]);
+
+    const rowSelection = await screen.findByRole("checkbox", {
+      name: "Select row",
+    });
+    fireEvent.click(rowSelection);
+    expect(rowSelection).toBeChecked();
+    expect(screen.getByText("1 selected")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cards view" }));
+    expect(await screen.findByTestId("entity-card-grid")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    const restoredRowSelection = await screen.findByRole("checkbox", {
+      name: "Select row",
+    });
+    await waitFor(() => expect(restoredRowSelection).not.toBeChecked());
+    expect(screen.queryByText("1 selected")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Clear selection" }),
+    ).toBeNull();
+  });
 });
 
 describe("GenericEntityList", () => {
+  it("keeps the primary search in a generic list request", () => {
+    // Cards and Compact use the same transport parser as List. If this is
+    // absent, Zod strips the typed search before the server can filter it.
+    expect(
+      parseEntityListInput("product", {
+        entity: "product",
+        filters: { searchQuery: "precision workshop tool" },
+      }).filters,
+    ).toMatchObject({ searchQuery: "precision workshop tool" });
+  });
+
   it.each([
     {
       label: "Vendor name",
@@ -280,12 +359,18 @@ describe("GenericEntityList", () => {
     });
     await renderListPage("product", "/products?view=shelf", [priced, unpriced]);
     const skillet = await screen.findByRole("link", {
-      name: /Cast iron skillet/u,
+      name: "Cast iron skillet",
     });
     expect(skillet).toHaveAttribute("href", `/products/${priced.id}`);
-    expect(within(skillet).getByText("$42.00")).toBeVisible();
+    const skilletCard = skillet.closest<HTMLElement>("[data-entity-card]");
+    expect(skilletCard).not.toBeNull();
+    expect(within(skilletCard!).getByText("$42.00")).toBeVisible();
     // The second subtitle field is the caption when the first is empty.
-    const gadget = screen.getByRole("link", { name: /Mystery gadget/u });
-    expect(within(gadget).getByText(/tools/iu)).toBeVisible();
+    const gadget = screen.getByRole("link", {
+      name: "Mystery gadget",
+    });
+    const gadgetCard = gadget.closest<HTMLElement>("[data-entity-card]");
+    expect(gadgetCard).not.toBeNull();
+    expect(within(gadgetCard!).getByText(/tools/iu)).toBeVisible();
   });
 });

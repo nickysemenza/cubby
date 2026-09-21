@@ -69,7 +69,10 @@ public typealias BrowserEvidenceKind = Components.Schemas.BrowserEvidenceKind
 public typealias BrowserEvidenceReference = Components.Schemas.BrowserEvidenceReference
 public typealias BrowserPageCapture = Components.Schemas.BrowserPageCapture
 public typealias BrowserPaymentEvidence = Components.Schemas.BrowserPaymentEvidence
+public typealias CookbookProductSummary = Components.Schemas.CookbookProductSummary
 public typealias CookbookShortcode = Components.Schemas.CookbookShortcode
+public typealias CookbookSummariesOut = Components.Schemas.CookbookSummariesOut
+public typealias CookbookSummary = Components.Schemas.CookbookSummary
 public typealias CostType = Components.Schemas.CostType
 public typealias DashboardCountsOut = Components.Schemas.DashboardCountsOut
 public typealias DataCheck = Components.Schemas.DataCheck
@@ -180,6 +183,7 @@ public typealias FinancialTransactionUpdateData = Components.Schemas.FinancialTr
 public typealias FoodInfo = Components.Schemas.FoodInfo
 public typealias FoodPortion = Components.Schemas.FoodPortion
 public typealias FoodSummary = Components.Schemas.FoodSummary
+public typealias FoodSummaryWithLinkedProducts = Components.Schemas.FoodSummaryWithLinkedProducts
 public typealias GardenEntryCreateInput = Components.Schemas.GardenEntryCreateInput
 public typealias GardenEntryDetail = Components.Schemas.GardenEntryDetail
 public typealias GardenEntryKind = Components.Schemas.GardenEntryKind
@@ -235,8 +239,11 @@ public typealias ImageAnalysisOutput = Components.Schemas.ImageAnalysisOutput
 public typealias ImageAssociation = Components.Schemas.ImageAssociation
 public typealias ImageAssociationEntity = Components.Schemas.ImageAssociationEntity
 public typealias ImageAssociationRole = Components.Schemas.ImageAssociationRole
+public typealias ImageBrowserListInput = Components.Schemas.ImageBrowserListInput
+public typealias ImageBrowserListOut = Components.Schemas.ImageBrowserListOut
 public typealias ImageHashIndex = Components.Schemas.ImageHashIndex
 public typealias ImageHashIndexItem = Components.Schemas.ImageHashIndexItem
+public typealias ImageListFilters = Components.Schemas.ImageListFilters
 public typealias ImageOut = Components.Schemas.ImageOut
 public typealias ImageRecordAnalysisInput = Components.Schemas.ImageRecordAnalysisInput
 public typealias ImageRecordAnalysisOutput = Components.Schemas.ImageRecordAnalysisOutput
@@ -520,11 +527,14 @@ public typealias TaskUpdateData = Components.Schemas.TaskUpdateData
 public typealias Trade = Components.Schemas.Trade
 public typealias UnitMappingInput = Components.Schemas.UnitMappingInput
 public typealias UnitMappingOut = Components.Schemas.UnitMappingOut
+public typealias UnitMappingWithMetadata = Components.Schemas.UnitMappingWithMetadata
 public typealias UnitMappingWithMetadataFood = Components.Schemas.UnitMappingWithMetadataFood
 public typealias UnitMappingWithMetadataManual = Components.Schemas.UnitMappingWithMetadataManual
 public typealias UnitMappingWithMetadataProduct = Components.Schemas.UnitMappingWithMetadataProduct
 public typealias Upc = Components.Schemas.Upc
 public typealias UpcLookupOutput = Components.Schemas.UpcLookupOutput
+public typealias UsdaFoodListOut = Components.Schemas.UsdaFoodListOut
+public typealias UsdaListInput = Components.Schemas.UsdaListInput
 public typealias VendorAccountBrowser = Components.Schemas.VendorAccountBrowser
 public typealias VendorAccountCreateInput = Components.Schemas.VendorAccountCreateInput
 public typealias VendorAccountCursor = Components.Schemas.VendorAccountCursor
@@ -585,6 +595,8 @@ extension Components.Schemas.BackgroundBatchRef: Identifiable {}
 extension Components.Schemas.BrowserBridgeRequest: Identifiable {}
 extension Components.Schemas.BrowserCapturedLink: Identifiable {}
 extension Components.Schemas.BrowserEvidenceReference: Identifiable {}
+extension Components.Schemas.CookbookProductSummary: Identifiable {}
+extension Components.Schemas.CookbookSummary: Identifiable {}
 extension Components.Schemas.DisplayImageSummary: Identifiable {}
 extension Components.Schemas.DuplicateUniqueProduct: Identifiable {}
 extension Components.Schemas.EntityAttachmentRead: Identifiable {}

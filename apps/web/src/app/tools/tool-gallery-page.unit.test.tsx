@@ -20,6 +20,7 @@ import { project } from "../projects/project.functions";
 import {
   ToolCard,
   ToolGalleryPage,
+  ToolInspectorSummary,
   toolLocationPath,
   toolPlacementSummary,
 } from "./tool-gallery-page";
@@ -268,5 +269,36 @@ describe("Tools gallery", () => {
     const card = screen.getByRole("button", { name: /cordless drill/i });
     fireEvent.click(card);
     expect(inspect).toHaveBeenCalledOnce();
+  });
+
+  it("keeps compact identity and badges while moving placement amounts and usage into inspection", () => {
+    const inspect = vi.fn();
+    const rendered = render(
+      <ToolCard
+        item={item}
+        compact
+        current
+        onInspect={inspect}
+        onHover={vi.fn()}
+        onHoverEnd={vi.fn()}
+      />,
+    );
+    const card = screen.getByRole("button", { name: /cordless drill/i });
+    expect(card).toHaveAttribute("aria-current", "true");
+    expect(screen.getByText("Makita · XFD10")).toBeVisible();
+    expect(screen.getByText("2 placements")).toBeVisible();
+    expect(screen.getByText("Installed")).toBeVisible();
+    expect(screen.getByText("+2")).toBeVisible();
+    expect(screen.queryByText("Home / Garage")).not.toBeInTheDocument();
+    expect(screen.queryByText("3 project uses")).not.toBeInTheDocument();
+    expect(screen.queryByText("$80.00/use")).not.toBeInTheDocument();
+    fireEvent.click(card);
+    expect(inspect).toHaveBeenCalledOnce();
+
+    rendered.rerender(<ToolInspectorSummary item={item} />);
+    expect(screen.getByText("Home / Garage")).toBeVisible();
+    expect(screen.getByText("Home / Workshop")).toBeVisible();
+    expect(screen.getByText("3 project uses")).toBeVisible();
+    expect(screen.getByText("$80.00/use")).toBeVisible();
   });
 });

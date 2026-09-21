@@ -110,16 +110,23 @@ export interface EntityListOverrideResult<
    * projection (cookbook); the generic list then pages client-side. Must be
    * referentially stable.
    */
-  client?: { data: TData[]; isLoading?: boolean; error?: unknown };
+  client?: {
+    data: TData[];
+    isLoading?: boolean;
+    error?: unknown;
+    /** Refreshes the projection after a retry from Cards/Compact. */
+    refetch?: () => Promise<void>;
+    /** True while an already-loaded projection is being refreshed. */
+    isRefreshing?: boolean;
+    /** Matches the manifest primary-search query against a client row. */
+    matchesSearch?: (row: TData, query: string) => boolean;
+  };
   /** Chrome rendered above the table, given the mounted list model. */
   above?: (list: UseEntityListReturn<TData, TFilters, TRow>) => ReactNode;
   /** Dialogs and other chrome rendered under the table. */
   below?: (list: UseEntityListReturn<TData, TFilters, TRow>) => ReactNode;
   /** A provider the whole list body renders inside. */
-  wrap?: (
-    children: ReactNode,
-    list: UseEntityListReturn<TData, TFilters, TRow>,
-  ) => ReactNode;
+  wrap?: (children: ReactNode, context: { data: TRow[] }) => ReactNode;
 }
 
 export interface EntityListOverride<

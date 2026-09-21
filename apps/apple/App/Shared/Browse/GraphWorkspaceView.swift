@@ -367,11 +367,13 @@ private struct GraphExplorerPane: View {
             HStack {
                 Button("Open record") {
                     inspecting = false
-                    if node.reference.entity.httpActions.contains(.get) {
+                    if node.reference.entity.nativeActions.contains(.get) {
                         appModel.navigator.openRecord(
                             .init(key: node.reference.entity, id: node.reference.id))
                     } else {
-                        openURL(appModel.webURL(for: node.reference.id))
+                        openURL(
+                            appModel.webURL(
+                                for: node.reference.entity, id: node.reference.id))
                     }
                 }
                 Menu("Record actions", systemImage: "ellipsis") {

@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 
 import {
   EntityActionButtons,
@@ -29,6 +29,7 @@ type EntityWorkbenchInspectorProps = {
   entity: Entity;
   id: string;
   onClose?: () => void;
+  overviewSupplement?: ReactNode;
 };
 
 const COMPACT_OVERVIEW_ENTITIES: ReadonlySet<Entity> = new Set(
@@ -67,6 +68,7 @@ export function EntityWorkbenchInspector({
   entity,
   id,
   onClose,
+  overviewSupplement,
 }: EntityWorkbenchInspectorProps) {
   return (
     <EntityWorkbenchInspectorContent
@@ -74,6 +76,7 @@ export function EntityWorkbenchInspector({
       entity={entity}
       id={id}
       onClose={onClose}
+      overviewSupplement={overviewSupplement}
     />
   );
 }
@@ -82,6 +85,7 @@ function EntityWorkbenchInspectorContent({
   entity,
   id,
   onClose,
+  overviewSupplement,
 }: EntityWorkbenchInspectorProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
   const [resolvedName, setResolvedName] = useState<string | undefined>();
@@ -112,6 +116,7 @@ function EntityWorkbenchInspectorContent({
       onClose={onClose}
       overview={
         <div>
+          {overviewSupplement}
           {supportsCompactOverview(entity) ? (
             <div className="px-3 py-3">
               <EntityPreviewContent

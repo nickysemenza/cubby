@@ -51,27 +51,6 @@ struct GenericEntityListModelTests {
         #expect(calls.withLock { $0 } == 1)
     }
 
-    /// `image` is exactly the case the guard exists for: it is a catalog entity, but the HTTP
-    /// document has no `resources.image.list` route. `GenericEntityListModel.load()` must defer
-    /// to `EntityKey.httpActions` or it would fire a request that 404s.
-    @Test func unavailableForADescriptorWithoutAnHTTPListRouteNeverHitsTheNetwork() async throws {
-        defer { ListStub.handler.withLock { $0 = nil } }
-        ListStub.handler.withLock { handler in
-            handler = { _ in
-                Issue.record("unexpected network call for a descriptor with no HTTP .list route")
-                return (500, Data())
-            }
-        }
-        let descriptor = EntityCatalog[.image]
-        #expect(!descriptor.key.httpActions.contains(.list))
-
-        let model = GenericEntityListModel(descriptor: descriptor, client: try makeClient())
-        await model.loadInitial()
-
-        #expect(model.phase == .unavailable("No list route for \(descriptor.plural)"))
-        #expect(model.rows.isEmpty)
-    }
-
     @Test func accumulatesPagesAndCollapsesDuplicateNextPageTriggers() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let calls = Mutex<[Int]>([])

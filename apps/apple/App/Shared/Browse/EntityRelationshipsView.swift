@@ -437,10 +437,10 @@ private struct ProductRelationshipProposalView: View {
     }
 
     private func open(_ reference: EntityRef) {
-        if reference.entity.httpActions.contains(.get) {
+        if reference.entity.nativeActions.contains(.get) {
             appModel.navigator.openRecord(.init(key: reference.entity, id: reference.id))
         } else {
-            openURL(appModel.webURL(for: reference.id))
+            openURL(appModel.webURL(for: reference.entity, id: reference.id))
         }
     }
 }
@@ -621,14 +621,15 @@ private struct RelationshipRecordButton: View {
         .accessibilityHint(nativeDestination ? "Opens this record" : "Opens this record on the web")
     }
 
-    private var nativeDestination: Bool { node.reference.entity.httpActions.contains(.get) }
+    private var nativeDestination: Bool { node.reference.entity.nativeActions.contains(.get) }
 
     private func open() {
         onOpen()
         if nativeDestination {
             appModel.navigator.openRecord(.init(key: node.reference.entity, id: node.reference.id))
         } else {
-            openURL(appModel.webURL(for: node.reference.id))
+            openURL(
+                appModel.webURL(for: node.reference.entity, id: node.reference.id))
         }
     }
 }

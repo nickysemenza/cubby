@@ -90,7 +90,12 @@ export type CompiledEntityPresentation = Omit<
       actions: readonly string[];
     };
   };
-  list: Omit<EntityPresentation["list"], "timeline"> & {
+  list: Omit<EntityPresentation["list"], "timeline" | "shelf"> & {
+    /**
+     * Every compiled list has a card presentation. Declarations may refine its
+     * caption, while the compiler supplies a mobile-subtitle fallback.
+     */
+    shelf: { subtitle: readonly string[] };
     timeline:
       | (Omit<EntityListTimeline, "lifecycle"> & {
           lifecycle:
@@ -107,6 +112,17 @@ export type EntityDetailSection =
   EntityPresentation["detail"]["sections"][number];
 export type EntityListView = EntityPresentation["list"]["views"][number];
 export type EntitySlotListView = Exclude<EntityListView, string>;
+
+/** Shared labels for the list presentation control on every platform. */
+export const LIST_PRESENTATION_CHOICES = [
+  { id: "table", view: "table", label: "List" },
+  { id: "shelf", view: "shelf", label: "Cards" },
+  // Compact is a local density of Cards, not a URL view.
+  { id: "compact", view: "shelf", label: "Compact" },
+] as const;
+
+export const listPresentationLabel = (id: string): string | null =>
+  LIST_PRESENTATION_CHOICES.find((choice) => choice.id === id)?.label ?? null;
 
 /** The three built-in renderers; every other view is a slot. */
 export const BUILT_IN_LIST_VIEWS = ["table", "shelf", "timeline"] as const;
@@ -611,8 +627,20 @@ const metadataSchemas = () => {
         .object({
           /** The first view is the default; `table` when omitted. */
           views: z.array(listViewSchema).min(1).optional().default(["table"]),
+          /** URL-compatible aliases for retired view ids, mapped before rendering. */
+          viewAliases: z
+            .record(nonEmptyString(), nonEmptyString())
+            .optional()
+            .default({}),
           shelf: z
             .object({ subtitle: z.array(fieldKey).optional().default([]) })
+            .strict()
+            .nullable()
+            .optional()
+            .default(null),
+          /** A custom list transport's search parameter (for example USDA's nameFilter). */
+          primarySearch: z
+            .object({ key: nonEmptyString(), placeholder: nonEmptyString() })
             .strict()
             .nullable()
             .optional()

@@ -1,6 +1,7 @@
 import {
   FILTER_KINDS,
   isSlotListView,
+  LIST_PRESENTATION_CHOICES,
   WAYFINDING_DOMAINS,
 } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { generatedHeader } from "../../artifacts.ts";
@@ -74,6 +75,19 @@ const SWIFT_RESERVED_WORDS = new Set([
   "true",
   "try",
 ]);
+
+const swiftPresentationChoices = LIST_PRESENTATION_CHOICES.map((choice) => ({
+  ...choice,
+  swiftCase:
+    choice.id === "table"
+      ? "list"
+      : choice.id === "shelf"
+        ? "cards"
+        : choice.id,
+}));
+const presentationLabel = (
+  id: (typeof LIST_PRESENTATION_CHOICES)[number]["id"],
+) => LIST_PRESENTATION_CHOICES.find((choice) => choice.id === id)!.label;
 
 /** Kebab/camel source identifier -> Swift camelCase (`usda-food` -> `usdaFood`). */
 const swiftIdentifier = (raw: string): string =>
@@ -388,9 +402,11 @@ const renderEntityDescriptorLiteral = (
   const plural = entity.inspector.plural ?? entity.inspector.singular;
   const searchable = entity.descriptor.searchable === true;
   const primarySearch =
-    entity.contract !== null && searchable
-      ? `PrimarySearchDescriptor(key: "searchQuery", placeholder: ${swiftString(`Search ${plural.toLowerCase()} or shortcode`)})`
-      : "nil";
+    entity.inspector.list.primarySearch === null
+      ? entity.contract !== null && searchable
+        ? `PrimarySearchDescriptor(key: "searchQuery", placeholder: ${swiftString(`Search ${plural.toLowerCase()} or shortcode`)})`
+        : "nil"
+      : `PrimarySearchDescriptor(key: ${swiftString(entity.inspector.list.primarySearch.key)}, placeholder: ${swiftString(entity.inspector.list.primarySearch.placeholder)})`;
   const timeline = entity.timeline === null ? "nil" : `.${entity.timeline}`;
   return (
     `  EntityDescriptor(\n` +
@@ -647,7 +663,20 @@ export const renderSwiftEntityCatalog = (
     "  /// prefilled from its filter.\n" +
     "  case journal\n" +
     "}\n\n" +
-    "/// A list view; the first declared one is the default.\n" +
+    "/// The shared List / Cards / Compact control. Compact keeps the Cards URL view.\n" +
+    "public enum ListPresentationChoice: String, Codable, Sendable, Hashable, CaseIterable {\n" +
+    swiftPresentationChoices
+      .map((choice) => `  case ${choice.swiftCase}`)
+      .join("\n") +
+    "\n\n  public var label: String {\n    switch self {\n" +
+    swiftPresentationChoices
+      .map(
+        (choice) =>
+          `    case .${choice.swiftCase}: ${swiftString(choice.label)}`,
+      )
+      .join("\n") +
+    "\n    }\n  }\n}\n\n" +
+    "/// A manifest view; the first declared one is the default.\n" +
     "public enum ListView: Codable, Sendable, Hashable, Identifiable {\n" +
     "  case table\n" +
     "  case shelf\n" +
@@ -663,8 +692,8 @@ export const renderSwiftEntityCatalog = (
     "  }\n\n" +
     "  public var label: String {\n" +
     "    switch self {\n" +
-    '    case .table: "Table"\n' +
-    '    case .shelf: "Shelf"\n' +
+    `    case .table: ${swiftString(presentationLabel("table"))}\n` +
+    `    case .shelf: ${swiftString(presentationLabel("shelf"))}\n` +
     '    case .timeline: "Timeline"\n' +
     "    case .slot(_, let label, _): label\n" +
     "    }\n" +
@@ -748,9 +777,9 @@ export const renderSwiftEntityCatalog = (
     "  public let sfSymbol: String\n" +
     "  /// Text fallback from `presentation.icons.emoji` where an SF Symbol can't render: CLI output, notifications, share text.\n" +
     "  public let emoji: String\n" +
-    "  /// Indexed by `search.find`; the intent surface is `searchable` ∧ `httpActions.contains(.get)`.\n" +
+    "  /// Indexed by `search.find`; the intent surface is `searchable` ∧ `nativeActions.contains(.get)`.\n" +
     "  public let searchable: Bool\n" +
-    "  /// `searchQuery` transport metadata; nil for client-only/custom lists.\n" +
+    "  /// Search transport metadata; nil for lists without a text-search parameter.\n" +
     "  public let primarySearch: PrimarySearchDescriptor?\n" +
     "  /// Non-nil exactly when the HTTP document exposes `resources.<key>.timeline`.\n" +
     "  public let timeline: EntityTimelineMode?\n" +

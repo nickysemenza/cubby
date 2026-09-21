@@ -188,14 +188,6 @@ const checkList = (
       );
     viewIds.add(id);
   }
-  if (viewIds.has("shelf") && capabilities.images.storage === false)
-    throw new EntityDeclarationError(
-      `${context}.list.views declares shelf, which needs stored images.`,
-    );
-  if (list.shelf !== null && !viewIds.has("shelf"))
-    throw new EntityDeclarationError(
-      `${context}.list.shelf needs a shelf view.`,
-    );
   for (const key of list.shelf?.subtitle ?? [])
     lookup.read(key, "list.shelf.subtitle");
   if (
@@ -302,6 +294,18 @@ export const compilePresentation = (
       `${context}.capabilities.timeline "custom" and extensions.ports.timeline must be declared together.`,
     );
   checkEdit(edit, lookup);
+  const mobileSubtitle = fieldModel.fields
+    .filter(
+      (field) =>
+        field.display.mobile?.slot === "subtitle" && field.readKey !== null,
+    )
+    .sort(
+      (left, right) =>
+        (left.display.mobile?.priority ?? Number.MAX_SAFE_INTEGER) -
+        (right.display.mobile?.priority ?? Number.MAX_SAFE_INTEGER),
+    )
+    .map((field) => field.key);
+  const shelfSubtitle = list.shelf?.subtitle ?? mobileSubtitle;
   return {
     ...presentation,
     detail: {
@@ -314,6 +318,12 @@ export const compilePresentation = (
     },
     list: {
       ...list,
+      // Cards are a universal alternate renderer. Stored images improve the
+      // card, but their absence resolves through the entity icon fallback.
+      views: list.views.includes("shelf")
+        ? list.views
+        : [...list.views, "shelf"],
+      shelf: { subtitle: shelfSubtitle },
       timeline:
         list.timeline === null
           ? null

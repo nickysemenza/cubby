@@ -100,7 +100,7 @@ export default defineEntity({
     },
     list: {
       views: [
-        { kind: "slot", id: "gallery", label: "Gallery" },
+        { kind: "slot", id: "gallery", label: "Contents" },
         "table",
         { kind: "slot", id: "visualizations", label: "Visualizations" },
       ],

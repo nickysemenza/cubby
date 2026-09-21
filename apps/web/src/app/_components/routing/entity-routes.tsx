@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
   isSlotListView,
+  listPresentationLabel,
   listViewId,
 } from "@cubby/schemas/entity-definitions/definition";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
@@ -8,7 +9,14 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, notFound, useParams } from "@tanstack/react-router";
-import { CalendarClock, type LucideIcon, Rows3, Table2 } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  Grid2X2,
+  Grid3X3,
+  type LucideIcon,
+  Table2,
+} from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { z } from "zod";
 
@@ -17,14 +25,22 @@ import {
   type GenericDetailEntity,
 } from "~/app/_components/entity-detail/generic-entity-detail";
 import {
+  EntityListCardDensityProvider,
   GenericEntityList,
   type GenericEntityListProps,
   resolveListView,
+  useEntityListCardDensity,
   useListSearch,
 } from "~/app/_components/entity-list/generic-entity-list";
 import type { PageLayout } from "~/components/layout/page-wrapper";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Empty,
   EmptyActions,
@@ -32,7 +48,7 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
-import { entities } from "~/entities/entities";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { readRecordField } from "~/entities/entity-references";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 
@@ -84,35 +100,88 @@ interface EntityListPageOptions {
 
 const VIEW_ICONS = {
   table: Table2,
-  shelf: Rows3,
+  shelf: Grid2X2,
   timeline: CalendarClock,
 } satisfies Record<"table" | "shelf" | "timeline", LucideIcon>;
 
 /** The segmented view control, rendered only when the manifest declares more than one view. */
 function ListViewSwitcher({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
+  const { density, setDensity } = useEntityListCardDensity();
   const { views, view } = resolveListView(entity, search);
   if (views.length < 2) return null;
-  const options = views.map((candidate) => ({
-    value: listViewId(candidate),
-    label: isSlotListView(candidate)
-      ? candidate.label
-      : candidate.slice(0, 1).toUpperCase() + candidate.slice(1),
-    icon: isSlotListView(candidate) ? undefined : VIEW_ICONS[candidate],
-  }));
+  const options = views.flatMap((candidate) => {
+    const id = listViewId(candidate);
+    const choice = {
+      value: id,
+      label: isSlotListView(candidate)
+        ? candidate.label
+        : (listPresentationLabel(candidate) ?? "Timeline"),
+      icon: isSlotListView(candidate) ? undefined : VIEW_ICONS[candidate],
+    };
+    return candidate === "shelf"
+      ? [
+          choice,
+          {
+            value: "compact",
+            label: listPresentationLabel("compact") ?? "Compact",
+            icon: Grid3X3,
+          },
+        ]
+      : [choice];
+  });
   const defaultView = listViewId(views[0] ?? "table");
+  const selected =
+    view === "shelf" && density === "compact" ? "compact" : listViewId(view);
+  const selectedOption = options.find((option) => option.value === selected);
+  const onValueChange = (next: string) => {
+    if (next === "compact") {
+      setDensity("compact");
+      navigate({ view: "shelf" });
+      return;
+    }
+    setDensity("cards");
+    navigate({ view: next === defaultView ? undefined : next });
+  };
   return (
-    <ViewSwitcher
-      ariaLabel={`${entities[entity].pluralLabel} view`}
-      options={options}
-      value={listViewId(view)}
-      compactOnMobile
-      // Merge, don't replace: filter params survive a renderer switch and
-      // stay shareable in the URL; the default view is the bare URL.
-      onValueChange={(next) =>
-        navigate({ view: next === defaultView ? undefined : next })
-      }
-    />
+    <>
+      <div className="md:hidden">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={`${entities[entity].pluralLabel} view: ${selectedOption?.label ?? selected}`}
+              />
+            }
+          >
+            View: {selectedOption?.label ?? selected}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {options.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                aria-current={option.value === selected ? "true" : undefined}
+                onClick={() => onValueChange(option.value)}
+              >
+                {option.value === selected && <Check aria-hidden />}
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <ViewSwitcher
+        ariaLabel={`${entities[entity].pluralLabel} view`}
+        className="hidden md:flex"
+        options={options}
+        value={selected}
+        // Merge, don't replace: filter params survive a renderer switch and
+        // stay shareable in the URL; the default view is the bare URL.
+        onValueChange={onValueChange}
+      />
+    </>
   );
 }
 
@@ -208,22 +277,31 @@ export function listChromePage({
   bodyGutter,
 }: ListChromeOptions) {
   return function ListChromeShell() {
+    const routedEntity =
+      entity !== undefined && isBrowserRoutedEntity(entity) ? entity : null;
+    const resolvedWorkbenchControls =
+      workbenchControls ??
+      (routedEntity
+        ? () => <ListViewSwitcher entity={routedEntity} />
+        : undefined);
     return (
-      <Page
-        variant="list"
-        listChrome="workbench"
-        title={title}
-        entity={entity}
-        layout={layout}
-        eyebrow={eyebrow}
-        compact={compact}
-        decoration={decoration}
-        actions={actions?.()}
-        workbenchControls={workbenchControls?.()}
-        bodyGutter={bodyGutter?.()}
-      >
-        <PageBody />
-      </Page>
+      <EntityListCardDensityProvider>
+        <Page
+          variant="list"
+          listChrome="workbench"
+          title={title}
+          entity={entity}
+          layout={layout}
+          eyebrow={eyebrow}
+          compact={compact}
+          decoration={decoration}
+          actions={actions?.()}
+          workbenchControls={resolvedWorkbenchControls?.()}
+          bodyGutter={bodyGutter?.()}
+        >
+          <PageBody />
+        </Page>
+      </EntityListCardDensityProvider>
     );
   };
 }

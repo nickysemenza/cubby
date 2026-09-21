@@ -1,6 +1,5 @@
 import type {
   ProjectDashboardSummaryOut,
-  ProjectFilters,
   ProjectOut,
   TaskOut,
 } from "@cubby/schemas/project";
@@ -12,26 +11,17 @@ import {
   type MouseEvent,
   type ReactNode,
   Suspense,
-  useCallback,
   useMemo,
 } from "react";
 
 import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
-import {
-  createCubbyColumnCollection,
-  type CubbyRow,
-  createCubbyColumnHelper,
-} from "~/app/_components/data-table/table-features";
+import type { CubbyRow } from "~/app/_components/data-table/table-features";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
-import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import type { PreviewPresentation } from "~/app/_components/hooks/useEntityPreview";
-import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { ProjectMark } from "~/app/projects/project-mark";
 import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
@@ -59,7 +49,6 @@ import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { entityListFor } from "~/entities/entity-list.functions";
 import { image, type ProjectImageSummaries } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -96,8 +85,8 @@ const TaskStatusBoard = lazy(() =>
   })),
 );
 
-/** The three slot views the project manifest declares beside the table. */
-export type DashboardView = "overview" | "analytics" | "gallery";
+/** The two project dashboard slots declared beside the ordinary list. */
+export type DashboardView = "overview" | "analytics";
 
 /** Cover image (first attached image) per project id — keyed lookup for the gallery/overview cards. */
 type CoverImages = ProjectImageSummaries;
@@ -146,10 +135,10 @@ function DashboardErrorState({
 }
 
 /**
- * `dashboardSummary` is fetched for all four of these views — it's the
+ * `dashboardSummary` is fetched for both of these views — it's the
  * bounded, cheap Overview read (summary counts, filtered project list w/
  * rollups, task-status breakdown, upcoming tasks, Needs Attention, filter
- * options), and Data/Gallery reuse its `projects` list rather than issuing
+ * options), and Overview reuses its `projects` list rather than issuing
  * their own query. Only `portfolioAnalytics` (chart aggregates) and the
  * Data's three lists issue their own paginated server reads. The dashboard
  * summary is never used as a browser-side membership oracle for them.
@@ -189,14 +178,7 @@ function DashboardContent({
   if (view === "analytics") {
     return <AnalyticsView data={analyticsData} isLoading={analyticsLoading} />;
   }
-  return (
-    <div className="pt-4">
-      <ServerProjectGallery
-        locations={data.filterOptions.locations}
-        completionYears={data.filterOptions.completionYears}
-      />
-    </div>
-  );
+  return <AnalyticsView data={analyticsData} isLoading={analyticsLoading} />;
 }
 
 function MainDashboard({ view }: { view: DashboardView }) {
@@ -262,7 +244,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
 
   const projects = dashboardQuery.data?.projects ?? NO_PROJECTS;
 
-  // Overview's project cards and Gallery both show cover images; the other
+  // Overview's project cards show cover images; Analytics does not render
   // views don't render any project cards, so skip the query entirely there.
   const showImages = view === "overview";
   const imageProjectIds = showImages
@@ -502,11 +484,9 @@ function AnalyticsView({
 function ProjectCards({
   projects,
   coverImages,
-  inspection,
 }: {
   projects: ProjectOut[];
   coverImages: CoverImages | undefined;
-  inspection?: ProjectCardsInspection;
 }) {
   if (projects.length === 0) {
     return (
@@ -523,155 +503,17 @@ function ProjectCards({
   return (
     <Grid cols="cards3">
       {projects.map((project) => {
-        const row = inspection?.getRow(project);
         return (
           <ProjectCard
             key={project.id}
             project={project}
             coverUrl={coverImages?.[project.id]?.[0]?.url}
-            inspection={
-              inspection && row
-                ? {
-                    row,
-                    currentRowId: inspection.currentRowId,
-                    presentation: inspection.presentation,
-                    onRowClick: () => inspection.onRowClick(row),
-                    onRowHover: () => inspection.onRowHover(row),
-                    onRowHoverEnd: () => inspection.onRowHoverEnd(row),
-                  }
-                : undefined
-            }
           />
         );
       })}
     </Grid>
   );
 }
-
-/** Gallery is the ordinary paginated project list rendered as cards. */
-function ServerProjectGallery({
-  locations,
-  completionYears,
-}: {
-  locations: string[];
-  completionYears: string[];
-}) {
-  const helper = useMemo(() => createCubbyColumnHelper<ProjectOut>(), []);
-  const projectOptions = useDeferredFilterOptions("project");
-  const filterOptions = useFilterOptions({
-    project: projectOptions,
-    projectLocations: locations.map((value) => ({ value, label: value })),
-    projectCompletionYears: completionYears.map((value) => ({
-      value,
-      label: value,
-    })),
-  });
-  const columns = useMemo(
-    () =>
-      createCubbyColumnCollection<ProjectOut>((add) => {
-        add(helper.accessor("status", { id: "status" }));
-        add(helper.accessor("kind", { id: "kind" }));
-        add(helper.accessor("locations", { id: "locations" }));
-        add(helper.accessor("parentProjectName", { id: "parent" }));
-        add(helper.accessor("startDate", { id: "startDate" }));
-      }),
-    [helper],
-  );
-  const listQueryOptions = useCallback<
-    ListQueryOptionsFn<ProjectFilters, ProjectOut>
-  >((params) => entityListFor("project").listQueryPlan(params), []);
-  const list = useEntityList<ProjectOut, ProjectFilters>({
-    entity: "project",
-    preview: { responsiveInspector: true },
-    queryOptions: listQueryOptions,
-    columns,
-    filterOptions,
-  });
-  const {
-    onRowClick,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    dockedInspector,
-    inspectorToggle,
-    preview,
-    presentation,
-  } = list.inspection;
-  const ids = useMemo(
-    () => list.data.map((project) => project.id),
-    [list.data],
-  );
-  const { data: images } = useQuery({
-    ...image.projectSummaries.queryOptions({ projectIds: ids }),
-    enabled: ids.length > 0,
-  });
-
-  if (list.workbench.isLoading)
-    return <Skeleton className="h-[400px] w-full" />;
-  if (list.workbench.error) {
-    return (
-      <DashboardErrorState
-        error={list.workbench.error}
-        onRetry={() => void list.workbench.refreshControls.onRefresh()}
-      />
-    );
-  }
-
-  return (
-    <>
-      <div className={cn("relative", dockedInspector && "xl:pr-[25rem]")}>
-        <Stack>
-          <Row justify="end">{inspectorToggle}</Row>
-          {list.workbench.bulkActionBar}
-          <ProjectCards
-            projects={list.data}
-            coverImages={images}
-            inspection={{
-              getRow: (project) => list.workbench.table.getRow(project.id),
-              currentRowId: preview?.rowKey,
-              presentation,
-              onRowClick,
-              onRowHover,
-              onRowHoverEnd,
-            }}
-          />
-          {list.workbench.infiniteScroll.hasNextPage && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={list.workbench.infiniteScroll.isFetchingNextPage}
-              onClick={list.workbench.infiniteScroll.fetchNextPage}
-            >
-              {list.workbench.infiniteScroll.isFetchingNextPage
-                ? "Loading…"
-                : "Load more projects"}
-            </Button>
-          )}
-        </Stack>
-        {dockedInspector ? (
-          <div
-            className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-l border-border bg-card xl:block"
-            data-desktop-inspector
-          >
-            {dockedInspector}
-          </div>
-        ) : null}
-      </div>
-      {list.workbench.actionDialogs}
-      {list.workbench.deleteDialog}
-      <PreviewSheet />
-    </>
-  );
-}
-
-type ProjectCardsInspection = {
-  getRow: (project: ProjectOut) => CubbyRow<ProjectOut>;
-  currentRowId: string | undefined;
-  presentation: PreviewPresentation;
-  onRowClick: (row: CubbyRow<ProjectOut>) => void;
-  onRowHover: (row: CubbyRow<ProjectOut>) => void;
-  onRowHoverEnd: (row: CubbyRow<ProjectOut>) => void;
-};
 
 type ProjectCardInspection = {
   row: Pick<

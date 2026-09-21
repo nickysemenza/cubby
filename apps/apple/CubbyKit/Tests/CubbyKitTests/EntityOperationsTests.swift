@@ -85,15 +85,15 @@ struct EntityOperationsTests {
         #expect(row == nil)
     }
 
-    /// `image` has only `resources.image.update`/`.delete` (photo attach/reorder and removal), so
-    /// the list/detail screens gate it out; `delete` is exposed but not generated, so it is in
-    /// `httpActions` and not in `nativeActions`.
-    @Test func imageActionsExcludeListAndGetAndDeleteIsNotNative() {
+    /// Image reads use declared typed RPCs rather than pretending the resource document exposes
+    /// list/get. Resource update remains native; resource delete remains intentionally absent
+    /// from the generated client.
+    @Test func imageRPCReadsAreNativeWithoutClaimingResourceActions() {
         #expect(!EntityKey.image.httpActions.contains(.list))
         #expect(!EntityKey.image.httpActions.contains(.get))
         #expect(EntityKey.image.httpActions.contains(.update))
         #expect(EntityKey.image.httpActions.contains(.delete))
-        #expect(EntityKey.image.nativeActions == [.update])
+        #expect(EntityKey.image.nativeActions == [.get, .list, .update])
         #expect(EntityKey.product.nativeActions.isSubset(of: EntityKey.product.httpActions))
         #expect(!EntityKey.product.nativeActions.contains(.delete))
     }

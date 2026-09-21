@@ -7,10 +7,12 @@ import { defineContract, query } from "~/contracts/define";
 
 export const cookbookContract = defineContract("cookbook", {
   list: query({
+    native: "Native cookbook browse",
     input: z.null(),
     output: cookbookSummariesOut,
   }),
   detail: query({
+    native: "Native cookbook detail",
     input: z.object({ shortcode: cookbookShortcode }),
     output: cookbookSummary.nullable(),
   }),
