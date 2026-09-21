@@ -61,3 +61,23 @@ test("footer metadata is server rendered and reused across client navigation", a
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
+
+test("anonymous OAuth registration lazily seeds the configured MCP resource", async ({
+  request,
+}) => {
+  const response = await request.post("/api/auth/oauth2/register", {
+    data: {
+      application_type: "native",
+      client_name: "Cubby E2E MCP Client",
+      grant_types: ["authorization_code", "refresh_token"],
+      redirect_uris: ["http://127.0.0.1/callback"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    },
+  });
+
+  expect(response.status()).toBe(201);
+  expect(await response.json()).toMatchObject({
+    resources: ["https://cubby.nickysemenza.com/api/mcp"],
+  });
+});

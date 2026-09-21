@@ -19,20 +19,41 @@ import {
 
 const isDev = process.env.NODE_ENV !== "production";
 
-// Better Auth 1.7 seeds configured resources during plugin initialization.
-// Vitest and Playwright collect broad server modules before their isolated
-// Postgres databases exist, so leave seeding to Worker and real runtimes.
-const oauthResourceOptions =
-  process.env.NODE_ENV === "test"
-    ? {}
-    : ({
-        resources: [{ identifier: MCP_RESOURCE, name: "Cubby MCP" }],
-        enforcePerClientResources: true,
-        // Claude does not send Better Auth's DCR `resources` extension, so link
-        // Cubby's sole protected resource to every newly registered client.
-        clientRegistrationDefaultResources: [MCP_RESOURCE],
-        clientRegistrationAllowedResources: [MCP_RESOURCE],
-      } satisfies Partial<Parameters<typeof oauthProvider>[0]>);
+const oauthResourceOptions = {
+  resources: [{ identifier: MCP_RESOURCE, name: "Cubby MCP" }],
+  enforcePerClientResources: true,
+  // Claude does not send Better Auth's DCR `resources` extension, so link
+  // Cubby's sole protected resource to every newly registered client.
+  clientRegistrationDefaultResources: [MCP_RESOURCE],
+  clientRegistrationAllowedResources: [MCP_RESOURCE],
+} satisfies Partial<Parameters<typeof oauthProvider>[0]>;
+
+/**
+ * Better Auth 1.7 seeds configured resources from its plugin init hook. Worker
+ * module initialization has no request-scoped database, so let the provider's
+ * own lazy seed run on the first resource request instead. Keeping the options
+ * after init preserves resource validation and dynamic-client defaults.
+ */
+function oauthProviderWithRequestScopedResourceSeed(
+  options: Parameters<typeof oauthProvider>[0],
+) {
+  const plugin = oauthProvider(options);
+  const init = plugin.init;
+  return {
+    ...plugin,
+    init: init
+      ? async (...args: Parameters<NonNullable<typeof init>>) => {
+          const configuredResources = plugin.options.resources;
+          plugin.options.resources = [];
+          try {
+            return await init(...args);
+          } finally {
+            plugin.options.resources = configuredResources;
+          }
+        }
+      : undefined,
+  };
+}
 
 // Preview deploys (`wrangler versions upload`) each get a unique host, so a
 // host-only session cookie forces a fresh login on every preview. CI injects
@@ -132,7 +153,7 @@ export const auth = betterAuth({
     // registration is required because neither can be given a client_id ahead
     // of time; registering is harmless on its own, since a token still requires
     // an interactive login + consent from the (single) account owner.
-    oauthProvider({
+    oauthProviderWithRequestScopedResourceSeed({
       loginPage: "/auth/sign-in",
       consentPage: "/oauth/consent",
       allowDynamicClientRegistration: true,
