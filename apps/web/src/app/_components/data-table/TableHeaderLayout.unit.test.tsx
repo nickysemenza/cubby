@@ -1,5 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 
 import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
 import TableHeaderLayout from "./TableHeaderLayout";
@@ -99,6 +101,39 @@ describe("TableHeaderLayout", () => {
     expect(
       screen.getByRole("button", { name: "Reorder nutrient-301 column" }),
     ).toBeInTheDocument();
+  });
+
+  it("hydrates the reorder grips with the server's aria-describedby id", async () => {
+    // dnd-kit's default DndDescribedBy id comes from a module counter that
+    // advances differently across the server and client passes.
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(<Harness />);
+    document.body.append(container);
+    const serverDescribedBy = container
+      .querySelector('[aria-label="Reorder nutrient-301 column"]')
+      ?.getAttribute("aria-describedby");
+    expect(serverDescribedBy).toMatch(/^DndDescribedBy-/);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const root = await act(async () => hydrateRoot(container, <Harness />));
+    try {
+      expect(
+        consoleError.mock.calls.filter(([message]) =>
+          String(message).includes("hydrat"),
+        ),
+      ).toEqual([]);
+      expect(
+        container
+          .querySelector('[aria-label="Reorder nutrient-301 column"]')
+          ?.getAttribute("aria-describedby"),
+      ).toBe(serverDescribedBy);
+    } finally {
+      consoleError.mockRestore();
+      await act(async () => root.unmount());
+      container.remove();
+    }
   });
 
   it("shows provenance without replacing the sortable header label", () => {
