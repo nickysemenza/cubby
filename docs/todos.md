@@ -27,13 +27,6 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
-- **`empty_expenses` cannot be excepted.** It is missing from
-  `EXCEPTION_REASONS` in `server/repo/data-quality.ts`, so a Purchase whose
-  lines will never exist (an in-store receipt that is gone, an online order
-  older than the vendor's history) sits in `needs_data` forever. Add
-  `unavailable` and `history_expired`, the same class of fix the product
-  identity checks got.
-
 - **Canvas conformance follow-ups.** The generic pages now render the
   canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
   workbench band with declared-filter chips and `Actions ▾`, plate verbs,
@@ -138,6 +131,12 @@ history is the archive. Permanent product constraints live in the
 ---
 
 ## Ready projects
+
+- **Resolve arrival findings after receiving.** The import writer files
+  `arrived` findings, but the interactive receive flow does not resolve them.
+  Connect successful receiving to the corresponding finding's lifecycle;
+  retain findings for partial receipts and never receive automatically. This
+  closes the [Delivered flow](plans/purchase-import-redesign.md#5-flows).
 
 - **Expense project suggestion ignores trade affinity.** The
   `expense.projectId` roster in `server/ai/field-suggest/registry.ts` is
@@ -325,6 +324,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires database changes
 
+- **Finish the meal amount migration.** `MealFoodEntry` and
+  `MealRecipePortion` still retain legacy `grams` columns and read/input
+  compatibility paths. Verify legacy rows and writers have drained, remove
+  those paths, deploy and drain the previous build, then drop the columns and
+  tighten constraints. Follow the [meal amount cleanup runbook](runbooks/meal-food-entry-schema.md#3-later-cleanup)
+  and verify the resulting schema; do not infer production readiness from code.
+
 - **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
   by giving cookbooks durable identity plus a merge/repoint path.
 
@@ -381,6 +387,45 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires thought or evidence
 
+- **Completeness scores for every entity.** Purchase and Product already have
+  computed 0–100 scores; the [universal scoring commitment](plans/purchase-import-redesign.md#10-pre-implementation-improvements)
+  remains unfinished. Define checks and weights for the remaining entities,
+  declare them in the manifest, expose scores and sorting across entity lists,
+  and share the checks with Problems and enrichment worklists. Preserve
+  vendor-aware expectations, durable exceptions, and existing status filters.
+
+- **Incremental import cursors and paced backfill.** The account cursor declares
+  newest-date/order-ID and backfill bounds, but imports do not advance them;
+  only the oldest available history boundary is recorded. Restore the
+  [incremental sync and backfill flows](plans/purchase-import-redesign.md#5-flows):
+  advance cursors after successful processing and resume newest-first backfill
+  with the planned 20–30 orders/hour pacing. This is durable progress and pacing,
+  separate from the conditional vendor-pagination evidence item below.
+
+- **Vendor evidence classification.** `orderEvidence` has a manual editor and
+  drives checks, but the [decision 14 classification pass](plans/purchase-import-redesign.md#2-decision-log)
+  and batch review are absent. Use vendor identity, website, charge descriptors,
+  and order-mail evidence to suggest classifications; decide confidence
+  thresholds and fit accepted writes into the current approval model.
+
+- **Complete charge-to-order discovery.** Gmail discovery handles unique exact
+  amounts and order subsets, but lacks the [planned matching sequence](plans/purchase-import-redesign.md#47-server-gmail-discovery):
+  consult retained shipment-payment evidence before mailbox matching, then use
+  a bounded Jev tie-break for ambiguous mail candidates. Preserve member/vendor
+  scoping and unresolved outcomes when evidence cannot support a match.
+
+- **Import decision evaluation.** The [planned offline evaluation](plans/purchase-import-redesign.md#6-cost-and-evaluation)
+  needs representative, sanitized identity, line-role, and reversal cases with
+  known outcomes and measured provider decisions. The current static Product
+  reuse fixture checks a result shape; it does not establish decision accuracy
+  or calibrate confidence thresholds. Evaluate the current shared-agent path
+  and its bounded decisions without committing private source material.
+
+- **CalDAV event deletion.** The HTTP adapter returns 405 for DELETE and directs
+  users to Cubby. Resolve the [deferred client-precondition policy](caldav.md#storage-and-writes)
+  for clients that omit `If-Match`, then implement canonical conditional deletion
+  through the adapter and Durable Object. Keep deletion in Cubby until then.
+
 - **Cache unchanged Jev evaluations by effective input.** Add application-level
   reuse keyed by a canonical hash of model, explicit prompt version,
   instructions, normalized context actually sent, and ordered choices/candidate
@@ -416,7 +461,12 @@ history is the archive. Permanent product constraints live in the
   candidates into evidence, automatic receipt outcomes with attachment ids and
   classifications, replay-safe writes, and multi-order handling. Keep a
   multi-order export as run evidence. Record the run evidence and terminal
-  outcomes so interruption resumes rather than duplicating work.
+  outcomes so interruption resumes rather than duplicating work. Close the
+  [grouped-settlement commitment](plans/purchase-import-redesign.md#47-server-gmail-discovery):
+  Gmail can identify several orders for one charge, but the writer matches
+  separate exact-amount transactions per Purchase. Turn a confirmed group into
+  the corresponding allocations atomically and without duplication; leave
+  ambiguous or incomplete groups for review.
 
 - **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its owned window,
@@ -679,21 +729,6 @@ history is the archive. Permanent product constraints live in the
   `apps/apple/project.yml`, `apps/apple/App`, and `CubbyKit`.
 
 ### Waiting for a trigger
-
-- **Shortcode prefixes of 2–5 letters** — Promote with the first entity that
-  wants a readable prefix. The `XXX-` shape is asserted in six places
-  (`scripts/generator/entities/compile.ts`, `EntityCatalogTests.swift`,
-  `test-support/identifiers.unit.test.ts`,
-  `mcp/entity-kernel.integration.test.ts`, the README prefix table, the MCP
-  instructions); the parser splits on the first dash and the column is
-  `text`, so nothing else cares.
-
-- **Data-exception fingerprints scoped to check inputs** — Promote when a
-  "never available" exception is reopened by an unrelated edit in practice.
-  Today the fingerprint is `<check>:<updatedAt>`, so assigning a project or
-  editing notes re-questions an `unavailable` document; hashing the inputs
-  the check reads (expense count, document set, `orderId`) would reopen it
-  only when evidence changes.
 
 - **`get_vendor_coverage` per account** — Promote when two members hold
   accounts at the same vendor. Coverage and `needs_data` are per Vendor
