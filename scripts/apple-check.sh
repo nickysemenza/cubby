@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
 # Body of the former `runAppleCheck` (scripts/ci-scope.ts, deleted): native
-# formatting, tests, OpenAPI drift, and a simulator build. Backs the `apple`
-# Nx target (apps/apple/project.json) and `pnpm apple check`. Run from the
-# workspace root.
+# formatting, OpenAPI drift, and a build (plus, locally, package tests). Backs
+# the `apple` Nx target (apps/apple/project.json) and `pnpm apple check`. Run
+# from the workspace root.
+#
+#   full  local default: swift test (CubbyKit package) + a generic-simulator build
+#   app   local, skips swift test: a generic-simulator build only
+#   ci    hosted `Apple checks` job: a generic-simulator build only, using the
+#         CI-cached SPM clone directory (-clonedSourcePackagesDirPath).
+#         CubbyKit's package tests run separately, on the macOS host, in the
+#         hosted `Apple package tests` job (`swift test`) — running them on
+#         the iOS Simulator inside this build job cost about 6 minutes to
+#         boot plus ~10 minutes of CPU starvation on a hosted runner
+#         (measured 2026-09-21), so they stay out of it.
 set -euo pipefail
 
 mode="${1:-full}"
 case "$mode" in
-  full | app) ;;
+  full | app | ci) ;;
   *)
-    echo "usage: $0 [full|app]" >&2
+    echo "usage: $0 [full|app|ci]" >&2
     exit 2
     ;;
 esac
@@ -19,16 +29,7 @@ if ! xcode-select -p >/dev/null 2>&1; then
   exit 0
 fi
 
-# The xcframework + shim come from the Nx cache when the Rust tree is
-# unchanged; a stale committed shim shows up as a dirty path afterwards.
-node scripts/ensure-apple-ffi.ts
-shim="apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift"
-if [ -n "$(git status --porcelain -- "$shim")" ]; then
-  echo "$shim is stale for the current Rust sources; commit the regenerated file." >&2
-  exit 1
-fi
-
-xcodegen generate --spec apps/apple/project.yml --use-cache
+apps/apple/scripts/prepare-project.sh
 
 # @State/@StateObject must never be seeded from an init parameter: a re-presented
 # `.sheet(item:)` can then show the previous item's stale state (apps/apple/AGENTS.md,
@@ -59,6 +60,8 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 # --force-resolved-versions: a bare `swift test` re-resolves and rewrites
 # CubbyKit/Package.resolved (only the originHash), leaving the tree dirty
 # after every run. Pins change only via a deliberate `swift package update`.
+# `ci` mode skips this: hosted CI runs CubbyKit's package tests separately,
+# on the host, in the `Apple package tests` job.
 if [ "$mode" = "full" ]; then
   swift test --package-path apps/apple/CubbyKit --force-resolved-versions
 fi
@@ -80,10 +83,22 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
 fi
 
+# CI-only: reuse the SPM clone directory .github/actions/setup-apple-tools
+# cached, instead of resolving Sentry/GRDB/Nuke from scratch every run. Local
+# builds keep SPM clones inside the DerivedData `pnpm apple` also uses, so the
+# two never thrash each other.
+clone_args=()
+if [ "$mode" = "ci" ]; then
+  clone_args+=(-clonedSourcePackagesDirPath apps/apple/SourcePackages)
+fi
+
 xcodebuild \
   -project apps/apple/Cubby.xcodeproj \
   -scheme Cubby-iOS \
   -destination "generic/platform=iOS Simulator" \
   -derivedDataPath apps/apple/DerivedData \
+  "${clone_args[@]}" \
+  -skipPackagePluginValidation \
+  -skipMacroValidation \
   "${build_settings[@]}" \
   build

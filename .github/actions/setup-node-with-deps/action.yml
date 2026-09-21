@@ -16,6 +16,12 @@ inputs:
     description: "Whether actions/setup-node should restore and save the pnpm store"
     required: false
     default: "true"
+  web-env:
+    description: >-
+      Copy apps/web/.env.example to apps/web/.env for jobs that build or test
+      the web app.
+    required: false
+    default: "false"
 
 outputs:
   pnpm-store-cache:
@@ -122,3 +128,9 @@ runs:
           pnpm install --frozen-lockfile --prefer-offline
         fi
       shell: bash
+
+    - name: Setup web environment variables
+      if: inputs.web-env == 'true'
+      shell: bash
+      run: |
+        cp apps/web/.env.example apps/web/.env

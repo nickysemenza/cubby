@@ -25,6 +25,7 @@ concurrency:
 permissions:
   contents: read
   actions: read
+  pull-requests: read
 
 jobs:
   scope:
@@ -34,17 +35,7 @@ jobs:
     outputs:
       coverage: ${{ steps.scope.outputs.coverage }}
       verify: ${{ steps.scope.outputs.verify }}
-      inert: 'false'
-      full: 'true'
-      web: 'true'
-      rust: 'true'
-      aux: 'true'
-      usda: 'true'
-      upc: 'true'
-      dependencies: 'true'
-      postgres: 'true'
-      e2e: 'true'
-      base-sha: ''
+      apple: ${{ steps.apple.outputs.apple }}
     steps:
       - id: scope
         env:
@@ -58,13 +49,44 @@ jobs:
             echo 'verify=true' >> "$GITHUB_OUTPUT"
           fi
 
+      # The Apple job is the slowest lane by far (macOS runners, xcodebuild),
+      # so it alone is path-filtered: everything else always runs. On a push
+      # or workflow_dispatch (no PR to diff against) it always runs too.
+      - id: apple
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # Prefix match for directories (a changed file anywhere under
+          # them), exact match for individual files that affect the Apple
+          # build outside apps/apple/ itself.
+          pattern='^(apps/apple/|cubby-ffi/|recipebridge/|\.github/|rust-toolchain\.toml$|scripts/ensure-apple-ffi\.ts$|scripts/rust-fingerprint\.ts$|scripts/apple-check\.sh$|apps/web/src/lib/generated/http-openapi\.gen\.json$)'
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename')"
+            matched="$(printf '%s\n' "$files" | grep -E "$pattern" || true)"
+            if [[ -n "$matched" ]]; then apple=true; else apple=false; fi
+          else
+            matched=""
+            apple=true
+          fi
+
+          echo "apple=$apple" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Apple job scope"
+            echo "apple=$apple ($EVENT_NAME)"
+            if [[ -n "$matched" ]]; then
+              echo
+              echo "Matching changed files:"
+              printf '%s\n' "$matched" | sed 's/^/- /'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   validation:
     name: Validation
     needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      needs.scope.outputs.inert != 'true' &&
-      (needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true')
+    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -83,18 +105,14 @@ jobs:
           tool: wasm-pack
       - name: Run repository validation
         shell: bash
-        env:
-          CHECK_DEPENDENCIES: ${{ needs.scope.outputs.dependencies }}
         run: |
           pnpm check:all &
           pids=("$!")
           names=("complete repository validation")
 
-          if [[ "$CHECK_DEPENDENCIES" == "true" ]]; then
-            pnpm dedupe:check &
-            pids+=("$!")
-            names+=("dependency deduplication")
-          fi
+          pnpm dedupe:check &
+          pids+=("$!")
+          names+=("dependency deduplication")
 
           result_code=0
           for index in "${!pids[@]}"; do
@@ -108,10 +126,7 @@ jobs:
   test-aux:
     name: Auxiliary tests and builds
     needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      needs.scope.outputs.verify == 'true' &&
-      needs.scope.outputs.aux == 'true'
+    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -119,23 +134,34 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "false"
-      - run: >-
-          pnpm -r --no-sort --workspace-concurrency=2 --no-bail
-          --filter '!@cubby/web' --if-present run test
-          --maxWorkers=1 --reporter=default --reporter=github-actions
-      - if: needs.scope.outputs.usda == 'true'
+      - name: Run auxiliary package tests
+        shell: bash
+        env:
+          COVERAGE: ${{ needs.scope.outputs.coverage }}
+        run: |
+          args=(-r --no-sort --workspace-concurrency=2 --no-bail --filter '!@cubby/web' --if-present run test --maxWorkers=1 --reporter=default --reporter=github-actions)
+          if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
+          pnpm "${args[@]}"
+      - if: needs.scope.outputs.verify == 'true'
         run: pnpm --filter @cubby/usda-api run build
-      - if: needs.scope.outputs.upc == 'true'
+      - if: needs.scope.outputs.verify == 'true'
         run: pnpm --filter @cubby/upc-lookup run build
+      - if: needs.scope.outputs.coverage == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-aux
+          path: |
+            apps/mcp-apps/coverage/coverage-final.json
+            apps/upc-lookup/coverage/coverage-final.json
+            apps/usda-api/coverage/coverage-final.json
+            packages/*/coverage/coverage-final.json
+          if-no-files-found: error
+          retention-days: 1
 
   test-rust:
     name: Rust - recipebridge
     needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      (needs.scope.outputs.verify == 'true' ||
-      needs.scope.outputs.coverage == 'true') &&
-      (needs.scope.outputs.rust == 'true' || needs.scope.outputs.coverage == 'true')
+    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:
@@ -167,11 +193,7 @@ jobs:
   test-web:
     name: Tests - web (${{ matrix.tier }})
     needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      (needs.scope.outputs.verify == 'true' ||
-      needs.scope.outputs.coverage == 'true') &&
-      needs.scope.outputs.web == 'true'
+    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -187,13 +209,11 @@ jobs:
             args: --project ui
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: ${{ needs.scope.outputs.full == 'true' && 1 || 0 }}
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web..."
-      - uses: ./.github/actions/setup-web-env
+          web-env: "true"
       - name: Build web Cloudflare bundle
         if: matrix.tier == 'node' && needs.scope.outputs.verify == 'true'
         env:
@@ -219,14 +239,11 @@ jobs:
       - name: Run ${{ matrix.tier }} tests
         shell: bash
         env:
-          BASE_SHA: ${{ needs.scope.outputs.base-sha }}
           COVERAGE: ${{ needs.scope.outputs.coverage }}
-          FULL: ${{ needs.scope.outputs.full }}
           VITEST_PROJECT_ARGS: ${{ matrix.args }}
         run: |
           read -r -a selected <<< "$VITEST_PROJECT_ARGS"
           args=("${selected[@]}" --testTimeout=10000 --reporter=default --reporter=github-actions --reporter=./tooling/test-run-contract-reporter.ts)
-          if [[ "$FULL" != "true" ]]; then args+=(--changed "$BASE_SHA"); fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"
       - name: Save web ${{ matrix.tier }} coverage
@@ -241,16 +258,7 @@ jobs:
   test-postgres:
     name: PostgreSQL integration tests
     needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      (needs.scope.outputs.verify == 'true' ||
-      needs.scope.outputs.coverage == 'true') &&
-      needs.scope.outputs.web == 'true' &&
-      (
-        needs.scope.outputs.full == 'true' ||
-        needs.scope.outputs.postgres == 'true' ||
-        needs.scope.outputs.coverage == 'true'
-      )
+    if: needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -276,13 +284,11 @@ jobs:
           PGPASSWORD: password
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: ${{ needs.scope.outputs.full == 'true' && 1 || 0 }}
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web... @cubby/purchase-agent..."
-      - uses: ./.github/actions/setup-web-env
+          web-env: "true"
       - name: Build coupled workerd Workers
         env:
           CUBBY_SOURCE_COMMIT: ${{ github.sha }}
@@ -293,15 +299,10 @@ jobs:
       - name: Run PostgreSQL integration tests
         shell: bash
         env:
-          BASE_SHA: ${{ needs.scope.outputs.base-sha }}
           COVERAGE: ${{ needs.scope.outputs.coverage }}
-          FULL: ${{ needs.scope.outputs.full }}
           CUBBY_TEST_INTEGRATION: "1"
         run: |
           args=(--project integration --reporter=default --reporter=github-actions --reporter=./tooling/test-run-contract-reporter.ts)
-          if [[ "$FULL" != "true" ]]; then
-            args+=(--changed "$BASE_SHA")
-          fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"
       - name: Save web PostgreSQL coverage
@@ -313,54 +314,37 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  test-aux-coverage:
-    name: Auxiliary package coverage
-    needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      needs.scope.outputs.coverage == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: "false"
-      - run: >-
-          pnpm -r --no-sort --workspace-concurrency=2 --no-bail
-          --filter '!@cubby/web' --if-present run test
-          --maxWorkers=1 --reporter=default --reporter=github-actions --coverage
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: coverage-aux
-          path: |
-            apps/mcp-apps/coverage/coverage-final.json
-            apps/upc-lookup/coverage/coverage-final.json
-            apps/usda-api/coverage/coverage-final.json
-            packages/*/coverage/coverage-final.json
-          if-no-files-found: error
-          retention-days: 1
-
   test-e2e:
     name: E2E tests (${{ matrix.lane }})
     needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      needs.scope.outputs.verify == 'true' &&
-      needs.scope.outputs.web == 'true' &&
-      (needs.scope.outputs.full == 'true' || needs.scope.outputs.e2e == 'true')
+    if: needs.scope.outputs.verify == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
-          - lane: chromium
+          # Two Playwright workers on one runner flaked (2026-09-21,
+          # inventory-session.spec, a 15s toBeVisible timeout under
+          # CUBBY_E2E_WORKERS=2), so chromium instead shards across two
+          # runners at one worker each; webkit stays a single unsharded lane.
+          # The historical "3 shards did not beat 2" note in docs/ci.md
+          # predates today's 370s suite.
+          - lane: "chromium 1/2"
+            slug: chromium-1
             browser: chromium
             test-script: test:e2e:ci:chromium
+            shard: "1/2"
+          - lane: "chromium 2/2"
+            slug: chromium-2
+            browser: chromium
+            test-script: test:e2e:ci:chromium
+            shard: "2/2"
           - lane: webkit
+            slug: webkit
             browser: webkit
             test-script: test:e2e:ci:webkit
+            shard: "1/1"
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       PLAYWRIGHT_VERSION: "1.63.0"
@@ -368,6 +352,9 @@ jobs:
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
       CUBBY_E2E_DATABASE: postgres
+    # Deliberately duplicated from test-postgres above: GitHub Actions YAML
+    # has no anchors and no reusable "services" construct that fits a
+    # per-job block like this.
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -395,6 +382,7 @@ jobs:
         with:
           wasm: "false"
           workspace-filter: "@cubby/web..."
+          web-env: "true"
       - name: Restore exact Playwright browser
         id: browser-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -439,7 +427,6 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-${{ matrix.browser }}
-      - uses: ./.github/actions/setup-web-env
       - name: Wait for the tested Cloudflare bundle
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
@@ -481,21 +468,44 @@ jobs:
           name: recipebridge-wasm
           path: packages/wasm
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run ${{ matrix.test-script }}
+        run: pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }}
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-report-${{ matrix.lane }}
+          name: playwright-report-${{ matrix.slug }}
           path: apps/web/playwright-report/
           retention-days: 1
 
+  # Branch protection requires a check named exactly "E2E tests (chromium)".
+  # With chromium split into two shards, this summary job carries that name
+  # and fails unless every test-e2e matrix leg passed, so the shard count can
+  # change without editing the required-checks list. It needs a runner only
+  # for a few seconds and starts when the slower shard finishes.
+  test-e2e-chromium:
+    name: E2E tests (chromium)
+    needs: [scope, test-e2e]
+    if: always() && needs.scope.outputs.verify == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every E2E lane to pass
+        env:
+          RESULT: ${{ needs.test-e2e.result }}
+        run: |
+          echo "test-e2e result: $RESULT"
+          [[ "$RESULT" == "success" ]]
+
+  # Host `swift test` for CubbyKit's package tests; not folded into test-apple
+  # below. Measured 2026-09-21: running these on the iOS Simulator inside the
+  # build job cost about 6 minutes to boot plus ~10 minutes of CPU starvation
+  # on a hosted macOS runner's 3 cores (a 5s script took 2.6 min, the compile
+  # doubled) — the merged job took 13 min even with warm caches. Two jobs beat
+  # one.
   test-apple-package:
     name: Apple package tests
     needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      needs.scope.outputs.verify == 'true'
+    if: needs.scope.outputs.verify == 'true' && needs.scope.outputs.apple == 'true'
     runs-on: macos-26
     timeout-minutes: 25
     steps:
@@ -503,34 +513,70 @@ jobs:
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: mac
+      # SPM fetch+resolve was 53s of this job's ~5 minutes; CubbyKit's
+      # Package.resolved pins exact versions, so an exact-key cache of the
+      # checkouts and git-object cache is safe to reuse unchanged.
+      - name: Restore cached SPM checkouts
+        id: spm-checkouts
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            apps/apple/CubbyKit/.build/checkouts
+            apps/apple/CubbyKit/.build/repositories
+          key: spm-checkouts-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}
       - name: Run CubbyKit Swift tests
         run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+      # Saved here rather than by actions/cache's post step so a red test run
+      # still keeps the checkouts for the next attempt. A concurrent job may
+      # have saved the same key first; that 409 is harmless and must never
+      # fail the check.
+      - name: Save SPM checkouts cache
+        if: always() && steps.spm-checkouts.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            apps/apple/CubbyKit/.build/checkouts
+            apps/apple/CubbyKit/.build/repositories
+          key: spm-checkouts-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}
 
   test-apple:
     name: Apple checks
     needs: scope
-    if: |
-      !cancelled() && needs.scope.result == 'success' &&
-      needs.scope.outputs.verify == 'true'
+    if: needs.scope.outputs.verify == 'true' && needs.scope.outputs.apple == 'true'
     runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: "false"
-          cache-pnpm-store: "false"
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - uses: ./.github/actions/setup-apple-tools
+        id: apple-tools
       - name: Run iOS app checks
-        run: sh scripts/apple-check.sh app
+        run: sh scripts/apple-check.sh ci
+      # Saved here rather than by actions/cache's post step so a red build
+      # still keeps the generator build and SPM clones for the next attempt.
+      # A concurrent job may have saved the same key first; that 409 is
+      # harmless and must never fail the check.
+      - name: Save OpenAPI generator cache
+        if: always() && steps.apple-tools.outputs.openapi-generator-cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
+          key: ${{ steps.apple-tools.outputs.openapi-generator-cache-key }}
+      - name: Save SPM clone cache
+        if: always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/apple/SourcePackages
+          key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
 
   report-coverage:
     name: Report scheduled coverage
-    needs: [scope, validation, test-rust, test-web, test-postgres, test-aux-coverage]
+    needs: [scope, validation, test-rust, test-web, test-postgres, test-aux]
     if: needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10

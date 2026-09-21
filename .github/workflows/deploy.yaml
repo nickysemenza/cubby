@@ -29,8 +29,7 @@ jobs:
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web..."
-      - uses: ./.github/actions/setup-web-env
-        if: steps.current_main.outputs.current == 'true'
+          web-env: "true"
       - name: Build web Cloudflare bundle
         if: steps.current_main.outputs.current == 'true'
         env:

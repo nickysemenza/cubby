@@ -30,7 +30,7 @@ private let split = image { ctx, size in
 
 @Suite("FeaturePrintIndex")
 struct FeaturePrintIndexTests {
-    @Test func identicalImageRanksFirstAndCacheRoundTrips() async throws {
+    @Test(.requiresVisionHardware) func identicalImageRanksFirstAndCacheRoundTrips() async throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "fp-\(UUID().uuidString)")
         let index = FeaturePrintIndex(cacheDirectory: dir)
         let url = URL(string: "https://example.invalid/cover.png")!

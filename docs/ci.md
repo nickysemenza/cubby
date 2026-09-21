@@ -61,31 +61,82 @@ resource-safe on the same machine. Keep heavy local runs coordinated when the
 host is constrained.
 
 A change under `apps/apple/` or `cubby-ffi/` selects the `apple` Nx target
-(`scripts/apple-check.sh`, the former `ci-scope.ts` `runAppleCheck` body): `node
+(`scripts/apple-check.sh`, the former `ci-scope.ts` `runAppleCheck` body).
+`apps/apple/scripts/prepare-project.sh` (extracted from the check script so
+the hosted job can call it before `pnpm install` has ever run) does `node
 scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI shim; a stale
-committed `cubby_ffi.swift` fails as a dirty tree), `xcodegen
-generate --use-cache`,
-`swift test --package-path apps/apple/CubbyKit`,
-`apps/apple/scripts/generate-openapi.sh --check`, then an `xcodebuild` simulator
-build. It skips itself (with a message, not a failure) when `xcode-select -p`
-fails, so a machine without Xcode still passes — `pnpm apple check` runs the
-same script directly. The `rust` target runs fmt/clippy/test per crate
-(`recipebridge/project.json`, `cubby-ffi/project.json`); `verify:local(:full)`
-runs both projects' `rust` target regardless of what changed. The hosted
-`Apple checks` job runs `pnpm apple check` on macOS for every verification workflow; it has the same
-format, package-test, OpenAPI-drift, and simulator-build coverage as the local
-target.
+committed `cubby_ffi.swift` fails as a dirty tree) and `xcodegen
+generate --use-cache`. `apple-check.sh` then runs the `@State`/`@StateObject`
+grep, `swift format lint`, `apps/apple/scripts/generate-openapi.sh --check`,
+and one of three modes: `full` (local default) additionally runs
+`swift test --package-path apps/apple/CubbyKit` and a generic-simulator
+`xcodebuild build`; `app` skips the package tests and only builds; `ci`
+(hosted only) also skips the package tests and only builds, but passes
+`-clonedSourcePackagesDirPath apps/apple/SourcePackages` so the build reuses
+the SPM clone cache described below instead of resolving Sentry/GRDB/Nuke
+from scratch. The script skips itself (with a message, not a failure) when
+`xcode-select -p` fails, so a machine without Xcode still passes — `pnpm apple
+check` runs `apple-check.sh full` directly. The `rust` target runs
+fmt/clippy/test per crate (`recipebridge/project.json`,
+`cubby-ffi/project.json`); `verify:local(:full)` runs both projects' `rust`
+target regardless of what changed.
+
+`apps/apple/project.yml`'s `Cubby-iOS` scheme also lists CubbyKit's own tests
+as a local package test target (`package: CubbyKit/CubbyKitTests`), so
+`xcodebuild test -scheme Cubby-iOS` on a simulator runs both `Cubby-iOS-Tests`
+and CubbyKit's package tests together — useful locally, but hosted CI does not
+use it (see below). `apps/apple/CubbyKit/Tests/CubbyKitTests/VisionHardware.swift`
+defines a `.requiresVisionHardware` trait that skips Vision-dependent
+contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
+for whichever caller — local or hosted — ends up running that scheme there.
+
+Two hosted macOS jobs cover the Apple surface, both gated on the `scope`
+job's `apple` output (a prefix match on `apps/apple/`, `cubby-ffi/`,
+`recipebridge/`, or `.github/`, or an exact match on `rust-toolchain.toml`,
+`scripts/ensure-apple-ffi.ts`, `scripts/rust-fingerprint.ts`,
+`scripts/apple-check.sh`, or
+`apps/web/src/lib/generated/http-openapi.gen.json`; always `true` on a `push`
+or `workflow_dispatch`, where there is no PR diff to check). A skipped job
+still satisfies its required status check (GitHub treats a skipped required
+job as passing). `Apple package tests` runs `swift test --package-path
+apps/apple/CubbyKit --force-resolved-versions` on the macOS host — no
+simulator — restoring/saving an exact-key cache of
+`apps/apple/CubbyKit/.build/{checkouts,repositories}` keyed on
+`Package.resolved` (SPM fetch+resolve was 53s of that job otherwise). `Apple
+checks` runs `sh scripts/apple-check.sh ci`, a generic-simulator
+`xcodebuild build` with no tests. Both were previously one merged job that
+also ran `xcodebuild test` on a concrete simulator; that was reverted after
+measuring a hosted runner's first simulator boot at about 6 minutes plus
+roughly 10 minutes of CPU starvation on top of it (a 5s script took 2.6
+minutes, the compile itself doubled) — the merged job took 13 minutes even
+with every cache warm, so two separate jobs are faster than one.
+`.github/actions/setup-apple-tools` installs XcodeGen and restores two more
+caches, both used only by `Apple checks`: the `swift-openapi-generator` 1.13.1
+binary it builds from source (keyed on the generator package's inputs and the
+Swift toolchain version, so a warm cache skips rebuilding it from scratch —
+previously about 140s every run), and `apps/apple/SourcePackages`, the
+`xcodebuild`-resolved SPM clones for Sentry, GRDB, and Nuke (previously an
+uncached "Resolve Package Graph" on every run). Both are separate from the
+target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
+package-test job's SPM checkout cache described above.
 
 ## Hosted suite
 
 The `CI` workflow runs automatically for pull requests to `main` and pushes to
 `main`. It runs repository validation and dependency deduplication, auxiliary
 tests and Worker builds, Rust checks, web node/UI tests, PostgreSQL integration
-tests, Chromium and WebKit E2E, and the Apple check. The browser lanes test the
-exact bundle produced by the node test lane and retain the discovery and no-skip
-guard. Coverage remains a manual `workflow_dispatch` option (`mode=coverage`);
-it does not deploy. The separate Markdown link workflow, previews, and opt-in
-Claude workflows remain manual.
+tests, Chromium and WebKit E2E, and (when the Apple path filter above matches)
+`Apple package tests` and `Apple checks` — see above for why those stayed two
+separate jobs. The browser lanes test the exact bundle produced by the node
+test lane and retain the discovery and no-skip guard; chromium runs as two
+Playwright shards (`--shard=1/2`/`--shard=2/2`, one worker each — two workers
+on a single runner flaked, see `apps/web/tooling/e2e-workers.ts`) and webkit
+runs unsharded. Coverage remains a manual `workflow_dispatch` option
+(`mode=coverage`); it does not deploy. `test-postgres` and `test-e2e` each
+declare their own `postgres`/`integresql` `services:` block — GitHub Actions
+YAML has no anchors and no reusable construct that fits here, so the
+duplication is accepted rather than worked around. The separate Markdown link
+workflow, previews, and opt-in Claude workflows remain manual.
 
 ## Deployment
 
@@ -126,6 +177,30 @@ from a partial or stale run.
 | PR / exact head | Queue | Required lanes (wall) | Cache state | Cancelled | Merge to Cloudflare |
 | --- | ---: | --- | --- | --- | ---: |
 | [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no | 82s |
+
+### 2026-09-21 Apple setup caches, path filter, chromium shards
+
+Exact-head runs of [#1163](https://github.com/nickysemenza/cubby/pull/1163)
+(every run touched `.github/`, so both Apple jobs ran). Baseline is run
+35644114202 on `main` before the branch: PR wall **600s**; Apple checks 544s
+(140s generator build, 93s SPM clone, 53s unneeded `pnpm install`); Apple
+package tests 301s after a 154s runner queue; chromium 433s on one worker.
+
+| Run | Apple caches | PR wall | Apple checks | Apple package | Chromium | Note |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| 35652760985 | cold | — | 1089s (failed) | merged into Apple checks | 345s (2 workers) | simulator tests: 4 Vision suites cannot run on the simulator; one real bug in `PhotoRecordSearch` |
+| 35655298230 | cold (saved on exit) | 1139s | 1082s | merged | 416s (2 workers) | simulator pre-booted at job start starved the FFI restore (41s → 281s) |
+| 35657369044 | warm | 918s | 899s | merged | 330s (2 workers, **1 flake**) | boot moved after restores: still ~10 min of CPU starvation |
+| 35659623444 | warm | **325s** | **296s** | 309s (SPM checkouts cold, saved) | **216s / 284s** (2 shards, 1 worker each) | two macOS jobs restored; retained |
+
+**Decisions.** Retained: generator-binary and SPM-clone caches (generator
+step 140s → under 5s warm; Resolve Package Graph 93s → 28s), dropping the
+Apple job's `pnpm install`, the PR path filter, two chromium shards at one
+worker each. Rejected: CubbyKit tests on the iOS Simulator inside the build
+job (a hosted runner's first boot is ~6 min and starves the 3-core machine
+for ~10 more, so the merged job was 13–18 min) and two Playwright workers on
+one runner (one flake in three runs). One warm sample so far; append further
+exact-head rows before changing this topology again.
 
 ### 2026-09-20 serial experiment record
 

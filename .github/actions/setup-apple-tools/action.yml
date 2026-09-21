@@ -1,0 +1,92 @@
+name: "Setup Apple Tools"
+description: >-
+  Installs XcodeGen (and optionally sentry-cli) and restores the cached
+  swift-openapi-generator binary and SPM package clones used by the Apple
+  jobs, so a warm cache never rebuilds the generator from source or reclones
+  Sentry/GRDB/Nuke.
+
+outputs:
+  openapi-generator-cache-hit:
+    description: "true when the generator binary cache matched exactly"
+    value: ${{ steps.generator-cache.outputs.cache-hit }}
+  openapi-generator-cache-key:
+    description: "Key to save the generator binary under (see ci.yaml's explicit save steps)"
+    value: ${{ steps.generator-cache.outputs.cache-primary-key }}
+  spm-clones-cache-hit:
+    description: "true when the SPM clone cache matched exactly"
+    value: ${{ steps.spm-cache.outputs.cache-hit }}
+  spm-clones-cache-key:
+    description: "Key to save the SPM clones under"
+    value: ${{ steps.spm-cache.outputs.cache-primary-key }}
+
+inputs:
+  sentry-cli:
+    description: "Also install getsentry/tools/sentry-cli (needed only for archive builds)"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install XcodeGen
+      shell: bash
+      run: brew install xcodegen
+
+    - name: Install sentry-cli
+      if: inputs.sentry-cli == 'true'
+      shell: bash
+      run: brew install getsentry/tools/sentry-cli
+
+    # The generator binary is toolchain-specific; fold `swift --version` into
+    # the cache key alongside the generator package's own inputs.
+    - name: Compute Swift toolchain hash
+      id: swift-version
+      shell: bash
+      run: |
+        hash="$(swift --version 2>&1 | shasum -a 256 | awk '{print $1}')"
+        echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+    # CUBBY_OPENAPI_GENERATOR_BIN points generate-openapi.sh at this binary
+    # directly, so a warm cache skips `swift build --show-bin-path` entirely
+    # (that call alone loads the package graph and fetches
+    # swift-openapi-generator, ~10s+). CUBBY_OPENAPI_GENERATOR_SCRATCH keeps a
+    # cold build's SwiftPM scratch directory in the same place across steps;
+    # it is never itself cached — only the small bin directory below is.
+    - name: Configure OpenAPI generator paths
+      shell: bash
+      run: |
+        bin_dir="$HOME/.cache/cubby/openapi-generator-bin"
+        scratch="$HOME/.cache/cubby/openapi-generator-build"
+        mkdir -p "$bin_dir"
+        {
+          echo "CUBBY_OPENAPI_GENERATOR_BIN_DIR=$bin_dir"
+          echo "CUBBY_OPENAPI_GENERATOR_BIN=$bin_dir/swift-openapi-generator"
+          echo "CUBBY_OPENAPI_GENERATOR_SCRATCH=$scratch"
+        } >> "$GITHUB_ENV"
+
+    # Exact key only, matching the OpenAPI generator's own content-stamp
+    # logic in generate-openapi.sh: the cached directory holds only the
+    # binary and its `.inputs` stamp, never the full SwiftPM scratch tree.
+    # Restore only: actions/cache's post-job save is skipped when the job
+    # fails, which would throw away a multi-minute generator build every time
+    # a test goes red. Callers save explicitly with `if: always()` using the
+    # key outputs above.
+    - name: Restore cached OpenAPI generator binary
+      id: generator-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ env.CUBBY_OPENAPI_GENERATOR_BIN_DIR }}
+        key: openapi-gen-v1-${{ runner.os }}-${{ hashFiles('apps/apple/.generator/Package.swift', 'apps/apple/.generator/Package.resolved') }}-${{ steps.swift-version.outputs.hash }}
+
+    # The app's own Package.resolved lives inside the gitignored xcodeproj,
+    # so Sentry/Nuke float within their `from:` ranges here; a slightly stale
+    # cache is fine because `xcodebuild`'s SPM resolver only fetches the
+    # delta.
+    - name: Restore cached SPM clones
+      id: spm-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: apps/apple/SourcePackages
+        key: spm-clones-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved', 'apps/apple/project.yml') }}
+        restore-keys: |
+          spm-clones-v1-${{ runner.os }}-
