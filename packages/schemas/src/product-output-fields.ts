@@ -1,9 +1,11 @@
 import { z } from "zod";
-import productDefinition from "./entity-definitions/00-product.entity";
-import { readFieldSchemas } from "./entity-definitions/definition";
+import { generatedProductFieldSchemas } from "./generated/entity-field-schemas.product.gen";
 
+// The generated map, not `readFieldSchemas(definition)`: the compiler
+// synthesizes `dataQuality` from `capabilities.dataQuality`, and only the
+// generated map carries its read schema.
 export const productTopLevelOut = z
-  .object(readFieldSchemas(productDefinition))
+  .object(generatedProductFieldSchemas.read)
   .extend({
     // Derived at read time by the same cover rule the picker uses (first
     // displayable, non-deleted image, ordered by sortOrder/createdAt/id — see

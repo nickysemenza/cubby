@@ -2,6 +2,7 @@ import { readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compileEntity, validateEntityIdentities } from "./compile.ts";
+import { validateDataQualityDeclarations } from "./data-quality.ts";
 import { validateRelationSections } from "./presentation.ts";
 import { browserRoutes } from "./render/routes.ts";
 import type {
@@ -292,6 +293,19 @@ export type CompiledEntity = Readonly<{
     merge: OperationOwner;
   }>;
   fieldModel: EntityFieldModel;
+  /** `capabilities.dataQuality`, or null for an unscored entity. */
+  dataQuality: Readonly<{
+    checks: readonly Readonly<{
+      id: string;
+      facet: string;
+      kind: "missing" | "defect";
+      weight: number;
+      label: string;
+      message: string;
+    }>[];
+    exceptions: boolean;
+    related: readonly string[];
+  }> | null;
 }>;
 
 export type EntityArtifacts = Readonly<{
@@ -379,7 +393,7 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
     throw new EntityDeclarationError(
       `${SPEC_DIRECTORY} has no entity declarations.`,
     );
-  const entities = await Promise.all(
+  const compiled = await Promise.all(
     entries.map(async (entry) => {
       const module = await import(
         pathToFileURL(resolve(SPEC_DIRECTORY, entry.name)).href
@@ -401,6 +415,7 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
       return entity;
     }),
   );
+  const entities = validateDataQualityDeclarations(compiled);
   const routes = new Set<string>();
   validateEntityIdentities(entities);
   validateRelationSections(entities);

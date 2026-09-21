@@ -33,7 +33,7 @@ import {
   guideWindowsFor,
   resolveGardenGuideKey,
 } from "~/server/garden-guides/windows";
-import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
+import { attachDataQuality } from "~/server/repo/data-quality";
 import {
   buildSearchConditions,
   formatSearchTerm,
@@ -89,7 +89,7 @@ export type IngredientDeepDB = typeof ingredient.$inferSelect & {
  * safe fallback for it (unlike `pricing`, whose empty-aggregate default is
  * safe), so every caller of {@link mapIngredientProducts} /
  * {@link mapIngredientProductsLean} must batch-load it first via
- * `enrichProductRowsWithDataQuality` / `loadProductDataQualities` and attach
+ * `attachDataQuality` / `loadDataQualities` and attach
  * it before calling in.
  */
 export type Qualified<T> = T & { dataQuality: DataQuality };
@@ -210,7 +210,7 @@ export const dbIngredientToAPI = async (
       // provide computed quality so this mapper can prove its pure projection
       // without opening a database connection.
       pricedProductRel
-    : await enrichProductRowsWithDataQuality(db, pricedProductRel);
+    : await attachDataQuality(db, "product", pricedProductRel);
   const productWithMappings = mapIngredientProducts(qualifiedProductRel);
 
   // One row per usage (a recipe repeats when it uses this ingredient in multiple

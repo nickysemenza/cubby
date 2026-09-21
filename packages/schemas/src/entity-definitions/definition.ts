@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  dataQualityCheckKind,
+  dataQualityFacetName,
+} from "../data-quality-facets";
 import { photoCategoryKeys } from "../photo-categories";
 
 /** The scalar shapes the entity compiler can persist and project. */
@@ -1045,6 +1049,35 @@ const metadataSchemas = () => {
     })
     .strict();
 
+  const entityDataQualityCheckMetadataSchema = z
+    .object({
+      /** Globally unique across entities; also the `dataGap` filter value. */
+      id: z.string().regex(/^[a-z][a-z0-9_]*$/, "must be snake_case"),
+      facet: dataQualityFacetName,
+      kind: dataQualityCheckKind.optional().default("missing"),
+      weight: z.number().int().positive().optional().default(1),
+      /** Filter-option label. */
+      label: nonEmptyString(),
+      /** `gap.message` shown beside the check. */
+      message: nonEmptyString(),
+    })
+    .strict();
+
+  const entityDataQualityMetadataSchema = z
+    .object({
+      checks: z.array(entityDataQualityCheckMetadataSchema).min(1),
+      /** True only where the table carries a `dataExceptions` jsonb column. */
+      exceptions: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(false),
+      /** Scored entities whose gaps roll up into this one (`relatedGaps`). */
+      related: z.array(nonEmptyString()).optional().default([]),
+      /** Where the synthesized `dataQuality` list column sits; unordered = last. */
+      listOrder: z.number().int().nonnegative().optional(),
+    })
+    .strict();
+
   const entityCapabilitiesMetadataSchema = z
     .object({
       auditable: z.boolean({ error: "must be a boolean" }),
@@ -1071,6 +1104,16 @@ const metadataSchemas = () => {
        */
       timeline: z
         .enum(["default", "custom"])
+        .nullable()
+        .optional()
+        .default(null),
+      /**
+       * Data-quality checks: the compiler synthesizes the `dataQuality` and
+       * `dataGaps` model fields, the `dataStatus`/`dataGap` filter descriptors
+       * and the `dataQualityScore` sort from this one block; the web repo binds
+       * each check id to SQL in `server/repo/data-quality/checks`.
+       */
+      dataQuality: entityDataQualityMetadataSchema
         .nullable()
         .optional()
         .default(null),

@@ -13,11 +13,7 @@ import {
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
-import {
-  dataQuality,
-  dataQualityStatus,
-  productDataCheck,
-} from "./data-quality";
+import { dataQuality, productDataCheck } from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { money, moneyNullable, positiveMoneyNullable } from "./money";
@@ -230,8 +226,6 @@ export const productFilterFields = {
   upcPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
-  dataStatus: dataQualityStatus.optional(),
-  dataGap: oneOrMany(productDataCheck).optional(),
   inventoryPresenceFilter: presenceFilter,
   inventoryMultiplicity: z
     .enum(["duplicate_within_placement"])

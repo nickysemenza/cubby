@@ -39,6 +39,7 @@
     "./pagination": "./src/pagination.ts",
     "./context": "./src/context.ts",
     "./data-quality": "./src/data-quality.ts",
+    "./data-quality-facets": "./src/data-quality-facets.ts",
     "./ingredient": "./src/ingredient.ts",
     "./ingredient-cooccurrence": "./src/ingredient-cooccurrence.ts",
     "./equivalences": "./src/equivalences.ts",

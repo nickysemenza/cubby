@@ -20416,6 +20416,31 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/tagFilters`.
                 public var tagFilters: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_product_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_product_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case productManufacturer = "product_manufacturer"
+                    case productExternalId = "product_external_id"
+                    case productCategory = "product_category"
+                    case productModel = "product_model"
+                    case productPrice = "product_price"
+                    case productImage = "product_image"
+                    case amazonAsin = "amazon_asin"
+                    case duplicateExternalId = "duplicate_external_id"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_product_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_product_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/kitId`.
                 public var kitId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/upcPresenceFilter`.
@@ -20434,27 +20459,6 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/externalIdPresenceFilter`.
                 public var externalIdPresenceFilter: Operations.Resources_product_list.Input.Query.ExternalIdPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataStatus`.
-                @frozen public enum DataStatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case complete = "complete"
-                    case needsData = "needs_data"
-                    case defect = "defect"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataStatus`.
-                public var dataStatus: Operations.Resources_product_list.Input.Query.DataStatusPayload?
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/DataGapPayload`.
-                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case productManufacturer = "product_manufacturer"
-                    case productCategory = "product_category"
-                    case productModel = "product_model"
-                    case productImage = "product_image"
-                    case amazonAsin = "amazon_asin"
-                    case duplicateExternalId = "duplicate_external_id"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataGap`.
-                public typealias DataGapPayload = [Operations.Resources_product_list.Input.Query.DataGapPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/dataGap`.
-                public var dataGap: Operations.Resources_product_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/inventoryPresenceFilter`.
                 @frozen public enum InventoryPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -20857,7 +20861,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, identity_strength. Default: -createdAt
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, dataQuality. Default: -createdAt
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/sort`.
                 public var sort: Swift.String?
@@ -20918,12 +20922,12 @@ public enum Operations {
                 ///   - notesPresenceFilter:
                 ///   - stockTrackedPresenceFilter: Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).
                 ///   - tagFilters: Match products carrying any of these tags
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - kitId:
                 ///   - upcPresenceFilter:
                 ///   - externalIdSource:
                 ///   - externalIdPresenceFilter:
-                ///   - dataStatus:
-                ///   - dataGap:
                 ///   - inventoryPresenceFilter:
                 ///   - inventoryMultiplicity: Products expected once but recorded more than once within stock or installed placement.
                 ///   - ownershipReconciliation: Products with a recorded disposal, no remaining known quantity, and a positive single-unit on-hand count.
@@ -20961,7 +20965,7 @@ public enum Operations {
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, identity_strength. Default: -createdAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, dataQuality. Default: -createdAt
                 ///   - groupBy: Group rows by one field. One of: category
                 public init(
                     createdFrom: Swift.String? = nil,
@@ -21010,12 +21014,12 @@ public enum Operations {
                     notesPresenceFilter: Operations.Resources_product_list.Input.Query.NotesPresenceFilterPayload? = nil,
                     stockTrackedPresenceFilter: Operations.Resources_product_list.Input.Query.StockTrackedPresenceFilterPayload? = nil,
                     tagFilters: [Swift.String]? = nil,
+                    dataStatus: Operations.Resources_product_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_product_list.Input.Query.DataGapPayload? = nil,
                     kitId: [Swift.String]? = nil,
                     upcPresenceFilter: Operations.Resources_product_list.Input.Query.UpcPresenceFilterPayload? = nil,
                     externalIdSource: [Swift.String]? = nil,
                     externalIdPresenceFilter: Operations.Resources_product_list.Input.Query.ExternalIdPresenceFilterPayload? = nil,
-                    dataStatus: Operations.Resources_product_list.Input.Query.DataStatusPayload? = nil,
-                    dataGap: Operations.Resources_product_list.Input.Query.DataGapPayload? = nil,
                     inventoryPresenceFilter: Operations.Resources_product_list.Input.Query.InventoryPresenceFilterPayload? = nil,
                     inventoryMultiplicity: Operations.Resources_product_list.Input.Query.InventoryMultiplicityPayload? = nil,
                     ownershipReconciliation: Operations.Resources_product_list.Input.Query.OwnershipReconciliationPayload? = nil,
@@ -21102,12 +21106,12 @@ public enum Operations {
                     self.notesPresenceFilter = notesPresenceFilter
                     self.stockTrackedPresenceFilter = stockTrackedPresenceFilter
                     self.tagFilters = tagFilters
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.kitId = kitId
                     self.upcPresenceFilter = upcPresenceFilter
                     self.externalIdSource = externalIdSource
                     self.externalIdPresenceFilter = externalIdPresenceFilter
-                    self.dataStatus = dataStatus
-                    self.dataGap = dataGap
                     self.inventoryPresenceFilter = inventoryPresenceFilter
                     self.inventoryMultiplicity = inventoryMultiplicity
                     self.ownershipReconciliation = ownershipReconciliation
@@ -22037,6 +22041,31 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/tagFilters`.
                 public var tagFilters: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_product_timeline.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_product_timeline.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case productManufacturer = "product_manufacturer"
+                    case productExternalId = "product_external_id"
+                    case productCategory = "product_category"
+                    case productModel = "product_model"
+                    case productPrice = "product_price"
+                    case productImage = "product_image"
+                    case amazonAsin = "amazon_asin"
+                    case duplicateExternalId = "duplicate_external_id"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_product_timeline.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_product_timeline.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/kitId`.
                 public var kitId: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/upcPresenceFilter`.
@@ -22055,27 +22084,6 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/externalIdPresenceFilter`.
                 public var externalIdPresenceFilter: Operations.Resources_product_timeline.Input.Query.ExternalIdPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataStatus`.
-                @frozen public enum DataStatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case complete = "complete"
-                    case needsData = "needs_data"
-                    case defect = "defect"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataStatus`.
-                public var dataStatus: Operations.Resources_product_timeline.Input.Query.DataStatusPayload?
-                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/DataGapPayload`.
-                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case productManufacturer = "product_manufacturer"
-                    case productCategory = "product_category"
-                    case productModel = "product_model"
-                    case productImage = "product_image"
-                    case amazonAsin = "amazon_asin"
-                    case duplicateExternalId = "duplicate_external_id"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataGap`.
-                public typealias DataGapPayload = [Operations.Resources_product_timeline.Input.Query.DataGapPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/dataGap`.
-                public var dataGap: Operations.Resources_product_timeline.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/timeline/GET/query/inventoryPresenceFilter`.
                 @frozen public enum InventoryPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -22536,12 +22544,12 @@ public enum Operations {
                 ///   - notesPresenceFilter:
                 ///   - stockTrackedPresenceFilter: Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).
                 ///   - tagFilters: Match products carrying any of these tags
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - kitId:
                 ///   - upcPresenceFilter:
                 ///   - externalIdSource:
                 ///   - externalIdPresenceFilter:
-                ///   - dataStatus:
-                ///   - dataGap:
                 ///   - inventoryPresenceFilter:
                 ///   - inventoryMultiplicity: Products expected once but recorded more than once within stock or installed placement.
                 ///   - ownershipReconciliation: Products with a recorded disposal, no remaining known quantity, and a positive single-unit on-hand count.
@@ -22628,12 +22636,12 @@ public enum Operations {
                     notesPresenceFilter: Operations.Resources_product_timeline.Input.Query.NotesPresenceFilterPayload? = nil,
                     stockTrackedPresenceFilter: Operations.Resources_product_timeline.Input.Query.StockTrackedPresenceFilterPayload? = nil,
                     tagFilters: [Swift.String]? = nil,
+                    dataStatus: Operations.Resources_product_timeline.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_product_timeline.Input.Query.DataGapPayload? = nil,
                     kitId: [Swift.String]? = nil,
                     upcPresenceFilter: Operations.Resources_product_timeline.Input.Query.UpcPresenceFilterPayload? = nil,
                     externalIdSource: [Swift.String]? = nil,
                     externalIdPresenceFilter: Operations.Resources_product_timeline.Input.Query.ExternalIdPresenceFilterPayload? = nil,
-                    dataStatus: Operations.Resources_product_timeline.Input.Query.DataStatusPayload? = nil,
-                    dataGap: Operations.Resources_product_timeline.Input.Query.DataGapPayload? = nil,
                     inventoryPresenceFilter: Operations.Resources_product_timeline.Input.Query.InventoryPresenceFilterPayload? = nil,
                     inventoryMultiplicity: Operations.Resources_product_timeline.Input.Query.InventoryMultiplicityPayload? = nil,
                     ownershipReconciliation: Operations.Resources_product_timeline.Input.Query.OwnershipReconciliationPayload? = nil,
@@ -22720,12 +22728,12 @@ public enum Operations {
                     self.notesPresenceFilter = notesPresenceFilter
                     self.stockTrackedPresenceFilter = stockTrackedPresenceFilter
                     self.tagFilters = tagFilters
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.kitId = kitId
                     self.upcPresenceFilter = upcPresenceFilter
                     self.externalIdSource = externalIdSource
                     self.externalIdPresenceFilter = externalIdPresenceFilter
-                    self.dataStatus = dataStatus
-                    self.dataGap = dataGap
                     self.inventoryPresenceFilter = inventoryPresenceFilter
                     self.inventoryMultiplicity = inventoryMultiplicity
                     self.ownershipReconciliation = ownershipReconciliation
@@ -24557,6 +24565,40 @@ public enum Operations {
                 public var expenseTotalMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/expenseTotalMax`.
                 public var expenseTotalMax: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/DataStatusPayload`.
+                @frozen public enum DataStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case needsData = "needs_data"
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataStatus`.
+                public typealias DataStatusPayload = [Operations.Resources_purchase_list.Input.Query.DataStatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataStatus`.
+                public var dataStatus: Operations.Resources_purchase_list.Input.Query.DataStatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/DataGapPayload`.
+                @frozen public enum DataGapPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case purchaseDate = "purchase_date"
+                    case orderId = "order_id"
+                    case statedTotal = "stated_total"
+                    case primaryDocument = "primary_document"
+                    case emptyExpenses = "empty_expenses"
+                    case unpricedExpense = "unpriced_expense"
+                    case paperworkMismatch = "paperwork_mismatch"
+                    case settlementReference = "settlement_reference"
+                    case settlementMismatch = "settlement_mismatch"
+                    case productManufacturer = "product_manufacturer"
+                    case productExternalId = "product_external_id"
+                    case productCategory = "product_category"
+                    case productModel = "product_model"
+                    case productPrice = "product_price"
+                    case productImage = "product_image"
+                    case amazonAsin = "amazon_asin"
+                    case duplicateExternalId = "duplicate_external_id"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataGap`.
+                public typealias DataGapPayload = [Operations.Resources_purchase_list.Input.Query.DataGapPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataGap`.
+                public var dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload?
                 /// vendor shortcode, e.g. VEN-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/VendorIdPayload`.
@@ -24703,86 +24745,6 @@ public enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/documentPresenceFilter`.
                 public var documentPresenceFilter: Operations.Resources_purchase_list.Input.Query.DocumentPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataStatus`.
-                @frozen public enum DataStatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case complete = "complete"
-                    case needsData = "needs_data"
-                    case defect = "defect"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataStatus`.
-                public var dataStatus: Operations.Resources_purchase_list.Input.Query.DataStatusPayload?
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/DataGapPayload`.
-                public struct DataGapPayloadPayload: Codable, Hashable, Sendable {
-                    /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/DataGapPayload/value1`.
-                    @frozen public enum Value1Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case purchaseDate = "purchase_date"
-                        case orderId = "order_id"
-                        case statedTotal = "stated_total"
-                        case primaryDocument = "primary_document"
-                        case emptyExpenses = "empty_expenses"
-                        case unpricedExpense = "unpriced_expense"
-                        case paperworkMismatch = "paperwork_mismatch"
-                        case settlementReference = "settlement_reference"
-                        case settlementMismatch = "settlement_mismatch"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/DataGapPayload/value1`.
-                    public var value1: Operations.Resources_purchase_list.Input.Query.DataGapPayloadPayload.Value1Payload?
-                    /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/DataGapPayload/value2`.
-                    @frozen public enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case productManufacturer = "product_manufacturer"
-                        case productCategory = "product_category"
-                        case productModel = "product_model"
-                        case productImage = "product_image"
-                        case amazonAsin = "amazon_asin"
-                        case duplicateExternalId = "duplicate_external_id"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/DataGapPayload/value2`.
-                    public var value2: Operations.Resources_purchase_list.Input.Query.DataGapPayloadPayload.Value2Payload?
-                    /// Creates a new `DataGapPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1:
-                    ///   - value2:
-                    public init(
-                        value1: Operations.Resources_purchase_list.Input.Query.DataGapPayloadPayload.Value1Payload? = nil,
-                        value2: Operations.Resources_purchase_list.Input.Query.DataGapPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    public init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    public func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataGap`.
-                public typealias DataGapPayload = [Operations.Resources_purchase_list.Input.Query.DataGapPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataGap`.
-                public var dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload?
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/searchQuery`.
                 public var searchQuery: Swift.String?
                 /// Page number, starting at 1 (default 1)
@@ -24793,7 +24755,7 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/pageSize`.
                 public var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt. Default: -date
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/sort`.
                 public var sort: Swift.String?
@@ -24810,8 +24772,9 @@ public enum Operations {
                     case documentCount = "documentCount"
                     case createdAt = "createdAt"
                     case updatedAt = "updatedAt"
+                    case dataQuality = "dataQuality"
                 }
-                /// Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt
+                /// Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/groupBy`.
                 public var groupBy: Operations.Resources_purchase_list.Input.Query.GroupByPayload?
@@ -24829,6 +24792,8 @@ public enum Operations {
                 ///   - statedTotalPresenceFilter:
                 ///   - expenseTotalMin:
                 ///   - expenseTotalMax:
+                ///   - dataStatus:
+                ///   - dataGap:
                 ///   - vendorId:
                 ///   - expenseId:
                 ///   - expensePresenceFilter:
@@ -24848,13 +24813,11 @@ public enum Operations {
                 ///   - reconciliation:
                 ///   - financialReconciliation:
                 ///   - documentPresenceFilter:
-                ///   - dataStatus:
-                ///   - dataGap:
                 ///   - searchQuery:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt. Default: -date
-                ///   - groupBy: Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality. Default: -date
+                ///   - groupBy: Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt, dataQuality
                 public init(
                     createdFrom: Swift.String? = nil,
                     createdTo: Swift.String? = nil,
@@ -24867,6 +24830,8 @@ public enum Operations {
                     statedTotalPresenceFilter: Operations.Resources_purchase_list.Input.Query.StatedTotalPresenceFilterPayload? = nil,
                     expenseTotalMin: Swift.Double? = nil,
                     expenseTotalMax: Swift.Double? = nil,
+                    dataStatus: Operations.Resources_purchase_list.Input.Query.DataStatusPayload? = nil,
+                    dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload? = nil,
                     vendorId: Operations.Resources_purchase_list.Input.Query.VendorIdPayload? = nil,
                     expenseId: [Swift.String]? = nil,
                     expensePresenceFilter: Operations.Resources_purchase_list.Input.Query.ExpensePresenceFilterPayload? = nil,
@@ -24886,8 +24851,6 @@ public enum Operations {
                     reconciliation: Operations.Resources_purchase_list.Input.Query.ReconciliationPayload? = nil,
                     financialReconciliation: Operations.Resources_purchase_list.Input.Query.FinancialReconciliationPayload? = nil,
                     documentPresenceFilter: Operations.Resources_purchase_list.Input.Query.DocumentPresenceFilterPayload? = nil,
-                    dataStatus: Operations.Resources_purchase_list.Input.Query.DataStatusPayload? = nil,
-                    dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload? = nil,
                     searchQuery: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
@@ -24905,6 +24868,8 @@ public enum Operations {
                     self.statedTotalPresenceFilter = statedTotalPresenceFilter
                     self.expenseTotalMin = expenseTotalMin
                     self.expenseTotalMax = expenseTotalMax
+                    self.dataStatus = dataStatus
+                    self.dataGap = dataGap
                     self.vendorId = vendorId
                     self.expenseId = expenseId
                     self.expensePresenceFilter = expensePresenceFilter
@@ -24924,8 +24889,6 @@ public enum Operations {
                     self.reconciliation = reconciliation
                     self.financialReconciliation = financialReconciliation
                     self.documentPresenceFilter = documentPresenceFilter
-                    self.dataStatus = dataStatus
-                    self.dataGap = dataGap
                     self.searchQuery = searchQuery
                     self.page = page
                     self.pageSize = pageSize

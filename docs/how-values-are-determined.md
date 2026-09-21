@@ -89,24 +89,6 @@ Notes present reports whether this product has non-empty notes.
 - Value paths: List `notesPresence`; Summary `notesPresence`
 - Source dependencies: Product notes (`notes`)
 
-### Data Gaps (`dataGaps`)
-
-Data gaps are the current checks reported by this product's data-quality evaluation.
-
-- Rule: `product.data-gaps`, version 1
-- Resolver: Declared field projection
-- Value paths: List `dataGaps`; Summary `dataGaps`
-- Source dependencies: Detected gaps (`dataGaps`)
-
-### Data quality (`dataQuality`)
-
-Data-quality gaps are evaluated from the fields and relationships in this product projection.
-
-- Rule: `product.data-quality`, version 1
-- Resolver: Declared field projection
-- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
-- Source dependencies: Detected gaps (`dataQuality.gaps`)
-
 ### Net basis (`expenseTotal`)
 
 Net basis is the sum of cost across this product's live expenses, including negative refund lines.
@@ -176,6 +158,24 @@ On-hand units are the sum of live inventory quantities after applying each entry
 - Resolver: Product quantity ledger
 - Value paths: Default `onHandUnits`
 - Source dependencies: Live inventory entries (`inventoryEntry`)
+
+### Data quality (`dataQuality`)
+
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `product.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
+
+- Rule: `product.data-gaps`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.gaps`; Summary `dataQuality.gaps`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
 
 ## Recipes (`recipe`)
 
@@ -562,15 +562,6 @@ Purchase images are the current live document attachments in canonical attachmen
 - Value paths: List `displayImages`; Detail `images`; Summary `displayImages`
 - Source dependencies: Selected purchase images (`displayImages`)
 
-### Data Quality (`dataQuality`)
-
-Data-quality gaps are evaluated from this purchase's current totals, line coverage, documents, and settlement state.
-
-- Rule: `purchase.data-quality`, version 1
-- Resolver: Declared field projection
-- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
-- Source dependencies: Detected gaps (`dataQuality.gaps`)
-
 ### Transaction Count (`transactionCount`)
 
 Transaction count is the number of confirmed financial transactions included in this purchase's settlement reconciliation.
@@ -580,9 +571,18 @@ Transaction count is the number of confirmed financial transactions included in 
 - Value paths: List `financialReconciliation.transactionCount`; Summary `financialReconciliation.transactionCount`
 - Source dependencies: Financial reconciliation (`financialReconciliation`)
 
-### Data Gaps (`dataGaps`)
+### Data quality (`dataQuality`)
 
-Data gaps are the current checks reported by this purchase's data-quality evaluation.
+Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.
+
+- Rule: `purchase.data-quality`, version 1
+- Resolver: Declared field projection
+- Value paths: List `dataQuality.status`; Summary `dataQuality.status`
+- Source dependencies: Detected gaps (`dataQuality.gaps`)
+
+### Data gaps (`dataGaps`)
+
+Data gaps are the current checks reported by this entity's data-quality evaluation.
 
 - Rule: `purchase.data-gaps`, version 1
 - Resolver: Declared field projection

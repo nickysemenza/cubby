@@ -1,6 +1,5 @@
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
-import { dataQuality } from "@cubby/schemas/data-quality";
 import { financialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
 import {
   imageShortcode,
@@ -500,29 +499,6 @@ export default defineEntity({
         },
       },
       {
-        key: "dataQuality",
-        kind: "json",
-        display: { list: true, columnId: "dataQuality", listHidden: true },
-        provenance: { kind: "derived", sources: [{ entity: "purchase" }] },
-        explanation: {
-          ruleId: "purchase.data-quality",
-          description:
-            "Data-quality gaps are evaluated from this purchase's current totals, line coverage, documents, and settlement state.",
-          projections: {
-            list: "dataQuality.status",
-            summary: "dataQuality.status",
-          },
-          sourceDependencies: [
-            { path: "dataQuality.gaps", label: "Detected gaps" },
-          ],
-        },
-        validation: {
-          read: dataQuality,
-          create: null,
-          update: null,
-        },
-      },
-      {
         key: "transactionCount",
         kind: "number",
         readKey: null,
@@ -548,24 +524,6 @@ export default defineEntity({
               path: "financialReconciliation",
               label: "Financial reconciliation",
             },
-          ],
-        },
-      },
-      {
-        key: "dataGaps",
-        kind: "json",
-        readKey: null,
-        provenance: { kind: "derived", sources: [{ entity: "purchase" }] },
-        explanation: {
-          ruleId: "purchase.data-gaps",
-          description:
-            "Data gaps are the current checks reported by this purchase's data-quality evaluation.",
-          projections: {
-            list: "dataQuality.gaps",
-            summary: "dataQuality.gaps",
-          },
-          sourceDependencies: [
-            { path: "dataQuality.gaps", label: "Detected gaps" },
           ],
         },
       },
@@ -731,7 +689,6 @@ export default defineEntity({
       "financialReconciliation",
       "documentCount",
       "images",
-      "dataQuality",
       "displayName",
       "createdAt",
       "updatedAt",
@@ -892,32 +849,6 @@ export default defineEntity({
         options: [
           { value: "has", label: "Has transactions", meta: true },
           { value: "none", label: "(none)", meta: true },
-        ],
-      },
-      {
-        columnId: "dataQuality",
-        field: "dataStatus",
-        kind: "select",
-        placeholder: "Filter data quality...",
-        options: [
-          { value: "complete", label: "Complete", color: "var(--slate)" },
-          { value: "needs_data", label: "Needs data", color: "var(--warning)" },
-          { value: "defect", label: "Defect", color: "var(--destructive)" },
-        ],
-      },
-      {
-        columnId: "dataGaps",
-        field: "dataGap",
-        kind: "multiselect",
-        placeholder: "Filter data gaps...",
-        options: [
-          { value: "settlement_reference", label: "No settlement evidence" },
-          { value: "purchase_date", label: "Missing date" },
-          { value: "order_id", label: "Missing order ID" },
-          { value: "stated_total", label: "Missing stated total" },
-          { value: "empty_expenses", label: "No expense lines" },
-          { value: "unpriced_expense", label: "Unpriced expense line" },
-          { value: "paperwork_mismatch", label: "Paperwork mismatch" },
         ],
       },
       {
@@ -1194,6 +1125,75 @@ export default defineEntity({
   search: { enabled: true, embedding: false },
   capabilities: {
     auditable: true,
+    // Equal weights: a purchase is a paperwork checklist, not a ranking.
+    // `primary_document` and `empty_expenses` are expected only when the
+    // vendor's `orderEvidence` says the vendor can supply them (checks/purchase.ts).
+    dataQuality: {
+      exceptions: true,
+      related: ["product"],
+      checks: [
+        {
+          id: "purchase_date",
+          facet: "identity",
+          label: "Missing date",
+          message: "Purchase date is not recorded.",
+        },
+        {
+          id: "order_id",
+          facet: "paperwork",
+          label: "Missing order ID",
+          message: "Vendor order or receipt ID is not recorded.",
+        },
+        {
+          id: "stated_total",
+          facet: "paperwork",
+          label: "Missing stated total",
+          message: "Literal vendor-stated total is not recorded.",
+        },
+        {
+          id: "primary_document",
+          facet: "paperwork",
+          label: "No primary document",
+          message:
+            "No primary order confirmation, sales order, invoice, or receipt is attached.",
+        },
+        {
+          id: "empty_expenses",
+          facet: "ledger",
+          label: "No expense lines",
+          message: "Purchase has no live Expenses.",
+        },
+        {
+          id: "unpriced_expense",
+          facet: "ledger",
+          label: "Unpriced expense line",
+          message: "At least one linked Expense is unpriced.",
+        },
+        {
+          id: "paperwork_mismatch",
+          facet: "paperwork",
+          kind: "defect",
+          label: "Paperwork mismatch",
+          message:
+            "Expense total differs from the literal vendor-stated total, and posted refunds do not fully explain it.",
+        },
+        {
+          id: "settlement_reference",
+          facet: "settlement",
+          label: "No settlement evidence",
+          message:
+            "No posted qualifying FinancialTransaction with external or cash-account evidence is linked.",
+        },
+        {
+          id: "settlement_mismatch",
+          facet: "settlement",
+          kind: "defect",
+          label: "Settlement mismatch",
+          message:
+            "Settlement evidence differs from incurred Expenses. Review the ledger and source evidence, or record a reasoned expected mismatch.",
+        },
+      ],
+    },
     images: {
       storage: "gallery",
       displaySources: [

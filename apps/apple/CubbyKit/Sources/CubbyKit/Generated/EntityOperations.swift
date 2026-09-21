@@ -539,12 +539,12 @@ extension EntityDescriptor {
                 case "notesPresenceFilter": query.notesPresenceFilter = try value.enumCase(name)
                 case "stockTrackedPresenceFilter": query.stockTrackedPresenceFilter = try value.enumCase(name)
                 case "tagFilters": query.tagFilters = value.strings
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "kitId": query.kitId = value.strings
                 case "upcPresenceFilter": query.upcPresenceFilter = try value.enumCase(name)
                 case "externalIdSource": query.externalIdSource = value.strings
                 case "externalIdPresenceFilter": query.externalIdPresenceFilter = try value.enumCase(name)
-                case "dataStatus": query.dataStatus = try value.enumCase(name)
-                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "inventoryPresenceFilter": query.inventoryPresenceFilter = try value.enumCase(name)
                 case "inventoryMultiplicity": query.inventoryMultiplicity = try value.enumCase(name)
                 case "ownershipReconciliation": query.ownershipReconciliation = try value.enumCase(name)
@@ -677,6 +677,8 @@ extension EntityDescriptor {
                 case "statedTotalPresenceFilter": query.statedTotalPresenceFilter = try value.enumCase(name)
                 case "expenseTotalMin": query.expenseTotalMin = try value.double(name)
                 case "expenseTotalMax": query.expenseTotalMax = try value.double(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "vendorId": query.vendorId = value.strings.map { .init(value1: $0) }
                 case "expenseId": query.expenseId = value.strings
                 case "expensePresenceFilter": query.expensePresenceFilter = try value.enumCase(name)
@@ -696,12 +698,6 @@ extension EntityDescriptor {
                 case "reconciliation": query.reconciliation = try value.enumCases(name)
                 case "financialReconciliation": query.financialReconciliation = try value.enumCase(name)
                 case "documentPresenceFilter": query.documentPresenceFilter = try value.enumCase(name)
-                case "dataStatus": query.dataStatus = try value.enumCase(name)
-                case "dataGap": query.dataGap = try value.strings.map { raw in
-                    try EntityFilterValue.anyOfCase(name, raw, .init(value1: .init(rawValue: raw), value2: .init(rawValue: raw))) {
-                        $0.value1 != nil || $0.value2 != nil
-                    }
-                }
                 case "searchQuery": query.searchQuery = try value.string(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.purchase, name)
@@ -1025,10 +1021,10 @@ extension EntityDescriptor {
                 case "modelPresenceFilter": ["has", "none"]
                 case "notesPresenceFilter": ["has", "none"]
                 case "stockTrackedPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["product_manufacturer", "product_external_id", "product_category", "product_model", "product_price", "product_image", "amazon_asin", "duplicate_external_id"]
                 case "upcPresenceFilter": ["has", "none"]
                 case "externalIdPresenceFilter": ["has", "none"]
-                case "dataStatus": ["complete", "needs_data", "defect"]
-                case "dataGap": ["product_manufacturer", "product_category", "product_model", "product_image", "amazon_asin", "duplicate_external_id"]
                 case "inventoryPresenceFilter": ["has", "none"]
                 case "inventoryMultiplicity": ["duplicate_within_placement"]
                 case "ownershipReconciliation": ["disposed_still_on_hand"]
@@ -1078,6 +1074,8 @@ extension EntityDescriptor {
         case .purchase:
             switch wireKey {
                 case "statedTotalPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["purchase_date", "order_id", "stated_total", "primary_document", "empty_expenses", "unpriced_expense", "paperwork_mismatch", "settlement_reference", "settlement_mismatch", "product_manufacturer", "product_external_id", "product_category", "product_model", "product_price", "product_image", "amazon_asin", "duplicate_external_id"]
                 case "expensePresenceFilter": ["has", "none"]
                 case "financialTransactionPresenceFilter": ["has", "none"]
                 case "productPresenceFilter": ["has", "none"]
@@ -1087,9 +1085,7 @@ extension EntityDescriptor {
                 case "reconciliation": ["unknown", "match", "refund_adjusted", "mismatch"]
                 case "financialReconciliation": ["mismatch"]
                 case "documentPresenceFilter": ["has", "none"]
-                case "dataStatus": ["complete", "needs_data", "defect"]
-                case "dataGap": ["purchase_date", "order_id", "stated_total", "primary_document", "empty_expenses", "unpriced_expense", "paperwork_mismatch", "settlement_reference", "settlement_mismatch", "product_manufacturer", "product_category", "product_model", "product_image", "amazon_asin", "duplicate_external_id"]
-                case "groupBy": ["orderId", "displayLabel", "date", "statedTotal", "vendor", "expenseCount", "expenseTotal", "reconciliationGap", "documentCount", "createdAt", "updatedAt"]
+                case "groupBy": ["orderId", "displayLabel", "date", "statedTotal", "vendor", "expenseCount", "expenseTotal", "reconciliationGap", "documentCount", "createdAt", "updatedAt", "dataQuality"]
                 default: nil
             }
         case .recipe:
@@ -1252,12 +1248,12 @@ extension EntityDescriptor {
                 case "notesPresenceFilter": query.notesPresenceFilter = try value.enumCase(name)
                 case "stockTrackedPresenceFilter": query.stockTrackedPresenceFilter = try value.enumCase(name)
                 case "tagFilters": query.tagFilters = value.strings
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "kitId": query.kitId = value.strings
                 case "upcPresenceFilter": query.upcPresenceFilter = try value.enumCase(name)
                 case "externalIdSource": query.externalIdSource = value.strings
                 case "externalIdPresenceFilter": query.externalIdPresenceFilter = try value.enumCase(name)
-                case "dataStatus": query.dataStatus = try value.enumCase(name)
-                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "inventoryPresenceFilter": query.inventoryPresenceFilter = try value.enumCase(name)
                 case "inventoryMultiplicity": query.inventoryMultiplicity = try value.enumCase(name)
                 case "ownershipReconciliation": query.ownershipReconciliation = try value.enumCase(name)

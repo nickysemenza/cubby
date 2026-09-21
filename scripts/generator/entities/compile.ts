@@ -15,6 +15,10 @@ import {
   stringValue,
   booleanValue,
 } from "./declarations.ts";
+import {
+  compileDataQuality,
+  validateDataQualityDeclarations,
+} from "./data-quality.ts";
 import type {
   CompiledEntity,
   DeclarationObject,
@@ -1093,7 +1097,7 @@ export const compileEntity = (
   validateDeclarationCapabilities(declaration, context);
   normalizedDeclarationRelations(declaration.relations, context);
   const descriptor = declarationDescriptor(declaration, context);
-  const fieldModel = compileFieldModel(
+  const declaredFieldModel = compileFieldModel(
     declaration.model,
     `${context}.model`,
     declaration.relations,
@@ -1105,7 +1109,7 @@ export const compileEntity = (
   };
   validateTitleField(
     declaration.presentation.titleField,
-    fieldModel,
+    declaredFieldModel,
     key,
     context,
   );
@@ -1115,13 +1119,25 @@ export const compileEntity = (
     filters.schema === undefined || filters.schema === null
       ? null
       : { module: filters.schema.module, export: filters.schema.export };
-  const filterDescriptors = filters.descriptors.map((value, index) =>
+  const declaredDescriptors = filters.descriptors.map((value, index) =>
     filterDescriptor(
       value,
-      fieldModel.fields,
-      fieldModel.storage,
+      declaredFieldModel.fields,
+      declaredFieldModel.storage,
       `${context}.filters.descriptors[${index}]`,
     ),
+  );
+  const {
+    dataQuality,
+    fieldModel,
+    descriptors: filterDescriptors,
+  } = compileDataQuality(
+    declaration.capabilities.dataQuality,
+    key,
+    declaredFieldModel,
+    declaredDescriptors,
+    declaration.fields !== null,
+    context,
   );
   const descriptorColumns = filterDescriptors.map(({ columnId }) => columnId);
   if (new Set(descriptorColumns).size !== descriptorColumns.length) {
@@ -1318,6 +1334,7 @@ export const compileEntity = (
     mcpActions: declaration.capabilities.mcp,
     operationOwners,
     fieldModel,
+    dataQuality,
   };
 };
 
@@ -1930,7 +1947,9 @@ export const compileEntityDeclarations = (
 ): CompiledEntity[] => {
   if (declarations.length === 0)
     throw new EntityDeclarationError("Entity declarations must not be empty.");
-  const entities = declarations.map(compileEntity);
+  const entities = validateDataQualityDeclarations(
+    declarations.map(compileEntity),
+  );
   validateEntityIdentities(entities);
   validateReferenceScopes(entities);
   validatePhotoCategoryLabels(photoCategories);

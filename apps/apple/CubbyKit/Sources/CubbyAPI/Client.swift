@@ -10930,6 +10930,20 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "dataStatus",
+                    value: input.query.dataStatus
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "dataGap",
+                    value: input.query.dataGap
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "kitId",
                     value: input.query.kitId
                 )
@@ -10953,20 +10967,6 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "externalIdPresenceFilter",
                     value: input.query.externalIdPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dataStatus",
-                    value: input.query.dataStatus
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dataGap",
-                    value: input.query.dataGap
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -11901,6 +11901,20 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "dataStatus",
+                    value: input.query.dataStatus
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "dataGap",
+                    value: input.query.dataGap
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "kitId",
                     value: input.query.kitId
                 )
@@ -11924,20 +11938,6 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "externalIdPresenceFilter",
                     value: input.query.externalIdPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dataStatus",
-                    value: input.query.dataStatus
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dataGap",
-                    value: input.query.dataGap
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -13254,6 +13254,20 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "dataStatus",
+                    value: input.query.dataStatus
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "dataGap",
+                    value: input.query.dataGap
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "vendorId",
                     value: input.query.vendorId
                 )
@@ -13382,20 +13396,6 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "documentPresenceFilter",
                     value: input.query.documentPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dataStatus",
-                    value: input.query.dataStatus
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dataGap",
-                    value: input.query.dataGap
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

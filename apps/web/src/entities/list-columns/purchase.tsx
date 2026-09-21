@@ -6,7 +6,6 @@ import { useMemo } from "react";
 import {
   createCurrencyColumn,
   createTextColumn,
-  renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
@@ -30,7 +29,6 @@ import {
   labeledFieldProvenance,
   relationshipFieldProvenance,
 } from "~/entities/field-provenance";
-import { dataQualityOptions } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/utils";
 
 import { defineListOverride, interleaveDeclared } from "./types";
@@ -244,16 +242,6 @@ export const purchaseListOverride = defineListOverride<
               cell: (info) => (
                 <ReconciliationStatus purchase={info.row.original} />
               ),
-            }),
-          );
-          add(
-            columnHelper.accessor((row) => row.dataQuality.status, {
-              id: "dataQuality",
-              header: "Data quality",
-              enableSorting: false,
-              meta: { className: "w-28" },
-              cell: (info) =>
-                renderOptionCell(info.getValue(), dataQualityOptions),
             }),
           );
           add(

@@ -1,3 +1,4 @@
+import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
 /**
  * The three boilerplate calls every entity list where-builder repeats —
  * `buildSearchConditions` + `declaredFilterPredicates`, `buildOrderBy` off the
@@ -26,6 +27,10 @@ import { asc, desc, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import {
+  dataQualityFilterPredicates,
+  dataQualitySortResolver,
+} from "./data-quality";
 import { buildOrderBy, buildSearchConditions } from "./database-helpers";
 import { declaredFilterPredicates } from "./declared-filter-predicates";
 import { lexicalEligibility, lexicalRelevance } from "./search-lexical";
@@ -38,6 +43,9 @@ type OrderByOpts = Parameters<typeof buildOrderBy>[3];
 const searchableEntityNames = new Set<string>(searchableEntities);
 const isSearchableEntity = (entity: string): entity is SearchableEntity =>
   searchableEntityNames.has(entity);
+const scoredEntityNames = new Set<string>(scoredEntities);
+const isScoredEntity = (entity: string): entity is ScoredEntity =>
+  scoredEntityNames.has(entity);
 const listSearchSchema = z
   .object({ searchQuery: z.string().trim().min(1).max(100).optional() })
   .passthrough();
@@ -59,6 +67,11 @@ export function listScaffold<
   },
 >(entity: E, table: T) {
   const searchable = isSearchableEntity(entity);
+  // A scored entity's `dataStatus`/`dataGap` filters and `dataQualityScore`
+  // sort are declared by the manifest block, so they bind here for every
+  // list at once rather than beside each repo's own conditions.
+  const scored = isScoredEntity(entity) ? entity : null;
+  const scoreSort = scored ? dataQualitySortResolver(scored, table) : null;
   return {
     /**
      * `computed` is every condition that isn't a declared stored predicate —
@@ -73,6 +86,9 @@ export function listScaffold<
         [],
         [
           ...declaredFilterPredicates(entity, table, filters),
+          ...(scored
+            ? dataQualityFilterPredicates(scored, table, filters)
+            : []),
           ...(searchable
             ? [
                 lexicalEligibility(
@@ -106,6 +122,7 @@ export function listScaffold<
         [...generatedEntitySort[entity].fields],
         {
           ...opts,
+          resolve: (sort) => scoreSort?.(sort) ?? opts?.resolve?.(sort) ?? null,
           // Offset pagination must be deterministic. Repositories may keep a
           // domain-specific tie-breaker, but every explicit list sort then
           // lands on the public shortcode before the private primary key.

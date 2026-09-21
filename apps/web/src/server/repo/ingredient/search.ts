@@ -37,8 +37,8 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import {
-  enrichProductRowsWithDataQuality,
-  loadProductDataQualities,
+  attachDataQuality,
+  loadDataQualities,
 } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
@@ -332,8 +332,9 @@ export const getIngredientsByIDsLean = async (
     // Expense_productId_idx cover the two join keys.
     loadProductPricingForIngredientIds(db, ids),
   ]);
-  const qualityById = await loadProductDataQualities(
+  const qualityById = await loadDataQualities(
     db,
+    "product",
     rows.flatMap((row) => row.product.map((product) => product.id)),
   );
   return rows.map((row) => {
@@ -420,8 +421,9 @@ export const enrichmentWorkbenchIngredients = async (
   const pricingById = new Map(
     pricedProducts.map((product) => [product.id, product.pricing]),
   );
-  const qualifiedProducts = await enrichProductRowsWithDataQuality(
+  const qualifiedProducts = await attachDataQuality(
     db,
+    "product",
     rows.flatMap((row) => row.product),
   );
   const qualityById = new Map(
@@ -721,8 +723,9 @@ const ingredientListImpl = async (
   const pricingById = new Map(
     pricedProducts.map((product) => [product.id, product.pricing]),
   );
-  const qualifiedProducts = await enrichProductRowsWithDataQuality(
+  const qualifiedProducts = await attachDataQuality(
     db,
+    "product",
     results.flatMap((row) => row.product),
   );
   const qualityById = new Map(

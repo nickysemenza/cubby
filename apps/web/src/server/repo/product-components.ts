@@ -44,7 +44,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadProductDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   getDb,
   notDeleted,
@@ -174,8 +174,9 @@ export async function listKitComponentRows(
     ...relations.product.list,
   });
 
-  const qualities = await loadProductDataQualities(
+  const qualities = await loadDataQualities(
     db,
+    "product",
     rows.map((row) => row.id),
   );
   const priced = await enrichProductRowsWithPricing(db, rows);

@@ -97,11 +97,11 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 /**
  * Builds the product list's columns the same way `productlist.tsx` does:
  * overrides for every field it renders specially, matched by column id —
- * including the three that `createEntityDisplayColumns` would otherwise
- * reject outright (`dataQuality` is `kind: "json"`; `servingAsLocations` and
- * `expectedQuantity` — the alias for the `ledgerExpectedQuantity` field — are
- * both `readKey: null`, since their real values are nested under
- * `quantityLedger` on the list row). `usdaUnavailable` and `onHandUnits` are
+ * including the two that `createEntityDisplayColumns` would otherwise
+ * reject outright (`servingAsLocations` and `expectedQuantity` — the alias
+ * for the `ledgerExpectedQuantity` field — are both `readKey: null`, since
+ * their real values are nested under `quantityLedger` on the list row).
+ * `dataQuality` is rendered by its manifest-declared `data-quality` renderer. `usdaUnavailable` and `onHandUnits` are
  * left generic to exercise the declaration's own width/format/mobile/sorting
  * metadata, same as the shared `declared width/format/mobile/sorting` block.
  */
@@ -151,12 +151,6 @@ function buildProductColumns() {
         helper.display({
           id: "stockTracked",
           cell: ({ row }) => <span>{String(row.original.stockTracked)}</span>,
-        }),
-      );
-      add(
-        helper.display({
-          id: "dataQuality",
-          cell: ({ row }) => <span>{row.original.dataQuality.status}</span>,
         }),
       );
       add(
@@ -368,7 +362,8 @@ describe("product list display columns", () => {
     expect(byId.expenses).toBe(true);
     // Not in the roster.
     expect(byId.stockTracked).toBe(false);
-    expect(byId.dataQuality).toBe(false);
+    // The manifest renderer's column sorts by score; its id is the sort field.
+    expect(byId.dataQuality).toBe(true);
     expect(byId.externalIds).toBe(false);
     expect(byId.servingAsLocations).toBe(false);
     expect(byId.components).toBe(false);
@@ -418,7 +413,6 @@ describe("product list display columns", () => {
             "model",
             "notes",
             "stockTracked",
-            "dataQuality",
             "externalIds",
             "price",
             "expenseTotal",

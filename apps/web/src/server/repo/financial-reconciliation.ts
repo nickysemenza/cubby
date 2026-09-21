@@ -86,7 +86,7 @@ export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
  * fingerprint so a changed charge amount cannot inherit an exception for a
  * different financial delta.
  */
-const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
+export const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
   `(CASE WHEN (
     SELECT count(DISTINCT a."transactionId")
     FROM "FinancialTransactionAllocation" a
