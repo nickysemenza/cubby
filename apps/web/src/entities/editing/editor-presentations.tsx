@@ -219,7 +219,6 @@ function LocationFields({ form, record }: EntityEditorFieldsProps) {
           form={form}
           name="collections"
           title="Collections"
-          addButtonText="Add Collection"
           placeholder="e.g. painting"
         />
       )}

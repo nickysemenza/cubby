@@ -34,9 +34,10 @@ interface PendingDocumentUploadProps {
   existingDocuments?: PendingDocument[];
   onExistingDocumentsRemove?: (removedDocumentIds: string[]) => void;
   /**
-   * Field label and drop-zone copy. Defaults to a product's manuals, which is
-   * where this started — a charge's documents are invoices and receipts, and
-   * calling them "Manuals" on a purchase page is just wrong vocabulary.
+   * Field label and the compact file-picker button's own text. Defaults to a
+   * product's manuals, which is where this started — a charge's documents
+   * are invoices and receipts, and calling them "Manuals" on a purchase page
+   * is just wrong vocabulary.
    */
   label?: string;
   dropLabel?: string;
@@ -215,8 +216,8 @@ export function PendingDocumentUpload({
       <Label>{label ?? "Manuals (PDF)"}</Label>
       <FileDropField
         accept={PDF_CONTENT_TYPE}
-        label={dropLabel ?? "Drop a PDF manual here"}
-        description="or choose a file"
+        label={dropLabel ?? "Choose file"}
+        mode="compact"
         onFilesAdded={handleFilesAdded}
         disabled={uploading}
       />

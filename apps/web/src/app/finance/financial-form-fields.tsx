@@ -27,6 +27,11 @@ export function SourceAliasesField<T extends FieldValues>({
       title="Source aliases"
       addButtonText="Add alias"
       emptyValue={{ source: "", alias: "", externalAccountId: null }}
+      columns={[
+        { label: "Source" },
+        { label: "Alias" },
+        { label: "External ID" },
+      ]}
     >
       {(_item, index) => (
         <>
@@ -34,16 +39,19 @@ export function SourceAliasesField<T extends FieldValues>({
             form={form}
             name={`sourceAliases.${index}.source`}
             label="Source"
+            hideLabel
           />
           <TextField
             form={form}
             name={`sourceAliases.${index}.alias`}
             label="Alias"
+            hideLabel
           />
           <TextField
             form={form}
             name={`sourceAliases.${index}.externalAccountId`}
             label="External ID"
+            hideLabel
           />
         </>
       )}
@@ -63,6 +71,7 @@ export function SourceRefsField<T extends FieldValues>({
       title="Source references"
       addButtonText="Add reference"
       emptyValue={{ source: "", externalId: "" }}
+      columns={[{ label: "Source" }, { label: "External ID" }]}
     >
       {(_item, index) => (
         <>
@@ -70,11 +79,13 @@ export function SourceRefsField<T extends FieldValues>({
             form={form}
             name={`sourceRefs.${index}.source`}
             label="Source"
+            hideLabel
           />
           <TextField
             form={form}
             name={`sourceRefs.${index}.externalId`}
             label="External ID"
+            hideLabel
           />
         </>
       )}
@@ -87,11 +98,15 @@ export function TextField<T extends FieldValues>({
   name,
   label,
   type = "text",
+  hideLabel = false,
 }: {
   form: UseFormReturn<T>;
   name: string;
   label: string;
   type?: string;
+  /** Skip the visible label — a `columns` array row already shows it as a
+   * header; the label still reaches assistive tech via `aria-label`. */
+  hideLabel?: boolean;
 }) {
   return (
     <Controller
@@ -101,13 +116,14 @@ export function TextField<T extends FieldValues>({
       name={name as never}
       render={({ field, fieldState }) => (
         <FormFieldGroup
-          label={label}
+          label={hideLabel ? undefined : label}
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
           <Input
             {...field}
             type={type}
+            aria-label={hideLabel ? label : undefined}
             value={field.value ?? ""}
             onChange={(event) =>
               field.onChange(

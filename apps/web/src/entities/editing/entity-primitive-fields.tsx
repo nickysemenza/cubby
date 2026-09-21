@@ -40,6 +40,7 @@ import { EntityValueField } from "~/app/_components/form-utils/entity-value-fiel
 import { VendorField } from "~/app/_components/form-utils/vendor-field";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { AliasesField } from "~/components/forms/aliases-field";
+import { FormSection } from "~/components/forms/form-section";
 import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -67,7 +68,10 @@ import {
   type EntitySelectOption,
 } from "./select-options";
 import type { EntityEditRecord } from "./types";
-import { entityEditValueBagSchema } from "./value-schema";
+import {
+  entityEditValueBagSchema,
+  type EntityEditValueBag,
+} from "./value-schema";
 type PrimitiveFieldOptions = {
   placeholder?: string;
   options?: readonly EntitySelectOption[];
@@ -94,7 +98,8 @@ function IntentFieldResolution({
   return enabled ? <FormFieldResolution form={form} field={field} /> : null;
 }
 
-type PrimitiveFieldModel = (typeof entityFieldModels)[Entity]["fields"][number];
+export type PrimitiveFieldModel =
+  (typeof entityFieldModels)[Entity]["fields"][number];
 
 /** `undefined` for a field with no `control.suggest` — the primitives' own
  * no-op convention (`AutoSuggestSlot`/`useAutoFieldSuggestion` treat a
@@ -486,14 +491,7 @@ interface SpecializedIntentRendererProps {
  * render independently.
  */
 function TagListField({ field, form }: SpecializedIntentRendererProps) {
-  return (
-    <AliasesField
-      form={form}
-      name={field.key}
-      title={field.label}
-      addButtonText={`Add ${field.label}`}
-    />
-  );
+  return <AliasesField form={form} name={field.key} title={field.label} />;
 }
 
 /**
@@ -620,6 +618,264 @@ function referenceEntitySearch(
   return sharedReferenceEntitySearch(referenceEntity);
 }
 
+/** One rendered intent field, in `EntityIntentFields`' own dispatch order: a
+ * singular reference gets the search-backed picker, a `control.kind:
+ * "specialized"` field dispatches to `controlRendererCoverage`, and
+ * everything else falls through to `renderPrimitiveField` — the exact
+ * per-kind switch `EntityPrimitiveFields` uses. Extracted so the section
+ * grammar below can lay these nodes out into `FormSection`s without
+ * duplicating the dispatch. */
+function renderIntentField({
+  entity,
+  field,
+  form,
+  idPrefix,
+  mode,
+  record,
+  scopedValueRecord,
+}: {
+  entity: Entity;
+  field: PrimitiveFieldModel;
+  form: UseFormReturn<FieldValues>;
+  idPrefix: string;
+  mode: EditMode;
+  record?: EntityEditRecord | undefined;
+  scopedValueRecord: EntityEditValueBag;
+}): ReactNode {
+  if (field.reference && !field.reference.multiple) {
+    const referenceEntity = field.reference.entity;
+    const scope = referenceScopeFor(field.reference, scopedValueRecord);
+    return (
+      <div key={field.key} className="space-y-1">
+        <EntityValueField
+          form={form}
+          // SAFETY: `field.key` is one of this entity's own declared
+          // model field keys; RHF's conditional path type cannot express
+          // a runtime-selected field roster.
+          name={field.key as never}
+          // SAFETY: `referenceEntity` is a manifest-declared reference
+          // target, always one of the picker's supported entities.
+          entity={referenceEntity as never}
+          label={field.label}
+          clearable={field.nullable}
+          description={<FieldProvenance provenance={field.provenance} />}
+          SearchProvider={referenceEntitySearch(referenceEntity)}
+          scope={scope}
+          suggestField={suggestFieldFor(
+            Boolean(field.control?.suggest),
+            field.key,
+          )}
+        />
+        <IntentFieldResolution
+          form={form}
+          field={field.key}
+          enabled={Boolean(field.resolution && !field.control?.suggest)}
+        />
+      </div>
+    );
+  }
+  const presentation = entityFieldPresentation(entity, field.key, mode);
+  if (presentation.control.kind === "specialized") {
+    const Renderer = specializedRendererFor(
+      presentation.control.renderer ?? "",
+    );
+    if (!Renderer) {
+      throw new Error(
+        `Field ${entity}.${field.key} has no specialized intent renderer for "${presentation.control.renderer}"`,
+      );
+    }
+    const provenanceId = field.provenance
+      ? `${idPrefix}-${field.key}-provenance`
+      : undefined;
+    return (
+      <fieldset
+        key={field.key}
+        className="space-y-1"
+        aria-label={field.label}
+        aria-describedby={provenanceId}
+      >
+        <Renderer
+          entity={entity}
+          field={field}
+          form={form}
+          idPrefix={idPrefix}
+          mode={mode}
+          scope={referenceScopeFor(field.reference, scopedValueRecord)}
+        />
+        {field.provenance ? (
+          <div id={provenanceId}>
+            <FieldProvenance provenance={field.provenance} />
+          </div>
+        ) : null}
+        <IntentFieldResolution
+          form={form}
+          field={field.key}
+          enabled={Boolean(field.resolution && !field.control?.suggest)}
+        />
+      </fieldset>
+    );
+  }
+  const fieldOptions: PrimitiveFieldOptions = {};
+  if (
+    field.key === "name" &&
+    mode === "create" &&
+    presentation.control.kind === "text"
+  ) {
+    fieldOptions.focusOnMount = true;
+  }
+  if (presentation.control.kind === "select") {
+    fieldOptions.options = entitySelectOptionsFor(entity, field.key, mode);
+  }
+  const rendered = renderPrimitiveField({
+    record,
+    entity,
+    field,
+    presentation,
+    form,
+    idPrefix,
+    fieldOptions,
+    name: field.key,
+    mode,
+  });
+  return (
+    <div key={field.key} className="space-y-1">
+      {rendered}
+      <IntentFieldResolution
+        form={form}
+        field={field.key}
+        enabled={Boolean(field.resolution && !field.control?.suggest)}
+      />
+    </div>
+  );
+}
+
+export type DeclaredEditSection = NonNullable<
+  CompiledEntityPresentation["edit"]["sections"]
+>[number];
+
+/** One rendered bucket of `EntityIntentFields`' fields. `title: null` is the
+ * flat `main` bucket — rendered with no `FormSection` wrapper so an entity
+ * that declares neither `edit.sections` nor any non-`main` `control.section`
+ * keeps today's output exactly (a bare list of field nodes). */
+export type FieldGroup = Readonly<{
+  id: string;
+  title: string | null;
+  collapsed: boolean;
+  fields: readonly PrimitiveFieldModel[];
+}>;
+
+/** `"order-confirmation"` → `"Order confirmation"`: the fallback title for a
+ * `control.section` id no declared `edit.sections` entry names (DESIGN.md:
+ * sentence case, not title case — the label roster stays lowercase after the
+ * leading word). */
+export function humanizeSectionId(id: string): string {
+  const words = id.split(/[-_]+/).filter(Boolean);
+  if (words.length === 0) return id;
+  const joined = words.join(" ").toLowerCase();
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
+}
+
+/**
+ * Buckets one intent's field roster (already in model order) into the
+ * section grammar: a field named by a declared `edit.sections` entry joins
+ * that section, rendered in the manifest's declared order; an undeclared
+ * field with a non-`main` `control.section` falls back to a humanized group,
+ * keyed by that section id's first appearance among the leftover fields;
+ * every other field joins one flat `main` bucket with no title. Same
+ * precedence as `GenericEntityEditModel.sections`
+ * (`apps/apple/CubbyKit/Sources/CubbyKit/Catalog/GenericEntityEditModel.swift:99-118`),
+ * except `main` never gets its own titled wrapper here — an entity that
+ * declares neither renders exactly as it did before this grammar existed.
+ */
+export function buildFieldGroups(
+  declaredSections: readonly DeclaredEditSection[] | null,
+  fields: readonly PrimitiveFieldModel[],
+): FieldGroup[] {
+  const groups: FieldGroup[] = [];
+  const declaredIndexByFieldKey = new Map<string, number>();
+  for (const section of declaredSections ?? []) {
+    const index =
+      groups.push({
+        id: section.id,
+        title: section.title,
+        collapsed: section.collapsed,
+        fields: [],
+      }) - 1;
+    for (const key of section.fields) declaredIndexByFieldKey.set(key, index);
+  }
+  const bucketIndexByGroupKey = new Map<string, number>();
+  for (const field of fields) {
+    const declaredIndex = declaredIndexByFieldKey.get(field.key);
+    if (declaredIndex !== undefined) {
+      groups[declaredIndex] = {
+        ...groups[declaredIndex]!,
+        fields: [...groups[declaredIndex]!.fields, field],
+      };
+      continue;
+    }
+    const section = field.control?.section;
+    const groupKey = section && section !== "main" ? section : "main";
+    let index = bucketIndexByGroupKey.get(groupKey);
+    if (index === undefined) {
+      index =
+        groups.push({
+          id: groupKey,
+          title: groupKey === "main" ? null : humanizeSectionId(groupKey),
+          collapsed: false,
+          fields: [],
+        }) - 1;
+      bucketIndexByGroupKey.set(groupKey, index);
+    }
+    groups[index] = {
+      ...groups[index]!,
+      fields: [...groups[index]!.fields, field],
+    };
+  }
+  return groups.filter((group) => group.fields.length > 0);
+}
+
+/**
+ * Pairs consecutive `control.width: "half"` fields within one group's own
+ * field order (never across a section boundary — pairing runs per group,
+ * after `buildFieldGroups`) into one `SideBySideFields` row; a lone trailing
+ * half field, or any full-width field, renders alone. A section boundary
+ * always breaks a pair even when the manifest declares two `"half"` fields
+ * back to back across sections, since `buildFieldGroups` already separated
+ * them into different `fields` arrays by then.
+ */
+// SAFETY: no entity declares `control.width: "half"` yet (PR 3 does
+// product), so the generator's `satisfies`-typed field model infers `width`
+// as the literal `null` from today's actual data alone; widen it back to the
+// schema's real `"half" | null` until some entity's data makes that literal
+// appear on its own.
+const isHalfWidthField = (field: PrimitiveFieldModel): boolean =>
+  (field.control?.width as "half" | null | undefined) === "half";
+
+function pairHalfWidthFields(
+  fields: readonly PrimitiveFieldModel[],
+): (
+  | readonly [PrimitiveFieldModel]
+  | readonly [PrimitiveFieldModel, PrimitiveFieldModel]
+)[] {
+  const rows: (
+    | readonly [PrimitiveFieldModel]
+    | readonly [PrimitiveFieldModel, PrimitiveFieldModel]
+  )[] = [];
+  let index = 0;
+  while (index < fields.length) {
+    const field = fields[index]!;
+    const next = fields[index + 1];
+    if (isHalfWidthField(field) && next && isHalfWidthField(next)) {
+      rows.push([field, next]);
+      index += 2;
+    } else {
+      rows.push([field]);
+      index += 1;
+    }
+  }
+  return rows;
+}
+
 /**
  * Select-control choices for enum fields whose options carry a status color
  * — a shape the manifest's plain `control.options` (`{value,label}`) doesn't
@@ -733,118 +989,49 @@ export function EntityIntentFields({
       ),
     [scopedFieldKeys, scopedValues],
   );
+  // SAFETY: same broad-`Entity` narrowing as `hiddenWhen` above.
+  const declaredSections: readonly DeclaredEditSection[] | null =
+    entitySummary[entity].edit.sections;
+  // `fields` already reflects this render's `hiddenWhen`/`projectIsAllocated`
+  // state, so the grouping has to be recomputed with it every render — no
+  // `useMemo` (a stale memo would leave a newly (in)visible field in the
+  // wrong bucket, or drop it from every bucket, until something else
+  // happened to invalidate the memo).
+  const groups = buildFieldGroups(declaredSections, fields);
 
   return (
     <>
-      {fields.map((field) => {
-        if (field.reference && !field.reference.multiple) {
-          const referenceEntity = field.reference.entity;
-          const scope = referenceScopeFor(field.reference, scopedValueRecord);
-          return (
-            <div key={field.key} className="space-y-1">
-              <EntityValueField
-                form={form}
-                // SAFETY: `field.key` is one of this entity's own declared
-                // model field keys; RHF's conditional path type cannot express
-                // a runtime-selected field roster.
-                name={field.key as never}
-                // SAFETY: `referenceEntity` is a manifest-declared reference
-                // target, always one of the picker's supported entities.
-                entity={referenceEntity as never}
-                label={field.label}
-                clearable={field.nullable}
-                description={<FieldProvenance provenance={field.provenance} />}
-                SearchProvider={referenceEntitySearch(referenceEntity)}
-                scope={scope}
-                suggestField={suggestFieldFor(
-                  Boolean(field.control?.suggest),
-                  field.key,
-                )}
-              />
-              <IntentFieldResolution
-                form={form}
-                field={field.key}
-                enabled={Boolean(field.resolution && !field.control?.suggest)}
-              />
-            </div>
-          );
-        }
-        const presentation = entityFieldPresentation(entity, field.key, mode);
-        if (presentation.control.kind === "specialized") {
-          const Renderer = specializedRendererFor(
-            presentation.control.renderer ?? "",
-          );
-          if (!Renderer) {
-            throw new Error(
-              `Field ${entity}.${field.key} has no specialized intent renderer for "${presentation.control.renderer}"`,
-            );
-          }
-          const provenanceId = field.provenance
-            ? `${idPrefix}-${field.key}-provenance`
-            : undefined;
-          return (
-            <fieldset
-              key={field.key}
-              className="space-y-1"
-              aria-label={field.label}
-              aria-describedby={provenanceId}
-            >
-              <Renderer
-                entity={entity}
-                field={field}
-                form={form}
-                idPrefix={idPrefix}
-                mode={mode}
-                scope={referenceScopeFor(field.reference, scopedValueRecord)}
-              />
-              {field.provenance ? (
-                <div id={provenanceId}>
-                  <FieldProvenance provenance={field.provenance} />
-                </div>
-              ) : null}
-              <IntentFieldResolution
-                form={form}
-                field={field.key}
-                enabled={Boolean(field.resolution && !field.control?.suggest)}
-              />
-            </fieldset>
-          );
-        }
-        const fieldOptions: PrimitiveFieldOptions = {};
-        if (
-          field.key === "name" &&
-          mode === "create" &&
-          presentation.control.kind === "text"
-        ) {
-          fieldOptions.focusOnMount = true;
-        }
-        if (presentation.control.kind === "select") {
-          fieldOptions.options = entitySelectOptionsFor(
+      {groups.map((group, index) => {
+        const renderField = (field: PrimitiveFieldModel) =>
+          renderIntentField({
             entity,
-            field.key,
+            field,
+            form,
+            idPrefix,
             mode,
-          );
-        }
-        const rendered = renderPrimitiveField({
-          record,
-          entity,
-          field,
-          presentation,
-          form,
-          idPrefix,
-          fieldOptions,
-          name: field.key,
-          mode,
-        });
+            record,
+            scopedValueRecord,
+          });
+        const nodes = pairHalfWidthFields(group.fields).map((row) =>
+          row.length === 2 ? (
+            <SideBySideFields key={`${row[0].key}-${row[1].key}`}>
+              {renderField(row[0])}
+              {renderField(row[1])}
+            </SideBySideFields>
+          ) : (
+            renderField(row[0])
+          ),
+        );
+        if (group.title === null) return nodes;
         return (
-          <div key={field.key} className="space-y-1">
-            {rendered}
-            <IntentFieldResolution
-              form={form}
-              field={field.key}
-              enabled={Boolean(field.resolution && !field.control?.suggest)}
-            />
-          </div>
+          <FormSection
+            key={group.id}
+            title={group.title}
+            first={index === 0}
+            collapsed={group.collapsed}
+          >
+            {nodes}
+          </FormSection>
         );
       })}
     </>

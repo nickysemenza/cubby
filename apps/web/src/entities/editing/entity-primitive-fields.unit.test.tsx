@@ -10,10 +10,27 @@ import { ai } from "~/lib/ai.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
+  buildFieldGroups,
   EntityIntentFields,
   EntityPrimitiveFields,
+  type DeclaredEditSection,
+  type PrimitiveFieldModel,
 } from "./entity-primitive-fields";
 import { entitySelectOptionsFor } from "./select-options";
+
+/** A minimal synthetic field — `buildFieldGroups` only reads `key` and
+ * `control?.section`, so a `buildFieldGroups`-only test doesn't need a real
+ * manifest field's full generated shape (nor a mocked one — this repo's own
+ * rule against module mocking applies to `entitySummary` here too). */
+function syntheticField(key: string, section?: string): PrimitiveFieldModel {
+  // SAFETY: `buildFieldGroups` only reads `key` and `control?.section`; this
+  // fixture supplies exactly those two. `key` and `control.section` are
+  // generated literal unions of today's real manifest values (from the
+  // `satisfies`-typed field model), which a synthetic test key can't be a
+  // member of — this cast widens past that back to the plain-string shape
+  // the function actually reads.
+  return { key, control: { section } } as PrimitiveFieldModel;
+}
 
 type IngredientValues = { name: string; usuallyOnHand: boolean };
 type NumericValues = Record<string, number | null | undefined>;
@@ -523,6 +540,103 @@ function VendorAccountCaptureFields() {
   );
 }
 
+/** `11-vendor.entity.ts`'s "full" intent: `name`/`website`/`notes` have no
+ * declared `control.section` (the flat `main` bucket); `orderUrlTemplate`
+ * and four siblings declare `section: "details"` with no `edit.sections`
+ * entry naming them — the undeclared-fallback path this file doesn't mock. */
+function VendorFullFields() {
+  const form = useForm({
+    defaultValues: {
+      name: "Acme Co",
+      website: null,
+      orderUrlTemplate: null,
+      orderEvidence: null,
+      orderEmailSenders: [],
+      browserDomains: [],
+      returnWindowDays: null,
+      notes: null,
+    },
+  });
+  return (
+    <FormProvider {...form}>
+      <EntityIntentFields entity="vendor" intent="full" mode="edit" />
+    </FormProvider>
+  );
+}
+
+describe("buildFieldGroups", () => {
+  it("renders declared sections in their declared order, ahead of any undeclared fallback", () => {
+    const declared: DeclaredEditSection[] = [
+      { id: "stock", title: "Stock", fields: ["price"], collapsed: false },
+      { id: "identity", title: "Identity", fields: ["name"], collapsed: true },
+    ];
+    // `price`/`name` are deliberately out of declared order — the grouping
+    // is keyed by field membership, not by input position. `upc`'s
+    // undeclared fallback section appears before `notes`'s `main` bucket
+    // because it's the earlier of the two in this input order.
+    const fields = [
+      syntheticField("price"),
+      syntheticField("name"),
+      syntheticField("upc", "identifiers"),
+      syntheticField("notes"),
+    ];
+
+    const groups = buildFieldGroups(declared, fields);
+
+    expect(groups.map((group) => group.id)).toEqual([
+      "stock",
+      "identity",
+      "identifiers",
+      "main",
+    ]);
+    expect(groups[0]).toMatchObject({
+      title: "Stock",
+      collapsed: false,
+      fields: [{ key: "price" }],
+    });
+    expect(groups[1]).toMatchObject({
+      title: "Identity",
+      collapsed: true,
+      fields: [{ key: "name" }],
+    });
+  });
+
+  it("falls back an undeclared control.section to a humanized group, accumulating every main field into one flat bucket regardless of scatter", () => {
+    const fields = [
+      syntheticField("name"),
+      syntheticField("orderUrlTemplate", "order-details"),
+      // `main` again, non-contiguous with `name` — same bucket by key, not
+      // by position (`GenericEntityEditModel.sections`'s own precedent).
+      syntheticField("notes"),
+    ];
+
+    const groups = buildFieldGroups(null, fields);
+
+    expect(groups).toEqual([
+      {
+        id: "main",
+        title: null,
+        collapsed: false,
+        fields: [fields[0], fields[2]],
+      },
+      {
+        id: "order-details",
+        title: "Order details",
+        collapsed: false,
+        fields: [fields[1]],
+      },
+    ]);
+  });
+
+  it("renders exactly today's flat output when every field is main and no sections are declared", () => {
+    const fields = [syntheticField("a"), syntheticField("b")];
+
+    expect(buildFieldGroups(null, fields)).toEqual([
+      { id: "main", title: null, collapsed: false, fields },
+    ]);
+  });
+});
+
 describe("EntityIntentFields", () => {
   let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -590,5 +704,26 @@ describe("EntityIntentFields", () => {
     expect(screen.getByLabelText("Vendor")).toBeInTheDocument();
     expect(screen.getByLabelText("Member")).toBeInTheDocument();
     expect(screen.getByLabelText("Browser")).toBeInTheDocument();
+  });
+
+  it("buckets an undeclared control.section into a titled region, leaving main fields ungrouped", () => {
+    render(<VendorFullFields />, { wrapper: harness.wrapper });
+
+    const details = screen.getByRole("region", { name: "Details" });
+    expect(details).toContainElement(
+      screen.getByRole("textbox", { name: "Order URL" }),
+    );
+    expect(details).toContainElement(
+      screen.getByRole("spinbutton", { name: "Return window" }),
+    );
+    // `name`/`notes` have no declared `control.section` (the flat `main`
+    // bucket) and render with no section wrapper at all — not even one of
+    // their own.
+    const name = screen.getByRole("textbox", { name: "Name" });
+    const notes = screen.getByRole("textbox", { name: "Notes" });
+    expect(details).not.toContainElement(name);
+    expect(details).not.toContainElement(notes);
+    expect(name.closest("section")).toBeNull();
+    expect(notes.closest("section")).toBeNull();
   });
 });

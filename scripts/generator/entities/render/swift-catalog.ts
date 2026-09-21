@@ -260,6 +260,7 @@ const renderFieldDescriptorLiteral = (
     `controlKind: ${controlKind}, ` +
     `controlRenderer: ${swiftOptionalRenderer(rendererMetadata.control)}, ` +
     `controlSection: ${swiftOptionalString(field.control?.section ?? null)}, ` +
+    `controlWidth: ${swiftOptionalString(field.control?.width ?? null)}, ` +
     `controlOptions: ${renderOptionsLiteral(field.control?.options ?? null)}, ` +
     `placeholder: ${swiftOptionalString(field.control?.placeholder ?? null)}, ` +
     `initial: ${swiftOptionalString(field.control?.initial ?? null)}, ` +
@@ -355,7 +356,7 @@ const renderPresentationLiteral = (
   const editSections =
     edit.sections === null
       ? "nil"
-      : `[${edit.sections.map((section) => `EditSection(id: ${swiftString(section.id)}, title: ${swiftString(section.title)}, fields: ${swiftStringArray(section.fields)})`).join(", ")}]`;
+      : `[${edit.sections.map((section) => `EditSection(id: ${swiftString(section.id)}, title: ${swiftString(section.title)}, fields: ${swiftStringArray(section.fields)}, collapsed: ${swiftBool(section.collapsed)})`).join(", ")}]`;
   const readOnlyWhen =
     edit.readOnlyWhen.length === 0
       ? "[]"
@@ -605,6 +606,8 @@ export const renderSwiftEntityCatalog = (
     "  public let controlRenderer: ControlRendererID?\n" +
     "  /// The editor section the field groups under when `presentation.editSections` is nil.\n" +
     "  public let controlSection: String?\n" +
+    '  /// `"half"` pairs with the next consecutive half-width field on one row.\n' +
+    "  public let controlWidth: String?\n" +
     "  /// A select control's choices; nil for every other control.\n" +
     "  public let controlOptions: [LabeledOption]?\n" +
     "  public let placeholder: String?\n" +
@@ -754,6 +757,8 @@ export const renderSwiftEntityCatalog = (
     "  public let id: String\n" +
     "  public let title: String\n" +
     "  public let fields: [String]\n" +
+    "  /// Render the section's body behind a disclosure that starts closed.\n" +
+    "  public let collapsed: Bool\n" +
     "}\n\n" +
     "public enum ReadOnlyMatch: Codable, Sendable, Hashable {\n" +
     "  case string(String)\n" +

@@ -10,6 +10,7 @@ import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { NativeSelect } from "~/components/ui/native-select";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
 import { cn } from "~/lib/utils";
@@ -481,99 +482,83 @@ export function PendingImageUpload({
 
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="space-y-2">
-        <div className="flex gap-2">
-          <div className="min-w-0 flex-1">
-            <FileDropField
-              accept={ACCEPTED_IMAGE_TYPES}
-              label="Choose image"
-              description="or drop it here"
-              mode="compact"
-              onFilesAdded={handleSelectedImages}
-              multiple
-              disabled={uploading || importing}
-            />
-          </div>
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileUpload}
-            disabled={uploading || importing}
-            hidden
-          />
-          <Button
-            type="button"
-            onClick={() => cameraInputRef.current?.click()}
-            disabled={uploading || importing}
-          >
-            <Camera className="mr-2 size-4" />
-            Camera
-          </Button>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            type="url"
-            placeholder="Paste image URL..."
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleImportFromUrl();
-              }
-            }}
-            disabled={importing || uploading}
-            className="flex-1"
-          />
-          <Button
-            type="button"
-            onClick={handleImportFromUrl}
-            disabled={importing || uploading || !imageUrl.trim()}
-          >
-            <Link className="mr-2 size-4" />
-            Import
-          </Button>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="pending-image-source">Photo source</Label>
-          <select
-            className="h-9 w-full rounded-sm border border-input bg-background px-2 text-sm"
-            id="pending-image-source"
-            value={source}
+      <div className="flex flex-wrap items-center gap-2">
+        <FileDropField
+          accept={ACCEPTED_IMAGE_TYPES}
+          label="Choose image"
+          mode="compact"
+          onFilesAdded={handleSelectedImages}
+          multiple
+          disabled={uploading || importing}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileUpload}
+          disabled={uploading || importing}
+          hidden
+        />
+        <Button
+          type="button"
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={uploading || importing}
+        >
+          <Camera className="mr-2 size-4" />
+          Camera
+        </Button>
+        <Input
+          type="url"
+          placeholder="Paste a URL — or ⌘V an image"
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleImportFromUrl();
+            }
+          }}
+          disabled={importing || uploading}
+          className="min-w-40 flex-1"
+        />
+        <Button
+          type="button"
+          onClick={handleImportFromUrl}
+          disabled={importing || uploading || !imageUrl.trim()}
+        >
+          <Link className="mr-2 size-4" />
+          Import
+        </Button>
+        <NativeSelect
+          aria-label="Photo source"
+          className="w-auto"
+          value={source}
+          onChange={(event) =>
+            setSource(
+              event.target.value === "own" || event.target.value === "catalog"
+                ? event.target.value
+                : "unknown",
+            )
+          }
+        >
+          <option value="own">Our photo</option>
+          <option value="catalog">Catalog image</option>
+          <option value="unknown">Unknown</option>
+        </NativeSelect>
+        {entityType === "PRODUCT" && (
+          <NativeSelect
+            aria-label="Attach as"
+            className="w-auto"
+            value={purpose}
             onChange={(event) =>
-              setSource(
-                event.target.value === "own" || event.target.value === "catalog"
-                  ? event.target.value
-                  : "unknown",
-              )
+              setPurpose(event.target.value === "label" ? "label" : "item")
             }
           >
-            <option value="own">Our photo</option>
-            <option value="catalog">Catalog image</option>
-            <option value="unknown">Unknown</option>
-          </select>
-        </div>
-        {entityType === "PRODUCT" && (
-          <div className="space-y-1">
-            <Label htmlFor="pending-product-image-purpose">Attach as</Label>
-            <select
-              className="h-9 w-full rounded-sm border border-input bg-background px-2 text-sm"
-              id="pending-product-image-purpose"
-              value={purpose}
-              onChange={(event) =>
-                setPurpose(event.target.value === "label" ? "label" : "item")
-              }
-            >
-              <option value="item">Item photo</option>
-              <option value="label">Label photo</option>
-            </select>
-          </div>
+            <option value="item">Item photo</option>
+            <option value="label">Label photo</option>
+          </NativeSelect>
         )}
-        <p className="text-xs text-muted-foreground">
-          You can also paste an image from your clipboard
-        </p>
       </div>
 
       {(uploading || importing) && (

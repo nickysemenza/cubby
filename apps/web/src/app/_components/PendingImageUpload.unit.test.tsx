@@ -195,9 +195,10 @@ describe("PendingImageUpload", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Paste image URL..."), {
-      target: { value: "https://example.com/garden.jpg" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste a URL — or ⌘V an image"),
+      { target: { value: "https://example.com/garden.jpg" } },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Import" }));
 
     expect(await screen.findByAltText("imported.jpg")).toBeInTheDocument();
