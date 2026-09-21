@@ -34,7 +34,7 @@ import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 
 import { householdContribution } from "./household-contribution.functions";
-import { ledgerPartyKindOptions } from "./ledger-party-columns";
+import { ledgerPartyKindOptions } from "./ledger-party-options";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (

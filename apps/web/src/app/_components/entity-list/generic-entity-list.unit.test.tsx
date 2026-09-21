@@ -18,10 +18,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  identityListConfig,
-  identityPatch,
-} from "~/app/_components/entity-list/identity-list-config";
+import { identityListConfig } from "~/app/_components/entity-list/identity-list-config";
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,
@@ -270,10 +267,7 @@ describe("GenericEntityList", () => {
     },
   );
 
-  it("maps derived and explicit identity edits to their stored fields", () => {
-    expect(identityPatch("name", "New vendor")).toEqual({
-      name: "New vendor",
-    });
+  it("maps an explicit identity edit to its stored field", () => {
     expect(mealNameUpdate("  ")).toEqual({ name: null });
   });
 

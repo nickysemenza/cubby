@@ -1,6 +1,13 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { CellData } from "@tanstack/react-table";
-import { render, renderHook, screen } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -52,7 +59,13 @@ describe("declared entity displays", () => {
       (field) => field.key === "expenseTotal",
     )!;
     render(
-      <>{renderDetailFieldValue({ expenseTotal: 12.299999999999 }, field)}</>,
+      <>
+        {renderDetailFieldValue(
+          "purchase",
+          { expenseTotal: 12.299999999999 },
+          field,
+        )}
+      </>,
     );
     expect(screen.getByText("$12.30")).toBeVisible();
   });
@@ -647,5 +660,118 @@ describe("declared entity displays", () => {
       // true for that column id.
       expect(byId.trade?.enableSorting).toBe(false);
     });
+  });
+});
+
+/**
+ * Every enum field reads one roster (`enumFieldOptions`) on every surface:
+ * a read-only list cell (no `onSaveField` — the embedded relation table's
+ * path) and the detail value both show the rich label in a pill, whether the
+ * label comes from the rich `ENTITY_SELECT_OPTIONS` table (task, expense,
+ * image — image declares no `control` at all) or from static
+ * `control.options` (planting). Regression: relation tables and hero chips
+ * used to print the raw stored value (`not_started`, `principal`).
+ */
+describe("generic enum fields", () => {
+  const rows: {
+    entity: Entity;
+    key: string;
+    raw: string;
+    label: string;
+  }[] = [
+    { entity: "task", key: "status", raw: "not_started", label: "Not started" },
+    {
+      entity: "expense",
+      key: "lineKind",
+      raw: "principal",
+      label: "Item or service",
+    },
+    { entity: "planting", key: "status", raw: "growing", label: "Growing" },
+    { entity: "image", key: "status", raw: "UPLOADED", label: "Uploaded" },
+    // A stored value the roster forgot prints itself, never "—".
+    { entity: "task", key: "status", raw: "zzz", label: "zzz" },
+  ];
+
+  function fieldOf(entity: Entity, key: string) {
+    const field = entityFieldModels[entity].fields.find(
+      (candidate) => candidate.key === key,
+    );
+    if (!field) throw new Error(`${entity}.${key} is not declared`);
+    return field;
+  }
+
+  it.each(rows)(
+    "$entity.$key renders $raw as the pill $label on list and detail",
+    ({ entity, key, raw, label }) => {
+      const record = { id: `${entity}-1`, [key]: raw };
+      const helper = createCubbyColumnHelper<typeof record>();
+      const columns = createEntityDisplayColumns(entity, helper, undefined, {
+        only: [key],
+      });
+      const [listCell] = columns.visit((column) =>
+        renderRowCell(column.cell, record),
+      );
+      const { unmount } = render(<>{listCell}</>);
+      expect(screen.getByText(label)).toBeVisible();
+      // Exactly one rendering: the label replaces the raw value rather than
+      // sitting beside it (the unknown-value row keeps them equal).
+      expect(
+        screen.getAllByText(new RegExp(`^(${label}|${raw})$`)),
+      ).toHaveLength(1);
+      unmount();
+
+      render(
+        <>{renderDetailFieldValue(entity, record, fieldOf(entity, key))}</>,
+      );
+      expect(screen.getByText(label)).toBeVisible();
+    },
+  );
+
+  it("saves an editable pick through onSaveField, and clears only a nullable enum", async () => {
+    const record = { id: "task-1", status: "not_started", trade: "plumbing" };
+    const helper = createCubbyColumnHelper<typeof record>();
+    const onSaveField = vi.fn().mockResolvedValue(undefined);
+    const columns = createEntityDisplayColumns("task", helper, undefined, {
+      only: ["status", "trade"],
+      onSaveField,
+    });
+    const [statusCell, tradeCell] = columns.visit((column) =>
+      renderRowCell(column.cell, record),
+    );
+    // `trade` declares `control.suggest`, so its open editor mounts the Jev
+    // apply affordance, which queries — hence the harness.
+    const harness = createBrowserTestHarness();
+
+    const status = render(<>{statusCell}</>, { wrapper: harness.wrapper });
+    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(await screen.findByRole("option", { name: "Done" }));
+    await waitFor(() => {
+      expect(onSaveField).toHaveBeenCalledWith(record, "status", "done");
+    });
+    // `status` is required: no clear affordance.
+    expect(
+      screen.queryByRole("button", { name: /^Clear/i, hidden: true }),
+    ).toBeNull();
+    status.unmount();
+
+    render(<>{tradeCell}</>, { wrapper: harness.wrapper });
+    fireEvent.click(screen.getByRole("button"));
+    await screen.findByRole("option", { name: "Plumbing" });
+    // `trade` is nullable (reset to inherited): the clear affordance shows.
+    expect(
+      screen.getByRole("button", { name: /^Clear/i, hidden: true }),
+    ).toBeInTheDocument();
+    // The open editor asks Jev for `trade` (declared `control.suggest`, as a
+    // "provided" alternative since a value is stored) and never for `status`
+    // (no `suggest`) — the generic list editor used to omit this entirely.
+    const suggestionTargets = harness.queryClient
+      .getQueryCache()
+      .findAll()
+      .map((query) => JSON.stringify(query.queryKey))
+      .filter((key) => key.includes("suggestFields"));
+    expect(suggestionTargets).toHaveLength(1);
+    expect(suggestionTargets[0]).toContain('"targets":["trade"]');
+    expect(suggestionTargets[0]).toContain('"basisMode":"provided"');
+    harness.dispose();
   });
 });

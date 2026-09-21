@@ -119,7 +119,13 @@ export default defineEntity({
       {
         key: "placement",
         kind: "enum",
-        control: { kind: "select" },
+        control: {
+          kind: "select",
+          options: [
+            { value: "stock", label: "Stock" },
+            { value: "installed", label: "Installed" },
+          ],
+        },
         display: { list: true, detail: true, detailOrder: 4 },
         validation: {
           read: inventoryPlacement.describe(

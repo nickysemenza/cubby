@@ -11,7 +11,7 @@ import {
   MoneyCell,
 } from "~/app/_components/household-contribution-format";
 import { householdContribution } from "~/app/finance/household-contribution.functions";
-import { ledgerPartyKindOptions } from "~/app/finance/ledger-party-columns";
+import { ledgerPartyKindOptions } from "~/app/finance/ledger-party-options";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";

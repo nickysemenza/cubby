@@ -6,10 +6,7 @@ import {
 import prettyBytes from "pretty-bytes";
 import { useMemo } from "react";
 
-import {
-  createImageColumn,
-  renderOptionCell,
-} from "~/app/_components/data-table/columnHelpers";
+import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -19,7 +16,6 @@ import { useFilenameEditable } from "~/app/_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
-import { imageStatusOptions } from "~/app/images/image-options";
 import { labeledFieldProvenance } from "~/entities/field-provenance";
 import { image } from "~/entities/image.functions";
 
@@ -68,17 +64,6 @@ export const imageListOverride = defineListOverride<
                 mobile: { slot: "trailing", priority: 5 },
               },
               cell: ({ getValue }) => <span>{prettyBytes(getValue())}</span>,
-            }),
-          );
-          add(
-            columnHelper.accessor("status", {
-              header: "Status",
-              meta: {
-                className: "w-28",
-                mobile: { slot: "meta", priority: 20 },
-              },
-              cell: ({ getValue }) =>
-                renderOptionCell(getValue(), imageStatusOptions),
             }),
           );
         }),

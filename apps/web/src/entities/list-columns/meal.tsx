@@ -1,14 +1,7 @@
 import type { MealFilters, MealOut } from "@cubby/schemas/meal";
-import {
-  mealKindSchema,
-  mealTypeSchema,
-} from "@cubby/schemas/meal-classification";
 import { useMemo } from "react";
 
-import {
-  createFilterableSelectColumn,
-  createPlainDateColumn,
-} from "~/app/_components/data-table/columnHelpers";
+import { createPlainDateColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -19,10 +12,8 @@ import { EntityInlineLinkList } from "~/app/_components/EntityInlineLinkList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { formatMealCost, mealDateLabel } from "~/app/meals/meal-format";
-import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
-import { manifestFilterConfig } from "~/entities/filter-manifest";
 
 import { defineListOverride } from "./types";
 
@@ -82,44 +73,6 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
                   await updateMealMutation.mutateAsync({
                     id: meal.id,
                     data: { date: newDate },
-                  });
-                },
-              },
-            }),
-          );
-          add(
-            createFilterableSelectColumn(columnHelper, "mealType", {
-              header: "Type",
-              placeholder: "Filter by meal type...",
-              selectOptions: mealTypeOptions,
-              className: "w-28",
-              mobile: { slot: "meta", priority: 30 },
-              filterConfig: manifestFilterConfig("meal", "mealType"),
-              editable: {
-                parseValue: (value) => mealTypeSchema.nullable().parse(value),
-                onSave: async (newValue, meal) => {
-                  await updateMealMutation.mutateAsync({
-                    id: meal.id,
-                    data: { mealType: newValue },
-                  });
-                },
-              },
-            }),
-          );
-          add(
-            createFilterableSelectColumn(columnHelper, "mealKind", {
-              header: "Kind",
-              placeholder: "Filter by kind...",
-              selectOptions: mealKindOptions,
-              className: "w-28",
-              mobile: { slot: "meta", priority: 40 },
-              filterConfig: manifestFilterConfig("meal", "mealKind"),
-              editable: {
-                parseValue: (value) => mealKindSchema.parse(value),
-                onSave: async (newValue, meal) => {
-                  await updateMealMutation.mutateAsync({
-                    id: meal.id,
-                    data: { mealKind: newValue },
                   });
                 },
               },

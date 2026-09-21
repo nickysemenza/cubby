@@ -546,8 +546,9 @@ export function useEntityCommands<E extends EditableEntity>(
 /** Exact browser-action adapter layered over the semantic editing lifecycle. */
 export function useEntityActionCommands<E extends StandardEntity>(
   entity: E,
+  options?: EntityCommandsOptions,
 ): EntityActionCommands<E> {
-  const commands = useEntityCommands(entity);
+  const commands = useEntityCommands(entity, options);
 
   const createAction = useCallback(
     async (

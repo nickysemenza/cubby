@@ -11,6 +11,7 @@ import {
 import { z } from "zod";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { enumFieldLabel } from "~/entities/enum-field-display";
 
 import { basisValueOf } from "./field-suggestion";
 import { useFieldSuggestionContext } from "./field-suggestion-provider";
@@ -261,11 +262,11 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
 
   return {
     currentLabel:
-      entityFieldModels[context.entity].fields
-        .find((candidate) => candidate.key === field)
-        ?.control?.options?.find(
-          (option) => option.value === basisValueOf(current),
-        )?.label ??
+      (entityFieldModels[context.entity].fields.find(
+        (candidate) => candidate.key === field,
+      )?.kind === "enum"
+        ? enumFieldLabel(context.entity, field, basisValueOf(current))
+        : null) ??
       z.object({ name: z.string() }).safeParse(current).data?.name ??
       basisValueOf(current),
     currentValue: basisValueOf(current),

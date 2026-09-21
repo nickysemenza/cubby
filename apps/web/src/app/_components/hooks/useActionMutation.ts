@@ -10,6 +10,7 @@ import { showErrorToast } from "~/components/feedback/error-details";
 import type {
   EntityActionData,
   EntityActionVariables,
+  EntityMutationPort,
 } from "~/entities/editing/types";
 import { useEntityActionCommands } from "~/entities/editing/use-entity-commands";
 import type {
@@ -143,14 +144,17 @@ export function useEntityActionMutation<
   entity,
   operation,
   intent = "capture",
+  mutationPort,
   ...presentation
 }: ActionPresentation<EntityActionData<E, A>, Error> & {
   mutationFn: EntityMutationOptionsFactory<E, A>;
   entity: E;
   operation: A;
   intent?: string;
+  /** Test seam: a local operation adapter in place of the Start transport. */
+  mutationPort?: EntityMutationPort;
 }) {
-  const commands = useEntityActionCommands(entity);
+  const commands = useEntityActionCommands(entity, { mutationPort });
   const executors = {
     create: async (data) => await commands.createAction(data, intent),
     update: async (variables) => await commands.updateAction(variables, intent),

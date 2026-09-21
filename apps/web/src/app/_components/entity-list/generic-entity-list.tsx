@@ -23,10 +23,7 @@ import { DataTablePagination } from "~/app/_components/data-table/data-table-pag
 import { DataTableToolbar } from "~/app/_components/data-table/data-table-toolbar";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import {
-  identityListConfig,
-  identityPatch,
-} from "~/app/_components/entity-list/identity-list-config";
+import { identityListConfig } from "~/app/_components/entity-list/identity-list-config";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeferredReferenceFilterOptions } from "~/app/_components/hooks/useDeferredReferenceFilterOptions";
 import {
@@ -37,12 +34,11 @@ import {
 } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { useEntityFieldSave } from "~/app/_components/hooks/useUpdateMutation";
 import { EntityTimeline } from "~/app/_components/timeline/entity-timeline";
 import { Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { entities } from "~/entities/entities";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import type { StandardEntity } from "~/entities/entity-contracts";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
@@ -181,12 +177,9 @@ function useListColumns(
 ) {
   const helper = useMemo(() => createCubbyColumnHelper<BaseListRow>(), []);
   const { overrides, compose } = parts;
-  // Cookbook has a custom client-backed list but no standard update command.
-  const mutationEntity = isStandardEntity(entity) ? entity : "product";
-  const update = useUpdateMutation({
-    mutationFn: entityMutationOptionsFactory(mutationEntity, "update"),
-    entity: mutationEntity,
-  });
+  // Cookbook has a custom client-backed list but no standard update command;
+  // `useEntityFieldSave` then hands back no writer at all.
+  const onSaveField = useEntityFieldSave(entity);
   const identity = useMemo(
     () =>
       identityListConfig(entity, {
@@ -200,31 +193,23 @@ function useListColumns(
     [allowAutoIdentityEditing, entity, parts.client, parts.source, parts.tree],
   );
   const identityEditable = useMemo(() => {
-    if (!identity.canAutoEdit || parts.list?.nameEditable) return undefined;
+    if (!identity.canAutoEdit || parts.list?.nameEditable || !onSaveField)
+      return undefined;
     return {
-      onSave: async (newValue: string, row: BaseListRow) => {
-        await update.mutateAsync({
-          id: row.id,
-          // SAFETY: identityListConfig proves this is the same non-null text
-          // field in the generated entity's update roster.
-          data: identityPatch(identity.titleField, newValue),
-        });
-      },
+      // `identityListConfig` proves this is the same non-null text field in
+      // the generated entity's update roster.
+      onSave: (newValue: string, row: BaseListRow) =>
+        onSaveField(row, identity.titleField, newValue),
     };
-    // oxlint-disable-next-line react/exhaustive-deps -- mutation result objects change every render; mutateAsync is the stable operation port.
-  }, [identity, parts.list?.nameEditable, update.mutateAsync]);
+  }, [identity, onSaveField, parts.list?.nameEditable]);
   const columns = useMemo(() => {
     const declared = createEntityDisplayColumns(entity, helper, overrides, {
-      onSaveField: async (row, field, value) => {
-        if (!isStandardEntity(entity)) return;
-        await update.mutateAsync({ id: row.id, data: { [field]: value } });
-      },
+      onSaveField,
     });
     return compose
       ? assertSpecialistColumnProvenance(entity, declared, compose(declared))
       : declared;
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- mutation result objects change every render; mutateAsync is the stable operation port.
-  }, [entity, helper, overrides, compose, update.mutateAsync]);
+  }, [entity, helper, overrides, compose, onSaveField]);
   // The generic column collection is kept separate from the identity adapter
   // so client/custom-source lists can still share the same column compiler.
   return { columns, identityEditable };

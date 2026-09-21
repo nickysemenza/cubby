@@ -14,11 +14,7 @@ import {
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import {
-  taskDueColumn,
-  taskStatusColumn,
-  taskTradeColumn,
-} from "~/app/projects/shared";
+import { taskDueColumn } from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
@@ -60,18 +56,6 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<TaskOut>((add) => {
-          add(
-            taskStatusColumn(
-              columnHelper,
-              async (status, task) => {
-                await updateTaskMutation.mutateAsync({
-                  id: task.id,
-                  data: { status },
-                });
-              },
-              { mobile: { slot: "subtitle", priority: 10 } },
-            ),
-          );
           add(
             createProjectLinkColumn(columnHelper, {
               className: "w-40",
@@ -124,18 +108,6 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
                 });
               },
               { mobile: { slot: "meta", priority: 40, interactive: true } },
-            ),
-          );
-          add(
-            taskTradeColumn(
-              columnHelper,
-              async (trade, task) => {
-                await updateTaskMutation.mutateAsync({
-                  id: task.id,
-                  data: { trade },
-                });
-              },
-              { mobile: { slot: "meta", priority: 50 } },
             ),
           );
         }),

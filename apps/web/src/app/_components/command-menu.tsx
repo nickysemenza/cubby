@@ -29,6 +29,7 @@ import {
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { enumFieldLabel } from "~/entities/enum-field-display";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
 
@@ -773,7 +774,12 @@ export function SearchGroupItem({
                     {placement.locationPath}
                   </div>
                   <div className="truncate text-2xs text-muted-foreground">
-                    {formatPlacementAmount(placement)} · {placement.placement}
+                    {formatPlacementAmount(placement)} ·{" "}
+                    {enumFieldLabel(
+                      "inventory",
+                      "placement",
+                      placement.placement,
+                    )}
                   </div>
                 </div>
                 <span className="font-mono text-2xs text-muted-foreground tabular-nums">
@@ -803,7 +809,11 @@ export function SearchGroupItem({
                       : "Kit content"}{" "}
                     · {componentPlacement.placement.locationPath} ·{" "}
                     {formatPlacementAmount(componentPlacement.placement)} ·{" "}
-                    {componentPlacement.placement.placement}
+                    {enumFieldLabel(
+                      "inventory",
+                      "placement",
+                      componentPlacement.placement.placement,
+                    )}
                   </div>
                 </div>
                 <span className="font-mono text-2xs text-muted-foreground tabular-nums">

@@ -61,7 +61,7 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
           ) : null}
         </Stack>
       ) : projectField ? (
-        renderDetailFieldValue(expense, projectField)
+        renderDetailFieldValue("expense", expense, projectField)
       ) : null}
       {expense.lineKind === "principal" ? (
         <ProjectSuggestionChips

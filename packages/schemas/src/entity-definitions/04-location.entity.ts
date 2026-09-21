@@ -186,7 +186,13 @@ export default defineEntity({
         // hand-rendered AI-suggest widget; `type` still disappears once a
         // product link supplies the form factor — see `intents.fields` below.
         control: { kind: "select", suggest: { basis: ["name"] } },
-        display: { list: true, detail: true, detailOrder: 1 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 1,
+          width: "sm",
+          mobile: { slot: "subtitle", priority: 15 },
+        },
         validation: {
           read: locationType.nullable(),
           create: locationType.nullable().optional(),

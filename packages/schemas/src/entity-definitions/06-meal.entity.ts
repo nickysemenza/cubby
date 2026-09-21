@@ -132,7 +132,12 @@ export default defineEntity({
           placeholder: "Which meal of the day?",
           suggest: { basis: ["name"] },
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 30 },
+        },
         validation: {
           read: mealTypeSchema.nullable(),
           create: mealTypeSchema
@@ -153,7 +158,12 @@ export default defineEntity({
         key: "mealKind",
         kind: "enum",
         control: { kind: "select", suggest: { basis: ["name"] } },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 40 },
+        },
         validation: {
           read: mealKindSchema,
           create: mealKindSchema

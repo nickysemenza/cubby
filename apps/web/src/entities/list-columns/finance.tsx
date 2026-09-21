@@ -22,7 +22,6 @@ import { useMemo } from "react";
 
 import {
   createBooleanColumn,
-  createFilterableSelectColumn,
   renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
@@ -47,13 +46,8 @@ import { WithLedgerPartySearch } from "~/app/finance/financial-selectors";
 import {
   createFinancialTransactionAccountColumn,
   createFinancialTransactionAmountColumn,
-  createFinancialTransactionStatusColumn,
 } from "~/app/finance/financial-transaction-columns";
-import { financialTransactionKindOptions } from "~/app/finance/financial-transaction-kind-options";
-import {
-  createLedgerPartyIdentityColumn,
-  createLedgerPartyKindColumn,
-} from "~/app/finance/ledger-party-columns";
+import { createLedgerPartyIdentityColumn } from "~/app/finance/ledger-party-columns";
 import {
   createLedgerTransferAmountColumn,
   createLedgerTransferEvidenceCountColumn,
@@ -225,18 +219,6 @@ export const financialTransactionListOverride = defineListOverride<
       () =>
         createCubbyColumnCollection<FinancialTransactionOut>((add) => {
           add(createFinancialTransactionAccountColumn(transactionHelper));
-          // `filterConfig: null` keeps `meta.filterConfig` undefined so the
-          // manifest's multiselect control stays the one that attaches.
-          add(
-            createFilterableSelectColumn(transactionHelper, "kind", {
-              header: "Kind",
-              className: "w-32",
-              placeholder: "Filter by kind...",
-              selectOptions: financialTransactionKindOptions,
-              filterConfig: null,
-            }),
-          );
-          add(createFinancialTransactionStatusColumn(transactionHelper));
           add(createFinancialTransactionAmountColumn(transactionHelper));
           add(
             transactionHelper.accessor("purchaseId", {
@@ -337,7 +319,6 @@ export const financialTransactionListOverride = defineListOverride<
 const partyHelper = createCubbyColumnHelper<LedgerPartyOut>();
 const partyOverrides = createCubbyColumnCollection<LedgerPartyOut>((add) => {
   add(createLedgerPartyIdentityColumn(partyHelper));
-  add(createLedgerPartyKindColumn(partyHelper));
 });
 
 /** Read-only: created through the household contribution ledger. */

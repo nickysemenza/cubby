@@ -1,12 +1,14 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createEntityMutationPort } from "~/entities/editing/use-entity-commands";
 import { entityList } from "~/entities/entity-list.functions";
 import {
   type EntityListInputByEntity,
   productListItem,
+  taskListItem,
 } from "~/entities/generated/entity-lists.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -228,5 +230,59 @@ describe("EntityRelationTable", () => {
     expect(
       await screen.findByRole("link", { name: product.name }),
     ).toBeVisible();
+  });
+
+  // Regression: the embedded table used to build its columns with no
+  // `onSaveField`, so an enum cell fell to the raw-text fallback
+  // (`not_started`) and could not be edited in place, unlike the target's own
+  // list page.
+  it("renders an enum cell as its rich pill and saves an inline pick through the target's update", async () => {
+    const task = {
+      ...mock(taskListItem, { seed: 5 }),
+      id: testShortcode("task", "TSK-TEST"),
+      status: "not_started" as const,
+    };
+    const list = entityList.list.withTransport(async () => ({
+      items: [task],
+      meta: { pageIndex: 0, pageSize: 50, totalCount: 1, sums: {} },
+    }));
+    const commands: unknown[] = [];
+    const mutationPort = createEntityMutationPort({
+      execute: async (command) => {
+        commands.push(command);
+        return {
+          action: "update",
+          entity: "task",
+          item: { ...task, status: "done" },
+          sideEffects: { backgroundBatches: [] },
+        };
+      },
+    });
+    render(
+      <EntityRelationTable
+        plan={planFor("project", "tasks")}
+        recordId={testShortcode("project", "PRJ-TEST")}
+        title="Tasks"
+        operations={{ list, mutationPort }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const pill = await screen.findByText("Not started");
+    expect(pill).toBeVisible();
+    expect(screen.queryByText("not_started")).toBeNull();
+
+    // Inside a table the range engine owns single clicks; double-click edits.
+    fireEvent.doubleClick(pill);
+    fireEvent.click(await screen.findByRole("option", { name: "Done" }));
+    await waitFor(() => expect(commands).toHaveLength(1));
+    expect(commands[0]).toMatchObject({
+      action: "update",
+      entity: "task",
+      id: task.id,
+      data: { status: "done" },
+    });
+    // The cell shows the saved pick at once; the list re-read is the root
+    // MutationCache's fan-out (root-provider), outside this harness.
+    expect(await screen.findByText("Done")).toBeVisible();
   });
 });
