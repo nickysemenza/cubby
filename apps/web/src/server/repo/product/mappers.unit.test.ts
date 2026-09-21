@@ -67,6 +67,31 @@ const completeDataQuality = {
   relatedExceptions: [],
 };
 
+const productModelGap = {
+  check: "product_model" as const,
+  facet: "identity" as const,
+  kind: "missing" as const,
+  targetType: "product" as const,
+  targetId: testShortcode("product", "PRD-TEST"),
+  message: "Manufacturer model is not recorded.",
+};
+
+const incompleteProductDataQuality = {
+  ...completeDataQuality,
+  status: "needs_data" as const,
+  score: 80,
+  gaps: [productModelGap],
+  facets: [
+    {
+      name: "identity" as const,
+      status: "needs_data" as const,
+      gaps: [productModelGap],
+    },
+    { name: "provenance" as const, status: "complete" as const, gaps: [] },
+    { name: "integrity" as const, status: "complete" as const, gaps: [] },
+  ],
+};
+
 const baseProduct = {
   id: PRODUCT_ID,
   shortcode: "PRD-TEST",
@@ -221,7 +246,7 @@ describe("product mappers", () => {
   it("maps list rows to the list contract without full location payloads", () => {
     const row = {
       ...baseProduct,
-      dataQuality: completeDataQuality,
+      dataQuality: incompleteProductDataQuality,
       ingredient: {
         id: INGREDIENT_ID,
         shortcode: "ING-TEST",
@@ -254,6 +279,8 @@ describe("product mappers", () => {
           valuation: 9,
           verifiedAt: null,
           placement: "stock" as const,
+          ownershipMode: "inherit" as const,
+          ownerLedgerPartyId: null,
           location: activeLocation,
         },
         {
@@ -268,6 +295,8 @@ describe("product mappers", () => {
           valuation: 4.5,
           verifiedAt: null,
           placement: "stock" as const,
+          ownershipMode: "inherit" as const,
+          ownerLedgerPartyId: null,
           location: deletedLocation,
         },
       ],
@@ -291,6 +320,7 @@ describe("product mappers", () => {
         },
       ],
       externalIds: [{ id: EXTERNAL_ID }],
+      dataGaps: ["product_model"],
       images: [{ id: IMAGE_ID }],
       inventoryEntry: [
         {
@@ -423,6 +453,8 @@ describe("product mappers", () => {
           valuation: 9,
           verifiedAt: null,
           placement: "stock" as const,
+          ownershipMode: "inherit" as const,
+          ownerLedgerPartyId: null,
           location: {
             ...activeLocation,
             deletedAt: null,
@@ -445,6 +477,8 @@ describe("product mappers", () => {
           valuation: 4.5,
           verifiedAt: null,
           placement: "stock" as const,
+          ownershipMode: "inherit" as const,
+          ownerLedgerPartyId: null,
           location: { ...deletedLocation, images: [] },
         },
       ],
@@ -579,6 +613,8 @@ describe("on-hand counts units in service as locations", () => {
                 valuation: 9,
                 verifiedAt: null,
                 placement: "stock" as const,
+                ownershipMode: "inherit" as const,
+                ownerLedgerPartyId: null,
                 location: activeLocation,
               },
             ],

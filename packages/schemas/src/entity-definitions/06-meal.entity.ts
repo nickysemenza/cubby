@@ -36,8 +36,18 @@ export default defineEntity({
     detail: {
       hero: { images: true },
       sections: [
-        { kind: "slot", id: "composition", title: "Recipes" },
-        { kind: "slot", id: "nutrition", title: "Nutrition" },
+        {
+          kind: "slot",
+          id: "composition",
+          title: "Recipes",
+          explanationField: "recipes",
+        },
+        {
+          kind: "slot",
+          id: "nutrition",
+          title: "Nutrition",
+          explanationField: "totals",
+        },
         {
           kind: "fields",
           id: "meal-details",
@@ -166,6 +176,13 @@ export default defineEntity({
           kind: "relation",
           sources: [{ entity: "recipe", relation: "recipes" }],
         },
+        explanation: {
+          ruleId: "meal.recipe-composition",
+          description:
+            "Meal composition is the current ordered set of recipe servings recorded for this meal.",
+          readPath: "recipes",
+          sourceDependencies: [{ path: "recipes", label: "Recipe servings" }],
+        },
         // Rendered by the `composition` detail slot.
         validation: {
           read: z.array(mealRecipeOut),
@@ -213,6 +230,19 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
         },
+        explanation: {
+          ruleId: "meal.images",
+          description:
+            "Meal images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
+          projections: {
+            list: "displayImages",
+            detail: "images",
+            summary: "displayImages",
+          },
+          sourceDependencies: [
+            { path: "displayImages", label: "Selected meal images" },
+          ],
+        },
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {
@@ -236,10 +266,41 @@ export default defineEntity({
         key: "totals",
         kind: "json",
         // Rendered by the `nutrition` detail slot.
+        explanation: {
+          ruleId: "meal.totals",
+          description:
+            "Meal totals combine the current recipe servings and their available cost and nutrition totals.",
+          readPath: "totals",
+          sourceDependencies: [{ path: "recipes", label: "Recipe servings" }],
+        },
         validation: {
           read: mealTotals,
           create: null,
           update: null,
+        },
+      },
+      {
+        key: "costTotal",
+        kind: "json",
+        nullable: true,
+        readKey: null,
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "recipe", relation: "recipes" }],
+        },
+        explanation: {
+          ruleId: "meal.cost-total",
+          description:
+            "Meal cost combines the current serving count with each recipe's available computed cost range.",
+          resolver: "recipeTotals",
+          projections: {
+            list: "totals.cost",
+            summary: "totals.cost",
+          },
+          sourceDependencies: [
+            { path: "recipes", label: "Recipe servings" },
+            { path: "totals.cost", label: "Computed meal cost" },
+          ],
         },
       },
       {
@@ -249,6 +310,19 @@ export default defineEntity({
         kind: "text-array",
         label: "Recipes",
         display: { detail: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "recipe", relation: "recipes" }],
+        },
+        explanation: {
+          ruleId: "meal.recipe-names",
+          description:
+            "Recipe names are projected from the meal's current recipe composition.",
+          readPath: "recipeNames",
+          sourceDependencies: [
+            { path: "recipes", label: "Recipe composition" },
+          ],
+        },
         validation: { read: z.array(z.string()), create: null, update: null },
       },
       {

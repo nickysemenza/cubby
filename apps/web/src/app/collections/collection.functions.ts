@@ -6,6 +6,19 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 export const collection = defineOperationDomain(collectionContract, {
+  referenceDetail: {
+    cache: "live-status",
+    tags: [
+      ["product"],
+      ["inventory"],
+      ["location"],
+      ["expense"],
+      ["purchase"],
+      ["financialAccount"],
+      ["vendorAccount"],
+      ["ledgerParty"],
+    ],
+  },
   smartList: {
     cache: "live-status",
     tags: [

@@ -75,12 +75,14 @@ export default defineEntity({
           id: "reconciliation",
           title: "Reconciliation",
           placement: "supporting",
+          explanationField: "reconciliation",
         },
         {
           kind: "slot",
           id: "financial-settlement",
           title: "Financial settlement",
           placement: "supporting",
+          explanationField: "financialReconciliation",
         },
       ],
     },
@@ -309,6 +311,12 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
         },
+        explanation: {
+          ruleId: "purchase.expense-count",
+          description:
+            "Expense count is the number of live expense lines linked to this purchase.",
+          readPath: "expenseCount",
+        },
         validation: {
           read: z.number().int(),
           create: null,
@@ -336,6 +344,16 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
         },
+        explanation: {
+          ruleId: "purchase.expense-total",
+          description:
+            "Expense total is the sum of cost across this purchase's live expense lines, including refunds.",
+          readPath: "expenseTotal",
+          sourceDependencies: [
+            { path: "expenseCount", label: "Live expense count" },
+            { path: "unpricedExpenseCount", label: "Unpriced expense count" },
+          ],
+        },
         validation: {
           read: money,
           create: null,
@@ -349,6 +367,17 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
+        },
+        explanation: {
+          ruleId: "purchase.expense-reconciliation",
+          description:
+            "Expense reconciliation compares the stated total with the live expense total and records missing-price coverage.",
+          readPath: "reconciliation",
+          sourceDependencies: [
+            { path: "statedTotal", label: "Stated total" },
+            { path: "expenseTotal", label: "Live expense total" },
+            { path: "unpricedExpenseCount", label: "Unpriced expense count" },
+          ],
         },
         validation: {
           read: purchaseReconciliation,
@@ -370,6 +399,19 @@ export default defineEntity({
             },
           ],
         },
+        explanation: {
+          ruleId: "purchase.financial-reconciliation",
+          description:
+            "Financial reconciliation compares the purchase total with confirmed settlement allocations; it does not change purchase spend.",
+          readPath: "financialReconciliation",
+          sourceDependencies: [
+            { path: "statedTotal", label: "Stated purchase total" },
+            {
+              path: "financialReconciliation",
+              label: "Settlement allocation summary",
+            },
+          ],
+        },
         validation: {
           read: financialReconciliationSummary,
           create: null,
@@ -384,6 +426,12 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
         },
+        explanation: {
+          ruleId: "purchase.document-count",
+          description:
+            "Document count is the number of live images attached to this purchase.",
+          readPath: "documentCount",
+        },
         validation: {
           read: z.number().int(),
           create: null,
@@ -397,6 +445,19 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
         },
+        explanation: {
+          ruleId: "purchase.images",
+          description:
+            "Purchase images are the current live document attachments in canonical attachment order; detail keeps each document classification while list and summary surfaces select the same images through the display-image projection.",
+          projections: {
+            list: "displayImages",
+            detail: "images",
+            summary: "displayImages",
+          },
+          sourceDependencies: [
+            { path: "displayImages", label: "Selected purchase images" },
+          ],
+        },
         validation: {
           read: purchaseImages,
           create: null,
@@ -408,10 +469,69 @@ export default defineEntity({
         kind: "json",
         display: { list: true, columnId: "dataQuality", listHidden: true },
         provenance: { kind: "derived", sources: [{ entity: "purchase" }] },
+        explanation: {
+          ruleId: "purchase.data-quality",
+          description:
+            "Data-quality gaps are evaluated from this purchase's current totals, line coverage, documents, and settlement state.",
+          projections: {
+            list: "dataQuality.status",
+            summary: "dataQuality.status",
+          },
+          sourceDependencies: [
+            { path: "dataQuality.gaps", label: "Detected gaps" },
+          ],
+        },
         validation: {
           read: dataQuality,
           create: null,
           update: null,
+        },
+      },
+      {
+        key: "transactionCount",
+        kind: "number",
+        readKey: null,
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              entity: "financialTransaction",
+              relation: "financial-transactions",
+            },
+          ],
+        },
+        explanation: {
+          ruleId: "purchase.transaction-count",
+          description:
+            "Transaction count is the number of confirmed financial transactions included in this purchase's settlement reconciliation.",
+          projections: {
+            list: "financialReconciliation.transactionCount",
+            summary: "financialReconciliation.transactionCount",
+          },
+          sourceDependencies: [
+            {
+              path: "financialReconciliation",
+              label: "Financial reconciliation",
+            },
+          ],
+        },
+      },
+      {
+        key: "dataGaps",
+        kind: "json",
+        readKey: null,
+        provenance: { kind: "derived", sources: [{ entity: "purchase" }] },
+        explanation: {
+          ruleId: "purchase.data-gaps",
+          description:
+            "Data gaps are the current checks reported by this purchase's data-quality evaluation.",
+          projections: {
+            list: "dataQuality.gaps",
+            summary: "dataQuality.gaps",
+          },
+          sourceDependencies: [
+            { path: "dataQuality.gaps", label: "Detected gaps" },
+          ],
         },
       },
       {

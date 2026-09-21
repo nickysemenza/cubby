@@ -1,3 +1,4 @@
+import { imageRepresentations } from "./image-summary";
 import { z } from "zod";
 import { imageShortcode } from "./identifiers";
 
@@ -11,6 +12,7 @@ import { imageShortcode } from "./identifiers";
 export const displayImageSummary = z.object({
   id: imageShortcode,
   url: z.url(),
+  representations: imageRepresentations.optional(),
 });
 export type DisplayImageSummary = z.infer<typeof displayImageSummary>;
 

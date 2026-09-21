@@ -179,6 +179,15 @@ const metadataSchemas = () => {
         )
         .optional()
         .default([]),
+      filters: z
+        .array(
+          z.strictObject({
+            field: nonEmptyString(),
+            values: z.array(nonEmptyString()).min(1),
+          }),
+        )
+        .optional()
+        .default([]),
     })
     .strict();
 
@@ -340,6 +349,47 @@ const metadataSchemas = () => {
         .optional()
         .default(null),
       provenance: entityFieldProvenanceMetadataSchema
+        .nullable()
+        .optional()
+        .default(null),
+      explanation: z
+        .strictObject({
+          ruleId: nonEmptyString(),
+          version: z.number().int().positive().default(1),
+          description: nonEmptyString(),
+          readPath: nonEmptyString().optional(),
+          resolver: z
+            .enum([
+              "field",
+              "inventoryOwnership",
+              "productValuation",
+              "imageRepresentation",
+              "productQuantity",
+              "recipeTotals",
+              "locationValuation",
+              "merchantVendorInference",
+              "expenseAttribution",
+            ])
+            .default("field"),
+          projections: z
+            .strictObject({
+              list: nonEmptyString().optional(),
+              detail: nonEmptyString().optional(),
+              summary: nonEmptyString().optional(),
+            })
+            .optional(),
+          sourceDependencies: z
+            .array(
+              z.strictObject({
+                path: nonEmptyString(),
+                label: nonEmptyString(),
+              }),
+            )
+            .optional(),
+          actions: z
+            .array(z.enum(["confirmOwner", "inheritOwner", "editSource"]))
+            .optional(),
+        })
         .nullable()
         .optional()
         .default(null),
@@ -538,6 +588,8 @@ const metadataSchemas = () => {
         kind: z.literal("slot"),
         id: sectionId,
         title: nonEmptyString().nullable().optional().default(null),
+        /** Declared computed field whose explanation applies to this slot. */
+        explanationField: fieldKey.nullable().optional().default(null),
         placement: sectionPlacement,
         collapsed: z
           .boolean({ error: "must be a boolean" })

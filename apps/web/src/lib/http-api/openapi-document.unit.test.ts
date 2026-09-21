@@ -191,6 +191,12 @@ describe("generated HTTP OpenAPI document", () => {
     expect(schemas).toHaveProperty("RecipeListPage");
     expect(schemas).toHaveProperty("ProductListItem");
     expect(schemas).toHaveProperty("AiDescribeLocationOutput");
+    expect(schemas).toHaveProperty("ImageProcessingIssueFilter");
+    expect(schemas).toHaveProperty("SmartCollectionPagination");
+    expect(schemas).toHaveProperty("ImageProcessingSource");
+    expect(schemas).toHaveProperty("ProductUnitPriceMappings");
+    expect(schemas).toHaveProperty("ProductDataGaps");
+    expect(schemas).toHaveProperty("OptionalImageRepresentations");
   });
 
   it("resolves every reference", () => {
@@ -255,7 +261,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(332);
+    expect(operations).toHaveLength(347);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -313,7 +319,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 154, post: 138, patch: 20, delete: 20 });
+    expect(methods).toEqual({ get: 159, post: 148, patch: 20, delete: 20 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();
@@ -386,7 +392,8 @@ describe("generated HTTP OpenAPI document", () => {
       .filter(
         (value) => schemaNode.safeParse(value).data?.format === "uri",
       ).length;
-    expect(uriPropertyCount).toBeLessThanOrEqual(50);
+    // ImageProcessingSource adds one intentional source URL to the previous 50.
+    expect(uriPropertyCount).toBeLessThanOrEqual(51);
   });
 
   it("shares one ListPageMeta across every list page", () => {

@@ -1,7 +1,7 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,7 +31,6 @@ import { inventory } from "~/app/inventory/inventory.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { entityListFor } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 
 const inventoryItemSchema = inventoryItemWithIdFields;
@@ -98,33 +97,28 @@ export default function BulkInventoryForm({
     }
   }, [initialLocation, initialLocationId, form, selectedLocation]);
 
-  // Fetch existing inventory items when location is selected.
-  // pageSize:100 caps how many existing entries we load into the form. Because
-  // bulkProcess deletes-on-omit, any existing entry NOT submitted is removed —
-  // so a truncated or still-loading set is a silent-wipe hazard. We surface
-  // status + totalCount below and refuse to submit when the loaded set can't be
-  // trusted as the complete picture.
-  const BULK_EDIT_PAGE_SIZE = 100;
+  const snapshotInput = selectedLocation
+    ? { locationId: selectedLocation.id, placement: "stock" as const }
+    : undefined;
+  const snapshotPolicy = snapshotInput
+    ? inventory.locationSnapshot.policy(snapshotInput)
+    : undefined;
   const {
     data: inventoryItemsData,
     refetch: refetchInventoryItems,
     status: inventoryStatus,
     isFetching: inventoryFetching,
-    dataUpdatedAt,
   } = useQuery({
-    ...entityListFor("inventory").queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: BULK_EDIT_PAGE_SIZE },
-      filters: { locationIdFilter: selectedLocation?.id ?? "" },
-    }),
-    enabled: !!selectedLocation,
+    queryKey: snapshotInput
+      ? inventory.locationSnapshot.queryKey(snapshotInput)
+      : ["inventory", "locationSnapshot", "unselected"],
+    queryFn: snapshotInput
+      ? ({ signal }) =>
+          inventory.locationSnapshot.call(snapshotInput, { signal })
+      : skipToken,
+    meta: snapshotPolicy?.meta,
+    ...snapshotPolicy?.freshness,
   });
-
-  // The loaded set is truncated when the location holds more entries than one
-  // page can show — saving would delete every entry past the first page.
-  const loadedCount = inventoryItemsData?.items.length ?? 0;
-  const totalCount = inventoryItemsData?.meta.totalCount ?? 0;
-  const isTruncated = !!selectedLocation && totalCount > loadedCount;
 
   // Seed the items field array once per selectedLocation.id rather than on
   // every inventoryItemsData identity change — a background refetch (window
@@ -212,14 +206,6 @@ export default function BulkInventoryForm({
       );
       return;
     }
-    if (isTruncated) {
-      setError(
-        `This location has ${totalCount} entries but only ${loadedCount} are shown here. Saving would permanently remove the ${
-          totalCount - loadedCount
-        } that aren't loaded. Audit this location in the inventory session instead, or split it into smaller locations.`,
-      );
-      return;
-    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -248,9 +234,7 @@ export default function BulkInventoryForm({
       await bulkProcessMutation.mutateAsync({
         locationId,
         items: processItems,
-        // Stamp the snapshot's fetch time so the server can reject a stale commit
-        // (something changed at this location since) rather than delete-on-omit.
-        loadedAt: dataUpdatedAt ? new Date(dataUpdatedAt) : undefined,
+        snapshotToken: inventoryItemsData?.snapshotToken,
       });
       toast.success(`Successfully updated inventory for ${location.name}`);
       setIsSubmitting(false);
@@ -285,14 +269,6 @@ export default function BulkInventoryForm({
           searchType="location"
         />
       </div>
-
-      {selectedLocation && isTruncated && (
-        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-xs text-warning-ink">
-          Showing {loadedCount} of {totalCount} entries. Bulk edit can't safely
-          save a partial load (it would delete the {totalCount - loadedCount}{" "}
-          not shown). Use the inventory session to audit this location.
-        </div>
-      )}
 
       {selectedLocation && (
         <>

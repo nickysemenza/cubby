@@ -1,8 +1,10 @@
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type EntityId,
   parseEntityId,
+  parseEntityRef,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
@@ -12,9 +14,15 @@ import {
   inventoryBulkOperationPayload,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
+  inventoryLocationSnapshotInput,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
 } from "@cubby/schemas/inventory";
+import {
+  confirmInventoryOwnershipInput,
+  type InventoryOwnershipSelection,
+  setInventoryOwnershipInput,
+} from "@cubby/schemas/inventory-ownership";
 import {
   resolveScanStraysInput,
   scanAtLocationInput,
@@ -30,8 +38,11 @@ import {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
   getInventoryByLocationIds,
+  getInventoryLocationSnapshotToken,
   moveInventoryEntries,
   reconcileLocationSession,
+  setInventoryOwnership,
+  confirmInventoryOwnership,
 } from "~/server/repo/inventory";
 import {
   discardFromInventoryEntries,
@@ -39,6 +50,7 @@ import {
 } from "~/server/repo/product";
 import {
   bindShortcodeResolver,
+  lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
@@ -104,6 +116,37 @@ const inventoryMutation = <
 
 const locationShortcodes = bindShortcodeResolver("location");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
+const ledgerPartyShortcodes = bindShortcodeResolver("ledgerParty");
+
+const resolveOwnership = async (
+  db: Database,
+  ownership: InventoryOwnershipSelection | undefined,
+) => {
+  if (!ownership) return undefined;
+  return {
+    ownershipMode: ownership.mode,
+    ownerLedgerPartyId:
+      ownership.mode === "person"
+        ? await ledgerPartyShortcodes.one(db, ownership.ownerId)
+        : null,
+  };
+};
+
+const inventoryCodesForIds = async (
+  db: Database,
+  ids: EntityId<"inventory">[],
+) => {
+  const codes = await lookupShortcodes(
+    db,
+    ids.map((id) => parseEntityRef("inventory", id)),
+  );
+  return ids.map((id) =>
+    parseShortcodeFor(
+      "inventory",
+      codes.get(entityRefKey("inventory", id)) ?? "",
+    ),
+  );
+};
 
 async function resolveEntityIds<
   T extends string,
@@ -161,18 +204,31 @@ export const bulkProcessInventoryWorkflow = inventoryMutation(
       ),
     ]);
 
-    return { resolvedProducts, resolvedLocations, resolvedInventories };
+    const resolvedOwnership = await Promise.all(
+      input.items.map((item) => resolveOwnership(db, item.ownership)),
+    );
+    return {
+      resolvedProducts,
+      resolvedLocations,
+      resolvedInventories,
+      resolvedOwnership,
+    };
   },
   async (
     db,
     actorContext,
     input,
-    { resolvedProducts, resolvedLocations, resolvedInventories },
+    {
+      resolvedProducts,
+      resolvedLocations,
+      resolvedInventories,
+      resolvedOwnership,
+    },
   ) => {
     const items = await bulkProcessInventoryEntries(
       db,
       parseEntityId("location", resolvedLocations.get(input.locationId)!),
-      input.items.map((item) => ({
+      input.items.map((item, index) => ({
         id: item.id
           ? parseEntityId("inventory", resolvedInventories.get(item.id)!)
           : undefined,
@@ -185,9 +241,11 @@ export const bulkProcessInventoryWorkflow = inventoryMutation(
           resolvedLocations.get(item.locationId)!,
         ),
         amount: item.amount,
+        ownership: resolvedOwnership[index],
       })),
       actorContext,
       input.loadedAt,
+      input.snapshotToken,
     );
     return { items };
   },
@@ -222,9 +280,17 @@ export const bulkAddInventoryWorkflow = inventoryMutation(
       "location",
     );
 
-    return { resolvedProducts, resolvedLocations };
+    const resolvedOwnership = await Promise.all(
+      input.items.map((item) => resolveOwnership(db, item.ownership)),
+    );
+    return { resolvedProducts, resolvedLocations, resolvedOwnership };
   },
-  async (db, actorContext, input, { resolvedProducts, resolvedLocations }) => {
+  async (
+    db,
+    actorContext,
+    input,
+    { resolvedProducts, resolvedLocations, resolvedOwnership },
+  ) => {
     const { items, createdCount, mergedCount } = await addInventoryEntries(
       db,
       {
@@ -232,13 +298,14 @@ export const bulkAddInventoryWorkflow = inventoryMutation(
           "location",
           resolvedLocations.get(input.locationId)!,
         ),
-        items: input.items.map((item) => ({
+        items: input.items.map((item, index) => ({
           productId: parseEntityId(
             "product",
             resolvedProducts.get(item.productId) ?? "",
           ),
           amount: item.amount,
           placement: item.placement,
+          ownership: resolvedOwnership[index],
         })),
       },
       actorContext,
@@ -463,6 +530,7 @@ export const reconcileInventorySessionWorkflow = bindWorkflow(
         expectedInventoryEntryIds: input.expectedInventoryEntryIds.map((id) =>
           parseEntityId("inventory", resolvedInventories.get(id)!),
         ),
+        snapshotToken: input.snapshotToken,
         resolutions: input.resolutions.map((resolution) => {
           const inventoryEntryId = parseEntityId(
             "inventory",
@@ -594,6 +662,78 @@ export const getInventoryByLocationIdsWorkflow = bindWorkflow(
     context: db,
     input,
   }),
+);
+
+export const getInventoryLocationSnapshotWorkflow = defineWorkflowOperation(
+  "inventory.locationSnapshot",
+  async (
+    db: Database,
+    input: z.output<typeof inventoryLocationSnapshotInput>,
+  ) => {
+    const locationId = await locationShortcodes.one(db, input.locationId);
+    // Token first: a write after this read makes the token stale and the
+    // eventual destructive reconcile refuse; reversing the reads could hand a
+    // caller a current token for rows absent from its visible snapshot.
+    const snapshotToken = await getInventoryLocationSnapshotToken(
+      db,
+      locationId,
+      input.placement,
+    );
+    const items = await getInventoryByLocationIds(db, [locationId], {
+      placement: input.placement,
+    });
+    return { items, snapshotToken };
+  },
+);
+
+export const setInventoryOwnershipWorkflow = defineWorkflowOperation(
+  "inventory.setOwnership",
+  async (
+    context: InventoryMutationContext,
+    input: z.output<typeof setInventoryOwnershipInput>,
+  ) => {
+    const id = await inventoryShortcodes.one(
+      context.db,
+      input.inventoryEntryId,
+    );
+    const ids = await setInventoryOwnership(
+      context.db,
+      id,
+      input.ownership,
+      input.quantity,
+      context.actorContext,
+    );
+    await runMutationSideEffectsForEntities(
+      context.db,
+      mutationEvents("inventory", "updated", ids, "inventory.setOwnership"),
+    );
+    return { entries: await inventoryCodesForIds(context.db, ids) };
+  },
+);
+
+export const confirmInventoryOwnershipWorkflow = defineWorkflowOperation(
+  "inventory.confirmOwnership",
+  async (
+    context: InventoryMutationContext,
+    input: z.output<typeof confirmInventoryOwnershipInput>,
+  ) => {
+    const id = await inventoryShortcodes.one(
+      context.db,
+      input.inventoryEntryId,
+    );
+    const ids = await confirmInventoryOwnership(
+      context.db,
+      id,
+      input.evidenceFingerprint,
+      input.quantity,
+      context.actorContext,
+    );
+    await runMutationSideEffectsForEntities(
+      context.db,
+      mutationEvents("inventory", "updated", ids, "inventory.confirmOwnership"),
+    );
+    return { entries: await inventoryCodesForIds(context.db, ids) };
+  },
 );
 
 export const scanInventoryAtLocationWorkflow = defineWorkflowOperation(

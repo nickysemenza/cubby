@@ -143,3 +143,57 @@ describe("smart Collection predicates", () => {
     ).toBe(1);
   });
 });
+
+describe("parameterized wardrobe predicates", () => {
+  it("requires both apparel and effective owner while a shared catalog item can belong to two wardrobes", () => {
+    const graph: SmartCollectionGraph = {
+      products: [
+        { id: "shirt", manufacturer: "", tags: [], category: "apparel" },
+        { id: "drill", manufacturer: "", tags: [], category: "tools" },
+        { id: "shoes", manufacturer: "", tags: [], category: "apparel" },
+      ],
+      inventory: [
+        {
+          productId: "shirt",
+          locationId: "closet",
+          effectiveOwnerId: "LPY-AAAA",
+        },
+        {
+          productId: "shirt",
+          locationId: "closet",
+          effectiveOwnerId: "LPY-BBBB",
+        },
+        {
+          productId: "drill",
+          locationId: "closet",
+          effectiveOwnerId: "LPY-AAAA",
+        },
+        { productId: "shoes", locationId: "closet", effectiveOwnerId: null },
+      ],
+      locations: [
+        { id: "closet", name: "Closet", parentId: null, productId: null },
+      ],
+      expenses: [],
+    };
+    const definitions: SmartCollectionDefinition[] = [
+      "LPY-AAAA",
+      "LPY-BBBB",
+    ].map((owner) =>
+      smartCollectionDefinition.parse({
+        key: "wardrobe",
+        name: "Wardrobe",
+        match: "all",
+        rules: [
+          { kind: "effectiveOwnerEquals", value: owner },
+          { kind: "categoryEquals", value: "apparel" },
+        ],
+      }),
+    );
+    for (const result of evaluateSmartCollections(graph, definitions))
+      expect([...result.members.keys()]).toEqual(["shirt"]);
+    const any = evaluateSmartCollections(graph, [
+      { ...definitions[0]!, match: "any" },
+    ])[0]!;
+    expect([...any.members.keys()]).toEqual(["shirt", "drill", "shoes"]);
+  });
+});

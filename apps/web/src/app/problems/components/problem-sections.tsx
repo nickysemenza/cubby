@@ -9,6 +9,7 @@ import {
   type FinancialTransactionAllocationDefect,
   type KitCountedTwice,
   type ImportFindingProblem,
+  type ImageProcessingProblem,
   type LabelVariant,
   type NegativeExpectedQuantity,
   type ProblemKey,
@@ -1424,6 +1425,28 @@ const DECLARED_SECTIONS = [
         ? [<CodeChip key="upc">{displayGtin(product.primaryGtin)}</CodeChip>]
         : [],
       route: entityDetailLink("product", product.id),
+    }),
+  }),
+  section({
+    id: "image-processing",
+    label: "Image processing",
+    select: (p) => p.imageProcessingIssues,
+    problemKeys: ["imageProcessingIssues"],
+    coverage: { keys: ["imageProcessingIssues"] },
+    entity: "image",
+    renderItem: (image: ImageProcessingProblem) => ({
+      title: image.filename,
+      subtitle:
+        image.processingIssue === "failed"
+          ? "Processing failed"
+          : "Cutout eligibility needs review",
+      badges: [
+        <Badge key="issue" variant="warning">
+          {image.processingIssue === "failed" ? "Failed" : "Needs review"}
+        </Badge>,
+      ],
+      route: entityDetailLink("image", image.id),
+      editLabel: "Open image",
     }),
   }),
   section({

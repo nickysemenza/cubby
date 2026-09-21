@@ -35,6 +35,8 @@ import {
 const PAGE_SIZE = 50;
 
 const RULE_KIND_LABELS = {
+  effectiveOwnerEquals: "Effective owner",
+  categoryEquals: "Product category",
   productTagEquals: "Product tag equals",
   manufacturerEquals: "Manufacturer equals",
   locationNameContains: "Location or ancestor contains",

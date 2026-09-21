@@ -1229,6 +1229,10 @@ describe("typed entity compiler", () => {
           {
             key: "dueOn",
             kind: "date",
+            provenance: {
+              kind: "derived",
+              sources: [{ label: "Scheduling rules" }],
+            },
             display: { detail: true },
             validation: { read: z.string(), create: null, update: null },
           },
@@ -1536,6 +1540,40 @@ describe("typed entity compiler", () => {
     expect(search).toContain('"kind":urlEnumListParam(searchRef');
     expect(search).toContain("create:createSearchField");
     expect(search).toContain('"manufacturer":urlStringParam');
+    const explanationReference = artifact("how-values-are-determined.md");
+    expect(explanationReference).toContain("# How values are determined");
+    expect(explanationReference).not.toContain("\nDerived from ");
+    const explanationCount = entities.reduce(
+      (count, entity) =>
+        count +
+        entity.fieldModel.fields.filter((field) => field.explanation !== null)
+          .length,
+      0,
+    );
+    expect(explanationReference.match(/^### /gmu)).toHaveLength(
+      explanationCount,
+    );
+    expect(explanationReference).toContain(
+      "A manual valuation price wins; otherwise Cubby derives a per-unit price",
+    );
+    expect(explanationReference).toContain(
+      "- Rule: `product.effective-valuation-price`, version 1",
+    );
+    expect(explanationReference).toContain(
+      "- Value paths: List `pricing.effectivePrice`; Detail `pricing.effectivePrice`; Summary `pricing.effectivePrice`",
+    );
+    expect(explanationReference).toContain("Manual valuation price (`price`)");
+    expect(explanationReference).toContain("- Available actions: Edit source");
+    expect(explanationReference).toContain(
+      "- Value paths: List `displayImages`; Detail `images`; Summary `displayImages`",
+    );
+    expect(explanationReference).toContain(
+      "Selected product images (`displayImages`)",
+    );
+    expect(explanationReference).toContain(
+      "Parent project (`parentProjectId`)",
+    );
+    expect(explanationReference).toContain("Image storage key (`key`)");
     // Generated routes keep a literal options object (the code-splitter
     // contract) and address the entity through its generated search.
     const vendorsIndex = artifact("vendors.index.tsx");

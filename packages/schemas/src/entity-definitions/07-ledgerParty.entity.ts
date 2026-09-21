@@ -20,6 +20,7 @@ export default defineEntity({
     icons: { lucide: "Users", sfSymbol: "person.2", emoji: "👤" },
     detail: {
       sections: [
+        { kind: "slot", id: "wardrobe", title: "Wardrobe" },
         {
           kind: "fields",
           id: "overview",

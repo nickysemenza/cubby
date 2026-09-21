@@ -1,6 +1,9 @@
 import { defineEntity } from "./definition.js";
 import { productShortcode, wishShortcode } from "../identifier-fields.js";
-import { wishCandidateOut } from "@cubby/schemas/wish-fields";
+import {
+  wishCandidateOut,
+  wishPriceRangeOut,
+} from "@cubby/schemas/wish-fields";
 import { z } from "zod";
 export default defineEntity({
   key: "wish",
@@ -118,8 +121,69 @@ export default defineEntity({
         key: "candidates",
         kind: "json",
         display: { detail: true, renderer: { detail: "wish-candidates" } },
+        provenance: {
+          kind: "relation",
+          sources: [{ entity: "product", relation: "candidates" }],
+        },
+        explanation: {
+          ruleId: "wish.candidates",
+          description:
+            "Candidates are the live product relationships currently recorded for this wish.",
+          readPath: "candidates",
+          sourceDependencies: [
+            { path: "candidates", label: "Candidate products" },
+          ],
+        },
         validation: {
           read: z.array(wishCandidateOut),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "candidateCount",
+        kind: "number",
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product", relation: "candidates" }],
+        },
+        explanation: {
+          ruleId: "wish.candidate-count",
+          description:
+            "Option count is the number of live candidate products currently attached to this wish.",
+          readPath: "candidateCount",
+          sourceDependencies: [
+            { path: "candidates", label: "Candidate products" },
+          ],
+        },
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "priceRange",
+        kind: "json",
+        nullable: true,
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product", relation: "candidates" }],
+        },
+        explanation: {
+          ruleId: "wish.candidate-price-range",
+          description:
+            "Price range is the low and high effective price across priced live candidates; unpriced candidates are counted separately and excluded from the range.",
+          readPath: "priceRange",
+          sourceDependencies: [
+            {
+              path: "candidates",
+              label: "Candidate products and effective prices",
+            },
+          ],
+        },
+        validation: {
+          read: wishPriceRangeOut.nullable(),
           create: null,
           update: null,
         },
@@ -182,6 +246,8 @@ export default defineEntity({
       "notes",
       "acquiredAt",
       "candidates",
+      "candidateCount",
+      "priceRange",
       "createdAt",
       "updatedAt",
     ],

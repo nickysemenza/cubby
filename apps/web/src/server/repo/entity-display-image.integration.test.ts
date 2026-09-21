@@ -52,6 +52,30 @@ import {
 describe("entity display image resolver", () => {
   const ctx = withTestDb();
 
+  const expectedRepresentations = (key: string) => {
+    const original = getR2PublicUrl(key);
+    return {
+      original,
+      transparent: null,
+      preferred: original,
+      preferredKind: "original" as const,
+    };
+  };
+
+  const expectedDisplayImage = (record: {
+    shortcode: string;
+    key: string;
+  }) => ({
+    id: record.shortcode,
+    url: getR2PublicUrl(record.key),
+    representations: expectedRepresentations(record.key),
+  });
+
+  const expectedImageUrl = (record: { key: string }) => ({
+    url: getR2PublicUrl(record.key),
+    representations: expectedRepresentations(record.key),
+  });
+
   const makeImage = (
     overrides: Partial<Parameters<typeof createUploadedImageRecord>[1]> = {},
   ) =>
@@ -106,9 +130,9 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
-        { id: imgB.shortcode, url: getR2PublicUrl(imgB.key) },
-        { id: imgC.shortcode, url: getR2PublicUrl(imgC.key) },
-        { id: imgA.shortcode, url: getR2PublicUrl(imgA.key) },
+        expectedDisplayImage(imgB),
+        expectedDisplayImage(imgC),
+        expectedDisplayImage(imgA),
       ]);
     });
 
@@ -164,8 +188,8 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
-        { id: locationImg.shortcode, url: getR2PublicUrl(locationImg.key) },
-        { id: productImg.shortcode, url: getR2PublicUrl(productImg.key) },
+        expectedDisplayImage(locationImg),
+        expectedDisplayImage(productImg),
       ]);
     });
   });
@@ -205,9 +229,7 @@ describe("entity display image resolver", () => {
         (row) => ({ id: row.id }),
       );
 
-      expect(rows[0]?.displayImages).toEqual([
-        { id: logo.shortcode, url: getR2PublicUrl(logo.key) },
-      ]);
+      expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(logo)]);
       expect(
         (
           await resolveEntityAttachments(ctx.db, "vendor", [created.entityId])
@@ -237,9 +259,7 @@ describe("entity display image resolver", () => {
         (row) => ({ id: row.id }),
       );
 
-      expect(rows[0]?.displayImages).toEqual([
-        { id: cover.shortcode, url: getR2PublicUrl(cover.key) },
-      ]);
+      expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(cover)]);
       expect(
         (await resolveEntityAttachments(ctx.db, "cookbook", [cb.entityId])).get(
           cb.entityId,
@@ -284,7 +304,7 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
-        { id: productImg.shortcode, url: getR2PublicUrl(productImg.key) },
+        expectedDisplayImage(productImg),
       ]);
     });
   });
@@ -335,8 +355,8 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
-        { id: olderImg.shortcode, url: getR2PublicUrl(olderImg.key) },
-        { id: newerImg.shortcode, url: getR2PublicUrl(newerImg.key) },
+        expectedDisplayImage(olderImg),
+        expectedDisplayImage(newerImg),
       ]);
       const [detail] = await withUniversalEntityMedia(
         ctx.db,
@@ -563,8 +583,8 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
-        { id: imgA.shortcode, url: getR2PublicUrl(imgA.key) },
-        { id: imgB.shortcode, url: getR2PublicUrl(imgB.key) },
+        expectedDisplayImage(imgA),
+        expectedDisplayImage(imgB),
       ]);
 
       // Regression: `wishList` handed hydrated rows (shortcode `id`) to the
@@ -576,10 +596,7 @@ describe("entity display image resolver", () => {
       });
       expect(
         listed.data.find((row) => row.id === wish.output.id)?.displayImages,
-      ).toEqual([
-        { id: imgA.shortcode, url: getR2PublicUrl(imgA.key) },
-        { id: imgB.shortcode, url: getR2PublicUrl(imgB.key) },
-      ]);
+      ).toEqual([expectedDisplayImage(imgA), expectedDisplayImage(imgB)]);
     });
   });
 
@@ -616,9 +633,7 @@ describe("entity display image resolver", () => {
         (row) => ({ id: row.id }),
       );
 
-      expect(rows[0]?.displayImages).toEqual([
-        { id: img.shortcode, url: getR2PublicUrl(img.key) },
-      ]);
+      expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(img)]);
     });
 
     it("an expense shows its product's images", async () => {
@@ -644,9 +659,7 @@ describe("entity display image resolver", () => {
         (row) => ({ id: row.id }),
       );
 
-      expect(rows[0]?.displayImages).toEqual([
-        { id: img.shortcode, url: getR2PublicUrl(img.key) },
-      ]);
+      expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(img)]);
     });
   });
 
@@ -679,8 +692,8 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
-        { id: first.shortcode, url: getR2PublicUrl(first.key) },
-        { id: second.shortcode, url: getR2PublicUrl(second.key) },
+        expectedDisplayImage(first),
+        expectedDisplayImage(second),
       ]);
     });
   });
@@ -765,9 +778,9 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
-        { id: newerImg.shortcode, url: getR2PublicUrl(newerImg.key) },
-        { id: olderImg.shortcode, url: getR2PublicUrl(olderImg.key) },
-        { id: productImg.shortcode, url: getR2PublicUrl(productImg.key) },
+        expectedDisplayImage(newerImg),
+        expectedDisplayImage(olderImg),
+        expectedDisplayImage(productImg),
       ]);
     });
 
@@ -807,7 +820,7 @@ describe("entity display image resolver", () => {
       );
 
       expect(rows[0]?.displayImages).toEqual([
-        { id: productImg.shortcode, url: getR2PublicUrl(productImg.key) },
+        expectedDisplayImage(productImg),
       ]);
     });
 
@@ -860,9 +873,9 @@ describe("entity display image resolver", () => {
         { entityType: "product", entityId: withoutImage.entityId },
       ]);
 
-      expect(result.get(entityRefKey("product", withImage.entityId))).toEqual({
-        url: getR2PublicUrl(cover.key),
-      });
+      expect(result.get(entityRefKey("product", withImage.entityId))).toEqual(
+        expectedImageUrl(cover),
+      );
       expect(result.has(entityRefKey("product", withoutImage.entityId))).toBe(
         false,
       );
@@ -885,9 +898,9 @@ describe("entity display image resolver", () => {
         { entityType: "financialAccount", entityId: financialAccountId },
       ]);
 
-      expect(result.get(entityRefKey("product", product.entityId))).toEqual({
-        url: getR2PublicUrl(img.key),
-      });
+      expect(result.get(entityRefKey("product", product.entityId))).toEqual(
+        expectedImageUrl(img),
+      );
       expect(
         result.has(entityRefKey("financialAccount", financialAccountId)),
       ).toBe(false);
@@ -1042,32 +1055,30 @@ describe("entity display image resolver", () => {
         { entityType: "gardenEntry", entityId: gardenEntryRow.id },
       ]);
 
-      expect(result.get(entityRefKey("product", product.entityId))).toEqual({
-        url: getR2PublicUrl(productImg.key),
-      });
-      expect(result.get(entityRefKey("location", location.entityId))).toEqual({
-        url: getR2PublicUrl(locationImg.key),
-      });
-      expect(result.get(entityRefKey("cookbook", cookbook.entityId))).toEqual({
-        url: getR2PublicUrl(cover.key),
-      });
+      expect(result.get(entityRefKey("product", product.entityId))).toEqual(
+        expectedImageUrl(productImg),
+      );
+      expect(result.get(entityRefKey("location", location.entityId))).toEqual(
+        expectedImageUrl(locationImg),
+      );
+      expect(result.get(entityRefKey("cookbook", cookbook.entityId))).toEqual(
+        expectedImageUrl(cover),
+      );
       expect(
         result.get(entityRefKey("ingredient", ingredient.entityId)),
-      ).toEqual({
-        url: getR2PublicUrl(ingredientImg.key),
-      });
-      expect(result.get(entityRefKey("wish", wish.entityId))).toEqual({
-        url: getR2PublicUrl(wishImg.key),
-      });
+      ).toEqual(expectedImageUrl(ingredientImg));
+      expect(result.get(entityRefKey("wish", wish.entityId))).toEqual(
+        expectedImageUrl(wishImg),
+      );
       expect(
         result.get(entityRefKey("inventory", inventoryEntry.entityId)),
-      ).toEqual({ url: getR2PublicUrl(invImg.key) });
-      expect(result.get(entityRefKey("expense", expense.entityId))).toEqual({
-        url: getR2PublicUrl(expImg.key),
-      });
+      ).toEqual(expectedImageUrl(invImg));
+      expect(result.get(entityRefKey("expense", expense.entityId))).toEqual(
+        expectedImageUrl(expImg),
+      );
       expect(
         result.get(entityRefKey("gardenEntry", gardenEntryRow.id)),
-      ).toEqual({ url: getR2PublicUrl(gardenImg.key) });
+      ).toEqual(expectedImageUrl(gardenImg));
     });
   });
 });

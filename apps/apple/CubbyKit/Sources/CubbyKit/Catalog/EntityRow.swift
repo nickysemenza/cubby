@@ -63,10 +63,14 @@ extension EntityDescriptor {
         )
     }
 
-    /// The server owns direct-versus-related precedence. Native renders only
-    /// the first universal `displayImages` entry and derives nothing itself.
+    /// The server owns direct-versus-related precedence and preferred-representation choice.
+    /// Native renders the preferred URL when present, falling back to the original for rows from
+    /// older servers and images whose derivative is not ready.
     private static func imageURL(from object: JSONValue) -> URL? {
-        guard let first = object["displayImages"]?[0]?["url"]?.stringValue else { return nil }
-        return URL(string: first)
+        guard let first = object["displayImages"]?[0] else { return nil }
+        let value =
+            first["representations"]?["preferred"]?.stringValue
+            ?? first["url"]?.stringValue
+        return value.flatMap(URL.init(string:))
     }
 }

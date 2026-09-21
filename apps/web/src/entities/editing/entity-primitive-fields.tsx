@@ -50,6 +50,7 @@ import {
   type EditMode,
   type EntityFieldPresentation,
 } from "./entity-field-presentation";
+import { LedgerAttributionsField } from "./ledger-attributions-field";
 import { referenceScopeFields, referenceScopeFor } from "./reference-scope";
 import {
   entitySelectOptionsFor,
@@ -511,6 +512,9 @@ export const controlRendererCoverage = {
   money: generic,
   url: generic,
   "tag-list": implemented(TagListField),
+  "ledger-attributions": implemented(({ field, form }) => (
+    <LedgerAttributionsField form={form} name={field.key} label={field.label} />
+  )),
   amount: implemented(AmountField),
   "entity-multi-select": implemented(EntityMultiSelectField),
   "vendor-name": implemented(VendorNameField),

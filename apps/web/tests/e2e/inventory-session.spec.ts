@@ -33,9 +33,7 @@ test("recount is current-pass scoped, resumable, and completes with a summary", 
     page.getByRole("button", { name: "Decrease quantity" }),
   ).toHaveCount(0);
 
-  await page
-    .getByRole("button", { name: `Change ${firstProduct}` })
-    .dispatchEvent("click");
+  await page.getByRole("button", { name: `Change ${firstProduct}` }).click();
   await expect(
     page.getByRole("button", { name: "Decrease quantity" }),
   ).toBeVisible();

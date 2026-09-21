@@ -28,6 +28,7 @@ const ledgerPartyMergeSummary = z.object({
   merged: z.number().int().nonnegative(),
   attributionEdgesRepointed: z.number().int().nonnegative(),
   accountEdgesRepointed: z.number().int().nonnegative(),
+  inventoryEdgesRepointed: z.number().int().nonnegative(),
   transferEdgesRepointed: z.number().int().nonnegative(),
   portionEdgesRepointed: z.number().int().nonnegative(),
   foodEntryEdgesRepointed: z.number().int().nonnegative(),

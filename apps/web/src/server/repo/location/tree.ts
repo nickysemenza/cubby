@@ -37,6 +37,7 @@ import {
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 
+import { hydrateImageReadProjection } from "../image-read-projection";
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
 import { loadStockItemsByLocation } from "./stock-items";
@@ -239,7 +240,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   const tree: InfLocation[] = roots.map((x) => {
     return buildLocationWithChildren(x, undefined, false, valuations);
   });
-  return tree;
+  return hydrateImageReadProjection(db, tree);
 };
 
 /**

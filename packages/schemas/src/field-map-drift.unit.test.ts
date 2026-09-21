@@ -93,6 +93,8 @@ const PROJECT_LOCATIONS_HAND_ARRAY =
 const TASK_EXPENSE_SHARED_MODULE_COLLISION =
   "task/expense's own generated field — generatedTaskFieldSchemas/generatedExpenseFieldSchemas are composed inside project.ts (see the file header note above MODULE_OVERRIDES on shared-module collisions); this key already references its OWN entity's generated map correctly, it just coincidentally shares a name with project's generated field and this walk runs per canonical module";
 const INTENTIONAL_RESPELLINGS = {
+  "inventory::inventoryLocationSnapshotInput::placement":
+    "location-snapshot makes the generated read placement optional with a default of stock; the wrapper changes omission behavior while retaining the generated enum as its inner schema",
   // --- product.ts: reviewed and intentional -------------------------------
   "product::productQuickCreatePayload::name":
     "quick-create keeps its own requiredName() label ('Product name'), not the generated create field's describe()/meta()",

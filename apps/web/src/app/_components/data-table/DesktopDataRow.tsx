@@ -13,6 +13,7 @@ import { z } from "zod";
 
 import { Button } from "~/components/ui/button";
 import { TableCell, TableRow } from "~/components/ui/table";
+import { FieldExplanation } from "~/entities/field-explanation";
 import { isInspectableFieldProvenance } from "~/entities/field-provenance";
 import { cn } from "~/lib/utils";
 
@@ -21,7 +22,7 @@ import { columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
 import type { CubbyRow as Row } from "./table-features";
-import type { CubbyColumnMeta } from "./table-meta";
+import { type CubbyColumnMeta, resolveColumnExplanation } from "./table-meta";
 
 const NUMERIC_CELL = "text-right font-mono tabular-nums";
 const MONO_CELL = "font-mono";
@@ -101,6 +102,26 @@ function DesktopDataCell<TItem extends RowData>({
     rendered,
     cell.column.columnDef.meta,
   );
+  const explanation = resolveColumnExplanation(
+    cell.column.columnDef.meta?.explanation,
+    cell.row.original,
+  );
+  const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
+  const explained =
+    explanation && rowIdentity.success ? (
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+        <span className="min-w-0">{content}</span>
+        <FieldExplanation
+          entity={explanation.entity}
+          id={rowIdentity.data.id}
+          field={explanation.field}
+          label={explanation.label}
+          surface="list"
+        />
+      </span>
+    ) : (
+      content
+    );
   return (
     <TableCell
       key={cell.id}
@@ -122,7 +143,7 @@ function DesktopDataCell<TItem extends RowData>({
       )}
       style={{ width, minWidth: width, maxWidth: width, ...inset }}
     >
-      {content}
+      {explained}
     </TableCell>
   );
 }

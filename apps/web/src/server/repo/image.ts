@@ -1,8 +1,7 @@
-/** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
-
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+/** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
 import type {
   EntityRef,
   ImageId,
@@ -24,6 +23,7 @@ import type {
 } from "@cubby/schemas/image";
 import { attachableImageEntityId } from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
+import type { SearchableEntityRef } from "@cubby/schemas/search";
 import {
   aliasedTable,
   and,
@@ -50,6 +50,12 @@ import type {
   IncomingEdgeKey,
   IncomingEdgePolicy,
 } from "~/server/db/entity-incoming-edges";
+import {
+  imageDerivative,
+  imageDescriptionCorrection,
+  imageProcessingOrphan,
+  imageProcessingJob,
+} from "~/server/db/image-processing-schema";
 import {
   cookbook,
   gardenEntry,
@@ -96,6 +102,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
+import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   resolveAllPresent,
@@ -107,6 +114,17 @@ import {
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+import { loadImageRepresentations } from "./image-processing";
+import {
+  imageProcessingIssueFilter,
+  loadImageProcessingIssues,
+} from "./image-processing-issues";
+import {
+  findDirectImageSearchOwnerRefs,
+  refreshCapturedImageSearchOwnerRefs,
+  refreshDirectImageOwnerSearchDocuments,
+} from "./search-document";
 
 /** A gallery target's discriminator and branded private ID travel together. */
 export type AttachableImageRef = Extract<
@@ -188,7 +206,7 @@ export const attachExistingImageToEntity = async (
   // SAFETY: target shortcode validation restricts the resolved live ref to the gallery roster.
   const entity = target as AttachableImageRef;
 
-  return await withTransaction(db, async (tx) => {
+  const attached = await withTransaction(db, async (tx) => {
     await lockAttachableEntity(tx, entity);
     const [source] = await tx
       .select({ status: image.status })
@@ -291,6 +309,11 @@ export const attachExistingImageToEntity = async (
     }
     return { reused };
   });
+  // The gallery association changes the direct owner set of the image's
+  // description and correction text. Refresh after commit so search only sees
+  // a live attachment.
+  await refreshDirectImageOwnerSearchDocuments(db, imageId);
+  return attached;
 };
 
 export const createPendingImageRecord = async (
@@ -472,6 +495,7 @@ export const setImagePerceptualHashes = async (
 };
 
 const imageIntegrityFields = (imageData: typeof image.$inferSelect) => ({
+  useOriginal: imageData.useOriginal,
   width: imageData.width,
   height: imageData.height,
   detectedContentType: imageData.detectedContentType,
@@ -821,6 +845,11 @@ const imageReferenceCondition = (
       liveness === "active" ? activeWhere : undefined,
     );
   const byEdge = {
+    // Processing children are cascade metadata, not user ownership. The hard
+    // delete path below clears them after it locks the original image.
+    "ImageProcessingJob.imageId": sql`FALSE`,
+    "ImageDerivative.imageId": sql`FALSE`,
+    "ImageDescriptionCorrection.imageId": sql`FALSE`,
     "ImportPreparedOrder.primaryDocumentImageId": exists(
       dbc
         .select({ one: sql`1` })
@@ -989,6 +1018,7 @@ export const buildImageWhere = (
       ...declaredFilterPredicates("image", outerImage, filters),
       ...auditDateWhereConditions(outerImage, filters),
       referencePresence,
+      imageProcessingIssueFilter(outerImage, filters.processingIssue),
       filters.uploadedAgeHoursMin !== undefined
         ? sql`${outerImage.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`
         : undefined,
@@ -1031,7 +1061,19 @@ export const imageList = async (
     count: () => countWhere(db, image, countWhereClause),
   });
 
-  const processedImages = images.map(imageWithRelationsToAPI);
+  const representations = await loadImageRepresentations(
+    db,
+    images.map((item) => item.shortcode),
+  );
+  const processingIssues = await loadImageProcessingIssues(
+    db,
+    images.map((item) => item.shortcode),
+  );
+  const processedImages = images.map((item) => ({
+    ...imageWithRelationsToAPI(item),
+    representations: representations.get(item.shortcode),
+    processingIssue: processingIssues.get(item.shortcode) ?? null,
+  }));
 
   return {
     data: processedImages,
@@ -1052,7 +1094,12 @@ export const getImageById = async (
     throw createAppError("IMAGE_NOT_FOUND", "Image not found");
   }
 
-  return imageWithRelationsToAPI(imageRecord);
+  return {
+    ...imageWithRelationsToAPI(imageRecord),
+    representations: (
+      await loadImageRepresentations(db, [imageRecord.shortcode])
+    ).get(imageRecord.shortcode),
+  };
 };
 
 /**
@@ -1073,7 +1120,14 @@ export const getImagesByShortcodes = async (
     ),
     with: imageEntityRelations,
   });
-  return records.map(imageWithRelationsToAPI);
+  const representations = await loadImageRepresentations(
+    db,
+    records.map((row) => row.shortcode),
+  );
+  return records.map((row) => ({
+    ...imageWithRelationsToAPI(row),
+    representations: representations.get(row.shortcode),
+  }));
 };
 
 /**
@@ -1091,7 +1145,7 @@ export const updateImage = async (
   await updateAndReturn(
     db,
     image,
-    { filename: data.filename },
+    { filename: data.filename, useOriginal: data.useOriginal },
     and(eq(image.id, imageId), notDeleted(image)),
   );
   return getImageById(db, imageId);
@@ -1174,29 +1228,44 @@ export const cullPendingImages = async (
   // while it creates associations and performs its final activation, so
   // SKIP LOCKED makes this culler leave in-flight imports untouched instead of
   // deleting rows selected by a stale pre-lock snapshot.
-  return await withTransaction(db, async (tx) => {
+  const result = await withTransaction(db, async (tx) => {
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
     const pendingImages = await tx
-      .select({ id: image.id, key: image.key })
+      .select({ id: image.id })
       .from(image)
       .where(cullablePendingImageWhere(db, cutoffDate))
       .for("update", { skipLocked: true });
 
     if (pendingImages.length === 0) {
-      return { count: 0, deletedIds: [], deletedKeys: [] };
+      return {
+        count: 0,
+        deletedIds: [],
+        deletedKeys: [],
+        affectedOwnerSearchRefs: [],
+      };
     }
 
     const imageIds = pendingImages.map((img) => img.id);
-    const imageKeys = pendingImages.map((img) => img.key);
-    await tx.delete(image).where(inArray(image.id, imageIds));
+    const deleted = await deleteImagesTx(tx, imageIds);
 
     return {
-      count: pendingImages.length,
-      deletedIds: imageIds,
-      deletedKeys: imageKeys,
+      count: deleted.deletedIds.length,
+      deletedIds: deleted.deletedIds,
+      deletedKeys: deleted.deletedKeys,
+      affectedOwnerSearchRefs: deleted.affectedOwnerSearchRefs,
     };
   });
+  await refreshCapturedImageSearchOwnerRefs(
+    db,
+    result.affectedOwnerSearchRefs,
+    "image.cull",
+  );
+  return {
+    count: result.count,
+    deletedIds: result.deletedIds,
+    deletedKeys: result.deletedKeys,
+  };
 };
 
 /**
@@ -1213,6 +1282,24 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
+  "ImageProcessingJob.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "The original image's durable processing attempts are removed before the original row.",
+  },
+  "ImageDerivative.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "Non-gallery derivative records are removed with their original image.",
+  },
+  "ImageDescriptionCorrection.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "A confirmed description cannot outlive the image it describes.",
+  },
   "ImportPreparedOrder.primaryDocumentImageId": {
     code: "clearFk",
     effect: "detach",
@@ -1306,9 +1393,89 @@ type ImageEdgeOperation = {
     imageIds?: string[],
   ) => Promise<string[]>;
   joinColumn?: PgColumn;
+  /** Processing metadata must cascade on delete but is never user ownership. */
+  countsAsOwnership?: boolean;
 };
 
+const parseImageIds = (imageIds: readonly string[]): ImageId[] =>
+  imageIds.map((imageId) => parseEntityId("image", imageId));
+
 const IMAGE_EDGE_OPERATIONS = {
+  // Job rows refer to derivatives as well as originals, so they must go first.
+  "ImageProcessingJob.imageId": {
+    countsAsOwnership: false,
+    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
+      await tx
+        .delete(imageProcessingJob)
+        .where(inArray(imageProcessingJob.imageId, parseImageIds(imageIds)));
+    },
+    findReferenced: async (
+      dbc: DrizzleClient | DrizzleTransaction,
+      imageIds?: string[],
+    ) => {
+      const rows = await dbc
+        .select({ imageId: imageProcessingJob.imageId })
+        .from(imageProcessingJob)
+        .where(
+          imageIds
+            ? inArray(imageProcessingJob.imageId, parseImageIds(imageIds))
+            : undefined,
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: undefined,
+  },
+  "ImageDerivative.imageId": {
+    countsAsOwnership: false,
+    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
+      await tx
+        .delete(imageDerivative)
+        .where(inArray(imageDerivative.imageId, parseImageIds(imageIds)));
+    },
+    findReferenced: async (
+      dbc: DrizzleClient | DrizzleTransaction,
+      imageIds?: string[],
+    ) => {
+      const rows = await dbc
+        .select({ imageId: imageDerivative.imageId })
+        .from(imageDerivative)
+        .where(
+          imageIds
+            ? inArray(imageDerivative.imageId, parseImageIds(imageIds))
+            : undefined,
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: undefined,
+  },
+  "ImageDescriptionCorrection.imageId": {
+    countsAsOwnership: false,
+    clear: async (tx: DrizzleTransaction, imageIds: string[]) => {
+      await tx
+        .delete(imageDescriptionCorrection)
+        .where(
+          inArray(imageDescriptionCorrection.imageId, parseImageIds(imageIds)),
+        );
+    },
+    findReferenced: async (
+      dbc: DrizzleClient | DrizzleTransaction,
+      imageIds?: string[],
+    ) => {
+      const rows = await dbc
+        .select({ imageId: imageDescriptionCorrection.imageId })
+        .from(imageDescriptionCorrection)
+        .where(
+          imageIds
+            ? inArray(
+                imageDescriptionCorrection.imageId,
+                parseImageIds(imageIds),
+              )
+            : undefined,
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: undefined,
+  },
   "ImportPreparedOrder.primaryDocumentImageId": {
     clear: async (tx, imageIds) => {
       await tx
@@ -1606,6 +1773,9 @@ const IMAGE_EDGE_OPERATIONS = {
     joinColumn: taskImage.imageId,
   },
 } satisfies Record<IncomingEdgeKey<"image">, ImageEdgeOperation>;
+const imageEdgeOperations: ImageEdgeOperation[] = Object.values(
+  IMAGE_EDGE_OPERATIONS,
+);
 
 /**
  * Resolve `imageIds` down to the subset that actually exists — bogus or
@@ -1613,19 +1783,33 @@ const IMAGE_EDGE_OPERATIONS = {
  * cascade. Used by {@link deleteImages}, which also needs the keys for the R2
  * cleanup.
  */
-const fetchExistingImages = (
-  dbc: DrizzleClient | DrizzleTransaction,
+const fetchExistingImages = async (
+  tx: DrizzleTransaction,
   imageIds: string[],
-): Promise<Array<{ id: string; shortcode: string; key: string }>> =>
-  dbc.query.image.findMany({
-    where: inArray(image.id, imageIds),
-    columns: { id: true, shortcode: true, key: true },
-  });
+): Promise<Array<{ id: ImageId; shortcode: string; key: string }>> => {
+  const rows = await tx
+    .select({ id: image.id, shortcode: image.shortcode, key: image.key })
+    .from(image)
+    .where(inArray(image.id, imageIds))
+    // Lock the original before reading derivative keys or clearing edges. A
+    // worker claim/adoption takes the same image lock, so it cannot rotate a
+    // key between our collection and hard delete.
+    .orderBy(asc(image.id))
+    .for("update");
+  return rows.map((row) => ({
+    ...row,
+    id: parseEntityId("image", row.id),
+  }));
+};
 
 type DeletedImages = {
-  deletedIds: string[];
+  deletedIds: ImageId[];
   deletedShortcodes: ImageShortcode[];
   deletedKeys: string[];
+};
+
+type DeletedImagesTx = DeletedImages & {
+  affectedOwnerSearchRefs: SearchableEntityRef[];
 };
 
 /**
@@ -1650,7 +1834,16 @@ export const deleteImages = async (
 ): Promise<DeletedImages> => {
   if (imageIds.length === 0)
     return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
-  return await withTransaction(db, (tx) => deleteImagesTx(tx, imageIds));
+  const { affectedOwnerSearchRefs, ...deleted } = await withTransaction(
+    db,
+    (tx) => deleteImagesTx(tx, imageIds),
+  );
+  await refreshCapturedImageSearchOwnerRefs(
+    db,
+    affectedOwnerSearchRefs,
+    "image.delete",
+  );
+  return deleted;
 };
 
 /**
@@ -1665,24 +1858,59 @@ export const deleteImages = async (
 const deleteImagesTx = async (
   tx: DrizzleTransaction,
   imageIds: string[],
-): Promise<DeletedImages> => {
+): Promise<DeletedImagesTx> => {
   if (imageIds.length === 0)
-    return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
+    return {
+      deletedIds: [],
+      deletedShortcodes: [],
+      deletedKeys: [],
+      affectedOwnerSearchRefs: [],
+    };
 
   const rows = await fetchExistingImages(tx, imageIds);
   if (rows.length === 0)
-    return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
+    return {
+      deletedIds: [],
+      deletedShortcodes: [],
+      deletedKeys: [],
+      affectedOwnerSearchRefs: [],
+    };
 
   const ids = rows.map((row) => row.id);
+  const affectedOwnerSearchRefs: SearchableEntityRef[] = [];
+  for (const id of ids) {
+    const refs = await findDirectImageSearchOwnerRefs(tx, id);
+    affectedOwnerSearchRefs.push(
+      ...refs.filter((ref) => ref.entityType !== "image"),
+    );
+  }
+  const derivatives = await tx
+    .select({ id: imageDerivative.id, key: imageDerivative.key })
+    .from(imageDerivative)
+    .where(inArray(imageDerivative.imageId, ids))
+    .orderBy(asc(imageDerivative.id))
+    .for("update");
+  if (derivatives.length > 0) {
+    await tx
+      .insert(imageProcessingOrphan)
+      .values(
+        derivatives.map((derivative) => ({
+          key: derivative.key,
+          reason: "original_image_deleted",
+        })),
+      )
+      .onConflictDoNothing();
+  }
   const affectedPurchases = await tx
     .selectDistinct({ purchaseId: purchaseImage.purchaseId })
     .from(purchaseImage)
     .where(and(inArray(purchaseImage.imageId, ids), notDeleted(purchaseImage)));
 
-  for (const operation of Object.values(IMAGE_EDGE_OPERATIONS)) {
+  for (const operation of imageEdgeOperations) {
     await operation.clear(tx, ids);
   }
 
+  await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
   await tx.delete(image).where(inArray(image.id, ids));
 
   await touchDataQualityTargets(tx, {
@@ -1694,7 +1922,11 @@ const deleteImagesTx = async (
     deletedShortcodes: rows.map((row) =>
       parseShortcodeFor("image", row.shortcode),
     ),
-    deletedKeys: rows.map((row) => row.key),
+    deletedKeys: [
+      ...rows.map((row) => row.key),
+      ...derivatives.map((row) => row.key),
+    ],
+    affectedOwnerSearchRefs,
   };
 };
 
@@ -1706,7 +1938,8 @@ const findReferencedImageIds = async (
   const referenced = new Set<string>();
   // Sequential, not Promise.all: a pg transaction is a single connection, and
   // this runs inside the caller's.
-  for (const operation of Object.values(IMAGE_EDGE_OPERATIONS)) {
+  for (const operation of imageEdgeOperations) {
+    if (operation.countsAsOwnership === false) continue;
     for (const imageId of await operation.findReferenced(dbc, imageIds)) {
       referenced.add(imageId);
     }
@@ -1819,9 +2052,14 @@ export const detachImagesFromEntity = async (
 export const reapUnreferencedImages = async (
   tx: DrizzleTransaction,
   imageIds: string[],
-): Promise<DeletedImages> => {
+): Promise<DeletedImagesTx> => {
   if (imageIds.length === 0)
-    return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
+    return {
+      deletedIds: [],
+      deletedShortcodes: [],
+      deletedKeys: [],
+      affectedOwnerSearchRefs: [],
+    };
   const referenced = await findReferencedImageIds(tx, imageIds);
   return await deleteImagesTx(
     tx,
@@ -1840,7 +2078,7 @@ export const reapUnreferencedImages = async (
  * the ids before they stop being findable.
  */
 export const imageJoinColumnFor = (table: PgTable): PgColumn | undefined => {
-  for (const operation of Object.values(IMAGE_EDGE_OPERATIONS)) {
+  for (const operation of imageEdgeOperations) {
     if (operation.joinColumn?.table === table) return operation.joinColumn;
   }
   return undefined;

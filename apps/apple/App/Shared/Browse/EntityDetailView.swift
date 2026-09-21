@@ -355,7 +355,21 @@ struct EntityDetailContent: View {
             if let view = DetailSlotRegistry.view(
                 for: descriptor.key, slot: section.id, row: row, appModel: appModel)
             {
-                Section(section.title ?? "") { view }
+                if let explanationField = section.explanationField,
+                    let field = descriptor.field(explanationField)
+                {
+                    Section {
+                        view
+                    } header: {
+                        FieldExplanationLabel(
+                            field: field,
+                            subject: EntityRef(entity: descriptor.key, id: row.id),
+                            labelOverride: section.title
+                        )
+                    }
+                } else {
+                    Section(section.title ?? "") { view }
+                }
             }
         }
     }

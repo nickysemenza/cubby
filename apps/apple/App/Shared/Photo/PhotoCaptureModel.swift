@@ -3,8 +3,8 @@ import CubbyKit
 import Foundation
 import Observation
 
-/// One photo on its way onto an entity. The original encoded file remains the upload source
-/// unless the user explicitly asks for subject lifting; only that edit path decodes full size.
+/// One photo on its way onto an entity. Subject lifting is a preview of the separately stored
+/// derivative; upload and duplicate review always use the original encoded bytes.
 @MainActor @Observable
 final class PhotoCaptureModel {
     enum Phase: Equatable {
@@ -33,17 +33,7 @@ final class PhotoCaptureModel {
             }
         }
     }
-    var background: SubjectLift.Background = .white {
-        didSet {
-            if background != oldValue, lifted != nil {
-                editedPhoto = nil
-                editedReviewItem = nil
-                editedExistingImageID = nil
-                uploadCheckpoint = nil
-                prepareLift()
-            }
-        }
-    }
+    private let background = SubjectLift.Background.transparent
     var makeCover: Bool
 
     private let uploader: PhotoUploader
@@ -52,10 +42,7 @@ final class PhotoCaptureModel {
     @ObservationIgnored private var preparationTask: Task<Void, Never>?
     private var selection: PhotoSelectionItem?
     private var originalPhoto: PreparedPhoto?
-    private var editedPhoto: PreparedPhoto?
     private var originalReviewItem: PhotoSelectionItem?
-    private var editedReviewItem: PhotoSelectionItem?
-    private var editedExistingImageID: ImageCode?
     private var uploadCheckpoint: PhotoUploader.Checkpoint?
     private var uploadFailureCanRetry = false
     private var lifecycleGeneration = UUID()
@@ -91,10 +78,6 @@ final class PhotoCaptureModel {
     var chosen: CGImage? {
         if useLifted, let lifted, lifted.foundSubject { return lifted.image }
         return original
-    }
-
-    var format: ImageEncoding.Format {
-        useLifted && lifted?.foundSubject == true && background == .transparent ? .png : .jpeg
     }
 
     func uses(client: CubbyClient) -> Bool {
@@ -199,9 +182,6 @@ final class PhotoCaptureModel {
             originalPhoto = photo
             lifted = result
             useLifted = result.foundSubject
-            editedPhoto = nil
-            editedReviewItem = nil
-            editedExistingImageID = nil
             phase = .ready
         } catch is CancellationError {
         } catch {
@@ -216,39 +196,24 @@ final class PhotoCaptureModel {
     /// uses a bounded PhotoKit preview, which can differ slightly from ImageIO's final file path.
     func finalSelectionForReview() async throws -> PhotoSelectionItem? {
         let generation = lifecycleGeneration
-        let photo: PreparedPhoto
-        if useLifted, lifted?.foundSubject == true {
-            if let editedReviewItem { return editedReviewItem }
-            photo = try await preparedEditedPhoto(generation: generation)
-        } else {
-            guard let originalPhoto else { return nil }
-            if let originalReviewItem { return originalReviewItem }
-            photo = originalPhoto
-        }
+        guard let originalPhoto else { return nil }
+        if let originalReviewItem { return originalReviewItem }
+        let photo = originalPhoto
         guard canPublish(generation) else { throw CancellationError() }
         var item = PhotoSelectionItem(
             file: photo.file, preview: try photo.file.thumbnail(), query: photo.hashQuery)
         guard canPublish(generation) else { throw CancellationError() }
         item.approvedCandidates = selection?.approvedCandidates ?? []
-        if useLifted {
-            editedReviewItem = item
-        } else {
-            item.existingImageID = selection?.existingImageID
-            originalReviewItem = item
-        }
+        item.existingImageID = selection?.existingImageID
+        originalReviewItem = item
         return item
     }
 
     func acceptFinalReview(_ item: PhotoSelectionItem) {
-        let previousExistingID = useLifted ? editedExistingImageID : selection?.existingImageID
-        if useLifted {
-            editedReviewItem = item
-            editedExistingImageID = item.existingImageID
-        } else {
-            originalReviewItem = item
-            selection?.existingImageID = item.existingImageID
-            selection?.approvedCandidates = item.approvedCandidates
-        }
+        let previousExistingID = selection?.existingImageID
+        originalReviewItem = item
+        selection?.existingImageID = item.existingImageID
+        selection?.approvedCandidates = item.approvedCandidates
         if previousExistingID != item.existingImageID {
             uploadCheckpoint = nil
         }
@@ -276,8 +241,7 @@ final class PhotoCaptureModel {
         phase = .uploading(.encoding)
         uploadFailureCanRetry = false
         do {
-            let existingID = useLifted ? editedExistingImageID : selection?.existingImageID
-            if let existingID {
+            if let existingID = selection?.existingImageID {
                 try await uploader.attachExisting(
                     existingID, entity: entity, entityID: entityID,
                     makeCover: makeCover && canMakeCover
@@ -290,9 +254,7 @@ final class PhotoCaptureModel {
             }
 
             let photo: PreparedPhoto
-            if useLifted, lifted?.foundSubject == true {
-                photo = try await preparedEditedPhoto(generation: generation)
-            } else if let originalPhoto {
+            if let originalPhoto {
                 photo = originalPhoto
             } else if let selection {
                 let file = try await selection.materialize()
@@ -318,7 +280,7 @@ final class PhotoCaptureModel {
                 Task { @MainActor in self?.report(step, generation: generation) }
             }
             guard canPublish(generation) else { return }
-            if entity == .product, let preview = chosen {
+            if entity == .product, let preview = original {
                 try? await featurePrints.add(
                     productID: ProductCode(entityID), name: entityTitle, imageURL: outcome.url,
                     image: preview)
@@ -335,35 +297,6 @@ final class PhotoCaptureModel {
             guard canPublish(generation) else { return }
             fail(error, context: "photo.upload", uploadRetry: true)
         }
-    }
-
-    private func preparedEditedPhoto(generation: UUID) async throws -> PreparedPhoto {
-        guard canPublish(generation) else { throw CancellationError() }
-        if let editedPhoto { return editedPhoto }
-        guard let lifted, lifted.foundSubject, let originalPhoto else {
-            throw PhotoFile.Failure.unreadable
-        }
-        let image = lifted.image
-        let format = format
-        let filename = "\(entityID.lowercased()).\(format.fileExtension)"
-        let sourceFingerprint = originalPhoto.sourceFingerprint
-        let capturedAt = originalPhoto.file.capturedAt
-        let task = Task.detached(priority: .userInitiated) {
-            let data = try ImageEncoding.encode(image, as: format)
-            let file = try PhotoFile.materialize(
-                data: data, filename: filename, contentType: format.contentType,
-                capturedAt: capturedAt)
-            return try PreparedPhoto.prepare(
-                file: file, sourceFingerprint: sourceFingerprint)
-        }
-        let prepared = try await withTaskCancellationHandler {
-            try await task.value
-        } onCancel: {
-            task.cancel()
-        }
-        guard canPublish(generation) else { throw CancellationError() }
-        editedPhoto = prepared
-        return prepared
     }
 
     private func report(_ step: PhotoUploader.Step, generation: UUID) {
@@ -388,10 +321,7 @@ final class PhotoCaptureModel {
     private func resetPreparedState() {
         uploadCheckpoint = nil
         originalPhoto = nil
-        editedPhoto = nil
         originalReviewItem = nil
-        editedReviewItem = nil
-        editedExistingImageID = nil
         lifted = nil
         useLifted = false
         uploadFailureCanRetry = false

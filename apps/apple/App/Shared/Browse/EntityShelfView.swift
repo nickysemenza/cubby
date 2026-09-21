@@ -16,8 +16,9 @@ extension ListPresentationChoice {
 struct EntityShelfView: View {
     let descriptor: EntityDescriptor
     let rows: [EntityRow]
-    let density: ListPresentationChoice
+    var density: ListPresentationChoice = .cards
     var section: AppSection = .browse
+    var subtitleOverride: ((EntityRow) -> String?)? = nil
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -79,7 +80,7 @@ struct EntityShelfView: View {
     private func destination(for row: EntityRow) -> some View {
         let card = EntityCard(
             title: row.title,
-            subtitle: subtitle(for: row),
+            subtitle: subtitleOverride?(row) ?? subtitle(for: row),
             identifier: row.id,
             imageURL: row.imageURL,
             symbol: descriptor.sfSymbol,

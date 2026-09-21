@@ -166,6 +166,7 @@ export const problemFilterSemantics = {
   financialTransaction: [{ columnId: "allocationIntegrity", kind: "select" }],
   image: [
     { columnId: "status", kind: "multiselect" },
+    { columnId: "processingIssue", kind: "multiselect" },
     { columnId: "entity", field: "referencePresenceFilter", kind: "presence" },
     {
       columnId: "createdAt",

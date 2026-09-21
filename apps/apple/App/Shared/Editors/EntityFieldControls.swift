@@ -121,7 +121,8 @@ struct EntityFieldControl: View {
 
     /// Dispatches the generated semantic renderer first. Generic entity-select/money/url
     /// renderers still use the same primitive controls as their `controlKind`; specialized
-    /// amount, multi-select, tags, and vendor-name controls keep their typed behavior.
+    /// amount, multi-select, tags, vendor-name, and ledger-attribution controls keep their typed
+    /// behavior.
     @ViewBuilder
     private var specialized: some View {
         if let renderer = field.controlRenderer {
@@ -140,6 +141,9 @@ struct EntityFieldControl: View {
                 textControl
             case .money:
                 moneyControl
+            case .ledgerAttributions:
+                LedgerAttributionsControl(
+                    field: field, model: model, pickedTitles: $pickedTitles)
             case .imageOrder, .structuredField:
                 EmptyView()
             }

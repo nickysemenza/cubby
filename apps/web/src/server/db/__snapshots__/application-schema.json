@@ -137,6 +137,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resultSchemaRevision": {
+          "name": "resultSchemaRevision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "runtime": {
+          "name": "runtime",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "model": {
           "name": "model",
           "type": "text",
@@ -220,6 +238,18 @@
               "expression": "inputFingerprint",
               "isExpression": false,
               "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "coalesce(\"provider\", '')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "coalesce(\"resultSchemaRevision\", 0)",
+              "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],
@@ -1786,6 +1816,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "inventoryOwnerDefaultEnabled": {
+          "name": "inventoryOwnerDefaultEnabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -2854,6 +2891,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "useOriginal": {
+          "name": "useOriginal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "verifiedAt": {
           "name": "verifiedAt",
           "type": "timestamp",
@@ -3000,6 +3044,627 @@
           "value": "\"Image\".\"perceptualHash\" IS NULL OR \"Image\".\"perceptualHash\" ~ '^[0-9a-f]{16}$'"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.ImageDerivative": {
+      "name": "ImageDerivative",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "imageId": {
+          "name": "imageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceContentHash": {
+          "name": "sourceContentHash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "processorRevision": {
+          "name": "processorRevision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contentType": {
+          "name": "contentType",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failureReason": {
+          "name": "failureReason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ImageDerivative_image_purpose_source_revision_key": {
+          "name": "ImageDerivative_image_purpose_source_revision_key",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purpose",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sourceContentHash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "processorRevision",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImageDerivative\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageDerivative_storage_key_key": {
+          "name": "ImageDerivative_storage_key_key",
+          "columns": [
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImageDerivative\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageDerivative_image_idx": {
+          "name": "ImageDerivative_image_idx",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageDerivative_status_idx": {
+          "name": "ImageDerivative_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImageDerivative_imageId_Image_id_fk": {
+          "name": "ImageDerivative_imageId_Image_id_fk",
+          "tableFrom": "ImageDerivative",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImageDerivative_purpose_check": {
+          "name": "ImageDerivative_purpose_check",
+          "value": "\"ImageDerivative\".\"purpose\" IN ('transparent')"
+        },
+        "ImageDerivative_status_check": {
+          "name": "ImageDerivative_status_check",
+          "value": "\"ImageDerivative\".\"status\" IN ('pending', 'ready', 'skipped', 'failed', 'abandoned')"
+        },
+        "ImageDerivative_ready_metadata_check": {
+          "name": "ImageDerivative_ready_metadata_check",
+          "value": "\"ImageDerivative\".\"status\" <> 'ready' OR (\"ImageDerivative\".\"contentType\" IS NOT NULL AND \"ImageDerivative\".\"contentType\" = 'image/png' AND \"ImageDerivative\".\"sha256\" IS NOT NULL AND \"ImageDerivative\".\"width\" IS NOT NULL AND \"ImageDerivative\".\"width\" > 0 AND \"ImageDerivative\".\"height\" IS NOT NULL AND \"ImageDerivative\".\"height\" > 0)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImageDescriptionCorrection": {
+      "name": "ImageDescriptionCorrection",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "imageId": {
+          "name": "imageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confirmedAt": {
+          "name": "confirmedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ImageDescriptionCorrection_image_idx": {
+          "name": "ImageDescriptionCorrection_image_idx",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageDescriptionCorrection_active_image_key": {
+          "name": "ImageDescriptionCorrection_active_image_key",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImageDescriptionCorrection\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImageDescriptionCorrection_imageId_Image_id_fk": {
+          "name": "ImageDescriptionCorrection_imageId_Image_id_fk",
+          "tableFrom": "ImageDescriptionCorrection",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ImageProcessingJob": {
+      "name": "ImageProcessingJob",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "imageId": {
+          "name": "imageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "derivativeId": {
+          "name": "derivativeId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceContentHash": {
+          "name": "sourceContentHash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "processorRevision": {
+          "name": "processorRevision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attemptId": {
+          "name": "attemptId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leaseExpiresAt": {
+          "name": "leaseExpiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "nextAttemptAt": {
+          "name": "nextAttemptAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "dispatchedAt": {
+          "name": "dispatchedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastError": {
+          "name": "lastError",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "runtime": {
+          "name": "runtime",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImageProcessingJob_identity_key": {
+          "name": "ImageProcessingJob_identity_key",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sourceContentHash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "processorRevision",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageProcessingJob_dispatch_idx": {
+          "name": "ImageProcessingJob_dispatch_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "nextAttemptAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageProcessingJob_image_idx": {
+          "name": "ImageProcessingJob_image_idx",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImageProcessingJob_imageId_Image_id_fk": {
+          "name": "ImageProcessingJob_imageId_Image_id_fk",
+          "tableFrom": "ImageProcessingJob",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImageProcessingJob_derivativeId_ImageDerivative_id_fk": {
+          "name": "ImageProcessingJob_derivativeId_ImageDerivative_id_fk",
+          "tableFrom": "ImageProcessingJob",
+          "tableTo": "ImageDerivative",
+          "columnsFrom": [
+            "derivativeId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImageProcessingJob_kind_check": {
+          "name": "ImageProcessingJob_kind_check",
+          "value": "\"ImageProcessingJob\".\"kind\" IN ('subject_lift', 'describe_image')"
+        },
+        "ImageProcessingJob_state_check": {
+          "name": "ImageProcessingJob_state_check",
+          "value": "\"ImageProcessingJob\".\"state\" IN ('pending', 'waiting_for_device', 'leased', 'ready', 'skipped', 'failed')"
+        },
+        "ImageProcessingJob_attempts_check": {
+          "name": "ImageProcessingJob_attempts_check",
+          "value": "\"ImageProcessingJob\".\"attempts\" >= 0"
+        },
+        "ImageProcessingJob_lease_check": {
+          "name": "ImageProcessingJob_lease_check",
+          "value": "(\"ImageProcessingJob\".\"state\" = 'leased') = (\"ImageProcessingJob\".\"attemptId\" IS NOT NULL AND \"ImageProcessingJob\".\"leaseExpiresAt\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImageProcessingOrphan": {
+      "name": "ImageProcessingOrphan",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attemptId": {
+          "name": "attemptId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImageProcessingOrphan_key_key": {
+          "name": "ImageProcessingOrphan_key_key",
+          "columns": [
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageProcessingOrphan_createdAt_idx": {
+          "name": "ImageProcessingOrphan_createdAt_idx",
+          "columns": [
+            {
+              "expression": "createdAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.ImportFinding": {
@@ -5365,6 +6030,19 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'stock'"
+        },
+        "ownershipMode": {
+          "name": "ownershipMode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'inherit'"
+        },
+        "ownerLedgerPartyId": {
+          "name": "ownerLedgerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -5403,10 +6081,37 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "ownershipMode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "coalesce(\"ownerLedgerPartyId\", '00000000-0000-0000-0000-000000000000'::uuid)",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
             }
           ],
           "isUnique": true,
           "where": "\"InventoryEntry\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "InventoryEntry_owner_idx": {
+          "name": "InventoryEntry_owner_idx",
+          "columns": [
+            {
+              "expression": "ownerLedgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5483,12 +6188,30 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "InventoryEntry_ownerLedgerPartyId_LedgerParty_id_fk": {
+          "name": "InventoryEntry_ownerLedgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "InventoryEntry",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "ownerLedgerPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "InventoryEntry_ownership_valid": {
+          "name": "InventoryEntry_ownership_valid",
+          "value": "(\"InventoryEntry\".\"ownershipMode\" = 'person' AND \"InventoryEntry\".\"ownerLedgerPartyId\" IS NOT NULL) OR (\"InventoryEntry\".\"ownershipMode\" IN ('inherit', 'unassigned') AND \"InventoryEntry\".\"ownerLedgerPartyId\" IS NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.jwks": {
@@ -14589,6 +15312,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "inventoryOwnerDefaultEnabled": {
+          "name": "inventoryOwnerDefaultEnabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "status": {
           "name": "status",

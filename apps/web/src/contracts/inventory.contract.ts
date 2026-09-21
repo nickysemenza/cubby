@@ -8,11 +8,18 @@ import {
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
+  inventoryLocationSnapshotInput,
+  inventoryLocationSnapshotOut,
   inventoryWithLocationAndProductListAndSideEffectsOut,
   inventoryWithLocationAndProductListOut,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
 } from "@cubby/schemas/inventory";
+import {
+  confirmInventoryOwnershipInput,
+  inventoryOwnershipMutationOut,
+  setInventoryOwnershipInput,
+} from "@cubby/schemas/inventory-ownership";
 import {
   resolveScanStraysInput,
   resolveScanStraysOut,
@@ -68,5 +75,20 @@ export const inventoryContract = defineContract("inventory", {
     native: "Audit bin rows",
     input: inventoryLocationIdsInput,
     output: inventoryWithLocationAndProductListOut,
+  }),
+  locationSnapshot: query({
+    native: "Ownership-aware inventory snapshot",
+    input: inventoryLocationSnapshotInput,
+    output: inventoryLocationSnapshotOut,
+  }),
+  setOwnership: mutation({
+    native: "Set inventory owner",
+    input: setInventoryOwnershipInput,
+    output: inventoryOwnershipMutationOut,
+  }),
+  confirmOwnership: mutation({
+    native: "Confirm inherited inventory owner",
+    input: confirmInventoryOwnershipInput,
+    output: inventoryOwnershipMutationOut,
   }),
 });

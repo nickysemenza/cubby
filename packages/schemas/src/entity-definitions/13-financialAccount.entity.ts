@@ -43,6 +43,7 @@ export default defineEntity({
             "provisional",
             "sourceAliases",
             "ledgerPartyId",
+            "inventoryOwnerDefaultEnabled",
             "notes",
             "transactionCount",
             "createdAt",
@@ -133,6 +134,18 @@ export default defineEntity({
         },
       },
       {
+        key: "inventoryOwnerDefaultEnabled",
+        kind: "boolean",
+        label: "Use as inventory owner default",
+        control: { kind: "checkbox", section: "details" },
+        display: { detail: true },
+        validation: {
+          read: z.boolean(),
+          create: z.boolean().default(false),
+          update: z.boolean().optional(),
+        },
+      },
+      {
         key: "notes",
         kind: "text",
         nullable: true,
@@ -173,6 +186,12 @@ export default defineEntity({
           sources: [
             { entity: "financialTransaction", relation: "transactions" },
           ],
+        },
+        explanation: {
+          ruleId: "financial-account.transaction-count",
+          description:
+            "Transaction count is the number of live financial transactions linked to this account.",
+          readPath: "transactionCount",
         },
         validation: {
           read: z.number().int().nonnegative(),
@@ -220,6 +239,11 @@ export default defineEntity({
         specialized: "json:sourceAliases",
       },
       { key: "ledgerPartyId", reference: "ledgerParty" },
+      {
+        key: "inventoryOwnerDefaultEnabled",
+        default: "literal",
+        defaultValue: false,
+      },
       "notes",
       { key: "createdAt", default: "now" },
       { key: "updatedAt", default: "now", specialized: "updated-at" },
@@ -231,6 +255,7 @@ export default defineEntity({
       "provisional",
       "sourceAliases",
       "ledgerPartyId",
+      "inventoryOwnerDefaultEnabled",
       "notes",
     ],
     update: [
@@ -239,6 +264,7 @@ export default defineEntity({
       "provisional",
       "sourceAliases",
       "ledgerPartyId",
+      "inventoryOwnerDefaultEnabled",
       "notes",
     ],
     bulk: [],
@@ -249,6 +275,7 @@ export default defineEntity({
       "sourceAliases",
       "notes",
       "ledgerPartyId",
+      "inventoryOwnerDefaultEnabled",
     ],
     sort: {
       fields: [
@@ -278,7 +305,13 @@ export default defineEntity({
           "sourceAliases",
           "notes",
         ],
-        full: ["name", "provisional", "sourceAliases", "notes"],
+        full: [
+          "name",
+          "provisional",
+          "sourceAliases",
+          "inventoryOwnerDefaultEnabled",
+          "notes",
+        ],
         identity: ["name", "provisional", "sourceAliases", "notes"],
       },
       create: ["capture", "full"],
@@ -300,6 +333,7 @@ export default defineEntity({
       "provisional",
       "sourceAliases",
       "ledgerPartyId",
+      "inventoryOwnerDefaultEnabled",
       "notes",
       "ledgerPartyName",
       "transactionCount",

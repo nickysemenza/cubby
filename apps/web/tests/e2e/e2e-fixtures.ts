@@ -669,3 +669,53 @@ export async function seedPlacementReviewPrerequisite(
   );
   return { source, destination, target };
 }
+
+/** One catalog garment, two independently owned quantities in different places. */
+export async function seedWardrobePrerequisites(page: Page, name: string) {
+  const owner = await createFixture(
+    page,
+    "ledgerParty",
+    ledgerPartyCreateInput.parse({ name: `${name} owner`, kind: "member" }),
+  );
+  const other = await createFixture(
+    page,
+    "ledgerParty",
+    ledgerPartyCreateInput.parse({ name: `${name} other`, kind: "guest" }),
+  );
+  const location = await seedLocationPrerequisite(page, `${name} drawer`);
+  const otherLocation = await seedLocationPrerequisite(
+    page,
+    `${name} other drawer`,
+  );
+  const product = await createFixture(
+    page,
+    "product",
+    productCreateInput.parse({
+      ...productFixtureInput(`${name} shirt`, "Fixture"),
+      category: "apparel",
+    }),
+  );
+  const entry = await createFixture(
+    page,
+    "inventory",
+    inventoryCreatePayloadData.parse({
+      productId: product.id,
+      locationId: location.id,
+      amount: { value: 3, unit: "each" },
+      ownershipMode: "person",
+      ownerLedgerPartyId: owner.id,
+    }),
+  );
+  await createFixture(
+    page,
+    "inventory",
+    inventoryCreatePayloadData.parse({
+      productId: product.id,
+      locationId: otherLocation.id,
+      amount: { value: 7, unit: "each" },
+      ownershipMode: "person",
+      ownerLedgerPartyId: other.id,
+    }),
+  );
+  return { owner, other, location, otherLocation, product, entry };
+}

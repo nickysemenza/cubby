@@ -27,11 +27,16 @@ export const formatUnitPrice = (price: number): string => {
  * alternative is a confident-looking wrong number.
  */
 export const UnitPriceLine: FC<{
-  mappings: UnitMapping[];
+  mappings?: UnitMapping[];
+  prices?: ReturnType<typeof computePerUnitPrices> | null;
   /** Compact hides the label and the per-gram figure (list/table cells). */
   compact?: boolean;
-}> = ({ mappings, compact = false }) => {
-  const prices = useMemo(() => computePerUnitPrices(mappings), [mappings]);
+}> = ({ mappings = [], prices: suppliedPrices, compact = false }) => {
+  const computedPrices = useMemo(
+    () => computePerUnitPrices(mappings),
+    [mappings],
+  );
+  const prices = suppliedPrices ?? computedPrices;
   if (!prices.natural) return null;
 
   const natural = `${formatUnitPrice(prices.natural.price)}/${prices.natural.unit}`;

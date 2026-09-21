@@ -38,6 +38,8 @@ describe("smart Collection cache contract", () => {
           sourceCounts: {
             productTagEquals: 0,
             manufacturerEquals: 0,
+            effectiveOwnerEquals: 0,
+            categoryEquals: 0,
             locationNameContains: 0,
             historicalExpenseTrade: 0,
           },

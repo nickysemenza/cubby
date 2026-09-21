@@ -38,6 +38,15 @@ const slot = <E extends GenericDetailEntity>(
  * chunk carries only the slots its own entity declares.
  */
 export const detailSlots = {
+  ledgerParty: {
+    wardrobe: slot(
+      () =>
+        import("~/app/collections/wardrobe-link").then((m) => ({
+          default: m.WardrobeLink,
+        })),
+      (record) => record.kind === "member" || record.kind === "guest",
+    ),
+  },
   product: {
     nutrition: slot(() =>
       import("~/app/products/slots").then((m) => ({

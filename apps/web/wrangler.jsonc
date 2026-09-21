@@ -97,6 +97,10 @@
       {
         "name": "PURCHASE_IMPORT",
         "class_name": "PurchaseImportDurableObject"
+      },
+      {
+        "name": "IMAGE_PROCESSING",
+        "class_name": "ImageProcessingDurableObject"
       }
     ]
   },
@@ -110,6 +114,10 @@
       "storage": "sqlite"
     },
     "PurchaseImportDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "ImageProcessingDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
     }
@@ -205,7 +213,7 @@
     ]
   },
   "triggers": {
-    "crons": ["0 * * * *", "0 12 * * *"]
+    "crons": ["*/5 * * * *", "0 * * * *", "0 12 * * *"]
   },
   "vars": {
     "NODE_ENV": "production",

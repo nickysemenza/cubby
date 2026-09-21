@@ -70,6 +70,7 @@ export default defineEntity({
           id: "contents-valuation",
           title: "Valuation",
           placement: "supporting",
+          explanationField: "valuation",
         },
         {
           kind: "slot",
@@ -297,6 +298,13 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "product", relation: "product" }],
         },
+        explanation: {
+          ruleId: "location.installed-product",
+          description:
+            "The installed product is projected from this location's current product relationship.",
+          readPath: "product",
+          sourceDependencies: [{ path: "product", label: "Installed product" }],
+        },
         validation: {
           read: locationIdentityProductOut.nullable(),
           create: null,
@@ -335,6 +343,19 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
         },
+        explanation: {
+          ruleId: "location.images",
+          description:
+            "Location images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
+          projections: {
+            list: "displayImages",
+            detail: "images",
+            summary: "displayImages",
+          },
+          sourceDependencies: [
+            { path: "displayImages", label: "Selected location images" },
+          ],
+        },
         validation: {
           read: z.array(imageOut),
           create: null,
@@ -347,6 +368,33 @@ export default defineEntity({
         nullable: true,
         display: { list: true, detail: false, columnId: "valuation" },
         provenance: { kind: "derived", sources: [{ entity: "location" }] },
+        explanation: {
+          ruleId: "location.direct-valuation",
+          description:
+            "Location valuation rolls up canonical inventory values; the list shows direct contents and the detail valuation includes descendant locations.",
+          resolver: "locationValuation",
+          projections: {
+            list: "valuation.directValuation",
+            detail: "valuation.totalValuation",
+            summary: "valuation.directValuation",
+          },
+          sourceDependencies: [
+            { path: "valuation.directItemCount", label: "Direct item count" },
+            {
+              path: "valuation.directPricedCount",
+              label: "Priced direct items",
+            },
+            {
+              path: "valuation.directUnpricedCount",
+              label: "Unpriced direct items",
+            },
+            {
+              path: "valuation.totalItemCount",
+              label: "Total rolled-up item count",
+            },
+            { path: "valuation.total", label: "Rolled-up pricing coverage" },
+          ],
+        },
         validation: {
           read: locationValuation.nullable(),
           create: null,

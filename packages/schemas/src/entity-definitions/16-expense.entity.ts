@@ -346,6 +346,15 @@ export default defineEntity({
         },
         display: { detail: true, detailOrder: 100 },
         provenance: { kind: "relation", sources: [{ entity: "vendor" }] },
+        explanation: {
+          ruleId: "expense.vendor",
+          description:
+            "Vendor is resolved from the live purchase linked to this expense.",
+          readPath: "vendor",
+          sourceDependencies: [
+            { path: "purchaseId", label: "Linked purchase" },
+          ],
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -367,6 +376,15 @@ export default defineEntity({
         provenance: {
           kind: "relation",
           sources: [{ entity: "purchase", relation: "purchase" }],
+        },
+        explanation: {
+          ruleId: "expense.order-id",
+          description:
+            "Order number is resolved from the live purchase linked to this expense.",
+          readPath: "orderId",
+          sourceDependencies: [
+            { path: "purchaseId", label: "Linked purchase" },
+          ],
         },
         validation: {
           read: z.string().nullable(),
@@ -396,10 +414,21 @@ export default defineEntity({
       {
         key: "beneficiaries",
         kind: "json",
-        control: { kind: "specialized", renderer: "structured-field" },
+        control: { kind: "specialized", renderer: "ledger-attributions" },
         provenance: {
           kind: "relation",
           sources: [{ label: "Ledger attributions" }],
+        },
+        explanation: {
+          ruleId: "expense.beneficiaries",
+          description:
+            "Beneficiaries are the live beneficiary attributions recorded for this expense; deleted parties remain visible as unresolved attribution rows.",
+          resolver: "expenseAttribution",
+          readPath: "beneficiaries",
+          sourceDependencies: [
+            { path: "beneficiaries", label: "Beneficiary attributions" },
+          ],
+          actions: ["editSource"],
         },
         validation: {
           read: ledgerAttributions,
@@ -410,10 +439,21 @@ export default defineEntity({
       {
         key: "funders",
         kind: "json",
-        control: { kind: "specialized", renderer: "structured-field" },
+        control: { kind: "specialized", renderer: "ledger-attributions" },
         provenance: {
           kind: "relation",
           sources: [{ label: "Ledger attributions" }],
+        },
+        explanation: {
+          ruleId: "expense.funders",
+          description:
+            "Funders are the live funder attributions recorded for this expense; deleted parties remain visible as unresolved attribution rows.",
+          resolver: "expenseAttribution",
+          readPath: "funders",
+          sourceDependencies: [
+            { path: "funders", label: "Funder attributions" },
+          ],
+          actions: ["editSource"],
         },
         validation: {
           read: ledgerAttributions,
@@ -426,6 +466,16 @@ export default defineEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         provenance: { kind: "relation", sources: [{ label: "Source claims" }] },
+        explanation: {
+          ruleId: "expense.source-claims",
+          description:
+            "Source claims preserve the imported or recorded evidence attached to this expense.",
+          readPath: "sourceClaims",
+          sourceDependencies: [
+            { path: "sourceClaims", label: "Recorded source claims" },
+          ],
+          actions: ["editSource"],
+        },
         validation: {
           read: ledgerSourceClaimsOut,
           create: ledgerSourceClaims.nullable().default([]),
@@ -667,6 +717,8 @@ export default defineEntity({
           "orderId",
           "trade",
           "costType",
+          "beneficiaries",
+          "funders",
         ],
         full: [
           "name",
@@ -682,6 +734,8 @@ export default defineEntity({
           "orderId",
           "trade",
           "costType",
+          "beneficiaries",
+          "funders",
           "url",
           "notes",
         ],

@@ -1,6 +1,11 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  LedgerPartyId,
+  LocationId,
+  ProductId,
+} from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
+import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 
 import type {
   inventoryEntry,
@@ -51,6 +56,8 @@ export interface UpdateInventoryEntryData {
   productId?: ProductId;
   locationId?: LocationId;
   placement?: InventoryPlacement;
+  ownershipMode?: InventoryOwnershipMode;
+  ownerLedgerPartyId?: LedgerPartyId | null;
 }
 
 export interface CreateInventoryEntryData {
@@ -58,6 +65,8 @@ export interface CreateInventoryEntryData {
   productId: ProductId;
   locationId: LocationId;
   placement?: InventoryPlacement;
+  ownershipMode?: InventoryOwnershipMode;
+  ownerLedgerPartyId?: LedgerPartyId | null;
   /**
    * Stamp the row as observed at creation. Only a location sweep sets this: it
    * put the row there by looking at the object, so leaving `verifiedAt` null

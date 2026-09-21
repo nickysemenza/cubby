@@ -19,6 +19,19 @@ import {
 describe("entity media public display images", () => {
   const ctx = withTestDb();
 
+  const expectedImage = (key: string) => {
+    const original = getR2PublicUrl(key);
+    return {
+      url: original,
+      representations: {
+        original,
+        transparent: null,
+        preferred: original,
+        preferredKind: "original" as const,
+      },
+    };
+  };
+
   it("deduplicates public refs and returns explicit nulls for absent or external records", async () => {
     const pictured = await createProductFixture(
       ctx.db,
@@ -91,12 +104,12 @@ describe("entity media public display images", () => {
 
     expect(result).toEqual({
       [entityRefKey("product", pictured.id)]: {
-        url: getR2PublicUrl(cover.key),
+        ...expectedImage(cover.key),
       },
       [entityRefKey("product", unpictured.id)]: null,
       [entityRefKey("product", deleted.id)]: null,
       [entityRefKey("location", picturedLocation.id)]: {
-        url: getR2PublicUrl(locationCover.key),
+        ...expectedImage(locationCover.key),
       },
       [entityRefKey("location", pictured.id)]: null,
       [entityRefKey("usda-food", "123456")]: null,

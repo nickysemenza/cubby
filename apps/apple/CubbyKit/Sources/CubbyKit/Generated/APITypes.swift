@@ -69,6 +69,10 @@ public typealias BrowserEvidenceKind = Components.Schemas.BrowserEvidenceKind
 public typealias BrowserEvidenceReference = Components.Schemas.BrowserEvidenceReference
 public typealias BrowserPageCapture = Components.Schemas.BrowserPageCapture
 public typealias BrowserPaymentEvidence = Components.Schemas.BrowserPaymentEvidence
+public typealias CollectionProductOut = Components.Schemas.CollectionProductOut
+public typealias CollectionProductPlacementOut = Components.Schemas.CollectionProductPlacementOut
+public typealias CollectionProductPurchaseOut = Components.Schemas.CollectionProductPurchaseOut
+public typealias ConfirmInventoryOwnershipInput = Components.Schemas.ConfirmInventoryOwnershipInput
 public typealias CookbookProductSummary = Components.Schemas.CookbookProductSummary
 public typealias CookbookShortcode = Components.Schemas.CookbookShortcode
 public typealias CookbookSummariesOut = Components.Schemas.CookbookSummariesOut
@@ -89,6 +93,7 @@ public typealias DisplayImagesField = Components.Schemas.DisplayImagesField
 public typealias DisplayImageSummary = Components.Schemas.DisplayImageSummary
 public typealias DuplicateUniqueProduct = Components.Schemas.DuplicateUniqueProduct
 public typealias EdgeKey = Components.Schemas.EdgeKey
+public typealias EffectiveInventoryOwnership = Components.Schemas.EffectiveInventoryOwnership
 public typealias EmbeddingReadiness = Components.Schemas.EmbeddingReadiness
 public typealias Entity = Components.Schemas.Entity
 public typealias EntityAttachmentRead = Components.Schemas.EntityAttachmentRead
@@ -122,6 +127,8 @@ public typealias EntityTimelineLink = Components.Schemas.EntityTimelineLink
 public typealias EntityTimelineOut = Components.Schemas.EntityTimelineOut
 public typealias EntityTimelineRow = Components.Schemas.EntityTimelineRow
 public typealias EntityTimelineStat = Components.Schemas.EntityTimelineStat
+public typealias EvaluateAppleImageDescriptionInput = Components.Schemas.EvaluateAppleImageDescriptionInput
+public typealias EvaluateAppleImageDescriptionOutput = Components.Schemas.EvaluateAppleImageDescriptionOutput
 public typealias ExpenseCreateInput = Components.Schemas.ExpenseCreateInput
 public typealias ExpenseDetail = Components.Schemas.ExpenseDetail
 public typealias ExpenseLineBasis = Components.Schemas.ExpenseLineBasis
@@ -138,6 +145,8 @@ public typealias ExternalIdKind = Components.Schemas.ExternalIdKind
 public typealias ExternalIdOut = Components.Schemas.ExternalIdOut
 public typealias ExternalIdSource = Components.Schemas.ExternalIdSource
 public typealias FdcId = Components.Schemas.FdcId
+public typealias FieldExplanationOutput = Components.Schemas.FieldExplanationOutput
+public typealias FieldExplanationSource = Components.Schemas.FieldExplanationSource
 public typealias FinancialAccountCreateInput = Components.Schemas.FinancialAccountCreateInput
 public typealias FinancialAccountDetail = Components.Schemas.FinancialAccountDetail
 public typealias FinancialAccountIdentity = Components.Schemas.FinancialAccountIdentity
@@ -241,13 +250,47 @@ public typealias ImageAssociationEntity = Components.Schemas.ImageAssociationEnt
 public typealias ImageAssociationRole = Components.Schemas.ImageAssociationRole
 public typealias ImageBrowserListInput = Components.Schemas.ImageBrowserListInput
 public typealias ImageBrowserListOut = Components.Schemas.ImageBrowserListOut
+public typealias ImageCutoutEligibility = Components.Schemas.ImageCutoutEligibility
+public typealias ImageDerivativeStatus = Components.Schemas.ImageDerivativeStatus
+public typealias ImageDescriptionAnalysis = Components.Schemas.ImageDescriptionAnalysis
+public typealias ImageDescriptionClaim = Components.Schemas.ImageDescriptionClaim
+public typealias ImageDescriptionClaimInput = Components.Schemas.ImageDescriptionClaimInput
+public typealias ImageDescriptionCorrection = Components.Schemas.ImageDescriptionCorrection
+public typealias ImageDescriptionCorrectionInput = Components.Schemas.ImageDescriptionCorrectionInput
+public typealias ImageDescriptionCorrectionOutput = Components.Schemas.ImageDescriptionCorrectionOutput
+public typealias ImageDescriptionResult = Components.Schemas.ImageDescriptionResult
+public typealias ImageDescriptionResultInput = Components.Schemas.ImageDescriptionResultInput
 public typealias ImageHashIndex = Components.Schemas.ImageHashIndex
 public typealias ImageHashIndexItem = Components.Schemas.ImageHashIndexItem
 public typealias ImageListFilters = Components.Schemas.ImageListFilters
 public typealias ImageOut = Components.Schemas.ImageOut
+public typealias ImageProcessingCapabilities = Components.Schemas.ImageProcessingCapabilities
+public typealias ImageProcessingClientMessage = Components.Schemas.ImageProcessingClientMessage
+public typealias ImageProcessingClientMessageResult = Components.Schemas.ImageProcessingClientMessageResult
+public typealias ImageProcessingCommand = Components.Schemas.ImageProcessingCommand
+public typealias ImageProcessingCommandDescribeImage = Components.Schemas.ImageProcessingCommandDescribeImage
+public typealias ImageProcessingCommandSubjectLift = Components.Schemas.ImageProcessingCommandSubjectLift
+public typealias ImageProcessingCompletedOutcome = Components.Schemas.ImageProcessingCompletedOutcome
+public typealias ImageProcessingCompletedOutcomeDescribeImage = Components.Schemas.ImageProcessingCompletedOutcomeDescribeImage
+public typealias ImageProcessingCompletedOutcomeSubjectLift = Components.Schemas.ImageProcessingCompletedOutcomeSubjectLift
+public typealias ImageProcessingFailedOutcome = Components.Schemas.ImageProcessingFailedOutcome
+public typealias ImageProcessingHello = Components.Schemas.ImageProcessingHello
+public typealias ImageProcessingIssue = Components.Schemas.ImageProcessingIssue
+public typealias ImageProcessingIssueFilter = Components.Schemas.ImageProcessingIssueFilter
+public typealias ImageProcessingJobKind = Components.Schemas.ImageProcessingJobKind
+public typealias ImageProcessingJobState = Components.Schemas.ImageProcessingJobState
+public typealias ImageProcessingResult = Components.Schemas.ImageProcessingResult
+public typealias ImageProcessingServerMessage = Components.Schemas.ImageProcessingServerMessage
+public typealias ImageProcessingServerMessageAcknowledge = Components.Schemas.ImageProcessingServerMessageAcknowledge
+public typealias ImageProcessingServerMessageCommand = Components.Schemas.ImageProcessingServerMessageCommand
+public typealias ImageProcessingSkippedOutcome = Components.Schemas.ImageProcessingSkippedOutcome
+public typealias ImageProcessingSource = Components.Schemas.ImageProcessingSource
+public typealias ImageProcessingStatus = Components.Schemas.ImageProcessingStatus
+public typealias ImageProcessingStatusOutput = Components.Schemas.ImageProcessingStatusOutput
 public typealias ImageRecordAnalysisInput = Components.Schemas.ImageRecordAnalysisInput
 public typealias ImageRecordAnalysisOutput = Components.Schemas.ImageRecordAnalysisOutput
 public typealias ImageRenderStatus = Components.Schemas.ImageRenderStatus
+public typealias ImageRepresentations = Components.Schemas.ImageRepresentations
 public typealias ImageShortcode = Components.Schemas.ImageShortcode
 public typealias ImageSourceFingerprint = Components.Schemas.ImageSourceFingerprint
 public typealias ImageSourceFingerprintInput = Components.Schemas.ImageSourceFingerprintInput
@@ -278,6 +321,16 @@ public typealias InventoryListItem = Components.Schemas.InventoryListItem
 public typealias InventoryListLocationOut = Components.Schemas.InventoryListLocationOut
 public typealias InventoryListPage = Components.Schemas.InventoryListPage
 public typealias InventoryListProductOut = Components.Schemas.InventoryListProductOut
+public typealias InventoryLocationSnapshotOut = Components.Schemas.InventoryLocationSnapshotOut
+public typealias InventoryOwner = Components.Schemas.InventoryOwner
+public typealias InventoryOwnershipEvidence = Components.Schemas.InventoryOwnershipEvidence
+public typealias InventoryOwnershipMode = Components.Schemas.InventoryOwnershipMode
+public typealias InventoryOwnershipMutationOut = Components.Schemas.InventoryOwnershipMutationOut
+public typealias InventoryOwnershipSelection = Components.Schemas.InventoryOwnershipSelection
+public typealias InventoryOwnershipSelectionInherit = Components.Schemas.InventoryOwnershipSelectionInherit
+public typealias InventoryOwnershipSelectionPerson = Components.Schemas.InventoryOwnershipSelectionPerson
+public typealias InventoryOwnershipSelectionUnassigned = Components.Schemas.InventoryOwnershipSelectionUnassigned
+public typealias InventoryOwnershipSource = Components.Schemas.InventoryOwnershipSource
 public typealias InventoryPlacement = Components.Schemas.InventoryPlacement
 public typealias InventoryPlacementProposal = Components.Schemas.InventoryPlacementProposal
 public typealias InventorySessionResolution = Components.Schemas.InventorySessionResolution
@@ -393,6 +446,7 @@ public typealias NutritionEstimate = Components.Schemas.NutritionEstimate
 public typealias NutritionInfo = Components.Schemas.NutritionInfo
 public typealias NutritionMeal = Components.Schemas.NutritionMeal
 public typealias OperationEffect = Components.Schemas.OperationEffect
+public typealias OptionalImageRepresentations = Components.Schemas.OptionalImageRepresentations
 public typealias PerceptualHash = Components.Schemas.PerceptualHash
 public typealias PhotoImportCommitInput = Components.Schemas.PhotoImportCommitInput
 public typealias PhotoImportCommitOutput = Components.Schemas.PhotoImportCommitOutput
@@ -417,6 +471,7 @@ public typealias ProductCategory = Components.Schemas.ProductCategory
 public typealias ProductCookbookRefOut = Components.Schemas.ProductCookbookRefOut
 public typealias ProductCreateInput = Components.Schemas.ProductCreateInput
 public typealias ProductDataCheck = Components.Schemas.ProductDataCheck
+public typealias ProductDataGaps = Components.Schemas.ProductDataGaps
 public typealias ProductDetail = Components.Schemas.ProductDetail
 public typealias ProductFindOrCreateByCodeInput = Components.Schemas.ProductFindOrCreateByCodeInput
 public typealias ProductFindOrCreateByCodeInputBarcode = Components.Schemas.ProductFindOrCreateByCodeInputBarcode
@@ -434,6 +489,7 @@ public typealias ProductQuantityLedgerOut = Components.Schemas.ProductQuantityLe
 public typealias ProductRelatedProposal = Components.Schemas.ProductRelatedProposal
 public typealias ProductShortcode = Components.Schemas.ProductShortcode
 public typealias ProductTopLevelOut = Components.Schemas.ProductTopLevelOut
+public typealias ProductUnitPriceMappings = Components.Schemas.ProductUnitPriceMappings
 public typealias ProductUpdateData = Components.Schemas.ProductUpdateData
 public typealias ProductWithMappingsAndFoodOut = Components.Schemas.ProductWithMappingsAndFoodOut
 public typealias ProductWithMappingsOut = Components.Schemas.ProductWithMappingsOut
@@ -503,15 +559,26 @@ public typealias ScanAtLocationInput = Components.Schemas.ScanAtLocationInput
 public typealias ScanAtLocationOut = Components.Schemas.ScanAtLocationOut
 public typealias ScanStrayOut = Components.Schemas.ScanStrayOut
 public typealias ScanStraySkipReason = Components.Schemas.ScanStraySkipReason
+public typealias ScheduleImageProcessingInput = Components.Schemas.ScheduleImageProcessingInput
+public typealias ScheduleImageProcessingOutput = Components.Schemas.ScheduleImageProcessingOutput
 public typealias SearchableEntity = Components.Schemas.SearchableEntity
 public typealias SearchableEntityId = Components.Schemas.SearchableEntityId
 public typealias SearchHit = Components.Schemas.SearchHit
 public typealias SearchHitsOut = Components.Schemas.SearchHitsOut
 public typealias SearchMatchField = Components.Schemas.SearchMatchField
 public typealias SearchMatchKind = Components.Schemas.SearchMatchKind
+public typealias SetInventoryOwnershipInput = Components.Schemas.SetInventoryOwnershipInput
 public typealias SetPerceptualHashesInput = Components.Schemas.SetPerceptualHashesInput
 public typealias SetPerceptualHashesOutput = Components.Schemas.SetPerceptualHashesOutput
 public typealias SignedProductQuantity = Components.Schemas.SignedProductQuantity
+public typealias SmartCollectionDetailOut = Components.Schemas.SmartCollectionDetailOut
+public typealias SmartCollectionMatch = Components.Schemas.SmartCollectionMatch
+public typealias SmartCollectionPagination = Components.Schemas.SmartCollectionPagination
+public typealias SmartCollectionReference = Components.Schemas.SmartCollectionReference
+public typealias SmartCollectionReferenceInput = Components.Schemas.SmartCollectionReferenceInput
+public typealias SmartCollectionReferenceStarter = Components.Schemas.SmartCollectionReferenceStarter
+public typealias SmartCollectionReferenceWardrobe = Components.Schemas.SmartCollectionReferenceWardrobe
+public typealias SmartCollectionSummary = Components.Schemas.SmartCollectionSummary
 public typealias SubmitReceiptEvidenceInput = Components.Schemas.SubmitReceiptEvidenceInput
 public typealias SubmitReceiptEvidenceOut = Components.Schemas.SubmitReceiptEvidenceOut
 public typealias TaskCreateInput = Components.Schemas.TaskCreateInput
@@ -535,6 +602,8 @@ public typealias Upc = Components.Schemas.Upc
 public typealias UpcLookupOutput = Components.Schemas.UpcLookupOutput
 public typealias UsdaFoodListOut = Components.Schemas.UsdaFoodListOut
 public typealias UsdaListInput = Components.Schemas.UsdaListInput
+public typealias ValidateImageProcessingCompanionMessageInput = Components.Schemas.ValidateImageProcessingCompanionMessageInput
+public typealias ValidateImageProcessingCompanionMessageOutput = Components.Schemas.ValidateImageProcessingCompanionMessageOutput
 public typealias VendorAccountBrowser = Components.Schemas.VendorAccountBrowser
 public typealias VendorAccountCreateInput = Components.Schemas.VendorAccountCreateInput
 public typealias VendorAccountCursor = Components.Schemas.VendorAccountCursor
@@ -566,6 +635,7 @@ public typealias WishDetail = Components.Schemas.WishDetail
 public typealias WishListItem = Components.Schemas.WishListItem
 public typealias WishListPage = Components.Schemas.WishListPage
 public typealias WishOut = Components.Schemas.WishOut
+public typealias WishPriceRangeOut = Components.Schemas.WishPriceRangeOut
 public typealias WishShortcode = Components.Schemas.WishShortcode
 public typealias WishUpdateData = Components.Schemas.WishUpdateData
 
@@ -595,6 +665,9 @@ extension Components.Schemas.BackgroundBatchRef: Identifiable {}
 extension Components.Schemas.BrowserBridgeRequest: Identifiable {}
 extension Components.Schemas.BrowserCapturedLink: Identifiable {}
 extension Components.Schemas.BrowserEvidenceReference: Identifiable {}
+extension Components.Schemas.CollectionProductOut: Identifiable {}
+extension Components.Schemas.CollectionProductPlacementOut: Identifiable {}
+extension Components.Schemas.CollectionProductPurchaseOut: Identifiable {}
 extension Components.Schemas.CookbookProductSummary: Identifiable {}
 extension Components.Schemas.CookbookSummary: Identifiable {}
 extension Components.Schemas.DisplayImageSummary: Identifiable {}
@@ -604,6 +677,7 @@ extension Components.Schemas.EntityGraphEdge: Identifiable {}
 extension Components.Schemas.EntityTimelineEvent: Identifiable {}
 extension Components.Schemas.EntityTimelineLink: Identifiable {}
 extension Components.Schemas.EntityTimelineRow: Identifiable {}
+extension Components.Schemas.EvaluateAppleImageDescriptionInput: Identifiable {}
 extension Components.Schemas.ExpenseDetail: Identifiable {}
 extension Components.Schemas.ExpenseListItem: Identifiable {}
 extension Components.Schemas.ExpenseOut: Identifiable {}
@@ -619,6 +693,7 @@ extension Components.Schemas.GardenEntryDetail: Identifiable {}
 extension Components.Schemas.GardenEntryListItem: Identifiable {}
 extension Components.Schemas.GardenEntryOut: Identifiable {}
 extension Components.Schemas.GetImageById: Identifiable {}
+extension Components.Schemas.ImageDescriptionCorrectionInput: Identifiable {}
 extension Components.Schemas.ImageHashIndexItem: Identifiable {}
 extension Components.Schemas.ImageOut: Identifiable {}
 extension Components.Schemas.ImageRecordAnalysisInput: Identifiable {}
@@ -633,6 +708,7 @@ extension Components.Schemas.InventoryEntryOut: Identifiable {}
 extension Components.Schemas.InventoryListItem: Identifiable {}
 extension Components.Schemas.InventoryListLocationOut: Identifiable {}
 extension Components.Schemas.InventoryListProductOut: Identifiable {}
+extension Components.Schemas.InventoryOwner: Identifiable {}
 extension Components.Schemas.InventoryWithLocationAndProductOut: Identifiable {}
 extension Components.Schemas.LedgerPartyDetail: Identifiable {}
 extension Components.Schemas.LedgerPartyListItem: Identifiable {}
@@ -686,6 +762,7 @@ extension Components.Schemas.RecipeUsageOut: Identifiable {}
 extension Components.Schemas.RecommendationLocationTarget: Identifiable {}
 extension Components.Schemas.RecommendationProjectTarget: Identifiable {}
 extension Components.Schemas.RecommendationSupportingExpense: Identifiable {}
+extension Components.Schemas.ScheduleImageProcessingInput: Identifiable {}
 extension Components.Schemas.SearchHit: Identifiable {}
 extension Components.Schemas.TaskDetail: Identifiable {}
 extension Components.Schemas.TaskListItem: Identifiable {}

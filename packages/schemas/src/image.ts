@@ -7,6 +7,7 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
+  oneOrMany,
   presenceFilter,
 } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
@@ -46,6 +47,15 @@ export const imageRenderStatusValues = generatedImageRenderStatusValues;
 export const imageStorageStatusValues = generatedImageStorageStatusValues;
 export type ImageRenderStatus = z.infer<typeof ImageRenderStatus>;
 export type ImageStorageStatus = z.infer<typeof ImageStorageStatus>;
+
+/** Durable current-image processing findings exposed to list and Problems. */
+export const imageProcessingIssue = z.enum(["failed", "review_needed"]);
+export type ImageProcessingIssue = z.infer<typeof imageProcessingIssue>;
+export const imageProcessingIssueFilter = oneOrMany(imageProcessingIssue)
+  .optional()
+  .describe(
+    "Filter to images whose current processing failed or needs eligibility review.",
+  );
 
 export type ImageSortField = GeneratedEntitySortField<"image">;
 
@@ -202,6 +212,7 @@ export type ImageUpdateInput = z.infer<typeof imageUpdateInput>;
 export const imageFilterFields = {
   ...auditDateFilterFields,
   ...generatedImageFilterFields,
+  processingIssue: imageProcessingIssueFilter,
   referencePresenceFilter: presenceFilter.describe(
     "Filter to images that are or are not referenced by any owning entity.",
   ),
@@ -504,6 +515,8 @@ export const imageWithEntitySchema = z.object({
   sha256: z.string().nullable(),
   renderStatus: ImageRenderStatus.nullable(),
   storageStatus: ImageStorageStatus.nullable(),
+  useOriginal: generatedImageFieldSchemas.read.useOriginal,
+  representations: generatedImageFieldSchemas.read.representations,
   verifiedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -511,6 +524,7 @@ export const imageWithEntitySchema = z.object({
   entityId: attachableImageEntityId.nullable(),
   entityName: z.string().nullable(),
   associations: z.array(imageAssociationSchema),
+  processingIssue: imageProcessingIssue.nullable().optional(),
 });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;

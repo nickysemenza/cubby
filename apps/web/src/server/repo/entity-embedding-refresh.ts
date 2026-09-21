@@ -15,6 +15,7 @@ import {
   financialTransaction,
   gardenEntry,
   gardenEntryPlanting,
+  image,
   ingredient,
   inventoryEntry,
   location,
@@ -291,6 +292,34 @@ async function getProductEmbeddingTexts(
       ...row,
       gtins: gtins.get(row.id) ?? [],
     }),
+  }));
+}
+
+/** Image analysis/corrections are appended by the shared search projection. */
+async function getImageEmbeddingTexts(
+  db: Database | DrizzleTransaction,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(image),
+        options.ids?.length
+          ? inArray(
+              image.id,
+              options.ids.map((id) => parseEntityId("image", id)),
+            )
+          : undefined,
+      ),
+      columns: { id: true, filename: true },
+    },
+    options.limit,
+  );
+  const rows = await unwrapDb(db).query.image.findMany(queryConfig);
+  return rows.map((row) => ({
+    entityType: "image",
+    entityId: row.id,
+    embeddingText: row.filename,
   }));
 }
 
@@ -1025,6 +1054,7 @@ async function getGardenEntryEmbeddingTexts(
 }
 
 const embeddingTextLoaders = {
+  image: getImageEmbeddingTexts,
   product: getProductEmbeddingTexts,
   recipe: getRecipeEmbeddingTexts,
   ingredient: getIngredientEmbeddingTexts,

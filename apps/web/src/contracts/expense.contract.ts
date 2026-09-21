@@ -1,8 +1,14 @@
 import { expenseShortcode } from "@cubby/schemas/identifiers";
+import {
+  confirmInventoryExpenseBeneficiaryInput,
+  confirmInventoryExpenseBeneficiaryOut,
+  expenseInventoryOwnershipContextInput,
+  expenseInventoryOwnershipContextOut,
+} from "@cubby/schemas/inventory-ownership";
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
 
-import { defineContract, query } from "~/contracts/define";
+import { defineContract, mutation, query } from "~/contracts/define";
 
 export const expenseContract = defineContract("expense", {
   chartData: query({
@@ -32,5 +38,13 @@ export const expenseContract = defineContract("expense", {
   chargeContext: query({
     input: expenseShortcode,
     output: schemas.expenseChargeContextOut,
+  }),
+  inventoryOwnershipContext: query({
+    input: expenseInventoryOwnershipContextInput,
+    output: expenseInventoryOwnershipContextOut,
+  }),
+  confirmInventoryBeneficiary: mutation({
+    input: confirmInventoryExpenseBeneficiaryInput,
+    output: confirmInventoryExpenseBeneficiaryOut,
   }),
 });

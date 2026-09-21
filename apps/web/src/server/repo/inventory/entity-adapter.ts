@@ -1,3 +1,5 @@
+import type { LedgerPartyId } from "@cubby/schemas/identifiers";
+
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -22,6 +24,17 @@ import {
 const inventoryShortcodes = bindShortcodeResolver("inventory");
 const productShortcodes = bindShortcodeResolver("product");
 const locationShortcodes = bindShortcodeResolver("location");
+const ledgerPartyShortcodes = bindShortcodeResolver("ledgerParty");
+
+const resolveOptionalOwner = async (
+  db: Parameters<typeof ledgerPartyShortcodes.one>[0],
+  shortcode: string | null | undefined,
+): Promise<LedgerPartyId | null | undefined> =>
+  shortcode === undefined
+    ? undefined
+    : shortcode === null
+      ? null
+      : await ledgerPartyShortcodes.one(db, shortcode);
 
 export const inventoryEntityAdapter = defineEntityAdapter({
   entity: "inventory",
@@ -31,9 +44,10 @@ export const inventoryEntityAdapter = defineEntityAdapter({
     list: (ctx, filters, sorts, pagination) =>
       inventoryentryList(ctx.db, filters, sorts, pagination),
     create: async (ctx, data) => {
-      const [productId, locationId] = await Promise.all([
+      const [productId, locationId, ownerLedgerPartyId] = await Promise.all([
         productShortcodes.one(ctx.db, data.productId),
         locationShortcodes.one(ctx.db, data.locationId),
+        resolveOptionalOwner(ctx.db, data.ownerLedgerPartyId),
       ]);
       const duplicate = await checkUniqueProductDuplicate(
         ctx.db,
@@ -47,7 +61,7 @@ export const inventoryEntityAdapter = defineEntityAdapter({
         );
       const output = await createInventoryEntry(
         ctx.db,
-        { ...data, productId, locationId },
+        { ...data, productId, locationId, ownerLedgerPartyId },
         ctx.actorContext,
       );
       return {
@@ -57,19 +71,20 @@ export const inventoryEntityAdapter = defineEntityAdapter({
     },
     update: async (ctx, shortcode, data) => {
       const entityId = await inventoryShortcodes.one(ctx.db, shortcode);
-      const [productId, locationId] = await Promise.all([
+      const [productId, locationId, ownerLedgerPartyId] = await Promise.all([
         data.productId
           ? productShortcodes.one(ctx.db, data.productId)
           : undefined,
         data.locationId
           ? locationShortcodes.one(ctx.db, data.locationId)
           : undefined,
+        resolveOptionalOwner(ctx.db, data.ownerLedgerPartyId),
       ]);
       return {
         output: await updateInventoryEntry(
           ctx.db,
           entityId,
-          { ...data, productId, locationId },
+          { ...data, productId, locationId, ownerLedgerPartyId },
           ctx.actorContext,
         ),
         entityId,

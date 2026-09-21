@@ -278,6 +278,12 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "purchase", relation: "purchases" }],
         },
+        explanation: {
+          ruleId: "vendor.purchase-count",
+          description:
+            "Purchase count is the number of live purchases linked to this vendor.",
+          readPath: "purchaseCount",
+        },
         validation: {
           read: z.number().int().min(0),
           create: null,
@@ -302,6 +308,15 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
         },
+        explanation: {
+          ruleId: "vendor.spend",
+          description:
+            "Vendor spend is the sum of cost across live expenses whose purchase belongs to this vendor, including refunds.",
+          readPath: "spend",
+          sourceDependencies: [
+            { path: "purchaseCount", label: "Live purchase count" },
+          ],
+        },
         validation: {
           read: money,
           create: null,
@@ -322,6 +337,15 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "purchase", relation: "purchases" }],
+        },
+        explanation: {
+          ruleId: "vendor.latest-purchase-date",
+          description:
+            "Latest purchase date is the most recent date among this vendor's live purchases.",
+          readPath: "latestPurchaseDate",
+          sourceDependencies: [
+            { path: "purchaseCount", label: "Live purchase count" },
+          ],
         },
         validation: {
           read: plainDate.nullable(),

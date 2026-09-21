@@ -137,8 +137,32 @@ export type EntityField = Readonly<{
       sourceField: string;
       targetField: string;
     }>[];
+    filters: readonly Readonly<{ field: string; values: readonly string[] }>[];
   }> | null;
   provenance: EntityFieldProvenance | null;
+  explanation: Readonly<{
+    ruleId: string;
+    version: number;
+    description: string;
+    readPath?: string;
+    resolver:
+      | "field"
+      | "inventoryOwnership"
+      | "productValuation"
+      | "imageRepresentation"
+      | "productQuantity"
+      | "recipeTotals"
+      | "locationValuation"
+      | "merchantVendorInference"
+      | "expenseAttribution";
+    projections?: Readonly<{
+      list?: string;
+      detail?: string;
+      summary?: string;
+    }>;
+    sourceDependencies?: readonly Readonly<{ path: string; label: string }>[];
+    actions?: readonly ("confirmOwner" | "inheritOwner" | "editSource")[];
+  }> | null;
   control: EntityFieldControl | null;
   display: Readonly<{
     list: boolean;

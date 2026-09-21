@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
+import { FieldExplanation } from "~/entities/field-explanation";
 import {
   FieldProvenance,
   isInspectableFieldProvenance,
@@ -21,6 +22,7 @@ import type {
   CubbyTable as ITable,
   CubbyRow as Row,
 } from "./table-features";
+import { resolveColumnExplanation } from "./table-meta";
 
 interface SlotValue {
   priority: number;
@@ -289,7 +291,7 @@ function collectMobileSlots<TItem extends RowData>(
       ) : (
         rendered
       );
-    const mobileValue = meta?.provenance ? (
+    const provenanceValue = meta?.provenance ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">
         <span className="min-w-0 truncate">{inspectedValue}</span>
         <FieldProvenance
@@ -300,6 +302,25 @@ function collectMobileSlots<TItem extends RowData>(
     ) : (
       inspectedValue
     );
+    const explanation = resolveColumnExplanation(
+      meta?.explanation,
+      row.original,
+    );
+    const mobileValue =
+      explanation && rowId ? (
+        <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+          <span className="min-w-0 truncate">{provenanceValue}</span>
+          <FieldExplanation
+            entity={explanation.entity}
+            id={rowId}
+            field={explanation.field}
+            label={explanation.label}
+            surface="summary"
+          />
+        </span>
+      ) : (
+        provenanceValue
+      );
     const entry: SlotValue = {
       priority: getPriority(meta, 50),
       value: mobileValue,

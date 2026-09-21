@@ -35,6 +35,9 @@ interface PresignedUrlParams {
   expiresIn?: number; // in seconds
 }
 
+/** Companion input/output grants use this bounded lifetime. */
+export const PRESIGNED_URL_DEFAULT_EXPIRY_SECONDS = 300;
+
 /**
  * Generate a presigned URL for uploading a file to S3.
  *
@@ -45,7 +48,7 @@ interface PresignedUrlParams {
 export const generatePresignedUploadUrl = async ({
   key,
   contentType,
-  expiresIn = 300, // Default 5 minutes
+  expiresIn = PRESIGNED_URL_DEFAULT_EXPIRY_SECONDS,
 }: PresignedUrlParams): Promise<string> => {
   const u = new URL(objectUrl(key));
   u.searchParams.set("X-Amz-Expires", String(expiresIn));
@@ -58,6 +61,22 @@ export const generatePresignedUploadUrl = async ({
       aws: { signQuery: true },
     },
   );
+  return signed.url;
+};
+
+/**
+ * Authorize one companion attempt to read an original without widening bucket
+ * visibility. Image-processing commands carry this URL, never original bytes.
+ */
+export const generatePresignedDownloadUrl = async ({
+  key,
+  expiresIn = PRESIGNED_URL_DEFAULT_EXPIRY_SECONDS,
+}: Pick<PresignedUrlParams, "key" | "expiresIn">): Promise<string> => {
+  const u = new URL(objectUrl(key));
+  u.searchParams.set("X-Amz-Expires", String(expiresIn));
+  const signed = await r2.sign(new Request(u, { method: "GET" }), {
+    aws: { signQuery: true },
+  });
   return signed.url;
 };
 

@@ -111,7 +111,10 @@
     "./statement-row": "./src/statement-row.ts",
     "./wish": "./src/wish.ts",
     "./wish-fields": "./src/wish-fields.ts",
-    "./entity-fields": "./src/entity-fields.ts"
+    "./entity-fields": "./src/entity-fields.ts",
+    "./inventory-ownership": "./src/inventory-ownership.ts",
+    "./image-processing": "./src/image-processing.ts",
+    "./field-explanation": "./src/field-explanation.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

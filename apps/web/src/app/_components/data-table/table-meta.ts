@@ -46,12 +46,32 @@ export type EntityColumnRole =
   | "fact"
   | "action";
 
+export type ColumnExplanation = {
+  entity: EntityRef["entityType"];
+  field: string;
+  label: string;
+};
+
+export type RowColumnExplanation<TData> = {
+  resolve: (row: TData) => ColumnExplanation | undefined;
+};
+
+export const resolveColumnExplanation = <TData>(
+  explanation: ColumnExplanation | RowColumnExplanation<TData> | undefined,
+  row: TData,
+): ColumnExplanation | undefined =>
+  explanation && "resolve" in explanation
+    ? explanation.resolve(row)
+    : explanation;
+
 /** Per-column Cubby rendering and editing conventions, bound through v9's meta slot. */
 export interface CubbyColumnMeta<TData = CellData> {
   /** Stable table role; layout and styling must not infer this from an id. */
   entityColumnRole?: EntityColumnRole;
   /** Generated origin metadata for relation-backed or computed values. */
   provenance?: EntityFieldProvenance | null;
+  /** Fetchable explanation for a manifest-declared computed value. */
+  explanation?: ColumnExplanation | RowColumnExplanation<TData>;
   /** Specialist cell already supplies the relation workbench interaction. */
   provenanceWorkbenchHandled?: boolean;
   mobile?: MobileColumnMeta;

@@ -38,12 +38,14 @@ filter:
     - BrowserPaymentEvidence
     - BrowserChoice
   operations:
+    - collection.referenceDetail
     - cookbook.detail
     - cookbook.list
     - dashboard.counts
     - entity.explore
     - entity.graph
     - entity.graphPaths
+    - fieldExplanation.explain
     - image.analysis
     - image.detail
     - image.hashIndex
@@ -53,12 +55,20 @@ filter:
     - image.setPerceptualHashes
     - image.uploadDocument
     - image.uploadImage
+    - imageProcessing.correctDescription
+    - imageProcessing.evaluateAppleDescription
+    - imageProcessing.schedule
+    - imageProcessing.status
+    - imageProcessing.validateCompanionMessage
+    - inventory.confirmOwnership
     - inventory.findDuplicates
     - inventory.getByLocationIds
+    - inventory.locationSnapshot
     - inventory.moveEntries
     - inventory.reconcileSession
     - inventory.resolveScanStrays
     - inventory.scanAtLocation
+    - inventory.setOwnership
     - location.bulkUpdateParent
     - location.ensureGlobalUnknown
     - location.makeTree

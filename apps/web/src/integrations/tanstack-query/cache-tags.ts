@@ -1,3 +1,8 @@
+import {
+  allEntities,
+  imageDisplayBindings,
+} from "@cubby/schemas/entity-manifest";
+
 import type { OperationCacheTag } from "./operation-meta";
 
 /**
@@ -232,7 +237,19 @@ export const ripple = {
 
   // The broad `image` prefix, not an image-list tag: a list-only invalidation
   // doesn't refresh the image DETAIL page after a rename.
-  image: rippleTags([["image"], ["dashboard"]]),
+  image: rippleTags(
+    [
+      ["image"],
+      ["dashboard"],
+      ["problems"],
+      ["maintenance"],
+      ["search"],
+      ["collection"],
+    ],
+    allEntities
+      .filter((entity) => imageDisplayBindings[entity].length > 0)
+      .map((entity): OperationCacheTag => [entity]),
+  ),
   /** Culling pending uploads / unreferenced files resolves the Problems
    * "unreferenced files" section alongside the image list. */
   imageCull: rippleTags([["image"], ["problems"], ["dashboard"]]),

@@ -30,6 +30,18 @@ function makeInventoryItem(params: {
     valuation: params.valuation,
     verifiedAt: null,
     placement: "stock" as const,
+    ownershipMode: "inherit",
+    ownerLedgerPartyId: null,
+    effectiveOwnership: {
+      mode: "inherit",
+      explicitOwner: null,
+      effectiveOwner: null,
+      source: "unresolved",
+      basis: null,
+      evidence: null,
+      evidenceFingerprint: "unresolved",
+      matchesInheritedOwner: false,
+    },
     location: {
       id: testShortcode("location", "LOC-2345"),
       name: "Test Location",

@@ -33,6 +33,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/import/agent/oauth/start",
   "/api/import/agent/oauth/status",
   "/api/import/agent/socket",
+  "/api/companion/image-processing/socket",
   "/api/import/agent/sync",
   "/api/import/merchant-rules",
   "/api/import/run-logs",
@@ -141,6 +142,10 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   {
     pattern: /^\/collections\/smart\/[^/]+$/u,
     template: "/collections/smart/:starter",
+  },
+  {
+    pattern: /^\/collections\/wardrobe\/[^/]+$/u,
+    template: "/collections/wardrobe/:owner",
   },
   {
     pattern: new RegExp(`^/(${DETAIL_COLLECTIONS})/[^/]+$`, "u"),

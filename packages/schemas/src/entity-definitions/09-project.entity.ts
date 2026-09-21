@@ -397,6 +397,15 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "project", relation: "parent" }],
         },
+        explanation: {
+          ruleId: "project.parentProjectName",
+          description:
+            "The parent project name is read from the current live parent project selected by this project's parent link.",
+          readPath: "parentProjectName",
+          sourceDependencies: [
+            { path: "parentProjectId", label: "Parent project" },
+          ],
+        },
         validation: {
           read: z.string().nullable(),
           create: null,

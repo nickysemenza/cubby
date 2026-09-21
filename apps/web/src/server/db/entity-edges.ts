@@ -82,6 +82,9 @@ import {
   financialTransactionAllocation,
   gardenEntry,
   gardenEntryImage,
+  imageDerivative,
+  imageDescriptionCorrection,
+  imageProcessingJob,
   gardenEntryPlanting,
   importFinding,
   importHunt,
@@ -190,6 +193,30 @@ export const ENTITY_EDGES = {
     },
   }),
   image: edges({
+    "ImageDerivative.imageId": {
+      column: imageDerivative.imageId,
+      role: "media",
+      label: "image derivatives",
+      description:
+        "A transparent representation derived from this original image; it is never a gallery attachment of its own.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImageProcessingJob.imageId": {
+      column: imageProcessingJob.imageId,
+      role: "metadata",
+      label: "image processing jobs",
+      description:
+        "Durable processing state for this original image; queue delivery is only a wakeup for this record.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ImageDescriptionCorrection.imageId": {
+      column: imageDescriptionCorrection.imageId,
+      role: "metadata",
+      label: "confirmed image descriptions",
+      description:
+        "A user-confirmed image description that remains separate from generated analysis history.",
+      liveness: { kind: "must-target-live" },
+    },
     "ImportPreparedOrder.primaryDocumentImageId": {
       column: importPreparedOrder.primaryDocumentImageId,
       role: "media",
@@ -499,6 +526,14 @@ export const ENTITY_EDGES = {
       label: "financial accounts",
       description:
         "The member or household party an evidence account belongs to.",
+      liveness: { kind: "must-target-live" },
+    },
+    "InventoryEntry.ownerLedgerPartyId": {
+      column: inventoryEntry.ownerLedgerPartyId,
+      role: "reference",
+      label: "owned inventory entries",
+      description:
+        "An explicit member or guest owner pinned on a current inventory slot.",
       liveness: { kind: "must-target-live" },
     },
     "LedgerTransfer.fromPartyId": {

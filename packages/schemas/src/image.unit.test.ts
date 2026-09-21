@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   attachableImageEntity,
+  imageListFiltersSchema,
   imageOut,
   initiateUploadWithoutEntitySchema,
   setPerceptualHashesInputSchema,
@@ -9,6 +10,17 @@ import {
 import { galleryEntities } from "./entity-manifest";
 
 describe("native image metadata", () => {
+  it("accepts the persisted processing issue filter roster", () => {
+    expect(
+      imageListFiltersSchema.safeParse({
+        processingIssue: ["failed", "review_needed"],
+      }).success,
+    ).toBe(true);
+    expect(
+      imageListFiltersSchema.safeParse({ processingIssue: "pending" }).success,
+    ).toBe(false);
+  });
+
   it("derives existing-image targets from the gallery manifest", () => {
     expect(attachableImageEntity.options).toEqual(galleryEntities);
     expect(attachableImageEntity.options).toContain("gardenEntry");
@@ -46,6 +58,7 @@ describe("native image metadata", () => {
       size: 100,
       contentType: "image/jpeg",
       status: "UPLOADED",
+      useOriginal: false,
       width: 10,
       height: 10,
       detectedContentType: null,

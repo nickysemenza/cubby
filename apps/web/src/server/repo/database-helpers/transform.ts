@@ -50,6 +50,7 @@ export type MappableImageRecord = {
   renderStatus?: ImageOut["renderStatus"] | null;
   storageStatus?: ImageOut["storageStatus"] | null;
   verifiedAt?: Date | null;
+  useOriginal?: boolean;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -95,6 +96,7 @@ export const mapImages = (
       renderStatus: dbImage.renderStatus ?? null,
       storageStatus: dbImage.storageStatus ?? null,
       verifiedAt: dbImage.verifiedAt ?? null,
+      useOriginal: dbImage.useOriginal ?? false,
       createdAt: dbImage.createdAt,
       updatedAt: dbImage.updatedAt,
     }));

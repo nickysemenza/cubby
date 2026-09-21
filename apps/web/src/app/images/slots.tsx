@@ -8,6 +8,8 @@ import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 
+import { ImageProcessingPanel } from "./image-processing-panel";
+
 /**
  * The image itself and every record it is attached to. The media lives here
  * rather than in the hero because an image owns no gallery of its own —
@@ -20,6 +22,7 @@ export const ImageAssociations: DetailSlotComponent<"image"> = ({
   return (
     <Stack gap="md">
       <ImageDetailMedia image={image} />
+      <ImageProcessingPanel image={image} />
       <Button variant="outline" onClick={() => setOpen(true)}>
         Attach to record
       </Button>

@@ -7,7 +7,10 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
-import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
+import {
+  CULL_PENDING_IMAGES_DEFAULT_HOURS,
+  imageProcessingIssue,
+} from "@cubby/schemas/image";
 import { measureEstimate, estimateCoverage } from "@cubby/schemas/nutrition";
 import {
   allProblemsSchema,
@@ -613,6 +616,8 @@ const presentCoverageExactRows = async (
 const exactProblemPresentationRowSchema = z.object({
   id: z.string(),
   name: z.string().nullish(),
+  filename: z.string().nullish(),
+  processingIssue: imageProcessingIssue.nullish(),
   manufacturer: z.string().nullish(),
   expectedQuantity: z.number().nullish(),
   inventoryEntry: z
@@ -758,6 +763,12 @@ const fastExactPresenters = {
       name: String(row.name),
       manufacturer: String(row.manufacturer ?? ""),
       primaryGtin: row.primaryGtin ?? null,
+    }),
+  imageProcessingIssues: (row) =>
+    allProblemsSchema.shape.imageProcessingIssues.element.parse({
+      id: row.id,
+      filename: row.filename ?? row.name ?? "(unnamed image)",
+      processingIssue: row.processingIssue,
     }),
   kitsCountedTwice: (row) =>
     allProblemsSchema.shape.kitsCountedTwice.element.parse({
@@ -932,6 +943,7 @@ const FAST_ENTITY_PROBLEM_KEYS = [
   "unlinkedExitExpenses",
   "purchaselessExitExpenses",
   "productsWithNoImages",
+  "imageProcessingIssues",
   "understatedCostMeals",
   "unknownParkedItems",
   "inventoryWithoutPricePath",
@@ -1146,6 +1158,11 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       "productsWithNoImages",
       page("productsWithNoImages"),
       allProblemsSchema.shape.productsWithNoImages,
+    ),
+    imageProcessingIssues: presentFastExactProblem(
+      "imageProcessingIssues",
+      page("imageProcessingIssues"),
+      allProblemsSchema.shape.imageProcessingIssues,
     ),
     understatedCostMeals: presentFastExactProblem(
       "understatedCostMeals",

@@ -29,6 +29,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expenseAttribution,
   financialAccount,
+  inventoryEntry,
   ledgerParty,
   ledgerTransfer,
   meal,
@@ -51,6 +52,7 @@ import {
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { applyInventoryOwnershipInTransaction } from "~/server/repo/inventory/ownership-mutations";
 import {
   assertDistinctMergeTargets,
   finalizeMerge,
@@ -114,6 +116,11 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     code: "block-accounts",
     effect: "block",
     description: "Live accounts retain their ledger party.",
+  },
+  "InventoryEntry.ownerLedgerPartyId": {
+    code: "block-inventory-owners",
+    effect: "block",
+    description: "Explicit inventory ownership retains its individual owner.",
   },
   "LedgerTransfer.fromPartyId": {
     code: "block-outgoing-transfers",
@@ -188,6 +195,12 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     code: "repoint-accounts",
     effect: "repoint",
     description: "Accounts move to the surviving party.",
+  },
+  "InventoryEntry.ownerLedgerPartyId": {
+    code: "merge-inventory-owners",
+    effect: "move-dedupe",
+    description:
+      "Explicitly owned inventory moves to the surviving person and folds only when the complete raw slot and unit agree.",
   },
   "LedgerTransfer.fromPartyId": {
     code: "repoint-outgoing-transfers",
@@ -498,6 +511,15 @@ export async function deleteLedgerParties(
           notDeleted(financialAccount),
         ),
       );
+    const [inventoryOwners] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(inventoryEntry)
+      .where(
+        and(
+          inArray(inventoryEntry.ownerLedgerPartyId, ids),
+          notDeleted(inventoryEntry),
+        ),
+      );
     const [transfers] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(ledgerTransfer)
@@ -513,6 +535,7 @@ export async function deleteLedgerParties(
     if (
       (refs?.n ?? 0) +
         (accounts?.n ?? 0) +
+        (inventoryOwners?.n ?? 0) +
         (transfers?.n ?? 0) +
         (portions?.n ?? 0) +
         (foodEntries?.n ?? 0) >
@@ -520,7 +543,7 @@ export async function deleteLedgerParties(
     )
       throw createAppError(
         "LEDGER_PARTY_HAS_EDGES",
-        "A ledger party with live attributions, accounts, transfers, meal portions, or meal food entries cannot be deleted.",
+        "A ledger party with live attributions, accounts, inventory ownership, transfers, meal portions, or meal food entries cannot be deleted.",
       );
     const { deleted } = await removeEntity(tx, {
       entity: "ledgerParty",
@@ -543,6 +566,7 @@ export async function previewMergeLedgerParties(
     parties,
     attributions,
     accounts,
+    inventoryOwners,
     outgoing,
     incoming,
     portions,
@@ -562,6 +586,12 @@ export async function previewMergeLedgerParties(
       getDb(db),
       financialAccount,
       financialAccount.ledgerPartyId,
+      mergeIds,
+    ),
+    countByTarget(
+      getDb(db),
+      inventoryEntry,
+      inventoryEntry.ownerLedgerPartyId,
       mergeIds,
     ),
     countByTarget(
@@ -621,6 +651,13 @@ export async function previewMergeLedgerParties(
         edgeKey: "FinancialAccount.ledgerPartyId",
         label: "financial accounts",
         byTargetId: accounts,
+      }),
+      impact({
+        disposition:
+          LEDGER_PARTY_MERGE_EDGE_POLICY["InventoryEntry.ownerLedgerPartyId"],
+        edgeKey: "InventoryEntry.ownerLedgerPartyId",
+        label: "explicitly owned inventory",
+        byTargetId: inventoryOwners,
       }),
       impact({
         disposition:
@@ -797,6 +834,7 @@ export async function mergeLedgerParties(
   let merged = 0;
   let attributionEdgesRepointed = 0;
   let accountEdgesRepointed = 0;
+  let inventoryEdgesRepointed = 0;
   let transferEdgesRepointed = 0;
   let portionEdgesRepointed = 0;
   let foodEntryEdgesRepointed = 0;
@@ -897,6 +935,24 @@ export async function mergeLedgerParties(
         ),
       );
     accountEdgesRepointed = accountCount?.n ?? 0;
+    const ownedInventory = await tx.query.inventoryEntry.findMany({
+      where: and(
+        inArray(inventoryEntry.ownerLedgerPartyId, loserIds),
+        notDeleted(inventoryEntry),
+      ),
+      columns: { id: true },
+      orderBy: inventoryEntry.id,
+    });
+    for (const row of ownedInventory) {
+      await applyInventoryOwnershipInTransaction(
+        tx,
+        row.id,
+        { ownershipMode: "person", ownerLedgerPartyId: keepId },
+        undefined,
+        actor,
+      );
+    }
+    inventoryEdgesRepointed = ownedInventory.length;
     const [transferCount] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(ledgerTransfer)
@@ -955,6 +1011,7 @@ export async function mergeLedgerParties(
       merged,
       attributionEdgesRepointed,
       accountEdgesRepointed,
+      inventoryEdgesRepointed,
       transferEdgesRepointed,
       portionEdgesRepointed,
       foodEntryEdgesRepointed,

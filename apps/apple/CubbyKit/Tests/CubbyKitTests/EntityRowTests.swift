@@ -57,6 +57,37 @@ struct EntityRowTests {
         #expect(row?.imageURL == URL(string: "https://images.example/first.jpg"))
     }
 
+    @Test func imageURLUsesPreferredRepresentationAndFallsBackToOriginalURL() {
+        let preferred: JSONValue = [
+            "id": "PRD-2345",
+            "name": "Sample",
+            "displayImages": [
+                [
+                    "id": "IMG-1", "url": "https://images.example/original.heic",
+                    "representations": [
+                        "original": "https://images.example/original.heic",
+                        "transparent": "https://images.example/cutout.png",
+                        "preferred": "https://images.example/cutout.png",
+                        "preferredKind": "transparent",
+                    ],
+                ]
+            ],
+        ]
+        let originalOnly: JSONValue = [
+            "id": "PRD-3456", "name": "Other",
+            "displayImages": [
+                ["id": "IMG-2", "url": "https://images.example/original.jpg"]
+            ],
+        ]
+
+        #expect(
+            product.row(from: preferred)?.imageURL
+                == URL(string: "https://images.example/cutout.png"))
+        #expect(
+            product.row(from: originalOnly)?.imageURL
+                == URL(string: "https://images.example/original.jpg"))
+    }
+
     @Test func imageURLDoesNotDeriveFromLegacyCoverWhenDisplayImagesAbsent() {
         let object: JSONValue = [
             "id": "PRD-2345",

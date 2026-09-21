@@ -1,3 +1,7 @@
+import {
+  preferredImageUrl,
+  type ImageRepresentations,
+} from "@cubby/schemas/image-summary";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PhotoViewer } from "~/app/_components/photos/photo-viewer";
@@ -5,7 +9,12 @@ import { transformedImageUrl } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 
 interface ImageGalleryProps {
-  images: Array<{ id: string; url: string; filename: string }>;
+  images: Array<{
+    id: string;
+    url: string;
+    representations?: ImageRepresentations;
+    filename: string;
+  }>;
   className?: string;
 }
 
@@ -93,7 +102,7 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
               onClick={() => setViewerIndex(index)}
             >
               <img
-                src={transformedImageUrl(image.url, 800)}
+                src={transformedImageUrl(preferredImageUrl(image), 800)}
                 alt={image.filename}
                 className="aspect-video w-full bg-card object-contain md:aspect-[4/3]"
                 loading={index === 0 ? "eager" : "lazy"}

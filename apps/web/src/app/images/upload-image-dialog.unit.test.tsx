@@ -37,6 +37,7 @@ function uploadedImageRow(imageId: ImageShortcode, file: File) {
     size: file.size,
     contentType: "image/jpeg",
     status: "UPLOADED" as const,
+    useOriginal: false,
     width: null,
     height: null,
     detectedContentType: null,

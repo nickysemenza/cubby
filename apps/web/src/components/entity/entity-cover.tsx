@@ -1,4 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  preferredImageUrl,
+  type ImageRepresentations,
+} from "@cubby/schemas/image-summary";
 import { ImageOff } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -17,6 +21,7 @@ import { cn } from "~/lib/utils";
 interface CoverImage {
   id: string;
   url: string;
+  representations?: ImageRepresentations;
 }
 
 interface EntityCoverProps {
@@ -91,7 +96,7 @@ export function EntityCover({
     <div className={shellClassName} style={style}>
       {preview ? (
         <ImageWithPreview
-          src={image.url}
+          src={preferredImageUrl(image)}
           alt={alt}
           to={to}
           params={params}
@@ -103,7 +108,7 @@ export function EntityCover({
         />
       ) : (
         <Image
-          src={image.url}
+          src={preferredImageUrl(image)}
           alt={alt}
           fallback={mediaFallback}
           loadingFallback={mediaFallback}

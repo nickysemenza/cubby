@@ -12,6 +12,172 @@ public import struct Foundation.Date
 public import CubbyAPISupport
 /// API operations, with input and output types, generated from `#/paths` in the OpenAPI document.
 public enum Operations {
+    /// - Remark: HTTP `POST /api/v1/collection/referenceDetail`.
+    /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)`.
+    public enum Collection_referenceDetail {
+        public static let id: Swift.String = "collection.referenceDetail"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/collection/referenceDetail/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Collection_referenceDetail.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Collection_referenceDetail.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Collection_referenceDetail.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/collection/referenceDetail/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/collection/referenceDetail/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.SmartCollectionReferenceInput)
+            }
+            public var body: Operations.Collection_referenceDetail.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Collection_referenceDetail.Input.Headers = .init(),
+                body: Operations.Collection_referenceDetail.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/collection/referenceDetail/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/collection/referenceDetail/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.SmartCollectionDetailOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.SmartCollectionDetailOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Collection_referenceDetail.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Collection_referenceDetail.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Collection_referenceDetail.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Collection_referenceDetail.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/collection/referenceDetail/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/collection/referenceDetail/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Collection_referenceDetail.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Collection_referenceDetail.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Collection_referenceDetail.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Collection_referenceDetail.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `GET /api/v1/cookbook/detail`.
     /// - Remark: Generated from `#/paths//api/v1/cookbook/detail/get(cookbook.detail)`.
     public enum Cookbook_detail {
@@ -2301,6 +2467,227 @@ public enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             public var `default`: Operations.Resources_expense_update.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/fieldExplanation/explain`.
+    /// - Remark: Generated from `#/paths//api/v1/fieldExplanation/explain/get(fieldExplanation.explain)`.
+    public enum FieldExplanation_explain {
+        public static let id: Swift.String = "fieldExplanation.explain"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/entityType`.
+                @frozen public enum EntityTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case product = "product"
+                    case recipe = "recipe"
+                    case ingredient = "ingredient"
+                    case cookbook = "cookbook"
+                    case location = "location"
+                    case inventory = "inventory"
+                    case meal = "meal"
+                    case ledgerParty = "ledgerParty"
+                    case ledgerTransfer = "ledgerTransfer"
+                    case project = "project"
+                    case task = "task"
+                    case vendor = "vendor"
+                    case purchase = "purchase"
+                    case financialAccount = "financialAccount"
+                    case financialTransaction = "financialTransaction"
+                    case wish = "wish"
+                    case expense = "expense"
+                    case usdaFood = "usda-food"
+                    case image = "image"
+                    case planting = "planting"
+                    case gardenEntry = "gardenEntry"
+                    case vendorAccount = "vendorAccount"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/entityType`.
+                public var entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload
+                /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/entityId`.
+                public var entityId: Swift.String
+                /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/field`.
+                public var field: Swift.String
+                /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/surface`.
+                @frozen public enum SurfacePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case list = "list"
+                    case detail = "detail"
+                    case summary = "summary"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/query/surface`.
+                public var surface: Operations.FieldExplanation_explain.Input.Query.SurfacePayload?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - entityType:
+                ///   - entityId:
+                ///   - field:
+                ///   - surface:
+                public init(
+                    entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload,
+                    entityId: Swift.String,
+                    field: Swift.String,
+                    surface: Operations.FieldExplanation_explain.Input.Query.SurfacePayload? = nil
+                ) {
+                    self.entityType = entityType
+                    self.entityId = entityId
+                    self.field = field
+                    self.surface = surface
+                }
+            }
+            public var query: Operations.FieldExplanation_explain.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.FieldExplanation_explain.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.FieldExplanation_explain.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.FieldExplanation_explain.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.FieldExplanation_explain.Input.Query,
+                headers: Operations.FieldExplanation_explain.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.FieldExplanationOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.FieldExplanationOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.FieldExplanation_explain.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.FieldExplanation_explain.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/fieldExplanation/explain/get(fieldExplanation.explain)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.FieldExplanation_explain.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.FieldExplanation_explain.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/fieldExplanation/explain/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.FieldExplanation_explain.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.FieldExplanation_explain.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/fieldExplanation/explain/get(fieldExplanation.explain)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.FieldExplanation_explain.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.FieldExplanation_explain.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -6929,6 +7316,845 @@ public enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/correctDescription`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/correctDescription/post(imageProcessing.correctDescription)`.
+    public enum ImageProcessing_correctDescription {
+        public static let id: Swift.String = "imageProcessing.correctDescription"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/correctDescription/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_correctDescription.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_correctDescription.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ImageProcessing_correctDescription.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/correctDescription/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/correctDescription/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.ImageDescriptionCorrectionInput)
+            }
+            public var body: Operations.ImageProcessing_correctDescription.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.ImageProcessing_correctDescription.Input.Headers = .init(),
+                body: Operations.ImageProcessing_correctDescription.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/correctDescription/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/correctDescription/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ImageDescriptionCorrectionOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ImageDescriptionCorrectionOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_correctDescription.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_correctDescription.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/correctDescription/post(imageProcessing.correctDescription)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ImageProcessing_correctDescription.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ImageProcessing_correctDescription.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/correctDescription/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/correctDescription/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_correctDescription.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_correctDescription.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/correctDescription/post(imageProcessing.correctDescription)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.ImageProcessing_correctDescription.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.ImageProcessing_correctDescription.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/evaluateAppleDescription`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/evaluateAppleDescription/post(imageProcessing.evaluateAppleDescription)`.
+    public enum ImageProcessing_evaluateAppleDescription {
+        public static let id: Swift.String = "imageProcessing.evaluateAppleDescription"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/evaluateAppleDescription/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_evaluateAppleDescription.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_evaluateAppleDescription.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ImageProcessing_evaluateAppleDescription.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/evaluateAppleDescription/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/evaluateAppleDescription/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.EvaluateAppleImageDescriptionInput)
+            }
+            public var body: Operations.ImageProcessing_evaluateAppleDescription.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.ImageProcessing_evaluateAppleDescription.Input.Headers = .init(),
+                body: Operations.ImageProcessing_evaluateAppleDescription.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/evaluateAppleDescription/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/evaluateAppleDescription/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.EvaluateAppleImageDescriptionOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.EvaluateAppleImageDescriptionOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_evaluateAppleDescription.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_evaluateAppleDescription.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/evaluateAppleDescription/post(imageProcessing.evaluateAppleDescription)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ImageProcessing_evaluateAppleDescription.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ImageProcessing_evaluateAppleDescription.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/evaluateAppleDescription/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/evaluateAppleDescription/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_evaluateAppleDescription.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_evaluateAppleDescription.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/evaluateAppleDescription/post(imageProcessing.evaluateAppleDescription)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.ImageProcessing_evaluateAppleDescription.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.ImageProcessing_evaluateAppleDescription.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/schedule`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/schedule/post(imageProcessing.schedule)`.
+    public enum ImageProcessing_schedule {
+        public static let id: Swift.String = "imageProcessing.schedule"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/schedule/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_schedule.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_schedule.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ImageProcessing_schedule.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/schedule/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/schedule/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.ScheduleImageProcessingInput)
+            }
+            public var body: Operations.ImageProcessing_schedule.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.ImageProcessing_schedule.Input.Headers = .init(),
+                body: Operations.ImageProcessing_schedule.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/schedule/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/schedule/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ScheduleImageProcessingOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ScheduleImageProcessingOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_schedule.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_schedule.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/schedule/post(imageProcessing.schedule)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ImageProcessing_schedule.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ImageProcessing_schedule.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/schedule/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/schedule/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_schedule.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_schedule.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/schedule/post(imageProcessing.schedule)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.ImageProcessing_schedule.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.ImageProcessing_schedule.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/imageProcessing/status`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/status/get(imageProcessing.status)`.
+    public enum ImageProcessing_status {
+        public static let id: Swift.String = "imageProcessing.status"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/status/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// image shortcode, e.g. IMG-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/status/GET/query/id`.
+                public var id: Swift.String
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - id: image shortcode, e.g. IMG-4K7M
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var query: Operations.ImageProcessing_status.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/status/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_status.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_status.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ImageProcessing_status.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.ImageProcessing_status.Input.Query,
+                headers: Operations.ImageProcessing_status.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/status/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/status/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ImageProcessingStatusOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ImageProcessingStatusOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_status.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_status.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/status/get(imageProcessing.status)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ImageProcessing_status.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ImageProcessing_status.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/status/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/status/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_status.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_status.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/status/get(imageProcessing.status)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.ImageProcessing_status.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.ImageProcessing_status.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/validateCompanionMessage`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/validateCompanionMessage/post(imageProcessing.validateCompanionMessage)`.
+    public enum ImageProcessing_validateCompanionMessage {
+        public static let id: Swift.String = "imageProcessing.validateCompanionMessage"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/validateCompanionMessage/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_validateCompanionMessage.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ImageProcessing_validateCompanionMessage.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ImageProcessing_validateCompanionMessage.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/imageProcessing/validateCompanionMessage/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/validateCompanionMessage/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.ValidateImageProcessingCompanionMessageInput)
+            }
+            public var body: Operations.ImageProcessing_validateCompanionMessage.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.ImageProcessing_validateCompanionMessage.Input.Headers = .init(),
+                body: Operations.ImageProcessing_validateCompanionMessage.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/validateCompanionMessage/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/validateCompanionMessage/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ValidateImageProcessingCompanionMessageOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ValidateImageProcessingCompanionMessageOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_validateCompanionMessage.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_validateCompanionMessage.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/validateCompanionMessage/post(imageProcessing.validateCompanionMessage)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ImageProcessing_validateCompanionMessage.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ImageProcessing_validateCompanionMessage.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/imageProcessing/validateCompanionMessage/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/imageProcessing/validateCompanionMessage/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ImageProcessing_validateCompanionMessage.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ImageProcessing_validateCompanionMessage.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/imageProcessing/validateCompanionMessage/post(imageProcessing.validateCompanionMessage)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.ImageProcessing_validateCompanionMessage.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.ImageProcessing_validateCompanionMessage.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `PATCH /api/v1/images/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/images/{id}/patch(resources.image.update)`.
     public enum Resources_image_update {
@@ -9024,6 +10250,172 @@ public enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `POST /api/v1/inventory/confirmOwnership`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/confirmOwnership/post(inventory.confirmOwnership)`.
+    public enum Inventory_confirmOwnership {
+        public static let id: Swift.String = "inventory.confirmOwnership"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/inventory/confirmOwnership/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Inventory_confirmOwnership.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Inventory_confirmOwnership.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Inventory_confirmOwnership.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/inventory/confirmOwnership/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/confirmOwnership/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.ConfirmInventoryOwnershipInput)
+            }
+            public var body: Operations.Inventory_confirmOwnership.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Inventory_confirmOwnership.Input.Headers = .init(),
+                body: Operations.Inventory_confirmOwnership.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/confirmOwnership/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/confirmOwnership/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.InventoryOwnershipMutationOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.InventoryOwnershipMutationOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Inventory_confirmOwnership.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Inventory_confirmOwnership.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/confirmOwnership/post(inventory.confirmOwnership)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Inventory_confirmOwnership.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Inventory_confirmOwnership.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/confirmOwnership/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/confirmOwnership/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Inventory_confirmOwnership.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Inventory_confirmOwnership.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/confirmOwnership/post(inventory.confirmOwnership)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Inventory_confirmOwnership.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Inventory_confirmOwnership.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `GET /api/v1/inventory/findDuplicates`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/findDuplicates/get(inventory.findDuplicates)`.
     public enum Inventory_findDuplicates {
@@ -9346,6 +10738,195 @@ public enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             public var `default`: Operations.Inventory_getByLocationIds.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/inventory/locationSnapshot`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/locationSnapshot/get(inventory.locationSnapshot)`.
+    public enum Inventory_locationSnapshot {
+        public static let id: Swift.String = "inventory.locationSnapshot"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// location shortcode, e.g. LOC-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/query/locationId`.
+                public var locationId: Swift.String
+                /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/query/placement`.
+                @frozen public enum PlacementPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case stock = "stock"
+                    case installed = "installed"
+                }
+                /// 'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/query/placement`.
+                public var placement: Operations.Inventory_locationSnapshot.Input.Query.PlacementPayload?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - locationId: location shortcode, e.g. LOC-4K7M
+                ///   - placement: 'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits
+                public init(
+                    locationId: Swift.String,
+                    placement: Operations.Inventory_locationSnapshot.Input.Query.PlacementPayload? = nil
+                ) {
+                    self.locationId = locationId
+                    self.placement = placement
+                }
+            }
+            public var query: Operations.Inventory_locationSnapshot.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Inventory_locationSnapshot.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Inventory_locationSnapshot.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Inventory_locationSnapshot.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.Inventory_locationSnapshot.Input.Query,
+                headers: Operations.Inventory_locationSnapshot.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.InventoryLocationSnapshotOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.InventoryLocationSnapshotOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Inventory_locationSnapshot.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Inventory_locationSnapshot.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/locationSnapshot/get(inventory.locationSnapshot)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Inventory_locationSnapshot.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Inventory_locationSnapshot.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/locationSnapshot/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Inventory_locationSnapshot.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Inventory_locationSnapshot.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/locationSnapshot/get(inventory.locationSnapshot)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Inventory_locationSnapshot.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Inventory_locationSnapshot.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -10010,6 +11591,172 @@ public enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             public var `default`: Operations.Inventory_scanAtLocation.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/inventory/setOwnership`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/setOwnership/post(inventory.setOwnership)`.
+    public enum Inventory_setOwnership {
+        public static let id: Swift.String = "inventory.setOwnership"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/inventory/setOwnership/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Inventory_setOwnership.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Inventory_setOwnership.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.Inventory_setOwnership.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/inventory/setOwnership/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/setOwnership/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.SetInventoryOwnershipInput)
+            }
+            public var body: Operations.Inventory_setOwnership.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.Inventory_setOwnership.Input.Headers = .init(),
+                body: Operations.Inventory_setOwnership.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/setOwnership/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/setOwnership/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.InventoryOwnershipMutationOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.InventoryOwnershipMutationOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Inventory_setOwnership.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Inventory_setOwnership.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/setOwnership/post(inventory.setOwnership)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Inventory_setOwnership.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.Inventory_setOwnership.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/setOwnership/POST/responses/default/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/setOwnership/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.Inventory_setOwnership.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.Inventory_setOwnership.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/setOwnership/post(inventory.setOwnership)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Inventory_setOwnership.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Operations.Inventory_setOwnership.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -22883,6 +24630,7 @@ public enum Operations {
                     case financialTransaction = "financialTransaction"
                     case wish = "wish"
                     case expense = "expense"
+                    case image = "image"
                     case planting = "planting"
                     case gardenEntry = "gardenEntry"
                 }

@@ -107,7 +107,12 @@ struct EntityHeroView<Actions: View>: View {
             HStack(spacing: PorcelainTokens.Space.lg) {
                 ForEach(stats, id: \.label) { stat in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(stat.label).font(.porcelainLabel).foregroundStyle(.secondary)
+                        FieldExplanationLabel(
+                            field: stat.field,
+                            subject: EntityRef(entity: descriptor.key, id: row.id)
+                        )
+                        .font(.porcelainLabel)
+                        .foregroundStyle(.secondary)
                         Text(stat.value).font(.porcelainData.weight(.semibold))
                     }
                     .accessibilityElement(children: .combine)
@@ -117,12 +122,12 @@ struct EntityHeroView<Actions: View>: View {
         actions
     }
 
-    private var heroStats: [(label: String, value: String)] {
+    private var heroStats: [(label: String, value: String, field: FieldDescriptor)] {
         presentation.heroStats.compactMap { key in
             guard let field = descriptor.field(key),
                 let value = EntityFieldValue.text(row.raw[key], field: field)
             else { return nil }
-            return (field.label, value)
+            return (field.label, value, field)
         }
     }
 
@@ -192,14 +197,24 @@ struct FieldsSectionView<Inline: View>: View {
         } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
             let value = reference.name ?? reference.id
             NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
-                LabeledContent(field.label, value: value)
+                LabeledContent {
+                    Text(value)
+                } label: {
+                    FieldExplanationLabel(
+                        field: field,
+                        subject: EntityRef(entity: descriptor.key, id: row.id))
+                }
             }
         } else if let value = EntityFieldValue.text(row.raw[field.key], field: field) {
-            LabeledContent(field.label) {
+            LabeledContent {
                 Text(value)
                     .font(field.kind == .identifier ? .porcelainCode : .porcelainBody)
                     .textSelection(.enabled)
                     .multilineTextAlignment(.trailing)
+            } label: {
+                FieldExplanationLabel(
+                    field: field,
+                    subject: EntityRef(entity: descriptor.key, id: row.id))
             }
         }
     }
@@ -208,7 +223,7 @@ struct FieldsSectionView<Inline: View>: View {
     private func recipeSourceRow(
         _ field: FieldDescriptor, source: RecipeSourcePresentation
     ) -> some View {
-        LabeledContent(field.label) {
+        LabeledContent {
             switch source {
             case .book(let title, let cookbookID):
                 if let cookbookID {
@@ -223,6 +238,106 @@ struct FieldsSectionView<Inline: View>: View {
                     Label(host, systemImage: "arrow.up.right.square")
                 }
             }
+        } label: {
+            FieldExplanationLabel(
+                field: field,
+                subject: EntityRef(entity: descriptor.key, id: row.id))
+        }
+    }
+}
+
+/// A manifest-owned explanation affordance shared by every generated detail field. The popover
+/// presents product language from the descriptor and keeps resolver/read-path internals out of UI.
+struct FieldExplanationLabel: View {
+    let field: FieldDescriptor
+    let subject: EntityRef
+    var labelOverride: String? = nil
+    @Environment(AppModel.self) private var appModel
+    @State private var showingExplanation = false
+    @State private var resolved: FieldExplanationOutput?
+    @State private var loadError: String?
+
+    var body: some View {
+        HStack(spacing: PorcelainTokens.Space.xs) {
+            Text(labelOverride ?? field.label)
+            if let explanation = field.explanation {
+                Button {
+                    showingExplanation = true
+                } label: {
+                    Image(systemName: "info.circle")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("About \(labelOverride ?? field.label)")
+                .popover(isPresented: $showingExplanation) {
+                    explanationPopover(fallback: explanation.description)
+                        .task(id: showingExplanation) { await loadExplanation() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func explanationPopover(fallback: String) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                Text(resolved?.label ?? field.label).font(.headline)
+                Text(resolved?.rule.description ?? fallback)
+                    .font(.porcelainBody)
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                if let resolved {
+                    if !resolved.sources.isEmpty {
+                        Divider()
+                        Text("Based on").font(.porcelainLabel.weight(.semibold))
+                        ForEach(Array(resolved.sources.enumerated()), id: \.offset) { _, source in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(source.label).font(.porcelainLabel)
+                                if let value = display(source.value), !value.isEmpty {
+                                    Text(value)
+                                        .font(.porcelainData)
+                                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                }
+                            }
+                        }
+                    }
+                    if resolved.truncated {
+                        Text("Showing the most relevant evidence.")
+                            .font(.caption)
+                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    }
+                } else if let loadError {
+                    Text(loadError).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .padding(PorcelainTokens.Space.md)
+            .frame(idealWidth: 340, alignment: .leading)
+        }
+        .presentationCompactAdaptation(.popover)
+    }
+
+    private func loadExplanation() async {
+        guard showingExplanation, resolved == nil else { return }
+        do {
+            resolved = try await appModel.client.fieldExplanation(
+                subject: subject, field: field.key)
+            loadError = nil
+        } catch {
+            loadError = "Current evidence couldn’t be loaded."
+            appModel.handle(error)
+        }
+    }
+
+    private func display(_ value: JsonValue) -> String? {
+        guard let value = try? JSONValue(encoding: value) else { return nil }
+        switch value {
+        case .null: return nil
+        case .bool(let value): return value ? "Yes" : "No"
+        case .number(let value): return value.formatted()
+        case .string(let value): return value
+        case .array, .object:
+            guard let data = try? JSONEncoder().encode(value) else { return nil }
+            return String(data: data, encoding: .utf8)
         }
     }
 }
@@ -344,8 +459,12 @@ struct EntityJournalEntryRow: View {
     let row: EntityRow
 
     private var images: [URL] {
-        row.raw["displayImages"]?.arrayValue?.compactMap { $0["url"]?.stringValue.flatMap(URL.init(string:)) }
-            ?? []
+        row.raw["displayImages"]?.arrayValue?.compactMap { image in
+            let value =
+                image["representations"]?["preferred"]?.stringValue
+                ?? image["url"]?.stringValue
+            return value.flatMap(URL.init(string:))
+        } ?? []
     }
 
     var body: some View {

@@ -43,10 +43,12 @@ describe("cascadeRemoval — the type-level lock", () => {
     });
   });
 
-  it("keeps every searchable entity removable", () => {
-    // If someone marks an entity `searchable` without `auditable`/a shortcode,
-    // `cascadeRemoval` could not cascade it and this stops compiling.
-    expectTypeOf<SearchableEntity>().toExtend<RemovableEntity>();
+  it("keeps every soft-deleted searchable entity removable", () => {
+    // Image search documents are removed by IMAGE_HARD_DELETE. Every other
+    // searchable entity must remain eligible for the audited cascade.
+    expectTypeOf<
+      Exclude<SearchableEntity, "image">
+    >().toExtend<RemovableEntity>();
   });
 
   it("keeps RemovableEntity aligned with the shortcode table roster", () => {

@@ -43,11 +43,6 @@ import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/app/_components/inventory/inventory-entries-quick-edit-dialog";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
-import {
-  ProductFoodSummariesProvider,
-  useHydratedProductFood,
-  useProductFoodSummaries,
-} from "~/app/_components/products/product-food-summaries";
 import { TruncatedList } from "~/app/_components/TruncatedList";
 import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
 import {
@@ -78,7 +73,6 @@ import {
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
-import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
@@ -182,7 +176,7 @@ function ExpectedQuantityCell({
 }
 
 function ProductFoodCell({ product }: { product: ProductListItem }) {
-  const food = useHydratedProductFood(product);
+  const food = product.food;
   return food ? (
     <EntityInlineLink
       displayImage={null}
@@ -290,11 +284,6 @@ export const productListOverride = defineListOverride<
 >({
   use() {
     const filterOptions = useProductFilterOptions();
-    const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
-      [],
-    );
-    const foodByProductId = useProductFoodSummaries(foodHydrationIds);
-
     const updateProductMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("product", "update"),
       entity: "product",
@@ -312,15 +301,6 @@ export const productListOverride = defineListOverride<
     // post-save invalidation refreshes the open dialog too.
     const [quickEditProductId, setQuickEditProductId] = useState<string | null>(
       null,
-    );
-
-    const getMappings = useCallback(
-      (product: ProductListItem) =>
-        getAllUnitMappingsFromProduct({
-          ...product,
-          food: foodByProductId[product.id] ?? null,
-        }),
-      [foodByProductId],
     );
 
     const overrides = useMemo(
@@ -729,8 +709,7 @@ export const productListOverride = defineListOverride<
             }),
           );
         }),
-      // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
-      [],
+      [updateProductMutation],
     );
 
     const compose = useCallback(
@@ -738,8 +717,8 @@ export const productListOverride = defineListOverride<
         createCubbyColumnCollection<ProductTreeRow>((add) => {
           const { place, rest } = interleaveDeclared(declared, add);
           // Interleaved with the declared columns to keep the column order:
-          // these aren't scalars of the product row (a relation, computed
-          // presence flags, a client-hydrated value, a second projection
+          // these aren't ordinary stored scalars (a relation, computed
+          // presence flags, a derived food projection, a second projection
           // hosting a filter control), so they stay explicit `add()`s per
           // docs/entities.md's third bucket.
           place("category");
@@ -776,12 +755,17 @@ export const productListOverride = defineListOverride<
           place("model");
           place("notes");
           add(
-            columnHelper.accessor((row) => row.model, {
+            columnHelper.accessor((row) => row.modelPresence, {
               id: "modelPresence",
               header: "Model present",
               enableSorting: false,
               meta: {
                 provenance: labeledFieldProvenance("Product record"),
+                explanation: {
+                  entity: "product",
+                  field: "modelPresence",
+                  label: "Model present",
+                },
                 className: "w-24",
               },
               cell: (info) =>
@@ -792,12 +776,17 @@ export const productListOverride = defineListOverride<
             }),
           );
           add(
-            columnHelper.accessor((row) => row.primaryGtin, {
+            columnHelper.accessor((row) => row.upcPresence, {
               id: "upcPresence",
               header: "UPC present",
               enableSorting: false,
               meta: {
                 provenance: labeledFieldProvenance("Product record"),
+                explanation: {
+                  entity: "product",
+                  field: "upcPresence",
+                  label: "UPC present",
+                },
                 className: "w-24",
               },
               cell: (info) =>
@@ -808,12 +797,17 @@ export const productListOverride = defineListOverride<
             }),
           );
           add(
-            columnHelper.accessor((row) => row.notes, {
+            columnHelper.accessor((row) => row.notesPresence, {
               id: "notesPresence",
               header: "Notes present",
               enableSorting: false,
               meta: {
                 provenance: labeledFieldProvenance("Product record"),
+                explanation: {
+                  entity: "product",
+                  field: "notesPresence",
+                  label: "Notes present",
+                },
                 className: "w-24",
               },
               cell: (info) =>
@@ -826,12 +820,17 @@ export const productListOverride = defineListOverride<
           place("stockTracked");
           place("dataQuality");
           add(
-            columnHelper.accessor((row) => row.dataQuality.gaps, {
+            columnHelper.accessor((row) => row.dataGaps, {
               id: "dataGaps",
               header: "Data gaps",
               enableSorting: false,
               meta: {
                 provenance: labeledFieldProvenance("Product data quality"),
+                explanation: {
+                  entity: "product",
+                  field: "dataGaps",
+                  label: "Data gaps",
+                },
                 className: "w-36",
                 mobile: { slot: "meta", priority: 80 },
               },
@@ -840,9 +839,7 @@ export const productListOverride = defineListOverride<
                 if (!gaps.length) return <NoneValue />;
                 return (
                   <span className="text-xs text-muted-foreground">
-                    {gaps
-                      .map((gap) => gap.check.replaceAll("_", " "))
-                      .join(", ")}
+                    {gaps.map((gap) => gap.replaceAll("_", " ")).join(", ")}
                   </span>
                 );
               },
@@ -850,24 +847,26 @@ export const productListOverride = defineListOverride<
           );
           place("externalIds");
           place("price");
-          // Comparable unit price. A DISPLAY column, not an accessor: the
-          // value is derived client-side from the loaded page, so a sortable
-          // header would order only the rows in front of you; display-only
-          // also keeps it clear of the `row._valuesCache` trap.
+          // Comparable unit price is projected by the server from the same
+          // effective price and complete conversion graph the explanation
+          // reads. It remains display-only because the list query does not
+          // expose server sorting for this derived value.
           add(
             columnHelper.display({
               id: "unitPrice",
               header: "Unit price",
               meta: {
                 provenance: labeledFieldProvenance("Product price and units"),
+                explanation: {
+                  entity: "product",
+                  field: "unitPrice",
+                  label: "Unit price",
+                },
                 numeric: true,
                 className: "w-24",
               },
               cell: (info) => (
-                <UnitPriceLine
-                  mappings={getMappings(info.row.original)}
-                  compact
-                />
+                <UnitPriceLine prices={info.row.original.unitPrice} compact />
               ),
             }),
           );
@@ -885,6 +884,11 @@ export const productListOverride = defineListOverride<
               // empty-value check, and most products have no USDA link.
               meta: {
                 provenance: entityFieldProvenance("usda-food"),
+                explanation: {
+                  entity: "product",
+                  field: "food",
+                  label: "USDA Food",
+                },
                 className: "w-32",
               },
               cell: ({ row }) => <ProductFoodCell product={row.original} />,
@@ -927,8 +931,7 @@ export const productListOverride = defineListOverride<
           place("expenses");
           rest();
         }),
-      // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
-      [getMappings],
+      [createInventoryMutation, updateInventoryMutation, updateProductMutation],
     );
 
     // Kits on the currently loaded pages, fetched for the whole page rather
@@ -968,11 +971,10 @@ export const productListOverride = defineListOverride<
         deletable: true as const,
         filterOptions,
         nameEditable,
-        getMappings,
         initialColumnVisibility: PRODUCT_INITIAL_COLUMN_VISIBILITY,
         groupConfig: PRODUCT_GROUP_CONFIG,
       }),
-      [filterOptions, nameEditable, getMappings],
+      [filterOptions, nameEditable],
     );
 
     return {
@@ -996,12 +998,7 @@ export const productListOverride = defineListOverride<
         ) : null;
       },
       wrap: (children, { data }) => (
-        <ProductListHydration
-          data={data}
-          summaries={foodByProductId}
-          onIds={setFoodHydrationIds}
-          onKitIds={setKitIds}
-        >
+        <ProductListHydration data={data} onKitIds={setKitIds}>
           {children}
         </ProductListHydration>
       ),
@@ -1010,35 +1007,23 @@ export const productListOverride = defineListOverride<
 });
 
 /**
- * Derives the food-hydration and kit id sets from the loaded rows (stable
- * arrays, so the query keys don't churn) and provides the food summaries the
- * USDA cell and unit-price line read.
+ * Derives the kit id set from the loaded rows as a stable array, so the query
+ * key does not churn while the table rerenders.
  */
 function ProductListHydration({
   data,
-  summaries,
-  onIds,
   onKitIds,
   children,
 }: {
   data: ProductListItem[];
-  summaries: ReturnType<typeof useProductFoodSummaries>;
-  onIds: (ids: readonly string[]) => void;
   onKitIds: (ids: string[]) => void;
   children: ReactNode;
 }) {
-  const productIds = useMemo(() => data.map((product) => product.id), [data]);
-  const stableIds = useStableIds(productIds);
   const kitCandidates = useMemo(
     () => data.filter((product) => product.componentCount > 0).map((p) => p.id),
     [data],
   );
   const stableKitIds = useStableIds(kitCandidates);
-  useEffect(() => onIds(stableIds), [onIds, stableIds]);
   useEffect(() => onKitIds([...stableKitIds]), [onKitIds, stableKitIds]);
-  return (
-    <ProductFoodSummariesProvider productIds={productIds} summaries={summaries}>
-      {children}
-    </ProductFoodSummariesProvider>
-  );
+  return children;
 }

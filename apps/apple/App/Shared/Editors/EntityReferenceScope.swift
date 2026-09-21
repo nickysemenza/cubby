@@ -12,10 +12,16 @@ enum EntityReferenceScope {
     static func pickerScope(
         field: FieldDescriptor, draft: [String: JSONValue]
     ) -> EntityPickerScope? {
-        guard let bindings = field.reference?.scope, !bindings.isEmpty else {
+        guard let reference = field.reference else { return nil }
+        let bindings = reference.scope
+        guard !bindings.isEmpty || !reference.filters.isEmpty else {
             return nil
         }
         var filters: [String: EntityFilterValue] = [:]
+        for filter in reference.filters {
+            filters[filter.field] =
+                filter.values.count == 1 ? .single(filter.values[0]) : .many(filter.values)
+        }
         for binding in bindings {
             guard let value = draft[binding.sourceField],
                 let strings = values(from: value),

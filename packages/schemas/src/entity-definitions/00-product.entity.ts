@@ -437,6 +437,27 @@ export default defineEntity({
           detailOrder: 4,
           format: "currency",
         },
+        explanation: {
+          ruleId: "product.effective-valuation-price",
+          description:
+            "A manual valuation price wins; otherwise Cubby derives a per-unit price from live priced expenses and their recorded quantities.",
+          resolver: "productValuation",
+          projections: {
+            list: "pricing.effectivePrice",
+            detail: "pricing.effectivePrice",
+            summary: "pricing.effectivePrice",
+          },
+          sourceDependencies: [
+            { path: "price", label: "Manual valuation price" },
+            {
+              path: "pricing.derivedPrice",
+              label: "Expense-derived unit price",
+            },
+            { path: "pricing.source", label: "Selected price source" },
+            { path: "pricing.partial", label: "Incomplete expense coverage" },
+          ],
+          actions: ["editSource"],
+        },
         validation: {
           read: moneyNullable.describe(
             "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
@@ -486,6 +507,15 @@ export default defineEntity({
         provenance: {
           kind: "relation",
           sources: [{ label: "Product identifiers" }],
+        },
+        explanation: {
+          ruleId: "product.external-identifiers",
+          description:
+            "External IDs are the current live identifier records attached to this product, with their source and canonical display value preserved.",
+          readPath: "externalIds",
+          sourceDependencies: [
+            { path: "externalIds", label: "Product identifier records" },
+          ],
         },
         display: {
           list: true,
@@ -607,6 +637,16 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "Product identifiers" }],
         },
+        explanation: {
+          ruleId: "product.primary-gtin",
+          description:
+            "The primary barcode is selected from this product's normalized external identifiers.",
+          readPath: "primaryGtin",
+          sourceDependencies: [
+            { path: "externalIds", label: "Product identifiers" },
+          ],
+          actions: ["editSource"],
+        },
         validation: {
           read: gtin.nullable(),
           create: null,
@@ -620,6 +660,19 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
+        },
+        explanation: {
+          ruleId: "product.images",
+          description:
+            "Product images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
+          projections: {
+            list: "displayImages",
+            detail: "images",
+            summary: "displayImages",
+          },
+          sourceDependencies: [
+            { path: "displayImages", label: "Selected product images" },
+          ],
         },
         validation: {
           read: z.array(imageOut),
@@ -637,6 +690,110 @@ export default defineEntity({
         },
       },
       {
+        key: "unitPrice",
+        kind: "json",
+        nullable: true,
+        readKey: null,
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Product price and unit mappings" }],
+        },
+        explanation: {
+          ruleId: "product.unit-price",
+          description:
+            "Comparable unit price converts one natural unit through the product's complete current conversion graph, including label or USDA-derived mappings and the effective price edge.",
+          resolver: "productValuation",
+          projections: { list: "unitPrice", summary: "unitPrice" },
+          sourceDependencies: [
+            {
+              path: "pricing.effectivePrice",
+              label: "Effective product price",
+            },
+            {
+              path: "unitPriceMappings",
+              label: "Complete unit conversion graph",
+            },
+          ],
+        },
+      },
+      {
+        key: "food",
+        kind: "json",
+        nullable: true,
+        readKey: null,
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "usda-food" }],
+        },
+        explanation: {
+          ruleId: "product.usda-food",
+          description:
+            "USDA food is the current lookup result for this product's explicit FDC identifier or normalized primary barcode.",
+          projections: { list: "food", summary: "food" },
+          sourceDependencies: [
+            { path: "fdc_id", label: "Explicit FDC identifier" },
+            { path: "primaryGtin", label: "Primary normalized barcode" },
+          ],
+        },
+      },
+      {
+        key: "modelPresence",
+        kind: "boolean",
+        readKey: null,
+        provenance: { kind: "derived", sources: [{ entity: "product" }] },
+        explanation: {
+          ruleId: "product.model-presence",
+          description:
+            "Model present reports whether this product has a non-empty model value.",
+          projections: { list: "modelPresence", summary: "modelPresence" },
+          sourceDependencies: [{ path: "model", label: "Product model" }],
+        },
+      },
+      {
+        key: "upcPresence",
+        kind: "boolean",
+        readKey: null,
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Product identifiers" }],
+        },
+        explanation: {
+          ruleId: "product.upc-presence",
+          description:
+            "UPC present reports whether the product has a primary normalized barcode.",
+          projections: { list: "upcPresence", summary: "upcPresence" },
+          sourceDependencies: [
+            { path: "externalIds", label: "Product identifiers" },
+          ],
+        },
+      },
+      {
+        key: "notesPresence",
+        kind: "boolean",
+        readKey: null,
+        provenance: { kind: "derived", sources: [{ entity: "product" }] },
+        explanation: {
+          ruleId: "product.notes-presence",
+          description:
+            "Notes present reports whether this product has non-empty notes.",
+          projections: { list: "notesPresence", summary: "notesPresence" },
+          sourceDependencies: [{ path: "notes", label: "Product notes" }],
+        },
+      },
+      {
+        key: "dataGaps",
+        kind: "json",
+        readKey: null,
+        provenance: { kind: "derived", sources: [{ entity: "product" }] },
+        explanation: {
+          ruleId: "product.data-gaps",
+          description:
+            "Data gaps are the current checks reported by this product's data-quality evaluation.",
+          projections: { list: "dataGaps", summary: "dataGaps" },
+          sourceDependencies: [{ path: "dataGaps", label: "Detected gaps" }],
+        },
+      },
+      {
         key: "dataQuality",
         kind: "json",
         // Default label would be "Data Quality"; the list column has always
@@ -644,6 +801,18 @@ export default defineEntity({
         label: "Data quality",
         display: { list: true, listOrder: 7, listHidden: true },
         provenance: { kind: "derived", sources: [{ entity: "product" }] },
+        explanation: {
+          ruleId: "product.data-quality",
+          description:
+            "Data-quality gaps are evaluated from the fields and relationships in this product projection.",
+          projections: {
+            list: "dataQuality.status",
+            summary: "dataQuality.status",
+          },
+          sourceDependencies: [
+            { path: "dataQuality.gaps", label: "Detected gaps" },
+          ],
+        },
         validation: {
           read: dataQuality,
           create: null,
@@ -663,6 +832,15 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
         },
+        explanation: {
+          ruleId: "product.net-expense-basis",
+          description:
+            "Net basis is the sum of cost across this product's live expenses, including negative refund lines.",
+          projections: { list: "expenseTotal", summary: "expenseTotal" },
+          sourceDependencies: [
+            { path: "expenseCount", label: "Live expense count" },
+          ],
+        },
         validation: {
           read: money,
           create: null,
@@ -677,6 +855,12 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "product", relation: "components" }],
+        },
+        explanation: {
+          ruleId: "product.component-count",
+          description:
+            "The component count is the number of live component relationships for this product.",
+          projections: { list: "componentCount", summary: "componentCount" },
         },
         validation: {
           read: z.number().int().nonnegative(),
@@ -696,6 +880,22 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "location", relation: "locations" }],
+        },
+        explanation: {
+          ruleId: "product.in-service-location-count",
+          description:
+            "In service counts live locations whose installed product is this product.",
+          resolver: "productQuantity",
+          projections: {
+            list: "quantityLedger.locationCount",
+            summary: "quantityLedger.locationCount",
+          },
+          sourceDependencies: [
+            {
+              path: "quantityLedger.locationCount",
+              label: "Installed location count",
+            },
+          ],
         },
       },
       {
@@ -717,6 +917,19 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
         },
+        explanation: {
+          ruleId: "product.expected-quantity",
+          description:
+            "Expected quantity is the signed sum of product quantities on live expenses; incomplete quantity evidence is retained in the ledger status.",
+          resolver: "productQuantity",
+          projections: {
+            list: "quantityLedger.expectedQuantity",
+            summary: "quantityLedger.expectedQuantity",
+          },
+          sourceDependencies: [
+            { path: "quantityLedger", label: "Expense quantity ledger" },
+          ],
+        },
       },
       {
         key: "quantityVariance",
@@ -727,6 +940,20 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
+        },
+        explanation: {
+          ruleId: "product.quantity-variance",
+          description:
+            "Variance is counted inventory minus expected expense-ledger quantity when both quantities are known.",
+          resolver: "productQuantity",
+          readPath: "quantityVariance",
+          sourceDependencies: [
+            { path: "onHandUnits", label: "Counted inventory units" },
+            {
+              path: "quantityLedger.expectedQuantity",
+              label: "Expected ledger quantity",
+            },
+          ],
         },
         validation: {
           read: z.number().nullable(),
@@ -746,6 +973,15 @@ export default defineEntity({
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
         },
+        explanation: {
+          ruleId: "product.acquisition-date",
+          description:
+            "Purchase date is the earliest acquisition date among this product's live positive-quantity expenses.",
+          projections: { list: "purchaseDate", summary: "purchaseDate" },
+          sourceDependencies: [
+            { path: "expenseCount", label: "Live expense count" },
+          ],
+        },
         validation: {
           read: plainDate.nullable(),
           create: null,
@@ -760,6 +996,12 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
+        },
+        explanation: {
+          ruleId: "product.expense-count",
+          description:
+            "Expense count is the number of live expenses linked to this product.",
+          projections: { list: "expenseCount", summary: "expenseCount" },
         },
         validation: {
           read: z.number().int(),
@@ -783,6 +1025,16 @@ export default defineEntity({
         provenance: {
           kind: "derived",
           sources: [{ entity: "inventory", relation: "inventory" }],
+        },
+        explanation: {
+          ruleId: "product.on-hand-units",
+          description:
+            "On-hand units are the sum of live inventory quantities after applying each entry's unit mapping; unknown mappings make the result unavailable.",
+          resolver: "productQuantity",
+          readPath: "onHandUnits",
+          sourceDependencies: [
+            { path: "inventoryEntry", label: "Live inventory entries" },
+          ],
         },
         validation: {
           read: z.number().nullable(),

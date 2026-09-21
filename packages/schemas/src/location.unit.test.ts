@@ -12,6 +12,7 @@ const img = (overrides: Partial<ImageOut> = {}): ImageOut =>
     size: 100,
     contentType: "image/jpeg",
     status: "UPLOADED",
+    useOriginal: false,
     width: null,
     height: null,
     detectedContentType: null,

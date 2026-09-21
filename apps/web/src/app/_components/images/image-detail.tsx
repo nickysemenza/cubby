@@ -1,4 +1,5 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
+import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { ImageIcon } from "lucide-react";
 
 import { Description } from "~/components/ui/description";
@@ -14,7 +15,7 @@ export function ImageDetailMedia({ image }: ImageDetailProps) {
     <div className="relative aspect-square w-full overflow-hidden border-y border-border bg-card md:max-w-sm md:rounded-md md:border">
       {image.status === "UPLOADED" ? (
         <Image
-          src={image.url}
+          src={preferredImageUrl(image)}
           alt={image.filename}
           displayWidth={640}
           className="absolute inset-0 h-full w-full object-contain"

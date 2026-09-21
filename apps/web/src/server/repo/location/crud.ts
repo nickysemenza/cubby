@@ -14,6 +14,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
+import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import type {
   InfLocation,
   LocationCreateInput,
@@ -105,6 +106,7 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { hydrateImageReadProjection } from "../image-read-projection";
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
 import { getHomeLocation } from "./home";
 import type {
@@ -944,7 +946,8 @@ const loadLocationCoverImages = async (
       byId.set(row.locationId, mapped);
     }
   }
-  return byId;
+  const entries = await hydrateImageReadProjection(db, [...byId]);
+  return new Map(entries);
 };
 
 /**
@@ -976,7 +979,8 @@ const loadIdentityProductCoverImages = async (
     const cover = mapImages(row.images).find(isDisplayableImageFile);
     if (cover) byId.set(row.id, cover);
   }
-  return byId;
+  const entries = await hydrateImageReadProjection(db, [...byId]);
+  return new Map(entries);
 };
 
 /**
@@ -1009,7 +1013,7 @@ export const getLocationCoverImageUrlsByLocationIds = async (
     const cover =
       ownCovers.get(row.id) ??
       (row.productId ? identityProductCovers.get(row.productId) : undefined);
-    if (cover) byId.set(row.id, cover.url);
+    if (cover) byId.set(row.id, preferredImageUrl(cover));
   }
   return byId;
 };

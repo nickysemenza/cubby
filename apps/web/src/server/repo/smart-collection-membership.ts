@@ -13,14 +13,101 @@ interface SmartLocation {
 }
 
 export interface SmartCollectionGraph {
-  products: readonly { id: string; manufacturer: string; tags: string[] }[];
+  products: readonly {
+    id: string;
+    manufacturer: string;
+    tags: string[];
+    category?: string | null;
+  }[];
   locations: readonly SmartLocation[];
-  inventory: readonly { productId: string; locationId: string }[];
+  inventory: readonly {
+    productId: string;
+    locationId: string;
+    effectiveOwnerId?: string | null;
+  }[];
   expenses: readonly {
     productId: string | null;
     shortcode: string;
     trade: Trade;
   }[];
+}
+
+type SmartProduct = SmartCollectionGraph["products"][number];
+type SmartRule = SmartCollectionDefinition["rules"][number];
+type ExpenseByProduct = ReadonlyMap<
+  string,
+  SmartCollectionGraph["expenses"][number][]
+>;
+
+const ownerEvidence = (
+  graph: SmartCollectionGraph,
+  productId: string,
+  ownerId: string,
+): string[] =>
+  graph.inventory.some(
+    (row) => row.productId === productId && row.effectiveOwnerId === ownerId,
+  )
+    ? [`Owner: ${ownerId}`]
+    : [];
+
+const locationEvidence = (
+  productId: string,
+  query: string,
+  placements: ReadonlyMap<string, string[]>,
+  ancestry: ReadonlyMap<string, SmartLocation[]>,
+): string[] => {
+  const evidence = new Set<string>();
+  for (const locationId of placements.get(productId) ?? []) {
+    const chain = ancestry.get(locationId) ?? [];
+    for (const [index, location] of chain.entries()) {
+      if (!location.name.toLowerCase().includes(query.toLowerCase())) continue;
+      evidence.add(
+        `Location: ${chain
+          .slice()
+          .reverse()
+          .map((item) => item.name)
+          .join(
+            " / ",
+          )} (matches ${index === 0 ? "current location" : "ancestor"} “${location.name}”)`,
+      );
+    }
+  }
+  return [...evidence];
+};
+
+const expenseTradeEvidence = (
+  rows: SmartCollectionGraph["expenses"],
+  trade: Trade,
+): string[] =>
+  rows
+    .filter((row) => row.trade === trade)
+    .map((row) => `${row.shortcode}: ${TRADE_LABELS[row.trade]}`);
+
+function evidenceForRule(
+  rule: SmartRule,
+  product: SmartProduct,
+  graph: SmartCollectionGraph,
+  placements: ReadonlyMap<string, string[]>,
+  ancestry: ReadonlyMap<string, SmartLocation[]>,
+  expenses: ExpenseByProduct,
+): string[] {
+  switch (rule.kind) {
+    case "effectiveOwnerEquals":
+      return ownerEvidence(graph, product.id, rule.value);
+    case "categoryEquals":
+      return product.category === rule.value ? [`Category: ${rule.value}`] : [];
+    case "productTagEquals":
+      return product.tags.includes(rule.value) ? [`Tag: ${rule.value}`] : [];
+    case "manufacturerEquals":
+      return product.manufacturer.trim().toLowerCase() ===
+        rule.value.trim().toLowerCase()
+        ? [`Manufacturer: ${product.manufacturer}`]
+        : [];
+    case "locationNameContains":
+      return locationEvidence(product.id, rule.value, placements, ancestry);
+    case "historicalExpenseTrade":
+      return expenseTradeEvidence(expenses.get(product.id) ?? [], rule.value);
+  }
 }
 
 /** Inputs contain only live rows and actual Expenses; no Purchase-level trade inference. */
@@ -67,6 +154,8 @@ export function evaluateSmartCollections(
       name: definition.name,
       totalCount: 0,
       sourceCounts: {
+        effectiveOwnerEquals: 0,
+        categoryEquals: 0,
         productTagEquals: 0,
         manufacturerEquals: 0,
         locationNameContains: 0,
@@ -76,55 +165,28 @@ export function evaluateSmartCollections(
     for (const product of graph.products) {
       const matches: SmartCollectionMatch[] = [];
       definition.rules.forEach((rule, ruleIndex) => {
-        const evidence = new Set<string>();
-        switch (rule.kind) {
-          case "productTagEquals":
-            if (product.tags.includes(rule.value))
-              evidence.add(`Tag: ${rule.value}`);
-            break;
-          case "manufacturerEquals":
-            if (
-              product.manufacturer.trim().toLowerCase() ===
-              rule.value.trim().toLowerCase()
-            )
-              evidence.add(`Manufacturer: ${product.manufacturer}`);
-            break;
-          case "locationNameContains":
-            for (const locationId of placements.get(product.id) ?? []) {
-              const chain = ancestry.get(locationId) ?? [];
-              for (const [index, location] of chain.entries()) {
-                if (
-                  location.name.toLowerCase().includes(rule.value.toLowerCase())
-                ) {
-                  evidence.add(
-                    `Location: ${chain
-                      .slice()
-                      .reverse()
-                      .map((item) => item.name)
-                      .join(
-                        " / ",
-                      )} (matches ${index === 0 ? "current location" : "ancestor"} “${location.name}”)`,
-                  );
-                }
-              }
-            }
-            break;
-          case "historicalExpenseTrade":
-            for (const row of expenses.get(product.id) ?? []) {
-              if (row.trade === rule.value)
-                evidence.add(`${row.shortcode}: ${TRADE_LABELS[row.trade]}`);
-            }
-            break;
-        }
-        if (evidence.size)
+        const evidence = evidenceForRule(
+          rule,
+          product,
+          graph,
+          placements,
+          ancestry,
+          expenses,
+        );
+        if (evidence.length)
           matches.push({
             ruleIndex,
             kind: rule.kind,
             value: rule.value,
-            evidence: [...evidence],
+            evidence,
           });
       });
-      if (!matches.length) continue;
+      if (
+        !matches.length ||
+        (definition.match === "all" &&
+          matches.length !== definition.rules.length)
+      )
+        continue;
       members.set(product.id, matches);
       for (const kind of new Set(matches.map((match) => match.kind)))
         summary.sourceCounts[kind] += 1;

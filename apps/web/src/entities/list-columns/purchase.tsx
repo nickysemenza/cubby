@@ -304,6 +304,11 @@ export const purchaseListOverride = defineListOverride<
                   ),
                   numeric: true,
                   className: "w-24",
+                  explanation: {
+                    entity: "purchase",
+                    field: "transactionCount",
+                    label: "Transactions",
+                  },
                 },
                 cell: (info) =>
                   info.getValue() > 0 ? (
@@ -326,6 +331,11 @@ export const purchaseListOverride = defineListOverride<
                 meta: {
                   provenance: labeledFieldProvenance("Purchase data quality"),
                   className: "w-48",
+                  explanation: {
+                    entity: "purchase",
+                    field: "dataGaps",
+                    label: "Data gaps",
+                  },
                 },
                 cell: (info) => info.getValue() || <NoneValue />,
               },

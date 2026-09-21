@@ -30,6 +30,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   financialAccount,
   financialTransaction,
+  ledgerParty,
   statementRow,
 } from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
@@ -91,6 +92,7 @@ const columns = {
   identity: financialAccount.identity,
   provisional: financialAccount.provisional,
   sourceAliases: financialAccount.sourceAliases,
+  inventoryOwnerDefaultEnabled: financialAccount.inventoryOwnerDefaultEnabled,
   ledgerPartyShortcode: sql<
     string | null
   >`(SELECT shortcode FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
@@ -119,6 +121,7 @@ const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
     identity: financialAccountIdentity.parse(row.identity),
     provisional: row.provisional,
     sourceAliases: row.sourceAliases,
+    inventoryOwnerDefaultEnabled: row.inventoryOwnerDefaultEnabled,
     ledgerPartyId: row.ledgerPartyShortcode
       ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
       : null,
@@ -327,9 +330,31 @@ export async function createFinancialAccount(
     );
     await assertAliasesAvailable(tx, data.sourceAliases);
     const { ledgerPartyId, ...columns } = data;
+    const resolvedLedgerPartyId = await resolveLedgerPartyForAccount(
+      tx,
+      ledgerPartyId,
+    );
+    if (data.inventoryOwnerDefaultEnabled) {
+      if (!resolvedLedgerPartyId) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "An inventory owner default requires an individual account owner.",
+        );
+      }
+      const party = await tx.query.ledgerParty.findFirst({
+        where: eq(ledgerParty.id, resolvedLedgerPartyId),
+        columns: { kind: true },
+      });
+      if (party?.kind !== "member") {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "An inventory owner default requires an individual account owner.",
+        );
+      }
+    }
     const created = await insertWithShortcode(tx, "financialAccount", {
       ...columns,
-      ledgerPartyId: await resolveLedgerPartyForAccount(tx, ledgerPartyId),
+      ledgerPartyId: resolvedLedgerPartyId,
     });
     await logAuditEntry(tx, actor, {
       entityType: "financialAccount",
@@ -378,6 +403,27 @@ export async function updateFinancialAccount(
       data.ledgerPartyId === undefined
         ? undefined
         : await resolveLedgerPartyForAccount(tx, data.ledgerPartyId);
+    const inventoryOwnerDefaultEnabled =
+      data.inventoryOwnerDefaultEnabled ?? before.inventoryOwnerDefaultEnabled;
+    if (inventoryOwnerDefaultEnabled) {
+      const effectivePartyId =
+        ledgerPartyId === undefined ? before.ledgerPartyId : ledgerPartyId;
+      const party = effectivePartyId
+        ? await tx.query.ledgerParty.findFirst({
+            where: and(
+              eq(ledgerParty.id, effectivePartyId),
+              notDeleted(ledgerParty),
+            ),
+            columns: { kind: true },
+          })
+        : null;
+      if (party?.kind !== "member") {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "An inventory owner default requires an individual account owner.",
+        );
+      }
+    }
     if (ledgerPartyId !== undefined && ledgerPartyId !== before.ledgerPartyId) {
       const [linkedEvidence] = await tx
         .select({ id: financialTransaction.id })

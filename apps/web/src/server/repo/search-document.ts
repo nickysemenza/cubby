@@ -2,14 +2,20 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import {
   embeddableEntities,
   type SearchableEntity,
+  type SearchableEntityRef,
   searchableEntities,
 } from "@cubby/schemas/search";
-import { type SQL, sql } from "drizzle-orm";
+import { getTableName, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
+import { preferredImageDescriptionPolicy } from "~/server/image-processing/description-policy";
+import {
+  imageJoinBindings,
+  unwrapDb,
+  uuidArrayParam,
+} from "~/server/repo/database-helpers";
 import {
   getEmbeddingTextsForEntityTypes,
   getEmbeddingTextsForRefs,
@@ -39,6 +45,164 @@ export interface SearchDocumentDiagnostics {
   missing: Array<{ entityType: SearchableEntity; entityId: string }>;
   orphaned: Array<{ entityType: SearchableEntity; entityId: string }>;
   stale: Array<{ entityType: SearchableEntity; entityId: string }>;
+}
+
+/**
+ * Direct image attachment evidence is indexed with its owner only. The branch
+ * list is generated from the canonical gallery bindings, so borrowed display
+ * images and unrelated relationship traversal never leak into search text.
+ */
+async function loadDirectImageSearchText(
+  db: Database | DrizzleTransaction,
+  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+): Promise<Map<string, string>> {
+  if (!refs.length) return new Map();
+  const refValues = sql.join(
+    refs.map((ref) => sql`(${ref.entityType}::text, ${ref.entityId}::uuid)`),
+    sql`, `,
+  );
+  const searchable = new Set<string>(searchableEntities);
+  const galleryBranches = Object.entries(imageJoinBindings)
+    .filter(([entityType]) => searchable.has(entityType))
+    .map(([entityType, binding]) => {
+      const table = sql.raw(`"${getTableName(binding.table)}"`);
+      const parent = sql.raw(`attachment."${binding.parentIdColumn.name}"`);
+      const imageId = sql.raw('attachment."imageId"');
+      return sql`
+        SELECT ${entityType}::text AS "entityType", ${parent}::text AS "entityId", ${imageId} AS "imageId"
+        FROM ${table} attachment
+        JOIN refs ON refs."entityType" = ${entityType} AND refs."entityId" = ${parent}
+        WHERE attachment."deletedAt" IS NULL`;
+    });
+  // Covers/logos are direct Image FK ownership rather than gallery joins.
+  const branches = [
+    ...(searchable.has("image")
+      ? [
+          sql`SELECT 'image'::text AS "entityType", i.id::text AS "entityId", i.id AS "imageId"
+          FROM "Image" i JOIN refs ON refs."entityType" = 'image' AND refs."entityId" = i.id
+          WHERE i."deletedAt" IS NULL`,
+        ]
+      : []),
+    ...galleryBranches,
+    sql`SELECT 'cookbook'::text AS "entityType", c.id::text AS "entityId", c."coverImageId" AS "imageId"
+        FROM "Cookbook" c JOIN refs ON refs."entityType" = 'cookbook' AND refs."entityId" = c.id
+        WHERE c."deletedAt" IS NULL AND c."coverImageId" IS NOT NULL`,
+    sql`SELECT 'vendor'::text AS "entityType", v.id::text AS "entityId", v."logoImageId" AS "imageId"
+        FROM "Vendor" v JOIN refs ON refs."entityType" = 'vendor' AND refs."entityId" = v.id
+        WHERE v."deletedAt" IS NULL AND v."logoImageId" IS NOT NULL`,
+  ];
+  const result = await unwrapDb(db).execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+    text: string | null;
+  }>(sql`
+    WITH refs("entityType", "entityId") AS (VALUES ${refValues}),
+    attached AS (${sql.join(branches, sql` UNION ALL `)})
+    SELECT attached."entityType", attached."entityId",
+      COALESCE(correction.description, analysis.result->>'description') AS text
+    FROM attached
+    JOIN "Image" image ON image.id = attached."imageId" AND image."deletedAt" IS NULL
+    LEFT JOIN LATERAL (
+      SELECT c.description FROM "ImageDescriptionCorrection" c
+      WHERE c."imageId" = image.id AND c."deletedAt" IS NULL
+      LIMIT 1
+    ) correction ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT a.result FROM "AiAnalysis" a
+      WHERE a."entityType" = 'image' AND a."entityId" = image.id
+        AND a.feature = 'image-description' AND a.provider = ${preferredImageDescriptionPolicy.provider}
+        AND a.model = ${preferredImageDescriptionPolicy.model}
+        AND a."promptVersion" = ${String(preferredImageDescriptionPolicy.promptRevision)}
+        AND a."resultSchemaRevision" = ${preferredImageDescriptionPolicy.resultSchemaRevision}
+        AND a."deletedAt" IS NULL
+        AND CASE
+          WHEN a."inputFingerprint" LIKE '{%'
+          THEN a."inputFingerprint"::jsonb->>'sourceContentHash' = image.sha256
+            AND a."inputFingerprint"::jsonb->>'provider' = ${preferredImageDescriptionPolicy.provider}
+            AND a."inputFingerprint"::jsonb->>'model' = ${preferredImageDescriptionPolicy.model}
+            AND a."inputFingerprint"::jsonb->>'promptRevision' = ${String(preferredImageDescriptionPolicy.promptRevision)}
+            AND a."inputFingerprint"::jsonb->>'resultSchemaRevision' = ${String(preferredImageDescriptionPolicy.resultSchemaRevision)}
+            AND a."inputFingerprint"::jsonb->>'normalizationRevision' = ${String(preferredImageDescriptionPolicy.normalizationRevision)}
+          ELSE false
+        END
+      ORDER BY a."createdAt" DESC LIMIT 1
+    ) analysis ON TRUE
+  `);
+  const values = new Map<string, string>();
+  for (const row of result.rows) {
+    const text = row.text?.trim();
+    if (!text) continue;
+    const key = entityRefKey(row.entityType, row.entityId);
+    values.set(key, [values.get(key), text].filter(Boolean).join("\n"));
+  }
+  return values;
+}
+
+/**
+ * Direct owners of one image, including the Image search document itself.
+ * The generated gallery bindings are the only relationship source here, so
+ * display fallbacks and borrowed images cannot become indexed evidence.
+ */
+export async function findDirectImageSearchOwnerRefs(
+  db: Database | DrizzleTransaction,
+  imageId: string,
+): Promise<SearchableEntityRef[]> {
+  const searchable = new Set<string>(searchableEntities);
+  const galleryBranches = Object.entries(imageJoinBindings)
+    .filter(([entityType]) => searchable.has(entityType))
+    .map(([entityType, binding]) => {
+      const table = sql.raw(`"${getTableName(binding.table)}"`);
+      const parent = sql.raw(`attachment."${binding.parentIdColumn.name}"`);
+      return sql`SELECT ${entityType}::text AS "entityType", ${parent}::text AS "entityId"
+        FROM ${table} attachment
+        WHERE attachment."imageId" = ${imageId}::uuid AND attachment."deletedAt" IS NULL`;
+    });
+  const result = await unwrapDb(db).execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+  }>(sql`
+    ${sql.join(
+      [
+        ...(searchable.has("image")
+          ? [
+              sql`SELECT 'image'::text AS "entityType", id::text AS "entityId" FROM "Image"
+            WHERE id = ${imageId}::uuid AND "deletedAt" IS NULL`,
+            ]
+          : []),
+        ...galleryBranches,
+        sql`SELECT 'cookbook'::text AS "entityType", id::text AS "entityId" FROM "Cookbook"
+          WHERE "coverImageId" = ${imageId}::uuid AND "deletedAt" IS NULL`,
+        sql`SELECT 'vendor'::text AS "entityType", id::text AS "entityId" FROM "Vendor"
+          WHERE "logoImageId" = ${imageId}::uuid AND "deletedAt" IS NULL`,
+      ],
+      sql` UNION ALL `,
+    )}
+  `);
+  return result.rows;
+}
+
+/** Refresh docs and semantic work after an analysis/correction changes text. */
+export async function refreshDirectImageOwnerSearchDocuments(
+  db: Database,
+  imageId: string,
+): Promise<void> {
+  const refs = await findDirectImageSearchOwnerRefs(db, imageId);
+  await refreshCapturedImageSearchOwnerRefs(
+    db,
+    refs,
+    "image-processing.search-text",
+  );
+}
+
+/** Refresh image owners captured before an attachment edge is removed. */
+export async function refreshCapturedImageSearchOwnerRefs(
+  db: Database,
+  refs: SearchableEntityRef[],
+  source: string,
+): Promise<void> {
+  const { refreshDerivedSearchRefs } =
+    await import("~/server/services/mutation-side-effects");
+  await refreshDerivedSearchRefs(db, refs, source);
 }
 
 /** Internal query boundary for the search service's indexed retrieval SQL. */
@@ -132,6 +296,11 @@ async function getSearchDocumentSources(
   // `refreshSearchDocument` marks the document missing forever, and the entity
   // never appears in global search. Nothing else in the pipeline sees that hole.
   const branches = {
+    image: sql`
+      SELECT 'image'::text AS "entityType", i."id"::text AS "entityId", i."shortcode",
+        i.filename AS title, NULL::text AS subtitle, 'image'::text AS "typeHint",
+        ARRAY[]::text[] AS aliases, ARRAY[i."contentType"]::text[] AS keywords
+      FROM "Image" i WHERE i."deletedAt" IS NULL AND 'image' IN (${types}) AND ${requested(sql`i."id"`)}`,
     product: sql`
       SELECT 'product'::text AS "entityType", p."id"::text AS "entityId", p."shortcode",
         p."name" AS title, p."manufacturer" AS subtitle, p."category" AS "typeHint",
@@ -357,6 +526,13 @@ export async function getSearchDocumentSourceRepairPage(
         AND "entityId" = ANY(${uuidArrayParam(sources.map((source) => source.entityId))})
     `),
   ]);
+  const imageTexts = await loadDirectImageSearchText(
+    db,
+    sources.map((source) => ({
+      entityType: source.entityType,
+      entityId: source.entityId,
+    })),
+  );
   const textByRef = new Map(
     texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
   );
@@ -375,7 +551,12 @@ export async function getSearchDocumentSourceRepairPage(
     if (
       !document ||
       document.sourceHash !==
-        (await searchDocumentSourceHash(source, text.embeddingText))
+        (await searchDocumentSourceHash(
+          source,
+          [text.embeddingText, imageTexts.get(key)]
+            .filter((value): value is string => Boolean(value))
+            .join("\n"),
+        ))
     ) {
       refs.push({ entityType: source.entityType, entityId: source.entityId });
     }
@@ -546,13 +727,14 @@ export async function refreshSearchDocuments(
   // whole rather than per type: each UNION arm is already gated on its own
   // entity type, and ids are uuids, so an id belonging to another type simply
   // matches nothing in the arms it was not meant for.
-  const [sources, texts] = await Promise.all([
+  const [sources, texts, imageTexts] = await Promise.all([
     getSearchDocumentSources(
       db,
       [...idsByType.keys()],
       refs.map((ref) => ref.entityId),
     ),
     getEmbeddingTextsForRefs(db, idsByType),
+    loadDirectImageSearchText(db, refs),
   ]);
 
   const sourceByRef = new Map(
@@ -575,7 +757,12 @@ export async function refreshSearchDocuments(
     const source = sourceByRef.get(key);
     const text = textByRef.get(key);
     if (source && text) {
-      entries.push({ source, body: text.embeddingText });
+      entries.push({
+        source,
+        body: [text.embeddingText, imageTexts.get(key)]
+          .filter((value): value is string => Boolean(value))
+          .join("\n"),
+      });
       continue;
     }
     results.push(
@@ -783,6 +970,13 @@ export async function getSearchDocumentDiagnostics(
         )})
     `),
   ]);
+  const imageTexts = await loadDirectImageSearchText(
+    db,
+    texts.map((text) => ({
+      entityType: text.entityType,
+      entityId: text.entityId,
+    })),
+  );
   const textByRef = new Map(
     texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
   );
@@ -818,7 +1012,12 @@ export async function getSearchDocumentDiagnostics(
     const text = textByRef.get(key);
     // No live source is orphaned, not stale — reported above, retired by repair.
     if (!source || !text) continue;
-    const expected = await searchDocumentSourceHash(source, text.embeddingText);
+    const expected = await searchDocumentSourceHash(
+      source,
+      [text.embeddingText, imageTexts.get(key)]
+        .filter((value): value is string => Boolean(value))
+        .join("\n"),
+    );
     if (expected !== document.sourceHash) {
       stale.push({
         entityType: document.entityType,

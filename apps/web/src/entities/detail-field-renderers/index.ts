@@ -14,6 +14,7 @@ import {
 import { expenseDetailFields } from "./expense";
 import { financialAccountDetailFields } from "./financial-account";
 import { financialTransactionDetailFields } from "./financial-transaction";
+import { inventoryDetailFields } from "./inventory";
 import { ledgerTransferDetailFields } from "./ledger-transfer";
 import { productDetailFields } from "./product";
 import { recipeDetailFields } from "./recipe";
@@ -42,6 +43,11 @@ type EntityDetailRendererCoverage<E extends DetailRendererEntity> = Readonly<
  * readable JSON rather than failing.
  */
 export const detailRendererCoverage = {
+  inventory: {
+    ownershipMode: implemented(inventoryDetailFields.ownershipMode),
+    ownerLedgerPartyId: implemented(inventoryDetailFields.ownerLedgerPartyId),
+    effectiveOwnership: implemented(inventoryDetailFields.effectiveOwnership),
+  },
   expense: {
     "expense-project": implemented(expenseDetailFields["expense-project"]),
   },
@@ -110,6 +116,8 @@ const detailCoverageFor = (
   entity: GenericDetailEntity,
 ): ErasedDetailCoverage | undefined => {
   switch (entity) {
+    case "inventory":
+      return detailRendererCoverage.inventory;
     case "expense":
       return detailRendererCoverage.expense;
     case "product":

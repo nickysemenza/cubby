@@ -49,4 +49,23 @@ export const basicProblemQueries = [
       columnVisibility: { logo: true, purchaseCount: true },
     },
   }),
+  defineProblem({
+    key: "imageProcessingIssues",
+    problemClass: PROBLEM_CLASS.imageProcessingIssues,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" },
+    freshness: { kind: "live" },
+    title: "Image processing attention",
+    description:
+      "Uploaded images whose current processing failed or needs an eligibility review.",
+    emptyMessage:
+      "Current image processing has no failures or review findings.",
+    source: {
+      kind: "entity",
+      entity: "image",
+      filters: [{ id: "processingIssue", value: ["failed", "review_needed"] }],
+      sort: [{ id: "createdAt", desc: false }],
+      columnVisibility: { filename: true },
+    },
+  }),
 ] as const satisfies readonly ProblemQuery[];

@@ -21,9 +21,7 @@ export function preserveSelectedPickerItems<TId extends string>(
 
 const scopeValueSchema = z.union([z.string(), z.array(z.string())]);
 
-const stringValue = (
-  value: EntityEditValue,
-): string | readonly string[] | null => {
+const stringValue = (value: EntityEditValue): string | string[] | null => {
   const parsed = scopeValueSchema.safeParse(value);
   if (!parsed.success) return null;
   if (!Array.isArray(parsed.data)) return parsed.data.trim() || null;
@@ -41,12 +39,23 @@ export function referenceScopeFor(
   values: EntityEditValueBag,
 ): EntitySearchScope | null | undefined {
   const mappings = reference?.scope ?? [];
-  if (mappings.length === 0) return undefined;
+  const fixed = reference?.filters ?? [];
+  if (mappings.length === 0 && fixed.length === 0) return undefined;
   const filters: Record<string, string | readonly string[]> = {};
+  for (const filter of fixed) filters[filter.field] = filter.values;
   for (const mapping of mappings) {
     const value = stringValue(values[mapping.sourceField]);
     if (value === null) return null;
-    filters[mapping.targetField] = value;
+    const allowed = filters[mapping.targetField];
+    if (allowed !== undefined) {
+      const permitted = new Set(Array.isArray(allowed) ? allowed : [allowed]);
+      const candidates = Array.isArray(value) ? value : [value];
+      const intersection = candidates.filter((candidate) =>
+        permitted.has(candidate),
+      );
+      if (intersection.length === 0) return null;
+      filters[mapping.targetField] = intersection;
+    } else filters[mapping.targetField] = value;
   }
   return filters;
 }

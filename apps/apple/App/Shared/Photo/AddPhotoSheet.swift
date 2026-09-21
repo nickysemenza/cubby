@@ -2,7 +2,7 @@ import CubbyKit
 import SwiftUI
 
 /// Picks, previews, and uploads one photo for an entity. Shows the lifted subject next to the
-/// original when Vision found one, with the background and cover choices underneath.
+/// original when Vision found one, with a cutout preview and cover choice underneath.
 struct AddPhotoSheet: View {
     @Bindable var capture: PhotoCaptureModel
     var onDone: (ImageCode) -> Void
@@ -235,20 +235,17 @@ struct AddPhotoSheet: View {
                     PanelDivider()
                 }
                 if capture.lifted?.foundSubject == true {
-                    Picker("Version", selection: $capture.useLifted) {
-                        Text("Lifted").tag(true)
+                    Picker("Preview", selection: $capture.useLifted) {
+                        Text("Cutout").tag(true)
                         Text("Original").tag(false)
                     }
                     .pickerStyle(.segmented)
                     .padding(PorcelainTokens.Space.md)
                     PanelDivider()
-                    Picker("Background", selection: $capture.background) {
-                        Text("White").tag(SubjectLift.Background.white)
-                        Text("Transparent").tag(SubjectLift.Background.transparent)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(PorcelainTokens.Space.md)
-                    .disabled(!capture.useLifted)
+                    Text("Preview only. Cubby uploads the original and stores the cutout with it.")
+                        .font(.porcelainLabel)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .padding(PorcelainTokens.Space.md)
                     PanelDivider()
                 }
                 if capture.canMakeCover {

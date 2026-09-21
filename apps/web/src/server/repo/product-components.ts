@@ -54,6 +54,7 @@ import {
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
+import { enrichProductListItems } from "~/server/repo/product/list-enrichment";
 import { dbProductToListAPI } from "~/server/repo/product/mappers";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
@@ -89,6 +90,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 
 export interface ProductComponentEntry {
   productId: ProductId;
@@ -122,6 +124,7 @@ export interface ProductComponentEntry {
 export async function listKitComponentRows(
   db: Database,
   parentProductIds: ProductId[],
+  usdaClient?: UsdaFoodBatchPort,
 ): Promise<KitComponentRowOut[]> {
   if (parentProductIds.length === 0) return [];
   const dbc = getDb(db);
@@ -177,7 +180,7 @@ export async function listKitComponentRows(
   );
   const priced = await enrichProductRowsWithPricing(db, rows);
   const ledgered = await enrichProductRowsWithQuantityLedger(db, priced);
-  const items = await withDisplayImages(
+  const projectedItems = await withDisplayImages(
     db,
     "product",
     ledgered,
@@ -187,6 +190,7 @@ export async function listKitComponentRows(
         displayImages,
       ),
   );
+  const items = await enrichProductListItems(projectedItems, usdaClient);
   // Keyed by the private uuid the edges carry, not the item's public shortcode.
   const byId = new Map(ledgered.map((row, index) => [row.id, items[index]!]));
 

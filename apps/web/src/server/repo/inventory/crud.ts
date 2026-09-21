@@ -87,10 +87,19 @@ import {
   requireLoadedProductPricing,
 } from "./mappers";
 import {
+  assertIndividualOwner,
+  loadEffectiveInventoryOwnership,
+} from "./ownership";
+import {
   liveProductAndLocation,
   placementCondition,
   stockOnly,
 } from "./placement";
+import {
+  assertValidRawInventoryOwnership,
+  inventoryOwnershipSlotCondition,
+  type InventoryRawOwnership,
+} from "./slot";
 import type {
   CreateInventoryEntryData,
   InventoryEntryDeepDB,
@@ -249,10 +258,14 @@ const inventoryReader = createEntityReader({
   entity: "inventory",
   fetchById: fetchInventoryById,
   fromDB: async (db, row: InventoryEntryDeepDB) => {
-    const pricing = await loadInventoryEntryPricing(db, [row]);
+    const [pricing, ownership] = await Promise.all([
+      loadInventoryEntryPricing(db, [row]),
+      loadEffectiveInventoryOwnership(db, [row]),
+    ]);
     return dbInventoryEntryToAPI(
       row,
       requireLoadedProductPricing(pricing, row.product.id),
+      ownership.get(row.id),
     );
   },
 });
@@ -476,7 +489,10 @@ export const inventoryentryList = async (
   const orderedResults = ids
     .map((id) => resultsById.get(id))
     .filter((r): r is NonNullable<typeof r> => r !== undefined);
-  const pricing = await loadInventoryEntryPricing(db, orderedResults);
+  const [pricing, ownership] = await Promise.all([
+    loadInventoryEntryPricing(db, orderedResults),
+    loadEffectiveInventoryOwnership(db, orderedResults),
+  ]);
   const inventoryEntries = await withDisplayImages(
     db,
     "inventory",
@@ -485,6 +501,7 @@ export const inventoryentryList = async (
       dbInventoryEntryToListAPI(
         entry,
         requireLoadedProductPricing(pricing, entry.product.id),
+        ownership.get(entry.id),
       ),
   );
   const valuationSum = Number(countResult?.valuationSum ?? 0);
@@ -493,6 +510,93 @@ export const inventoryentryList = async (
     count: countResult?.count ?? 0,
     sums: { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum },
   };
+};
+
+type InventoryRow = typeof inventoryEntry.$inferSelect;
+
+const resolveUpdatedOwnership = (
+  before: InventoryRow,
+  data: UpdateInventoryEntryData,
+): InventoryRawOwnership => ({
+  ownershipMode: data.ownershipMode ?? before.ownershipMode,
+  ownerLedgerPartyId:
+    data.ownerLedgerPartyId !== undefined
+      ? data.ownerLedgerPartyId
+      : data.ownershipMode !== undefined && data.ownershipMode !== "person"
+        ? null
+        : before.ownerLedgerPartyId,
+});
+
+const validateUpdatedOwnership = async (
+  db: Database,
+  ownership: InventoryRawOwnership,
+) => {
+  try {
+    assertValidRawInventoryOwnership(ownership);
+  } catch {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Person ownership requires an individual owner; inherited and unassigned ownership cannot retain one.",
+    );
+  }
+  if (!ownership.ownerLedgerPartyId) return;
+  try {
+    await assertIndividualOwner(getDb(db), ownership.ownerLedgerPartyId);
+  } catch {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Inventory can only be assigned to a live member or guest.",
+    );
+  }
+};
+
+const updatedInventoryValuation = async (
+  db: Database,
+  before: InventoryRow,
+  data: UpdateInventoryEntryData,
+) => {
+  if (data.amount === undefined && data.productId === undefined)
+    return undefined;
+  return await computeValuationForEntry(
+    db,
+    data.productId ?? before.productId,
+    data.amount ?? before.amount,
+  );
+};
+
+const changesInventorySlot = (data: UpdateInventoryEntryData) =>
+  data.productId !== undefined ||
+  data.locationId !== undefined ||
+  data.placement !== undefined ||
+  data.ownershipMode !== undefined ||
+  data.ownerLedgerPartyId !== undefined;
+
+const assertUpdatedSlotAvailable = async (
+  db: Database,
+  id: InventoryId,
+  before: InventoryRow,
+  data: UpdateInventoryEntryData,
+  ownership: InventoryRawOwnership,
+) => {
+  if (!changesInventorySlot(data)) return;
+  const targetPlacement = data.placement ?? before.placement;
+  const occupant = await getDb(db).query.inventoryEntry.findFirst({
+    where: and(
+      eq(inventoryEntry.productId, data.productId ?? before.productId),
+      eq(inventoryEntry.locationId, data.locationId ?? before.locationId),
+      eq(inventoryEntry.placement, targetPlacement),
+      inventoryOwnershipSlotCondition(ownership),
+      not(eq(inventoryEntry.id, id)),
+      notDeleted(inventoryEntry),
+    ),
+    columns: { shortcode: true },
+  });
+  if (occupant) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Another ${targetPlacement} entry for this product already sits at this location (${occupant.shortcode}). Merge them by moving one onto the other instead.`,
+    );
+  }
 };
 
 export const updateInventoryEntry = async (
@@ -511,18 +615,15 @@ export const updateInventoryEntry = async (
     where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
   });
 
-  let valuation: number | null | undefined;
-  if (data.amount !== undefined || data.productId !== undefined) {
-    const effectiveProductId = data.productId ?? before?.productId;
-    const effectiveAmount = data.amount ?? before?.amount;
-    if (effectiveProductId && effectiveAmount) {
-      valuation = await computeValuationForEntry(
-        db,
-        effectiveProductId,
-        effectiveAmount,
-      );
-    }
+  if (!before) {
+    throw createAppError(
+      "INVENTORY_NOT_FOUND",
+      `Inventory entry ${id} not found`,
+    );
   }
+  const rawOwnership = resolveUpdatedOwnership(before, data);
+  await validateUpdatedOwnership(db, rawOwnership);
+  const valuation = await updatedInventoryValuation(db, before, data);
 
   // Pre-check the slot rather than letting the partial unique index raise a
   // raw 23505 — nothing maps that to an AppError, so it would surface as an
@@ -535,32 +636,7 @@ export const updateInventoryEntry = async (
   // installed when an installed row of that product already sits in that room.
   // That pair is legitimate, which is exactly why the key allows it, so this is
   // reachable by design rather than a corrupt state.
-  if (
-    before &&
-    (data.productId !== undefined ||
-      data.locationId !== undefined ||
-      data.placement !== undefined)
-  ) {
-    const targetProductId = data.productId ?? before.productId;
-    const targetLocationId = data.locationId ?? before.locationId;
-    const targetPlacement = data.placement ?? before.placement;
-    const occupant = await getDb(db).query.inventoryEntry.findFirst({
-      where: and(
-        eq(inventoryEntry.productId, targetProductId),
-        eq(inventoryEntry.locationId, targetLocationId),
-        eq(inventoryEntry.placement, targetPlacement),
-        not(eq(inventoryEntry.id, id)),
-        notDeleted(inventoryEntry),
-      ),
-      columns: { shortcode: true },
-    });
-    if (occupant) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `Another ${targetPlacement} entry for this product already sits at this location (${occupant.shortcode}). Merge them by moving one onto the other instead.`,
-      );
-    }
-  }
+  await assertUpdatedSlotAvailable(db, id, before, data, rawOwnership);
 
   const updateValues = buildPartialUpdateValues({
     amount: data.amount,
@@ -570,6 +646,11 @@ export const updateInventoryEntry = async (
     // It does NOT move the row — the dimmer stays in the kitchen, it just stops
     // being counted, audited, and browsed.
     placement: data.placement,
+    ownershipMode: data.ownershipMode,
+    ownerLedgerPartyId:
+      data.ownershipMode !== undefined || data.ownerLedgerPartyId !== undefined
+        ? rawOwnership.ownerLedgerPartyId
+        : undefined,
     valuation,
   });
 
@@ -606,10 +687,14 @@ export const updateInventoryEntry = async (
     );
   }
 
-  const pricing = await loadInventoryEntryPricing(db, [result]);
+  const [pricing, ownership] = await Promise.all([
+    loadInventoryEntryPricing(db, [result]),
+    loadEffectiveInventoryOwnership(db, [result]),
+  ]);
   return dbInventoryEntryToAPI(
     result,
     requireLoadedProductPricing(pricing, result.product.id),
+    ownership.get(result.id),
   );
 };
 
@@ -629,12 +714,55 @@ export const createInventoryEntry = async (
     data.productId,
     data.amount,
   );
+  const ownershipMode = data.ownershipMode ?? "inherit";
+  const ownerLedgerPartyId = data.ownerLedgerPartyId ?? null;
+  try {
+    assertValidRawInventoryOwnership({ ownershipMode, ownerLedgerPartyId });
+  } catch {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Person ownership requires an individual owner; inherited and unassigned ownership cannot retain one.",
+    );
+  }
+  if (ownerLedgerPartyId) {
+    try {
+      await assertIndividualOwner(getDb(db), ownerLedgerPartyId);
+    } catch {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Inventory can only be assigned to a live member or guest.",
+      );
+    }
+  }
+
+  const placement = data.placement ?? "stock";
+  const occupant = await getDb(db).query.inventoryEntry.findFirst({
+    where: and(
+      eq(inventoryEntry.productId, data.productId),
+      eq(inventoryEntry.locationId, data.locationId),
+      eq(inventoryEntry.placement, placement),
+      inventoryOwnershipSlotCondition({
+        ownershipMode,
+        ownerLedgerPartyId,
+      }),
+      notDeleted(inventoryEntry),
+    ),
+    columns: { shortcode: true },
+  });
+  if (occupant) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Another ${placement} entry for this product already sits at this location (${occupant.shortcode}). Add to or move into that entry instead.`,
+    );
+  }
 
   const values: Omit<typeof inventoryEntry.$inferInsert, "shortcode"> = {
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,
     valuation,
+    ownershipMode,
+    ownerLedgerPartyId,
   };
   if (data.placement) values.placement = data.placement;
   if (data.verifiedAt) values.verifiedAt = data.verifiedAt;
@@ -658,10 +786,14 @@ export const createInventoryEntry = async (
     );
   }
 
-  const pricing = await loadInventoryEntryPricing(db, [result]);
+  const [pricing, ownership] = await Promise.all([
+    loadInventoryEntryPricing(db, [result]),
+    loadEffectiveInventoryOwnership(db, [result]),
+  ]);
   return dbInventoryEntryToAPI(
     result,
     requireLoadedProductPricing(pricing, result.product.id),
+    ownership.get(result.id),
   );
 };
 
@@ -696,11 +828,15 @@ export const getInventoryByLocationIds = async (
     ...relations.inventory.full,
   });
 
-  const pricing = await loadInventoryEntryPricing(db, results);
+  const [pricing, ownership] = await Promise.all([
+    loadInventoryEntryPricing(db, results),
+    loadEffectiveInventoryOwnership(db, results),
+  ]);
   return results.map((entry) =>
     dbInventoryEntryToAPI(
       entry,
       requireLoadedProductPricing(pricing, entry.product.id),
+      ownership.get(entry.id),
     ),
   );
 };

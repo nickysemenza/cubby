@@ -158,8 +158,8 @@ describe("entity graph repository", () => {
       true,
     );
     const branch = measured.result.branches[0];
-    // Root lookup, batched traversal, and one shared display-image batch.
-    expect(measured.queryCount).toBe(3);
+    // Root lookup, batched traversal, shared images, and one derivative batch.
+    expect(measured.queryCount).toBe(4);
     expect(branch).toMatchObject({ totalCount: 2, nextOffset: 1 });
     expect(branch?.items).toHaveLength(1);
     expect(measured.result.edges).toHaveLength(1);

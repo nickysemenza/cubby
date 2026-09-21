@@ -61,7 +61,15 @@ export const productEntityAdapter = defineEntityAdapter({
     get: (ctx, shortcode) =>
       readProductDetail({ db: ctx.db, usdaClient: ctx.usdaClient }, shortcode),
     list: (ctx, filters, sorts, pagination, groupBy) =>
-      productList(ctx.db, filters, sorts, pagination, groupBy),
+      productList(
+        ctx.db,
+        filters,
+        sorts,
+        pagination,
+        groupBy,
+        "page",
+        ctx.usdaClient,
+      ),
     create: async (ctx, data) => {
       const result = await createProductWithSideEffects(
         {
