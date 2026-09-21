@@ -487,7 +487,7 @@ struct ImageDiagnosticsCompareView: View {
             Section { Text(error).foregroundStyle(PorcelainTokens.destructive) }
         }
         if model.server != nil || model.device != nil {
-            Section("Server vs. device") {
+            Section("Local Vision comparison") {
                 CompareRow(
                     label: "SHA-256", server: model.server?.identity.sha256,
                     device: model.device?.identity.sha256)
@@ -531,8 +531,8 @@ private struct CompareRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(Font.porcelainLabel).foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 12) {
-                CompareColumn(title: "Server (at import)", value: server)
-                CompareColumn(title: "Device (now)", value: device)
+                CompareColumn(title: "Stored at import", value: server)
+                CompareColumn(title: "Analyzed locally now", value: device)
             }
         }
         .foregroundStyle(differs ? PorcelainTokens.warning : PorcelainTokens.graphite)

@@ -27,7 +27,17 @@ export function ImageProcessingMaintenance() {
   const result = useQuery(maintenance.imageProcessing.queryOptions());
   const batch = useActionMutation({
     mutationFn: maintenance.backfillImageProcessing.mutationOptions,
-    success: (result) => `${result.scheduled} image work items scheduled`,
+    success: (result) =>
+      result.submissionId ? (
+        <a
+          className="underline"
+          href={`/activity?view=runs&submissionId=${encodeURIComponent(result.submissionId)}`}
+        >
+          {result.scheduled} image work items scheduled — view submission
+        </a>
+      ) : (
+        `${result.scheduled} image work items scheduled`
+      ),
   });
   const configure = useActionMutation({
     mutationFn: maintenance.configureImageProcessing.mutationOptions,

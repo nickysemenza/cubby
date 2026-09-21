@@ -27,6 +27,8 @@ extension ImageProcessingClientMessage {
                 platform: platform,
                 appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
                     as? String ?? "unknown",
+                deviceName: ProcessInfo.processInfo.hostName,
+                osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
                 capabilities: ImageProcessingCapabilities(
                     visionSubjectLift: .init(
                         available: subjectLiftAvailable,
@@ -43,6 +45,13 @@ extension ImageProcessingClientMessage {
 }
 
 extension ImageProcessingCommand {
+    var companionKind: String {
+        switch self {
+        case .describeImage: "describe_image"
+        case .subjectLift: "subject_lift"
+        }
+    }
+
     var companionJobID: String {
         switch self {
         case .describeImage(let value): value.jobId

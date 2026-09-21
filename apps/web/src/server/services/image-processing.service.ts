@@ -10,19 +10,24 @@ import type {
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
+import { safeImageProcessingError } from "~/server/image-processing/safe-error";
+import { retryFailedImageProcessingJobs } from "~/server/repo/image-processing";
 import {
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   completeImageProcessingJob,
-  createImageProcessingJob,
-  createTransparentDerivativeAndJob,
   getLeasedImageProcessingOutputKey,
   claimImageProcessingOrphans,
   finalizeImageProcessingOrphans,
   getLeasedImageProcessingJobContext,
-  getUploadedImageProcessingSource,
 } from "~/server/repo/image-processing";
+import {
+  recordImageProcessingEvent,
+  createImageProcessingSubmission,
+} from "~/server/repo/image-processing-history";
 import { readImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
+import {
+  persistImageProcessingSubmission,
+  persistAppleImageDescriptionSubmission,
+} from "~/server/repo/image-processing-submission";
 import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
@@ -43,39 +48,15 @@ export async function scheduleImageProcessingJobs(
     kinds: readonly ImageProcessingJobKind[];
     publish?: boolean;
     automatic?: boolean;
+    submission?: { id: string; publicId: string };
   },
-): Promise<{ jobIds: string[] }> {
+): Promise<{ jobIds: string[]; submissionId?: string }> {
   const settings = await readImageProcessingSettings(db);
   if (input.automatic && !settings.enabled) return { jobIds: [] };
-  const imageId = await resolveOrThrow(db, "image", input.id);
-  const source = await getUploadedImageProcessingSource(db, imageId);
-  if (!source)
-    throw new Error("Image must be uploaded and integrity-verified first");
-
-  const jobIds: string[] = [];
-  for (const kind of new Set(input.kinds)) {
-    if (kind === "subject_lift") {
-      const scheduled = await createTransparentDerivativeAndJob(db, {
-        imageId,
-        sourceContentHash: source.sha256,
-        // Every actual dispatch rotates this placeholder to a fresh key.
-        key: `pending/${crypto.randomUUID()}.png`,
-      });
-      if (scheduled) jobIds.push(scheduled.jobId);
-      continue;
-    }
-    const jobId = await createImageProcessingJob(db, {
-      imageId,
-      kind,
-      sourceContentHash: source.sha256,
-      processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-    });
-    if (jobId) jobIds.push(jobId);
-  }
-  const unique = [...new Set(jobIds)];
+  const scheduled = await persistImageProcessingSubmission(db, input);
   if (input.publish !== false && !settings.paused)
-    await publishImageProcessingWakeups(db, unique);
-  return { jobIds: unique };
+    await publishImageProcessingWakeups(db, scheduled.jobIds);
+  return scheduled;
 }
 
 /** Queue payloads only wake durable rows, so repeats and repairs are harmless. */
@@ -112,18 +93,10 @@ export async function scheduleAppleImageDescriptionEvaluation(
   db: Database,
   input: { id: string },
 ): Promise<{ jobId: string | null }> {
-  const imageId = await resolveOrThrow(db, "image", input.id);
-  const source = await getUploadedImageProcessingSource(db, imageId);
-  if (!source)
-    throw new Error("Image must be uploaded and integrity-verified first");
-  const jobId = await createImageProcessingJob(db, {
-    imageId,
-    kind: "describe_image",
-    sourceContentHash: source.sha256,
-    processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  });
-  if (jobId) await publishImageProcessingWakeups(db, [jobId]);
-  return { jobId };
+  const scheduled = await persistAppleImageDescriptionSubmission(db, input);
+  if (scheduled.jobId)
+    await publishImageProcessingWakeups(db, [scheduled.jobId]);
+  return scheduled;
 }
 
 async function verifyTransparentOutput(
@@ -169,7 +142,19 @@ export async function completeCompanionImageProcessingResult(
   result: ImageProcessingResult,
 ): Promise<{ adopted: boolean }> {
   const prepared = await prepareCompanionCompletion(db, result);
-  if (!prepared) return { adopted: false };
+  if (!prepared) {
+    await recordImageProcessingEvent(db, {
+      jobId: result.jobId,
+      eventKey: `${result.attemptId}:rejected`,
+      event: "completion.rejected",
+      level: "debug",
+      details: {
+        reason:
+          "Attempt or input is no longer current, or output validation failed",
+      },
+    });
+    return { adopted: false };
+  }
   const completion = await completeImageProcessingJob(db, prepared.input);
   if (completion.adopted && prepared.searchImageId)
     await refreshDirectImageOwnerSearchDocuments(db, prepared.searchImageId);
@@ -229,10 +214,7 @@ async function prepareSubjectLiftCompletion(
   } catch (error) {
     // The key belongs to this attempt. Failure and delayed cleanup commit as
     // one unit so invalid bytes cannot be stranded by a worker crash.
-    const reason =
-      error instanceof Error
-        ? error.message
-        : "Transparent output validation failed";
+    const reason = safeImageProcessingError(error);
     await completeImageProcessingJob(db, {
       result: {
         ...result,
@@ -295,4 +277,18 @@ async function prepareAppleDescriptionCompletion(
     },
     searchImageId: context.imageId,
   };
+}
+
+export async function retryImageProcessingFailures(
+  db: Database,
+  input: { id: string },
+) {
+  const imageId = await resolveOrThrow(db, "image", input.id);
+  const submission = await createImageProcessingSubmission(db);
+  const jobs = await retryFailedImageProcessingJobs(db, 100, {
+    imageId,
+    submissionId: submission.id,
+  });
+  await publishImageProcessingWakeups(db, jobs);
+  return { retried: jobs.length, submissionId: submission.publicId };
 }

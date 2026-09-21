@@ -61,7 +61,7 @@ struct SectionDomainMarks: View {
                     DomainMark(domain, size: 5)
                 }
             }
-        case .today, .photos, .dev:
+        case .today, .activity, .photos, .dev:
             EmptyView()
         }
     }

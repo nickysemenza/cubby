@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { MCP_RESOURCE } from "~/lib/auth-constants";
+
 import {
   createPkcePair,
   createPurchaseAgentOAuthState,
   issuePurchaseAgentDelegation,
+  purchaseAgentAuthorizeURL,
+  purchaseAgentConnectionRedirect,
   verifyPurchaseAgentDelegation,
   verifyPurchaseAgentOAuthState,
 } from "./agent-auth";
@@ -55,5 +59,24 @@ describe("purchase agent auth tokens", () => {
     const pair = await createPkcePair();
     expect(pair.verifier.length).toBeGreaterThanOrEqual(43);
     expect(pair.challenge).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it("redirects to the connections activity with a closed status vocabulary", () => {
+    const url = new URL(purchaseAgentConnectionRedirect("dispatch_failed"));
+    expect(url.pathname).toBe("/activity");
+    expect(url.searchParams.get("tab")).toBe("connections");
+    expect(url.searchParams.get("purchaseAgent")).toBe("dispatch_failed");
+  });
+
+  it("starts authorization with PKCE and the protected MCP resource", () => {
+    const url = purchaseAgentAuthorizeURL({
+      state: "state-1",
+      challenge: "challenge-1",
+    });
+    expect(url.pathname).toBe("/api/auth/oauth2/authorize");
+    expect(url.searchParams.get("state")).toBe("state-1");
+    expect(url.searchParams.get("code_challenge")).toBe("challenge-1");
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(url.searchParams.get("resource")).toBe(MCP_RESOURCE);
   });
 });

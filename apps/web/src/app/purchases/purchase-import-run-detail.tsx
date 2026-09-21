@@ -1124,6 +1124,12 @@ function PurchaseImportRunContent({
 }) {
   return (
     <div className="grid gap-4 pb-8">
+      <a
+        className="text-sm text-primary hover:underline"
+        href={`/activity?tab=runs&kind=${run.purpose === "purchase_validation" ? "purchase_validation" : run.purpose === "product_enrichment" ? "product_enrichment" : "purchase_import"}`}
+      >
+        Back to Activity
+      </a>
       <section className="grid gap-4 border-b border-border pb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">

@@ -31,6 +31,18 @@ public typealias Wish = Components.Schemas.WishOut
 
 // MARK: - Components
 
+public typealias ActivityAttempt = Components.Schemas.ActivityAttempt
+public typealias ActivityDetailOutput = Components.Schemas.ActivityDetailOutput
+public typealias ActivityDevicesOutput = Components.Schemas.ActivityDevicesOutput
+public typealias ActivityEvent = Components.Schemas.ActivityEvent
+public typealias ActivityEventsOutput = Components.Schemas.ActivityEventsOutput
+public typealias ActivityExecutor = Components.Schemas.ActivityExecutor
+public typealias ActivityKind = Components.Schemas.ActivityKind
+public typealias ActivityListOutput = Components.Schemas.ActivityListOutput
+public typealias ActivityRun = Components.Schemas.ActivityRun
+public typealias ActivityRunId = Components.Schemas.ActivityRunId
+public typealias ActivitySubmissionId = Components.Schemas.ActivitySubmissionId
+public typealias ActivitySubmissionOutput = Components.Schemas.ActivitySubmissionOutput
 public typealias Amount = Components.Schemas.Amount
 public typealias ApiError = Components.Schemas.ApiError
 public typealias AttachableImageEntityId = Components.Schemas.AttachableImageEntityId
@@ -244,6 +256,7 @@ public typealias GetImageById = Components.Schemas.GetImageById
 public typealias Gtin = Components.Schemas.Gtin
 public typealias GtinInput = Components.Schemas.GtinInput
 public typealias Id = Components.Schemas.Id
+public typealias ImageAnalysisHistoryOutput = Components.Schemas.ImageAnalysisHistoryOutput
 public typealias ImageAnalysisOutput = Components.Schemas.ImageAnalysisOutput
 public typealias ImageAssociation = Components.Schemas.ImageAssociation
 public typealias ImageAssociationEntity = Components.Schemas.ImageAssociationEntity
@@ -273,6 +286,7 @@ public typealias ImageProcessingCommandSubjectLift = Components.Schemas.ImagePro
 public typealias ImageProcessingCompletedOutcome = Components.Schemas.ImageProcessingCompletedOutcome
 public typealias ImageProcessingCompletedOutcomeDescribeImage = Components.Schemas.ImageProcessingCompletedOutcomeDescribeImage
 public typealias ImageProcessingCompletedOutcomeSubjectLift = Components.Schemas.ImageProcessingCompletedOutcomeSubjectLift
+public typealias ImageProcessingDiagnostics = Components.Schemas.ImageProcessingDiagnostics
 public typealias ImageProcessingFailedOutcome = Components.Schemas.ImageProcessingFailedOutcome
 public typealias ImageProcessingHello = Components.Schemas.ImageProcessingHello
 public typealias ImageProcessingIssue = Components.Schemas.ImageProcessingIssue
@@ -560,6 +574,8 @@ public typealias ReconcileSessionPayload = Components.Schemas.ReconcileSessionPa
 public typealias RelatednessEvidence = Components.Schemas.RelatednessEvidence
 public typealias ResolveScanStraysInput = Components.Schemas.ResolveScanStraysInput
 public typealias ResolveScanStraysOut = Components.Schemas.ResolveScanStraysOut
+public typealias RetryImageProcessingInput = Components.Schemas.RetryImageProcessingInput
+public typealias RetryImageProcessingOutput = Components.Schemas.RetryImageProcessingOutput
 public typealias ScanAtLocationInput = Components.Schemas.ScanAtLocationInput
 public typealias ScanAtLocationOut = Components.Schemas.ScanAtLocationOut
 public typealias ScanStrayOut = Components.Schemas.ScanStrayOut
@@ -666,6 +682,9 @@ public typealias PhotoImportCreateBody = Components.Schemas.PhotoImportCommitInp
 
 // MARK: - Identifiable
 
+extension Components.Schemas.ActivityEvent: Identifiable {}
+extension Components.Schemas.ActivityRun: Identifiable {}
+extension Components.Schemas.ActivitySubmissionOutput: Identifiable {}
 extension Components.Schemas.BackgroundBatchRef: Identifiable {}
 extension Components.Schemas.BrowserBridgeRequest: Identifiable {}
 extension Components.Schemas.BrowserCapturedLink: Identifiable {}
@@ -767,6 +786,7 @@ extension Components.Schemas.RecipeUsageOut: Identifiable {}
 extension Components.Schemas.RecommendationLocationTarget: Identifiable {}
 extension Components.Schemas.RecommendationProjectTarget: Identifiable {}
 extension Components.Schemas.RecommendationSupportingExpense: Identifiable {}
+extension Components.Schemas.RetryImageProcessingInput: Identifiable {}
 extension Components.Schemas.ScheduleImageProcessingInput: Identifiable {}
 extension Components.Schemas.SearchHit: Identifiable {}
 extension Components.Schemas.TaskDetail: Identifiable {}

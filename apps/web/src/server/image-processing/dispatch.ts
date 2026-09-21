@@ -4,6 +4,8 @@ import {
   imageProcessingCommand,
 } from "@cubby/schemas/image-processing";
 
+import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
+import { providerFor } from "~/server/ai/models";
 import { getImageProcessingNamespace } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
@@ -15,7 +17,9 @@ import {
   markImageProcessingWaitingForDevice,
   reclaimExpiredImageProcessingLeases,
 } from "~/server/repo/image-processing";
+import { assignImageProcessingExecutor } from "~/server/repo/image-processing-history";
 import { readImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
+import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
 import { describeOriginalImage } from "~/server/services/image-description.service";
 import {
   generatePresignedDownloadUrl,
@@ -23,6 +27,7 @@ import {
 } from "~/server/utils/s3";
 
 import type { ImageProcessingCompanionRpc } from "./contracts";
+import { safeImageProcessingError } from "./safe-error";
 
 const LEASE_MS = 5 * 60_000;
 type ImageProcessingStub = ReturnType<
@@ -54,11 +59,24 @@ export async function dispatchImageProcessingWakeup(
       claimed.kind === "describe_image" &&
       claimed.processorRevision !== IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION
     ) {
-      const { result } = await describeOriginalImage(db, {
-        imageId: claimed.imageId,
+      const assigned = await assignImageProcessingExecutor(db, {
         jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        executor: {
+          kind: "cloud",
+          deviceId: null,
+          name: providerFor(IMAGE_DESCRIPTION_FEATURE.model),
+          platform: "cloud",
+          appVersion: null,
+          osVersion: null,
+        },
       });
-      await completeImageProcessingJob(db, {
+      if (!assigned) return "skipped";
+      const { result, fingerprint } = await describeOriginalImage(db, {
+        imageId: claimed.imageId,
+        attemptId: claimed.attemptId,
+      });
+      const completion = await completeImageProcessingJob(db, {
         result: {
           jobId: claimed.id,
           attemptId: claimed.attemptId,
@@ -67,11 +85,27 @@ export async function dispatchImageProcessingWakeup(
             kind: "describe_image",
             status: "completed",
             description: result,
-            runtime: { platform: "cloud", model: "gateway" },
+            runtime: {
+              platform: "cloud",
+              model: IMAGE_DESCRIPTION_FEATURE.model,
+            },
           },
         },
-        runtime: { provider: "cloud", feature: "image-description" },
+        cloudAnalysis: {
+          provider: providerFor(IMAGE_DESCRIPTION_FEATURE.model),
+          model: IMAGE_DESCRIPTION_FEATURE.model,
+          promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
+          resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+          inputFingerprint: fingerprint,
+        },
+        runtime: {
+          provider: providerFor(IMAGE_DESCRIPTION_FEATURE.model),
+          model: IMAGE_DESCRIPTION_FEATURE.model,
+          feature: "image-description",
+        },
       });
+      if (!completion.adopted) return "skipped";
+      await refreshDirectImageOwnerSearchDocuments(db, claimed.imageId);
       const { publishImageProcessingWakeups } =
         await import("~/server/services/image-processing.service");
       await publishImageProcessingWakeups(
@@ -183,10 +217,7 @@ export async function dispatchImageProcessingWakeup(
     }
     return "dispatched";
   } catch (error) {
-    const detail =
-      error instanceof Error
-        ? error.message
-        : "Image processing dispatch failed";
+    const detail = safeImageProcessingError(error);
     await completeImageProcessingJob(db, {
       result: {
         jobId: claimed.id,

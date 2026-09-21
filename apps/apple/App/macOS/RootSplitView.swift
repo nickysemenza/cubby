@@ -63,6 +63,20 @@ struct RootSplitView: View {
                         .tag(SidebarDestination.section(section))
                 }
             }
+            if let label = model.localExecutionLabel {
+                Section("Working") {
+                    Button {
+                        model.navigator.section = .activity
+                    } label: {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(label)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens Activity")
+                }
+            }
             ForEach(AppDomain.allCases) { domain in
                 Section(domain.title) {
                     ForEach(

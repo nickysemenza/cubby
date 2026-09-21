@@ -26,14 +26,24 @@ public struct BrowserBridgeDebugRecord: Codable, Sendable, Equatable {
     public let messageType: String?
     public let errorType: String?
     public let errorCode: Int?
+    public let executor: ActivityExecutor?
 
     private enum CodingKeys: String, CodingKey {
         case id, occurredAt, event, host, browser, attempt, count, outcome, messageType, errorType,
-            errorCode
+            errorCode, executor
         case runID = "runId"
         case commandID = "commandId"
         case operationID = "operationId"
         case operationKind, accountID
+    }
+
+    fileprivate func withExecutor(_ executor: ActivityExecutor) -> Self {
+        Self(
+            id: id, occurredAt: occurredAt, event: event, runID: runID, commandID: commandID,
+            operationID: operationID, operationKind: operationKind, host: host, browser: browser,
+            accountID: accountID, attempt: attempt, count: count, outcome: outcome,
+            messageType: messageType, errorType: errorType, errorCode: errorCode,
+            executor: executor)
     }
 }
 
@@ -50,22 +60,25 @@ public actor URLSessionBrowserBridgeDebugReporter: BrowserBridgeDebugReporting {
     private let baseURL: URL
     private let credentials: CredentialProvider
     private let session: URLSession
+    private let executor: ActivityExecutor
     private var pending: [BrowserBridgeDebugRecord] = []
     private var flushTask: Task<Void, Never>?
     private var retryAttempt = 0
 
     public init(
-        baseURL: URL, credentials: CredentialProvider, session: URLSession = .cubbyShared
+        baseURL: URL, credentials: CredentialProvider, executor: ActivityExecutor,
+        session: URLSession = .cubbyShared
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
+        self.executor = executor
         self.session = session
     }
 
     public func report(_ record: BrowserBridgeDebugRecord) async {
         // Connection chatter without a run cannot be authorized or usefully displayed per run.
         guard record.runID != nil else { return }
-        pending.append(record)
+        pending.append(record.withExecutor(executor))
         if pending.count >= 50 {
             await flush()
         } else if flushTask == nil {
@@ -216,7 +229,8 @@ public enum BrowserBridgeDebugLog {
                 commandID: resolvedCommandID, operationID: resolvedOperationID,
                 operationKind: resolvedOperationKind, host: host, browser: browser?.rawValue,
                 accountID: accountID, attempt: attempt, count: count, outcome: resolvedOutcome,
-                messageType: messageType, errorType: errorType, errorCode: errorCode)
+                messageType: messageType, errorType: errorType, errorCode: errorCode,
+                executor: nil)
             Task { await BrowserBridgeDebugHub.shared.report(record) }
         #endif
     }

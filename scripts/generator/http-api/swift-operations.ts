@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { generatedEntityFieldModels } from "../../../packages/schemas/src/generated/entity-field-model.gen.ts";
 import { entityInspectorMetadata } from "../../../packages/schemas/src/generated/entity-inspector.gen.ts";
+import { entityKeys } from "../../../packages/schemas/src/generated/entity-summary.gen.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import type { JsonSchema } from "./document-passes.ts";
@@ -331,7 +332,7 @@ export const renderEntityOperations = (
   }
   for (const id of nativeOperations) {
     const match = /^([^.]+)\.(list|detail)$/u.exec(id);
-    if (!match) continue;
+    if (!match || !entityKeys.some((key) => key === match[1])) continue;
     const actions = nativeActionsByEntity.get(match[1]!) ?? new Set<string>();
     actions.add(match[2] === "detail" ? "get" : "list");
     nativeActionsByEntity.set(match[1]!, actions);

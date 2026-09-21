@@ -10,6 +10,11 @@ extension OperationRoute {
     public static let imageAttachableEntities: Set<String> = ["gardenEntry", "location", "meal", "product", "purchase", "recipe", "task"]
 
     private static let routeTable: [OperationRoute] = [
+        OperationRoute(operationID: "activity.detail", method: .get, path: "/api/v1/activity/detail", pathParameters: [], queryParameters: ["cursor", "id", "limit"], hasBody: false),
+        OperationRoute(operationID: "activity.devices", method: .get, path: "/api/v1/activity/devices", pathParameters: [], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "activity.events", method: .get, path: "/api/v1/activity/events", pathParameters: [], queryParameters: ["cursor", "id", "limit"], hasBody: false),
+        OperationRoute(operationID: "activity.list", method: .get, path: "/api/v1/activity/list", pathParameters: [], queryParameters: ["cursor", "deviceId", "executor", "from", "kind", "limit", "sort", "state", "subjectId", "submissionId", "to"], hasBody: false),
+        OperationRoute(operationID: "activity.submission", method: .get, path: "/api/v1/activity/submission", pathParameters: [], queryParameters: ["id"], hasBody: false),
         OperationRoute(operationID: "ai.approveDetectedInventoryItem", method: .post, path: "/api/v1/ai/approveDetectedInventoryItem", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "ai.describeLocation", method: .post, path: "/api/v1/ai/describeLocation", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "ai.detectInventoryItems", method: .post, path: "/api/v1/ai/detectInventoryItems", pathParameters: [], queryParameters: [], hasBody: true),
@@ -75,8 +80,10 @@ extension OperationRoute {
         OperationRoute(operationID: "image.update", method: .post, path: "/api/v1/image/update", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "image.uploadDocument", method: .post, path: "/api/v1/image/uploadDocument", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "image.uploadImage", method: .post, path: "/api/v1/image/uploadImage", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "imageProcessing.analyses", method: .get, path: "/api/v1/imageProcessing/analyses", pathParameters: [], queryParameters: ["cursor", "id", "limit"], hasBody: false),
         OperationRoute(operationID: "imageProcessing.correctDescription", method: .post, path: "/api/v1/imageProcessing/correctDescription", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "imageProcessing.evaluateAppleDescription", method: .post, path: "/api/v1/imageProcessing/evaluateAppleDescription", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "imageProcessing.retry", method: .post, path: "/api/v1/imageProcessing/retry", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "imageProcessing.schedule", method: .post, path: "/api/v1/imageProcessing/schedule", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "imageProcessing.status", method: .get, path: "/api/v1/imageProcessing/status", pathParameters: [], queryParameters: ["id"], hasBody: false),
         OperationRoute(operationID: "imageProcessing.validateCompanionMessage", method: .post, path: "/api/v1/imageProcessing/validateCompanionMessage", pathParameters: [], queryParameters: [], hasBody: true),

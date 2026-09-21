@@ -22,6 +22,24 @@ struct RootTabsView: View {
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let label = model.localExecutionLabel {
+                Button {
+                    model.navigator.section = .activity
+                } label: {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(label).font(.callout.weight(.medium))
+                        Image(systemName: "chevron.right").font(.caption)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens Activity")
+            }
+        }
         // Today's shortcut tiles move the tab selection; without this they would have nothing to
         // move and would render disabled.
         .environment(\.sectionSelection, $navigator.section)

@@ -44,7 +44,14 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         self.settings = settings
         #if DEBUG
             let reporter = URLSessionBrowserBridgeDebugReporter(
-                baseURL: baseURL, credentials: credentials)
+                baseURL: baseURL, credentials: credentials,
+                executor: ActivityExecutor(
+                    kind: .device,
+                    deviceId: AppInstallationID.current.uuidString.lowercased(),
+                    name: ProcessInfo.processInfo.hostName, platform: .macos,
+                    appVersion: Bundle.main.object(
+                        forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+                    osVersion: ProcessInfo.processInfo.operatingSystemVersionString))
             Task { await BrowserBridgeDebugLog.installRemoteReporter(reporter) }
         #endif
     }
@@ -173,7 +180,7 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
                 baseURL: baseURL, vendorAccountID: account.id)
             await bridge.connect(
                 BrowserBridgeConnectionConfiguration(
-                    url: url, deviceID: Self.deviceID, browser: browser,
+                    url: url, deviceID: AppInstallationID.current, browser: browser,
                     capabilities: capabilities
                 ) { [credentials] in
                     guard case .bearer(let token) = await credentials.current() else { return nil }
@@ -244,16 +251,6 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         let connected = statuses.values.count { $0 == .connected }
         settings?.setAccountCounts(connected: connected, total: bridges.count)
         settings?.setStatus(BrowserBridgeFleetStatus.aggregate(statuses.values))
-    }
-
-    private static var deviceID: UUID {
-        let key = "purchaseImport.browserBridge.deviceID"
-        if let raw = UserDefaults.standard.string(forKey: key), let value = UUID(uuidString: raw) {
-            return value
-        }
-        let value = UUID()
-        UserDefaults.standard.set(value.uuidString, forKey: key)
-        return value
     }
 
     private static func statusLabel(_ status: BrowserBridgeConnectionStatus) -> String {

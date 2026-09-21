@@ -9,7 +9,6 @@ import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { calendar } from "~/app/calendar/calendar.functions";
 import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
-import { purchaseImportRunHref } from "~/app/purchases/purchase-import-links";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -36,17 +35,11 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { pageTitle } from "~/lib/page-title";
-import { purchaseImportAgentOAuthStatus } from "~/lib/purchase-import-run-detail";
-import { formatCurrency } from "~/lib/utils";
 import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
 import { merchantRulesResponse } from "~/routes/api/import/merchant-rules";
-import {
-  purchaseImportRunsError,
-  purchaseImportRunsResponse,
-} from "~/routes/api/import/runs";
 import {
   memberLoginsError,
   memberLoginsResponse,
@@ -65,10 +58,24 @@ function SettingsPage() {
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
         <CalendarAccessCard />
         <GmailAccessCard />
-        <PurchaseImportAgentAccessCard />
+        <Card className="max-md:border-x-0">
+          <CardHeader>
+            <CardTitle>Activity connections</CardTitle>
+            <CardDescription>
+              Manage the accounts and devices that can perform household work.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <a
+              className="text-primary hover:underline"
+              href="/activity?view=connections"
+            >
+              Open connections
+            </a>
+          </CardContent>
+        </Card>
         <MemberLoginsCard />
         <MerchantVendorRulesCard />
-        <PurchaseImportRunsCard />
 
         {/* Everything dev/debug/maintenance lives behind one collapsed
             disclosure so the user-facing prefs above aren't drowned in flags. */}
@@ -111,96 +118,6 @@ function SettingsPage() {
         </Collapsible>
       </Stack>
     </Page>
-  );
-}
-
-function PurchaseImportAgentAccessCard() {
-  const queryClient = useQueryClient();
-  const access = useQuery({
-    queryKey: ["purchase-import", "agent-oauth"],
-    queryFn: async () => {
-      const response = await fetch("/api/import/agent/oauth/status");
-      const body: unknown = await response.json();
-      if (!response.ok)
-        throw new Error("Purchase import agent access could not load.");
-      return purchaseImportAgentOAuthStatus.parse(body);
-    },
-  });
-  const disconnect = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/import/agent/oauth/status", {
-        method: "DELETE",
-      });
-      const body: unknown = await response.json();
-      if (!response.ok)
-        throw new Error(
-          "Purchase import agent access could not be disconnected.",
-        );
-      return purchaseImportAgentOAuthStatus.parse(body);
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(["purchase-import", "agent-oauth"], data);
-      toast.success("Purchase import agent disconnected");
-    },
-  });
-  return (
-    <Card className="max-md:border-x-0">
-      <CardHeader>
-        <CardTitle>Purchase import agent</CardTitle>
-        <CardDescription>
-          Authorize the private agent to continue an interactive vendor import
-          on your behalf.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {access.isLoading ? (
-          <StatusText>Checking agent access…</StatusText>
-        ) : access.isError ? (
-          <StatusText tone="destructive">
-            {getErrorMessage(access.error)}
-          </StatusText>
-        ) : access.data?.authorized ? (
-          <Row align="center" justify="between" gap="sm" wrap>
-            <span className="text-sm text-muted-foreground">
-              Authorized
-              {access.data.expiresAt
-                ? ` until ${new Date(access.data.expiresAt).toLocaleString()}`
-                : ""}
-              .
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => disconnect.mutate()}
-              disabled={disconnect.isPending}
-            >
-              Disconnect agent
-            </Button>
-          </Row>
-        ) : (
-          <Row align="center" justify="between" gap="sm" wrap>
-            <span className="text-sm text-muted-foreground">
-              Not authorized.
-            </span>
-            <Button
-              render={
-                <a
-                  href="/api/import/agent/oauth/start"
-                  aria-label="Authorize purchase import agent"
-                />
-              }
-            >
-              Authorize agent
-            </Button>
-          </Row>
-        )}
-        {disconnect.isError ? (
-          <StatusText tone="destructive">
-            {getErrorMessage(disconnect.error)}
-          </StatusText>
-        ) : null}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -424,96 +341,6 @@ function MemberLoginsCard() {
           </Stack>
         ) : (
           <StatusText>No Better Auth users exist yet.</StatusText>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PurchaseImportRunsCard() {
-  const runs = useQuery({
-    queryKey: ["purchase-import", "runs"],
-    queryFn: async () => {
-      const response = await fetch("/api/import/runs");
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        const parsed = purchaseImportRunsError.safeParse(body);
-        throw new Error(
-          parsed.success
-            ? parsed.data.error
-            : "Purchase import runs could not load.",
-        );
-      }
-      return purchaseImportRunsResponse.parse(body).runs;
-    },
-  });
-  return (
-    <Card id="purchase-import-runs" className="max-md:border-x-0">
-      <CardHeader>
-        <CardTitle>Purchase imports</CardTitle>
-        <CardDescription>
-          Recent runs for your vendor accounts. Cost is derived from recorded AI
-          usage for each run. Open a run to inspect its durable agent, server,
-          and Mac evidence.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {runs.isLoading ? (
-          <StatusText>Loading recent runs…</StatusText>
-        ) : runs.isError ? (
-          <Stack gap="sm" className="items-start">
-            <StatusText tone="destructive">
-              {getErrorMessage(runs.error)}
-            </StatusText>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void runs.refetch()}
-            >
-              Try again
-            </Button>
-          </Stack>
-        ) : runs.data?.length ? (
-          <Stack gap="sm">
-            {runs.data.map((run) => (
-              <div
-                key={run.publicId}
-                className="border-b border-border pb-2 text-sm last:border-0 last:pb-0"
-              >
-                <div className="grid gap-1 md:grid-cols-[minmax(0,1fr)_auto]">
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">
-                      {run.vendorName ??
-                        run.vendorAccountLabel ??
-                        "Vendor import"}
-                    </div>
-                    <div className="text-muted-foreground">
-                      {new Date(run.startedAt).toLocaleString()} · {run.trigger}{" "}
-                      · {run.status}
-                    </div>
-                    {run.failureCode ? (
-                      <div className="text-destructive">{run.failureCode}</div>
-                    ) : null}
-                  </div>
-                  <div className="text-muted-foreground md:text-right">
-                    <div>
-                      {run.imported} imported · {run.updated} updated ·{" "}
-                      {run.skipped} skipped
-                    </div>
-                    <div>{formatCurrency(run.estimatedCost)}</div>
-                  </div>
-                </div>
-                <a
-                  className="mt-1 inline-flex min-h-11 items-center text-xs font-medium text-primary hover:underline"
-                  href={purchaseImportRunHref(run.publicId)}
-                >
-                  Open import run
-                </a>
-              </div>
-            ))}
-          </Stack>
-        ) : (
-          <StatusText>No purchase imports have run yet.</StatusText>
         )}
       </CardContent>
     </Card>

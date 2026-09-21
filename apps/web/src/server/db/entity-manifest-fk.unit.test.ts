@@ -86,6 +86,10 @@ const NON_ENTITY_FK_TARGETS = {
     "immutable purchase-import evidence preparation, not a domain entity",
   ImportSourceClaim: "idempotency provenance for imported evidence",
   ImageDerivative: "a non-gallery representation owned by its original Image",
+  ImageProcessingJob:
+    "authoritative operational image work, exposed through Activity",
+  ImageProcessingSubmission:
+    "fixed membership of an explicit image-processing request",
   OrderMail: "normalized mailbox evidence, not a domain entity",
 };
 

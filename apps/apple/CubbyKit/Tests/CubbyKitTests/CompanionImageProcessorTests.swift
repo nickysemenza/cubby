@@ -47,6 +47,11 @@ struct CompanionImageProcessorTests {
         let pixelSize = try #require(ImageEncoding.pixelSize(of: captured.data))
         #expect(pixelSize.width == artifact.width)
         #expect(pixelSize.height == artifact.height)
+        #expect(artifact.diagnostics.decodeMilliseconds != nil)
+        #expect(artifact.diagnostics.processingMilliseconds != nil)
+        #expect(artifact.diagnostics.uploadMilliseconds != nil)
+        #expect(artifact.diagnostics.width == artifact.width)
+        #expect(artifact.diagnostics.height == artifact.height)
         let imageSource = try #require(CGImageSourceCreateWithData(captured.data as CFData, nil))
         let uploadedImage = try #require(CGImageSourceCreateImageAtIndex(imageSource, 0, nil))
         #expect(
@@ -95,13 +100,16 @@ struct CompanionImageProcessorTests {
                 await upload.record(data, url: url, contentType: contentType)
             })
 
-        let decoded = try await processor.sourceImage(
+        let decoded = try await processor.decodedSourceImage(
             CompanionImageSource(
                 url: URL(string: "https://images.example.invalid/oriented.\(fileExtension)")!,
                 sha256: Self.sha256(sourceBytes), contentType: contentType))
 
-        #expect(decoded.width == 40)
-        #expect(decoded.height == 80)
+        #expect(decoded.image.width == 40)
+        #expect(decoded.image.height == 80)
+        #expect(decoded.diagnostics.orientation == 6)
+        #expect(decoded.diagnostics.width == 40)
+        #expect(decoded.diagnostics.height == 80)
         #expect(await upload.count == 0)
     }
 

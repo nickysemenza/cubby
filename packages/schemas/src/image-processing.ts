@@ -88,6 +88,8 @@ export const imageProcessingHello = z.object({
   deviceId: z.uuid(),
   platform: z.enum(["macos", "ios"]),
   appVersion: z.string().trim().min(1).max(100),
+  deviceName: z.string().max(200).optional(),
+  osVersion: z.string().max(100).optional(),
   capabilities: imageProcessingCapabilities,
 });
 
@@ -161,7 +163,19 @@ export const imageProcessingFailedOutcome = z.object({
   reason: z.string().trim().min(1).max(1_000),
 });
 
+export const imageProcessingDiagnostics = z.object({
+  osVersion: z.string().max(100).optional(),
+  appVersion: z.string().max(100).optional(),
+  processor: z.string().max(200).optional(),
+  decodeMs: z.number().nonnegative().optional(),
+  processingMs: z.number().nonnegative().optional(),
+  uploadMs: z.number().nonnegative().optional(),
+  width: z.int().positive().optional(),
+  height: z.int().positive().optional(),
+  orientation: z.int().optional(),
+});
 export const imageProcessingResult = z.object({
+  diagnostics: imageProcessingDiagnostics.optional(),
   jobId: z.uuid(),
   attemptId: z.uuid(),
   completedAt: isoDateTime,
@@ -251,6 +265,7 @@ export const scheduleImageProcessingInput = z.object({
 });
 export const scheduleImageProcessingOutput = z.object({
   jobIds: z.array(z.uuid()),
+  submissionId: z.string().optional(),
 });
 
 /** Explicit sample evaluation; automatic processing never sends this command. */

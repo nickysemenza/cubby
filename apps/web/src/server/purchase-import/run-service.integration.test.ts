@@ -6,6 +6,9 @@ import {
   controlImportRun,
   finishImportRun,
   issueBrowserCommand,
+  loadImportRunByPublicId,
+  recordImportRunDispatchAttempt,
+  resumeAuthorizedImportRuns,
   runImportOperation,
   startOrResumeImportRun,
   startTargetedImportRun,
@@ -60,6 +63,148 @@ describe("purchase import run admission", () => {
 
     expect(first.id).toBe(second.id);
     expect([first.created, second.created].sort()).toEqual([false, true]);
+  });
+
+  it("returns the unpriced usage count as a runtime number", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { aiUsage } = await import("~/server/db/schema");
+    const { getDb } = await import("~/server/repo/database-helpers");
+
+    const empty = await loadImportRunByPublicId(
+      ctx.db,
+      ctx.actor,
+      run.publicId,
+    );
+    expect(empty.usage.unpricedCount).toBe(0);
+
+    await getDb(ctx.db).insert(aiUsage).values({
+      feature: "purchase_import",
+      provider: "test",
+      model: "test-model",
+      operation: "extract",
+      jobKind: "purchase_import_run",
+      jobId: run.id,
+      status: "succeeded",
+      estimatedCost: null,
+      durationMs: 1,
+    });
+    const withUsage = await loadImportRunByPublicId(
+      ctx.db,
+      ctx.actor,
+      run.publicId,
+    );
+    expect(withUsage.usage.unpricedCount).toBe(1);
+  });
+
+  it("resumes authorization with a persisted dispatch generation", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { importRun } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    await getDb(ctx.db)
+      .update(importRun)
+      .set({ status: "paused_auth", coordinatorStartedAt: new Date() })
+      .where(eq(importRun.id, run.id));
+
+    const [resumed] = await resumeAuthorizedImportRuns(
+      ctx.db,
+      ctx.actor.userId,
+    );
+    expect(resumed?.eventId).toEqual(expect.any(String));
+    expect(resumed?.eventId).not.toBe(run.dispatchEventId);
+    const [stored] = await getDb(ctx.db)
+      .select({
+        eventId: importRun.dispatchEventId,
+        coordinatorStartedAt: importRun.coordinatorStartedAt,
+      })
+      .from(importRun)
+      .where(eq(importRun.id, run.id));
+    expect(stored).toEqual({
+      eventId: resumed?.eventId,
+      coordinatorStartedAt: null,
+    });
+
+    await recordImportRunDispatchAttempt(ctx.db, {
+      runId: run.id,
+      eventId: resumed!.eventId!,
+      error: "queue unavailable",
+    });
+    const [failed] = await getDb(ctx.db)
+      .select({ status: importRun.status, error: importRun.dispatchError })
+      .from(importRun)
+      .where(eq(importRun.id, run.id));
+    expect(failed).toEqual({
+      status: "dispatch_failed",
+      error: "queue unavailable",
+    });
+  });
+
+  it("republishes an interrupted authorization dispatch with its stable event id", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { importRun } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const now = new Date("2026-09-20T20:00:00.000Z");
+    await getDb(ctx.db)
+      .update(importRun)
+      .set({ updatedAt: new Date(now.getTime() - 61_000) })
+      .where(eq(importRun.id, run.id));
+
+    const repaired = await resumeAuthorizedImportRuns(
+      ctx.db,
+      ctx.actor.userId,
+      now,
+    );
+
+    expect(repaired).toContainEqual(
+      expect.objectContaining({ id: run.id, eventId: run.dispatchEventId }),
+    );
+  });
+
+  it("accepts a producer receipt after the consumer advances the run", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeImportRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { importRun } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    if (!run.dispatchEventId)
+      throw new Error("Run did not have a dispatch event");
+
+    for (const status of ["paused_auth", "completed"] as const) {
+      await getDb(ctx.db)
+        .update(importRun)
+        .set({ status })
+        .where(eq(importRun.id, run.id));
+      await expect(
+        recordImportRunDispatchAttempt(ctx.db, {
+          runId: run.id,
+          eventId: run.dispatchEventId,
+        }),
+      ).resolves.toMatchObject({ id: run.id, status });
+    }
   });
 
   it("creates an evidence-only validation successor without mutating the Purchase", async () => {

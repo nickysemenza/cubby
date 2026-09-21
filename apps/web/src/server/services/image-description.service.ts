@@ -5,6 +5,11 @@ import {
   type ImageDescriptionResult,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
+import {
+  fetchExternalResponse,
+  readResponseWithLimit,
+  MAX_EXTERNAL_IMAGE_BYTES,
+} from "@cubby/shared/external-fetch";
 import type { ImagePart } from "@tanstack/ai";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
@@ -13,11 +18,17 @@ import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { IMAGE_ANALYSIS_NORMALIZATION_REVISION } from "~/server/image-processing/description-policy";
 import {
+  recordImageDescriptionInput,
+  reserveImageAnalysisInput,
+  retainImageAnalysisInput,
+} from "~/server/repo/activity-input";
+import {
   findCachedImageDescriptionAnalysis,
   getUploadedImageProcessingSource,
-  saveImageDescriptionAnalysis,
 } from "~/server/repo/image-processing";
+import { inspectImageFile } from "~/server/services/image-integrity";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+import { uploadToS3 } from "~/server/utils/s3";
 
 /**
  * The edge rendition normalizes EXIF/HEIF orientation and requests a provider-
@@ -37,8 +48,10 @@ export function imageDescriptionInputFingerprint(input: {
   contentType: string;
   model: string;
   provider: string;
+  renditionHash?: string;
 }): string {
   return JSON.stringify({
+    renditionHash: input.renditionHash,
     feature: IMAGE_DESCRIPTION_FEATURE.feature,
     sourceContentHash: input.sourceContentHash,
     contentType: input.contentType,
@@ -81,20 +94,63 @@ function descriptionRequest(imageUrl: string) {
  */
 export async function describeOriginalImage(
   db: Database,
-  input: { imageId: ImageId; jobId?: string | null },
-): Promise<{ result: ImageDescriptionResult; cached: boolean }> {
+  input: { imageId: ImageId; attemptId: string },
+): Promise<{
+  result: ImageDescriptionResult;
+  cached: boolean;
+  fingerprint: string;
+}> {
   const source = await getUploadedImageProcessingSource(db, input.imageId);
   if (!source) {
     throw new Error("Image must be uploaded and integrity-verified first");
   }
   const provider = providerFor(IMAGE_DESCRIPTION_FEATURE.model);
-  const fingerprint = imageDescriptionInputFingerprint({
+  let fingerprint = imageDescriptionInputFingerprint({
     sourceContentHash: source.sha256,
     contentType: source.contentType,
     provider,
     model: IMAGE_DESCRIPTION_FEATURE.model,
   });
-  const cached = await findCachedImageDescriptionAnalysis(db, {
+  await recordImageDescriptionInput(db, {
+    attemptId: input.attemptId,
+    sourceHash: source.sha256,
+    sourceKey: source.key,
+    fingerprint,
+    provider,
+    model: IMAGE_DESCRIPTION_FEATURE.model,
+    promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
+    schemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+    normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
+    request: descriptionRequest(
+      imageAnalysisRenditionUrl(getR2PublicUrl(source.key)),
+    ),
+    cached: false,
+  });
+  let analysisUrl = imageAnalysisRenditionUrl(getR2PublicUrl(source.key));
+  const key = `cubby/analysis-inputs/${input.attemptId}.jpg`;
+  if (!(await reserveImageAnalysisInput(db, input.attemptId, key)))
+    throw new Error("Image analysis attempt is no longer current");
+  const response = await fetchExternalResponse(analysisUrl);
+  const bytes = await readResponseWithLimit(response, MAX_EXTERNAL_IMAGE_BYTES);
+  const inspected = await inspectImageFile(bytes, "image/jpeg");
+  if (inspected.detectedContentType !== "image/jpeg")
+    throw new Error("Analysis rendition must be JPEG");
+  await uploadToS3({
+    key,
+    body: Buffer.from(bytes),
+    contentType: "image/jpeg",
+  });
+  if (!(await retainImageAnalysisInput(db, input.attemptId, key)))
+    throw new Error("Image was removed during analysis input upload");
+  analysisUrl = getR2PublicUrl(key);
+  fingerprint = imageDescriptionInputFingerprint({
+    sourceContentHash: source.sha256,
+    contentType: source.contentType,
+    provider,
+    model: IMAGE_DESCRIPTION_FEATURE.model,
+    renditionHash: inspected.sha256,
+  });
+  const exactCached = await findCachedImageDescriptionAnalysis(db, {
     imageId: source.id,
     provider,
     model: IMAGE_DESCRIPTION_FEATURE.model,
@@ -102,16 +158,34 @@ export async function describeOriginalImage(
     resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
     inputFingerprint: fingerprint,
   });
-  if (cached)
-    return { result: imageDescriptionResult.parse(cached), cached: true };
-
+  await recordImageDescriptionInput(db, {
+    attemptId: input.attemptId,
+    sourceHash: source.sha256,
+    sourceKey: source.key,
+    fingerprint,
+    provider,
+    model: IMAGE_DESCRIPTION_FEATURE.model,
+    promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
+    schemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+    normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
+    request: descriptionRequest(analysisUrl),
+    cached: Boolean(exactCached),
+    renditionKey: key,
+    renditionHash: inspected.sha256,
+  });
+  if (exactCached)
+    return {
+      result: imageDescriptionResult.parse(exactCached),
+      cached: true,
+      fingerprint,
+    };
   const raw = await runStructuredFeature(
     IMAGE_DESCRIPTION_FEATURE,
-    descriptionRequest(imageAnalysisRenditionUrl(getR2PublicUrl(source.key))),
+    descriptionRequest(analysisUrl),
     {
       db,
       operation: "imageDescription",
-      job: input.jobId ? { kind: "describe_image", id: input.jobId } : null,
+      job: { kind: "image_processing_attempt", id: input.attemptId },
       cacheStatus: "miss",
       entity: { entityType: "image", entityId: source.id },
     },
@@ -125,14 +199,5 @@ export async function describeOriginalImage(
       imageId: parseShortcodeFor("image", source.shortcode),
     })),
   });
-  await saveImageDescriptionAnalysis(db, {
-    imageId: source.id,
-    provider,
-    model: IMAGE_DESCRIPTION_FEATURE.model,
-    promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-    resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
-    inputFingerprint: fingerprint,
-    result,
-  });
-  return { result, cached: false };
+  return { result, cached: false, fingerprint };
 }

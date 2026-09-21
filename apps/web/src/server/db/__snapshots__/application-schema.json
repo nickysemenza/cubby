@@ -3351,6 +3351,326 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.ImageProcessingAttempt": {
+      "name": "ImageProcessingAttempt",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "jobId": {
+          "name": "jobId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submissionId": {
+          "name": "submissionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inputKey": {
+          "name": "inputKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "executor": {
+          "name": "executor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assignedUserId": {
+          "name": "assignedUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assignedConnectionId": {
+          "name": "assignedConnectionId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "diagnostics": {
+          "name": "diagnostics",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "startedAt": {
+          "name": "startedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ImageProcessingAttempt_job_number_key": {
+          "name": "ImageProcessingAttempt_job_number_key",
+          "columns": [
+            {
+              "expression": "jobId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageProcessingAttempt_device_idx": {
+          "name": "ImageProcessingAttempt_device_idx",
+          "columns": [
+            {
+              "expression": "(\"executor\"->>'deviceId')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageProcessingAttempt_submission_idx": {
+          "name": "ImageProcessingAttempt_submission_idx",
+          "columns": [
+            {
+              "expression": "submissionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImageProcessingAttempt_jobId_ImageProcessingJob_id_fk": {
+          "name": "ImageProcessingAttempt_jobId_ImageProcessingJob_id_fk",
+          "tableFrom": "ImageProcessingAttempt",
+          "tableTo": "ImageProcessingJob",
+          "columnsFrom": [
+            "jobId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "ImageProcessingAttempt_submissionId_ImageProcessingSubmission_id_fk": {
+          "name": "ImageProcessingAttempt_submissionId_ImageProcessingSubmission_id_fk",
+          "tableFrom": "ImageProcessingAttempt",
+          "tableTo": "ImageProcessingSubmission",
+          "columnsFrom": [
+            "submissionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImageProcessingAttempt_number_check": {
+          "name": "ImageProcessingAttempt_number_check",
+          "value": "\"ImageProcessingAttempt\".\"number\" > 0"
+        },
+        "ImageProcessingAttempt_state_check": {
+          "name": "ImageProcessingAttempt_state_check",
+          "value": "\"ImageProcessingAttempt\".\"state\" IN ('leased','running','waiting','expired','ready','skipped','failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImageProcessingEvent": {
+      "name": "ImageProcessingEvent",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "jobId": {
+          "name": "jobId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "eventKey": {
+          "name": "eventKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event": {
+          "name": "event",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "level": {
+          "name": "level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'info'"
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'server'"
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurredAt": {
+          "name": "occurredAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImageProcessingEvent_job_event_key": {
+          "name": "ImageProcessingEvent_job_event_key",
+          "columns": [
+            {
+              "expression": "jobId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "eventKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImageProcessingEvent_job_time_idx": {
+          "name": "ImageProcessingEvent_job_time_idx",
+          "columns": [
+            {
+              "expression": "jobId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurredAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImageProcessingEvent_jobId_ImageProcessingJob_id_fk": {
+          "name": "ImageProcessingEvent_jobId_ImageProcessingJob_id_fk",
+          "tableFrom": "ImageProcessingEvent",
+          "tableTo": "ImageProcessingJob",
+          "columnsFrom": [
+            "jobId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.ImageProcessingJob": {
       "name": "ImageProcessingJob",
       "schema": "",
@@ -3361,6 +3681,13 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
+        },
+        "publicId": {
+          "name": "publicId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'IPR-' || upper(replace(gen_random_uuid()::text, '-', ''))"
         },
         "imageId": {
           "name": "imageId",
@@ -3397,6 +3724,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "submissionId": {
+          "name": "submissionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "attemptId": {
           "name": "attemptId",
@@ -3470,6 +3803,21 @@
         }
       },
       "indexes": {
+        "ImageProcessingJob_publicId_key": {
+          "name": "ImageProcessingJob_publicId_key",
+          "columns": [
+            {
+              "expression": "publicId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "ImageProcessingJob_identity_key": {
           "name": "ImageProcessingJob_identity_key",
           "columns": [
@@ -3565,6 +3913,19 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImageProcessingJob_submissionId_ImageProcessingSubmission_id_fk": {
+          "name": "ImageProcessingJob_submissionId_ImageProcessingSubmission_id_fk",
+          "tableFrom": "ImageProcessingJob",
+          "tableTo": "ImageProcessingSubmission",
+          "columnsFrom": [
+            "submissionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -3665,6 +4026,158 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ImageProcessingSubmission": {
+      "name": "ImageProcessingSubmission",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "publicId": {
+          "name": "publicId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'IPS-' || upper(replace(gen_random_uuid()::text, '-', ''))"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImageProcessingSubmission_publicId_key": {
+          "name": "ImageProcessingSubmission_publicId_key",
+          "columns": [
+            {
+              "expression": "publicId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ImageProcessingSubmissionJob": {
+      "name": "ImageProcessingSubmissionJob",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "submissionId": {
+          "name": "submissionId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "jobId": {
+          "name": "jobId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disposition": {
+          "name": "disposition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "baselineAttempts": {
+          "name": "baselineAttempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "ImageProcessingSubmissionJob_membership_key": {
+          "name": "ImageProcessingSubmissionJob_membership_key",
+          "columns": [
+            {
+              "expression": "submissionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "jobId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImageProcessingSubmissionJob_submissionId_ImageProcessingSubmission_id_fk": {
+          "name": "ImageProcessingSubmissionJob_submissionId_ImageProcessingSubmission_id_fk",
+          "tableFrom": "ImageProcessingSubmissionJob",
+          "tableTo": "ImageProcessingSubmission",
+          "columnsFrom": [
+            "submissionId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "ImageProcessingSubmissionJob_jobId_ImageProcessingJob_id_fk": {
+          "name": "ImageProcessingSubmissionJob_jobId_ImageProcessingJob_id_fk",
+          "tableFrom": "ImageProcessingSubmissionJob",
+          "tableTo": "ImageProcessingJob",
+          "columnsFrom": [
+            "jobId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImageProcessingSubmissionJob_disposition_check": {
+          "name": "ImageProcessingSubmissionJob_disposition_check",
+          "value": "\"ImageProcessingSubmissionJob\".\"disposition\" IN ('new','reused','running','retry')"
+        },
+        "ImageProcessingSubmissionJob_baseline_check": {
+          "name": "ImageProcessingSubmissionJob_baseline_check",
+          "value": "\"ImageProcessingSubmissionJob\".\"baselineAttempts\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ImportFinding": {
@@ -5486,6 +5999,12 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
+        },
+        "executor": {
+          "name": "executor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "runId": {
           "name": "runId",

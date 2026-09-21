@@ -3,9 +3,17 @@ import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { APP_ORIGIN, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
+import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-run-detail";
+export type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-run-detail";
 import type { Database } from "~/server/db";
-import { oauthClient, oauthRefreshToken, session } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import {
+  oauthClient,
+  oauthClientResource,
+  oauthRefreshToken,
+  oauthResource,
+  session,
+} from "~/server/db/schema";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 
 export const PURCHASE_AGENT_OAUTH_CLIENT_ID = "cubby-purchase-agent";
 const PURCHASE_AGENT_OAUTH_SOFTWARE_ID = "cubby-purchase-agent-v1";
@@ -38,47 +46,96 @@ export type PurchaseAgentDelegationClaims = z.infer<typeof delegationClaims>;
 
 export async function ensurePurchaseAgentOAuthClient(database: Database) {
   const now = new Date();
-  await getDb(database)
-    .insert(oauthClient)
-    .values({
-      id: PURCHASE_AGENT_OAUTH_CLIENT_ID,
-      clientId: PURCHASE_AGENT_OAUTH_CLIENT_ID,
-      clientSecret: null,
-      disabled: false,
-      skipConsent: false,
-      enableEndSession: false,
-      subjectType: "public",
-      scopes: ["openid", "profile", "email", "offline_access"],
-      userId: null,
-      createdAt: now,
-      updatedAt: now,
-      name: "Cubby Purchase Agent",
-      uri: APP_ORIGIN,
-      softwareId: PURCHASE_AGENT_OAUTH_SOFTWARE_ID,
-      softwareVersion: "1",
-      redirectUris: [PURCHASE_AGENT_OAUTH_CALLBACK],
-      tokenEndpointAuthMethod: "none",
-      grantTypes: ["authorization_code", "refresh_token"],
-      responseTypes: ["code"],
-      public: true,
-      type: "web",
-      requirePKCE: true,
-      referenceId: PURCHASE_AGENT_OAUTH_SOFTWARE_ID,
-    })
-    .onConflictDoUpdate({
-      target: oauthClient.clientId,
-      set: {
+  await withTransaction(database, async (tx) => {
+    await tx
+      .insert(oauthResource)
+      .values({
+        id: "cubby-mcp",
+        identifier: MCP_RESOURCE,
+        name: "Cubby MCP",
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: oauthResource.identifier });
+    await tx
+      .insert(oauthClient)
+      .values({
+        id: PURCHASE_AGENT_OAUTH_CLIENT_ID,
+        clientId: PURCHASE_AGENT_OAUTH_CLIENT_ID,
+        clientSecret: null,
         disabled: false,
-        redirectUris: [PURCHASE_AGENT_OAUTH_CALLBACK],
+        skipConsent: false,
+        enableEndSession: false,
+        subjectType: "public",
         scopes: ["openid", "profile", "email", "offline_access"],
+        userId: null,
+        createdAt: now,
+        updatedAt: now,
+        name: "Cubby Purchase Agent",
+        uri: APP_ORIGIN,
+        softwareId: PURCHASE_AGENT_OAUTH_SOFTWARE_ID,
+        softwareVersion: "1",
+        redirectUris: [PURCHASE_AGENT_OAUTH_CALLBACK],
         tokenEndpointAuthMethod: "none",
         grantTypes: ["authorization_code", "refresh_token"],
         responseTypes: ["code"],
         public: true,
+        type: "web",
         requirePKCE: true,
-        updatedAt: now,
-      },
-    });
+        referenceId: PURCHASE_AGENT_OAUTH_SOFTWARE_ID,
+      })
+      .onConflictDoUpdate({
+        target: oauthClient.clientId,
+        set: {
+          disabled: false,
+          skipConsent: false,
+          redirectUris: [PURCHASE_AGENT_OAUTH_CALLBACK],
+          scopes: ["openid", "profile", "email", "offline_access"],
+          tokenEndpointAuthMethod: "none",
+          grantTypes: ["authorization_code", "refresh_token"],
+          responseTypes: ["code"],
+          public: true,
+          requirePKCE: true,
+          updatedAt: now,
+        },
+      });
+    await tx
+      .insert(oauthClientResource)
+      .values({
+        id: `${PURCHASE_AGENT_OAUTH_CLIENT_ID}:cubby-mcp`,
+        clientId: PURCHASE_AGENT_OAUTH_CLIENT_ID,
+        resourceId: MCP_RESOURCE,
+        createdAt: now,
+      })
+      .onConflictDoNothing({
+        target: [oauthClientResource.clientId, oauthClientResource.resourceId],
+      });
+  });
+}
+
+export function purchaseAgentConnectionRedirect(
+  status: PurchaseAgentConnectionStatus,
+) {
+  const url = new URL("/activity", APP_ORIGIN);
+  url.searchParams.set("tab", "connections");
+  url.searchParams.set("purchaseAgent", status);
+  return url.toString();
+}
+
+export function purchaseAgentAuthorizeURL(input: {
+  state: string;
+  challenge: string;
+}) {
+  const url = new URL("/api/auth/oauth2/authorize", APP_ORIGIN);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("client_id", PURCHASE_AGENT_OAUTH_CLIENT_ID);
+  url.searchParams.set("redirect_uri", PURCHASE_AGENT_OAUTH_CALLBACK);
+  url.searchParams.set("scope", "openid profile email offline_access");
+  url.searchParams.set("state", input.state);
+  url.searchParams.set("code_challenge", input.challenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  url.searchParams.set("resource", MCP_RESOURCE);
+  return url;
 }
 
 export async function findActivePurchaseAgentGrant(
