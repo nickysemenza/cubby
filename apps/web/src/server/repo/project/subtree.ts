@@ -18,6 +18,7 @@
  * `computeAttentionItems` re-derived the same thing independently).
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectOut } from "@cubby/schemas/project";
 import {
   MAX_PROJECT_TREE_DEPTH,
   type ProjectDateWindow,
@@ -60,6 +61,9 @@ export type ProjectParentRow = {
   status: ProjectStatus;
   /** Completion-year fallback when the folded effective end is null. */
   updatedAt: Date;
+  locations: string[];
+  locationsMode: "inherit" | "explicit";
+  defaultTrade: ProjectOut["defaultTrade"];
 };
 
 /**
@@ -78,6 +82,9 @@ async function allProjectParentRows(db: Database): Promise<ProjectParentRow[]> {
       endDate: project.endDate,
       status: project.status,
       updatedAt: project.updatedAt,
+      locations: project.locations,
+      locationsMode: project.locationsMode,
+      defaultTrade: project.defaultTrade,
     })
     .from(project)
     .where(notDeleted(project))

@@ -36,6 +36,15 @@ describe("inline suggestion review", () => {
     },
   );
 
+  it("requires 0.95 for a provided alternative even when the stored value is explicit None", () => {
+    expect(
+      actionableSuggestion({ ...suggestion, probability: 0.9 }, null, true),
+    ).toBe(false);
+    expect(
+      actionableSuggestion({ ...suggestion, probability: 0.95 }, null, true),
+    ).toBe(true);
+  });
+
   it("shows both values, requires acceptance, and retains the proposal after a failed save", async () => {
     const save = vi
       .fn()

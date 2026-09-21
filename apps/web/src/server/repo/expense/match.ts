@@ -60,6 +60,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
+import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
 import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
 import {
   emptyPurchaseFinancialAggregate,
@@ -201,7 +202,7 @@ export const matchExpenses = async (
       LEFT JOIN "Vendor" v
         ON v."id" = p."vendorId" AND v."deletedAt" IS NULL
       LEFT JOIN "Project" pr
-        ON pr."id" = e."projectId" AND pr."deletedAt" IS NULL
+        ON pr."id" = ${effectiveExpenseProjectSql("e")} AND pr."deletedAt" IS NULL
       LEFT JOIN "Product" pd
         ON pd."id" = e."productId" AND pd."deletedAt" IS NULL
       WHERE e."deletedAt" IS NULL

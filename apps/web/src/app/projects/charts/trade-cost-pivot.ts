@@ -12,7 +12,7 @@ export const PIVOT_COST_KEYS = costTypeValues;
 export type PivotCostKey = CostType;
 
 type TradePivotRow = {
-  trade: Trade;
+  trade: Trade | null;
   cells: Record<PivotCostKey, number>; // dollar sums
   total: number;
 };
@@ -39,7 +39,7 @@ const emptyCells = () =>
  * lets them share one implementation instead of two that drift.
  */
 export type TradeCostContribution = {
-  trade: Trade;
+  trade: Trade | null;
   costType: PivotCostKey;
   value: number;
 };
@@ -47,7 +47,7 @@ export type TradeCostContribution = {
 export function pivotTradeCostContributions(
   contributions: Iterable<TradeCostContribution>,
 ): TradeCostPivot {
-  const grouped = new Map<Trade, Record<PivotCostKey, number>>();
+  const grouped = new Map<Trade | null, Record<PivotCostKey, number>>();
 
   for (const { trade, costType, value } of contributions) {
     let entry = grouped.get(trade);

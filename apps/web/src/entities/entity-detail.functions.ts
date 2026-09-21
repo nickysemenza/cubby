@@ -74,6 +74,15 @@ export function entityDetailFor<E extends DetailEntity>(entity: E) {
   return {
     entity,
     queryKey: (shortcode: string) => queryKeyFor(inputFor(shortcode)),
+    readFresh: async (shortcode: string) => {
+      const input = inputFor(shortcode);
+      const result = await operation.call(
+        parseEntityDetailInput(entity, input),
+      );
+      return result === null
+        ? null
+        : getEntityDetailOutputSchema(entity).parse(result);
+    },
     queryOptions: (
       shortcode: string,
       options?: { enabled?: boolean; staleTime?: number },

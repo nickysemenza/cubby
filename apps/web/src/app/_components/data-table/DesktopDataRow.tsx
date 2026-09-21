@@ -16,6 +16,10 @@ import { Button } from "~/components/ui/button";
 import { TableCell, TableRow } from "~/components/ui/table";
 import { FieldExplanation } from "~/entities/field-explanation";
 import { isInspectableFieldProvenance } from "~/entities/field-provenance";
+import {
+  FieldResolutionBadge,
+  fieldResolutionFor,
+} from "~/entities/field-resolution";
 import { cn } from "~/lib/utils";
 
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
@@ -81,6 +85,23 @@ function cellPresentation<TItem extends RowData>(
   return { selectable, selected, anchor, pinned, boundary, width };
 }
 
+function resolvedCellContent<TItem extends RowData>(
+  cell: ReturnType<Row<TItem>["getVisibleCells"]>[number],
+  content: ReactNode,
+) {
+  if (!fieldResolutionFor(cell.row.original, cell.column.id)) return content;
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      <span className="min-w-0">{content}</span>
+      <FieldResolutionBadge
+        record={cell.row.original}
+        field={cell.column.id}
+        interactive={false}
+      />
+    </span>
+  );
+}
+
 function DesktopDataCell<TItem extends RowData>({
   cell,
   cellClassName,
@@ -103,6 +124,7 @@ function DesktopDataCell<TItem extends RowData>({
     rendered,
     cell.column.columnDef.meta,
   );
+  const resolvedContent = resolvedCellContent(cell, content);
   const explanation = resolveColumnExplanation(
     cell.column.columnDef.meta?.explanation,
     cell.row.original,
@@ -111,7 +133,7 @@ function DesktopDataCell<TItem extends RowData>({
   const explained =
     explanation && rowIdentity.success ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">
-        <span className="min-w-0">{content}</span>
+        <span className="min-w-0">{resolvedContent}</span>
         <FieldExplanation
           entity={explanation.entity}
           id={rowIdentity.data.id}
@@ -121,7 +143,7 @@ function DesktopDataCell<TItem extends RowData>({
         />
       </span>
     ) : (
-      content
+      resolvedContent
     );
   return (
     <TableCell

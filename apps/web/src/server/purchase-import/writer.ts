@@ -65,6 +65,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import {
   applyAllocationChanges,
   readAllocations,
@@ -861,6 +862,10 @@ export async function importVendorOrder(
       target = await insertWithShortcode(tx, "purchase", {
         vendorId,
         vendorAccountId,
+        defaultTrade: input.defaultTrade,
+        defaultProjectId: input.defaultProjectId
+          ? parseEntityId("project", input.defaultProjectId)
+          : null,
         importRunId: input.runId,
         orderId: candidate.orderId,
         displayLabel: candidate.merchant,
@@ -872,6 +877,10 @@ export async function importVendorOrder(
         .update(purchase)
         .set({
           vendorAccountId: target.vendorAccountId ?? vendorAccountId,
+          defaultTrade: input.defaultTrade ?? target.defaultTrade,
+          defaultProjectId: input.defaultProjectId
+            ? parseEntityId("project", input.defaultProjectId)
+            : target.defaultProjectId,
           importRunId: target.importRunId ?? input.runId,
           displayLabel: target.displayLabel ?? candidate.merchant,
           statedTotal: target.statedTotal ?? candidate.printedGrandTotal,
@@ -917,7 +926,7 @@ export async function importVendorOrder(
             lineKind: "principal",
             lineBasis: "item_line",
             costType: "materials",
-            trade: "other",
+            trade: null,
           });
           rowMutations.push({
             targetType: "expense",
@@ -1026,10 +1035,11 @@ export async function importVendorOrder(
             lineKind: identity.lineKind,
             lineBasis: "item_line",
             costType: costTypeSchema.parse(aggregate?.costType ?? "materials"),
-            trade: tradeSchema.parse(aggregate?.tradeId ?? "other"),
-            projectId: aggregate?.projectId
-              ? parseEntityId("project", aggregate.projectId)
-              : null,
+            trade: tradeSchema.nullable().parse(aggregate?.tradeId ?? null),
+            projectId:
+              identity.lineKind === "principal" && aggregate?.projectId
+                ? parseEntityId("project", aggregate.projectId)
+                : null,
             productId,
             productQuantity: quantity,
           });
@@ -1101,6 +1111,12 @@ export async function importVendorOrder(
         }
       }
     }
+
+    const classifiedLines = await tx.query.expense.findMany({
+      where: and(eq(expense.purchaseId, purchaseId), notDeleted(expense)),
+    });
+    for (const line of classifiedLines)
+      await validateExpenseInheritance(tx, line);
 
     if (candidate.allShipmentsDelivered === true) {
       findingIds.push(

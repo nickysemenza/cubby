@@ -272,6 +272,7 @@ const compileFieldModel = (
               resolver: "field",
             }
           : null),
+      resolution: field.resolution,
       control: field.control,
       display: {
         columnId: field.display.columnId,

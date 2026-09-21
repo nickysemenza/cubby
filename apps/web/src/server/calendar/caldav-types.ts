@@ -8,6 +8,7 @@ import type { MealType } from "@cubby/schemas/meal-classification";
 import { mealTypeSchema } from "@cubby/schemas/meal-classification";
 import type { TaskStatus } from "@cubby/schemas/project";
 import { taskStatusSchema } from "@cubby/schemas/project";
+import type { Trade } from "@cubby/schemas/task-fields";
 import { z } from "zod";
 
 export const CALDAV_COLLECTIONS = {
@@ -51,6 +52,7 @@ export interface CalDavResource {
   projection: CalendarProjection;
 }
 export interface CalDavEventInput {
+  trade?: Trade;
   uid: string;
   summary: string;
   startDate: string;

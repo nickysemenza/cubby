@@ -53,7 +53,9 @@ import {
   withTransaction,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
+import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { deleteImages } from "~/server/repo/image";
+import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   deleteStoredObjects,
@@ -78,9 +80,13 @@ const sha256 = async (value: string): Promise<string> => {
 
 const operationArgs = (input: {
   prepareOperationId: string;
+  defaultTrade?: CommitPurchaseImportInput["defaultTrade"];
+  defaultProjectId?: CommitPurchaseImportInput["defaultProjectId"];
   resolutions: CommitPurchaseImportInput["resolutions"];
 }) => ({
   prepareOperationId: input.prepareOperationId,
+  defaultTrade: input.defaultTrade,
+  defaultProjectId: input.defaultProjectId,
   resolutions: input.resolutions,
 });
 
@@ -590,6 +596,29 @@ export async function commitPurchaseImport(
         throw new Error(
           `Purchase import run is fenced in ${scope.public.status}`,
         );
+      const prepared = await loadPreparation(
+        transactionDb,
+        scope.public.runId,
+        input.prepareOperationId,
+      );
+      const defaultProjectId = input.defaultProjectId
+        ? await resolveOrThrow(transactionDb, "project", input.defaultProjectId)
+        : null;
+      const hasPrincipalLine = prepared.some(({ lines }) =>
+        lines.some(
+          (line) =>
+            extractedPurchaseLine.parse(line.line).lineKind === "principal",
+        ),
+      );
+      if (hasPrincipalLine) {
+        await validateExpenseInheritance(transactionDb, {
+          lineKind: "principal",
+          projectId: defaultProjectId,
+          productId: null,
+          purchaseId: null,
+          trade: input.defaultTrade ?? null,
+        });
+      }
       await database.insert(importRunOperation).values({
         runId: scope.public.runId,
         operationId: input._runExecution.operationId,
@@ -597,11 +626,6 @@ export async function commitPurchaseImport(
         inputFingerprint: argsFingerprint,
         state: "started",
       });
-      const prepared = await loadPreparation(
-        transactionDb,
-        scope.public.runId,
-        input.prepareOperationId,
-      );
       for (const { order } of prepared) {
         const extraction = importExtractionOutcome.parse(order.extraction);
         const targetFingerprint = await computeTargetFingerprint(
@@ -685,6 +709,8 @@ export async function commitPurchaseImport(
         const result = await importVendorOrder(
           transactionDb,
           {
+            defaultTrade: input.defaultTrade,
+            defaultProjectId: defaultProjectId ?? undefined,
             runId: scope.public.runId,
             ledgerPartyId: scope.ledgerPartyId,
             vendorId,
@@ -1209,6 +1235,8 @@ export async function commitProductEnrichment(
             updatedAt: new Date(),
           })
           .where(eq(product.id, productId));
+        if (changes.category !== undefined)
+          await validateLiveEffectiveTrades(tx);
         for (const identifier of changes.identifiers ?? []) {
           const [identifierEvidence] = await tx
             .select({ metadata: importRunEvidence.sourceMetadata })
@@ -1327,55 +1355,44 @@ export async function overwriteProductEnrichment(
     "product",
     input.productId,
   );
-  const database = getDb(db);
-  const [target] = await database
-    .select({ targetFingerprint: importRunTarget.targetFingerprint })
-    .from(importRunTarget)
-    .where(
-      and(
-        eq(importRunTarget.runId, scope.public.runId),
-        eq(importRunTarget.productId, resolvedProductId),
-      ),
+  return withTransaction(db, async (database) => {
+    const [target] = await database
+      .select({ targetFingerprint: importRunTarget.targetFingerprint })
+      .from(importRunTarget)
+      .where(
+        and(
+          eq(importRunTarget.runId, scope.public.runId),
+          eq(importRunTarget.productId, resolvedProductId),
+        ),
+      )
+      .limit(1);
+    if (!target || target.targetFingerprint !== input.targetFingerprint)
+      throw new Error("Product enrichment target changed before approval");
+    const [live] = await database
+      .select({
+        name: product.name,
+        manufacturer: product.manufacturer,
+        category: product.category,
+        model: product.model,
+        updatedAt: product.updatedAt,
+      })
+      .from(product)
+      .where(and(eq(product.id, resolvedProductId), notDeleted(product)))
+      .limit(1);
+    if (!live) throw new Error("Product enrichment target was not found");
+    if (
+      (await sha256(JSON.stringify({ product: live }))) !==
+      input.targetFingerprint
     )
-    .limit(1);
-  if (!target || target.targetFingerprint !== input.targetFingerprint)
-    throw new Error("Product enrichment target changed before approval");
-  const [live] = await database
-    .select({
-      name: product.name,
-      manufacturer: product.manufacturer,
-      category: product.category,
-      model: product.model,
-      updatedAt: product.updatedAt,
-    })
-    .from(product)
-    .where(and(eq(product.id, resolvedProductId), notDeleted(product)))
-    .limit(1);
-  if (!live) throw new Error("Product enrichment target was not found");
-  if (
-    (await sha256(JSON.stringify({ product: live }))) !==
-    input.targetFingerprint
-  )
-    throw new Error("Product enrichment target changed after proposal");
-  const [updated] =
-    input.change.field === "manufacturer"
-      ? await database
-          .update(product)
-          .set({
-            manufacturer: input.change.value ?? "",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(product.id, resolvedProductId),
-              eq(product.updatedAt, live.updatedAt),
-            ),
-          )
-          .returning({ id: product.id })
-      : input.change.field === "category"
+      throw new Error("Product enrichment target changed after proposal");
+    const [updated] =
+      input.change.field === "manufacturer"
         ? await database
             .update(product)
-            .set({ category: input.change.value, updatedAt: new Date() })
+            .set({
+              manufacturer: input.change.value ?? "",
+              updatedAt: new Date(),
+            })
             .where(
               and(
                 eq(product.id, resolvedProductId),
@@ -1383,35 +1400,49 @@ export async function overwriteProductEnrichment(
               ),
             )
             .returning({ id: product.id })
-        : await database
-            .update(product)
-            .set({ model: input.change.value, updatedAt: new Date() })
-            .where(
-              and(
-                eq(product.id, resolvedProductId),
-                eq(product.updatedAt, live.updatedAt),
-              ),
-            )
-            .returning({ id: product.id });
-  if (!updated) throw new Error("Product changed while applying approval");
-  await database
-    .update(importRunTarget)
-    .set({
-      state: "completed",
-      outcome: "enriched",
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(importRunTarget.runId, scope.public.runId),
-        eq(importRunTarget.productId, resolvedProductId),
-      ),
-    );
-  return overwriteProductEnrichmentOut.parse({
-    runPublicId: scope.public.publicId,
-    productId: input.productId,
-    changedField: input.change.field,
+        : input.change.field === "category"
+          ? await database
+              .update(product)
+              .set({ category: input.change.value, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(product.id, resolvedProductId),
+                  eq(product.updatedAt, live.updatedAt),
+                ),
+              )
+              .returning({ id: product.id })
+          : await database
+              .update(product)
+              .set({ model: input.change.value, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(product.id, resolvedProductId),
+                  eq(product.updatedAt, live.updatedAt),
+                ),
+              )
+              .returning({ id: product.id });
+    if (!updated) throw new Error("Product changed while applying approval");
+    if (input.change.field === "category")
+      await validateLiveEffectiveTrades(database);
+    await database
+      .update(importRunTarget)
+      .set({
+        state: "completed",
+        outcome: "enriched",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(importRunTarget.runId, scope.public.runId),
+          eq(importRunTarget.productId, resolvedProductId),
+        ),
+      );
+    return overwriteProductEnrichmentOut.parse({
+      runPublicId: scope.public.publicId,
+      productId: input.productId,
+      changedField: input.change.field,
+    });
   });
 }
 

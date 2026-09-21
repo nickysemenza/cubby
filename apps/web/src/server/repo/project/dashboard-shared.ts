@@ -17,7 +17,6 @@ import type {
 } from "@cubby/schemas/project";
 import {
   and,
-  arrayOverlaps,
   gte,
   inArray,
   isNotNull,
@@ -26,16 +25,22 @@ import {
   notInArray,
   or,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
-import { expense, project, task } from "~/server/db/schema";
+import { project, task } from "~/server/db/schema";
 import {
   buildSearchConditions,
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
+import {
+  effectiveProjectLocationsSql,
+  effectiveTaskProjectSql,
+} from "~/server/repo/task-project-inheritance";
 import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
 
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
@@ -52,13 +57,13 @@ export function dashboardKindLocationConditions(
     // other direction of the singular `location` filter in
     // project/lookup.ts (`= ANY(...)`).
     //
-    // arrayOverlaps, not a hand-rolled sql`${col} && ${arr}`: drizzle
-    // interpolates a JS array into raw SQL as a ROW CONSTRUCTOR (`&& ($1,
-    // $2)`), which isn't a text[] — the hand-rolled version failed for every
-    // location count, one included. Same trap fixed in recipe/crud.ts's tag
-    // filter; semantics are unchanged (ANY-of / array overlap).
+    // SQL-valued inherited arrays need an explicit PostgreSQL text[] operand;
+    // passing a JS array to a raw expression becomes a row constructor.
     filters.locations && filters.locations.length > 0
-      ? arrayOverlaps(project.locations, filters.locations)
+      ? sql`${effectiveProjectLocationsSql(sql`${project.id}`)} && ARRAY[${sql.join(
+          filters.locations.map((value) => sql`${value}`),
+          sql`, `,
+        )}]::text[]`
       : undefined,
   ];
 }
@@ -101,17 +106,17 @@ const qb = new QueryBuilder();
  *    review to keep it here.
  *  - **Nullable FK.** `task.projectId` is nullable and a NULL inside a
  *    `NOT IN` list makes the whole predicate UNKNOWN, so without
- *    `isNotNull(task.projectId)` `buildUndatedProjectWhere` would count zero
+ *    `isNotNull(effectiveTaskProjectSql())` `buildUndatedProjectWhere` would count zero
  *    rows instead of the genuinely undated ones.
  */
 function datedTaskProjectIds(dateFrom?: string, dateTo?: string) {
   return qb
-    .select({ projectId: task.projectId })
+    .select({ projectId: effectiveTaskProjectSql() })
     .from(task)
     .where(
       and(
         notDeleted(task),
-        isNotNull(task.projectId),
+        isNotNull(effectiveTaskProjectSql()),
         isNotNull(task.dueDate),
         dateTo ? lte(task.dueDate, dateTo) : undefined,
         dateFrom ? gte(effectiveTaskDueDateSql(), dateFrom) : undefined,
@@ -129,18 +134,13 @@ function datedTaskProjectIds(dateFrom?: string, dateTo?: string) {
  * the tracker filters them out of a date range.
  */
 function datedExpenseProjectIds(dateFrom?: string, dateTo?: string) {
-  return qb
-    .select({ projectId: expense.projectId })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        isNotNull(expense.projectId),
-        isNotNull(expense.date),
-        dateTo ? lte(expense.date, dateTo) : undefined,
-        dateFrom ? gte(expense.date, dateFrom) : undefined,
-      ),
-    );
+  return sql`(SELECT DISTINCT allocation."projectId"
+    FROM (${expenseProjectAllocationSql()}) allocation
+    JOIN "Expense" dated_expense ON dated_expense."id" = allocation."expenseId"
+    WHERE allocation."projectId" IS NOT NULL
+      AND dated_expense."date" IS NOT NULL
+      ${dateTo ? sql`AND dated_expense."date" <= ${dateTo}` : sql``}
+      ${dateFrom ? sql`AND dated_expense."date" >= ${dateFrom}` : sql``})`;
 }
 
 /**

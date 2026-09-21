@@ -1,3 +1,4 @@
+import { tradeSchema } from "./task-fields";
 import { productTopLevelOut } from "./product-output-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { foodSummary, foodSummaryMcpOut, upc } from "@cubby/usda-schemas";
@@ -435,6 +436,7 @@ export type ProductQuantityLedgerOut = z.infer<typeof productQuantityLedgerOut>;
  * same units off the shelf in the same transaction.
  */
 export const productDiscardInput = z.object({
+  trade: tradeSchema,
   productId: productShortcode,
   quantity: z
     .number()

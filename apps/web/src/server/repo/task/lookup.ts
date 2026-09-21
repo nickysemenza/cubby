@@ -7,11 +7,9 @@ import type {
 } from "@cubby/schemas/pagination";
 import type { TaskFilters } from "@cubby/schemas/project";
 import {
-  type AnyColumn,
   and,
   eq,
   gte,
-  inArray,
   isNull,
   lt,
   lte,
@@ -28,7 +26,6 @@ import { product, task } from "~/server/db/schema";
 import {
   auditDateWhereConditions,
   countWhere,
-  eqAny,
   eqAnyOrPresence,
   executeListQueryWithCount,
   formatSearchTerm,
@@ -37,6 +34,7 @@ import {
   notDeleted,
   presenceCondition,
   relations,
+  uuidArrayParam,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
@@ -48,6 +46,12 @@ import {
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
+import {
+  effectiveTaskProjectSql,
+  effectiveTaskSubjectProductSql,
+  effectiveTaskTradeSql,
+  hydrateTaskInheritanceRows,
+} from "../task-project-inheritance";
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
 
@@ -89,26 +93,34 @@ async function buildTaskProjectCondition(
   projectId: TaskFilters["projectId"],
   includeSubProjects: boolean | undefined,
   presence?: PresenceFilter,
+  taskAlias = "Task",
 ): Promise<SQL | undefined> {
-  const presenceCond = presenceCondition(task.projectId, presence);
+  const effectiveProjectId = effectiveTaskProjectSql(taskAlias);
+  const presenceCond =
+    presence === "has"
+      ? sql`${effectiveProjectId} IS NOT NULL`
+      : presence === "none"
+        ? sql`${effectiveProjectId} IS NULL`
+        : undefined;
   const selectedCodes = projectId ? [projectId].flat() : [];
   if (selectedCodes.length === 0) return presenceCond;
   const selected = await toUuids(db, selectedCodes, "project");
   if (selected.length === 0) return presenceCond ?? sql`false`;
   if (!includeSubProjects)
-    return or(eqAny(task.projectId, selected), presenceCond);
+    return or(
+      sql`${effectiveProjectId} = ANY(${uuidArrayParam(selected)})`,
+      presenceCond,
+    );
 
   const { childrenByParent } = await loadProjectTree(db);
+  const scopedIds = uniq(
+    selected.flatMap((id) => [
+      id,
+      ...collectDescendantIds(childrenByParent, id),
+    ]),
+  );
   return or(
-    inArray(
-      task.projectId,
-      uniq(
-        selected.flatMap((id) => [
-          id,
-          ...collectDescendantIds(childrenByParent, id),
-        ]),
-      ),
-    ),
+    sql`${effectiveProjectId} = ANY(${uuidArrayParam(scopedIds)})`,
     presenceCond,
   );
 }
@@ -121,24 +133,27 @@ async function buildTaskProjectCondition(
 const joinedNameSort = (
   sort: SortParams,
   tableName: string,
-  foreignKey: AnyColumn,
+  foreignKey: SQL,
 ) => {
   const dirSql =
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
   return [
-    sql.raw(
-      `(SELECT j."name" FROM "${tableName}" j ` +
-        `WHERE j."id" = "task"."${foreignKey.name}" AND j."deletedAt" IS NULL) ${dirSql}`,
-    ),
+    sql`(SELECT j."name" FROM ${sql.raw(`"${tableName}"`)} j
+        WHERE j."id" = ${foreignKey} AND j."deletedAt" IS NULL)
+      ${sql.raw(dirSql)}`,
   ];
 };
 
 const resolveTaskSort = (sort: SortParams) => {
   if (sort.orderBy === "project") {
-    return joinedNameSort(sort, "Project", task.projectId);
+    return joinedNameSort(sort, "Project", effectiveTaskProjectSql("task"));
   }
   if (sort.orderBy === "subjectProduct") {
-    return joinedNameSort(sort, "Product", task.subjectProductId);
+    return joinedNameSort(
+      sort,
+      "Product",
+      effectiveTaskSubjectProductSql("task"),
+    );
   }
   return null;
 };
@@ -146,13 +161,18 @@ const resolveTaskSort = (sort: SortParams) => {
 const taskScaffold = listScaffold("task", task);
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
+export const buildTaskWhere = async (
+  db: Database,
+  filters: TaskFilters,
+  taskAlias = "Task",
+) => {
   const dbClient = getDb(db);
   const projectCondition = await buildTaskProjectCondition(
     db,
     filters.projectId,
     filters.includeSubProjects,
     filters.projectPresenceFilter,
+    taskAlias,
   );
   const parentTaskCodes = filters.parentTaskId
     ? [filters.parentTaskId].flat()
@@ -172,11 +192,20 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
     subjectProductIds.length === 0 &&
     !filters.subjectProductPresenceFilter
       ? sql`false`
-      : eqAnyOrPresence(
-          task.subjectProductId,
-          subjectProductIds,
-          filters.subjectProductPresenceFilter,
-        );
+      : (() => {
+          const effectiveSubject = effectiveTaskSubjectProductSql(taskAlias);
+          const match =
+            subjectProductIds.length > 0
+              ? sql`${effectiveSubject} = ANY(${uuidArrayParam(subjectProductIds)})`
+              : undefined;
+          const presence =
+            filters.subjectProductPresenceFilter === "has"
+              ? sql`${effectiveSubject} IS NOT NULL`
+              : filters.subjectProductPresenceFilter === "none"
+                ? sql`${effectiveSubject} IS NULL`
+                : undefined;
+          return match && presence ? or(match, presence) : (match ?? presence);
+        })();
   const parentTaskCondition = () =>
     parentTaskCodes.length > 0 &&
     parentTaskIds.length === 0 &&
@@ -200,13 +229,13 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
       );
     return or(
       formatSearchTerm(task.name, filters.search),
-      inArray(task.subjectProductId, subjectProductNameMatches),
+      sql`${effectiveTaskSubjectProductSql(taskAlias)} IN ${subjectProductNameMatches}`,
     );
   };
   const scopeCondition = () =>
     scopedProjectIds
       ? scopedProjectIds.length > 0
-        ? inArray(task.projectId, scopedProjectIds)
+        ? sql`${effectiveTaskProjectSql(taskAlias)} = ANY(${uuidArrayParam(scopedProjectIds)})`
         : sql`false`
       : undefined;
   const dueConditions = () => [
@@ -232,7 +261,7 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
         ? eq(task.status, "done")
         : undefined;
 
-  // `status` and `trade` are declared stored filters — `taskScaffold.where`
+  // `status` is declared stored; trade is resolved below instead of reading the
   // applies them via `declaredFilterPredicates` before the conditions below.
   return taskScaffold.where(filters, [
     ...auditDateWhereConditions(task, filters),
@@ -246,6 +275,12 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
     filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
     parentTaskCondition(),
     scopeCondition(),
+    filters.trade
+      ? sql`${effectiveTaskTradeSql(taskAlias)} IN (${sql.join(
+          [filters.trade].flat().map((value) => sql`${value}`),
+          sql`, `,
+        )})`
+      : undefined,
     // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
     // ranged task still inside its window isn't treated as overdue, matching
     // the "overdue" semantics used on the board/stat tiles.
@@ -271,7 +306,10 @@ export const taskList = async (
   readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
-  const whereClause = await buildTaskWhere(db, filters);
+  const [whereClause, countWhereClause] = await Promise.all([
+    buildTaskWhere(db, filters, "task"),
+    buildTaskWhere(db, filters),
+  ]);
 
   const orderByArray = taskScaffold.orderBy(
     sorts,
@@ -292,7 +330,7 @@ export const taskList = async (
         offset: skip,
         ...relations.task.withProject,
       }),
-    count: () => countWhere(db, task, whereClause),
+    count: () => countWhere(db, task, countWhereClause),
   });
   if (readIntent === "count") {
     return { data: [], count };
@@ -304,7 +342,8 @@ export const taskList = async (
     taskSubtaskCounts(db, ids),
   ]);
 
-  const data = await withDisplayImages(db, "task", rows, (row) => {
+  const hydratedRows = await hydrateTaskInheritanceRows(db, rows);
+  const data = await withDisplayImages(db, "task", hydratedRows, (row) => {
     const counts = subtaskCounts.get(row.id);
     return dbTaskToAPI(
       row,

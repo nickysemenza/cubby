@@ -128,7 +128,7 @@ describe("shared purchase-import prepare and commit", () => {
       exactIdentifierMatch: true,
     });
 
-    const commitInput = commitPurchaseImportInput.parse({
+    const missingDefaultsInput = commitPurchaseImportInput.parse({
       _runExecution: {
         runPublicId: run.publicId,
         operationId: "commit:amazon-order-1",
@@ -144,6 +144,24 @@ describe("shared purchase-import prepare and commit", () => {
           },
         },
       ],
+    });
+    await expect(
+      commitPurchaseImport(ctx.db, missingDefaultsInput, ctx.actor),
+    ).rejects.toMatchObject({
+      reason: "CONSTRAINT_VIOLATION",
+      message:
+        "A principal Expense requires a trade from the Expense, its Purchase, or its effective Project.",
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: purchase.id })
+        .from(purchase)
+        .where(eq(purchase.orderId, "111-2222222-3333333")),
+    ).toHaveLength(0);
+
+    const commitInput = commitPurchaseImportInput.parse({
+      ...missingDefaultsInput,
+      defaultTrade: "other",
     });
     const first = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
     const replay = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);

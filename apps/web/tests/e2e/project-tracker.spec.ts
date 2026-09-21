@@ -44,3 +44,22 @@ test("mobile expense quick-add renders as a bottom sheet and still submits", asy
   await expect(sheet).not.toBeVisible();
   await expect(page.getByText(name).first()).toBeVisible();
 });
+
+test("task quick-add requires a deliberate trade and saves assignment modes", async ({
+  page,
+}) => {
+  const name = `e2e classified task ${Date.now()}`;
+  await page.goto("/tasks");
+  await waitForAppHydration(page);
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Name", { exact: true }).fill(name);
+  await expect(dialog.getByPlaceholder("Select trade")).toBeVisible();
+  await dialog.getByPlaceholder("Select trade").click();
+  await page
+    .getByRole("option", { name: "Electrical & Lighting", exact: true })
+    .click();
+  await dialog.getByRole("button", { name: /^Create$/ }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText(name).first()).toBeVisible();
+});

@@ -24,6 +24,10 @@ import {
 import { wholeCentAmount } from "@cubby/schemas/money";
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { z } from "zod";
+import {
+  optionalFieldResolutionsSchema,
+  optionalProjectAllocationsSchema,
+} from "@cubby/schemas/field-resolution";
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
@@ -114,6 +118,24 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "projectAllocations",
+        kind: "json",
+        validation: {
+          read: optionalProjectAllocationsSchema,
+          create: null,
+          update: null,
+        },
+      },
       {
         key: "name",
         kind: "text",
@@ -210,6 +232,7 @@ export default defineEntity({
       {
         key: "trade",
         kind: "enum",
+        nullable: true,
         control: {
           kind: "select",
           section: "details",
@@ -218,10 +241,35 @@ export default defineEntity({
           },
         },
         display: { list: true, detail: true, detailOrder: 60 },
+        resolution: {
+          reset: { trade: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "expense.effective-trade",
+          description:
+            "An expense trade override wins; otherwise the expense uses its purchase default trade, then its effective project's default trade.",
+          projections: {
+            list: "fieldResolutions.trade.value",
+            detail: "fieldResolutions.trade.value",
+            summary: "fieldResolutions.trade.value",
+          },
+          sourceDependencies: [
+            { path: "fieldResolutions.trade.sourceEntity", label: "Source" },
+            {
+              path: "fieldResolutions.trade.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.trade.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
-          read: tradeSchema,
-          create: tradeSchema,
-          update: tradeSchema.optional(),
+          read: tradeSchema.nullable(),
+          create: tradeSchema.nullable().default(null),
+          update: tradeSchema.nullable().optional(),
         },
       },
       {
@@ -278,6 +326,34 @@ export default defineEntity({
           renderer: { detail: "expense-project" },
           detailOrder: 120,
           columnId: "project",
+        },
+        resolution: {
+          reset: { projectId: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "expense.effective-project",
+          description:
+            "A principal expense project override wins; otherwise the expense uses its purchase's default project, then Household for food or Unassigned. Purchase-level adjustments are allocated across the purchase's principal project totals.",
+          projections: {
+            list: "fieldResolutions.projectId.value",
+            detail: "fieldResolutions.projectId.value",
+            summary: "fieldResolutions.projectId.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.projectId.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.projectId.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.projectId.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
         },
         validation: {
           read: projectShortcode.nullable(),
@@ -749,6 +825,8 @@ export default defineEntity({
       update: ["full", "planned", "cost", "date", "project", "product"],
     },
     output: [
+      "fieldResolutions",
+      "projectAllocations",
       "id",
       "name",
       "cost",

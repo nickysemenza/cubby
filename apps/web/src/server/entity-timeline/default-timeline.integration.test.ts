@@ -1,15 +1,17 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { taskCreateInput } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { parseEntityTimelineInput } from "~/entities/generated/entity-timelines.gen";
 import { householdLocalDate } from "~/lib/household-date";
+import { task } from "~/server/db/schema";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getDb } from "~/server/repo/database-helpers";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { defaultTimeline, TIMELINE_ROW_CAP } from "./default-timeline";
@@ -186,13 +188,18 @@ describe("default entity timeline", () => {
 
   it("caps the scope at the row cap and says so in both notes and stats", async () => {
     const db = ctx.db;
-    for (let index = 0; index <= TIMELINE_ROW_CAP; index += 1) {
-      await insertWithShortcode(db, "task", {
-        name: `Filler ${index}`,
-        status: "not_started",
-        trade: "other",
-      });
-    }
+    // This exercises timeline capping; one batch avoids spending the test's
+    // time budget on 501 unrelated fixture-creation round trips.
+    await getDb(db)
+      .insert(task)
+      .values(
+        Array.from({ length: TIMELINE_ROW_CAP + 1 }, (_, index) => ({
+          shortcode: testShortcode("task", `cap-${index}`),
+          name: `Filler ${index}`,
+          status: "not_started" as const,
+          trade: "other" as const,
+        })),
+      );
     const out = await timeline({ order: "desc" });
     expect(out.notes).toEqual([
       `Showing the newest ${TIMELINE_ROW_CAP} of ${TIMELINE_ROW_CAP + 1} matching records; narrow the filters to see the rest.`,

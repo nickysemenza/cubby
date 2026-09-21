@@ -56,7 +56,7 @@ interface PartDraft {
   name: string;
   cost: string;
   costType: CostType;
-  trade: Trade;
+  trade: Trade | null;
   projectId: string | null;
   keepProduct: boolean;
   productQuantity: string;
@@ -277,13 +277,15 @@ export function SplitExpenseDialog({
                   items={tradeOptions}
                   value={part.trade}
                   onValueChange={(next) => {
-                    const parsed = tradeSchema.safeParse(next);
+                    const parsed = tradeSchema.nullable().safeParse(next);
                     if (parsed.success) {
                       updatePart(part.key, { trade: parsed.data });
                     }
                   }}
                   className="w-40"
                   label={`Part ${index + 1} trade`}
+                  placeholder="Inherited trade"
+                  clearable
                   compact
                 />
                 <div className="w-48">

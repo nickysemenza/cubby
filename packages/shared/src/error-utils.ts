@@ -101,6 +101,7 @@ export const AppErrors = {
   // `ai.suggestFields` was asked for a target that isn't declared
   // `control.suggest` on the entity's manifest.
   SUGGEST_FIELD_UNKNOWN: "BAD_REQUEST",
+  SUGGEST_FIELD_FORBIDDEN: "BAD_REQUEST",
   // Caller tried to attach a product as a component of itself.
   PRODUCT_COMPONENT_SELF_REFERENCE: "BAD_REQUEST",
   // Attach-side counterpart of PRODUCT_MERGE_COMPONENT_CYCLE: the DB CHECK only

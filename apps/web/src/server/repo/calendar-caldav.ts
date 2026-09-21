@@ -228,6 +228,12 @@ export async function executeCalDavWrite(
       });
       return { shortcode: created.item.id };
     }
+    if (!event.trade) {
+      throw new CalDavError(
+        422,
+        "Task creation requires a valid X-CUBBY-TRADE classification. Create the task in Cubby first if your calendar cannot provide it.",
+      );
+    }
     const created = await executeEntity(caldavContext(db, write.actorId), {
       action: "create",
       entity: "task",
@@ -236,7 +242,9 @@ export async function executeCalDavWrite(
         dueDate: event.startDate,
         dueEndDate: shiftDate(event.endDateExclusive, -1),
         status: write.collection === "completed-tasks" ? "done" : "not_started",
-        trade: "other",
+        trade: event.trade,
+        projectMode: "inherit",
+        subjectProductMode: "inherit",
         projectId: null,
         subjectProductId: null,
         parentTaskId: null,

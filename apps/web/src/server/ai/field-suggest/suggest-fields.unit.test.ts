@@ -237,6 +237,220 @@ describe("suggestFields", () => {
     expect(jev).not.toHaveBeenCalled();
   });
 
+  it.each(["tax", "auto", null])(
+    "forbids project suggestions for adjustment drafts with line kind %s",
+    async (lineKind) => {
+      const jev = jevPortPicking("Kitchen Remodel");
+      await expect(
+        suggestFields(
+          fakeDb,
+          {
+            basisMode: "provided",
+            entity: "expense",
+            targets: ["projectId"],
+            basis: { name: "Sales tax", lineKind },
+          },
+          { jev, registry: { "expense.projectId": fakeProjectSpec() } },
+        ),
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        reason: "SUGGEST_FIELD_FORBIDDEN",
+      });
+      expect(jev).not.toHaveBeenCalled();
+    },
+  );
+
+  it("resolves automatic principal line kinds before asking for projects", async () => {
+    const result = await suggestFields(
+      fakeDb,
+      {
+        basisMode: "suggested",
+        entity: "expense",
+        targets: ["projectId"],
+        basis: { name: "Kitchen shelf", lineKind: "auto" },
+      },
+      {
+        jev: jevPortPicking("Kitchen Remodel"),
+        registry: { "expense.projectId": fakeProjectSpec() },
+      },
+    );
+    expect(result.suggestions.projectId?.value).toBe("PRJ-AAAA");
+  });
+
+  it("excludes an inherited target using the authoritative draft snapshot", async () => {
+    const jev = jevPortPicking("electrical:");
+    const fieldResolutions = {
+      trade: {
+        mode: "inherit" as const,
+        storedValue: null,
+        value: "plumbing",
+        fallbackValue: "plumbing",
+        source: "Project default",
+        sourceEntity: { entityType: "project" as const, entityId: "PRJ-AAAA" },
+        matchesFallback: true,
+        canReset: false,
+      },
+    };
+    const result = await suggestFields(
+      fakeDb,
+      {
+        basisMode: "suggested",
+        entity: "expense",
+        targets: ["trade"],
+        basis: { name: "replace a valve", trade: null },
+      },
+      {
+        jev,
+        resolveInheritance: async () => fieldResolutions,
+      },
+    );
+
+    expect(result).toEqual({
+      suggestions: {},
+      fieldResolutions,
+      eligibleTargets: [],
+    });
+    expect(jev).not.toHaveBeenCalled();
+  });
+
+  it("suggests only unresolved inherited targets and uses effective inherited basis", async () => {
+    const jev = jevPortPicking("electrical:");
+    const fieldResolutions = {
+      projectId: {
+        mode: "inherit" as const,
+        storedValue: null,
+        value: "PRJ-AAAA",
+        fallbackValue: "PRJ-AAAA",
+        source: "Parent task",
+        sourceEntity: { entityType: "task" as const, entityId: "TSK-PARENT" },
+        matchesFallback: true,
+        canReset: false,
+      },
+      trade: {
+        mode: "inherit" as const,
+        storedValue: null,
+        value: null,
+        fallbackValue: null,
+        source: "No trade source",
+        sourceEntity: null,
+        matchesFallback: true,
+        canReset: false,
+      },
+    };
+    const result = await suggestFields(
+      fakeDb,
+      {
+        basisMode: "suggested",
+        entity: "task",
+        targets: ["projectId", "trade"],
+        basis: { name: "replace panel", projectId: null },
+      },
+      {
+        jev,
+        resolveInheritance: async () => fieldResolutions,
+        resolveLabels: async () => new Map([["PRJ-AAAA", "Kitchen Remodel"]]),
+        registry: { "task.projectId": fakeProjectSpec() },
+      },
+    );
+
+    expect(result.eligibleTargets).toEqual(["trade"]);
+    expect(result.suggestions.projectId).toBeUndefined();
+    expect(result.suggestions.trade?.value).toBe("electrical");
+    expect(jev.mock.calls[0]?.[0].state).toContain("Kitchen Remodel");
+  });
+
+  it("allows provided alternatives for explicit None without using a sibling proposal as evidence", async () => {
+    const jev = jevPortPicking("Kitchen Remodel", "electrical:");
+    const fieldResolutions = {
+      projectId: {
+        mode: "none" as const,
+        storedValue: null,
+        value: null,
+        fallbackValue: "PRJ-BBBB",
+        source: "Task override",
+        sourceEntity: null,
+        matchesFallback: false,
+        canReset: true,
+      },
+      trade: {
+        mode: "inherit" as const,
+        storedValue: null,
+        value: null,
+        fallbackValue: null,
+        source: "No trade source",
+        sourceEntity: null,
+        matchesFallback: true,
+        canReset: false,
+      },
+    };
+    const result = await suggestFields(
+      fakeDb,
+      {
+        basisMode: "provided",
+        entity: "task",
+        targets: ["projectId", "trade"],
+        basis: { name: "replace panel", projectId: null },
+      },
+      {
+        jev,
+        resolveInheritance: async () => fieldResolutions,
+        resolveLabels: async () => new Map([["PRJ-AAAA", "Kitchen Remodel"]]),
+        registry: { "task.projectId": fakeProjectSpec() },
+      },
+    );
+
+    expect(result.eligibleTargets).toEqual(["projectId", "trade"]);
+    expect(result.suggestions.projectId?.value).toBe("PRJ-AAAA");
+    const tradeCall = jev.mock.calls.find(([call]) =>
+      Object.values(call.questions.selection.criteria).some((label) =>
+        label.startsWith("electrical:"),
+      ),
+    );
+    expect(tradeCall?.[0].state).not.toContain("Kitchen Remodel");
+  });
+
+  it("chains an untouched unresolved suggested project into an unresolved trade", async () => {
+    const jev = jevPortPicking("Kitchen Remodel", "electrical:");
+    const unresolved = {
+      mode: "inherit" as const,
+      storedValue: null,
+      value: null,
+      fallbackValue: null,
+      source: "No source",
+      sourceEntity: null,
+      matchesFallback: true,
+      canReset: false,
+    };
+    const result = await suggestFields(
+      fakeDb,
+      {
+        basisMode: "suggested",
+        entity: "task",
+        targets: ["projectId", "trade"],
+        basis: { name: "replace panel", projectId: null },
+      },
+      {
+        jev,
+        resolveInheritance: async () => ({
+          projectId: unresolved,
+          trade: unresolved,
+        }),
+        resolveLabels: async () => new Map([["PRJ-AAAA", "Kitchen Remodel"]]),
+        registry: { "task.projectId": fakeProjectSpec() },
+      },
+    );
+
+    expect(result.eligibleTargets).toEqual(["projectId", "trade"]);
+    expect(result.suggestions.projectId?.value).toBe("PRJ-AAAA");
+    expect(result.suggestions.trade?.value).toBe("electrical");
+    const tradeCall = jev.mock.calls.find(([call]) =>
+      Object.values(call.questions.selection.criteria).some((label) =>
+        label.startsWith("electrical:"),
+      ),
+    );
+    expect(tradeCall?.[0].state).toContain("Kitchen Remodel");
+  });
+
   it("chains a resolved target's value into a sibling target's basis, uses a client value when sent, and carries the resolved display name into the sibling's subject", async () => {
     const jev = jevPortPicking("Kitchen Remodel", "electrical:");
     const resolveLabels = vi.fn(

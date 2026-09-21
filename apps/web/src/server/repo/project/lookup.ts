@@ -4,6 +4,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 import type {
   ProjectFilters,
   ProjectOptionsOut,
@@ -19,16 +20,23 @@ import {
   countWhere,
   executeListQueryWithCount,
   getDb,
+  formatSearchTerm,
+  textArrayMatches,
   idSetPresence,
   type ListReadIntent,
   notDeleted,
   presenceCondition,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
+import {
+  effectiveProjectLocationsSql,
+  effectiveTaskProjectSql,
+} from "~/server/repo/task-project-inheritance";
 
 import { projectContentDates, projectDependencyIds } from "./analytics";
 import {
@@ -219,7 +227,15 @@ export const buildProjectListQuery = async (
   // `search` (name ∪ notes ∪ locations), `status`, `kind` and `location` (an
   // overlap over the `locations` array) are declared stored filters — applied
   // by `projectScaffold.where` before the conditions below.
-  const whereClause = projectScaffold.where(filters, [
+  const whereClause = projectScaffold.where({ ...filters, search: undefined }, [
+    or(
+      formatSearchTerm(project.name, filters.search),
+      formatSearchTerm(project.notes, filters.search),
+      textArrayMatches(
+        effectiveProjectLocationsSql(sql`${project.id}`),
+        filters.search,
+      ),
+    ),
     ...auditDateWhereConditions(project, filters),
     ...relatedWhereConditions("project", filters, project.id),
     dashboardProjectDateCondition(filters),
@@ -231,6 +247,12 @@ export const buildProjectListQuery = async (
     completionIds ? inArray(project.id, completionIds) : undefined,
     filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
     parentCondition,
+    filters.location && [filters.location].flat().length > 0
+      ? sql`${effectiveProjectLocationsSql(sql`${project.id}`)} && ARRAY[${sql.join(
+          [filters.location].flat().map((location) => sql`${location}`),
+          sql`, `,
+        )}]::text[]`
+      : undefined,
     idSetPresence(
       project.id,
       filters.imagePresenceFilter,
@@ -238,48 +260,26 @@ export const buildProjectListQuery = async (
     ),
   ]);
 
-  // `startDate` is an override that is usually null now that the window is
-  // derived, so sorting on the raw column would sink most of the table into a
-  // null bucket. Sort on the effective start instead: the override when set,
-  // else the project's own earliest dated task/expense.
-  //
-  // APPROXIMATION: non-recursive. A parent with no override and no own content
-  // still sorts as null even when its children are dated — matching the true
-  // recursive fold would need a recursive CTE, and at this scale (75 projects,
-  // 15 of them children) it moves nothing. Everything *displayed* comes from
-  // `dates.effectiveStart`, which is fully recursive; this only orders rows.
-  //
-  // `sql.raw` with the alias spelled out by hand, NOT a `sql` template over
-  // Drizzle column refs — same pattern as `resolveProductSort`
-  // (product/crud.ts) and location/crud.ts's "parent" resolver, for the same
-  // reason `buildDashboardProjectWhere` had to drop correlated `EXISTS`
-  // (dashboard-shared.ts). This is fed to `query.project.findMany`, whose
-  // alias mapper rewrites EVERY column ref inside the clause — including ones
-  // belonging to Task/Expense — to the root alias, emitting
-  // `min("project"."dueDate") from "Task"` and a self-referential
-  // `"project"."projectId" = "project"."id"`. That is not a subtle ordering
-  // bug: the query throws, and `startDate` is this table's DEFAULT sort.
-  // Exercised by project.integration.test.ts's "sorts by effective start".
-  //
-  // The `deletedAt IS NULL` guards below are hand-written for the same reason
-  // and are load-bearing — the `cubby/require-soft-delete-filter` oxlint rule
-  // only scans `exists`/`notExists` bodies, so it cannot see them.
-  //
-  // The two content sources are combined with LEAST, not chained into the
-  // coalesce: a project with both tasks and expenses must sort by the
-  // EARLIER of the two, and `coalesce(taskMin, expenseMin)` would take the
-  // task min whenever any task exists — silently ignoring an earlier expense
-  // and disagreeing with the `dates.effectiveStart` the row displays.
-  // (LEAST ignores NULL args and is NULL only when all of them are.)
+  // Stop at explicit starts: descendants behind an override must not influence
+  // an ancestor's folded date. Raw aliases avoid Drizzle's root-alias rewrite.
   const effectiveStartSortSql = (direction: SortParams["direction"]) =>
-    sql.raw(
-      `coalesce("project"."startDate", LEAST(` +
-        `(SELECT min(t."dueDate") FROM "Task" t ` +
-        `WHERE t."projectId" = "project"."id" AND t."deletedAt" IS NULL), ` +
-        `(SELECT min(pu."date") FROM "Expense" pu ` +
-        `WHERE pu."projectId" = "project"."id" AND pu."deletedAt" IS NULL))) ` +
-        `${direction === "asc" ? "asc" : "desc"} nulls last`,
-    );
+    sql`(
+      WITH RECURSIVE date_tree AS (
+        SELECT p."id", p."startDate", 0 AS depth
+        FROM "Project" p WHERE p."id" = "project"."id" AND p."deletedAt" IS NULL
+        UNION ALL
+        SELECT child."id", child."startDate", parent.depth + 1
+        FROM "Project" child JOIN date_tree parent ON child."parentProjectId" = parent."id"
+        WHERE child."deletedAt" IS NULL AND parent."startDate" IS NULL
+          AND parent.depth < ${MAX_PROJECT_TREE_DEPTH}
+      ), allocations AS (${expenseProjectAllocationSql()})
+      SELECT min(coalesce(node."startDate", LEAST(
+        (SELECT min(coalesce(t."dueEndDate", t."dueDate")) FROM "Task" t
+         WHERE ${effectiveTaskProjectSql("t")} = node."id" AND t."deletedAt" IS NULL),
+        (SELECT min(e."date") FROM "Expense" e JOIN allocations a ON a."expenseId" = e."id"
+         WHERE a."projectId" = node."id" AND e."deletedAt" IS NULL)
+      ))) FROM date_tree node
+    ) ${sql.raw(direction === "asc" ? "asc" : "desc")} nulls last`;
   const orderByArray = projectScaffold.orderBy(
     sorts,
     {

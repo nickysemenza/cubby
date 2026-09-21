@@ -104,6 +104,18 @@ const invalidatesSomething = (tag: OperationCacheTag) =>
   liveDeclaredTags.some((candidate) => isPrefixOf(tag, candidate));
 
 describe("operation cache tags", () => {
+  it("invalidates field suggestions when an inheritance source changes", () => {
+    for (const entity of [
+      "project",
+      "task",
+      "purchase",
+      "product",
+      "expense",
+    ]) {
+      expect(entityRipple(entity)).toContainEqual(["ai", "suggestFields"]);
+    }
+  });
+
   it("loads the whole catalog", () => {
     expect(descriptors.length).toBeGreaterThan(200);
     expect(declaredQueryTags.length).toBeGreaterThan(100);

@@ -15,6 +15,7 @@
     "./entity-read-media": "./src/entity-read-media.ts",
     "./import-recipe": "./src/import-recipe.ts",
     "./entity": "./src/entity.ts",
+    "./field-resolution": "./src/field-resolution.ts",
     "./entity-core": "./src/entity-core.ts",
     "./entity-definitions/definition": "./src/entity-definitions/definition.ts",
     "./entity-manifest": "./src/entity-manifest.ts",

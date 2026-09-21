@@ -1,3 +1,4 @@
+import { tradeSchema } from "./task-fields";
 import { z } from "zod";
 import { productCategory } from "./product-fields";
 import { externalIdKind, externalIdSource } from "./external-id";
@@ -7,6 +8,7 @@ import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
   productShortcode,
+  projectShortcode,
   purchaseShortcode,
   vendorShortcode,
 } from "./identifier-fields";
@@ -721,6 +723,8 @@ export const purchaseImportRunScope = z.object({
 export type PurchaseImportRunScope = z.infer<typeof purchaseImportRunScope>;
 
 export const importWriterInput = z.object({
+  defaultTrade: tradeSchema.optional(),
+  defaultProjectId: z.uuid().optional(),
   runId: z.uuid(),
   ledgerPartyId: z.uuid(),
   vendorId: z.uuid(),
@@ -867,6 +871,8 @@ export const preparedProductResolution = z.discriminatedUnion("kind", [
 export const commitPurchaseImportInput = z.object({
   _runExecution: purchaseImportRunExecution,
   prepareOperationId: importOperationId,
+  defaultTrade: tradeSchema.optional(),
+  defaultProjectId: projectShortcode.optional(),
   resolutions: z
     .array(
       z.object({

@@ -5,6 +5,7 @@ import {
   mealTypeValues,
   type MealType,
 } from "@cubby/schemas/meal-classification";
+import { tradeSchema } from "@cubby/schemas/task-fields";
 import { TZDate } from "@date-fns/tz";
 import ICAL from "ical.js";
 import { z } from "zod";
@@ -223,6 +224,12 @@ export function parseCalDavEvent(
     });
   if (!identity.success) invalid("UID and SUMMARY are required");
   const { uid, summary } = identity.data;
+  const rawTrade = event.getFirstPropertyValue("x-cubby-trade");
+  const classification =
+    rawTrade == null ? undefined : tradeSchema.safeParse(rawTrade);
+  if (classification && !classification.success)
+    invalid("X-CUBBY-TRADE must be a valid Cubby trade");
+  const trade = classification?.success ? classification.data : undefined;
   const start = timeProperty(event, "dtstart");
   if (!start) invalid("DTSTART is required");
   if (start.isDate) {
@@ -233,6 +240,7 @@ export function parseCalDavEvent(
       invalid("an all-day meal must be one day");
     return {
       uid,
+      trade,
       summary: summary.trim(),
       startDate,
       endDateExclusive,
@@ -252,6 +260,7 @@ export function parseCalDavEvent(
   );
   return {
     uid,
+    trade,
     summary: summary.trim(),
     startDate,
     endDateExclusive,

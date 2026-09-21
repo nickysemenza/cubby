@@ -8,6 +8,7 @@ import type {
   ProjectId,
   PurchaseId,
   RecipeId,
+  TaskId,
   VendorId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -41,12 +42,19 @@ import {
 import {
   notDeleted,
   unwrapDb,
+  uuidArrayParam,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import {
   getOrphanedSearchDocumentRefs,
   type SearchDocumentCursor,
 } from "~/server/repo/search-document";
+
+import { expenseProjectAllocationSql } from "./expense-project-allocation";
+import {
+  effectiveTaskProjectSql,
+  effectiveTaskSubjectProductSql,
+} from "./task-project-inheritance";
 
 async function softDeleteEntityEmbeddingsTx(
   tx: DrizzleTransaction,
@@ -151,11 +159,13 @@ export async function findTaskEmbeddingRefsForProducts(
   productIds: ProductId[],
 ): Promise<SearchableEntityRef[]> {
   if (productIds.length === 0) return [];
-  const rows = await unwrapDb(db).query.task.findMany({
-    where: and(inArray(task.subjectProductId, productIds), notDeleted(task)),
-    columns: { id: true },
-  });
-  return rows.map((row) => ({ entityType: "task", entityId: row.id }));
+  const result = await unwrapDb(db).execute<SearchableEntityRef>(sql`
+    SELECT 'task' AS "entityType", t."id"::text AS "entityId" FROM "Task" t
+    WHERE t."deletedAt" IS NULL AND ${effectiveTaskSubjectProductSql("t")} = ANY(${uuidArrayParam(productIds)})
+    UNION ALL
+    SELECT 'expense', e."id"::text FROM "Expense" e WHERE e."deletedAt" IS NULL AND e."productId" = ANY(${uuidArrayParam(productIds)})
+  `);
+  return result.rows;
 }
 
 /** Wishes embed candidate product identity, so Product identity edits fan out. */
@@ -320,26 +330,19 @@ export async function findTrackerEmbeddingRefsForProjects(
   projectIds: ProjectId[],
 ): Promise<SearchableEntityRef[]> {
   if (projectIds.length === 0) return [];
-  const [tasks, expenses] = await Promise.all([
-    unwrapDb(db).query.task.findMany({
-      where: and(inArray(task.projectId, projectIds), notDeleted(task)),
-      columns: { id: true },
-    }),
-    unwrapDb(db).query.expense.findMany({
-      where: and(inArray(expense.projectId, projectIds), notDeleted(expense)),
-      columns: { id: true },
-    }),
-  ]);
-  return [
-    ...tasks.map((row): SearchableEntityRef => ({
-      entityType: "task",
-      entityId: row.id,
-    })),
-    ...expenses.map((row): SearchableEntityRef => ({
-      entityType: "expense",
-      entityId: row.id,
-    })),
-  ];
+  const result = await unwrapDb(db).execute<SearchableEntityRef>(sql`
+    WITH RECURSIVE affected AS (
+      SELECT p."id" FROM "Project" p WHERE p."id" = ANY(${uuidArrayParam(projectIds)})
+      UNION
+      SELECT p."id" FROM "Project" p JOIN affected a ON p."parentProjectId" = a."id" WHERE p."deletedAt" IS NULL
+    )
+    SELECT 'project' AS "entityType", p."id"::text AS "entityId" FROM "Project" p JOIN affected a ON a."id" = p."id" WHERE p."deletedAt" IS NULL
+    UNION ALL
+    SELECT 'task', t."id"::text FROM "Task" t WHERE t."deletedAt" IS NULL AND ${effectiveTaskProjectSql("t")} IN (SELECT "id" FROM affected)
+    UNION ALL
+    SELECT DISTINCT 'expense', allocation."expenseId"::text FROM (${expenseProjectAllocationSql()}) allocation WHERE allocation."projectId" IN (SELECT "id" FROM affected)
+  `);
+  return result.rows;
 }
 
 /** Purchases and their downstream ledger/settlement records embed vendor identity. */
@@ -451,10 +454,17 @@ export async function findCommercialEmbeddingRefsForExpenses(
       and(eq(purchase.vendorId, vendor.id), notDeleted(vendor)),
     )
     .where(and(inArray(expense.id, expenseIds), notDeleted(expense)));
-  return rows.flatMap((row): SearchableEntityRef[] => [
-    { entityType: "purchase", entityId: row.purchaseId },
-    { entityType: "vendor", entityId: row.vendorId },
-  ]);
+  const siblings = await findEmbeddingRefsForPurchases(
+    db,
+    rows.map((row) => row.purchaseId),
+  );
+  return [
+    ...siblings,
+    ...rows.flatMap((row): SearchableEntityRef[] => [
+      { entityType: "purchase", entityId: row.purchaseId },
+      { entityType: "vendor", entityId: row.vendorId },
+    ]),
+  ];
 }
 
 const RECONCILE_PAGE_SIZE = 500;
@@ -519,4 +529,16 @@ export async function selectRecentlySoftDeletedSearchRefs(
         ? { entityType: last.entityType, entityId: last.entityId }
         : null,
   };
+}
+
+export async function findChildTaskEmbeddingRefs(
+  db: Database | DrizzleTransaction,
+  parentIds: TaskId[],
+): Promise<SearchableEntityRef[]> {
+  if (parentIds.length === 0) return [];
+  const rows = await unwrapDb(db).query.task.findMany({
+    where: and(inArray(task.parentTaskId, parentIds), notDeleted(task)),
+    columns: { id: true },
+  });
+  return rows.map((row) => ({ entityType: "task", entityId: row.id }));
 }

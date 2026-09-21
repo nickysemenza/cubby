@@ -1,6 +1,8 @@
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 
 import { FieldSuggestionHint } from "./field-suggestion-hint";
+import { useFieldSuggestionContext } from "./field-suggestion-provider";
+import { FormFieldResolution } from "./form-field-resolution";
 import { useAutoFieldSuggestion } from "./use-auto-field-suggestion";
 
 /**
@@ -24,6 +26,7 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
   valueKind?: "id" | "item";
   disabled?: boolean;
 }) {
+  const context = useFieldSuggestionContext();
   const {
     suggestion,
     applied,
@@ -40,14 +43,18 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
     disabled,
   });
   return (
-    <FieldSuggestionHint
-      currentLabel={currentLabel}
-      currentValue={currentValue}
-      questionKey={questionKey}
-      suggestion={suggestion}
-      applied={applied}
-      pending={isPending}
-      onApply={apply}
-    />
+    <>
+      <FormFieldResolution form={form} field={field} />
+      <FieldSuggestionHint
+        currentLabel={currentLabel}
+        currentValue={currentValue}
+        questionKey={questionKey}
+        suggestion={suggestion}
+        applied={applied}
+        pending={isPending}
+        onApply={apply}
+        alternative={context?.isAlternative(field) ?? false}
+      />
+    </>
   );
 }

@@ -28,6 +28,7 @@ import {
 } from "~/server/db/schema";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -210,8 +211,9 @@ async function applyFix(
       lineKind: "principal",
       lineBasis: "item_line",
       costType: "materials",
-      trade: "other",
+      trade: null,
     });
+    await validateExpenseInheritance(tx, row);
     await logAuditEntries(tx, actor, [
       { entityType: "expense", entityId: row.id, action: "create" },
     ]);
@@ -246,11 +248,13 @@ async function applyFix(
       lineKind: line.lineKind,
       lineBasis: "item_line",
       costType: costTypeSchema.parse(aggregate.costType ?? "materials"),
-      trade: tradeSchema.parse(aggregate.tradeId ?? "other"),
-      projectId: aggregate.projectId
-        ? parseEntityId("project", aggregate.projectId)
-        : null,
+      trade: tradeSchema.nullable().parse(aggregate.tradeId ?? null),
+      projectId:
+        line.lineKind === "principal" && aggregate.projectId
+          ? parseEntityId("project", aggregate.projectId)
+          : null,
     });
+    await validateExpenseInheritance(tx, row);
     audit.push({
       entityType: "expense" as const,
       entityId: row.id,

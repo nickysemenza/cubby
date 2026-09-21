@@ -134,8 +134,10 @@ import {
   resolveAllPresent,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
 
 import { hydrateImageReadProjection } from "../image-read-projection";
+import { validateLiveEffectiveTrades } from "../inheritance-validation";
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,
@@ -601,12 +603,12 @@ export const buildProductWhere = async (
     filters.taskDueTo,
   );
   const productIdsWithFilteredTasks = dbClient
-    .select({ productId: task.subjectProductId })
+    .select({ productId: effectiveTaskSubjectProductSql() })
     .from(task)
     .where(
       and(
         notDeleted(task),
-        isNotNull(task.subjectProductId),
+        isNotNull(effectiveTaskSubjectProductSql()),
         taskStatuses?.length ? inArray(task.status, taskStatuses) : undefined,
         filters.taskOpenOnly ? ne(task.status, "done") : undefined,
         filters.taskDueFrom
@@ -1752,6 +1754,9 @@ export const updateProduct = async (
       const updated = hasScalarChanges
         ? await updateLiveAndReturn(tx, product, updateData, id)
         : beforeProduct;
+
+      if (updated.category !== beforeProduct.category)
+        await validateLiveEffectiveTrades(tx);
 
       // Conversion coverage and inventory valuation are invalidated only after
       // mappings land; both are projections of the resulting conversion graph.

@@ -24,6 +24,7 @@ function projectFixture(): ProjectOut {
     status: "planning",
     kind: null,
     locations: [],
+    defaultTrade: null,
     costEstimate: null,
     parentProjectId: null,
     startDate: null,

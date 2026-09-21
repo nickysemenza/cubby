@@ -9,6 +9,7 @@ import {
   expense,
   image,
   inventoryEntry,
+  location,
   product,
   productImage,
   purchase,
@@ -438,24 +439,27 @@ describe("entity graph repository", () => {
   });
 
   it("batches a capped 25-root graph without per-record queries", async () => {
-    const products = await Promise.all(
-      Array.from({ length: 25 }, (_, index) =>
-        createProduct(
-          ctx.db,
-          makeProductInput({ name: `Batched graph product ${index}` }),
-          ctx.actor,
-        ),
-      ),
-    );
-    const locations = await Promise.all(
-      Array.from({ length: 20 }, (_, index) =>
-        createLocation(
-          ctx.db,
-          makeLocationInput({ name: `Batched graph location ${index}` }),
-          ctx.actor,
-        ),
-      ),
-    );
+    // Graph batching is measured below; seed the population in batches so
+    // fixture hydration does not consume the query contract's time budget.
+    const products = await getDb(ctx.db)
+      .insert(product)
+      .values(
+        Array.from({ length: 25 }, (_, index) => ({
+          shortcode: testShortcode("product", `graph-${index}`),
+          name: `Batched graph product ${index}`,
+          manufacturer: "Fixture manufacturer",
+        })),
+      )
+      .returning({ entityId: product.id, id: product.shortcode });
+    const locations = await getDb(ctx.db)
+      .insert(location)
+      .values(
+        Array.from({ length: 20 }, (_, index) => ({
+          shortcode: testShortcode("location", `graph-${index}`),
+          name: `Batched graph location ${index}`,
+        })),
+      )
+      .returning({ entityId: location.id });
     const vendorId = await findOrCreateVendor(ctx.db, "Batched graph vendor");
     const purchases = await getDb(ctx.db)
       .insert(purchase)

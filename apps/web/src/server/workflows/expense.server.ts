@@ -43,7 +43,10 @@ import {
   selectedExpenseFacetValues,
   type ExpenseFacetId,
 } from "~/server/repo/expense/analyze";
-import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
+import {
+  buildExpenseWhereClause,
+  resolveExpenseProjectAllocationScope,
+} from "~/server/repo/expense/lookup";
 import {
   confirmInventoryExpenseBeneficiary,
   loadEffectiveInventoryOwnershipById,
@@ -170,16 +173,23 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
       ? buildExpenseWhereClause(context, comparison.filters)
       : Promise.resolve(undefined),
   )
+  .call("projectScope", ({ context }, { input }) =>
+    resolveExpenseProjectAllocationScope(context, input.filters),
+  )
   .parallel("periods", 2, {
-    current: ({ context }, { input, currentWhere }) =>
+    current: ({ context }, { input, currentWhere, projectScope }) =>
       loadExpenseAnalysisPeriod(
         context,
         expenseAnalysisWhere(currentWhere, input),
         currentWhere,
         input.rowDimension,
         input.columnDimension,
+        projectScope,
       ),
-    previous: ({ context }, { input, comparison, previousWhere }) =>
+    previous: (
+      { context },
+      { input, comparison, previousWhere, projectScope },
+    ) =>
       comparison
         ? loadExpenseAnalysisPeriod(
             context,
@@ -187,6 +197,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
             previousWhere,
             input.rowDimension,
             input.columnDimension,
+            projectScope,
           )
         : Promise.resolve(null),
   })
@@ -204,13 +215,19 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
       branch
         .parallel("causes", 2, {
           current: ({ context }, { input }) =>
-            loadExpenseAnalysisCauses(context, input.input, input.currentWhere),
+            loadExpenseAnalysisCauses(
+              context,
+              input.input,
+              input.currentWhere,
+              input.projectScope,
+            ),
           previous: ({ context }, { input }) =>
             input.comparison
               ? loadExpenseAnalysisCauses(
                   context,
                   input.input,
                   input.previousWhere,
+                  input.projectScope,
                 )
               : Promise.resolve(null),
         })

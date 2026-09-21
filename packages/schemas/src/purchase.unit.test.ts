@@ -240,10 +240,9 @@ describe("reconcilePurchase", () => {
 });
 
 /**
- * The MCP `split_expense` cue: `originalCost`/`partsSum`/`delta`. A cue, not a
- * gate — `splitExpense` itself never validates the sum, and this function
- * doesn't either; it only reports the gap the way `reconcilePurchase` reports
- * `statedTotal` vs. `expenseTotal`.
+ * The MCP `split_expense` arithmetic: `originalCost`/`partsSum`/`delta`. This
+ * pure helper describes any inputs; the priced write path separately requires
+ * a zero delta before replacing the original Expense.
  */
 describe("splitExpenseDelta", () => {
   it("is zero when the parts sum exactly to the original", () => {

@@ -13,6 +13,9 @@ import {
   projectRollup,
 } from "@cubby/schemas/project-output-fields";
 import { z } from "zod";
+import { tradeSchema } from "@cubby/schemas/task-fields";
+import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
   key: "project",
   names: { singular: "Project", plural: "Projects" },
@@ -67,6 +70,7 @@ export default defineEntity({
             "costEstimate",
             "parentProjectId",
             "locations",
+            "defaultTrade",
             "updatedAt",
           ],
         },
@@ -169,6 +173,15 @@ export default defineEntity({
   model: {
     fields: [
       {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "What are you working on?" },
@@ -220,10 +233,90 @@ export default defineEntity({
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true, detailOrder: 90 },
+        resolution: {
+          reset: { locationsMode: "inherit", locations: [] },
+          none: { locationsMode: "explicit", locations: [] },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "project.effective-locations",
+          description:
+            "Explicit project locations win; otherwise the nearest parent project with explicit locations supplies them.",
+          projections: {
+            list: "fieldResolutions.locations.value",
+            detail: "fieldResolutions.locations.value",
+            summary: "fieldResolutions.locations.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.locations.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.locations.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.locations.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
           read: z.array(z.string()).describe("House/site names, free-form"),
           create: z.array(z.string()).default([]),
           update: z.array(z.string()).optional(),
+        },
+      },
+      {
+        key: "locationsMode",
+        kind: "enum",
+        readKey: null,
+        validation: {
+          read: null,
+          create: inheritanceModeSchema.optional(),
+          update: inheritanceModeSchema.optional(),
+        },
+      },
+      {
+        key: "defaultTrade",
+        kind: "enum",
+        nullable: true,
+        label: "Default trade",
+        control: { kind: "select" },
+        display: { detail: true, detailOrder: 95 },
+        resolution: {
+          reset: { defaultTrade: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "project.effective-default-trade",
+          description:
+            "A project trade override wins; otherwise the nearest parent project with a default trade supplies it.",
+          projections: {
+            list: "fieldResolutions.defaultTrade.value",
+            detail: "fieldResolutions.defaultTrade.value",
+            summary: "fieldResolutions.defaultTrade.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.defaultTrade.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.defaultTrade.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.defaultTrade.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
+        validation: {
+          read: tradeSchema.nullable(),
+          create: tradeSchema.nullable().default(null),
+          update: tradeSchema.nullable().optional(),
         },
       },
       {
@@ -501,6 +594,13 @@ export default defineEntity({
         defaultValue: "'{}'::text[]",
         specialized: "text-array",
       },
+      {
+        key: "locationsMode",
+        default: "literal",
+        defaultValue: "'inherit'",
+        specialized: "enum:locationsMode",
+      },
+      { key: "defaultTrade", specialized: "enum:defaultTrade" },
       { key: "costEstimate", specialized: "double-precision" },
       { key: "parentProjectId", reference: "project" },
       "startDate",
@@ -519,6 +619,8 @@ export default defineEntity({
       "status",
       "kind",
       "locations",
+      "locationsMode",
+      "defaultTrade",
       "costEstimate",
       "parentProjectId",
       "startDate",
@@ -533,6 +635,8 @@ export default defineEntity({
       "status",
       "kind",
       "locations",
+      "locationsMode",
+      "defaultTrade",
       "costEstimate",
       "parentProjectId",
       "startDate",
@@ -549,6 +653,8 @@ export default defineEntity({
       "status",
       "kind",
       "locations",
+      "locationsMode",
+      "defaultTrade",
       "costEstimate",
       "parentProjectId",
       "startDate",
@@ -578,6 +684,9 @@ export default defineEntity({
           "kind",
           "costEstimate",
           "parentProjectId",
+          "locations",
+          "locationsMode",
+          "defaultTrade",
           "startDate",
         ],
         full: [
@@ -590,6 +699,8 @@ export default defineEntity({
           "endDate",
           "costEstimate",
           "locations",
+          "locationsMode",
+          "defaultTrade",
           "googleDriveFolderUrl",
           "notionPageUrl",
           "blockedByIds",
@@ -604,11 +715,13 @@ export default defineEntity({
       update: ["full", "status", "kind", "dates", "parent"],
     },
     output: [
+      "fieldResolutions",
       "id",
       "name",
       "status",
       "kind",
       "locations",
+      "defaultTrade",
       "costEstimate",
       "parentProjectId",
       "startDate",
@@ -653,7 +766,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by project name...",
         deriveSchema: true,
-        stored: { columns: ["name", "notes", "locations"] },
+        stored: { columns: ["name", "notes"] },
       },
       {
         columnId: "status",
@@ -723,7 +836,6 @@ export default defineEntity({
         deriveSchema: true,
         schemaDescription: "Any exact match against locations[]",
         optionsKey: "projectLocations",
-        stored: { array: true },
       },
       {
         columnId: "dateRange",
@@ -1001,6 +1113,19 @@ export default defineEntity({
           export: "projectResourcesRelationAdapter",
         },
         audiences: ["browser", "mcp"],
+      },
+    },
+    {
+      key: "defaultPurchases",
+      label: "Purchases using this default",
+      target: "purchase",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Purchase.defaultProjectId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Purchase.defaultProjectId", direction: "outgoing" }],
       },
     },
     {

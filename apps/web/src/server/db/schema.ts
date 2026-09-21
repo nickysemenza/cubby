@@ -1321,6 +1321,7 @@ export const purchase = pgTable(
   "Purchase",
   {
     ...generatedPurchaseColumns({
+      project: (): AnyPgColumn => project.id,
       vendor: (): AnyPgColumn => vendor.id,
       vendorAccount: (): AnyPgColumn => vendorAccount.id,
     }),
@@ -1338,6 +1339,7 @@ export const purchase = pgTable(
     uniqueIndex("Purchase_vendorId_orderId_key")
       .on(table.vendorId, table.orderId)
       .where(sql`${table.orderId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+    index("Purchase_defaultProjectId_idx").on(table.defaultProjectId),
     index("Purchase_vendorId_idx").on(table.vendorId),
     index("Purchase_vendorAccountId_idx").on(table.vendorAccountId),
     index("Purchase_importRunId_idx").on(table.importRunId),
@@ -2432,6 +2434,10 @@ export const expense = pgTable(
   }),
   (table) => [
     shortcodeUnique("Expense", table.shortcode),
+    check(
+      "Expense_live_charge_assignment_check",
+      sql`${table.deletedAt} IS NOT NULL OR ${table.lineKind} = 'principal' OR (${table.projectId} IS NULL AND ${table.purchaseId} IS NOT NULL)`,
+    ),
     uniqueIndex("Expense_notionPageId_key")
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),

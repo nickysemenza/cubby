@@ -276,7 +276,12 @@ describe("expense repository — CRUD", () => {
       await createExpense(
         ctx.db,
         expenseCreateInput.parse(
-          makeExpenseInput({ name: "Sales tax", cost: 26.81 }),
+          makeExpenseInput({
+            name: "Sales tax",
+            cost: 26.81,
+            vendor: "Line role fixture vendor",
+            orderId: "LINE-ROLE-1",
+          }),
         ),
         ctx.actor,
       );
@@ -366,7 +371,12 @@ describe("expense repository — CRUD", () => {
       createExpense(
         ctx.db,
         expenseCreateInput.parse(
-          makeExpenseInput({ name: "Order discount", cost: -60 }),
+          makeExpenseInput({
+            name: "Order discount",
+            cost: -60,
+            vendor: "Line role fixture vendor",
+            orderId: "LINE-ROLE-1",
+          }),
         ),
         ctx.actor,
       ),
@@ -379,6 +389,8 @@ describe("expense repository — CRUD", () => {
             name: "Tax refund",
             cost: -8.5,
             lineKind: "tax",
+            vendor: "Line role fixture vendor",
+            orderId: "LINE-ROLE-1",
           }),
         ),
         ctx.actor,
@@ -600,6 +612,93 @@ describe("expense repository — bulk trade / cost-type writes", () => {
 describe("expense repository — expenseAnalytics", () => {
   const ctx = withTestDb();
 
+  it("uses attributed adjustment shares throughout project-filtered analytics", async () => {
+    const { output: projectA } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "scoped analytics project a" }),
+      ctx.actor,
+    );
+    const { output: projectB } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "scoped analytics project b" }),
+      ctx.actor,
+    );
+    const purchaseIdentity = {
+      vendor: "Scoped analytics vendor",
+      orderId: "SCOPED-ANALYTICS-1",
+    };
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        ...purchaseIdentity,
+        date: "2026-06-10",
+        name: "scoped analytics principal a",
+        trade: "plumbing",
+        costType: "materials",
+        cost: 60,
+        projectId: projectA.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        ...purchaseIdentity,
+        date: "2026-06-10",
+        name: "scoped analytics principal b",
+        trade: "plumbing",
+        costType: "materials",
+        cost: 40,
+        projectId: projectB.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        ...purchaseIdentity,
+        date: "2026-06-10",
+        lineKind: "tax",
+        name: "scoped analytics tax",
+        trade: null,
+        costType: "services",
+        cost: 10,
+      }),
+      ctx.actor,
+    );
+
+    const filters = {
+      search: "scoped analytics",
+      projectId: projectA.id,
+    };
+    const result = await expenseAnalytics(ctx.db, filters);
+    expect(result.summary).toMatchObject({ net: 66, count: 2 });
+    expect(result.adjustments).toMatchObject({ net: 6, count: 1 });
+    expect(result.monthly).toEqual([
+      expect.objectContaining({ month: "2026-06", net: 66, count: 2 }),
+    ]);
+    expect(result.byProject).toEqual([
+      expect.objectContaining({
+        projectId: projectA.id,
+        net: 66,
+        count: 2,
+      }),
+    ]);
+
+    const analysis = await expenseAnalyzeWorkflow(ctx.db, {
+      filters,
+      rowDimension: "project",
+      comparison: "none",
+    });
+    expect(analysis).toMatchObject({
+      status: "ready",
+      totals: {
+        scope: { current: { net: 66, count: 2 } },
+        grid: { current: { net: 66, count: 2 } },
+      },
+    });
+  });
+
   it("aggregates match manual arithmetic, omits empty categories, and stays consistent with expenseList under the same filter", async () => {
     const { output: projectA } = await createProject(
       ctx.db,
@@ -619,6 +718,8 @@ describe("expense repository — expenseAnalytics", () => {
         costType: "materials",
         name: "analytics p1 actual",
         projectId: projectA.id,
+        vendor: "Analytics allocation vendor",
+        orderId: "ANALYTICS-1",
         cost: 100,
         date: "2026-01-10",
         future: false,
@@ -633,6 +734,8 @@ describe("expense repository — expenseAnalytics", () => {
         costType: "materials",
         name: "analytics p2 committed",
         projectId: projectA.id,
+        vendor: "Analytics allocation vendor",
+        orderId: "ANALYTICS-1",
         cost: 50,
         future: true,
       }),
@@ -670,7 +773,8 @@ describe("expense repository — expenseAnalytics", () => {
         costType: "services",
         lineKind: "tax",
         name: "analytics p5 tax",
-        projectId: projectA.id,
+        vendor: "Analytics allocation vendor",
+        orderId: "ANALYTICS-1",
         cost: 23,
         date: "2026-01-10",
         future: false,
@@ -684,7 +788,8 @@ describe("expense repository — expenseAnalytics", () => {
         costType: "tools",
         lineKind: "discount",
         name: "analytics p6 discount",
-        projectId: projectA.id,
+        vendor: "Analytics allocation vendor",
+        orderId: "ANALYTICS-1",
         cost: -5,
         date: "2026-01-10",
         future: false,

@@ -114,7 +114,7 @@ export function rangeConditions<P extends string>(
 }
 
 export const formatSearchTerm = (
-  column: AnyColumn,
+  column: AnyColumn | SQL,
   term?: string,
 ): SQL | undefined => {
   if (term === undefined || term.trim() === "") {
@@ -129,7 +129,7 @@ export const formatSearchTerm = (
  * boundary between two elements.
  */
 export const textArrayMatches = (
-  column: AnyColumn,
+  column: AnyColumn | SQL,
   term?: string,
 ): SQL | undefined => {
   if (term === undefined || term.trim() === "") return undefined;

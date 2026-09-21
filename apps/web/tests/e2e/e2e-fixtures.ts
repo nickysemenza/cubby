@@ -777,3 +777,33 @@ export async function seedActivityHistory(name: string) {
     filename: source.filename,
   };
 }
+
+export async function seedInheritancePrerequisite(page: Page, name: string) {
+  const project = await createFixture(page, "project", {
+    name: `${name} project`,
+    defaultTrade: "building",
+  });
+  const vendor = await seedVendorDisplayPrerequisite(page, `${name} vendor`);
+  const purchase = await createFixture(page, "purchase", {
+    vendorId: vendor.id,
+    date: "2026-09-20",
+    defaultProjectId: project.id,
+  });
+  const expense = await createFixture(page, "expense", {
+    name: `${name} item`,
+    date: "2026-09-20",
+    purchaseId: purchase.id,
+    projectId: project.id,
+    cost: 10,
+    costType: "materials",
+  });
+  const charge = await createFixture(page, "expense", {
+    name: `${name} tax`,
+    date: "2026-09-20",
+    purchaseId: purchase.id,
+    cost: 1,
+    costType: "services",
+    lineKind: "tax",
+  });
+  return { project, purchase, expense, charge };
+}

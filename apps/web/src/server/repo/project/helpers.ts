@@ -1,9 +1,12 @@
+import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { type ProjectId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProjectDateWindow,
   ProjectOut,
   ProjectRollup,
 } from "@cubby/schemas/project";
+
+import type { ProjectParentRow } from "./subtree";
 
 /** Shape of a `project` row as returned by a plain (no relations) select. */
 export type ProjectRow = {
@@ -13,6 +16,8 @@ export type ProjectRow = {
   status: ProjectOut["status"];
   kind: ProjectOut["kind"];
   locations: string[];
+  locationsMode: "inherit" | "explicit";
+  defaultTrade: ProjectOut["defaultTrade"];
   costEstimate: number | null;
   parentProjectId: ProjectId | null;
   startDate: string | null;
@@ -23,6 +28,47 @@ export type ProjectRow = {
   notionPageUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+/** Resolve project-only inherited settings from the already-loaded tree. */
+const resolveInheritedProjectSettings = (
+  row: ProjectRow,
+  allRows: ReadonlyArray<{
+    id: ProjectId;
+    shortcode: string;
+    parentProjectId: ProjectId | null;
+    locations: string[];
+    locationsMode: "inherit" | "explicit";
+    defaultTrade: ProjectOut["defaultTrade"];
+  }>,
+) => {
+  const byId = new Map(allRows.map((item) => [item.id, item]));
+  let current: (typeof allRows)[number] | ProjectRow | undefined = row;
+  const seen = new Set<ProjectId>();
+  let locations: string[] | null = null;
+  let defaultTrade: ProjectOut["defaultTrade"] = null;
+  let locationsSource: string | null = null;
+  let tradeSource: string | null = null;
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    if (locations === null && current.locationsMode === "explicit") {
+      locations = current.locations;
+      locationsSource = current.shortcode;
+    }
+    if (defaultTrade === null && current.defaultTrade !== null) {
+      defaultTrade = current.defaultTrade;
+      tradeSource = current.shortcode;
+    }
+    current = current.parentProjectId
+      ? byId.get(current.parentProjectId)
+      : undefined;
+  }
+  return {
+    locations: locations ?? [],
+    defaultTrade,
+    locationsSource,
+    tradeSource,
+  };
 };
 
 /** This project's own (non-recursive) rollup — see `ProjectRollup`'s doc comment. */
@@ -111,6 +157,7 @@ const dbProjectToAPI = ({
   parentProjectName,
   parentProjectShortcode,
   childProjectIds,
+  allRows,
 }: {
   row: ProjectRow;
   ownRollup: ProjectOwnRollup;
@@ -121,33 +168,91 @@ const dbProjectToAPI = ({
   parentProjectName: string | null;
   parentProjectShortcode: string | null;
   childProjectIds: string[];
-}): ProjectOut => ({
-  id: parseShortcodeFor("project", row.shortcode),
-  name: row.name,
-  status: row.status,
-  kind: row.kind,
-  locations: row.locations,
-  costEstimate: row.costEstimate,
-  parentProjectId: parentProjectShortcode
-    ? parseShortcodeFor("project", parentProjectShortcode)
-    : null,
-  parentProjectName,
-  childProjectIds: childProjectIds.map((id) =>
-    parseShortcodeFor("project", id),
-  ),
-  startDate: row.startDate,
-  endDate: row.endDate,
-  icon: row.icon,
-  notes: row.notes,
-  googleDriveFolderUrl: row.googleDriveFolderUrl,
-  notionPageUrl: row.notionPageUrl,
-  blockedByIds: blockedByIds.map((id) => parseShortcodeFor("project", id)),
-  blockingIds: blockingIds.map((id) => parseShortcodeFor("project", id)),
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-  rollup: { ...ownRollup, subtree: subtreeRollup },
-  dates,
-});
+  allRows: Parameters<typeof resolveInheritedProjectSettings>[1];
+}): ProjectOut => {
+  const resolved = resolveInheritedProjectSettings(row, allRows);
+  const fallback = resolveInheritedProjectSettings(
+    { ...row, locationsMode: "inherit", defaultTrade: null },
+    allRows,
+  );
+  const reference = (shortcode: string | null) =>
+    shortcode ? { entityType: "project" as const, entityId: shortcode } : null;
+  return {
+    id: parseShortcodeFor("project", row.shortcode),
+    name: row.name,
+    status: row.status,
+    kind: row.kind,
+    locations: resolved.locations,
+    defaultTrade: resolved.defaultTrade,
+    fieldResolutions: {
+      locations: {
+        mode:
+          row.locationsMode === "explicit"
+            ? row.locations.length === 0
+              ? "none"
+              : "explicit"
+            : "inherit",
+        storedValue: row.locations,
+        value: resolved.locations,
+        fallbackValue: fallback.locations,
+        source:
+          row.locationsMode === "explicit"
+            ? "Project override"
+            : resolved.locationsSource
+              ? "Parent project"
+              : "No site names",
+        sourceEntity:
+          row.locationsMode === "inherit"
+            ? reference(resolved.locationsSource)
+            : null,
+        matchesFallback:
+          row.locationsMode === "explicit" &&
+          row.locations.length > 0 &&
+          [...row.locations].sort().join("\0") ===
+            [...fallback.locations].sort().join("\0"),
+        canReset: row.locationsMode === "explicit",
+      },
+      defaultTrade: {
+        mode: row.defaultTrade === null ? "inherit" : "explicit",
+        storedValue: row.defaultTrade,
+        value: resolved.defaultTrade,
+        fallbackValue: fallback.defaultTrade,
+        source:
+          row.defaultTrade !== null
+            ? "Project override"
+            : resolved.tradeSource
+              ? "Parent project"
+              : "No trade default",
+        sourceEntity:
+          row.defaultTrade === null ? reference(resolved.tradeSource) : null,
+        matchesFallback:
+          row.defaultTrade !== null &&
+          row.defaultTrade === fallback.defaultTrade,
+        canReset: row.defaultTrade !== null,
+      },
+    } satisfies FieldResolutions,
+    costEstimate: row.costEstimate,
+    parentProjectId: parentProjectShortcode
+      ? parseShortcodeFor("project", parentProjectShortcode)
+      : null,
+    parentProjectName,
+    childProjectIds: childProjectIds.map((id) =>
+      parseShortcodeFor("project", id),
+    ),
+    startDate: row.startDate,
+    endDate: row.endDate,
+    icon: row.icon,
+    notes: row.notes,
+    googleDriveFolderUrl: row.googleDriveFolderUrl,
+    notionPageUrl: row.notionPageUrl,
+    blockedByIds: blockedByIds.map((id) => parseShortcodeFor("project", id)),
+    blockingIds: blockingIds.map((id) => parseShortcodeFor("project", id)),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    rollup: { ...ownRollup, subtree: subtreeRollup },
+    dates,
+  };
+};
 
 /**
  * Apply the repository's canonical empty fallbacks and parent/child/dependency
@@ -162,6 +267,7 @@ export const hydrateProjectRow = (
     nameById: Map<ProjectId, string>;
     shortcodeById: Map<ProjectId, string>;
     childrenByParent: Map<ProjectId, ProjectId[]>;
+    allRows: ProjectParentRow[];
   },
   dependencies: {
     blockedBy: Map<ProjectId, ProjectId[]>;
@@ -186,5 +292,6 @@ export const hydrateProjectRow = (
     childProjectIds: (context.childrenByParent.get(row.id) ?? []).map(
       toShortcode,
     ),
+    allRows: context.allRows,
   });
 };

@@ -14,7 +14,17 @@ import {
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
 import { addDays } from "date-fns";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import { and, eq, gte, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { aggregateTotals } from "~/lib/nutrition-estimates";
@@ -25,6 +35,11 @@ import { expense, project, purchase, task } from "~/server/db/schema";
 import { loadCalendarPlantings, mapPlantingItems } from "./calendar-plantings";
 import { getDb, notDeleted, relations } from "./database-helpers";
 import { eqAny, presenceCondition } from "./database-helpers/query";
+import { expenseInheritanceReadExtras } from "./expense-inheritance";
+import {
+  expenseAllocationExistsSql,
+  expenseAllocatedCostSql,
+} from "./expense-project-allocation";
 import { dbExpenseToAPI } from "./expense/helpers";
 import { chargeCondition } from "./expense/lookup";
 import { getMealsByDateRange } from "./meal";
@@ -36,6 +51,11 @@ import {
 } from "./project/subtree";
 import { getRecipeCoverImageUrlsByShortcodes } from "./recipe";
 import { resolveAllPresent } from "./shortcode-resolver";
+import {
+  effectiveTaskProjectSql,
+  effectiveTaskTradeSql,
+  hydrateTaskInheritanceRows,
+} from "./task-project-inheritance";
 import { dbTaskToAPI } from "./task/helpers";
 
 const emptyDaySummary = (): CalendarDaySummary => ({
@@ -101,17 +121,24 @@ type CalendarProjectScope = Awaited<
 >;
 
 const projectScopeOn = (
-  column: AnyColumn,
+  column: AnyColumn | SQL,
   input: CalendarRangeInput,
   scope: CalendarProjectScope,
 ): SQL | undefined =>
   or(
     scope.scopeIds.length
-      ? inArray(column, scope.scopeIds)
+      ? sql`${column} IN (${sql.join(
+          scope.scopeIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})`
       : scope.projectRequested
         ? sql`false`
         : undefined,
-    presenceCondition(column, input.projectPresenceFilter),
+    input.projectPresenceFilter === "none"
+      ? isNull(column)
+      : input.projectPresenceFilter === "has"
+        ? isNotNull(column)
+        : undefined,
   );
 
 const loadCalendarMeals = (
@@ -129,26 +156,29 @@ const loadCalendarMeals = (
       : Promise.resolve([]);
 };
 
-const loadCalendarTasks = (
+const loadCalendarTasks = async (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
   scope: CalendarProjectScope,
 ) => {
   if (input.kinds && !input.kinds.includes("task")) return Promise.resolve([]);
-  return getDb(db).query.task.findMany({
+  const rows = await getDb(db).query.task.findMany({
     where: and(
       notDeleted(task),
       or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
       lte(sql`coalesce(${task.dueDate}, ${task.dueEndDate})`, endInclusive),
       gte(sql`coalesce(${task.dueEndDate}, ${task.dueDate})`, input.startDate),
       eqAny(task.status, input.taskStatus),
-      eqAny(task.trade, input.taskTrade),
-      projectScopeOn(task.projectId, input, scope),
+      input.taskTrade
+        ? inArray(effectiveTaskTradeSql("task"), [input.taskTrade].flat())
+        : undefined,
+      projectScopeOn(effectiveTaskProjectSql("task"), input, scope),
     ),
     orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
     ...relations.task.withProject,
   });
+  return hydrateTaskInheritanceRows(db, rows);
 };
 
 const loadCalendarExpenses = (
@@ -175,7 +205,12 @@ const loadCalendarExpenses = (
       input.expenseFuture !== undefined
         ? eq(expense.future, input.expenseFuture)
         : undefined,
-      projectScopeOn(expense.projectId, input, scope),
+      scope.projectRequested || input.projectPresenceFilter
+        ? expenseAllocationExistsSql(sql`"expense"."id"`, {
+            projectIds: scope.projectRequested ? scope.scopeIds : undefined,
+            presence: input.projectPresenceFilter,
+          })
+        : undefined,
       or(
         vendorCondition,
         presenceCondition(
@@ -186,6 +221,16 @@ const loadCalendarExpenses = (
     ),
     orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
     ...relations.expense.withProject,
+    extras: {
+      ...expenseInheritanceReadExtras(),
+      scopedCost: (scope.projectRequested || input.projectPresenceFilter
+        ? expenseAllocatedCostSql(sql`"expense"."id"`, {
+            projectIds: scope.projectRequested ? scope.scopeIds : undefined,
+            presence: input.projectPresenceFilter,
+          })
+        : sql<number | null>`"expense"."cost"`
+      ).as("scopedCost"),
+    },
   });
 };
 
@@ -304,7 +349,7 @@ const mapExpenseItems = (
               ? ("move" as const)
               : ("read-only" as const),
             future: value.future,
-            cost: value.cost,
+            cost: row.scopedCost,
             vendor: value.vendor,
             trade: value.trade,
             projectName: value.projectName,

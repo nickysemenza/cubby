@@ -70,6 +70,7 @@ import {
 } from "./entities";
 import { readReferenceField, type ReferenceItem } from "./entity-references";
 import { FieldExplanation } from "./field-explanation";
+import { FieldResolutionBadge, fieldResolutionFor } from "./field-resolution";
 import { listRendererColumns } from "./list-field-renderers";
 
 type DisplayField = EntityFieldModel["fields"][number];
@@ -506,17 +507,29 @@ export function EntityBasicInfo<TRecord extends object>({
               label={field.label}
             />
           ) : undefined;
+        const resolution = fieldResolutionFor(record, field.key);
+        const decoratedValue =
+          field.control?.suggest || resolution ? (
+            <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+              {field.control?.suggest ? (
+                <RecordFieldSuggestion record={record} field={field.key}>
+                  {rendered.value}
+                </RecordFieldSuggestion>
+              ) : (
+                rendered.value
+              )}
+              {resolution ? (
+                <FieldResolutionBadge record={record} field={field.key} />
+              ) : null}
+            </span>
+          ) : (
+            rendered.value
+          );
         return [
           {
             label: field.label,
             ...rendered,
-            value: field.control?.suggest ? (
-              <RecordFieldSuggestion record={record} field={field.key}>
-                {rendered.value}
-              </RecordFieldSuggestion>
-            ) : (
-              rendered.value
-            ),
+            value: decoratedValue,
             filterAction:
               filterAction || explanationAction ? (
                 <>

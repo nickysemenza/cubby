@@ -21,7 +21,7 @@ import {
   type ProjectOut,
   type ProjectUpdateInput,
 } from "@cubby/schemas/project";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -31,6 +31,7 @@ import {
   projectDependency,
   projectImage,
   projectToolUsage,
+  purchase,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -51,6 +52,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
@@ -58,11 +60,23 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { effectiveExpenseProjectSql } from "../expense-inheritance";
+import {
+  effectiveTaskProjectSql,
+  effectiveProjectLocationsSql,
+  effectiveProjectTradeSql,
+} from "../task-project-inheritance";
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups } from "./subtree";
 
 export const PROJECT_DELETE_EDGE_POLICY = {
+  "Purchase.defaultProjectId": {
+    code: "block-live-purchase-default",
+    effect: "block",
+    description:
+      "A project selected as a live purchase default cannot be deleted until the purchase is reassigned.",
+  },
   "Project.parentProjectId": {
     code: "block-live-child",
     effect: "block",
@@ -189,6 +203,9 @@ export const createProject = async (
       status: data.status,
       kind: data.kind,
       locations: data.locations,
+      locationsMode:
+        data.locationsMode ?? (data.locations.length ? "explicit" : "inherit"),
+      defaultTrade: data.defaultTrade,
       costEstimate: data.costEstimate,
       parentProjectId,
       startDate: data.startDate,
@@ -198,6 +215,7 @@ export const createProject = async (
       googleDriveFolderUrl: data.googleDriveFolderUrl,
       notionPageUrl: data.notionPageUrl,
     });
+    await validateLiveEffectiveTrades(tx);
     await logAuditEntry(tx, actor, {
       entityType: "project",
       entityId: created.id,
@@ -207,6 +225,50 @@ export const createProject = async (
   });
   return { output: await getProjectByID(db, id), entityId: id };
 };
+
+async function projectSettingsAfterParentChange(
+  tx: DrizzleTransaction,
+  id: ProjectId,
+  before: NonNullable<Awaited<ReturnType<typeof fetchProjectById>>>,
+  data: ProjectUpdateData,
+  parentProjectId: ProjectId | null | undefined,
+) {
+  const detached = parentProjectId === null && before.parentProjectId !== null;
+  const inherited = detached
+    ? (
+        await tx.execute<{
+          locations: string[];
+          trade: ProjectOut["defaultTrade"];
+        }>(sql`
+    SELECT ${effectiveProjectLocationsSql(sql`${id}::uuid`)} AS locations,
+      ${effectiveProjectTradeSql(sql`${id}::uuid`)} AS trade
+  `)
+      ).rows[0]
+    : undefined;
+  const preserveLocations =
+    detached &&
+    before.locationsMode === "inherit" &&
+    data.locations === undefined &&
+    data.locationsMode === undefined;
+  return {
+    locations:
+      data.locationsMode === "inherit"
+        ? []
+        : preserveLocations
+          ? (inherited?.locations ?? [])
+          : data.locations,
+    locationsMode: preserveLocations
+      ? ("explicit" as const)
+      : (data.locationsMode ??
+        (data.locations === undefined ? undefined : ("explicit" as const))),
+    defaultTrade:
+      detached &&
+      before.defaultTrade === null &&
+      data.defaultTrade === undefined
+        ? (inherited?.trade ?? null)
+        : data.defaultTrade,
+  };
+}
 
 export const updateProject = async (
   db: Database,
@@ -261,11 +323,18 @@ export const updateProject = async (
       );
     }
 
+    const settings = await projectSettingsAfterParentChange(
+      tx,
+      id,
+      before,
+      data,
+      parentProjectId,
+    );
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       status: data.status,
       kind: data.kind,
-      locations: data.locations,
+      ...settings,
       costEstimate: data.costEstimate,
       parentProjectId,
       startDate: data.startDate,
@@ -276,6 +345,7 @@ export const updateProject = async (
       notionPageUrl: data.notionPageUrl,
     });
     const updated = await updateLiveAndReturn(tx, project, updateValues, id);
+    await validateLiveEffectiveTrades(tx);
 
     // Full-replacement set: clear this project's blocked-by edges and insert
     // the new ones, all inside the same transaction as the column update.
@@ -340,20 +410,22 @@ const fetchLiveChildProjects = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
  * Live tasks under `ids`. Used by `deleteProjects`' PROJECT_HAS_TASKS guard.
  */
 const fetchLiveProjectTasks = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
-  dbc.query.task.findMany({
-    where: and(inArray(task.projectId, ids), notDeleted(task)),
-    columns: { projectId: true },
-  });
+  dbc
+    .select({ projectId: effectiveTaskProjectSql() })
+    .from(task)
+    .where(and(inArray(effectiveTaskProjectSql(), ids), notDeleted(task)));
 
 /**
  * Live expenses under `ids`. Used by `deleteProjects`' PROJECT_HAS_EXPENSES
  * guard.
  */
 const fetchLiveProjectExpenses = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
-  dbc.query.expense.findMany({
-    where: and(inArray(expense.projectId, ids), notDeleted(expense)),
-    columns: { projectId: true },
-  });
+  dbc
+    .select({ projectId: effectiveExpenseProjectSql() })
+    .from(expense)
+    .where(
+      and(inArray(effectiveExpenseProjectSql(), ids), notDeleted(expense)),
+    );
 
 /**
  * Soft-delete projects. Guards against orphaning live tasks/expenses/child
@@ -398,6 +470,18 @@ export const deleteProjects = async (
       message: (count, names) =>
         `Cannot delete ${count} project(s): ${names} still have sub-projects. Delete or reparent them first.`,
     });
+
+    const purchaseDefaults = await tx
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(
+        and(inArray(purchase.defaultProjectId, ids), notDeleted(purchase)),
+      );
+    if (purchaseDefaults.length)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Reassign purchase project defaults before deleting these projects.",
+      );
 
     const liveTasks = await fetchLiveProjectTasks(tx, ids);
     await assertNoDependents({

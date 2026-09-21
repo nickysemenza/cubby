@@ -194,7 +194,10 @@ export function LinkExpensesDialog({
               className: "w-36",
               mobile: { slot: "meta", priority: 20 },
             },
-            cell: (info) => <TradeBadge trade={info.getValue()} />,
+            cell: (info) => {
+              const trade = info.getValue();
+              return trade ? <TradeBadge trade={trade} /> : <NoneValue />;
+            },
           }),
         );
         add(

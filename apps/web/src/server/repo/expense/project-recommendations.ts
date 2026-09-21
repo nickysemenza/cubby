@@ -9,6 +9,15 @@ import { expense, project } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { projectNameOptions } from "~/server/repo/project/lookup";
 
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+  expenseInheritanceReadExtras,
+} from "../expense-inheritance";
+
+const effectiveProjectId = effectiveExpenseProjectSql('"Expense"');
+const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
+
 /** Excluding the source before folding dates also removes its vote from ancestors. */
 export async function expenseProjectRecommendationContext(
   db: Database,
@@ -16,8 +25,9 @@ export async function expenseProjectRecommendationContext(
 ) {
   const source = await getDb(db).query.expense.findFirst({
     where: and(eq(expense.shortcode, id), notDeleted(expense)),
+    extras: expenseInheritanceReadExtras(),
   });
-  if (!source) return null;
+  if (!source || source.effectiveTrade === null) return null;
   const [projects, history, currentProject] = await Promise.all([
     projectNameOptions(db, source.id),
     getDb(db)
@@ -25,37 +35,46 @@ export async function expenseProjectRecommendationContext(
         id: expense.shortcode,
         name: expense.name,
         projectId: project.shortcode,
-        trade: expense.trade,
+        trade: effectiveTrade,
         productId: expense.productId,
       })
       .from(expense)
       .innerJoin(
         project,
-        and(eq(expense.projectId, project.id), notDeleted(project)),
+        and(eq(effectiveProjectId, project.id), notDeleted(project)),
       )
       .where(
         and(
           notDeleted(expense),
           ne(expense.id, source.id),
           eq(expense.lineKind, "principal"),
-          isNotNull(expense.projectId),
+          isNotNull(effectiveProjectId),
           or(
-            eq(expense.trade, source.trade),
+            source.effectiveTrade
+              ? eq(effectiveTrade, source.effectiveTrade)
+              : undefined,
             source.productId
               ? eq(expense.productId, source.productId)
               : undefined,
           ),
         ),
       ),
-    source.projectId
+    source.effectiveProjectId
       ? getDb(db).query.project.findFirst({
-          where: and(eq(project.id, source.projectId), notDeleted(project)),
+          where: and(
+            eq(project.id, source.effectiveProjectId),
+            notDeleted(project),
+          ),
           columns: { shortcode: true, name: true },
         })
       : undefined,
   ]);
   return {
-    source,
+    source: {
+      ...source,
+      projectId: source.effectiveProjectId,
+      trade: source.effectiveTrade,
+    },
     projects,
     history: history.map((row) => ({
       ...row,

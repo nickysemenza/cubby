@@ -61,6 +61,10 @@ export async function createProjectFromTasks(
       status: input.project.status,
       kind: input.project.kind,
       locations: input.project.locations,
+      locationsMode:
+        input.project.locationsMode ??
+        (input.project.locations.length ? "explicit" : "inherit"),
+      defaultTrade: input.project.defaultTrade,
       costEstimate: input.project.costEstimate,
       parentProjectId,
       startDate: input.project.startDate,
@@ -84,7 +88,7 @@ export async function createProjectFromTasks(
     if (before.length > 0) {
       await tx
         .update(task)
-        .set({ projectId: created.id })
+        .set({ projectId: created.id, projectMode: "explicit" })
         .where(and(inArray(task.id, taskIdsUuid), notDeleted(task)));
 
       const auditEntries: AuditEntryInput[] = [];

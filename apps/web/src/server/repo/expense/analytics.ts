@@ -28,18 +28,44 @@ import type {
   ExpenseMonthlySummaryOut,
   Trade,
 } from "@cubby/schemas/project";
-import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNotNull, ne, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import {
-  expenseAggregateFields as aggregateSelect,
-  EXPENSE_MONTH_BUCKET as MONTH_BUCKET,
-} from "~/server/repo/expense-aggregate-sql";
+import { EXPENSE_MONTH_BUCKET as MONTH_BUCKET } from "~/server/repo/expense-aggregate-sql";
 
-import { buildExpenseWhereClause } from "./lookup";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+} from "../expense-inheritance";
+import {
+  expenseAllocatedCostSql,
+  expenseAllocationScopeConditionSql,
+  expenseProjectAllocationSql,
+  type ExpenseAllocationProjectScope,
+} from "../expense-project-allocation";
+import {
+  buildExpenseWhereClause,
+  resolveExpenseProjectAllocationScope,
+} from "./lookup";
+
+const effectiveProjectId = effectiveExpenseProjectSql('"Expense"');
+const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
+
+const aggregateForCost = (cost: SQL<number | null>) => ({
+  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = false), 0)::float`,
+  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = true), 0)::float`,
+  credits: sql<number>`coalesce(-sum(${cost}) filter (where ${cost} < 0), 0)::float`,
+  net: sql<number>`coalesce(sum(${cost}), 0)::float`,
+  count: sql<number>`count(*)::int`,
+});
+
+const analyticsCost = (scope: ExpenseAllocationProjectScope | undefined) =>
+  scope
+    ? expenseAllocatedCostSql(sql`${expense.id}`, scope)
+    : sql<number | null>`${expense.cost}`;
 
 /**
  * The charge table under its own alias, for `byVendor`'s join.
@@ -56,9 +82,11 @@ export async function expenseMonthlySummary(
   filters: ExpenseFilters,
 ): Promise<ExpenseMonthlySummaryOut> {
   const whereClause = await buildExpenseWhereClause(db, filters);
+  const projectScope = await resolveExpenseProjectAllocationScope(db, filters);
+  const aggregate = aggregateForCost(analyticsCost(projectScope));
   const datedWhereClause = and(whereClause, isNotNull(expense.date));
   return await getDb(db)
-    .select({ month: MONTH_BUCKET, ...aggregateSelect() })
+    .select({ month: MONTH_BUCKET, ...aggregate })
     .from(expense)
     .where(datedWhereClause)
     .groupBy(MONTH_BUCKET)
@@ -70,6 +98,8 @@ export async function expenseAnalytics(
   filters: ExpenseFilters,
 ): Promise<ExpenseAnalyticsOut> {
   const whereClause = await buildExpenseWhereClause(db, filters);
+  const projectScope = await resolveExpenseProjectAllocationScope(db, filters);
+  const aggregate = aggregateForCost(analyticsCost(projectScope));
   const principalWhereClause = and(
     whereClause,
     eq(expense.lineKind, "principal"),
@@ -91,42 +121,42 @@ export async function expenseAnalytics(
     byTrade,
     tradeCostMatrix,
     monthly,
-    byProjectRows,
+    byProjectResult,
     byVendor,
   ] = await Promise.all([
     getDb(db)
       .select({
-        ...aggregateSelect(),
+        ...aggregate,
         actualCount: sql<number>`count(*) filter (where ${expense.future} = false)::int`,
         plannedCount: sql<number>`count(*) filter (where ${expense.future} = true)::int`,
       })
       .from(expense)
       .where(whereClause),
     getDb(db)
-      .select({ ...aggregateSelect() })
+      .select({ ...aggregate })
       .from(expense)
       .where(adjustmentsWhereClause),
     getDb(db)
-      .select({ costType: expense.costType, ...aggregateSelect() })
+      .select({ costType: expense.costType, ...aggregate })
       .from(expense)
       .where(principalWhereClause)
       .groupBy(expense.costType),
     getDb(db)
-      .select({ trade: expense.trade, ...aggregateSelect() })
+      .select({ trade: effectiveTrade, ...aggregate })
       .from(expense)
       .where(principalWhereClause)
-      .groupBy(expense.trade),
+      .groupBy(effectiveTrade),
     getDb(db)
       .select({
-        trade: expense.trade,
+        trade: effectiveTrade,
         costType: expense.costType,
-        ...aggregateSelect(),
+        ...aggregate,
       })
       .from(expense)
       .where(principalWhereClause)
-      .groupBy(expense.trade, expense.costType),
+      .groupBy(effectiveTrade, expense.costType),
     getDb(db)
-      .select({ month: MONTH_BUCKET, ...aggregateSelect() })
+      .select({ month: MONTH_BUCKET, ...aggregate })
       .from(expense)
       .where(datedWhereClause)
       .groupBy(MONTH_BUCKET)
@@ -136,19 +166,37 @@ export async function expenseAnalytics(
     // (no project to report against) as well as expenses still pointing at
     // a soft-deleted project — mirroring `resolveLiveJoinName`'s convention
     // of hiding a deleted parent's name elsewhere in the expense API.
-    getDb(db)
-      .select({
-        projectShortcode: project.shortcode,
-        projectName: project.name,
-        ...aggregateSelect(),
-      })
-      .from(expense)
-      .innerJoin(
-        project,
-        and(eq(expense.projectId, project.id), notDeleted(project)),
-      )
-      .where(and(whereClause, isNotNull(expense.projectId)))
-      .groupBy(project.shortcode, project.name),
+    getDb(db).execute<{
+      projectShortcode: string;
+      projectName: string;
+      actual: number;
+      committed: number;
+      credits: number;
+      net: number;
+      count: number;
+    }>(sql`
+      SELECT
+        p."shortcode" AS "projectShortcode",
+        p."name" AS "projectName",
+        coalesce(sum((allocation."attributedCents"::bigint / 100.0))
+          filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = false), 0)::float8 AS actual,
+        coalesce(sum((allocation."attributedCents"::bigint / 100.0))
+          filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = true), 0)::float8 AS committed,
+        coalesce(-sum((allocation."attributedCents"::bigint / 100.0))
+          filter (where allocation."attributedCents"::bigint < 0), 0)::float8 AS credits,
+        coalesce(sum(allocation."attributedCents"::bigint) / 100.0, 0)::float8 AS net,
+        count(DISTINCT ${expense.id})::int AS count
+      FROM (${expenseProjectAllocationSql()}) allocation
+      JOIN ${expense} ON ${expense.id} = allocation."expenseId"
+      JOIN ${project} p ON p."id" = allocation."projectId" AND p."deletedAt" IS NULL
+      WHERE ${whereClause ?? sql`true`}
+        ${
+          projectScope
+            ? sql`AND ${expenseAllocationScopeConditionSql("allocation", projectScope) ?? sql`true`}`
+            : sql``
+        }
+      GROUP BY p."shortcode", p."name"
+    `),
     // Spend by the vendor the money went to, resolved through the charge:
     // expense → Purchase → Vendor. Inner-joined for the same reason `byProject`
     // is, with the same consequence: charge-less rows (no vendor recorded) are
@@ -173,7 +221,7 @@ export async function expenseAnalytics(
       .select({
         vendorShortcode: vendor.shortcode,
         vendorName: vendor.name,
-        ...aggregateSelect(),
+        ...aggregate,
       })
       .from(expense)
       .innerJoin(
@@ -205,11 +253,15 @@ export async function expenseAnalytics(
     summary,
     adjustments: adjustmentRows[0]!,
     byCostType,
-    byTrade,
-    tradeCostMatrix,
+    byTrade: byTrade.filter(
+      (row): row is typeof row & { trade: Trade } => row.trade !== null,
+    ),
+    tradeCostMatrix: tradeCostMatrix.filter(
+      (row): row is typeof row & { trade: Trade } => row.trade !== null,
+    ),
     monthly,
     cumulative,
-    byProject: byProjectRows.map(({ projectShortcode, ...row }) => ({
+    byProject: byProjectResult.rows.map(({ projectShortcode, ...row }) => ({
       ...row,
       projectId: parseShortcodeFor("project", projectShortcode),
     })),
@@ -240,26 +292,33 @@ export async function expenseTradeAffinity(
   const rows = await getDb(db)
     .select({
       projectShortcode: project.shortcode,
-      trade: expense.trade,
+      trade: effectiveTrade,
       count: sql<number>`count(*)::int`,
     })
     .from(expense)
     .innerJoin(
       project,
-      and(eq(expense.projectId, project.id), notDeleted(project)),
+      and(eq(effectiveProjectId, project.id), notDeleted(project)),
     )
     .where(
       and(
         notDeleted(expense),
-        isNotNull(expense.projectId),
+        isNotNull(effectiveProjectId),
+        isNotNull(effectiveTrade),
         eq(expense.lineKind, "principal"),
       ),
     )
-    .groupBy(project.shortcode, expense.trade);
+    .groupBy(project.shortcode, effectiveTrade);
 
-  return rows.map((row) => ({
-    projectId: parseShortcodeFor("project", row.projectShortcode),
-    trade: row.trade,
-    count: row.count,
-  }));
+  return rows.flatMap((row) =>
+    row.trade === null
+      ? []
+      : [
+          {
+            projectId: parseShortcodeFor("project", row.projectShortcode),
+            trade: row.trade,
+            count: row.count,
+          },
+        ],
+  );
 }

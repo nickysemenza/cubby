@@ -56,6 +56,10 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+} from "~/server/repo/expense-inheritance";
 import { foldAssociation } from "~/server/repo/merge";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
@@ -74,6 +78,10 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import {
+  effectiveTaskProjectSql,
+  effectiveTaskTradeSql,
+} from "~/server/repo/task-project-inheritance";
 
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
@@ -82,6 +90,10 @@ export const EXPENSIVE_TOOL_THRESHOLD = 100;
 export const REUSED_CHEAP_TOOL_PROJECTS = 2;
 export const MAX_TRADE_SUGGESTIONS = 20;
 export const MAX_SUGGESTIONS_PER_TRADE = 5;
+const effectiveExpenseProject = effectiveExpenseProjectSql();
+const effectiveExpenseTrade = effectiveExpenseTradeSql();
+const effectiveTaskProject = effectiveTaskProjectSql();
+const effectiveTaskTrade = effectiveTaskTradeSql();
 
 export type ResourceMetrics = {
   projectUseCount: number;
@@ -271,8 +283,8 @@ async function loadProjectSoftwareWindowCosts(
         gte(expense.date, context.sharedWindow.startDate),
         lte(expense.date, context.sharedWindow.endDate),
         or(
-          isNull(expense.projectId),
-          notInArray(expense.projectId, [...context.excludedProjectIds]),
+          isNull(effectiveExpenseProject),
+          notInArray(effectiveExpenseProject, [...context.excludedProjectIds]),
         ),
         notDeleted(expense),
       ),
@@ -295,14 +307,14 @@ export async function loadProjectToolPurchaseCosts(
   if (projectIds.length === 0 || productIds.length === 0) return result;
   const rows = await dbc
     .select({
-      projectId: expense.projectId,
+      projectId: effectiveExpenseProject,
       productId: expense.productId,
       cost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
     })
     .from(expense)
     .where(
       and(
-        inArray(expense.projectId, projectIds),
+        inArray(effectiveExpenseProject, projectIds),
         inArray(expense.productId, productIds),
         eq(expense.future, false),
         eq(expense.lineKind, "principal"),
@@ -311,7 +323,7 @@ export async function loadProjectToolPurchaseCosts(
         notDeleted(expense),
       ),
     )
-    .groupBy(expense.projectId, expense.productId);
+    .groupBy(effectiveExpenseProject, expense.productId);
   for (const row of rows) {
     if (!row.projectId || !row.productId) continue;
     const perProject = result.get(row.projectId) ?? new Map();
@@ -343,14 +355,14 @@ async function loadProductPurchaseCostsByProject(
   if (projectIds.length === 0) return result;
   const rows = await dbc
     .select({
-      projectId: expense.projectId,
+      projectId: effectiveExpenseProject,
       cost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
     })
     .from(expense)
     .where(
       and(
         eq(expense.productId, productId),
-        inArray(expense.projectId, projectIds),
+        inArray(effectiveExpenseProject, projectIds),
         eq(expense.future, false),
         eq(expense.lineKind, "principal"),
         eq(expense.costType, "tools"),
@@ -358,7 +370,7 @@ async function loadProductPurchaseCostsByProject(
         notDeleted(expense),
       ),
     )
-    .groupBy(expense.projectId);
+    .groupBy(effectiveExpenseProject);
   for (const row of rows) {
     if (row.projectId) result.set(row.projectId, row.cost);
   }
@@ -1267,20 +1279,20 @@ export async function suggestProjectTools(
         ),
       ),
     dbc
-      .select({ trade: task.trade, taskCount: count() })
+      .select({ trade: effectiveTaskTrade, taskCount: count() })
       .from(task)
       .where(
         and(
-          eq(task.projectId, projectId),
-          ne(task.trade, "planning"),
-          ne(task.trade, "other"),
+          eq(effectiveTaskProject, projectId),
+          ne(effectiveTaskTrade, "planning"),
+          ne(effectiveTaskTrade, "other"),
           notDeleted(task),
         ),
       )
-      .groupBy(task.trade),
+      .groupBy(effectiveTaskTrade),
     dbc
       .select({
-        trade: expense.trade,
+        trade: effectiveExpenseTrade,
         expenseCount: count(),
         grossSpend: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(
           Number,
@@ -1289,16 +1301,16 @@ export async function suggestProjectTools(
       .from(expense)
       .where(
         and(
-          eq(expense.projectId, projectId),
+          eq(effectiveExpenseProject, projectId),
           eq(expense.lineKind, "principal"),
           eq(expense.future, false),
           gt(expense.cost, 0),
-          ne(expense.trade, "planning"),
-          ne(expense.trade, "other"),
+          ne(effectiveExpenseTrade, "planning"),
+          ne(effectiveExpenseTrade, "other"),
           notDeleted(expense),
         ),
       )
-      .groupBy(expense.trade),
+      .groupBy(effectiveExpenseTrade),
     dbc
       .select({
         productId: product.id,
@@ -1315,7 +1327,7 @@ export async function suggestProjectTools(
       )
       .where(
         and(
-          eq(expense.projectId, projectId),
+          eq(effectiveExpenseProject, projectId),
           eq(expense.lineKind, "principal"),
           eq(expense.future, false),
           eq(expense.costType, "tools"),
@@ -1349,20 +1361,28 @@ export async function suggestProjectTools(
   const attached = new Set(attachedRows.map((row) => row.productId));
   const inventoried = new Set(inventoryRows.map((row) => row.productId));
   const taskCountByTrade = new Map(
-    taskTrades.map((row) => [row.trade, Number(row.taskCount)]),
+    taskTrades.flatMap((row) =>
+      row.trade ? [[row.trade, Number(row.taskCount)] as const] : [],
+    ),
   );
   const expenseByTrade = new Map(
-    expenseTrades.map((row) => [
-      row.trade,
-      {
-        expenseCount: Number(row.expenseCount),
-        grossSpend: row.grossSpend,
-      },
-    ]),
+    expenseTrades.flatMap((row) =>
+      row.trade
+        ? [
+            [
+              row.trade,
+              {
+                expenseCount: Number(row.expenseCount),
+                grossSpend: row.grossSpend,
+              },
+            ] as const,
+          ]
+        : [],
+    ),
   );
   const trades = uniq([
-    ...taskTrades.map((row) => row.trade),
-    ...expenseTrades.map((row) => row.trade),
+    ...taskTrades.flatMap((row) => (row.trade ? [row.trade] : [])),
+    ...expenseTrades.flatMap((row) => (row.trade ? [row.trade] : [])),
   ])
     .map((trade): ProjectTradeSignal => ({
       trade,
@@ -1387,7 +1407,7 @@ export async function suggestProjectTools(
             productCode: product.shortcode,
             productName: product.name,
             manufacturer: product.manufacturer,
-            trade: expense.trade,
+            trade: effectiveExpenseTrade,
             matchingExpenseCount: count(),
           })
           .from(expense)
@@ -1398,7 +1418,7 @@ export async function suggestProjectTools(
           .where(
             and(
               inArray(
-                expense.trade,
+                effectiveExpenseTrade,
                 trades.map((signal) => signal.trade),
               ),
               eq(expense.future, false),
@@ -1414,7 +1434,7 @@ export async function suggestProjectTools(
             product.shortcode,
             product.name,
             product.manufacturer,
-            expense.trade,
+            effectiveExpenseTrade,
           );
 
   const candidateProductIds = uniq([
@@ -1477,6 +1497,7 @@ export async function suggestProjectTools(
 
   const tradeRowsByTrade = new Map<Trade, typeof tradeRows>();
   for (const row of tradeRows) {
+    if (row.trade === null) continue;
     const current = tradeRowsByTrade.get(row.trade) ?? [];
     current.push(row);
     tradeRowsByTrade.set(row.trade, current);
@@ -1554,7 +1575,7 @@ export async function suggestProjectTools(
     .from(expense)
     .where(
       and(
-        eq(expense.projectId, projectId),
+        eq(effectiveExpenseProject, projectId),
         isNull(expense.productId),
         eq(expense.lineKind, "principal"),
         eq(expense.future, false),
@@ -1609,7 +1630,7 @@ async function loadSoftwareExpenseRows(
 
   const rows = await dbc
     .select({
-      projectId: expense.projectId,
+      projectId: effectiveExpenseProject,
       date: expense.date,
       cost: expense.cost,
     })

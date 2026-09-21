@@ -132,17 +132,31 @@ function PurchaseImportRunSummary({ run }: { run: PurchaseImportRunSummary }) {
 export const PurchaseProjectAllocation: DetailSlotComponent<"purchase"> = ({
   record: purchase,
 }) => (
-  <RelationshipSummaryTable
-    relationKey="purchase.projects"
-    sourceId={purchase.id}
-    columns={["target", "expenses", "unpriced", "netSpend"]}
-    defaultSort={{ field: "netSpend", direction: "desc" }}
-    emptyCopy="No expenses on this purchase have been assigned to projects yet."
-    nullLabel="Unassigned"
-    expenseHref={(target) =>
-      `/expenses?purchaseId=${encodeURIComponent(purchase.id)}&project=${encodeURIComponent(target?.id ?? "__none__")}`
-    }
-  />
+  <Stack gap="sm">
+    <Row align="center" justify="between" gap="sm">
+      <span className="text-sm text-muted-foreground">
+        Items + shared charges
+      </span>
+      <span className="font-mono text-sm tabular-nums">
+        {formatCurrency(purchase.expenseTotal)}
+      </span>
+    </Row>
+    <p className="text-xs text-muted-foreground">
+      Tax, shipping, fees, and discounts follow the purchase’s item project
+      shares. The project totals below add up to this expense total.
+    </p>
+    <RelationshipSummaryTable
+      relationKey="purchase.projects"
+      sourceId={purchase.id}
+      columns={["target", "items", "sharedCharges", "netSpend", "coverage"]}
+      defaultSort={{ field: "netSpend", direction: "desc" }}
+      emptyCopy="No item or shared-charge allocation is available yet."
+      nullLabel="Unassigned"
+      expenseHref={(target) =>
+        `/expenses?purchaseId=${encodeURIComponent(purchase.id)}&project=${encodeURIComponent(target?.id ?? "__none__")}`
+      }
+    />
+  </Stack>
 );
 
 /**

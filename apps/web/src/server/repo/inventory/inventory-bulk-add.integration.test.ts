@@ -103,6 +103,7 @@ describe("addInventoryEntries", () => {
       {
         items: [{ inventoryEntryId: movedEntry.id, quantity: 1 }],
         date: "2026-01-01",
+        trade: "other",
         reason: "Broken test item",
       },
     );
@@ -139,6 +140,7 @@ describe("addInventoryEntries", () => {
         productId: product.id,
         quantity: 1,
         date: "2026-01-01",
+        trade: "other",
         adjustInventory: false,
       }),
     );
@@ -157,6 +159,7 @@ describe("addInventoryEntries", () => {
         productId: product.id,
         quantity: 1,
         date: "2026-01-01",
+        trade: "other",
         adjustInventory: true,
         inventoryEntryId: entry.id,
       }),

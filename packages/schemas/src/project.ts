@@ -715,13 +715,13 @@ export const expenseCostTypeAggregate = z.object({
 export type ExpenseCostTypeAggregate = z.infer<typeof expenseCostTypeAggregate>;
 
 export const expenseTradeAggregate = z.object({
-  trade: tradeSchema,
+  trade: tradeSchema.nullable(),
   ...expenseAggregateFields,
 });
 export type ExpenseTradeAggregate = z.infer<typeof expenseTradeAggregate>;
 
 export const expenseTradeCostAggregate = z.object({
-  trade: tradeSchema,
+  trade: tradeSchema.nullable(),
   costType: costTypeSchema,
   ...expenseAggregateFields,
 });

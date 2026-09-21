@@ -1,3 +1,9 @@
+import type {
+  InventoryShortcode,
+  LocationShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 /**
  * ProductDiscardDialog — record that units were thrown away or written off.
  *
@@ -14,13 +20,7 @@
  * the point — otherwise expected and actual diverge in the gap between two
  * writes, which is precisely the drift the Variance column exists to catch.
  */
-
-import type {
-  InventoryShortcode,
-  LocationShortcode,
-  ProductShortcode,
-} from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { tradeSchema } from "@cubby/schemas/task-fields";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { type FC, useId, useMemo } from "react";
@@ -29,6 +29,7 @@ import { z } from "zod";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { product as productOperations } from "~/app/products/product.functions";
+import { tradeOptions } from "~/app/projects/trade-options";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -49,6 +50,7 @@ import {
 } from "../form-utils";
 
 const formSchema = z.object({
+  trade: tradeSchema,
   quantity: z.number().positive(),
   date: z.string(),
   reason: z.string(),
@@ -202,6 +204,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       productId: product.id,
       quantity: values.quantity,
       date: values.date,
+      trade: values.trade,
       reason: values.reason.trim() || null,
       adjustInventory: values.adjustInventory,
       inventoryEntryId: values.adjustInventory
@@ -232,6 +235,13 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
             fraction
           />
           <PlainDateField form={form} name="date" label="Date" />
+          <SelectField
+            form={form}
+            name="trade"
+            label="Trade"
+            options={tradeOptions}
+            placeholder="Choose a trade…"
+          />
           <UnifiedTextField
             form={form}
             name="reason"

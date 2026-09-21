@@ -11,6 +11,7 @@ export function FieldSuggestionHint({
   currentValue = null,
   currentLabel,
   questionKey = "",
+  alternative = false,
 }: {
   suggestion: FieldSuggestion | null;
   applied: boolean;
@@ -19,6 +20,7 @@ export function FieldSuggestionHint({
   currentValue?: string | null;
   currentLabel?: ReactNode;
   questionKey?: string;
+  alternative?: boolean;
 }) {
   if (applied || !onApply) return null;
   return (
@@ -29,6 +31,7 @@ export function FieldSuggestionHint({
       questionKey={questionKey}
       pending={pending}
       onApply={onApply}
+      alternative={alternative}
     />
   );
 }

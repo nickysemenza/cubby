@@ -1,7 +1,6 @@
+import type { Amount } from "@cubby/schemas/codec";
 /** Merge duplicate Products without silently discarding identity, stock, or conversion evidence.
  * Preserve keeper values; validate component cycles and surface irreconcilable slot conflicts. */
-
-import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import type {
   ImpactItem,
@@ -69,6 +68,7 @@ import {
 } from "~/server/repo/merge";
 import { cascadeRemoval } from "~/server/repo/removal";
 
+import { validateLiveEffectiveTrades } from "../inheritance-validation";
 import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
@@ -1614,6 +1614,7 @@ export const mergeProducts = async (
       survivorChanges,
     });
     summary.merged = removed;
+    await validateLiveEffectiveTrades(tx);
 
     // Every moved entry now values at the KEEPER's effective price; without
     // this a re-pointed row keeps a valuation derived from a product that no

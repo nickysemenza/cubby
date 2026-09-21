@@ -40,7 +40,7 @@ export function TradeActivity({
     () =>
       rows
         .map((r): Datum => ({
-          trade: TRADE_LABELS[r.trade],
+          trade: r.trade ? TRADE_LABELS[r.trade] : "Unassigned trade",
           actual: r.actual,
           committed: r.committed,
         }))

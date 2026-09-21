@@ -20,6 +20,7 @@ import {
   suggestTargetsFor,
 } from "~/app/_components/ai/field-suggestion";
 import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
+import { FormFieldResolution } from "~/app/_components/ai/form-field-resolution";
 import {
   WithEntitySearch,
   type WithEntitySearchProps,
@@ -139,8 +140,7 @@ function bulkFieldDescription(
 /**
  * One reference field's search provider — the vendor picker needs its own
  * shortcode-typed wrapper, matching `referenceEntitySearch` in
- * `entity-primitive-fields.tsx` (duplicated rather than imported: that file
- * exports neither piece, and this PR leaves it unmodified).
+ * `entity-primitive-fields.tsx`.
  */
 function referenceEntitySearch(
   referenceEntity: string,
@@ -242,10 +242,7 @@ function renderBulkEditField(
 /**
  * Renders `capabilities.bulkUpdate.fields` in model order, through the same
  * per-kind switch `EntityIntentFields` uses in
- * `entities/editing/entity-primitive-fields.tsx` — reimplemented here rather
- * than imported because that file exports neither `renderPrimitiveField` nor
- * a field-list variant of `EntityIntentFields`, and this PR must not modify
- * it (another lane owns it). A singular reference renders as a search-backed
+ * `entities/editing/entity-primitive-fields.tsx`. A singular reference renders as a search-backed
  * picker, exactly as `EntityIntentFields` special-cases it, so a nullable
  * reference (`projectId`, `locationId`, `parentId`) gets a "Clear" affordance
  * for free.
@@ -271,28 +268,45 @@ function BulkEditFields({
             `Bulk-edit field ${entity}.${key} is not declared on the entity's field model.`,
           );
         }
+        // Companion assignment modes are written by the value field controls.
+        if (!field.control) return null;
         if (field.reference && !field.reference.multiple) {
           return (
-            <EntityValueField
-              key={field.key}
-              form={form}
-              // SAFETY: `field.key` is one of this entity's own declared
-              // model field keys; RHF's conditional path type cannot express
-              // a runtime-selected field roster.
-              name={field.key as never}
-              // SAFETY: `field.reference.entity` is a manifest-declared
-              // reference target, always one of the picker's supported
-              // entities.
-              entity={field.reference.entity as never}
-              label={field.label}
-              clearable={field.nullable}
-              description={<FieldProvenance provenance={field.provenance} />}
-              SearchProvider={searchProviderFor(field.reference.entity)}
-              suggestField={field.control?.suggest ? field.key : undefined}
-            />
+            <fieldset key={field.key} aria-label={`${field.label} assignment`}>
+              <EntityValueField
+                form={form}
+                // SAFETY: `field.key` is one of this entity's own declared
+                // model field keys; RHF's conditional path type cannot express
+                // a runtime-selected field roster.
+                name={field.key as never}
+                // SAFETY: `field.reference.entity` is a manifest-declared
+                // reference target, always one of the picker's supported
+                // entities.
+                entity={field.reference.entity as never}
+                label={field.label}
+                clearable={field.nullable}
+                description={<FieldProvenance provenance={field.provenance} />}
+                SearchProvider={searchProviderFor(field.reference.entity)}
+                suggestField={field.control?.suggest ? field.key : undefined}
+              />
+              <FormFieldResolution
+                entity={entity}
+                form={form}
+                field={field.key}
+              />
+            </fieldset>
           );
         }
-        return renderBulkEditField(entity, field, form);
+        return (
+          <fieldset key={field.key} aria-label={`${field.label} assignment`}>
+            {renderBulkEditField(entity, field, form)}
+            <FormFieldResolution
+              entity={entity}
+              form={form}
+              field={field.key}
+            />
+          </fieldset>
+        );
       })}
     </>
   );

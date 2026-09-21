@@ -43,6 +43,16 @@ import {
   EXPENSE_MONTH_BUCKET,
   expenseAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+} from "~/server/repo/expense-inheritance";
+import {
+  expenseAllocatedCostSql,
+  expenseAllocationScopeConditionSql,
+  expenseProjectAllocationSql,
+  type ExpenseAllocationProjectScope,
+} from "~/server/repo/expense-project-allocation";
 
 import { buildExpenseWhereClause } from "./lookup";
 
@@ -69,7 +79,11 @@ type FacetId = ExpenseFacetId;
  * unattributed expense, not a bucket with a stale label.
  */
 const dimensionSpecs = {
-  trade: { key: expense.trade, label: expense.trade, relation: "expense" },
+  trade: {
+    key: effectiveExpenseTradeSql(),
+    label: effectiveExpenseTradeSql(),
+    relation: "expense",
+  },
   costType: {
     key: expense.costType,
     label: expense.costType,
@@ -98,7 +112,7 @@ const scalarFacetSpecs = {
   costType: { value: expense.costType },
   lineKind: { value: expense.lineKind },
   lineBasis: { value: expense.lineBasis },
-  trade: { value: expense.trade },
+  trade: { value: effectiveExpenseTradeSql() },
   future: {
     value: sql<string>`case when ${expense.future} then 'true' else 'false' end`,
   },
@@ -202,11 +216,65 @@ export const expenseAnalysisWhere = (
     ? and(where, eq(expense.lineKind, "principal"))
     : where;
 
-async function scopeAggregate(db: Database, where: SQL | undefined) {
+const aggregateForCost = (cost: SQL<number | null>) => ({
+  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = false), 0)::float`,
+  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = true), 0)::float`,
+  credits: sql<number>`coalesce(-sum(${cost}) filter (where ${cost} < 0), 0)::float`,
+  net: sql<number>`coalesce(sum(${cost}), 0)::float`,
+  count: sql<number>`count(*)::int`,
+});
+
+const analysisAggregateFields = (
+  allocationScope: ExpenseAllocationProjectScope | undefined,
+) =>
+  allocationScope
+    ? aggregateForCost(
+        expenseAllocatedCostSql(sql`${expense.id}`, allocationScope),
+      )
+    : expenseAggregateFields();
+
+async function scopeAggregate(
+  db: Database,
+  where: SQL | undefined,
+  allocationScope?: ExpenseAllocationProjectScope,
+) {
   const rows = await getDb(db)
-    .select(expenseAggregateFields())
+    .select(analysisAggregateFields(allocationScope))
     .from(expense)
     .where(where);
+  return aggregate(rows[0]);
+}
+
+const allocationAggregateFields = () => ({
+  actual: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = false), 0)::float`,
+  committed: sql<number>`coalesce(sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint > 0 and ${expense.future} = true), 0)::float`,
+  credits: sql<number>`coalesce(-sum(allocation."attributedCents"::bigint / 100.0) filter (where allocation."attributedCents"::bigint < 0), 0)::float`,
+  net: sql<number>`coalesce(sum(allocation."attributedCents"::bigint) / 100.0, 0)::float`,
+  count: sql<number>`count(distinct ${expense.id})::int`,
+});
+
+async function allocatedProjectAggregate(
+  db: Database,
+  where: SQL | undefined,
+  projectCondition: SQL,
+  allocationScope?: ExpenseAllocationProjectScope,
+) {
+  const rows = await getDb(db)
+    .select(allocationAggregateFields())
+    .from(expense)
+    .innerJoin(
+      sql`(${expenseProjectAllocationSql()}) allocation`,
+      sql`allocation."expenseId" = ${expense.id}`,
+    )
+    .where(
+      and(
+        where,
+        projectCondition,
+        allocationScope
+          ? expenseAllocationScopeConditionSql("allocation", allocationScope)
+          : undefined,
+      ),
+    );
   return aggregate(rows[0]);
 }
 
@@ -214,20 +282,53 @@ async function groupedDimension(
   db: Database,
   where: SQL | undefined,
   dimension: Dimension,
+  allocationScope?: ExpenseAllocationProjectScope,
 ): Promise<BucketRow[]> {
   const database = getDb(db);
   const spec = dimensionSpecs[dimension];
+  if (dimension === "project") {
+    const rows = await database
+      .select({
+        key: project.shortcode,
+        label: project.name,
+        ...allocationAggregateFields(),
+      })
+      .from(expense)
+      .innerJoin(
+        sql`(${expenseProjectAllocationSql()}) allocation`,
+        sql`allocation."expenseId" = ${expense.id}`,
+      )
+      .innerJoin(
+        project,
+        and(sql`${project.id} = allocation."projectId"`, notDeleted(project)),
+      )
+      .where(
+        and(
+          where,
+          allocationScope
+            ? expenseAllocationScopeConditionSql("allocation", allocationScope)
+            : undefined,
+        ),
+      )
+      .groupBy(project.shortcode, project.name)
+      .orderBy(project.name);
+    return rows.map((row) => ({
+      ...row,
+      key: String(row.key),
+      label: String(row.label),
+    }));
+  }
   const charge = alias(purchase, "analyzeDimensionCharge");
   const rows = await database
     .select({
       key: spec.key,
       label: spec.label,
-      ...expenseAggregateFields(),
+      ...analysisAggregateFields(allocationScope),
     })
     .from(expense)
     .leftJoin(
       project,
-      and(eq(expense.projectId, project.id), notDeleted(project)),
+      and(eq(effectiveExpenseProjectSql(), project.id), notDeleted(project)),
     )
     .leftJoin(
       charge,
@@ -251,21 +352,53 @@ async function groupedCells(
   where: SQL | undefined,
   rowDimension: ExpenseAnalyzeRowDimension,
   columnDimension: ExpenseAnalyzeColumnDimension,
+  allocationScope?: ExpenseAllocationProjectScope,
 ): Promise<CellRow[]> {
   const database = getDb(db);
   const row = dimensionSpecs[rowDimension];
   const column = dimensionColumns(columnDimension);
+  if (rowDimension === "project") {
+    const rows = await database
+      .select({
+        rowKey: project.shortcode,
+        columnKey: column.key,
+        ...allocationAggregateFields(),
+      })
+      .from(expense)
+      .innerJoin(
+        sql`(${expenseProjectAllocationSql()}) allocation`,
+        sql`allocation."expenseId" = ${expense.id}`,
+      )
+      .innerJoin(
+        project,
+        and(sql`${project.id} = allocation."projectId"`, notDeleted(project)),
+      )
+      .where(
+        and(
+          where,
+          allocationScope
+            ? expenseAllocationScopeConditionSql("allocation", allocationScope)
+            : undefined,
+        ),
+      )
+      .groupBy(project.shortcode, column.key)
+      .orderBy(project.shortcode, column.key);
+    return rows.map((item) => ({
+      ...item,
+      rowKey: String(item.rowKey),
+    }));
+  }
   const charge = alias(purchase, "analyzeCellCharge");
   const rows = await database
     .select({
       rowKey: row.key,
       columnKey: column.key,
-      ...expenseAggregateFields(),
+      ...analysisAggregateFields(allocationScope),
     })
     .from(expense)
     .leftJoin(
       project,
-      and(eq(expense.projectId, project.id), notDeleted(project)),
+      and(eq(effectiveExpenseProjectSql(), project.id), notDeleted(project)),
     )
     .leftJoin(
       charge,
@@ -431,6 +564,31 @@ async function entityFacetOptions(
   where: SQL | undefined,
   dimension: "project" | "vendor",
 ): Promise<ExpenseFacetOption[]> {
+  if (dimension === "project") {
+    const rows = await getDb(db)
+      .select({
+        value: project.shortcode,
+        label: project.name,
+        count: sql<number>`count(distinct ${expense.id})::int`,
+      })
+      .from(expense)
+      .innerJoin(
+        sql`(${expenseProjectAllocationSql()}) allocation`,
+        sql`allocation."expenseId" = ${expense.id}`,
+      )
+      .innerJoin(
+        project,
+        and(sql`${project.id} = allocation."projectId"`, notDeleted(project)),
+      )
+      .where(where)
+      .groupBy(project.shortcode, project.name)
+      .orderBy(project.name);
+    return rows.map((row) => ({
+      value: String(row.value),
+      label: String(row.label),
+      count: Number(row.count),
+    }));
+  }
   const spec = dimensionSpecs[dimension];
   const charge = alias(purchase, "facetDimensionCharge");
   const rows = await getDb(db)
@@ -442,7 +600,7 @@ async function entityFacetOptions(
     .from(expense)
     .leftJoin(
       project,
-      and(eq(expense.projectId, project.id), notDeleted(project)),
+      and(eq(effectiveExpenseProjectSql(), project.id), notDeleted(project)),
     )
     .leftJoin(
       charge,
@@ -462,12 +620,37 @@ async function entityFacetOptions(
 async function presenceFacetOptions(
   db: Database,
   where: SQL | undefined,
-  column: typeof expense.projectId | typeof expense.purchaseId,
+  column: typeof expense.purchaseId,
 ): Promise<ExpenseFacetOption[]> {
   const [presence] = await getDb(db)
     .select({
       any: sql<number>`count(*) filter (where ${column} is not null)::int`,
       none: sql<number>`count(*) filter (where ${column} is null)::int`,
+    })
+    .from(expense)
+    .where(where);
+  return [
+    { value: "__any__", label: null, count: presence?.any ?? 0 },
+    { value: "__none__", label: null, count: presence?.none ?? 0 },
+  ];
+}
+
+async function projectPresenceFacetOptions(
+  db: Database,
+  where: SQL | undefined,
+): Promise<ExpenseFacetOption[]> {
+  const [presence] = await getDb(db)
+    .select({
+      any: sql<number>`count(*) filter (where exists (
+        select 1 from (${expenseProjectAllocationSql()}) allocation
+        where allocation."expenseId" = ${expense.id}
+          and allocation."projectId" is not null
+      ))::int`,
+      none: sql<number>`count(*) filter (where exists (
+        select 1 from (${expenseProjectAllocationSql()}) allocation
+        where allocation."expenseId" = ${expense.id}
+          and allocation."projectId" is null
+      ))::int`,
     })
     .from(expense)
     .where(where);
@@ -497,17 +680,29 @@ export const loadExpenseAnalysisPeriod = async (
   scopeWhere: SQL | undefined,
   rowDimension: ExpenseAnalyzeRowDimension,
   columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
+  allocationScope?: ExpenseAllocationProjectScope,
 ): Promise<ExpenseAnalysisPeriod> => {
-  const rowsPromise = groupedDimension(db, gridWhere, rowDimension);
+  const rowsPromise = groupedDimension(
+    db,
+    gridWhere,
+    rowDimension,
+    allocationScope,
+  );
   const [rows, columns, cells, scope] = await Promise.all([
     rowsPromise,
     columnDimension
-      ? groupedDimension(db, gridWhere, columnDimension)
+      ? groupedDimension(db, gridWhere, columnDimension, allocationScope)
       : Promise.resolve([]),
     columnDimension
-      ? groupedCells(db, gridWhere, rowDimension, columnDimension)
+      ? groupedCells(
+          db,
+          gridWhere,
+          rowDimension,
+          columnDimension,
+          allocationScope,
+        )
       : rowsPromise.then(asOneDimensionCells),
-    scopeAggregate(db, scopeWhere),
+    scopeAggregate(db, scopeWhere, allocationScope),
   ]);
   return { rows, columns, cells, scope };
 };
@@ -576,16 +771,11 @@ export const loadExpenseAnalysisCauses = async (
   db: Database,
   input: ExpenseAnalyzeInput,
   where: SQL | undefined,
+  allocationScope?: ExpenseAllocationProjectScope,
 ) => {
   const principalAxis = hasPrincipalAxis(input);
   const projectAxis = input.rowDimension === "project";
   const vendorAxis = input.rowDimension === "vendor";
-  const missingProject = notExists(
-    getDb(db)
-      .select({ id: project.id })
-      .from(project)
-      .where(and(eq(project.id, expense.projectId), notDeleted(project))),
-  );
   const liveCharge = alias(purchase, "analyzeLiveCharge");
   const missingVendor = notExists(
     getDb(db)
@@ -602,13 +792,22 @@ export const loadExpenseAnalysisCauses = async (
   const [adjustments, unattributedProject, unattributedVendor] =
     await Promise.all([
       principalAxis
-        ? scopeAggregate(db, and(where, ne(expense.lineKind, "principal")))
+        ? scopeAggregate(
+            db,
+            and(where, ne(expense.lineKind, "principal")),
+            allocationScope,
+          )
         : Promise.resolve(zeroAggregate()),
       projectAxis
-        ? scopeAggregate(db, and(where, missingProject))
+        ? allocatedProjectAggregate(
+            db,
+            where,
+            sql`allocation."projectId" IS NULL`,
+            allocationScope,
+          )
         : Promise.resolve(zeroAggregate()),
       vendorAxis
-        ? scopeAggregate(db, and(where, missingVendor))
+        ? scopeAggregate(db, and(where, missingVendor), allocationScope)
         : Promise.resolve(zeroAggregate()),
     ]);
   return { adjustments, unattributedProject, unattributedVendor };
@@ -780,11 +979,9 @@ export const loadExpensePresenceFacetOptions = (
   where: SQL | undefined,
   id: "project" | "vendor",
 ) =>
-  presenceFacetOptions(
-    db,
-    where,
-    id === "project" ? expense.projectId : expense.purchaseId,
-  );
+  id === "project"
+    ? projectPresenceFacetOptions(db, where)
+    : presenceFacetOptions(db, where, expense.purchaseId);
 
 export const loadExpenseOrderIdFacetOptions = async (
   db: Database,

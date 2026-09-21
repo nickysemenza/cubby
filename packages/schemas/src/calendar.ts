@@ -91,7 +91,7 @@ export const calendarExpenseItem = z.object({
   future: z.boolean(),
   cost: moneyNullable,
   vendor: z.string().nullable(),
-  trade: tradeSchema,
+  trade: tradeSchema.nullable(),
   projectName: z.string().nullable(),
   productName: z.string().nullable(),
   coverImageUrl: z.url().nullable(),

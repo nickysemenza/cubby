@@ -104,7 +104,7 @@ describe("record suggestions", () => {
     });
     await screen.findByText("Suggested: Food");
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.basisMode).toBe("provided");
+    expect(calls[0]?.basisMode).toBe("suggested");
     view.rerender(<Surface name="steel wrench" operations={operations} />);
     expect(screen.queryByText("Suggested: Food")).not.toBeInTheDocument();
     await waitFor(() => expect(calls).toHaveLength(2));
@@ -124,7 +124,7 @@ describe("record suggestions", () => {
     expect(calls).toHaveLength(2);
   });
 
-  it("accepts a nested inventory reference through the normal update contract and preserves the value after failure", async () => {
+  it("opens the normal editor with the saved value after acceptance fails", async () => {
     const record = {
       id: testShortcode("inventory", "bin"),
       product: { id: testShortcode("product", "bin"), name: "Storage bin" },
@@ -155,6 +155,7 @@ describe("record suggestions", () => {
         records={[record]}
         fieldKeys={["location"]}
         operations={operations}
+        readRecord={async () => record}
         mutationPort={createEntityMutationPort({
           execute: async (command) => {
             commands.push(command);
@@ -189,19 +190,17 @@ describe("record suggestions", () => {
     await screen.findByText("Suggested: Workshop");
     expect(calls).toBe(1);
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
-    await screen.findByRole("alert");
-    expect(screen.getByText("Garage")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("dialog", { name: "Edit Inventory Item" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Garage").length).toBeGreaterThan(0);
     expect(commands[0]).toEqual({
       action: "update",
       entity: "inventory",
       id: record.id,
       data: { locationId },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
-    await waitFor(() =>
-      expect(screen.queryByText("Suggested: Workshop")).not.toBeInTheDocument(),
-    );
-    expect(commands).toHaveLength(2);
+    expect(commands).toHaveLength(1);
   });
 
   it("reads inventory's nested product reference as the location suggestion basis", () => {
@@ -217,6 +216,208 @@ describe("record suggestions", () => {
         },
       },
     );
-    expect(basis).toEqual({ productId });
+    expect(basis).toEqual({
+      productId,
+      __referenceLabels: JSON.stringify({
+        productId: { id: productId, name: "Storage bin" },
+      }),
+    });
+  });
+
+  it("changes the authoritative basis when reference evidence is renamed", () => {
+    const productId = testShortcode("product", "renamed");
+    const targets = suggestTargetsFor("inventory", ["locationId"]);
+    const before = fieldSuggestionBasisFromRecord("inventory", targets, {
+      product: { id: productId, name: "Storage bin" },
+    });
+    const after = fieldSuggestionBasisFromRecord("inventory", targets, {
+      product: { id: productId, name: "Garage tote" },
+    });
+
+    expect(after.productId).toBe(before.productId);
+    expect(after.__referenceLabels).not.toBe(before.__referenceLabels);
+  });
+
+  it("rechecks authoritative eligibility before accepting a rendered proposal", async () => {
+    const record = {
+      id: testShortcode("product", "stale"),
+      name: "Red apple",
+      manufacturer: null,
+      category: null,
+    };
+    let calls = 0;
+    const commands: EntityBrowserMutationInput[] = [];
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async () => {
+        calls += 1;
+        return {
+          suggestions: { category: food },
+          eligibleTargets: ["category"],
+        };
+      }),
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["category"]}
+        operations={operations}
+        readRecord={async () => ({
+          ...record,
+          fieldResolutions: {
+            category: {
+              mode: "inherit",
+              storedValue: null,
+              value: "food",
+              fallbackValue: "food",
+              source: "Parent default",
+              sourceEntity: null,
+              matchesFallback: true,
+              canReset: false,
+            },
+          },
+        })}
+        mutationPort={createEntityMutationPort({
+          execute: async (command) => {
+            commands.push(command);
+            throw new Error("must not write");
+          },
+        })}
+      >
+        <RecordFieldSuggestion record={record} field="category">
+          <span>Empty category</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    await screen.findByText("Suggested: Food");
+    fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
+    await screen.findByRole("alert");
+    expect(calls).toBe(1);
+    expect(commands).toHaveLength(0);
+  });
+
+  it("resets a redundant override when the proposal matches its inherited fallback", async () => {
+    const record = {
+      id: testShortcode("task", "redundant"),
+      name: "Replace electrical panel",
+      trade: "plumbing",
+      fieldResolutions: {
+        trade: {
+          mode: "explicit" as const,
+          storedValue: "plumbing",
+          value: "plumbing",
+          fallbackValue: "electrical",
+          source: "Task override",
+          sourceEntity: null,
+          matchesFallback: false,
+          canReset: true,
+        },
+      },
+    };
+    const commands: EntityBrowserMutationInput[] = [];
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async () => ({
+        suggestions: {
+          trade: { ...food, value: "electrical", label: "Electrical" },
+        },
+      })),
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="task"
+        records={[record]}
+        fieldKeys={["trade"]}
+        operations={operations}
+        readRecord={async () => record}
+        mutationPort={createEntityMutationPort({
+          execute: async (command) => {
+            commands.push(command);
+            throw new Error("stop after capture");
+          },
+        })}
+      >
+        <RecordFieldSuggestion record={record} field="trade">
+          <span>Plumbing</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    await screen.findByText("Suggested: Electrical");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use inherited value" }),
+    );
+    expect(
+      await screen.findByRole("dialog", { name: "Edit Task" }),
+    ).toBeInTheDocument();
+    expect(commands[0]).toMatchObject({
+      action: "update",
+      entity: "task",
+      id: record.id,
+      data: { trade: null },
+    });
+  });
+
+  it("routes unresolved inheritance and explicit None to separate review batches", async () => {
+    const calls: FieldSuggestionsInput[] = [];
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+        calls.push(input);
+        return { suggestions: {} };
+      }),
+    };
+    const resolution = {
+      storedValue: null,
+      value: null,
+      fallbackValue: null,
+      source: "Purchase default",
+      sourceEntity: null,
+      matchesFallback: false,
+      canReset: false,
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="expense"
+        records={[
+          {
+            id: testShortcode("expense", "inherited"),
+            name: "Permit fee",
+            lineKind: "principal",
+            projectId: null,
+            trade: null,
+            fieldResolutions: {
+              projectId: { ...resolution, mode: "inherit" },
+              trade: { ...resolution, mode: "none" },
+            },
+          },
+        ]}
+        fieldKeys={["projectId", "trade"]}
+        operations={operations}
+      >
+        <span>row</span>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          basisMode: "suggested",
+          targets: ["projectId"],
+          basis: expect.objectContaining({
+            __resolutionContext: expect.any(String),
+          }),
+        }),
+        expect.objectContaining({
+          basisMode: "provided",
+          targets: ["trade"],
+          basis: expect.objectContaining({
+            __resolutionContext: expect.any(String),
+          }),
+        }),
+      ]),
+    );
   });
 });

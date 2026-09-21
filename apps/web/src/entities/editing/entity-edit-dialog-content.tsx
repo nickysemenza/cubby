@@ -118,6 +118,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
           entity={request.entity as ShortcodeEntity}
           mode={request.operation === "create" ? "create" : "edit"}
           fieldKeys={intentFields}
+          record={record}
         >
           <presentation.Fields
             form={session.form}

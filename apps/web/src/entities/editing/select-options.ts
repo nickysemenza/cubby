@@ -70,9 +70,11 @@ const ENTITY_SELECT_OPTIONS = {
   "task.trade": tradeOptions,
   "project.status": PROJECT_STATUS_OPTIONS,
   "project.kind": projectKindOptions,
+  "project.defaultTrade": tradeOptions,
   "meal.mealType": mealTypeOptions,
   "meal.mealKind": mealKindOptions,
   "expense.trade": tradeOptions,
+  "purchase.defaultTrade": tradeOptions,
   "expense.costType": costTypeOptions,
   // The capture form's `"auto"` sentinel: `lineKind` is left undecided on
   // create and derived server-side from the name — `buildData` strips it

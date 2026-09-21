@@ -123,6 +123,16 @@ type EntityFieldProvenance = Readonly<{
     relation: string | null;
   }>[];
 }>;
+type EntityFieldResolutionValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly EntityFieldResolutionValue[]
+  | EntityFieldResolutionObject;
+interface EntityFieldResolutionObject {
+  readonly [key: string]: EntityFieldResolutionValue;
+}
 export type EntityField = Readonly<{
   key: string;
   kind: EntityFieldKind;
@@ -162,6 +172,11 @@ export type EntityField = Readonly<{
     }>;
     sourceDependencies?: readonly Readonly<{ path: string; label: string }>[];
     actions?: readonly ("confirmOwner" | "inheritOwner" | "editSource")[];
+  }> | null;
+  resolution: Readonly<{
+    reset: Readonly<Record<string, EntityFieldResolutionValue>>;
+    none: Readonly<Record<string, EntityFieldResolutionValue>> | null;
+    redundancy: "eligible" | "intentional";
   }> | null;
   control: EntityFieldControl | null;
   display: Readonly<{

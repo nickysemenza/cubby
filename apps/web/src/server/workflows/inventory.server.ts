@@ -352,6 +352,7 @@ export const bulkDiscardInventoryWorkflow = bindWorkflow(
             ),
             quantity: item.quantity,
           })),
+          trade: input.trade,
           date: input.date,
           reason: input.reason,
         },

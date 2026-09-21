@@ -75,7 +75,15 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+} from "~/server/repo/expense-inheritance";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
+import {
+  effectiveTaskProjectSql,
+  effectiveTaskTradeSql,
+} from "~/server/repo/task-project-inheritance";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
@@ -99,6 +107,11 @@ import {
  * paging mechanism.
  */
 const MAX_MATRIX_ROWS = 250;
+const effectiveExpenseProject = effectiveExpenseProjectSql();
+const effectiveExpenseTrade = effectiveExpenseTradeSql();
+const effectiveTaskProject = effectiveTaskProjectSql();
+const effectiveTaskTrade = effectiveTaskTradeSql();
+type ProjectDateWindows = Awaited<ReturnType<typeof loadProjectDateWindows>>;
 
 type MatrixCellKey = `${ProjectId}:${ProductId}`;
 const cellKey = (projectId: ProjectId, productId: ProductId): MatrixCellKey =>
@@ -131,6 +144,29 @@ function groupLabel(groupBy: "trade" | "manufacturer", key: string): string {
   const parsedTrade = tradeSchema.safeParse(key);
   return parsedTrade.success ? TRADE_LABELS[parsedTrade.data] : key;
 }
+
+const toolNameSearchCondition = (search: string | undefined) =>
+  search
+    ? or(
+        formatSearchTerm(product.name, search),
+        formatSearchTerm(product.manufacturer, search),
+      )
+    : undefined;
+
+const completionProjectIds = (
+  filters: ProjectToolMatrixFilters,
+  dated: ProjectDateWindows,
+): ProjectId[] | undefined => {
+  if (!filters.completionYear) return undefined;
+  return dated.tree.allRows
+    .filter((row) => {
+      const window = dated.dateWindows.get(row.id);
+      return (
+        window && projectCompletionYear(row, window) === filters.completionYear
+      );
+    })
+    .map((row) => row.id);
+};
 
 export async function projectToolMatrix(
   db: Database,
@@ -180,15 +216,7 @@ export async function projectToolMatrix(
         buildSearchConditions(
           product,
           [],
-          [
-            eq(product.category, "tools"),
-            toolSearch
-              ? or(
-                  formatSearchTerm(product.name, toolSearch),
-                  formatSearchTerm(product.manufacturer, toolSearch),
-                )
-              : undefined,
-          ],
+          [eq(product.category, "tools"), toolNameSearchCondition(toolSearch)],
         ),
       )
       .groupBy(
@@ -210,17 +238,7 @@ export async function projectToolMatrix(
   // Columns. `buildDashboardProjectWhere` is reused verbatim: the matrix's
   // column scope IS the Projects-page scope, so a bespoke filter here would be
   // a fourth copy of rules that already drifted once.
-  const completionIds = filters.completionYear
-    ? dated.tree.allRows
-        .filter((row) => {
-          const window = dated.dateWindows.get(row.id);
-          return (
-            window &&
-            projectCompletionYear(row, window) === filters.completionYear
-          );
-        })
-        .map((row) => row.id)
-    : undefined;
+  const completionIds = completionProjectIds(filters, dated);
 
   const [projectRows, toolSignalRows] = await Promise.all([
     dbc
@@ -238,7 +256,7 @@ export async function projectToolMatrix(
     // edge, or tool-costType spend. Unbounded by design (82 edges household-
     // wide today) and independent of the row set, so it rides along here.
     dbc
-      .select({ projectId: expense.projectId })
+      .select({ projectId: effectiveExpenseProject })
       .from(expense)
       .where(
         and(
@@ -249,7 +267,7 @@ export async function projectToolMatrix(
           notDeleted(expense),
         ),
       )
-      .groupBy(expense.projectId),
+      .groupBy(effectiveExpenseProject),
   ]);
 
   // The sort key is the RECURSIVE effective window, which only exists as a TS
@@ -347,26 +365,26 @@ export async function projectToolMatrix(
         ? []
         : dbc
             .select({
-              projectId: task.projectId,
-              trade: task.trade,
+              projectId: effectiveTaskProject,
+              trade: effectiveTaskTrade,
               taskCount: count(),
             })
             .from(task)
             .where(
               and(
-                inArray(task.projectId, columnIds),
-                ne(task.trade, "planning"),
-                ne(task.trade, "other"),
+                inArray(effectiveTaskProject, columnIds),
+                ne(effectiveTaskTrade, "planning"),
+                ne(effectiveTaskTrade, "other"),
                 notDeleted(task),
               ),
             )
-            .groupBy(task.projectId, task.trade),
+            .groupBy(effectiveTaskProject, effectiveTaskTrade),
       empty || !wantsLane("trade_match")
         ? []
         : dbc
             .select({
-              projectId: expense.projectId,
-              trade: expense.trade,
+              projectId: effectiveExpenseProject,
+              trade: effectiveExpenseTrade,
               expenseCount: count(),
               grossSpend:
                 sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
@@ -374,16 +392,16 @@ export async function projectToolMatrix(
             .from(expense)
             .where(
               and(
-                inArray(expense.projectId, columnIds),
+                inArray(effectiveExpenseProject, columnIds),
                 eq(expense.lineKind, "principal"),
                 eq(expense.future, false),
                 gt(expense.cost, 0),
-                ne(expense.trade, "planning"),
-                ne(expense.trade, "other"),
+                ne(effectiveExpenseTrade, "planning"),
+                ne(effectiveExpenseTrade, "other"),
                 notDeleted(expense),
               ),
             )
-            .groupBy(expense.projectId, expense.trade),
+            .groupBy(effectiveExpenseProject, effectiveExpenseTrade),
       rowIds.length === 0
         ? []
         : dbc
@@ -408,7 +426,7 @@ export async function projectToolMatrix(
         : dbc
             .select({
               productId: expense.productId,
-              trade: expense.trade,
+              trade: effectiveExpenseTrade,
               matchingExpenseCount: count(),
             })
             .from(expense)
@@ -422,7 +440,7 @@ export async function projectToolMatrix(
                 notDeleted(expense),
               ),
             )
-            .groupBy(expense.productId, expense.trade),
+            .groupBy(expense.productId, effectiveExpenseTrade),
       loadResourceMetrics(dbc, rowIds),
       loadProductOwnershipTimelines(dbc, rowIds, { today }),
     ]);
@@ -476,7 +494,7 @@ export async function projectToolMatrix(
     Array<{ productId: ProductId; matchingExpenseCount: number }>
   >();
   for (const row of candidateRows) {
-    if (!row.productId) continue;
+    if (!row.productId || !row.trade) continue;
     const bucket = candidatesByTrade.get(row.trade) ?? [];
     bucket.push({
       productId: row.productId,
@@ -499,11 +517,11 @@ export async function projectToolMatrix(
     return existing;
   };
   for (const row of taskTradeRows) {
-    if (!row.projectId) continue;
+    if (!row.projectId || !row.trade) continue;
     signalFor(row.projectId, row.trade).taskCount = Number(row.taskCount);
   }
   for (const row of expenseTradeRows) {
-    if (!row.projectId) continue;
+    if (!row.projectId || !row.trade) continue;
     const signal = signalFor(row.projectId, row.trade);
     signal.expenseCount = Number(row.expenseCount);
     signal.grossSpend = row.grossSpend;

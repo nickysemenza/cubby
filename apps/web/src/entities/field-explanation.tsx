@@ -1,14 +1,18 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
 import { fieldExplanationSource } from "@cubby/schemas/field-explanation";
+import { inventoryShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { inventory } from "~/app/inventory/inventory.functions";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { NoneValue } from "~/components/ui/none-value";
 import {
   Popover,
   PopoverContent,
@@ -20,12 +24,74 @@ import { fieldExplanation } from "./field-explanation.functions";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
 type ExplanationValue = ExplanationSource["value"];
-const explanationString = z.string();
+const explanationScalar = z.union([z.string(), z.number(), z.boolean()]);
+const explanationRecord = z.record(z.string(), z.json());
 
-const formatExplanationValue = (value: ExplanationValue): string => {
-  const text = explanationString.safeParse(value);
-  return text.success ? text.data : JSON.stringify(value, null, 2);
-};
+const humanizeKey = (key: string) =>
+  key
+    .replaceAll(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replaceAll("_", " ")
+    .replace(/^./, (letter) => letter.toUpperCase());
+
+function ReadableExplanationValue({
+  value,
+  depth = 0,
+}: {
+  value: ExplanationValue;
+  depth?: number;
+}) {
+  if (value === null) return <NoneValue />;
+  const scalar = explanationScalar.safeParse(value);
+  if (scalar.success) {
+    const boolean = z.boolean().safeParse(scalar.data);
+    const display = boolean.success
+      ? boolean.data
+        ? "Yes"
+        : "No"
+      : scalar.data;
+    return <span className="break-words">{display}</span>;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <NoneValue />;
+    const occurrences = new Map<string, number>();
+    return (
+      <ul className="grid gap-1 pl-4 text-xs">
+        {value.map((item) => {
+          const contentKey = JSON.stringify(item);
+          const occurrence = occurrences.get(contentKey) ?? 0;
+          occurrences.set(contentKey, occurrence + 1);
+          return (
+            <li key={`${contentKey}:${occurrence}`} className="list-disc">
+              <ReadableExplanationValue value={item} depth={depth + 1} />
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+  const record = explanationRecord.safeParse(value);
+  if (!record.success) return <span>Unavailable</span>;
+  if (depth >= 2) {
+    const summary = Object.entries(record.data)
+      .filter(([, item]) => explanationScalar.safeParse(item).success)
+      .slice(0, 3)
+      .map(([key, item]) => `${humanizeKey(key)}: ${String(item)}`)
+      .join(" · ");
+    return <span>{summary || "Supporting details"}</span>;
+  }
+  return (
+    <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
+      {Object.entries(record.data).map(([key, item]) => (
+        <div key={key} className="contents">
+          <dt className="text-muted-foreground">{humanizeKey(key)}</dt>
+          <dd className="min-w-0">
+            <ReadableExplanationValue value={item} depth={depth + 1} />
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 const explanationSourceKey = (source: ExplanationSource): string =>
   [
@@ -57,6 +123,14 @@ export function FieldExplanation({
   surface?: "list" | "detail" | "summary";
 }) {
   const [open, setOpen] = useState(false);
+  const inheritOwner = useActionMutation({
+    mutationFn: inventory.setOwnership.mutationOptions,
+    success: "Using inherited owner",
+  });
+  const confirmOwner = useActionMutation({
+    mutationFn: inventory.confirmOwnership.mutationOptions,
+    success: "Owner confirmed",
+  });
   const result = useQuery({
     ...fieldExplanation.explain.queryOptions({
       entityType: entity,
@@ -93,9 +167,9 @@ export function FieldExplanation({
               <p className="text-sm">{result.data.rule.description}</p>
               <div className="text-sm">
                 <span className="text-muted-foreground">Current value</span>
-                <pre className="text-xs break-words whitespace-pre-wrap">
-                  {formatExplanationValue(result.data.value)}
-                </pre>
+                <div className="mt-1">
+                  <ReadableExplanationValue value={result.data.value} />
+                </div>
               </div>
               {result.data.sources.map((source) => (
                 <div key={explanationSourceKey(source)} className="text-sm">
@@ -107,9 +181,9 @@ export function FieldExplanation({
                     />
                   ) : null}
                   {source.value !== null ? (
-                    <pre className="text-xs break-words whitespace-pre-wrap">
-                      {formatExplanationValue(source.value)}
-                    </pre>
+                    <div className="mt-1">
+                      <ReadableExplanationValue value={source.value} />
+                    </div>
                   ) : null}
                 </div>
               ))}
@@ -118,18 +192,67 @@ export function FieldExplanation({
                   Showing the first sources.
                 </p>
               ) : null}
-              {result.data.actions.map((action) => (
-                <div
-                  key={action.kind}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <span>{action.label}</span>
-                  <ExplanationEntityLink
-                    entity={action.target.entityType}
-                    id={action.target.entityId}
-                  />
-                </div>
-              ))}
+              {result.data.actions.map((action) => {
+                const inventoryAction =
+                  action.target.entityType === "inventory";
+                if (action.kind === "inheritOwner" && inventoryAction) {
+                  return (
+                    <Button
+                      key={action.kind}
+                      size="sm"
+                      variant="outline"
+                      disabled={inheritOwner.isPending}
+                      onClick={() =>
+                        inheritOwner.mutate({
+                          inventoryEntryId: inventoryShortcode.parse(
+                            action.target.entityId,
+                          ),
+                          ownership: { mode: "inherit" },
+                        })
+                      }
+                    >
+                      {action.label}
+                    </Button>
+                  );
+                }
+                if (
+                  action.kind === "confirmOwner" &&
+                  inventoryAction &&
+                  result.data.evidenceFingerprint
+                ) {
+                  const evidenceFingerprint = result.data.evidenceFingerprint;
+                  return (
+                    <Button
+                      key={action.kind}
+                      size="sm"
+                      variant="outline"
+                      disabled={confirmOwner.isPending}
+                      onClick={() =>
+                        confirmOwner.mutate({
+                          inventoryEntryId: inventoryShortcode.parse(
+                            action.target.entityId,
+                          ),
+                          evidenceFingerprint,
+                        })
+                      }
+                    >
+                      {action.label}
+                    </Button>
+                  );
+                }
+                return (
+                  <div
+                    key={action.kind}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <span>{action.label}</span>
+                    <ExplanationEntityLink
+                      entity={action.target.entityType}
+                      id={action.target.entityId}
+                    />
+                  </div>
+                );
+              })}
             </>
           )}
         </Stack>
