@@ -210,12 +210,18 @@ const recipeCoverageSchema = z.object({
   cost: z.unknown(),
   kcal: z.unknown(),
 });
-const productCoverageSchema = z.object({
+// Shape for any scored entity (product, purchase, and future entries in
+// `scoredEntities`) whose item carries a `dataQuality` block — not a
+// product-specific shape.
+const dataQualityCoverageSchema = z.object({
   status: z.string().nullable(),
   missingChecks: z.array(z.string()),
   defectChecks: z.array(z.string()),
 });
-const coverageSchema = z.union([recipeCoverageSchema, productCoverageSchema]);
+const coverageSchema = z.union([
+  recipeCoverageSchema,
+  dataQualityCoverageSchema,
+]);
 
 const entitySummaryItemSchema = z
   .object({
@@ -263,6 +269,10 @@ const projectionItemSchema = z
   .passthrough();
 type ProjectionItem = z.infer<typeof projectionItemSchema>;
 
+// Structural, not name-based: any entity whose item carries `dataQuality`
+// (product, purchase, or a future scored entity from `scoredEntities`) gets
+// the same coverage projection, so this never needs a per-entity branch as
+// more entities gain a data-quality block.
 function coverageFor(entity: keyof typeof entitySummary, item: ProjectionItem) {
   if (entity === "recipe") {
     return {
@@ -270,27 +280,25 @@ function coverageFor(entity: keyof typeof entitySummary, item: ProjectionItem) {
       kcal: item.totals?.nutrition.kcal ?? null,
     };
   }
-  if (entity === "product") {
-    const quality = item.dataQuality;
-    return {
-      status: quality?.status ?? null,
-      missingChecks: [
-        ...new Set(
-          (quality?.gaps ?? [])
-            .filter((gap) => gap.kind === "missing")
-            .map((gap) => String(gap.check)),
-        ),
-      ],
-      defectChecks: [
-        ...new Set(
-          (quality?.gaps ?? [])
-            .filter((gap) => gap.kind === "defect")
-            .map((gap) => String(gap.check)),
-        ),
-      ],
-    };
-  }
-  return undefined;
+  const quality = item.dataQuality;
+  if (!quality) return undefined;
+  return {
+    status: quality.status ?? null,
+    missingChecks: [
+      ...new Set(
+        (quality.gaps ?? [])
+          .filter((gap) => gap.kind === "missing")
+          .map((gap) => String(gap.check)),
+      ),
+    ],
+    defectChecks: [
+      ...new Set(
+        (quality.gaps ?? [])
+          .filter((gap) => gap.kind === "defect")
+          .map((gap) => String(gap.check)),
+      ),
+    ],
+  };
 }
 
 function summarizeEntityItem(

@@ -4,7 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 
-import { slimProduct, slimProductDetail } from "./response-projection";
+import {
+  entitySummaryResultSchema,
+  projectEntityResult,
+  slimProduct,
+  slimProductDetail,
+} from "./response-projection";
 
 const productAttachmentImageOut = productTopLevelOut.shape.images.element;
 
@@ -105,5 +110,58 @@ describe("product MCP response projection", () => {
         isCover: false,
       }),
     ]);
+  });
+});
+
+describe("data-quality coverage projection", () => {
+  // coverageFor is structural (any item carrying `dataQuality`), not a
+  // product-only branch, so a non-product scored entity (purchase here)
+  // must produce the identical coverage shape from an update result.
+  it("projects coverage for a non-product scored entity carrying dataQuality", () => {
+    const result = projectEntityResult(
+      { resultDetail: "summary" },
+      {
+        action: "update",
+        entity: "purchase",
+        item: {
+          id: "PUR-2ABC",
+          displayName: "Synthetic purchase",
+          dataQuality: {
+            status: "needs_data",
+            gaps: [
+              { check: "order_id", kind: "missing" },
+              { check: "paperwork_mismatch", kind: "defect" },
+            ],
+          },
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      item: {
+        id: "PUR-2ABC",
+        name: "Synthetic purchase",
+        coverage: {
+          status: "needs_data",
+          missingChecks: ["order_id"],
+          defectChecks: ["paperwork_mismatch"],
+        },
+      },
+    });
+  });
+
+  it("omits coverage for entities with no dataQuality block", () => {
+    const result = projectEntityResult(
+      { resultDetail: "summary" },
+      {
+        action: "update",
+        entity: "cookbook",
+        item: { id: "CBK-2ABC", book: "Synthetic book" },
+      },
+    );
+
+    expect(result).toMatchObject({ item: { id: "CBK-2ABC" } });
+    const parsed = entitySummaryResultSchema.parse(result);
+    expect(parsed.item?.coverage).toBeUndefined();
   });
 });
