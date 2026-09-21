@@ -5,13 +5,13 @@ import Testing
 @Suite("Intent surface")
 struct IntentSurfaceTests {
     /// The intent surface is exactly the catalog's searchable, HTTP-gettable, prefixed entities:
-    /// an entity with a prefix but no search index (image) or no prefix (usdaFood) stays out of
-    /// Siri, Spotlight and deep links.
+    /// searchable images participate through their native read adapter; entities without a
+    /// shortcode prefix (usdaFood) stay out of Siri, Spotlight and deep links.
     @Test func exposedEntitiesAreSearchableFetchableAndPrefixed() {
         let exposed = EntityCatalog.intentExposed
         #expect(exposed.contains { $0.key == .product })
         #expect(exposed.contains { $0.key == .location })
-        #expect(!exposed.contains { $0.key == .image })
+        #expect(exposed.contains { $0.key == .image })
         #expect(!exposed.contains { $0.key == .usdaFood })
     }
 

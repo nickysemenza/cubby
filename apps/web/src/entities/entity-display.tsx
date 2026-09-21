@@ -834,6 +834,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
               ...column.meta,
               entityColumnRole: "fact",
               provenance: field.provenance ?? undefined,
+              explanation: field.explanation
+                ? { entity, field: field.key, label: field.label }
+                : undefined,
             }),
             header:
               column.header === undefined ||

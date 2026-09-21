@@ -135,6 +135,7 @@ function buildRecipeColumnMeta() {
     header: z.string().parse(column.header),
     className: column.meta?.className,
     mobile: column.meta?.mobile,
+    explanation: column.meta?.explanation,
     enableSorting: column.enableSorting,
   }));
 }
@@ -207,6 +208,17 @@ describe("recipe list display columns", () => {
     );
     expect(byId.notes?.className).toBeUndefined();
     expect(byId.notes?.mobile).toBeUndefined();
+  });
+
+  it("preserves explanation metadata on the manifest-rendered source column", () => {
+    const byId = Object.fromEntries(
+      buildRecipeColumnMeta().map((column) => [column.id, column]),
+    );
+    expect(byId.source?.explanation).toEqual({
+      entity: "recipe",
+      field: "source",
+      label: "Source",
+    });
   });
 
   it("renders the costTotal override's own cell against the row", () => {
