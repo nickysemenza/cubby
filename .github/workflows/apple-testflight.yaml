@@ -56,8 +56,7 @@ jobs:
           {
             echo "version=$version"
             echo "mode=$mode"
-            echo "ios-build=${commit_count}.1.${GITHUB_RUN_ATTEMPT}"
-            echo "macos-build=${commit_count}.2.${GITHUB_RUN_ATTEMPT}"
+            echo "build=${commit_count}.${GITHUB_RUN_ATTEMPT}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Check current main
@@ -75,8 +74,8 @@ jobs:
       - uses: ./.github/actions/release-apple
         with:
           version: ${{ steps.release.outputs.version }}
-          ios-build-number: ${{ steps.release.outputs.ios-build }}
-          macos-build-number: ${{ steps.release.outputs.macos-build }}
+          ios-build-number: ${{ steps.release.outputs.build }}
+          macos-build-number: ${{ steps.release.outputs.build }}
           mode: ${{ steps.release.outputs.mode }}
           api-key-p8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}

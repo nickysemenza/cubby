@@ -95,8 +95,7 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 
 The `Apple TestFlight` GitHub Actions workflow archives and uploads both the iOS and native macOS
 apps to the shared App Store Connect record. A release tag must be an exact `vMAJOR.MINOR.PATCH`
-tag on the current `main` commit, and the `CI` workflow must already have succeeded for that exact
-commit. For example:
+tag on the current `main` commit. For example:
 
 ```sh
 git switch main
@@ -105,12 +104,11 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-The tag supplies `MARKETING_VERSION`. Build numbers are generated without editing `project.yml`:
-iOS uses `<commit-count>.1.<run-attempt>` and macOS uses
-`<commit-count>.2.<run-attempt>`. Rerunning a partially failed release therefore produces fresh
-build numbers for both platforms. Both archives must finish before either upload starts, and every
-uploaded archive has `testFlightInternalTestingOnly` set, so it cannot later be promoted to external
-TestFlight or the App Store.
+The tag supplies `MARKETING_VERSION`. Both platforms share a
+`<commit-count>.<run-attempt>` build number generated without editing `project.yml`. Rerunning a
+partially failed release therefore produces a fresh build number for both platforms. Both archives
+must finish before either upload starts. Every uploaded archive has `testFlightInternalTestingOnly`
+set, so it cannot later be promoted to external TestFlight or the App Store.
 
 Use the workflow's manual dispatch with a `MAJOR.MINOR.PATCH` version to validate the complete
 certificate, profile, archive, and export path. Manual runs save the signed exports and dSYMs as a
