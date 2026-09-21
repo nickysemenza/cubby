@@ -122,7 +122,7 @@ describe("project reusable resources", () => {
     await expect(
       deleteProducts(ctx.db, [tool.entityId], ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "PRODUCT_HAS_PROJECT_USES" },
+      reason: "PRODUCT_HAS_PROJECT_USES",
     });
 
     await deleteProjects(ctx.db, [project.id], ctx.actor);
@@ -272,14 +272,12 @@ describe("repointProjectUses", () => {
       // simply the wrong category, and the two used to be indistinguishable.
       // The refusal also NAMES the offending shortcode, structurally.
     ).rejects.toMatchObject({
-      cause: { reason: "PRODUCT_CATEGORY_INELIGIBLE" },
+      reason: "PRODUCT_CATEGORY_INELIGIBLE",
     });
     const refusalSchema = z.object({
-      cause: z.object({
-        blockers: z
-          .array(z.object({ byTargetId: z.record(z.string(), z.number()) }))
-          .optional(),
-      }),
+      blockers: z
+        .array(z.object({ byTargetId: z.record(z.string(), z.number()) }))
+        .optional(),
     });
     const captureRefusal = async () => {
       try {
@@ -295,9 +293,7 @@ describe("repointProjectUses", () => {
     };
     const refusal = await captureRefusal();
     expect(
-      refusal.cause.blockers?.flatMap((blocker) =>
-        Object.keys(blocker.byTargetId),
-      ),
+      refusal.blockers?.flatMap((blocker) => Object.keys(blocker.byTargetId)),
     ).toEqual([consumable.id]);
   });
 });

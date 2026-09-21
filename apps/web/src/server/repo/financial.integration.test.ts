@@ -98,7 +98,7 @@ describe("financial repositories — critical invariants", () => {
     const rejected = results.find((result) => result.status === "rejected");
     expect(rejected).toMatchObject({
       reason: {
-        cause: { reason: "FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT" },
+        reason: "FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT",
       },
     });
   });
@@ -133,7 +133,7 @@ describe("financial repositories — critical invariants", () => {
     const rejected = results.find((result) => result.status === "rejected");
     expect(rejected).toMatchObject({
       reason: {
-        cause: { reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" },
+        reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
       },
     });
   });
@@ -683,7 +683,7 @@ describe("financial repositories — critical invariants", () => {
     await expect(
       deleteFinancialAccounts(ctx.db, [acct.id], ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS" },
+      reason: "FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS",
     });
     // The child survives with its triage intact — the half a fail-open guard
     // would destroy.
@@ -724,7 +724,7 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({
-      cause: { reason: "FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT" },
+      reason: "FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT",
     });
     const vendorId = await findOrCreateVendor(ctx.db, "Finance test vendor");
     const purchase = (
@@ -755,7 +755,7 @@ describe("financial repositories — critical invariants", () => {
     await expect(
       deleteFinancialAccounts(ctx.db, [a.id], ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS" },
+      reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
     });
     await expect(
       createFinancialTransaction(
@@ -770,7 +770,7 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({
-      cause: { reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" },
+      reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
     });
     await expect(
       updateFinancialTransaction(
@@ -780,7 +780,7 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({
-      cause: { reason: "FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED" },
+      reason: "FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED",
     });
     const updated = await updateFinancialTransaction(
       ctx.db,
@@ -1258,12 +1258,12 @@ describe("financial repositories — critical invariants", () => {
         { amount: 140.22 },
         ctx.actor,
       ),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
 
     // Update path: a kind outside the allowlist may not stay linked.
     await expect(
       updateFinancialTransaction(ctx.db, payout.id, { kind: "fee" }, ctx.actor),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
 
     // The last line of defence when app validation is bypassed used to be a DB
     // CHECK. It was dropped with the `purchaseId` column it read: once "is this

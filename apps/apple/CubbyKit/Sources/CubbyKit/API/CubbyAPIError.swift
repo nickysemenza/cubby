@@ -91,6 +91,28 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
         }
     }
 
+    public struct Diagnostics: Decodable, Sendable {
+        public struct Cause: Decodable, Sendable {
+            public let name: String
+            public let message: String
+            public let code: String?
+            public let status: Int?
+        }
+
+        public let origin: String
+        public let operation: String
+        public let entity: String?
+        public let module: String?
+        public let stage: String
+        public let causes: [Cause]
+        public let truncated: Bool?
+        public let batchIndex: Int?
+        public let sentryEventId: String?
+        public let sentryUrl: String?
+        public let cfRayId: String?
+        public let cloudflareUrl: String?
+    }
+
     /// The `ApiError` body, hand-decoded so a body that is merely *shaped* like JSON still
     /// degrades to `detail == nil` instead of throwing out of an error path.
     public struct ErrorDetail: Decodable, Sendable {
@@ -98,6 +120,7 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
         public let message: String
         public let reason: String?
         public let requestId: String?
+        public let diagnostics: Diagnostics?
         public let validationIssues: [ValidationIssue]?
 
         public init(
@@ -105,13 +128,30 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
             message: String,
             reason: String? = nil,
             requestId: String? = nil,
+            diagnostics: Diagnostics? = nil,
             validationIssues: [ValidationIssue]? = nil
         ) {
             self.code = code
             self.message = message
             self.reason = reason
             self.requestId = requestId
+            self.diagnostics = diagnostics
             self.validationIssues = validationIssues
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case code, message, reason, requestId, diagnostics, validationIssues
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            code = try values.decode(String.self, forKey: .code)
+            message = try values.decode(String.self, forKey: .message)
+            reason = try values.decodeIfPresent(String.self, forKey: .reason)
+            requestId = try values.decodeIfPresent(String.self, forKey: .requestId)
+            validationIssues = try values.decodeIfPresent([ValidationIssue].self, forKey: .validationIssues)
+            // An optional diagnostic extension must not discard a usable API error.
+            diagnostics = try? values.decodeIfPresent(Diagnostics.self, forKey: .diagnostics)
         }
     }
 

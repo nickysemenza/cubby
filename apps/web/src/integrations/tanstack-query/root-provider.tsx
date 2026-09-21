@@ -12,9 +12,9 @@ import { toast } from "sonner";
 import superjson from "superjson";
 import { z } from "zod";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { authClient } from "~/lib/auth-client";
 import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
-import { getErrorMessage } from "~/lib/error-utils";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 
 import {
@@ -72,7 +72,7 @@ const signInWithGoogle = (params: unknown) => {
 // state update on a component that hasn't mounted yet" warning. Deferring to a
 // macrotask guarantees the toast fires after the current commit.
 function deferToastError<Failure>(error: Failure) {
-  setTimeout(() => toast.error(getErrorMessage(error)), 0);
+  setTimeout(() => showErrorToast(error), 0);
 }
 
 export interface RootMutationSuccessRuntime {

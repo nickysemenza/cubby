@@ -7,6 +7,11 @@ import { z } from "zod";
 
 import type { PublicStartValidationIssue } from "~/server/start-operation.contract";
 
+import {
+  type ErrorDiagnostics,
+  errorDiagnosticsSchema,
+} from "./error-diagnostics";
+
 // Re-export from shared for convenience (22+ consumers)
 export { getErrorMessage } from "@cubby/shared";
 
@@ -66,6 +71,8 @@ const validationIssueSchema = z.object({
 const transportErrorSchema = z.object({
   message: z.string(),
   data: z.object({
+    requestId: z.string().optional().catch(undefined),
+    diagnostics: errorDiagnosticsSchema.optional().catch(undefined),
     code: z.string().optional().catch(undefined),
     reason: appErrorReasonSchema.optional().catch(undefined),
     blockers: z.array(publicImpactItemSchema).optional().catch(undefined),
@@ -78,6 +85,8 @@ const transportErrorSchema = z.object({
 
 type AppErrorDetails = {
   message: string;
+  requestId?: string;
+  diagnostics?: ErrorDiagnostics;
   code?: string;
   reason?: AppErrorReason;
   /**
@@ -97,6 +106,10 @@ export function getAppErrorDetails(error: UnparsedError): AppErrorDetails {
   const parsed = transportErrorSchema.safeParse(error);
   if (parsed.success) {
     const details: AppErrorDetails = { message: parsed.data.message };
+    if (parsed.data.data.requestId)
+      details.requestId = parsed.data.data.requestId;
+    if (parsed.data.data.diagnostics)
+      details.diagnostics = parsed.data.data.diagnostics;
     if (parsed.data.data.code) details.code = parsed.data.data.code;
     if (parsed.data.data.reason) details.reason = parsed.data.data.reason;
     if (parsed.data.data.blockers) {

@@ -668,7 +668,7 @@ describe("deleteIngredients", () => {
       deleteIngredients(ctx.db, [usedIngredientId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "INGREDIENT_HAS_RECIPES" },
+      reason: "INGREDIENT_HAS_RECIPES",
     });
 
     // Deleting the recipe cascade-soft-deletes its section ingredients,
@@ -705,7 +705,7 @@ describe("deleteIngredients", () => {
       deleteIngredients(ctx.db, [cropId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "INGREDIENT_HAS_PLANTINGS" },
+      reason: "INGREDIENT_HAS_PLANTINGS",
     });
   });
 
@@ -729,7 +729,7 @@ describe("deleteIngredients", () => {
       deleteIngredients(ctx.db, [cropId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "INGREDIENT_HAS_GARDEN_PRODUCTS" },
+      reason: "INGREDIENT_HAS_GARDEN_PRODUCTS",
     });
   });
 });

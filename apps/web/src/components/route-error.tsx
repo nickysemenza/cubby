@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ErrorDetails } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -21,6 +22,7 @@ import {
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
+import { sentryEventUrl } from "~/lib/error-diagnostics";
 import {
   getAppErrorDetails,
   getErrorMessage,
@@ -47,11 +49,6 @@ const FRIENDLY_MESSAGES = {
   navigation: "Navigation was interrupted. Reload the app to continue.",
   generic: "Something went wrong",
 } satisfies Record<ErrorCategory, string>;
-
-const SENTRY_ORGANIZATION_ID = "83311";
-
-const sentryEventUrl = (eventId: string) =>
-  `https://sentry.io/organizations/${SENTRY_ORGANIZATION_ID}/issues/?query=${encodeURIComponent(`event.id:${eventId}`)}`;
 
 const categorizeError = (
   code: string | undefined,
@@ -113,7 +110,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [sentryEventId, setSentryEventId] = useState<string>();
 
-  const { code, reason, message } = getAppErrorDetails(error);
+  const { code, reason, message, diagnostics } = getAppErrorDetails(error);
   const rawMessage = getErrorMessage(error);
   const category = categorizeError(code, reason, rawMessage, error);
   const friendlyMessage = FRIENDLY_MESSAGES[category];
@@ -121,6 +118,11 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
     error instanceof StartOperationError ? error.requestId : undefined;
 
   useEffect(() => {
+    if (
+      error instanceof StartOperationError ||
+      diagnostics?.origin === "server"
+    )
+      return;
     if (
       category === "generic" ||
       category === "network" ||
@@ -132,7 +134,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
       );
       setSentryEventId(eventId);
     }
-  }, [error, category, requestId]);
+  }, [error, category, requestId, diagnostics?.origin]);
 
   const stack = error instanceof Error ? error.stack : undefined;
 
@@ -149,7 +151,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
       </h2>
 
       <p className="max-w-md text-center text-muted-foreground">
-        {friendlyMessage}
+        {diagnostics ? message : friendlyMessage}
       </p>
 
       {category === "auth" && (
@@ -189,78 +191,80 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         </Row>
       )}
 
-      {/* Collapsible technical details */}
-      <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <CollapsibleTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs text-muted-foreground"
-            />
-          }
-        >
-          Technical details
-          <ChevronDown
-            className={`ml-1 size-3 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
-          />
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <Stack
-            gap="sm"
-            className="mt-2 w-[min(60rem,calc(100vw-2rem))] border border-[var(--border)] bg-muted/50 p-4 text-left font-mono text-sm leading-6 break-words"
+      <ErrorDetails error={error} />
+      {!diagnostics && (
+        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <CollapsibleTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground"
+              />
+            }
           >
-            {code && (
+            Technical details
+            <ChevronDown
+              className={`ml-1 size-3 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <Stack
+              gap="sm"
+              className="mt-2 w-[min(60rem,calc(100vw-2rem))] border border-[var(--border)] bg-muted/50 p-4 text-left font-mono text-sm leading-6 break-words"
+            >
+              {code && (
+                <div>
+                  <span className="text-muted-foreground">Code: </span>
+                  <span className="text-foreground">{code}</span>
+                </div>
+              )}
+              {reason && (
+                <div>
+                  <span className="text-muted-foreground">Reason: </span>
+                  <span className="text-foreground">{reason}</span>
+                </div>
+              )}
               <div>
-                <span className="text-muted-foreground">Code: </span>
-                <span className="text-foreground">{code}</span>
+                <span className="text-muted-foreground">Message: </span>
+                <span className="text-foreground">{message || rawMessage}</span>
               </div>
-            )}
-            {reason && (
-              <div>
-                <span className="text-muted-foreground">Reason: </span>
-                <span className="text-foreground">{reason}</span>
-              </div>
-            )}
-            <div>
-              <span className="text-muted-foreground">Message: </span>
-              <span className="text-foreground">{message || rawMessage}</span>
-            </div>
-            {requestId && (
-              <div>
-                {/* "Request ID", not "Trace ID": this is an OTel trace id in
+              {requestId && (
+                <div>
+                  {/* "Request ID", not "Trace ID": this is an OTel trace id in
                     dev but a Cloudflare ray id in prod — different systems,
                     different formats, so a generic label is the honest one. */}
-                <span className="text-muted-foreground">Request ID: </span>
-                <span className="text-foreground">{requestId}</span>
-              </div>
-            )}
-            {sentryEventId && (
-              <div>
-                <span className="text-muted-foreground">Sentry: </span>
-                <a
-                  href={sentryEventUrl(sentryEventId)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-cobalt hover:text-cobalt-hover underline underline-offset-2"
-                >
-                  View event {sentryEventId}
-                </a>
-              </div>
-            )}
-            {stack && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                  Stack trace
-                </summary>
-                <pre className="mt-1 max-h-96 overflow-auto text-xs whitespace-pre-wrap text-muted-foreground">
-                  {stack}
-                </pre>
-              </details>
-            )}
-          </Stack>
-        </CollapsibleContent>
-      </Collapsible>
+                  <span className="text-muted-foreground">Request ID: </span>
+                  <span className="text-foreground">{requestId}</span>
+                </div>
+              )}
+              {sentryEventId && (
+                <div>
+                  <span className="text-muted-foreground">Sentry: </span>
+                  <a
+                    href={sentryEventUrl(sentryEventId)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-cobalt hover:text-cobalt-hover underline underline-offset-2"
+                  >
+                    View event {sentryEventId}
+                  </a>
+                </div>
+              )}
+              {stack && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    Stack trace
+                  </summary>
+                  <pre className="mt-1 max-h-96 overflow-auto text-xs whitespace-pre-wrap text-muted-foreground">
+                    {stack}
+                  </pre>
+                </details>
+              )}
+            </Stack>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   );
 }

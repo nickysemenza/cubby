@@ -63,6 +63,26 @@ struct ErrorDecodingTests {
         #expect(issues[0].message == "Sample field error")
     }
 
+    @Test func diagnosticExtensionsPreserveCausesAndLinks() throws {
+        let body = Data(
+            #"{"code":"INTERNAL_SERVER_ERROR","message":"Connection limit exceeded","diagnostics":{"origin":"server","operation":"entity.list","stage":"run","causes":[{"name":"Error","message":"Connection limit exceeded","code":"53300"}],"sentryEventId":"sample-event","sentryUrl":"https://example.invalid/event","cfRayId":"sample-ray"}}"#
+                .utf8)
+        let error = CubbyAPIError.decode(status: 500, operationID: "entity.list", body: body)
+        let detail = try #require(error.detail)
+        #expect(detail.diagnostics?.causes.first?.code == "53300")
+        #expect(detail.diagnostics?.sentryEventId == "sample-event")
+        #expect(detail.diagnostics?.cfRayId == "sample-ray")
+    }
+
+    @Test func malformedOptionalDiagnosticsDoNotDiscardTheMessage() {
+        let body = Data(
+            #"{"code":"INTERNAL_SERVER_ERROR","message":"Operation failed","diagnostics":{"causes":42}}"#.utf8
+        )
+        let error = CubbyAPIError.decode(status: 500, operationID: "entity.list", body: body)
+        #expect(error.detail?.message == "Operation failed")
+        #expect(error.detail?.diagnostics == nil)
+    }
+
     @Test func anHTMLBodyDecodesToANilDetail() throws {
         let error = CubbyAPIError.decode(
             status: 502, operationID: "resources.product.list",

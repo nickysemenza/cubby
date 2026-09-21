@@ -35,6 +35,29 @@ beforeEach(() => {
 });
 
 describe("HTTP boundary", () => {
+  it("distinguishes authenticated adapter failures from auth-provider failures", async () => {
+    ports.context.mockRejectedValueOnce(
+      new Error("Context service unavailable"),
+    );
+    const contextFailure = await request("recipes");
+    expect(await contextFailure.json()).toMatchObject({
+      message: "Context service unavailable",
+      diagnostics: {
+        operation: "entity.list",
+        stage: "context",
+        causes: [{ message: "Context service unavailable" }],
+      },
+    });
+    ports.getSession.mockRejectedValueOnce(new Error("Private auth backend"));
+    const authFailure = await request("recipes");
+    const body = await authFailure.text();
+    expect(JSON.parse(body)).toMatchObject({
+      message: "The operation could not be completed",
+      diagnostics: { causes: [] },
+    });
+    expect(body).not.toContain("Private auth backend");
+  });
+
   it("verifies the session and lets the server choose the database read policy", async () => {
     expect((await request("recipes")).status).toBe(200);
     expect(ports.getSession).toHaveBeenCalledWith({

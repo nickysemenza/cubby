@@ -109,14 +109,14 @@ test("core entity list, detail, and mutation ride named Start operations", async
   for (const request of detailRequests) {
     expect(request.method).toBe("POST");
     const detailUrl = new URL(request.url);
-    expect(detailUrl.pathname).toContain("start-operation-dispatch");
-    expect(detailUrl.search).toBe("");
+    expect(detailUrl.pathname).toBe("/_serverFn/dispatch");
+    expect(detailUrl.searchParams.get("operation")).toBe("entity.detail");
+    expect(detailUrl.searchParams.get("entity")).toBe("product");
     expect(payloadOf(request.url, "")).not.toContain('["entity","shortcode"]');
     expect(payloadOf("", request.body)).toContain('["entity","shortcode"]');
   }
 
-  // IDs are intentionally private, but every ordinary operation must share
-  // the one dispatcher URL instead of compiling a domain graph of endpoints.
+  // Inputs stay in the POST body; operation labels share one dispatcher path.
   expect(
     new Set(starts.map((request) => new URL(request.url).pathname)).size,
   ).toBe(1);
@@ -142,11 +142,89 @@ test("core entity list, detail, and mutation ride named Start operations", async
   );
   for (const start of starts) {
     expect(start.operation).toBeDefined();
+    expect(new URL(start.url).searchParams.get("operation")).toBe(
+      start.operation,
+    );
   }
+
+  const detail = detailRequests[0];
+  if (!detail) throw new Error("Expected a compiled detail request");
+  const legacy = new URL(detail.url);
+  legacy.pathname =
+    "/_serverFn/server-functions-start-operation-dispatch-dispatch-start-operation-server-function";
+  legacy.search = "";
+  const oldClientResponse = await page.request.post(legacy.toString(), {
+    data: detail.body,
+    headers: {
+      "content-type": "application/json",
+      "x-tsr-serverFn": "true",
+      origin: legacy.origin,
+      "sec-fetch-site": "same-origin",
+    },
+  });
+  expect(oldClientResponse.status()).toBe(200);
+  expect(await oldClientResponse.text()).toContain(name);
 
   // Response-owned ids, rather than a shared module-global "last id", make
   // each completed browser request independently searchable in traces.
   await Promise.all(requestIdReads);
   expect(requestIds.length).toBeGreaterThanOrEqual(3);
   for (const requestId of requestIds) expect(requestId).toBe(canaryRequestId);
+});
+
+test("server error references remain usable on desktop and narrow screens", async ({
+  page,
+  context,
+}, testInfo) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/");
+  await page.route("**/_serverFn/**", async (route) => {
+    if (route.request().headers()["x-cubby-operation"] !== "entity.list") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 500,
+      headers: {
+        "content-type": "text/plain",
+        "x-request-id": "diagnostic-test-request",
+        "x-sentry-event-id": "0123456789abcdef0123456789abcdef",
+      },
+      body: "Internal Server Error",
+    });
+  });
+  await page
+    .getByLabel("Workspace navigation")
+    .getByRole("link", { name: "Products", exact: true })
+    .click();
+  await expect(
+    page.getByText("Server request failed (HTTP 500)", { exact: true }).first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Details", exact: true })
+    .first()
+    .click();
+  const details = page
+    .locator("details")
+    .filter({ hasText: "Technical details" })
+    .first();
+  await details.locator("summary").click();
+  await expect(details).toContainText("entity.list / dispatch");
+  await expect(
+    details.getByRole("link", { name: "View in Sentry" }),
+  ).toHaveAttribute(
+    "href",
+    "https://nicky-semenza.sentry.io/issues/?query=0123456789abcdef0123456789abcdef",
+  );
+  await details.getByRole("button", { name: "Copy details" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
+    "diagnostic-test-request",
+  );
+  await page.screenshot({ path: testInfo.outputPath("error-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(details.getByRole("button", { name: "Copied" })).toBeVisible();
+  const bounds = await details.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("error-mobile.png") });
 });

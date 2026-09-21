@@ -302,10 +302,10 @@ describe("cookbook repository", () => {
         imported.id,
         "001.0001",
       ),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
     await expect(
       getCookbookRecipePhotoSource(ctx.db, cookbookId, imported.id, "001.0999"),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
   });
 
   it("refuses to import from a cookbook stored in the retired flat format", async () => {
@@ -330,7 +330,7 @@ describe("cookbook repository", () => {
     ).toBe(true);
     await expect(
       getCookbookSource(ctx.db, legacy.entityId),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
   });
 
   // deleteCookbook is UNGUARDED (lockAndValidateForDelete only locks + checks
@@ -497,7 +497,7 @@ describe("cookbook repository", () => {
 
       await expect(
         deleteProducts(ctx.db, [shelfCopy.entityId], ctx.actor),
-      ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_COOKBOOKS" } });
+      ).rejects.toMatchObject({ reason: "PRODUCT_HAS_COOKBOOKS" });
 
       await setCookbookProduct(ctx.db, ctx.actor, cb.entityId, null);
       await expect(

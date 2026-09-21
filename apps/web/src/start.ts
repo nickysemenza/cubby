@@ -5,6 +5,7 @@
 import { createCsrfMiddleware, createStart } from "@tanstack/react-start";
 
 import { fetchWithRequestDiagnostics } from "~/lib/request-id";
+import { labelStartRequest } from "~/lib/start-dispatch-url";
 import { privateServerFunctionResponses } from "~/server/middleware/private-server-functions";
 import { tracingMiddleware } from "~/server/middleware/tracing";
 
@@ -18,7 +19,11 @@ const csrfMiddleware = createCsrfMiddleware({
 export const startInstance = createStart(() => ({
   serverFns: {
     fetch: (input, init) =>
-      fetchWithRequestDiagnostics(globalThis.fetch, input, init),
+      fetchWithRequestDiagnostics(
+        globalThis.fetch,
+        labelStartRequest(input, init),
+        init,
+      ),
   },
   // Request middleware runs on every server request (SSR, server routes, server functions)
   requestMiddleware: [

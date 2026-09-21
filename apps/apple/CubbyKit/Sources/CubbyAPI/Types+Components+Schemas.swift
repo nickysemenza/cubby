@@ -876,6 +876,234 @@ extension Components {
             public var reason: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ApiError/requestId`.
             public var requestId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics`.
+            public struct DiagnosticsPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/origin`.
+                @frozen public enum OriginPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case server = "server"
+                }
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/origin`.
+                public var origin: Components.Schemas.ApiError.DiagnosticsPayload.OriginPayload
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/operation`.
+                public var operation: Swift.String
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/entity`.
+                public var entity: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/module`.
+                public var module: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/stage`.
+                @frozen public enum StagePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case context = "context"
+                    case input = "input"
+                    case run = "run"
+                    case output = "output"
+                    case dispatch = "dispatch"
+                }
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/stage`.
+                public var stage: Components.Schemas.ApiError.DiagnosticsPayload.StagePayload
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/CausesPayload`.
+                public struct CausesPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/CausesPayload/name`.
+                    public var name: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/CausesPayload/message`.
+                    public var message: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/CausesPayload/code`.
+                    public var code: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/CausesPayload/status`.
+                    public var status: Swift.Double?
+                    /// Creates a new `CausesPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - name:
+                    ///   - message:
+                    ///   - code:
+                    ///   - status:
+                    public init(
+                        name: Swift.String,
+                        message: Swift.String,
+                        code: Swift.String? = nil,
+                        status: Swift.Double? = nil
+                    ) {
+                        self.name = name
+                        self.message = message
+                        self.code = code
+                        self.status = status
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case name
+                        case message
+                        case code
+                        case status
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.name = try container.decode(
+                            Swift.String.self,
+                            forKey: .name
+                        )
+                        self.message = try container.decode(
+                            Swift.String.self,
+                            forKey: .message
+                        )
+                        self.code = try container.decodeIfPresent(
+                            Swift.String.self,
+                            forKey: .code
+                        )
+                        self.status = try container.decodeIfPresent(
+                            Swift.Double.self,
+                            forKey: .status
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "name",
+                            "message",
+                            "code",
+                            "status"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/causes`.
+                public typealias CausesPayload = [Components.Schemas.ApiError.DiagnosticsPayload.CausesPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/causes`.
+                public var causes: Components.Schemas.ApiError.DiagnosticsPayload.CausesPayload
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/truncated`.
+                public var truncated: Swift.Bool?
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/batchIndex`.
+                public var batchIndex: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/sentryEventId`.
+                public var sentryEventId: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/sentryUrl`.
+                public var sentryUrl: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/cfRayId`.
+                public var cfRayId: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/cloudflareUrl`.
+                @frozen public enum CloudflareUrlPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case https_colon_Dash_cloudflare_com_quest_To_equals__colon_AccountWorkersAndPagesObservability = "https://dash.cloudflare.com/?to=/:account/workers-and-pages/observability"
+                }
+                /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics/cloudflareUrl`.
+                public var cloudflareUrl: Components.Schemas.ApiError.DiagnosticsPayload.CloudflareUrlPayload?
+                /// Creates a new `DiagnosticsPayload`.
+                ///
+                /// - Parameters:
+                ///   - origin:
+                ///   - operation:
+                ///   - entity:
+                ///   - module:
+                ///   - stage:
+                ///   - causes:
+                ///   - truncated:
+                ///   - batchIndex:
+                ///   - sentryEventId:
+                ///   - sentryUrl:
+                ///   - cfRayId:
+                ///   - cloudflareUrl:
+                public init(
+                    origin: Components.Schemas.ApiError.DiagnosticsPayload.OriginPayload,
+                    operation: Swift.String,
+                    entity: Swift.String? = nil,
+                    module: Swift.String? = nil,
+                    stage: Components.Schemas.ApiError.DiagnosticsPayload.StagePayload,
+                    causes: Components.Schemas.ApiError.DiagnosticsPayload.CausesPayload,
+                    truncated: Swift.Bool? = nil,
+                    batchIndex: Swift.Int? = nil,
+                    sentryEventId: Swift.String? = nil,
+                    sentryUrl: Swift.String? = nil,
+                    cfRayId: Swift.String? = nil,
+                    cloudflareUrl: Components.Schemas.ApiError.DiagnosticsPayload.CloudflareUrlPayload? = nil
+                ) {
+                    self.origin = origin
+                    self.operation = operation
+                    self.entity = entity
+                    self.module = module
+                    self.stage = stage
+                    self.causes = causes
+                    self.truncated = truncated
+                    self.batchIndex = batchIndex
+                    self.sentryEventId = sentryEventId
+                    self.sentryUrl = sentryUrl
+                    self.cfRayId = cfRayId
+                    self.cloudflareUrl = cloudflareUrl
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case origin
+                    case operation
+                    case entity
+                    case module
+                    case stage
+                    case causes
+                    case truncated
+                    case batchIndex
+                    case sentryEventId
+                    case sentryUrl
+                    case cfRayId
+                    case cloudflareUrl
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.origin = try container.decode(
+                        Components.Schemas.ApiError.DiagnosticsPayload.OriginPayload.self,
+                        forKey: .origin
+                    )
+                    self.operation = try container.decode(
+                        Swift.String.self,
+                        forKey: .operation
+                    )
+                    self.entity = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .entity
+                    )
+                    self.module = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .module
+                    )
+                    self.stage = try container.decode(
+                        Components.Schemas.ApiError.DiagnosticsPayload.StagePayload.self,
+                        forKey: .stage
+                    )
+                    self.causes = try container.decode(
+                        Components.Schemas.ApiError.DiagnosticsPayload.CausesPayload.self,
+                        forKey: .causes
+                    )
+                    self.truncated = try container.decodeIfPresent(
+                        Swift.Bool.self,
+                        forKey: .truncated
+                    )
+                    self.batchIndex = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .batchIndex
+                    )
+                    self.sentryEventId = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .sentryEventId
+                    )
+                    self.sentryUrl = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .sentryUrl
+                    )
+                    self.cfRayId = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .cfRayId
+                    )
+                    self.cloudflareUrl = try container.decodeIfPresent(
+                        Components.Schemas.ApiError.DiagnosticsPayload.CloudflareUrlPayload.self,
+                        forKey: .cloudflareUrl
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "origin",
+                        "operation",
+                        "entity",
+                        "module",
+                        "stage",
+                        "causes",
+                        "truncated",
+                        "batchIndex",
+                        "sentryEventId",
+                        "sentryUrl",
+                        "cfRayId",
+                        "cloudflareUrl"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ApiError/diagnostics`.
+            public var diagnostics: Components.Schemas.ApiError.DiagnosticsPayload?
             /// - Remark: Generated from `#/components/schemas/ApiError/blockers`.
             public var blockers: [Components.Schemas.ImpactItem]?
             /// - Remark: Generated from `#/components/schemas/ApiError/ValidationIssuesPayload`.
@@ -938,6 +1166,7 @@ extension Components {
             ///   - code:
             ///   - reason:
             ///   - requestId:
+            ///   - diagnostics:
             ///   - blockers:
             ///   - validationIssues:
             public init(
@@ -945,6 +1174,7 @@ extension Components {
                 code: Swift.String,
                 reason: Swift.String? = nil,
                 requestId: Swift.String? = nil,
+                diagnostics: Components.Schemas.ApiError.DiagnosticsPayload? = nil,
                 blockers: [Components.Schemas.ImpactItem]? = nil,
                 validationIssues: Components.Schemas.ApiError.ValidationIssuesPayload? = nil
             ) {
@@ -952,6 +1182,7 @@ extension Components {
                 self.code = code
                 self.reason = reason
                 self.requestId = requestId
+                self.diagnostics = diagnostics
                 self.blockers = blockers
                 self.validationIssues = validationIssues
             }
@@ -960,6 +1191,7 @@ extension Components {
                 case code
                 case reason
                 case requestId
+                case diagnostics
                 case blockers
                 case validationIssues
             }
@@ -981,6 +1213,10 @@ extension Components {
                     Swift.String.self,
                     forKey: .requestId
                 )
+                self.diagnostics = try container.decodeIfPresent(
+                    Components.Schemas.ApiError.DiagnosticsPayload.self,
+                    forKey: .diagnostics
+                )
                 self.blockers = try container.decodeIfPresent(
                     [Components.Schemas.ImpactItem].self,
                     forKey: .blockers
@@ -994,6 +1230,7 @@ extension Components {
                     "code",
                     "reason",
                     "requestId",
+                    "diagnostics",
                     "blockers",
                     "validationIssues"
                 ])

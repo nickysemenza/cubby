@@ -267,7 +267,7 @@ describe("implementSubscriptionDomain", () => {
     expect(seenSignal?.aborted).toBe(true);
   });
 
-  it("retains the production adapter's NDJSON error framing", async () => {
+  it("retains NDJSON error framing and authenticates before parsing input", async () => {
     const handlers = implementSubscriptionDomain(domain, {
       precomputeEnrichmentProposals: noEvents,
       backfillLocationDescriptions: async function* () {
@@ -283,9 +283,7 @@ describe("implementSubscriptionDomain", () => {
       await handlers.streams.backfillLocationDescriptions({ request }),
     );
     expect(frame?.kind).toBe("error");
-    expect(frame?.kind === "error" && frame.error.code).toBe(
-      "INTERNAL_SERVER_ERROR",
-    );
+    expect(frame?.kind === "error" && frame.error.code).toBe("UNAUTHORIZED");
   });
 
   it("requires the handler table to be exhaustive and closed", () => {

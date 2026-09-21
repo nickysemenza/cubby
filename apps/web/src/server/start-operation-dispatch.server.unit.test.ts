@@ -1,8 +1,21 @@
+import { testUserId } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
+
+import { Database } from "~/server/db";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { dispatchStartOperation } from "./start-operation-dispatch.server";
 
 const request = {
+  verifiedContext: requireActor(
+    createTestRequestContext(
+      new Database(() => {
+        throw new Error("No DB access expected");
+      }),
+      { auth: { userId: testUserId("dispatch-user") } },
+    ),
+  ),
   headers: new Headers(),
   signal: new AbortController().signal,
 };
@@ -37,7 +50,7 @@ describe("browser Start operation dispatcher", () => {
     });
   });
 
-  it("rejects an operation without a registered handler before lookup", async () => {
+  it("returns correlated loader failures before invoking a handler", async () => {
     await expect(
       dispatchStartOperation(
         {
@@ -47,8 +60,16 @@ describe("browser Start operation dispatcher", () => {
         },
         {},
       ),
-    ).rejects.toThrow(
-      "No browser handler is registered for calendar.rotateFeed",
-    );
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        message: "No browser handler is registered for calendar.rotateFeed",
+        diagnostics: {
+          origin: "server",
+          operation: "calendar.rotateFeed",
+          stage: "dispatch",
+        },
+      },
+    });
   });
 });

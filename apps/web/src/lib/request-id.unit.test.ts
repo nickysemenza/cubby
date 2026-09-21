@@ -12,6 +12,29 @@ describe("request correlation header", () => {
     expect(REQUEST_ID_HEADER).toBe("x-request-id");
   });
 
+  it("preserves fallback server references when Start receives an opaque HTTP failure", async () => {
+    await expect(
+      fetchWithRequestDiagnostics(
+        async () =>
+          new Response("opaque", {
+            status: 500,
+            headers: {
+              "x-request-id": "sample-ray",
+              "x-sentry-event-id": "sample-event",
+            },
+          }),
+        "/_serverFn/dispatch",
+        { headers: { "x-cubby-operation": "entity.list" } },
+      ),
+    ).rejects.toMatchObject({
+      message: "Server request failed (HTTP 500)",
+      data: {
+        requestId: "sample-ray",
+        diagnostics: { origin: "server", sentryEventId: "sample-event" },
+      },
+    });
+  });
+
   it("keeps out-of-order response ids paired with their own operations", async () => {
     vi.stubGlobal("window", {});
     const pending = new Map<string, (response: Response) => void>();

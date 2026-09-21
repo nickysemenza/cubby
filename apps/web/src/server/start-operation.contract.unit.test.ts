@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { unparsedStartOperationDataSchema } from "./start-operation.contract";
+import {
+  publicStartOperationErrorSchema,
+  unparsedStartOperationDataSchema,
+} from "./start-operation.contract";
 
 describe("Start operation serializable carrier", () => {
+  it("ignores malformed optional diagnostics without losing the error", () => {
+    expect(
+      publicStartOperationErrorSchema.parse({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed",
+        diagnostics: { causes: 42 },
+      }),
+    ).toMatchObject({ code: "INTERNAL_SERVER_ERROR", message: "Failed" });
+  });
+
   it("preserves TanStack-supported undefined, Date, collections, and nesting", () => {
     const occurredAt = new Date("2026-08-28T00:00:00.000Z");
     const input = {

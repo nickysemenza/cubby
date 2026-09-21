@@ -30,15 +30,7 @@ export class StartOperationError extends Error {
     super(error.message);
     this.name = "StartOperationError";
     this.requestId = error.requestId;
-    const data: Omit<PublicStartOperationError, "message"> = {
-      code: error.code,
-    };
-    if (error.reason) data.reason = error.reason;
-    if (error.requestId) data.requestId = error.requestId;
-    if (error.blockers) data.blockers = error.blockers;
-    if (error.validationIssues) {
-      data.validationIssues = error.validationIssues;
-    }
+    const { message: _message, ...data } = error;
     this.data = data;
   }
 }

@@ -511,6 +511,12 @@ projections use the same Start operation module for authentication, validation,
 errors, cancellation checkpoints, tracing, and console observability. Every
 entity browser operation uses this Start transport.
 
+Ordinary browser calls share `/_serverFn/dispatch`. The global Start fetch hook
+adds validated `operation` and optional `entity` query labels for DevTools;
+dispatch still reads the validated POST body. The previous production dispatcher
+path is internally rewritten at both server entries for already-open clients.
+SSR invokes the operation locally without fetching this URL.
+
 The server operation boundary chooses one database adapter before invoking a
 handler and exposes that adapter through both context handles. Ordinary queries
 across browser, native, HTTP and MCP use Hyperdrive's bounded-stale binding when

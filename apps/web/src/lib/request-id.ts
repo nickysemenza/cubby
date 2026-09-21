@@ -11,8 +11,10 @@
  * OTel trace id in dev, the CF `cf-ray` in prod.
  */
 
-/** Response header carrying the server's request id back to the client. */
 import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
+
+/** Response header carrying the server's request id back to the client. */
+import { type ErrorDiagnostics, sentryEventUrl } from "./error-diagnostics";
 
 export const REQUEST_ID_HEADER = "x-request-id";
 
@@ -58,5 +60,39 @@ export async function fetchWithRequestDiagnostics(
       requestDiagnostics.shift();
     }
   }
+  if (response.status >= 500 && operation) {
+    const eventId = response.headers.get("x-sentry-event-id") ?? undefined;
+    const message = `Server request failed (HTTP ${response.status})`;
+    const diagnostics: ErrorDiagnostics = {
+      origin: "server",
+      operation,
+      stage: "dispatch",
+      causes: [],
+    };
+    if (eventId) {
+      diagnostics.sentryEventId = eventId;
+      diagnostics.sentryUrl = sentryEventUrl(eventId);
+    }
+    const data: ServerResponseError["data"] = {
+      code: "INTERNAL_SERVER_ERROR",
+      diagnostics,
+    };
+    if (requestId) data.requestId = requestId;
+    throw new ServerResponseError(message, data);
+  }
   return response;
+}
+
+class ServerResponseError extends Error {
+  constructor(
+    message: string,
+    readonly data: {
+      code: string;
+      requestId?: string;
+      diagnostics: ErrorDiagnostics;
+    },
+  ) {
+    super(message);
+    this.name = "ServerResponseError";
+  }
 }

@@ -4,6 +4,8 @@ import { Button } from "~/components/ui/button";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 
+import { ErrorDetails } from "./error-details";
+
 interface ErrorDisplayProps {
   error: unknown;
   className?: string;
@@ -78,6 +80,7 @@ export function ErrorDisplay({
             {opId ? <span className="font-mono">{opId}</span> : null}
           </span>
         ) : null}
+        <ErrorDetails error={error} />
         {onRetry ? (
           <Button variant="outline" size="sm" onClick={onRetry}>
             Retry

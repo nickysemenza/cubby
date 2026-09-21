@@ -89,18 +89,14 @@ export function createAppError(
     code,
     reason,
     message,
-    cause: { reason, originalError },
+    cause: originalError,
   });
 }
 
 /**
  * A refusal that can name what blocked it.
  *
- * `createAppError` carries only `{reason, originalError}`, so a guard that knew
- * exactly which rows blocked — and how many dependents each had — could only
- * render that into a sentence and drop the structure. The preview path has
- * expressed the same facts as `ImpactItem`s for a while; this is the mutation
- * path finally being able to say the same thing in the same vocabulary.
+ * Retains the same structured impact items used by operation previews.
  *
  * A separate function rather than a fourth parameter on `createAppError`: a
  * blocked refusal always has blockers, and threading an optional past
@@ -122,7 +118,7 @@ export function createBlockedError(
     reason,
     message,
     blockers,
-    cause: { reason, blockers },
+    cause: error.cause,
   });
 }
 
@@ -166,7 +162,7 @@ export function toPublicErrorPayload(error: UnparsedError): PublicErrorPayload {
     return payload;
   }
 
-  const parsed = publicErrorCarrierSchema.safeParse(error);
+  const parsed = readPublicErrorCarrier(error);
   if (!parsed.success) return payload;
   if (parsed.data.code) payload.code = parsed.data.code;
   if (parsed.data.cause?.reason) payload.reason = parsed.data.cause.reason;
@@ -174,6 +170,14 @@ export function toPublicErrorPayload(error: UnparsedError): PublicErrorPayload {
     payload.blockers = parsed.data.cause.blockers;
   }
   return payload;
+}
+
+function readPublicErrorCarrier(error: UnparsedError) {
+  try {
+    return publicErrorCarrierSchema.safeParse(error);
+  } catch {
+    return publicErrorCarrierSchema.safeParse(null);
+  }
 }
 
 /**
@@ -215,7 +219,27 @@ export function isExpectedAppError(error: UnparsedError): boolean {
 }
 
 export function appErrorFromUnknown(error: UnparsedError): AppError | null {
-  if (error instanceof AppError) return error;
-  const carrier = z.object({ cause: z.instanceof(AppError) }).safeParse(error);
-  return carrier.success ? carrier.data.cause : null;
+  const pending = [error];
+  const seen = new Set<unknown>();
+  while (pending.length && seen.size < 24) {
+    const current = pending.shift();
+    if (current instanceof AppError) return current;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    try {
+      const carrier = z
+        .object({
+          cause: z.unknown().optional(),
+          originalError: z.unknown().optional(),
+        })
+        .safeParse(current);
+      if (!carrier.success) continue;
+      if (carrier.data.cause !== undefined) pending.push(carrier.data.cause);
+      if (carrier.data.originalError !== undefined)
+        pending.push(carrier.data.originalError);
+    } catch {
+      // Inspecting an arbitrary thrown value can itself throw.
+    }
+  }
+  return null;
 }

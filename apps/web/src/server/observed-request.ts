@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/tanstackstart-react";
 import { type JSONType, z } from "zod";
 
 import type {
@@ -10,6 +9,7 @@ import {
   withDatabaseOperationMetrics,
 } from "~/server/db-observability";
 import { isExpectedAppError } from "~/server/errors/app-error";
+import { reportServerError } from "~/server/errors/report-error";
 import { type AppSpan, withTrace } from "~/server/tracing";
 import type { RequestOrigin, Workload } from "~/server/workload";
 
@@ -17,6 +17,7 @@ export type ObservedFailure = Error | JSONType;
 export type ObservedResult = {
   error?: ObservedFailure;
   workload?: Workload;
+  reported?: boolean;
 };
 
 export type OperationObservation<Result> = {
@@ -27,10 +28,13 @@ export type OperationObservation<Result> = {
 
 export function parseObservedFailure<TError>(error: TError): ObservedFailure {
   if (error instanceof Error) return error;
-  const serializable = z.json().safeParse(error);
-  return serializable.success
-    ? serializable.data
-    : new Error("A non-serializable value was thrown");
+  try {
+    const serializable = z.json().safeParse(error);
+    if (serializable.success) return serializable.data;
+  } catch {
+    // Cycles and throwing getters must not replace the failure being observed.
+  }
+  return new Error("A non-serializable value was thrown", { cause: error });
 }
 
 const databaseMetricAttributes = (metrics: DatabaseOperationMetrics) => ({
@@ -87,14 +91,8 @@ async function observeRequest<T>(options: {
           }
           span.recordException(inspection.error);
           span.setError();
-          if (!isExpectedAppError(inspection.error)) {
-            Sentry.captureException(inspection.error, {
-              extra: {
-                rpcMethod: options.method,
-                rpcSystem: options.system,
-                rpcType: options.type,
-              },
-            });
+          if (!inspection.reported && !isExpectedAppError(inspection.error)) {
+            reportServerError(inspection.error, { operation: options.method });
           }
         }
         return result;
@@ -105,13 +103,7 @@ async function observeRequest<T>(options: {
           throw error;
         }
         if (!isExpectedAppError(failure)) {
-          Sentry.captureException(failure, {
-            extra: {
-              rpcMethod: options.method,
-              rpcSystem: options.system,
-              rpcType: options.type,
-            },
-          });
+          reportServerError(error, { operation: options.method });
         }
         throw error;
       } finally {
