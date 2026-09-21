@@ -21,6 +21,45 @@ const JEV_MAX_CHOICES = 255;
 /** One slot is reserved for `none`. */
 export const JEV_MAX_CANDIDATES = JEV_MAX_CHOICES - 1;
 const NONE_KEY = "none";
+const JEV_MAX_ATTEMPTS = 3;
+const JEV_DEADLINE_MS = 30_000;
+
+function retryDelay(
+  response: Response,
+  attempt: number,
+  elapsedMs: number,
+): number | null {
+  if (response.status !== 429 || attempt >= JEV_MAX_ATTEMPTS) return null;
+  const header = response.headers.get("retry-after");
+  const seconds = header === null ? NaN : Number(header);
+  const retryAfterMs = Number.isFinite(seconds)
+    ? seconds * 1_000
+    : header === null
+      ? 0
+      : Date.parse(header) - Date.now();
+  // Spread a throttled table's retries out instead of replaying its burst.
+  const backoff = 500 * 2 ** (attempt - 1) * (1 + Math.random());
+  const delayMs = Math.max(
+    backoff,
+    Number.isFinite(retryAfterMs) ? retryAfterMs : 0,
+  );
+  return elapsedMs + delayMs < JEV_DEADLINE_MS ? delayMs : null;
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 const jevChoiceInputSchema = z.object({
   state: z.string(),
@@ -105,25 +144,48 @@ async function requestJev(
   );
 
   const startedAt = performance.now();
+  const controller = new AbortController();
+  const deadline = setTimeout(() => {
+    controller.abort(new Error("Jev request exceeded its 30-second deadline."));
+  }, JEV_DEADLINE_MS);
   let parsed: JevChoiceResponse | undefined;
+  let attempt = 0;
+  let gatewayLogId: string | null = null;
   try {
-    const response = await fetch(
-      `${gatewayBaseURL("workers-ai")}/run/${feature.model}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      },
-    );
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error(
-        `Jev request failed (${response.status}): ${body.slice(0, 200)}`,
+    while (attempt < JEV_MAX_ATTEMPTS) {
+      attempt += 1;
+      controller.signal.throwIfAborted();
+      const response = await fetch(
+        `${gatewayBaseURL("workers-ai")}/run/${feature.model}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+          signal: controller.signal,
+        },
       );
+      gatewayLogId = response.headers.get("cf-aig-log-id");
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        const delayMs = retryDelay(
+          response,
+          attempt,
+          performance.now() - startedAt,
+        );
+        if (delayMs !== null) {
+          await waitForRetry(delayMs, controller.signal);
+          continue;
+        }
+        throw new Error(
+          `Jev request failed (${response.status}): ${body.slice(0, 200)}`,
+        );
+      }
+      parsed = parseJevResponse(await response.json().catch(() => undefined));
+      return parsed;
     }
-    parsed = parseJevResponse(await response.json().catch(() => undefined));
-    return parsed;
+    throw new Error("Jev exhausted its request attempts.");
   } finally {
+    clearTimeout(deadline);
     if (ctx.db) {
       await recordAiUsage(ctx.db, {
         provider: "typesafe",
@@ -137,6 +199,9 @@ async function requestJev(
         durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
         cacheStatus: ctx.cacheStatus ?? "none",
         entity: ctx.entity ?? null,
+        attempt,
+        status: parsed ? "succeeded" : "failed",
+        gatewayLogId,
       });
     }
   }
