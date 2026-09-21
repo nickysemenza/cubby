@@ -80,6 +80,8 @@ const NON_ENTITY_FK_TARGETS = {
   StatementImport: "provider export bookkeeping, not a domain entity",
   StatementRow: "verbatim statement evidence, not a domain entity",
   ImportRun: "purchase-import execution bookkeeping, not a domain entity",
+  ImportRunTarget:
+    "explicit operational target for a validation or enrichment import run",
   ImportPreparedOrder:
     "immutable purchase-import evidence preparation, not a domain entity",
   ImportSourceClaim: "idempotency provenance for imported evidence",
@@ -107,6 +109,19 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "ImportRun.vendorId": {
     classification: "metadata",
     reason: "records the vendor for accountless mail, receipt, and export runs",
+  },
+  "ImportRunTarget.purchaseId": {
+    classification: "metadata",
+    reason: "records the Purchase a targeted validation examined",
+  },
+  "ImportRunTarget.productId": {
+    classification: "metadata",
+    reason: "records the Product a targeted enrichment examined",
+  },
+  "ImportRunTarget.vendorAccountId": {
+    classification: "metadata",
+    reason:
+      "freezes the member-owned vendor account selected for targeted evidence",
   },
   "ImportPreparedOrder.primaryDocumentImageId": {
     classification: "metadata",

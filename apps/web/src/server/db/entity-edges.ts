@@ -1055,6 +1055,14 @@ export const ENTITY_EDGES = {
   // usda-link-resolved-at-query-time).
   inventory: edges({}),
   vendorAccount: edges({
+    "ImportRunTarget.vendorAccountId": {
+      column: importRunTarget.vendorAccountId,
+      role: "history",
+      label: "targeted import runs",
+      description:
+        "A targeted validation or enrichment target retains the selected member-owned vendor account that supplied its evidence.",
+      liveness: { kind: "must-target-live" },
+    },
     "Purchase.vendorAccountId": {
       column: purchase.vendorAccountId,
       role: "reference",

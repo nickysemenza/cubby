@@ -4583,6 +4583,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'account_sync'"
+        },
         "trigger": {
           "name": "trigger",
           "type": "text",
@@ -4677,6 +4684,31 @@
           "primaryKey": false,
           "notNull": false
         },
+        "dispatchEventId": {
+          "name": "dispatchEventId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatchAttempts": {
+          "name": "dispatchAttempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "dispatchError": {
+          "name": "dispatchError",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "coordinatorStartedAt": {
+          "name": "coordinatorStartedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "agentSessionId": {
           "name": "agentSessionId",
           "type": "text",
@@ -4752,6 +4784,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRun_dispatch_event_unique": {
+          "name": "ImportRun_dispatch_event_unique",
+          "columns": [
+            {
+              "expression": "dispatchEventId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImportRun\".\"dispatchEventId\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4850,7 +4898,11 @@
         },
         "ImportRun_status_check": {
           "name": "ImportRun_status_check",
-          "value": "\"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed')"
+          "value": "\"ImportRun\".\"status\" IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')"
+        },
+        "ImportRun_purpose_check": {
+          "name": "ImportRun_purpose_check",
+          "value": "\"ImportRun\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment')"
         }
       },
       "isRLSEnabled": false
@@ -5153,7 +5205,152 @@
       "checkConstraints": {
         "ImportRunControlEvent_action_check": {
           "name": "ImportRunControlEvent_action_check",
-          "value": "\"ImportRunControlEvent\".\"action\" IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'escalate_sol')"
+          "value": "\"ImportRunControlEvent\".\"action\" IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ImportRunEvidence": {
+      "name": "ImportRunEvidence",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "targetId": {
+          "name": "targetId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "objectKey": {
+          "name": "objectKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checksum": {
+          "name": "checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mediaType": {
+          "name": "mediaType",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "byteSize": {
+          "name": "byteSize",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceMetadata": {
+          "name": "sourceMetadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImportRunEvidence_object_key_unique": {
+          "name": "ImportRunEvidence_object_key_unique",
+          "columns": [
+            {
+              "expression": "objectKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunEvidence_run_target_idx": {
+          "name": "ImportRunEvidence_run_target_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "targetId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportRunEvidence_runId_ImportRun_id_fk": {
+          "name": "ImportRunEvidence_runId_ImportRun_id_fk",
+          "tableFrom": "ImportRunEvidence",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRunEvidence_targetId_ImportRunTarget_id_fk": {
+          "name": "ImportRunEvidence_targetId_ImportRunTarget_id_fk",
+          "tableFrom": "ImportRunEvidence",
+          "tableTo": "ImportRunTarget",
+          "columnsFrom": [
+            "targetId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImportRunEvidence_kind_check": {
+          "name": "ImportRunEvidence_kind_check",
+          "value": "\"ImportRunEvidence\".\"kind\" IN ('browser_capture', 'gmail_attachment', 'manual_upload')"
         }
       },
       "isRLSEnabled": false
@@ -5544,6 +5741,281 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ImportRunTarget": {
+      "name": "ImportRunTarget",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purchaseId": {
+          "name": "purchaseId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "productId": {
+          "name": "productId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vendorAccountId": {
+          "name": "vendorAccountId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceKind": {
+          "name": "sourceKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceExternalKey": {
+          "name": "sourceExternalKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "targetFingerprint": {
+          "name": "targetFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidenceFingerprint": {
+          "name": "evidenceFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "warning": {
+          "name": "warning",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "diff": {
+          "name": "diff",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "preparedAt": {
+          "name": "preparedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ImportRunTarget_run_idx": {
+          "name": "ImportRunTarget_run_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunTarget_purchase_idx": {
+          "name": "ImportRunTarget_purchase_idx",
+          "columns": [
+            {
+              "expression": "purchaseId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunTarget_product_idx": {
+          "name": "ImportRunTarget_product_idx",
+          "columns": [
+            {
+              "expression": "productId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunTarget_run_purchase_key": {
+          "name": "ImportRunTarget_run_purchase_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purchaseId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImportRunTarget\".\"purchaseId\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportRunTarget_run_product_key": {
+          "name": "ImportRunTarget_run_product_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "productId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"ImportRunTarget\".\"productId\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportRunTarget_runId_ImportRun_id_fk": {
+          "name": "ImportRunTarget_runId_ImportRun_id_fk",
+          "tableFrom": "ImportRunTarget",
+          "tableTo": "ImportRun",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRunTarget_purchaseId_Purchase_id_fk": {
+          "name": "ImportRunTarget_purchaseId_Purchase_id_fk",
+          "tableFrom": "ImportRunTarget",
+          "tableTo": "Purchase",
+          "columnsFrom": [
+            "purchaseId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRunTarget_productId_Product_id_fk": {
+          "name": "ImportRunTarget_productId_Product_id_fk",
+          "tableFrom": "ImportRunTarget",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "productId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportRunTarget_vendorAccountId_VendorAccount_id_fk": {
+          "name": "ImportRunTarget_vendorAccountId_VendorAccount_id_fk",
+          "tableFrom": "ImportRunTarget",
+          "tableTo": "VendorAccount",
+          "columnsFrom": [
+            "vendorAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImportRunTarget_exactly_one_target_check": {
+          "name": "ImportRunTarget_exactly_one_target_check",
+          "value": "((\"ImportRunTarget\".\"purchaseId\" IS NOT NULL)::int + (\"ImportRunTarget\".\"productId\" IS NOT NULL)::int) = 1"
+        },
+        "ImportRunTarget_state_check": {
+          "name": "ImportRunTarget_state_check",
+          "value": "\"ImportRunTarget\".\"state\" IN ('pending', 'prepared', 'completed', 'skipped', 'unresolved', 'needs_evidence', 'unavailable')"
+        },
+        "ImportRunTarget_outcome_check": {
+          "name": "ImportRunTarget_outcome_check",
+          "value": "\"ImportRunTarget\".\"outcome\" IS NULL OR \"ImportRunTarget\".\"outcome\" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ImportSourceClaim": {

@@ -53,6 +53,12 @@ export const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Import runs retain their vendor-account scope.",
   },
+  "ImportRunTarget.vendorAccountId": {
+    code: "block-targeted-runs",
+    effect: "block",
+    description:
+      "Targeted validation and enrichment retain the account selected for their evidence.",
+  },
   "ImportSourceClaim.vendorAccountId": {
     code: "block-source-claims",
     effect: "block",
