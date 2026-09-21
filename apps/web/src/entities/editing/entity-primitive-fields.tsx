@@ -768,7 +768,7 @@ export type FieldGroup = Readonly<{
  * `control.section` id no declared `edit.sections` entry names (DESIGN.md:
  * sentence case, not title case — the label roster stays lowercase after the
  * leading word). */
-export function humanizeSectionId(id: string): string {
+function humanizeSectionId(id: string): string {
   const words = id.split(/[-_]+/).filter(Boolean);
   if (words.length === 0) return id;
   const joined = words.join(" ").toLowerCase();

@@ -103,7 +103,10 @@ public final class GenericEntityEditModel {
             return declared.compactMap { section in
                 let fields = section.fields.filter { visibleKeys.contains($0) }
                 return fields.isEmpty
-                    ? nil : EditSection(id: section.id, title: section.title, fields: fields)
+                    ? nil
+                    : EditSection(
+                        id: section.id, title: section.title, fields: fields,
+                        collapsed: section.collapsed)
             }
         }
         var order: [String] = []
@@ -113,7 +116,9 @@ public final class GenericEntityEditModel {
             if grouped[section] == nil { order.append(section) }
             grouped[section, default: []].append(field.key)
         }
-        return order.map { EditSection(id: $0, title: Self.sectionTitle($0), fields: grouped[$0] ?? []) }
+        return order.map {
+            EditSection(id: $0, title: Self.sectionTitle($0), fields: grouped[$0] ?? [], collapsed: false)
+        }
     }
 
     /// Whether `key` is locked in this mode: `readOnlyOnUpdate`, or a `readOnlyWhen` rule whose
