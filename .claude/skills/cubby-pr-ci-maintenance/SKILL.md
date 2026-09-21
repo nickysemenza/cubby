@@ -7,7 +7,7 @@ description: Inspect and repair Cubby PR checks or address review feedback. Use 
 
 This skill owns triage and delivery sequencing. Follow [Cubby agent
 rules](../../../AGENTS.md) and [validation, CI, and delivery](../../../docs/agents/validation.md)
-for current commands, mandatory hooks, and local versus hosted gates.
+for current commands, cheap Git operations, and local versus hosted gates.
 
 ## Procedure
 
@@ -29,13 +29,13 @@ for current commands, mandatory hooks, and local versus hosted gates.
    artifacts as application failures.
 5. Run the failed gate and affected checks according to the validation guide.
    Distinguish fixed failures from unrelated failures and unavailable checks.
-   Read `apps/web/.vitest-failures.txt` instead of repeating a failed tier, run
-   broad validation once per logical revision, and refresh against the
-   requested base before the final proof.
-6. When publication is requested, commit and push the scoped changes through
-   the mandatory hooks. Follow the guide's clean-final-commit merge gate; if
-   hosted verification is requested, wait for results on that exact commit.
-   Report local and hosted evidence separately.
+   Read `apps/web/.vitest-failures.txt` instead of repeating a failed tier.
+   Choose local checks for the changed behavior and reuse valid results;
+   publication and handoff do not require a broad local validation run.
+6. When publication is requested, commit and push the scoped changes following
+   the validation policy. Require passing GitHub checks on the exact final PR
+   head before merge; if hosted verification is requested, wait for results on
+   that commit. Report local and hosted evidence separately.
 7. When monitoring is requested, use the host's supported automation and update
    an existing matching monitor where possible. Keep it quiet while the state
    is unchanged; otherwise use one bounded wait instead of repeatedly streaming

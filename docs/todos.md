@@ -651,10 +651,9 @@ history is the archive. Permanent product constraints live in the
   relations declared on both sides.
 
 - **Narrow the `e2e` Nx target's inputs, then cache it.** `nx affected`
-  treats all of `apps/web/src/**` as an e2e input, so every web push pays ~2
-  minutes of Playwright in `verify:push` where the old path classifier ran it
-  only for routing paths; and the target is uncached (container side effects),
-  so `verify:local` always pays it too. Decide which paths genuinely change
+  treats all of `apps/web/src/**` as an e2e input. The target is uncached
+  (container side effects), so explicit `verify:local` runs always pay for
+  Playwright; pushes run no validation. Decide which paths genuinely change
   browser behavior (routes, app shells, the worker entry, `tests/e2e/**`) and
   whether a cache hit on an unchanged tree is acceptable evidence.
 

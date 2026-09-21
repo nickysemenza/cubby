@@ -2,19 +2,16 @@
 
 ## Universal loop
 
-- Make the requested in-scope change; validate at the narrowest tier that can
-  fail. `pnpm typecheck` is cheap. Run one file with `pnpm test:file src/…`
-  (path relative to `apps/web`) — that is the spelling, not `vitest`/`npx
-  vitest`. At handoff, the root agent runs `pnpm check` plus affected tests;
-  GitHub Actions is the required full verification before merge.
+- Make the requested in-scope change and choose the narrowest checks that
+  verify its behavior. Follow [validation policy](docs/agents/validation.md)
+  for local feedback, cheap Git operations, and the required GitHub merge gate.
 - A failing test run already lists what failed, at the end of its output and in
   `apps/web/.vitest-failures.txt`. Read those instead of re-running the tier —
   measured, 24% of all test runs were a re-run of one that had just failed.
-- Subagents run `pnpm test:file` only; `pnpm typecheck`, `pnpm check`, `pnpm
-  test`, and Apple builds belong to the root's single final join, never to
-  parallel implementers. Others continue useful work while the owner runs,
-  return distilled evidence (result, command, duration, relevant output), and
-  the root performs one bounded final join rather than polling.
+- Subagents run focused tests and return distilled evidence (result, command,
+  duration, relevant output, and limits). The root owns any needed broad
+  validation; others continue useful work while it runs. Reuse unchanged
+  results at handoff instead of rerunning checks for publication.
 - Production migrations have one exclusive owner; establish safe data and
   deployed-code compatibility before pushing, then verify the schema afterward.
 - Keep edits disjoint across agents/worktrees. The main task runs on whichever
@@ -36,12 +33,6 @@
   restate a typecheck; consolidate same-shape per-entity tests into one
   table-driven test. A test that names a regression or invariant in a comment
   is consolidated, never dropped.
-- Git hooks are mandatory validation. Pre-commit runs `pnpm check`; pre-push
-  runs the affected static and fast-test graph. Never use `--no-verify` to
-  bypass either.
-- `pnpm verify:local(:full)` remains the explicit local full-diagnostic path.
-  Before merge, GitHub Actions must pass on the exact final PR head. Coverage
-  remains manually dispatchable; `main` runs CI after deployment starts.
 - Spend tool calls on bytes that earn their place. Batch independent read-only
   shell into one call, but prefer a targeted `Grep`/`Glob` over dumping a large
   file: the cost is calls x bytes returned, not calls alone. Re-read a file only
