@@ -217,9 +217,12 @@ const displaySourceBranch = (source: DisplaySource, index: number): SQL => {
 const DISPLAY_BRANCHES = [
   ...allEntities.flatMap((entity) => {
     const branch = directStorageBranch(entity);
-    return branch === null ? [] : [branch];
+    return branch === null ? [] : [{ entity, branch }];
   }),
-  ...DISPLAY_SOURCES.map(displaySourceBranch),
+  ...DISPLAY_SOURCES.map((source, index) => ({
+    entity: source.entity,
+    branch: displaySourceBranch(source, index),
+  })),
 ];
 
 const displayImageRowSchema = z.object({
@@ -261,7 +264,15 @@ async function resolveUniversalEntityDisplayImageLists(
     ),
     sql`, `,
   );
-  const displayBranches = sql.join(DISPLAY_BRANCHES, sql` UNION ALL `);
+  // Unrelated entity arms still incur planner/JIT costs even when their WHERE
+  // clauses can never match. Compile only the source types in this batch.
+  const sourceTypes = new Set(supported.map((ref) => ref.entityType));
+  const displayBranches = DISPLAY_BRANCHES.filter(({ entity }) =>
+    sourceTypes.has(entity),
+  ).map(({ branch }) => branch);
+  const borrowedImages = displayBranches.length
+    ? sql`UNION ALL ${sql.join(displayBranches, sql` UNION ALL `)}`
+    : sql``;
   const result = await unwrapDb(db).execute(sql`
     WITH refs("entityType", "entityId") AS (VALUES ${values})
     SELECT refs."entityType", refs."entityId"::text AS "entityId", (
@@ -280,8 +291,7 @@ async function resolveUniversalEntityDisplayImageLists(
         FROM "Image" i
         WHERE refs."entityType" = 'image' AND i.id = refs."entityId"
           AND i."deletedAt" IS NULL AND ${displayableImageSql("i")}
-        UNION ALL
-        ${displayBranches}
+        ${borrowedImages}
         ) raw_candidates
         ORDER BY raw_candidates."imageId", raw_candidates.priority,
                  raw_candidates."groupCreatedAt", raw_candidates."groupId",
