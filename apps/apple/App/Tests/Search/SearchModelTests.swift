@@ -131,7 +131,11 @@ struct SearchModelTests {
 
         var model: SearchModel? = SearchModel(client: try makeClient())
         await model?.start()
-        weak var discarded = model
+        #if compiler(>=6.4)
+            weak let discarded = model
+        #else
+            weak var discarded = model
+        #endif
         model = nil
         await Task.yield()
 

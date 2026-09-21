@@ -16,7 +16,8 @@
 //
 // Options: --device <name> (ios; default: the first paired iPhone),
 // --sim <name> (sim; default: the booted simulator, else the first iPhone),
-// --verbose (full xcodebuild log instead of -quiet).
+// --verbose (full xcodebuild log instead of -quiet),
+// --timing (mac/ios/sim; include the Xcode build timing summary).
 //
 // Not a debugging tool: when breakpoints are needed, open the Xcode project and
 // use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/AGENTS.md
@@ -43,20 +44,21 @@ const DERIVED = join(APPLE, "DerivedData");
 const BUNDLE_ID = "com.nickysemenza.cubby";
 const PRODUCT = "Cubby.app";
 
-const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--verbose] [-- <cli args>]`;
+const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--verbose] [--timing] [-- <cli args>]`;
 
 type Options = {
   command: string;
   device?: string;
   sim?: string;
   verbose: boolean;
+  timing: boolean;
   rest: string[];
 };
 
 const parseArguments = (argv: readonly string[]): Options => {
   const [command, ...tail] = argv;
   if (!command) throw new Error(usage);
-  const options: Options = { command, verbose: false, rest: [] };
+  const options: Options = { command, verbose: false, timing: false, rest: [] };
   // Everything after `cli` belongs to the CLI, flags included; the other
   // commands take only the options above.
   if (command === "cli") {
@@ -75,6 +77,12 @@ const parseArguments = (argv: readonly string[]): Options => {
         index += 1;
         break;
       }
+      case "--timing":
+        if (!["mac", "ios", "sim"].includes(command)) {
+          throw new Error(`--timing requires mac, ios, or sim\n${usage}`);
+        }
+        options.timing = true;
+        break;
       case "--verbose":
         options.verbose = true;
         break;
@@ -156,7 +164,8 @@ const xcodebuild = (
     // "isn't registered" → "No profiles found"; the second flag adds it.
     "-allowProvisioningUpdates",
     "-allowProvisioningDeviceRegistration",
-    ...(options.verbose ? [] : ["-quiet"]),
+    ...(options.verbose || options.timing ? [] : ["-quiet"]),
+    ...(options.timing ? ["-showBuildTimingSummary"] : []),
     // The index store only feeds Xcode's IDE navigation; a command-line build
     // has no reader for it. Left out of project.yml so GUI builds still index.
     "COMPILER_INDEX_STORE_ENABLE=NO",

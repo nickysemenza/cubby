@@ -51,63 +51,7 @@ struct EntityDetailView: View {
                 // Handoff-only.
                 activity.isEligibleForSearch = false
             }
-            .toolbar {
-                if developerOverlays, let row = model?.row {
-                    ToolbarItem { copyDiagnosticsButton(row: row, fetchedAt: model?.fetchedAt) }
-                }
-                if let row = model?.row {
-                    if key.nativeActions.contains(.update) {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button("Edit") { editing = true }
-                                .accessibilityIdentifier("detail.\(key.rawValue).edit")
-                        }
-                    }
-                    ToolbarItem {
-                        ShareLink(item: appModel.webURL(for: key, id: row.id)) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                        }
-                    }
-                    ToolbarItem {
-                        Menu {
-                            Button {
-                                Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
-                            } label: {
-                                Label("Copy link", systemImage: "link")
-                            }
-                            Button {
-                                Clipboard.copy(row.id)
-                            } label: {
-                                Label("Copy shortcode", systemImage: "number")
-                            }
-                            if key.nativeActions.contains(.delete) {
-                                Divider()
-                                Button(role: .destructive) {
-                                    confirmingDelete = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                        } label: {
-                            Label("More", systemImage: "ellipsis.circle")
-                        }
-                    }
-                }
-                // Any entity whose update takes pendingImageIds can take a photo; the cover
-                // choice inside the sheet is product-only.
-                if descriptor.acceptsImages, let row = model?.row {
-                    ToolbarItem {
-                        Button {
-                            photoCapture = PhotoCaptureModel(
-                                client: appModel.client, entity: key, entityID: row.id,
-                                entityTitle: row.title,
-                                featurePrints: appModel.featurePrints
-                            )
-                        } label: {
-                            Label("Add photo", systemImage: "camera.badge.ellipsis")
-                        }
-                    }
-                }
-            }
+            .toolbar { detailToolbar }
             .sheet(item: $photoCapture) { capture in
                 AddPhotoSheet(capture: capture) { _ in
                     Task { await model?.refresh(id: id) }
@@ -133,6 +77,65 @@ struct EntityDetailView: View {
             ) {
                 Button("Delete", role: .destructive) { Task { await delete() } }
             }
+    }
+
+    @ToolbarContentBuilder
+    private var detailToolbar: some ToolbarContent {
+        if developerOverlays, let row = model?.row {
+            ToolbarItem { copyDiagnosticsButton(row: row, fetchedAt: model?.fetchedAt) }
+        }
+        if let row = model?.row {
+            if key.nativeActions.contains(.update) {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Edit") { editing = true }
+                        .accessibilityIdentifier("detail.\(key.rawValue).edit")
+                }
+            }
+            ToolbarItem {
+                ShareLink(item: appModel.webURL(for: key, id: row.id)) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
+            ToolbarItem {
+                Menu {
+                    Button {
+                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                    } label: {
+                        Label("Copy link", systemImage: "link")
+                    }
+                    Button {
+                        Clipboard.copy(row.id)
+                    } label: {
+                        Label("Copy shortcode", systemImage: "number")
+                    }
+                    if key.nativeActions.contains(.delete) {
+                        Divider()
+                        Button(role: .destructive) {
+                            confirmingDelete = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                }
+            }
+        }
+        // Any entity whose update takes pendingImageIds can take a photo; the cover
+        // choice inside the sheet is product-only.
+        if descriptor.acceptsImages, let row = model?.row {
+            ToolbarItem {
+                Button {
+                    photoCapture = PhotoCaptureModel(
+                        client: appModel.client, entity: key, entityID: row.id,
+                        entityTitle: row.title,
+                        featurePrints: appModel.featurePrints
+                    )
+                } label: {
+                    Label("Add photo", systemImage: "camera.badge.ellipsis")
+                }
+            }
+        }
     }
 
     @ViewBuilder

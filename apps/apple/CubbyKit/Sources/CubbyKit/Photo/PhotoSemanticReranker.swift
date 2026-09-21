@@ -241,10 +241,15 @@ public struct FoundationModelsPhotoSemanticModel: PhotoSemanticModel {
                 photo, route, and candidate IDs. Abstain with null IDs when evidence is uncertain.
                 """)
         let prompt = renderPrompt(evidence: evidence, candidates: candidates)
+        #if compiler(>=6.4)
+            let options = GenerationOptions(samplingMode: .greedy)
+        #else
+            let options = GenerationOptions(sampling: .greedy)
+        #endif
         do {
             let response = try await session.respond(
                 to: prompt, generating: GeneratedPhotoReranking.self,
-                options: GenerationOptions(sampling: .greedy))
+                options: options)
             return response.content.decisions.map {
                 PhotoRoutingDecision(
                     photoID: $0.photoID, routeID: $0.routeID, candidateID: $0.candidateID,

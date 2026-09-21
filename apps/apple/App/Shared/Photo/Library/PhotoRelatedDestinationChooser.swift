@@ -168,9 +168,7 @@ struct PhotoRelatedDestinationChooser: View {
                 option: context.option, source: context.source, captureDate: captureDate,
                 client: appModel.client, page: listPage, pageSize: 25)
             {
-                rows = Dictionary(
-                    grouping: rows + page.items, by: \.id
-                ).values.compactMap(\.last).sorted { $0.title < $1.title }
+                mergeRows(page.items)
                 let hasMore = listPage * page.meta.pageSize < page.meta.totalCount
                 nextOffset = hasMore ? listPage * page.meta.pageSize : nil
                 listPage += 1
@@ -198,9 +196,7 @@ struct PhotoRelatedDestinationChooser: View {
                     imageURL: node.imageURL,
                     raw: .object(["id": .string(reference.id), "name": .string(node.label)]))
             }
-            rows = Dictionary(
-                grouping: rows + loaded, by: \.id
-            ).values.compactMap(\.last).sorted { $0.title < $1.title }
+            mergeRows(loaded)
             nextOffset = branch?.nextOffset
         } catch is CancellationError {
             return
@@ -208,6 +204,12 @@ struct PhotoRelatedDestinationChooser: View {
             errorMessage = error.localizedDescription
             Diagnostics.report(error, context: "photos.destination.related.\(context.option.id)")
         }
+    }
+
+    private func mergeRows(_ loaded: [EntityRow]) {
+        let grouped: [String: [EntityRow]] = Dictionary(grouping: rows + loaded, by: \.id)
+        let latest: [EntityRow] = grouped.values.compactMap(\.last)
+        rows = latest.sorted { $0.title < $1.title }
     }
 
     /// Developer overlays layer 3: this chooser has one flat list (no separate date/recent lanes),

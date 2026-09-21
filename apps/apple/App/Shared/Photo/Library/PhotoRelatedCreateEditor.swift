@@ -299,8 +299,8 @@ struct PhotoRelatedCreateEditor: View {
         createPrefill(bindings: option.route.bindings, source: source, captureDate: captureDate)
     }
 
-    /// True when every field the create form would show (`renders`) is optional — nullable or
-    /// seeded with a default (`initial`). `chooseSourceRecord`'s auto-resolve (and the "New
+    /// True when every field the create form would show (`renders`) permits omission, is nullable,
+    /// or is seeded with a default (`initial`). `chooseSourceRecord`'s auto-resolve (and the "New
     /// <entity>" row's `createSelf` case) stages such a create directly instead of opening this
     /// editor for fields a person would just accept. Not used for `createTarget`, which always
     /// opens the editor — the reference choice needs a person regardless.
@@ -320,7 +320,7 @@ struct PhotoRelatedCreateEditor: View {
                 {
                     return false
                 }
-                return field.nullable || field.initial != nil
+                return !field.requiredOnCreate || field.nullable || field.initial != nil
             }
     }
 }

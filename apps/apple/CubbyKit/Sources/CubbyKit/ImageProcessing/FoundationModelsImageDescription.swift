@@ -104,7 +104,7 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
                     """)
             let response = try await session.respond(
                 generating: GeneratedCompanionImageDescription.self,
-                options: GenerationOptions(sampling: .greedy)
+                options: GenerationOptions(samplingMode: .greedy)
             ) {
                 "Evaluate this image for Cubby's catalog."
                 Attachment(image).label("source image")

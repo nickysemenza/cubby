@@ -461,63 +461,9 @@ struct ActivityDetailView: View {
     var body: some View {
         List {
             if let detail = model.detail {
-                Section("Run") {
-                    LabeledContent("Work", value: detail.run.kind.title)
-                    LabeledContent("Subject", value: detail.run.subjectName)
-                    LabeledContent("State", value: detail.run.state)
-                    LabeledContent("Started") { Text(detail.run.createdAt, style: .relative) }
-                    if let cost = detail.run.estimatedCost {
-                        LabeledContent("Estimated cost", value: cost, format: .currency(code: "USD"))
-                    }
-                    if let error = detail.run.error {
-                        Text(error).foregroundStyle(PorcelainTokens.destructive)
-                    }
-                }
-                Section("Attempts") {
-                    ForEach(detail.attempts, id: \.number) { attempt in
-                        DisclosureGroup("Attempt \(attempt.number) · \(attempt.state)") {
-                            if let executor = attempt.executor {
-                                LabeledContent("Executor", value: executor.name)
-                                LabeledContent("Platform", value: executor.platform.rawValue)
-                                if let version = executor.appVersion {
-                                    LabeledContent("App", value: version)
-                                }
-                                if let version = executor.osVersion {
-                                    LabeledContent("OS", value: version)
-                                }
-                            }
-                            diagnosticText("Diagnostics", attempt.diagnosticsJson)
-                            diagnosticText("Result", attempt.resultJson)
-                            if let error = attempt.error {
-                                Text(error).foregroundStyle(PorcelainTokens.destructive)
-                            }
-                        }
-                    }
-                    if detail.nextAttemptCursor != nil {
-                        Button("Load more attempts") {
-                            Task { await model.loadMoreAttempts(id: id, client: appModel.client) }
-                        }
-                    }
-                }
-                Section("Events") {
-                    ForEach(model.events, id: \.id) { event in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(event.event).font(.body.monospaced())
-                            Text(
-                                "\(event.source.rawValue) · \(event.occurredAt.formatted(.relative(presentation: .named)))"
-                            )
-                            .font(.caption).foregroundStyle(.secondary)
-                            if let details = event.detailsJson {
-                                Text(details).font(.caption.monospaced()).textSelection(.enabled)
-                            }
-                        }
-                    }
-                    if model.eventCursor != nil {
-                        Button("Load more events") {
-                            Task { await model.loadMoreEvents(id: id, client: appModel.client) }
-                        }
-                    }
-                }
+                runSection(detail: detail)
+                attemptsSection(detail: detail)
+                eventsSection()
             } else if let error = model.error {
                 ContentUnavailableView(
                     "Couldn’t load run", systemImage: "exclamationmark.triangle",
@@ -534,6 +480,72 @@ struct ActivityDetailView: View {
         .task(id: "\(appModel.host):\(id)") { await model.load(id: id, client: appModel.client) }
         .task(id: "\(appModel.host):\(id):poll") {
             await model.pollActive(id: id, client: appModel.client)
+        }
+    }
+
+    private func runSection(detail: ActivityDetailOutput) -> some View {
+        Section("Run") {
+            LabeledContent("Work", value: detail.run.kind.title)
+            LabeledContent("Subject", value: detail.run.subjectName)
+            LabeledContent("State", value: detail.run.state)
+            LabeledContent("Started") { Text(detail.run.createdAt, style: .relative) }
+            if let cost = detail.run.estimatedCost {
+                LabeledContent("Estimated cost", value: cost, format: .currency(code: "USD"))
+            }
+            if let error = detail.run.error {
+                Text(error).foregroundStyle(PorcelainTokens.destructive)
+            }
+        }
+    }
+
+    private func attemptsSection(detail: ActivityDetailOutput) -> some View {
+        Section("Attempts") {
+            ForEach(detail.attempts, id: \.number) { attempt in
+                DisclosureGroup("Attempt \(attempt.number) · \(attempt.state)") {
+                    if let executor = attempt.executor {
+                        LabeledContent("Executor", value: executor.name)
+                        LabeledContent("Platform", value: executor.platform.rawValue)
+                        if let version = executor.appVersion {
+                            LabeledContent("App", value: version)
+                        }
+                        if let version = executor.osVersion {
+                            LabeledContent("OS", value: version)
+                        }
+                    }
+                    diagnosticText("Diagnostics", attempt.diagnosticsJson)
+                    diagnosticText("Result", attempt.resultJson)
+                    if let error = attempt.error {
+                        Text(error).foregroundStyle(PorcelainTokens.destructive)
+                    }
+                }
+            }
+            if detail.nextAttemptCursor != nil {
+                Button("Load more attempts") {
+                    Task { await model.loadMoreAttempts(id: id, client: appModel.client) }
+                }
+            }
+        }
+    }
+
+    private func eventsSection() -> some View {
+        Section("Events") {
+            ForEach(model.events, id: \.id) { event in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(event.event).font(.body.monospaced())
+                    Text(
+                        "\(event.source.rawValue) · \(event.occurredAt.formatted(.relative(presentation: .named)))"
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
+                    if let details = event.detailsJson {
+                        Text(details).font(.caption.monospaced()).textSelection(.enabled)
+                    }
+                }
+            }
+            if model.eventCursor != nil {
+                Button("Load more events") {
+                    Task { await model.loadMoreEvents(id: id, client: appModel.client) }
+                }
+            }
         }
     }
 

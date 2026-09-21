@@ -31,17 +31,7 @@ struct PhotoDestinationSheet: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            reviewLayout
-                .navigationTitle("Review photos")
-                #if os(iOS)
-                    .navigationBarTitleDisplayMode(.inline)
-                #endif
-                .navigationSubtitle("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
-                .toolbar { reviewToolbar }
-                .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
-                .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
-                    destinationScreen(destination)
-                }
+            reviewContent
         }
         .nativeSheet(.photo)
         .interactiveDismissDisabled(manifest.isCommitting)
@@ -130,6 +120,20 @@ struct PhotoDestinationSheet: View {
             }
             .environment(appModel)
         }
+    }
+
+    private var reviewContent: some View {
+        reviewLayout
+            .navigationTitle("Review photos")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .navigationSubtitle("\(manifest.selectedIDs.count) of \(manifest.items.count) selected")
+            .toolbar { reviewToolbar }
+            .safeAreaInset(edge: .bottom, spacing: 0) { statusFooter }
+            .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
+                destinationScreen(destination)
+            }
     }
 
     /// Extracted so `body` stays under the project's 200ms type-check budget

@@ -370,6 +370,8 @@ export const renderEntityOperations = (
     generatedOperationIds,
   );
 
+  const fallback = (covered: (key: string) => boolean, value: string) =>
+    entityKeys.every(covered) ? "" : `\n        default: ${value}`;
   const actionCases = entities
     .map(
       ([entity, actions]) =>
@@ -515,8 +517,7 @@ extension EntityKey {
     /// generated client carries them (\`delete\` is exposed but not generated).
     public var httpActions: Set<EntityAction> {
         switch self {
-${actionCases}
-        default: []
+${actionCases}${fallback((key) => resourceEntities.has(key), "[]")}
         }
     }
 
@@ -524,15 +525,13 @@ ${actionCases}
     /// operations below can perform (create/update/timeline gate the generic editor and views).
     public var nativeActions: Set<EntityAction> {
         switch self {
-${nativeActionCases}
-        default: []
+${nativeActionCases}${fallback((key) => (nativeActionsByEntity.get(key)?.size ?? 0) > 0, "[]")}
         }
     }
 
     public var nativeReadKind: NativeReadKind {
         switch self {
-${nativeReadCases}
-        default: .unavailable
+${nativeReadCases}${fallback((key) => nativeActionsByEntity.get(key)?.has("list") ?? false, ".unavailable")}
         }
     }
 }

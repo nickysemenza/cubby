@@ -450,7 +450,7 @@ struct PhotoImportFlowTests {
             gardenEntries
             .map { entry in
                 """
-                {"id":"\(entry.id)","locationId":"\(entry.locationId)","kind":"note","observedOn":"2026-09-10","images":[],"displayName":"\(entry.id)","locationName":"Test bed","createdAt":"2026-09-10T00:00:00Z","updatedAt":"2026-09-10T00:00:00Z","displayImages":[]}
+                {"id":"\(entry.id)","locationId":"\(entry.locationId)","plantingIds":[],"kind":"note","observedOn":"2026-09-10","images":[],"displayName":"\(entry.id)","locationName":"Test bed","plantings":[],"createdAt":"2026-09-10T00:00:00Z","updatedAt":"2026-09-10T00:00:00Z","displayImages":[]}
                 """
             }.joined(separator: ",")
         let json =
