@@ -11812,6 +11812,92 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// - Remark: HTTP `POST /api/v1/purchaseImport/initiateRunEvidenceUpload`.
+    /// - Remark: Generated from `#/paths//api/v1/purchaseImport/initiateRunEvidenceUpload/post(purchaseImport.initiateRunEvidenceUpload)`.
+    public func purchaseImport_initiateRunEvidenceUpload(_ input: Operations.PurchaseImport_initiateRunEvidenceUpload.Input) async throws -> Operations.PurchaseImport_initiateRunEvidenceUpload.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.PurchaseImport_initiateRunEvidenceUpload.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/api/v1/purchaseImport/initiateRunEvidenceUpload",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .post
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                let body: OpenAPIRuntime.HTTPBody?
+                switch input.body {
+                case .none:
+                    body = nil
+                case let .json(value):
+                    body = try converter.setOptionalRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
+                }
+                return (request, body)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.PurchaseImport_initiateRunEvidenceUpload.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.InitiateImportRunEvidenceUploadOut.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.PurchaseImport_initiateRunEvidenceUpload.Output.Default.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ApiError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
     /// - Remark: HTTP `GET /api/v1/purchaseImport/listReceiptHunts`.
     /// - Remark: Generated from `#/paths//api/v1/purchaseImport/listReceiptHunts/get(purchaseImport.listReceiptHunts)`.
     public func purchaseImport_listReceiptHunts(_ input: Operations.PurchaseImport_listReceiptHunts.Input) async throws -> Operations.PurchaseImport_listReceiptHunts.Output {

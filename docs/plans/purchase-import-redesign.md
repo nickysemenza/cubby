@@ -591,13 +591,37 @@ were consolidated into this branch instead of separate PRs.
     "Durable import checkpoints", "Marketplace seller on Amazon purchases",
     "PurchaseLine SKU annotation".
 
-### 8.3 Validation
+### 8.3 Targeted validation and enrichment
+
+The shipped runtime also admits explicit `purchase_validation` and
+`product_enrichment` runs. These runs persist typed Purchase/Product targets,
+freeze their selected source and VendorAccount, and store browser, Gmail, or
+manual evidence in run-scoped R2 records. They never attach validation
+evidence to shared Images or documents.
+
+Purchase validation reuses the import plan builder but compares the proposed
+semantic plan to live Purchase headers, Expense lines, Product resolutions,
+and settlement state without calling the writer. Equality completes as a
+replayed no-op; drift or unresolved identity stops for review. Product
+enrichment may fill only blank identity fields, proven non-colliding external
+identifiers, and one exact-variant image selected from target-bound evidence;
+price is never agent-written. Populated-field replacement remains a typed,
+revalidated approval rather than an implicit overwrite.
+
+Admission remains deliberately simple: a VendorAccount with an active run
+rejects another group and links to the blocker. Every admitted run has one
+stable dispatch event, bounded queue delivery, a coordinator-start
+acknowledgement, late-message fencing, and manual retry/abort controls. Target
+edges participate in Product/Purchase merge and deletion policy, while
+`ImportRunMutation` continues to describe only real business changes.
+
+### 8.4 Validation
 
 Per AGENTS.md: `pnpm typecheck`, `pnpm test:file` per touched file, `pnpm
 check` at handoff, `pnpm verify:local` before merge, `generate:check`, Apple
 build for the Mac app.
 
-### 8.4 Tests the plan requires
+### 8.5 Tests the plan requires
 
 - Writer: one table-driven test with a row per §4.4 invariant, including
   "single unlinked aggregate → replaced with snapshot carried", "any other

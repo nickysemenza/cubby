@@ -2,13 +2,27 @@ import { setProvider } from "@flue/runtime";
 import { createAgentRouter } from "@flue/runtime/routing";
 import { env } from "cloudflare:workers";
 
-import { cubbyAiGatewayProviders } from "./cubby-ai-provider";
+import {
+  cubbyAiGatewayProviders,
+  type PurchaseAgentTestModelBinding,
+} from "./cubby-ai-provider";
 import { internalAgentRoute } from "./internal-agent-route";
 import { PurchaseImportRun } from "./purchase-import-run";
 
-// Every model request, including Flue compaction and retries, uses the same
-// Universal Gateway/BYOK transport as Cubby's web Worker.
-for (const provider of cubbyAiGatewayProviders(() => env.AI)) {
+// This named binding exists only in the workerd harness configuration. It is
+// deliberately not declared in wrangler.jsonc, so deployed requests fail
+// closed to the mandatory Universal Gateway transport below.
+// SAFETY: the optional extension describes only the test-harness binding;
+// production CloudflareBindings remains unchanged and cannot supply it.
+const testModel = (
+  env as typeof env & {
+    CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentTestModelBinding;
+  }
+).CUBBY_PURCHASE_AGENT_TEST_MODEL;
+
+// Every production model request, including Flue compaction and retries, uses
+// the same Universal Gateway/BYOK transport as Cubby's web Worker.
+for (const provider of cubbyAiGatewayProviders(() => env.AI, testModel)) {
   setProvider(provider);
 }
 

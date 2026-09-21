@@ -13,6 +13,7 @@ export type PurchaseAgentDispatch = (
 type PurchaseAgentSignalAttributes = {
   eventId: string;
   publicId?: string;
+  purpose?: "account_sync" | "purchase_validation" | "product_enrichment";
 };
 
 export async function dispatchPurchaseAgentEvent(
@@ -28,6 +29,7 @@ export async function dispatchPurchaseAgentEvent(
       runId: event.runId,
       publicId: event.publicId,
       coordinatorModel: event.coordinatorModel,
+      purpose: event.purpose,
     },
     idempotencyKey: purchaseAgentEventIdempotencyKey(event),
     message: {

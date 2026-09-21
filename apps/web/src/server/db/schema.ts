@@ -1437,6 +1437,7 @@ export const importRun = pgTable(
     predecessorRunId: uuid("predecessorRunId").references(
       (): AnyPgColumn => importRun.id,
     ),
+    purpose: text("purpose").notNull().default("account_sync"),
     trigger: text("trigger").notNull(),
     status: text("status").notNull().default("running"),
     coordinatorModel: text("coordinatorModel")
@@ -1453,6 +1454,11 @@ export const importRun = pgTable(
     skipped: integer("skipped").notNull().default(0),
     auditedAt: timestamp("auditedAt", { mode: "date" }),
     failureCode: text("failureCode"),
+    /** Stable queue generation; duplicate and late deliveries are fenced to it. */
+    dispatchEventId: text("dispatchEventId"),
+    dispatchAttempts: integer("dispatchAttempts").notNull().default(0),
+    dispatchError: text("dispatchError"),
+    coordinatorStartedAt: timestamp("coordinatorStartedAt", { mode: "date" }),
     agentSessionId: text("agentSessionId"),
     ...baseTimestamps(),
   },
@@ -1472,13 +1478,103 @@ export const importRun = pgTable(
     ),
     check(
       "ImportRun_status_check",
-      sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed')`,
+      sql`${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval', 'needs_review', 'completed', 'failed', 'dispatch_failed')`,
     ),
+    check(
+      "ImportRun_purpose_check",
+      sql`${table.purpose} IN ('account_sync', 'purchase_validation', 'product_enrichment')`,
+    ),
+    uniqueIndex("ImportRun_dispatch_event_unique")
+      .on(table.dispatchEventId)
+      .where(sql`${table.dispatchEventId} IS NOT NULL`),
     uniqueIndex("ImportRun_one_active_vendor_account_key")
       .on(table.vendorAccountId)
       .where(
         sql`${table.vendorAccountId} IS NOT NULL AND ${table.status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')`,
       ),
+  ],
+);
+
+/** Explicit no-op-validation/enrichment targets; ImportRunMutation remains writes-only. */
+export const importRunTarget = pgTable(
+  "ImportRunTarget",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    purchaseId: uuid("purchaseId")
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
+    productId: uuid("productId")
+      .$type<ProductId>()
+      .references(() => product.id),
+    vendorAccountId: uuid("vendorAccountId").references(() => vendorAccount.id),
+    sourceKind: text("sourceKind"),
+    sourceExternalKey: text("sourceExternalKey"),
+    state: text("state").notNull().default("pending"),
+    targetFingerprint: text("targetFingerprint").notNull(),
+    evidenceFingerprint: text("evidenceFingerprint"),
+    outcome: text("outcome"),
+    warning: text("warning"),
+    diff: jsonb("diff"),
+    preparedAt: timestamp("preparedAt", { mode: "date" }),
+    completedAt: timestamp("completedAt", { mode: "date" }),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    index("ImportRunTarget_run_idx").on(table.runId),
+    index("ImportRunTarget_purchase_idx").on(table.purchaseId),
+    index("ImportRunTarget_product_idx").on(table.productId),
+    uniqueIndex("ImportRunTarget_run_purchase_key")
+      .on(table.runId, table.purchaseId)
+      .where(sql`${table.purchaseId} IS NOT NULL`),
+    uniqueIndex("ImportRunTarget_run_product_key")
+      .on(table.runId, table.productId)
+      .where(sql`${table.productId} IS NOT NULL`),
+    check(
+      "ImportRunTarget_exactly_one_target_check",
+      sql`((${table.purchaseId} IS NOT NULL)::int + (${table.productId} IS NOT NULL)::int) = 1`,
+    ),
+    check(
+      "ImportRunTarget_state_check",
+      sql`${table.state} IN ('pending', 'prepared', 'completed', 'skipped', 'unresolved', 'needs_evidence', 'unavailable')`,
+    ),
+    check(
+      "ImportRunTarget_outcome_check",
+      sql`${table.outcome} IS NULL OR ${table.outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped')`,
+    ),
+  ],
+);
+
+/** Immutable R2-backed evidence scoped to a run target, never a shared Image. */
+export const importRunEvidence = pgTable(
+  "ImportRunEvidence",
+  {
+    id: pkUuid(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => importRun.id),
+    targetId: uuid("targetId")
+      .notNull()
+      .references(() => importRunTarget.id),
+    kind: text("kind").notNull(),
+    objectKey: text("objectKey").notNull(),
+    checksum: text("checksum").notNull(),
+    mediaType: text("mediaType").notNull(),
+    byteSize: integer("byteSize"),
+    sourceMetadata: jsonb("sourceMetadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ImportRunEvidence_object_key_unique").on(table.objectKey),
+    index("ImportRunEvidence_run_target_idx").on(table.runId, table.targetId),
+    check(
+      "ImportRunEvidence_kind_check",
+      sql`${table.kind} IN ('browser_capture', 'gmail_attachment', 'manual_upload')`,
+    ),
   ],
 );
 
@@ -1630,7 +1726,7 @@ export const importRunControlEvent = pgTable(
     ),
     check(
       "ImportRunControlEvent_action_check",
-      sql`${table.action} IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'escalate_sol')`,
+      sql`${table.action} IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol')`,
     ),
   ],
 );

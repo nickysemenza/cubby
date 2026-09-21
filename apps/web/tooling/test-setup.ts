@@ -230,6 +230,7 @@ async function seedTestHome(rawDb: ReturnType<typeof drizzle>) {
  */
 let fileDb: {
   db: Database;
+  databaseUrl: string;
   rawDb: ReturnType<typeof drizzle>;
   pool: Pool;
   /** IntegreSQL's pool slot for this database, for {@link closeTestDb}. */
@@ -308,7 +309,13 @@ async function getFileDb() {
     );
   }
 
-  fileDb = { db: toTestDatabase(rawDb, pool), rawDb, pool, testId };
+  fileDb = {
+    db: toTestDatabase(rawDb, pool),
+    databaseUrl: connectionUrl,
+    rawDb,
+    pool,
+    testId,
+  };
   return fileDb;
 }
 
@@ -370,6 +377,8 @@ async function resetTestDb() {
 /** Holder returned by {@link withTestDb}; fields are live before each test. */
 export interface TestDbContext {
   db: Database;
+  /** Isolated IntegreSQL URL for a workerd Worker/Hyperdrive test binding. */
+  databaseUrl: string;
   actor: ActorContext;
 }
 
@@ -425,6 +434,12 @@ export function withTestDb(source: AuditSource = "ui"): TestDbContext {
         throw new Error("withTestDb database is unavailable before beforeEach");
       }
       return state.db;
+    },
+    get databaseUrl() {
+      if (!state.db) {
+        throw new Error("withTestDb database is unavailable before beforeEach");
+      }
+      return fileDb?.databaseUrl ?? "";
     },
     actor,
   };

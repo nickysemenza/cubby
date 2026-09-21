@@ -14,6 +14,7 @@ import {
   purchaseImportRunsResponse,
   type PurchaseImportRunSummary,
 } from "~/lib/purchase-import-run-detail";
+import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
 import { FinancialSettlement } from "./financial-settlement";
@@ -26,6 +27,7 @@ import {
   ReconciliationNote,
 } from "./purchase-reconciliation";
 import { purchase as purchaseOperations } from "./purchase.functions";
+import { TargetedImportLaunchButton } from "./targeted-import-launch";
 
 const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
 
@@ -52,23 +54,47 @@ export const PurchaseImportRuns: DetailSlotComponent<"purchase"> = ({
     },
   });
 
-  if (runs.isLoading) return <StatusText>Loading import runs…</StatusText>;
+  const startValidation = (
+    <TargetedImportLaunchButton
+      targetId={purchase.id}
+      targetLabel={purchaseLabel(purchase)}
+      purpose="purchase_validation"
+    />
+  );
+  if (runs.isLoading)
+    return (
+      <Stack gap="sm">
+        {startValidation}
+        <StatusText>Loading import runs…</StatusText>
+      </Stack>
+    );
   if (runs.isError)
-    return <StatusText tone="destructive">{runs.error.message}</StatusText>;
+    return (
+      <Stack gap="sm">
+        {startValidation}
+        <StatusText tone="destructive">{runs.error.message}</StatusText>
+      </Stack>
+    );
   const importRuns = runs.data ?? [];
   if (importRuns.length === 0) {
     return (
-      <StatusText>
-        No import run has recorded a mutation for this purchase.
-      </StatusText>
+      <Stack gap="sm">
+        {startValidation}
+        <StatusText>
+          No import run has been recorded for this purchase.
+        </StatusText>
+      </Stack>
     );
   }
   return (
-    <div className="grid gap-3">
-      {importRuns.map((run) => (
-        <PurchaseImportRunSummary key={run.publicId} run={run} />
-      ))}
-    </div>
+    <Stack gap="sm">
+      {startValidation}
+      <div className="grid gap-3">
+        {importRuns.map((run) => (
+          <PurchaseImportRunSummary key={run.publicId} run={run} />
+        ))}
+      </div>
+    </Stack>
   );
 };
 
@@ -79,7 +105,10 @@ function PurchaseImportRunSummary({ run }: { run: PurchaseImportRunSummary }) {
         <span className="font-medium">
           {run.vendorName ?? run.vendorAccountLabel ?? "Purchase import"}
         </span>
-        <span className="text-muted-foreground">{run.status}</span>
+        <span className="text-muted-foreground">
+          {run.purpose ? `${run.purpose.replaceAll("_", " ")} · ` : ""}
+          {run.status}
+        </span>
       </div>
       <div className="text-muted-foreground">
         {new Date(run.startedAt).toLocaleString()} · {run.trigger} ·{" "}

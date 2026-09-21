@@ -33,6 +33,14 @@ export interface PurchaseImportDurableObjectRpc {
   connected(): Promise<boolean>;
   notifyRunCompleted(summary: {
     runID: string;
+    terminalStatus: "completed" | "needs_review" | "failed" | "dispatch_failed";
+    outcome?:
+      | "replayed"
+      | "raw_evidence_drift"
+      | "semantic_drift"
+      | "enriched"
+      | "unavailable"
+      | "skipped";
     imported: number;
     updated: number;
     skipped: number;

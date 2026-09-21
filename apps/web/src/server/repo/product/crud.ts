@@ -59,6 +59,7 @@ import {
   image,
   ingredient,
   inventoryEntry,
+  importRunTarget,
   location,
   mealFoodEntry,
   product,
@@ -2170,6 +2171,11 @@ type ProductDependentFetcher = (
 ) => Promise<Array<{ productId: ProductId | null }>>;
 
 const PRODUCT_RETAINING_DEPENDENTS = {
+  "ImportRunTarget.productId": (tx, ids) =>
+    tx.query.importRunTarget.findMany({
+      where: inArray(importRunTarget.productId, ids),
+      columns: { productId: true },
+    }),
   "Planting.sourceProductId": async (tx, ids) => {
     const rows = await tx.query.planting.findMany({
       where: and(inArray(planting.sourceProductId, ids), notDeleted(planting)),

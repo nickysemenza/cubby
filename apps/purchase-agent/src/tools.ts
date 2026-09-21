@@ -77,6 +77,19 @@ export function purchaseImportTools(
       }),
     }),
     defineTool({
+      name: "extract_run_evidence",
+      description:
+        "Extract the immutable run-scoped evidence uploaded for a purchase validation target. Use this instead of any shared Image or document API.",
+      input: v.object({ operationId }),
+      output: serviceResult,
+      durable: true,
+      run: async ({ data, step }) => ({
+        output: await step.do(`extract-run-evidence:${data.operationId}`, () =>
+          serviceForRun().extractRunEvidence({ runId, ...data }),
+        ),
+      }),
+    }),
+    defineTool({
       name: "issue_browser_command",
       description:
         "Request one fixed read-only browser action. A pending command ends this submission; a queue event resumes this same agent when evidence is ready.",
@@ -129,6 +142,20 @@ export function purchaseImportTools(
         });
         return { output, terminate: pendingResult(output) };
       },
+    }),
+    defineTool({
+      name: "import_browser_order_evidence",
+      description:
+        "Bind a completed browser command's retained evidence to its exact run target before preparation or enrichment. Use the commandId returned by the browser result.",
+      input: v.object({ operationId, commandId: v.pipe(v.string(), v.uuid()) }),
+      output: serviceResult,
+      durable: true,
+      run: async ({ data, step }) => ({
+        output: await step.do(
+          `import-browser-evidence:${data.operationId}`,
+          () => serviceForRun().importOrderEvidence({ runId, ...data }),
+        ),
+      }),
     }),
     defineTool({
       name: "report_agent_progress",

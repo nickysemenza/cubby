@@ -10,6 +10,7 @@ let harness: ReturnType<typeof createBrowserTestHarness>;
 const run = {
   publicId: "PIR-ABCDE12345",
   status: "completed",
+  purpose: "purchase_validation",
   trigger: "manual",
   startedAt: "2026-09-20T16:00:00.000Z",
   endedAt: "2026-09-20T16:03:00.000Z",
@@ -73,6 +74,41 @@ const run = {
     },
   ],
   preparedOrders: [],
+  targets: [
+    {
+      id: "target-1",
+      targetType: "purchase",
+      targetShortcode: "PUR-ABCDE12345",
+      targetName: "Fixture purchase",
+      sourceId: null,
+      sourceLabel: "browser order · fixture-order",
+      vendorAccountLabel: "Fixture vendor",
+      state: "completed",
+      fingerprint: "fixture-fingerprint",
+      outcome: "replayed",
+      warning: null,
+      diff: null,
+      completedAt: "2026-09-20T16:03:00.000Z",
+    },
+  ],
+  evidence: [
+    {
+      id: "evidence-1",
+      targetId: null,
+      sourceKind: "browser_capture",
+      filename: "fixture-order.pdf",
+      mediaType: "application/pdf",
+      checksum: "fixture-checksum",
+      createdAt: "2026-09-20T16:00:00.000Z",
+    },
+  ],
+  dispatch: {
+    eventId: "event-1",
+    state: "started",
+    attempts: 1,
+    error: null,
+    coordinatorStartedAt: "2026-09-20T16:00:01.000Z",
+  },
   progress: [],
   latestProgress: null,
   approvals: [],
@@ -140,6 +176,10 @@ describe("PurchaseImportRunDetailPage", () => {
     expect(
       screen.getByLabelText("Purchase import transcript"),
     ).toHaveTextContent("extract-1");
+    expect(screen.getByText("purchase validation")).toBeInTheDocument();
+    expect(screen.getByText("Targets and outcome")).toBeInTheDocument();
+    expect(screen.getByText("Outcome: replayed")).toBeInTheDocument();
+    expect(screen.getByText("fixture-order.pdf")).toBeInTheDocument();
     expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Send prompt" }),

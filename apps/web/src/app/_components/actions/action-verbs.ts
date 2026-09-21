@@ -118,6 +118,7 @@ export const actionVerbs = {
   suggest: { label: "Suggest", icon: Sparkles },
   analyze: { label: "Analyze photos", icon: Sparkles },
   identify: { label: "Identify product", icon: Sparkles },
+  enrichProducts: { label: "Enrich products...", icon: Sparkles },
   detect: { label: "Detect items", icon: Sparkles },
   regenerate: { label: "Regenerate flow", icon: Sparkles },
 

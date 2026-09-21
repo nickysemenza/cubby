@@ -141,10 +141,11 @@ export const auditPurchaseImportBatch = async (args: {
     },
   );
 
-export const extractPurchaseReceipt = async (args: {
+export const extractPurchaseEvidence = async (args: {
   db: Database;
   runId: string;
-  imageUrl: string;
+  evidenceUrl: string;
+  mediaType: string;
 }) =>
   normalizeImportExtractionModelOutput(
     await runStructuredFeature(
@@ -157,7 +158,23 @@ export const extractPurchaseReceipt = async (args: {
           {
             role: "user",
             content: [
-              { type: "image", source: { type: "url", value: args.imageUrl } },
+              args.mediaType === "application/pdf"
+                ? {
+                    type: "document",
+                    source: {
+                      type: "url",
+                      value: args.evidenceUrl,
+                      mimeType: args.mediaType,
+                    },
+                  }
+                : {
+                    type: "image",
+                    source: {
+                      type: "url",
+                      value: args.evidenceUrl,
+                      mimeType: args.mediaType,
+                    },
+                  },
               { type: "text", content: "Extract this confirmed receipt." },
             ],
           } satisfies ModelMessage,
@@ -172,6 +189,18 @@ export const extractPurchaseReceipt = async (args: {
       },
     ),
   );
+
+export const extractPurchaseReceipt = (args: {
+  db: Database;
+  runId: string;
+  imageUrl: string;
+}) =>
+  extractPurchaseEvidence({
+    db: args.db,
+    runId: args.runId,
+    evidenceUrl: args.imageUrl,
+    mediaType: "image/jpeg",
+  });
 
 export const classifyOrderMail = async (args: {
   db: Database;

@@ -133,6 +133,14 @@ export type ProductDeleteDisposition =
   | (OperationDisposition & { effect: "soft-delete" | "hard-delete" });
 
 export const PRODUCT_DELETE_EDGE_POLICY = {
+  "ImportRunTarget.productId": {
+    code: "block-targeted-import-history",
+    effect: "block",
+    description:
+      "A Product retained by targeted validation or enrichment history cannot be deleted.",
+    reason: "CONSTRAINT_VIOLATION",
+    label: "targeted import runs",
+  },
   "InventoryEntry.productId": {
     code: "block-live-inventory",
     effect: "block",

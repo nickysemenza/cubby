@@ -142,6 +142,8 @@ public enum BrowserBridgeDebugLog {
         case controllerRoster = "controller.roster"
         case controllerStatus = "controller.status"
         case syncRequested = "sync.requested"
+        case windowRaised = "window.raised"
+        case windowRaiseFailed = "window.raise_failed"
         case windowBackgrounded = "window.backgrounded"
         case windowBackgroundFailed = "window.background_failed"
         case windowMinimized = "window.minimized"

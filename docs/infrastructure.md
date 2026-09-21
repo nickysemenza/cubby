@@ -102,6 +102,14 @@ a bounded circular service topology, not a recursive request loop: queue events
 start agent work, agent MCP calls return through `PurchaseImportService`, and
 browser users reach the agent only through an authenticated web route.
 
+Account syncs and explicit Purchase validation/Product enrichment runs share
+the same queue. Each admitted run records a stable start-event id and the
+consumer fences duplicates and late deliveries before Flue admission. A
+VendorAccount never has more than one active run: targeted launches reject a
+busy account and link to its `PIR-*` page instead of creating an application
+waiting queue. Run-scoped evidence is stored beneath the import-run R2 prefix
+and remains separate from shared Image and Purchase document records.
+
 The fixed public OAuth client id is `cubby-purchase-agent`. It uses authorization
 code + PKCE, `offline_access`, no client secret, and the callback
 `https://cubby.nickysemenza.com/api/import/agent/oauth/callback`. The web Worker

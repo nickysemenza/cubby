@@ -650,6 +650,18 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
+  canDispatchCoordinator(input: { runId: string; eventId: string }) {
+    return this.withDatabase((db, service) =>
+      service.canDispatchImportRunCoordinator(db, input),
+    );
+  }
+
+  acknowledgeCoordinator(input: { runId: string; eventId: string }) {
+    return this.withDatabase((db, service) =>
+      service.acknowledgeImportRunCoordinator(db, input),
+    );
+  }
+
   acquireMcpAccess(input: { runId: string }) {
     return this.withDatabase(async (db, service) => {
       const scope = await service.loadRunScope(db, input.runId);
@@ -727,6 +739,50 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
               (_line, index) => `receipt:${evidence.huntId}:line:${index}`,
             ),
             primaryDocumentImageId: evidence.imageId,
+            screenshotImageId: null,
+          };
+        },
+      ),
+    );
+  }
+
+  extractRunEvidence(input: { runId: string; operationId: string }) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "extract_run_evidence", payload: input },
+        async () => {
+          const [
+            { extractPurchaseEvidence },
+            { loadRunEvidenceForExtraction },
+          ] = await Promise.all([
+            import("./server/agents/purchase-import/extract"),
+            import("./server/purchase-import/run-evidence"),
+          ]);
+          const evidence = await loadRunEvidenceForExtraction(db, input.runId);
+          if (!evidence)
+            throw new Error("This validation run has no uploaded evidence");
+          const extraction = await extractPurchaseEvidence({
+            db,
+            runId: input.runId,
+            evidenceUrl: evidence.evidenceUrl,
+            mediaType: evidence.mediaType,
+          });
+          return {
+            stableOrderId: `run-evidence:${evidence.id}`,
+            itemOperationId: `run-evidence:${evidence.id}`,
+            source: {
+              kind: evidence.sourceKind ?? "receipt_photo",
+              externalKey: evidence.sourceExternalKey ?? evidence.id,
+              checksum: evidence.checksum,
+            },
+            evidenceChecksum: evidence.checksum,
+            extractionRevision: "run-evidence@1",
+            extraction,
+            lineIds: (extraction.candidate?.lines ?? []).map(
+              (_line, index) => `run-evidence:${evidence.id}:line:${index}`,
+            ),
+            primaryDocumentImageId: null,
             screenshotImageId: null,
           };
         },
@@ -938,6 +994,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     operationId: string;
     failureCode: "flue_failed" | "flue_aborted";
     detail?: string;
+    dispatchEventId?: string;
   }) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(

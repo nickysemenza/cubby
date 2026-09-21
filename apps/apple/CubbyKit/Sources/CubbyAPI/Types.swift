@@ -329,6 +329,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/projects/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/projects/{id}/patch(resources.project.update)`.
     func resources_project_update(_ input: Operations.Resources_project_update.Input) async throws -> Operations.Resources_project_update.Output
+    /// - Remark: HTTP `POST /api/v1/purchaseImport/initiateRunEvidenceUpload`.
+    /// - Remark: Generated from `#/paths//api/v1/purchaseImport/initiateRunEvidenceUpload/post(purchaseImport.initiateRunEvidenceUpload)`.
+    func purchaseImport_initiateRunEvidenceUpload(_ input: Operations.PurchaseImport_initiateRunEvidenceUpload.Input) async throws -> Operations.PurchaseImport_initiateRunEvidenceUpload.Output
     /// - Remark: HTTP `GET /api/v1/purchaseImport/listReceiptHunts`.
     /// - Remark: Generated from `#/paths//api/v1/purchaseImport/listReceiptHunts/get(purchaseImport.listReceiptHunts)`.
     func purchaseImport_listReceiptHunts(_ input: Operations.PurchaseImport_listReceiptHunts.Input) async throws -> Operations.PurchaseImport_listReceiptHunts.Output
@@ -1531,6 +1534,17 @@ extension APIProtocol {
     ) async throws -> Operations.Resources_project_update.Output {
         try await resources_project_update(Operations.Resources_project_update.Input(
             path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/purchaseImport/initiateRunEvidenceUpload`.
+    /// - Remark: Generated from `#/paths//api/v1/purchaseImport/initiateRunEvidenceUpload/post(purchaseImport.initiateRunEvidenceUpload)`.
+    public func purchaseImport_initiateRunEvidenceUpload(
+        headers: Operations.PurchaseImport_initiateRunEvidenceUpload.Input.Headers = .init(),
+        body: Operations.PurchaseImport_initiateRunEvidenceUpload.Input.Body? = nil
+    ) async throws -> Operations.PurchaseImport_initiateRunEvidenceUpload.Output {
+        try await purchaseImport_initiateRunEvidenceUpload(Operations.PurchaseImport_initiateRunEvidenceUpload.Input(
             headers: headers,
             body: body
         ))

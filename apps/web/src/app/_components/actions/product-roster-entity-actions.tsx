@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
 
+import { TargetedProductBulkEnrichmentDialog } from "~/app/purchases/targeted-import-launch";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { booleanCellOptions } from "~/lib/select-options";
 
@@ -124,7 +125,48 @@ function useSetProductStockTrackingAction(): EntityActionHandles {
   };
 }
 
+function useEnrichProductsAction(): EntityActionHandles {
+  const [rows, setRows] = useState<ProductRosterActionRow[]>([]);
+  const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
+    null,
+  );
+  const finish = useCallback((success: boolean) => {
+    setRows([]);
+    resolveRef.current?.({ success });
+    resolveRef.current = null;
+  }, []);
+  return {
+    run: (next) => {
+      setRows(next.map(asProductRow));
+      return new Promise((resolve) => {
+        resolveRef.current = resolve;
+      });
+    },
+    rowMenuItem: () => null,
+    dialog: (
+      <TargetedProductBulkEnrichmentDialog
+        open={rows.length > 0}
+        onOpenChange={(open) => {
+          if (!open) finish(false);
+        }}
+        products={rows.map((row) => ({ id: row.id, name: row.name }))}
+        onFinished={finish}
+      />
+    ),
+  };
+}
+
 export const productRosterEntityActionDefinitions = [
+  defineEntityAction({
+    verb: "enrichProducts",
+    entities: ["product"],
+    arity: "both",
+    surfaces: ["selection"],
+    group: "organize",
+    priority: 150,
+    preserveSelection: true,
+    use: useEnrichProductsAction,
+  }),
   defineEntityAction({
     id: "print-labels",
     verb: "printLabels",

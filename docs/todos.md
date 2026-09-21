@@ -401,6 +401,12 @@ history is the archive. Permanent product constraints live in the
 
 ## Requires thought or evidence
 
+- **Apply a reviewed purchase-validation diff.** Targeted validation now
+  records a read-only semantic diff and stops for review. Design the explicit
+  human confirmation, stale-target revalidation, and transactional application
+  path before allowing any proposed validation change to touch Purchases,
+  Expenses, Product assignments, settlement, or shared evidence.
+
 - **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its owned window,
   cannot avoid Chrome's JavaScript-from-Apple-Events setting, or otherwise

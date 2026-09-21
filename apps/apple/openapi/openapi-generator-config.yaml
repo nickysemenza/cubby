@@ -79,6 +79,7 @@ filter:
     - problems.getCounts
     - product.findOrCreateByCode
     - product.findOrCreateByUPC
+    - purchaseImport.initiateRunEvidenceUpload
     - purchaseImport.listReceiptHunts
     - purchaseImport.submitReceiptEvidence
     - recommendations.forEntity

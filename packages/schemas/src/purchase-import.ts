@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { productCategory } from "./product-fields";
+import { externalIdKind, externalIdSource } from "./external-id";
 
 import { money } from "./money";
 import { expenseLineKindSchema } from "./expense-line-kind";
@@ -41,8 +43,48 @@ export const importRunStatus = z.enum([
   "needs_review",
   "completed",
   "failed",
+  "dispatch_failed",
 ]);
 export type ImportRunStatus = z.infer<typeof importRunStatus>;
+
+/** The server capability boundary is selected by the run, never by a prompt. */
+export const importRunPurpose = z.enum([
+  "account_sync",
+  "purchase_validation",
+  "product_enrichment",
+]);
+export type ImportRunPurpose = z.infer<typeof importRunPurpose>;
+
+export const importRunTargetKind = z.enum(["purchase", "product"]);
+export type ImportRunTargetKind = z.infer<typeof importRunTargetKind>;
+
+export const importRunTargetState = z.enum([
+  "pending",
+  "prepared",
+  "completed",
+  "skipped",
+  "unresolved",
+  "needs_evidence",
+  "unavailable",
+]);
+export type ImportRunTargetState = z.infer<typeof importRunTargetState>;
+
+export const importRunTargetOutcome = z.enum([
+  "replayed",
+  "raw_evidence_drift",
+  "semantic_drift",
+  "enriched",
+  "unavailable",
+  "skipped",
+]);
+export type ImportRunTargetOutcome = z.infer<typeof importRunTargetOutcome>;
+
+export const importRunEvidenceKind = z.enum([
+  "browser_capture",
+  "gmail_attachment",
+  "manual_upload",
+]);
+export type ImportRunEvidenceKind = z.infer<typeof importRunEvidenceKind>;
 
 /** Public, non-entity identity for one durable purchase-import run. */
 export const importRunPublicId = z
@@ -51,6 +93,93 @@ export const importRunPublicId = z
   .toUpperCase()
   .regex(/^PIR-[A-Z0-9]{10}$/);
 export type ImportRunPublicId = z.infer<typeof importRunPublicId>;
+
+/** Stage bytes for a run target only; this never creates an Image or Document. */
+export const initiateImportRunEvidenceUploadInput = z.object({
+  runPublicId: importRunPublicId,
+  targetId: z.uuid(),
+  kind: importRunEvidenceKind,
+  contentType: z.enum([
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+  ]),
+  byteSize: z
+    .number()
+    .int()
+    .positive()
+    .max(50 * 1024 * 1024),
+  checksum: z.string().regex(/^[a-f0-9]{64}$/),
+  filename: z.string().trim().min(1).max(255),
+  sourceMetadata: z.record(z.string(), z.json()).default({}),
+});
+export type InitiateImportRunEvidenceUploadInput = z.infer<
+  typeof initiateImportRunEvidenceUploadInput
+>;
+
+export const initiateImportRunEvidenceUploadOut = z.object({
+  evidenceId: z.uuid(),
+  objectKey: z.string().min(1),
+  uploadUrl: z.url(),
+  expiresAt: z.iso.datetime(),
+});
+export type InitiateImportRunEvidenceUploadOut = z.infer<
+  typeof initiateImportRunEvidenceUploadOut
+>;
+
+const targetedSource = z.object({
+  kind: importSourceKind,
+  externalKey: z.string().trim().min(1).max(512),
+});
+
+export const purchaseValidationTargetInput = z.object({
+  purchaseId: purchaseShortcode,
+  vendorAccountId: z.uuid().nullable().optional(),
+  source: targetedSource.nullable().optional(),
+  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export const createPurchaseValidationRunInput = z.object({
+  vendorId: vendorShortcode,
+  vendorAccountId: z.uuid().nullable().optional(),
+  trigger: importRunTrigger.default("manual"),
+  targets: z.array(purchaseValidationTargetInput).min(1).max(50),
+});
+export type CreatePurchaseValidationRunInput = z.infer<
+  typeof createPurchaseValidationRunInput
+>;
+
+export const productEnrichmentTargetInput = z.object({
+  productId: productShortcode,
+  vendorAccountId: z.uuid().nullable().optional(),
+  source: targetedSource.nullable().optional(),
+  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export const createProductEnrichmentRunsInput = z.object({
+  vendorId: vendorShortcode,
+  trigger: importRunTrigger.default("manual"),
+  targets: z.array(productEnrichmentTargetInput).min(1).max(50),
+});
+export type CreateProductEnrichmentRunsInput = z.infer<
+  typeof createProductEnrichmentRunsInput
+>;
+
+export const targetedImportRunStartOut = z.object({
+  created: z.boolean(),
+  run: z
+    .object({
+      publicId: importRunPublicId,
+      status: importRunStatus,
+      purpose: importRunPurpose,
+      dispatchEventId: z.string().uuid().nullable(),
+    })
+    .nullable(),
+  blockingRun: z
+    .object({ publicId: importRunPublicId, status: importRunStatus })
+    .nullable(),
+});
 
 const importOperationId = z.string().trim().min(1).max(200);
 const importItemOperationId = z.string().trim().min(1).max(200);
@@ -366,6 +495,11 @@ export const browserBridgeOperation = z.discriminatedUnion("type", [
     // web service derives this URL from the run's claimed work; the Mac may use it only when its
     // dedicated window disappeared across an app/browser restart.
     recoveryURL: z.url().optional(),
+    // Targeted browser evidence must retain the scope that authorizes its R2
+    // upload; account-sync captures intentionally omit it.
+    evidenceScope: z
+      .object({ runPublicId: importRunPublicId, targetId: z.uuid() })
+      .optional(),
   }),
 ]);
 export type BrowserBridgeOperation = z.infer<typeof browserBridgeOperation>;
@@ -398,6 +532,9 @@ export const browserCapturedLink = z.object({
 export const browserCapturedImage = z.object({
   url: z.url(),
   alt: z.string().nullish(),
+  naturalWidth: z.number().int().positive().nullish(),
+  naturalHeight: z.number().int().positive().nullish(),
+  highResolutionUrl: z.url().nullish(),
 });
 export const browserPaymentEvidence = z.object({
   methodLabel: z.string().nullish(),
@@ -406,6 +543,19 @@ export const browserPaymentEvidence = z.object({
 });
 export const browserPageCapture = z.object({
   sourceURL: z.url(),
+  canonicalUrl: z.url().nullish(),
+  requestedAmazonAsin: z
+    .string()
+    .regex(/^[A-Z0-9]{10}$/iu)
+    .nullish(),
+  servedAmazonAsin: z
+    .string()
+    .regex(/^[A-Z0-9]{10}$/iu)
+    .nullish(),
+  variantMarkers: z
+    .array(z.string().trim().min(1).max(500))
+    .max(50)
+    .default([]),
   title: z.string().max(500),
   capturedAt: z.iso.datetime(),
   captureVersion: z.number().int().positive(),
@@ -484,6 +634,14 @@ export const browserBridgeClientMessage = z.discriminatedUnion("type", [
 ]);
 export const browserBridgeRunCompletion = z.object({
   runID: z.uuid(),
+  /** Only `completed` permits the account-owned window to be minimized. */
+  terminalStatus: z.enum([
+    "completed",
+    "needs_review",
+    "failed",
+    "dispatch_failed",
+  ]),
+  outcome: importRunTargetOutcome.nullish(),
   imported: z.number().int().nonnegative(),
   updated: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
@@ -526,6 +684,7 @@ export const purchaseAgentEvent = z.object({
   version: z.literal(1),
   runId: z.uuid(),
   publicId: importRunPublicId.optional(),
+  purpose: importRunPurpose.optional(),
   coordinatorModel: z.enum(["gpt-5.6-terra", "gpt-5.6-sol"]).optional(),
   eventId: z.string().trim().min(1).max(256),
   type: z.enum([
@@ -545,6 +704,7 @@ export const purchaseImportRunScope = z.object({
   publicId: importRunPublicId,
   agentId: z.string().trim().min(1),
   trigger: importRunTrigger,
+  purpose: importRunPurpose,
   status: importRunStatus,
   vendorAccountId: z.uuid().nullable(),
   vendorLabel: z.string().trim().min(1).max(500).nullable(),
@@ -553,6 +713,10 @@ export const purchaseImportRunScope = z.object({
   coordinatorModel: z.string().trim().min(1).max(200),
   skillRevision: z.string().trim().min(1).max(200),
   runtimeRevision: z.string().trim().min(1).max(200),
+  dispatchEventId: z.string().uuid().nullable(),
+  dispatchAttempts: z.number().int().nonnegative(),
+  dispatchError: z.string().nullable(),
+  coordinatorStartedAt: z.iso.datetime().nullable(),
 });
 export type PurchaseImportRunScope = z.infer<typeof purchaseImportRunScope>;
 
@@ -729,6 +893,108 @@ export const commitPurchaseImportOut = z.object({
       findingCount: z.number().int().nonnegative(),
     }),
   ),
+});
+
+/** Read-only replay comparison for an immutable prepared validation batch. */
+export const validatePurchaseImportInput = z.object({
+  _runExecution: purchaseImportRunExecution,
+  prepareOperationId: importOperationId,
+  resolutions: commitPurchaseImportInput.shape.resolutions,
+});
+export type ValidatePurchaseImportInput = z.infer<
+  typeof validatePurchaseImportInput
+>;
+
+export const validatePurchaseImportOut = z.object({
+  runPublicId: importRunPublicId,
+  operationId: importOperationId,
+  status: z.enum(["completed", "needs_review"]),
+  targets: z.array(
+    z.object({
+      stableOrderId: stableImportItemId,
+      outcome: z.enum(["replayed", "raw_evidence_drift", "semantic_drift"]),
+      diff: z.unknown().nullable(),
+    }),
+  ),
+});
+
+/** Bounded Product enrichment write. Price is deliberately absent. */
+export const commitProductEnrichmentInput = z.object({
+  _runExecution: purchaseImportRunExecution,
+  productId: productShortcode,
+  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  changes: z
+    .object({
+      manufacturer: z.string().trim().min(1).max(300).optional(),
+      category: productCategory.optional(),
+      model: z.string().trim().min(1).max(300).optional(),
+      identifiers: z
+        .array(
+          z.object({
+            evidenceId: z.uuid(),
+            source: externalIdSource,
+            kind: externalIdKind,
+            externalId: z.string().trim().min(1).max(500),
+            url: z.url().nullable().optional(),
+          }),
+        )
+        .max(20)
+        .optional(),
+      image: z
+        .object({
+          evidenceId: z.uuid(),
+          url: z.url(),
+          naturalWidth: z.number().int().positive(),
+          naturalHeight: z.number().int().positive(),
+        })
+        .optional(),
+    })
+    .refine(
+      (value) => Object.keys(value).length > 0,
+      "at least one change is required",
+    ),
+});
+export type CommitProductEnrichmentInput = z.infer<
+  typeof commitProductEnrichmentInput
+>;
+
+export const commitProductEnrichmentOut = z.object({
+  runPublicId: importRunPublicId,
+  operationId: importOperationId,
+  productId: productShortcode,
+  status: z.enum(["running", "needs_review"]),
+  changedFields: z.array(
+    z.enum(["manufacturer", "category", "model", "identifiers", "image"]),
+  ),
+});
+
+export const overwriteProductEnrichmentInput = z.object({
+  _runExecution: purchaseImportRunExecution,
+  productId: productShortcode,
+  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  change: z.discriminatedUnion("field", [
+    z.object({
+      field: z.literal("manufacturer"),
+      value: z.string().trim().min(1).max(300).nullable(),
+    }),
+    z.object({
+      field: z.literal("category"),
+      value: productCategory.nullable(),
+    }),
+    z.object({
+      field: z.literal("model"),
+      value: z.string().trim().min(1).max(300).nullable(),
+    }),
+  ]),
+});
+export type OverwriteProductEnrichmentInput = z.infer<
+  typeof overwriteProductEnrichmentInput
+>;
+
+export const overwriteProductEnrichmentOut = z.object({
+  runPublicId: importRunPublicId,
+  productId: productShortcode,
+  changedField: z.enum(["manufacturer", "category", "model"]),
 });
 
 export const purchaseImportOperationStatusInput = z.object({

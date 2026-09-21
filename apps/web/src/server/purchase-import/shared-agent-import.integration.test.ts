@@ -1,10 +1,14 @@
-import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
+import {
+  commitPurchaseImportInput,
+  validatePurchaseImportInput,
+} from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   expense,
+  importRunTarget,
   product,
   productExternalId,
   purchase,
@@ -16,8 +20,12 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
-import { startOrResumeImportRun } from "./run-service";
+import {
+  commitPurchaseImport,
+  preparePurchaseImport,
+  validatePurchaseImport,
+} from "./import-orders";
+import { startOrResumeImportRun, startTargetedImportRun } from "./run-service";
 
 const checksum = (digit: string) => digit.repeat(64);
 
@@ -151,5 +159,154 @@ describe("shared purchase-import prepare and commit", () => {
       .from(expense)
       .where(eq(expense.purchaseId, writtenPurchases[0]!.id));
     expect(writtenExpenses).toEqual([{ productId: existingProduct.entityId }]);
+  });
+
+  it("refuses foreign-currency semantic replay and distinguishes raw evidence drift", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Validation member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Validation vendor ${crypto.randomUUID()}`,
+      website: "https://shop.example.test",
+      browserDomains: ["shop.example.test"],
+    });
+    const existingProduct = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Validation product" }),
+      ctx.actor,
+    );
+    const [productRow] = await getDb(ctx.db)
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, existingProduct.entityId));
+    if (!productRow) throw new Error("Product fixture was not created");
+    const existingPurchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "ORDER-VALIDATE-1",
+      date: "2026-09-20",
+      statedTotal: 12.34,
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: existingPurchase.id,
+      name: "Validation product",
+      cost: 12.34,
+      date: "2026-09-20",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+      productId: existingProduct.entityId,
+      productQuantity: 1,
+    });
+
+    const runValidation = async (
+      currency: "USD" | "EUR",
+      sourceChecksum: string,
+    ) => {
+      const started = await startTargetedImportRun(ctx.db, {
+        ledgerPartyId: party.id,
+        purpose: "purchase_validation",
+        vendorId: vendor.id,
+        vendorAccountId: null,
+        trigger: "manual",
+        targets: [
+          {
+            kind: "purchase",
+            purchaseId: existingPurchase.id,
+            sourceKind: "browser_order",
+            sourceExternalKey: "validation:ORDER-VALIDATE-1",
+            targetFingerprint: checksum("c"),
+            evidenceFingerprint: checksum("a"),
+          },
+        ],
+      });
+      if (!started.created) throw new Error("Validation run was blocked");
+      const prepareOperationId = `prepare:${currency.toLowerCase()}`;
+      await preparePurchaseImport(
+        ctx.db,
+        {
+          _runExecution: {
+            runPublicId: started.run.publicId,
+            operationId: prepareOperationId,
+            itemOperationIds: [`item:${currency.toLowerCase()}`],
+          },
+          orders: [
+            {
+              stableOrderId: `order-${currency.toLowerCase()}`,
+              itemOperationId: `item:${currency.toLowerCase()}`,
+              source: {
+                kind: "browser_order",
+                externalKey: "validation:ORDER-VALIDATE-1",
+                checksum: sourceChecksum,
+              },
+              evidenceChecksum: checksum("b"),
+              extractionRevision: "validation@1",
+              extraction: {
+                status: "ready",
+                candidate: {
+                  orderId: "ORDER-VALIDATE-1",
+                  orderedAt: "2026-09-20T12:00:00.000Z",
+                  merchant: "Example",
+                  currency,
+                  printedGrandTotal: 12.34,
+                  lines: [
+                    {
+                      title: "Validation product",
+                      amount: 12.34,
+                      lineKind: "principal",
+                      quantity: 1,
+                    },
+                  ],
+                  payments: [],
+                  allShipmentsDelivered: true,
+                },
+              },
+              lineIds: [`line-${currency.toLowerCase()}`],
+              primaryDocumentImageId: null,
+              screenshotImageId: null,
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      const result = await validatePurchaseImport(
+        ctx.db,
+        validatePurchaseImportInput.parse({
+          _runExecution: {
+            runPublicId: started.run.publicId,
+            operationId: `validate:${currency.toLowerCase()}`,
+          },
+          prepareOperationId,
+          resolutions: [
+            {
+              stableOrderId: `order-${currency.toLowerCase()}`,
+              stableLineId: `line-${currency.toLowerCase()}`,
+              resolution: { kind: "existing", productId: productRow.shortcode },
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+      const [target] = await getDb(ctx.db)
+        .select({ warning: importRunTarget.warning })
+        .from(importRunTarget)
+        .where(eq(importRunTarget.runId, started.run.id));
+      return { result, target };
+    };
+
+    const foreign = await runValidation("EUR", checksum("a"));
+    expect(foreign.result).toMatchObject({
+      status: "needs_review",
+      targets: [{ outcome: "semantic_drift" }],
+    });
+
+    const rawDrift = await runValidation("USD", checksum("d"));
+    expect(rawDrift.result).toMatchObject({
+      status: "completed",
+      targets: [{ outcome: "raw_evidence_drift", diff: null }],
+    });
+    expect(rawDrift.target?.warning).toContain("source evidence changed");
   });
 });

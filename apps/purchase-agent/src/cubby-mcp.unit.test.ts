@@ -17,6 +17,9 @@ describe("cubbyMcpConnection", () => {
       throw new Error("Unexpected agent service call");
     });
     const service: PurchaseImportService = {
+      loadRunScope: unavailable,
+      canDispatchCoordinator: unavailable,
+      acknowledgeCoordinator: unavailable,
       acquireMcpAccess: vi.fn(async () => ({
         token: "run-token",
         expiresAt: "2026-09-20T20:00:00.000Z",
@@ -25,8 +28,10 @@ describe("cubbyMcpConnection", () => {
       mcpFetch,
       claimNextWork: unavailable,
       extractReceiptEvidence: unavailable,
+      extractRunEvidence: unavailable,
       issueBrowserCommand: unavailable,
       readBrowserCommandResult: unavailable,
+      importOrderEvidence: unavailable,
       saveNavigationHints: unavailable,
       markHistoryExpired: unavailable,
       finishRun: unavailable,

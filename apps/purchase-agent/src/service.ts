@@ -47,11 +47,24 @@ interface AgentProgressEvent {
 }
 
 export interface PurchaseImportService {
+  loadRunScope(input: { runId: string }): Promise<PurchaseImportServiceResult>;
+  canDispatchCoordinator(input: {
+    runId: string;
+    eventId: string;
+  }): Promise<boolean>;
+  acknowledgeCoordinator(input: {
+    runId: string;
+    eventId: string;
+  }): Promise<boolean>;
   claimNextWork(input: {
     runId: string;
     operationId: string;
   }): Promise<PurchaseImportServiceResult>;
   extractReceiptEvidence(input: {
+    runId: string;
+    operationId: string;
+  }): Promise<PurchaseImportServiceResult>;
+  extractRunEvidence(input: {
     runId: string;
     operationId: string;
   }): Promise<PurchaseImportServiceResult>;
@@ -72,6 +85,11 @@ export interface PurchaseImportService {
   readBrowserCommandResult(input: {
     runId: string;
     operationId: string;
+  }): Promise<PurchaseImportServiceResult>;
+  importOrderEvidence(input: {
+    runId: string;
+    operationId: string;
+    commandId: string;
   }): Promise<PurchaseImportServiceResult>;
   saveNavigationHints(input: {
     runId: string;
@@ -98,12 +116,15 @@ export interface PurchaseImportService {
     detail?: string;
   }): Promise<PurchaseImportServiceResult>;
   recordAgentUsage(input: AgentUsageEvent): Promise<void>;
-  updateAgentProgress(input: AgentProgressEvent): Promise<void>;
+  updateAgentProgress(
+    input: AgentProgressEvent,
+  ): Promise<{ recorded: boolean }>;
   markRunFailed(input: {
     runId: string;
     operationId: string;
     failureCode: "flue_failed" | "flue_aborted";
     detail?: string;
+    dispatchEventId?: string;
   }): Promise<PurchaseImportServiceResult>;
 }
 

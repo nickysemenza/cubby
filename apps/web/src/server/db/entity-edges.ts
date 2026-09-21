@@ -90,6 +90,7 @@ import {
   importHunt,
   importPreparedOrder,
   importRun,
+  importRunTarget,
   importSourceClaim,
   ingredient,
   inventoryEntry,
@@ -560,6 +561,14 @@ export const ENTITY_EDGES = {
     },
   }),
   product: edges({
+    "ImportRunTarget.productId": {
+      column: importRunTarget.productId,
+      role: "history",
+      label: "targeted import runs",
+      description:
+        "A no-op validation or enrichment target preserves the Product it examined.",
+      liveness: { kind: "must-target-live" },
+    },
     "MealFoodEntry.productId": {
       column: mealFoodEntry.productId,
       role: "reference",
@@ -873,6 +882,18 @@ export const ENTITY_EDGES = {
     },
   }),
   purchase: edges({
+    "ImportRunTarget.purchaseId": {
+      column: importRunTarget.purchaseId,
+      role: "history",
+      label: "targeted import runs",
+      description:
+        "A validation target preserves the Purchase it examined without claiming a business mutation.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Purchase deletion preserves targeted-run history (see PURCHASE_DELETE_EDGE_POLICY), so the run target deliberately retains the Purchase tombstone.",
+      },
+    },
     "ImportSourceClaim.purchaseId": {
       column: importSourceClaim.purchaseId,
       role: "history",

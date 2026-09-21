@@ -1,4 +1,6 @@
+import { importRunPurpose } from "@cubby/schemas/purchase-import";
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 
 import {
   importRunPublicId,
@@ -11,6 +13,7 @@ import { getPurchaseAgentQueue } from "~/server/cf-env";
 import {
   controlImportRun,
   loadImportRunByPublicId,
+  recordImportRunDispatchAttempt,
 } from "~/server/purchase-import/run-service";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
@@ -25,6 +28,7 @@ const browserRun = (
 ) => ({
   publicId: run.publicId,
   status: run.status,
+  purpose: run.purpose,
   trigger: run.trigger,
   source: run.source,
   actor: {
@@ -42,6 +46,17 @@ const browserRun = (
   updated: run.updated,
   skipped: run.skipped,
   failureCode: run.failureCode,
+  dispatch: {
+    eventId: run.dispatch.eventId,
+    state: run.dispatch.coordinatorStartedAt
+      ? "started"
+      : run.dispatch.error
+        ? "failed"
+        : "pending",
+    attempts: run.dispatch.attempts,
+    error: run.dispatch.error,
+    coordinatorStartedAt: iso(run.dispatch.coordinatorStartedAt),
+  },
   predecessorRunPublicId: run.predecessorRunPublicId,
   successorRunPublicId: run.successorRunPublicId,
   coordinatorModel: run.coordinatorModel,
@@ -62,6 +77,33 @@ const browserRun = (
     externalKey: order.externalKey,
     preparedAt: order.preparedAt.toISOString(),
     lineCount: order.lineCount,
+  })),
+  targets: run.targets.map((target) => ({
+    id: target.id,
+    targetType: target.purchaseId ? "purchase" : "product",
+    targetShortcode: target.purchaseId ?? target.productId,
+    targetName: null,
+    sourceId: null,
+    sourceLabel: target.sourceKind
+      ? `${target.sourceKind}${target.sourceExternalKey ? ` · ${target.sourceExternalKey}` : ""}`
+      : null,
+    vendorAccountLabel: target.vendorAccountId,
+    state: target.state,
+    fingerprint: target.targetFingerprint,
+    outcome: target.outcome,
+    warning: target.warning,
+    diff: target.diff,
+    completedAt: iso(target.completedAt),
+  })),
+  evidence: run.evidence.map((evidence) => ({
+    id: evidence.id,
+    // Run-target UUIDs are internal. Evidence still renders under the run.
+    targetId: null,
+    sourceKind: evidence.kind,
+    filename: null,
+    mediaType: evidence.mediaType,
+    checksum: evidence.checksum,
+    createdAt: evidence.createdAt.toISOString(),
   })),
   approvals: run.approvals.map((approval) => ({
     id: approval.id,
@@ -171,24 +213,45 @@ export const Route = createFileRoute("/api/import/runs/$publicId")({
             },
           );
           if (
-            "successorRunId" in control &&
-            control.successorRunId &&
-            control.successorRunPublicId
+            "dispatchRunId" in control &&
+            control.dispatchRunId &&
+            control.dispatchEventId
           ) {
             const queue = getPurchaseAgentQueue();
-            if (!queue)
-              throw new Error("Purchase import agent queue is unavailable");
-            await queue.send({
-              version: 1,
-              runId: control.successorRunId,
-              publicId: control.successorRunPublicId,
-              coordinatorModel:
-                input.data.action === "escalate_sol"
-                  ? "gpt-5.6-sol"
-                  : "gpt-5.6-terra",
-              eventId: crypto.randomUUID(),
-              type: "start_or_resume",
-            });
+            if (!queue) {
+              await recordImportRunDispatchAttempt(context.db, {
+                runId: control.dispatchRunId,
+                eventId: control.dispatchEventId,
+                error: "Purchase import agent queue is unavailable",
+              });
+            } else {
+              try {
+                await queue.send({
+                  version: 1,
+                  runId: control.dispatchRunId,
+                  publicId: control.dispatchPublicId,
+                  purpose: importRunPurpose.parse(control.dispatchPurpose),
+                  coordinatorModel: z
+                    .enum(["gpt-5.6-terra", "gpt-5.6-sol"])
+                    .parse(control.dispatchCoordinatorModel),
+                  eventId: control.dispatchEventId,
+                  type: "start_or_resume",
+                });
+                await recordImportRunDispatchAttempt(context.db, {
+                  runId: control.dispatchRunId,
+                  eventId: control.dispatchEventId,
+                });
+              } catch (error) {
+                await recordImportRunDispatchAttempt(context.db, {
+                  runId: control.dispatchRunId,
+                  eventId: control.dispatchEventId,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Queue send failed",
+                });
+              }
+            }
           }
           const run = await loadImportRunByPublicId(
             context.db,

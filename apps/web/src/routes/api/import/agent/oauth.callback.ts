@@ -92,7 +92,7 @@ export const Route = createFileRoute("/api/import/agent/oauth/callback")({
                 runId: run.id,
                 publicId: run.publicId,
                 eventId: crypto.randomUUID(),
-                type: "start_or_resume",
+                type: "retry",
               }),
             ),
           );
