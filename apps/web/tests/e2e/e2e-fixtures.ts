@@ -1,5 +1,7 @@
 import "./build-constants";
 
+import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
+
 import { upsertCookbook } from "~/server/repo/cookbook";
 import {
   makeCookbookExtraction,
@@ -306,7 +308,11 @@ export async function seedToolFlowPrerequisite(
       const product = await createFixture(
         page,
         "product",
-        productFixtureInput(name, "Flow fixture maker", "CAT-2224"),
+        productFixtureInput(
+          name,
+          "Flow fixture maker",
+          taxonomyShortcode("tools"),
+        ),
       );
       await createFixture(
         page,
@@ -744,7 +750,11 @@ export async function seedWardrobePrerequisites(page: Page, name: string) {
     page,
     "product",
     productCreateInput.parse({
-      ...productFixtureInput(`${name} shirt`, "Fixture", "CAT-2235"),
+      ...productFixtureInput(
+        `${name} shirt`,
+        "Fixture",
+        taxonomyShortcode("apparel"),
+      ),
     }),
   );
   const entry = await createFixture(

@@ -1,5 +1,6 @@
 import { testServiceConfig } from "../../tooling/test-service-config";
 import { schemaTemplateInputs } from "../../tooling/schema-template-inputs";
+import { taxonomyRootFixtures } from "../../tooling/product-category-fixtures";
 import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
@@ -96,7 +97,9 @@ export async function createE2EDatabase(): Promise<E2EDatabase> {
   );
   const seedPool = new Pool({ connectionString: databaseUrl });
   try {
-    await seedHome(drizzleNodePostgres(seedPool));
+    const seedDb = drizzleNodePostgres(seedPool);
+    await seedHome(seedDb);
+    await seedDb.insert(schema.productCategory).values(taxonomyRootFixtures);
   } finally {
     await seedPool.end();
   }
