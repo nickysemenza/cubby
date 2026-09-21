@@ -106,12 +106,6 @@ const clientCodeSplittingGroups = [
     entriesAware: true,
     entriesAwareMergeThreshold: 65536,
   },
-  {
-    name: "image-functions",
-    test: /[\\/]image\.functions\.[jt]sx?(?:$|[?#])/,
-    entriesAware: true,
-    entriesAwareMergeThreshold: 65536,
-  },
 ];
 
 /**
@@ -222,9 +216,9 @@ export default defineConfig(async ({ command, mode }) => {
     //   - es-toolkit, date-fns, TanStack Router/Query, Floating UI, React runtime,
     //     hook-form, Radix UI, and small runtime utilities are bounded shared
     //     families; entry-aware groups keep route-specific subsets local.
-    //   - Cubby's image server-function wrappers share the same client contract;
-    //     their own entry-aware group reduces request fan-out without crossing
-    //     route boundaries.
+    // Application-owned server-function wrappers stay on Rolldown's default
+    // graph: grouping image.functions created a cross-chunk initialization
+    // cycle once authenticated routes shared entity-schema dependencies.
     //   - @base-ui was tried and reverted: its grouped chunk is 243KB (80KB gzip)
     //     but the landing page only uses ~7KB of it, so grouping would drag
     //     lazy-route dialog/sheet code into first paint. Lazy-only deps (@nivo,
