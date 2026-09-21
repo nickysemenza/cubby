@@ -37,9 +37,10 @@ export const sentryEventUrl = (eventId: string): string =>
 export const CLOUDFLARE_OBSERVABILITY_URL =
   "https://dash.cloudflare.com/?to=/:account/workers-and-pages/observability";
 
-/** Only messages cross the boundary: SQL wrappers contain their parameters too. */
+/** The only audience is the trusted household, so SQL text and parameters (including
+ * Drizzle's `Failed query:` wrapper) are surfaced verbatim, bounded to 2000 chars.
+ * Only credential-shaped values are redacted below. */
 export function scrubErrorMessage(message: string): string {
-  if (message.startsWith("Failed query:")) return "Database query failed";
   return message
     .replace(
       /\b(authorization|cookie|set-cookie)\s*:\s*[^\r\n]+/giu,

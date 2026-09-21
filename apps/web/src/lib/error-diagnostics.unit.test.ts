@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { describeErrorCauses, scrubErrorMessage } from "./error-diagnostics";
 
 describe("error diagnostics", () => {
-  it("retains driver causes without Drizzle SQL or parameters", () => {
+  it("retains driver causes including Drizzle SQL and parameters", () => {
     const driver = Object.assign(new Error("Connection limit exceeded"), {
       code: "53300",
     });
@@ -16,11 +16,11 @@ describe("error diagnostics", () => {
     );
     expect(chain.causes.map(({ message }) => message)).toEqual([
       "Could not load options",
-      "Database query failed",
+      "Failed query: select secret from example\nparams: private fixture value",
       "Connection limit exceeded",
     ]);
     expect(chain.causes.at(-1)?.code).toBe("53300");
-    expect(JSON.stringify(chain)).not.toContain("private fixture value");
+    expect(JSON.stringify(chain)).toContain("private fixture value");
   });
 
   it("scrubs credentials embedded in messages", () => {

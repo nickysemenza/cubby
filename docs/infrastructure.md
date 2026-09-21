@@ -206,8 +206,14 @@ previous web and Apple versions. Postgres import rows and the retained
 
 ### PostgreSQL and Hyperdrive
 
-Neon owns the PostgreSQL database. Cloudflare has two Hyperdrive configurations
-pointing at the same direct Neon connection string:
+Neon owns the PostgreSQL database. Production compute is autoscaling
+0.25–1 CU (it was a fixed 0.25 CU compute until the 2026-09-21 OOM incident).
+The Hyperdrive origin connection caps below (12 + 5) and the background
+queue's `max_concurrency: 10` remain sized for the 0.25 CU floor, not the
+ceiling — revisit them together if the floor ever moves.
+
+Cloudflare has two Hyperdrive configurations pointing at the same direct Neon
+connection string:
 
 | Binding | Hyperdrive ID | Contract |
 |---|---|---|
@@ -403,6 +409,21 @@ Web error details include Copy details, the Sentry link, and Open Workers
 Observability with a copyable Ray ID when Cloudflare supplied one. The Cloudflare
 link opens the dashboard, not an individual trace: the custom-span API does not
 expose the active trace ID. These references also survive native API decoding.
+
+Source maps for `apps/web` are generated ("hidden" — emitted to disk but not
+referenced by a `//# sourceMappingURL` comment) and uploaded at deploy by
+`sentryTanstackStart` (`vite.config.ts`), under release `cubby@<short sha>` —
+the same value the browser (`router.tsx`) and Worker (`cf-server.ts`) SDKs
+report via `Sentry.init`/`withSentry`. Uploaded `.map` files are deleted from
+`dist/` afterward so none are served as Worker static assets. Map sources are
+rewritten to repo-relative paths (`apps/web/src/...`, `packages/*/src/...`) so
+a single Sentry GitHub code mapping (repo root -> repo root on `main`) resolves
+stack frames from both the client bundle and the Worker bundle. The upload needs a `SENTRY_AUTH_TOKEN`
+secret, present only in the `deploy.yaml` workflow; PR/preview builds have no
+token, so the plugin injects debug IDs and deletes the local maps but skips the
+network upload. `SENTRY_IGNORED_ERRORS` (`apps/web/src/lib/sentry-noise.ts`)
+lists known-noise messages dropped via `ignoreErrors` before Sentry ingests
+them, so they never consume the free-plan error quota.
 
 Cloudflare must have two account-level Workers Observability destinations:
 

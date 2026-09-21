@@ -49,9 +49,13 @@
 The [README tenets](README.md#tenets) are binding: inventory never
 auto-decrements; `fdc_id` is product-only; rare interactive work stays
 interactive; all money is `SUM(Expense.cost)`; the trusted household has no
-multi-user coordination, restore/undo, reservations, or locking. Read only the
-relevant README heading for architecture, commands, entities, deployment, or
-roadmap context.
+multi-user coordination, restore/undo, reservations, or locking. Because the
+trusted household is the only audience, error surfaces (toasts, Technical
+details, HTTP/MCP error bodies) show raw diagnostics — SQL text and
+parameters, Postgres SQLSTATE codes, upstream response bodies — and are never
+masked or softened into generic messages; the only redaction is
+credential-shaped values (`scrubErrorMessage`). Read only the relevant README
+heading for architecture, commands, entities, deployment, or roadmap context.
 
 ## Skill routing
 

@@ -36,6 +36,7 @@ jobs:
         env:
           CUBBY_SOURCE_COMMIT: ${{ github.sha }}
           CUBBY_SOURCE_BRANCH: main
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: pnpm --filter @cubby/web run build:cf
       - name: Re-check current main before deployment
         if: steps.current_main.outputs.current == 'true'

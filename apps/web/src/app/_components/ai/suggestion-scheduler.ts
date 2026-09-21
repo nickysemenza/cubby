@@ -1,5 +1,10 @@
-/** A page keeps its limiter across input changes; obsolete work cannot open a second pool. */
-export function createSuggestionScheduler(limit = 32) {
+/** A page keeps its limiter across input changes; obsolete work cannot open a second pool.
+ * Each in-flight request pins a Neon backend and an AI Gateway call: on 2026-09-21 a
+ * 32-wide burst from one page pinned enough backends to OOM the 1 GB / 0.25 CU compute
+ * for ~80s (37 failed suggestFields plus every other query in that window) and produced
+ * 135 AI Gateway 429s. Halving to 16 leaves total work unchanged — rows just fill in
+ * later — until Jev response caching removes the redundant calls entirely. */
+export function createSuggestionScheduler(limit = 16) {
   let active = 0;
   const queued: Array<() => void> = [];
   const drain = () => {
