@@ -255,7 +255,7 @@ export const updateLiveAndReturn = async <
  * `associateImagesWithProduct`/`associateImagesWithRecipe` below), which pass
  * a row's own `Image.id` straight from an insert and were NEVER shortcodes.
  * Resolving inside this function would silently no-op every one of those
- * internal callers — including `attach_file`, the MCP attachment path — since
+ * internal callers — including `attach_files`, the MCP attachment path — since
  * a raw uuid never matches the `IMG-` shortcode pattern.
  *
  * `pendingImageIds` is typed `ImageId[]`, not `string[]`, for the same reason

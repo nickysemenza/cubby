@@ -18,10 +18,12 @@ source/kind slot and removes only an explicitly obsolete value with its exact
 patch. A full `entity update product` external-ID set is a deliberate complete
 replacement: preserve every intended ID and remove MCP-only timestamps first.
 
-For a batch, use the plural tool only after each item is settled. `attach_files`
-uses the same validation as a singular attachment. `expectedImageCount` is a
-read precondition: a mismatch means another writer changed that one gallery.
-Retry only after a fresh read with the same logical idempotency key.
+For settled attachments, call `attach_files({items})`; every item supplies an
+`entityId`, one `url` or `uploadId`, its idempotency key, and the freshly read
+`expectedImageCount` for a Product gallery. Multiple files for one Product
+are dependent count changes, so prefer separate target batches. It returns
+ordered independent results, so retry only the failed indices after a fresh
+read. A mismatch means another writer changed that gallery.
 Keep a write singular when it needs judgment during the mutation: a collision,
 gallery drift, cover replacement, or fresh display-order decision.
 

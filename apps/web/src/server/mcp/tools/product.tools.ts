@@ -99,7 +99,7 @@ export function registerProductTools(server: McpServer) {
   registerMcpTool(server, {
     name: "verify_product_images",
     description:
-      "Fetch every attached Product file from R2, backfill legacy integrity metadata, and record available, missing, or metadata-mismatch state. Returns the refreshed detailed Product; ordinary get_product performs no R2 requests.",
+      'Fetch every attached Product file from R2, backfill legacy integrity metadata, and record available, missing, or metadata-mismatch state. Returns the refreshed detailed Product; ordinary entity action="get", entity="product" performs no R2 requests.',
     inputSchema: z.object({ id: idParam("product") }),
     outputSchema: productMcpDetailOut,
     annotations: WRITE_CLOSED,

@@ -125,7 +125,9 @@ const unavailableCaller = {
   usda: { getByAlternateID: unavailableCallerMethod },
 } satisfies McpWorkflowCaller;
 
-function completeTestCaller(caller: McpTestCaller): McpWorkflowCaller {
+export function createCallerWithOverrides(
+  caller: McpTestCaller,
+): McpWorkflowCaller {
   return {
     auditLog: { ...unavailableCaller.auditLog, ...caller.auditLog },
     dataQuality: { ...unavailableCaller.dataQuality, ...caller.dataQuality },
@@ -199,7 +201,7 @@ export async function callMcpTool(
         clientId: "test",
         scopes: [],
         extra: {
-          caller: completeTestCaller(caller),
+          caller: createCallerWithOverrides(caller),
           ...extra,
         },
       },

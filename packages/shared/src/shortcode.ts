@@ -57,7 +57,7 @@ const shortcodeRegex = (type: ShortcodeType) =>
 /**
  * A schema for a code whose entity isn't known until runtime — an MCP tool
  * whose target type is chosen by another field (`find_similar_entities`'s
- * `pair`) or read off the prefix itself (`attach_file`).
+ * `pair`) or read off the prefix itself (`attach_files`).
  *
  * Still a `ZodString` with a real `pattern`, just one alternating over the
  * allowed prefixes, so the published JSON Schema keeps telling an agent which

@@ -316,11 +316,11 @@ const INTENTIONAL_RESPELLINGS = {
   "image::initiateUploadWithoutEntitySchema::width": IMAGE_NO_GENERATED_CREATE,
   "image::initiateUploadWithoutEntitySchema::height": IMAGE_NO_GENERATED_CREATE,
   "image::mcpAttachFileInput::contentType":
-    "MCP attach_file tool input (attachFileFields) — its own .describe() MCP prose; no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
+    "MCP attach_files tool input (attachFileFields) — its own .describe() MCP prose; no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
   "image::mcpAttachFileInput::filename":
-    "MCP attach_file tool input (attachFileFields) — its own .describe() MCP prose; no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
+    "MCP attach_files tool input (attachFileFields) — its own .describe() MCP prose; no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
   "image::mcpAttachFileInput::url":
-    "MCP attach_file tool input (attachFileFields) — its own .describe() MCP prose ('exactly one of url/data/uploadId'); no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
+    "MCP attach_files tool input (attachFileFields) — its own .describe() MCP prose ('exactly one of url/data/uploadId'); no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
   "image::projectImageSummarySchema::filename": IMAGE_READ_FIELD_HAND_COPY,
   "image::projectImageSummarySchema::url": IMAGE_READ_FIELD_HAND_COPY,
 

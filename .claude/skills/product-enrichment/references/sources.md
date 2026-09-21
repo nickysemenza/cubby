@@ -33,9 +33,10 @@ the whole file.
 - A cover sweep answers other open questions as a side effect (image filenames
   encode the maker; notes saying "manufacturer pending a vendor-page check" get
   closed). Read the notes for what else the lookup would answer.
-- **`attach_file`'s server fetch is not your browser.** A URL that loads for
-  you can 403 the server (kitchenaid.com's image CDN); stage those bytes with
-  `create_file_upload`. Conversely `m.media-amazon.com`, `ikea.com`,
+- **An attachment URL fetch is not your browser.** A URL that loads for you
+  can 403 the server (kitchenaid.com's image CDN); stage local bytes with
+  `create_file_uploads({items})` and attach its indexed `uploadId` result.
+  Conversely `m.media-amazon.com`, `ikea.com`,
   `mobileimages.lowes.com`, `images.thdstatic.com`, Zoro's `og:image` and Shopify
   CDNs all fetch server-side fine.
 - **`entity merge product` carries fields.** The survivor's empty `upc`,
@@ -168,7 +169,7 @@ the whole file.
 Two identifiers (`item_number` from the header, `catalog_number` from the URL);
 model and specs behind the **Specifications** tab (click, wait, re-read;
 multi-colour items list a model per variant); images are AVIF, which
-`attach_file` rejects — swap the AEM URL's extension to `.jpg`. `_1` is usually
+the attachment workflow rejects — swap the AEM URL's extension to `.jpg`. `_1` is usually
 the clean hero.
 
 ## Zoro
@@ -185,7 +186,7 @@ Order-confirmation emails embed `_compact_cropped` thumbnails (~3 KB); strip
 that suffix from the filename for the full-size original, and `curl -I` both
 before attaching — the base name is not guaranteed. Drop the `?v=` query (the
 Gmail tool mangles it); extensions lie (`.webp` serving `image/jpeg` is fine,
-`attach_file` sniffs). The filename often encodes the maker SKU — a hint, never
+the attachment workflow sniffs). The filename often encodes the maker SKU — a hint, never
 a `model` value. A store's `/products.json?limit=250` is the whole catalog with
 per-variant `featured_image`; parse it in the in-app browser (Chrome's JSON
 viewer mangles `innerText`).

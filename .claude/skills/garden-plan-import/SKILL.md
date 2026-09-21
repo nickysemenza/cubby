@@ -54,8 +54,9 @@ Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGui
 
 ## Default workflow
 
-1. Read `entities://catalog` first — field rosters drift, and this skill's
-   examples can go stale faster than the manifest.
+1. Read the relevant tool input schema first when a required field or action is
+   uncertain; consult the catalog only if the schema is insufficient. The
+   focused mapping below is the normal path.
 2. Read the whole plan document before writing anything. Note every bed
    name, every dated heading, every shopping line, and every plant-index
    entry (variety, source, seed stock) — a partial read produces a partial
@@ -83,12 +84,11 @@ Location (bed/planter/area) ──< Planting >── Ingredient (crop; gardenGui
    `plannedWindow` (text, as the plan states timing), `taskId` pointing at
    the Task from step 5 that will plant it. Leave `sowedOn`/`transplantedOn`
    unset at import time (see [references/mapping.md](references/mapping.md)
-   for the later, normal shape of nursery-bought stock). No planned
-   Planting carries photos — planting has no photo gallery.
-8. Verify: `entity list planting {filters:{taskId}}` per Task reads back
-   what was planned; `entity list task {filters:{projectId}}` accounts for
-   every calendar row and shopping line; the season's Tasks show up on the
-   planning calendar by due date.
+   for the later, normal shape of nursery-bought stock). No planned Planting
+   carries photos — planting has no photo gallery.
+8. Verify in batches: list Plantings with the created `taskId` filters and
+   Tasks with the Project filter, then compare counts and named rows to the
+   plan. Do not make one verification read per row.
 
 ## What NOT to import
 

@@ -1,4 +1,5 @@
 import { referentialLivenessViolationSchema } from "@cubby/schemas/entity-integrity";
+import { mealRecipeId as mealRecipeIdSchema } from "@cubby/schemas/identifiers";
 import { problemsCountSchema } from "@cubby/schemas/mcp";
 import {
   mealNutritionOut,
@@ -20,16 +21,18 @@ import {
 import { similarEntitiesOut } from "@cubby/schemas/search";
 import type { McpToolCallTelemetry } from "@cubby/schemas/telemetry";
 import { testShortcode } from "@cubby/schemas/testing";
+import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { describe, expect, it, vi } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 
 import { callMcpTool } from "./mcp-test-utils";
-import { createMcpServer } from "./server";
+import { createMcpServer, MCP_SERVER_INSTRUCTIONS } from "./server";
 import {
   buildRecipeNutrition,
   effectiveRecipeServings,
 } from "./tools/recipe.tools";
+import { toolCallResultTraceAttributes } from "./tools/tool-call-telemetry";
 
 /** The mock generator can't satisfy the coverage refine; build totals by hand. */
 const knownTotals: NutritionTotals = withMacros({
@@ -52,6 +55,15 @@ const knownTotals: NutritionTotals = withMacros({
 });
 
 describe("MCP workflow tools", () => {
+  it("generates shortcode and workflow guidance from current source names", () => {
+    for (const [entity, prefix] of Object.entries(SHORTCODE_PREFIX)) {
+      expect(MCP_SERVER_INSTRUCTIONS).toContain(`- ${prefix} ${entity}`);
+    }
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("add_recipe_to_meal");
+    expect(MCP_SERVER_INSTRUCTIONS).not.toContain("add_meal_recipe");
+    expect(MCP_SERVER_INSTRUCTIONS).not.toContain("attach_file,");
+  });
+
   it("scales recipe nutrition and reports compact unmapped coverage", () => {
     const explain = mock(recipeCostingExplain, {
       overrides: {
@@ -109,7 +121,10 @@ describe("MCP workflow tools", () => {
     const meal = mock(mealOut, {
       overrides: { name: "Dinner", totals: knownTotals, recipes: [] },
     });
-    const addRecipe = vi.fn(async () => meal);
+    const mealRecipeId = mealRecipeIdSchema.parse(
+      "00000000-0000-4000-8000-000000000001",
+    );
+    const addRecipe = vi.fn(async () => ({ meal, mealRecipeId }));
     const server = createMcpServer();
     const params = {
       mealId: meal.id,
@@ -129,6 +144,7 @@ describe("MCP workflow tools", () => {
     expect(compact.isError).not.toBe(true);
     expect(compact.structuredContent).toEqual({
       id: meal.id,
+      mealRecipeId,
       name: "Dinner",
       coverage: { cost: 1.5, kcal: 120 },
     });
@@ -136,6 +152,135 @@ describe("MCP workflow tools", () => {
       coverage: { cost: 1.5, kcal: 120 },
       nutrition: { kcal: 120, protein: "pending" },
     });
+  });
+
+  it("create_file_uploads preserves indexes across partial runtime failures", async () => {
+    const firstUploadId = testShortcode("image", "upload-first");
+    const thirdUploadId = testShortcode("image", "upload-third");
+    const createFileUpload = vi.fn(async (input: { filename: string }) => {
+      if (input.filename === "invalid.txt") {
+        throw new Error("Unsupported file type: text/plain");
+      }
+      const uploadId =
+        input.filename === "first.jpg" ? firstUploadId : thirdUploadId;
+      return {
+        uploadId,
+        uploadUrl: `https://uploads.example.test/${uploadId}`,
+      };
+    });
+
+    const result = await callMcpTool(
+      createMcpServer(),
+      "create_file_uploads",
+      {
+        items: [
+          {
+            entityId: "PRD-2ABC",
+            filename: "first.jpg",
+            contentType: "image/jpeg",
+            size: 10,
+          },
+          {
+            entityId: "PRD-2ABC",
+            filename: "invalid.txt",
+            contentType: "text/plain",
+            size: 11,
+          },
+          {
+            entityId: "PRD-2ABC",
+            filename: "third.jpg",
+            contentType: "image/jpeg",
+            size: 12,
+          },
+        ],
+      },
+      { image: { createFileUpload } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({
+      summary: { requested: 3, succeeded: 2, failed: 1 },
+      results: [
+        {
+          index: 0,
+          status: "succeeded",
+          reference: firstUploadId,
+          item: {
+            uploadId: firstUploadId,
+            uploadUrl: `https://uploads.example.test/${firstUploadId}`,
+          },
+        },
+        {
+          index: 1,
+          status: "failed",
+          error: { message: "Unsupported file type: text/plain" },
+        },
+        {
+          index: 2,
+          status: "succeeded",
+          reference: thirdUploadId,
+          item: {
+            uploadId: thirdUploadId,
+            uploadUrl: `https://uploads.example.test/${thirdUploadId}`,
+          },
+        },
+      ],
+    });
+  });
+
+  it("attach_files exposes idempotent replay outcomes without base64", async () => {
+    const entityId = testShortcode("product", "attach-target");
+    const imageId = testShortcode("image", "attached-image");
+    let attached = false;
+    const attachFile = vi.fn(
+      async (input: { idempotencyKey?: string; entityId: string }) => {
+        const reused = attached;
+        attached = true;
+        return {
+          imageId,
+          url: "https://images.example.test/item.jpg",
+          filename: "item.jpg",
+          contentType: "image/jpeg",
+          kind: "image" as const,
+          entityType: "product" as const,
+          entityId,
+          idempotencyKey: input.idempotencyKey,
+          reused,
+        };
+      },
+    );
+    const args = {
+      items: [
+        {
+          entityId,
+          url: "https://source.example.test/item.jpg",
+          idempotencyKey: "stable-item-key",
+        },
+      ],
+    };
+
+    const first = await callMcpTool(createMcpServer(), "attach_files", args, {
+      image: { attachFile },
+    });
+    const replay = await callMcpTool(createMcpServer(), "attach_files", args, {
+      image: { attachFile },
+    });
+
+    expect(first.structuredContent).toMatchObject({
+      summary: { requested: 1, succeeded: 1, failed: 0 },
+      results: [{ index: 0, status: "succeeded", item: { reused: false } }],
+    });
+    expect(replay.structuredContent).toMatchObject({
+      summary: { requested: 1, succeeded: 1, failed: 0 },
+      results: [{ index: 0, status: "succeeded", item: { reused: true } }],
+    });
+    expect(attachFile).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        entityId,
+        entityType: "product",
+        idempotencyKey: "stable-item-key",
+      }),
+    );
   });
 
   it("reads compact daily macros for one eater and only includes foods on request", async () => {
@@ -423,6 +568,30 @@ describe("MCP workflow tools", () => {
     expect(Object.keys(firstEvent ?? {})).not.toEqual(
       expect.arrayContaining(["arguments", "output", "errorText"]),
     );
+  });
+
+  it("traces response bytes and partial batch outcomes separately from transport success", () => {
+    const result = {
+      content: [
+        {
+          type: "text" as const,
+          text: '{"summary":{"requested":3,"succeeded":2,"failed":1}}',
+        },
+      ],
+      structuredContent: {
+        summary: { requested: 3, succeeded: 2, failed: 1 },
+      },
+    };
+
+    expect(toolCallResultTraceAttributes(result)).toEqual({
+      "mcp.result.is_error": false,
+      "mcp.result.serialized_bytes": new TextEncoder().encode(
+        JSON.stringify(result),
+      ).byteLength,
+      "mcp.batch.requested": 3,
+      "mcp.batch.succeeded": 2,
+      "mcp.batch.failed": 1,
+    });
   });
 
   it("rejects unknown filters but forwards valid workflow filters", async () => {

@@ -4,7 +4,10 @@ import {
   telemetryMessageV1Schema,
 } from "@cubby/schemas/telemetry";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  CallToolRequest,
+  CallToolResult,
+} from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -20,6 +23,32 @@ const telemetryExtraSchema = z.strictObject({
     output: z.promise(z.void()),
   }),
 });
+
+const batchSummarySchema = z.object({
+  requested: z.number().int().nonnegative(),
+  succeeded: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+});
+
+export function toolCallResultTraceAttributes(result: CallToolResult) {
+  let serializedBytes: number | undefined;
+  try {
+    const serialized = JSON.stringify(result);
+    serializedBytes = new TextEncoder().encode(serialized).byteLength;
+  } catch {
+    // Observation cannot turn a valid tool result into a transport failure.
+  }
+  const summary = batchSummarySchema.safeParse(
+    result.structuredContent?.summary,
+  );
+  return {
+    "mcp.result.is_error": result.isError === true,
+    "mcp.result.serialized_bytes": serializedBytes,
+    "mcp.batch.requested": summary.success ? summary.data.requested : undefined,
+    "mcp.batch.succeeded": summary.success ? summary.data.succeeded : undefined,
+    "mcp.batch.failed": summary.success ? summary.data.failed : undefined,
+  };
+}
 
 function observedToolName(request: CallToolRequest): string | undefined {
   return request.params.name.length > 0 ? request.params.name : undefined;
@@ -56,6 +85,7 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
     const toolName = observedToolName(request);
     const spanName = TraceNames.mcp(toolName ?? "unknown");
     return withTrace(spanName, async (span) => {
+      const startedAt = performance.now();
       const telemetry = telemetryExtraSchema.safeParse(
         extra.authInfo?.extra?.telemetry,
       );
@@ -73,6 +103,9 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
       try {
         const result = await dispatch(request, extra);
         outcome = result.isError === true ? "error" : "success";
+        if (span.isRecording) {
+          span.setAttributes(toolCallResultTraceAttributes(result));
+        }
         if (outcome === "error") {
           span.setError("MCP tool returned an error");
         }
@@ -81,6 +114,10 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
         span.setError("MCP tool dispatch failed");
         throw error;
       } finally {
+        span.setAttribute(
+          "mcp.tool.duration_ms",
+          Math.max(0, Math.round(performance.now() - startedAt)),
+        );
         if (toolName && telemetry.success) {
           try {
             await telemetry.data.emit({

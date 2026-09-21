@@ -1,4 +1,8 @@
-import { type MealCreateInput, mealCreateInput } from "@cubby/schemas/meal";
+import {
+  type MealCreateInput,
+  mealCreateInput,
+  shoppingListInput,
+} from "@cubby/schemas/meal";
 import {
   buildNutrition,
   hasKnownEstimate,
@@ -10,14 +14,16 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, recipe } from "~/server/db/schema";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   getMealPreparationsWorkflow,
+  getShoppingListWorkflow,
   saveMealRecipePreparationWorkflow,
 } from "~/server/workflows/meal.server";
 
 import { getDb } from "./database-helpers";
 import { createLedgerParty } from "./ledger-party";
-import { createMealWithEntityId } from "./meal/crud";
+import { addRecipeToMeal, createMealWithEntityId } from "./meal/crud";
 import {
   getMealPreparations,
   saveMealRecipePreparation,
@@ -80,6 +86,88 @@ describe("meal recipe preparations", () => {
   });
   const createTestMeal = async (data: MealCreateInput) =>
     (await createMealWithEntityId(ctx.db, data, ctx.actor)).output;
+
+  it("returns distinct occurrence handles for repeated recipes and preserves shopping contributions", async () => {
+    const ingredient = await seedIngredientWithStock(
+      ctx.db,
+      { name: "Repeated serving flour", onHand: { value: 0, unit: "g" } },
+      ctx.actor,
+    );
+    const recipeFixture = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({
+        name: "Repeated serving recipe",
+        sections: [
+          {
+            ingredients: [
+              ingredientRef(ingredient.shortcode, {
+                amounts: [{ value: 100, unit: "g" }],
+              }),
+            ],
+            instructions: [{ instruction: "Cook" }],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const source = await createMealWithEntityId(
+      ctx.db,
+      mealCreateInput.parse({ date: "2026-09-21", name: "Two servings" }),
+      ctx.actor,
+    );
+    const first = await addRecipeToMeal(
+      ctx.db,
+      source.entityId,
+      { recipeId: recipeFixture.id, scale: 1, sortOrder: 0 },
+      ctx.actor,
+    );
+    const second = await addRecipeToMeal(
+      ctx.db,
+      source.entityId,
+      { recipeId: recipeFixture.id, scale: 2, sortOrder: 1 },
+      ctx.actor,
+    );
+    expect(first.mealRecipeId).not.toBe(second.mealRecipeId);
+    expect(second.meal.recipes).toEqual([
+      expect.objectContaining({ id: first.mealRecipeId, scale: 1 }),
+      expect.objectContaining({ id: second.mealRecipeId, scale: 2 }),
+    ]);
+
+    // The returned handle targets the inserted occurrence without another read.
+    await saveMealRecipePreparation(
+      ctx.db,
+      { mealRecipeId: second.mealRecipeId, actualYieldGrams: 200, changes: [] },
+      ctx.actor,
+    );
+    const preparations = await getMealPreparationsWorkflow(
+      ctx.db,
+      { mealId: source.output.id },
+      createTestRequestContext(ctx.db).services.recipeCosting,
+    );
+    expect(preparations.preparations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mealRecipeId: second.mealRecipeId,
+          actualYieldGrams: 200,
+        }),
+      ]),
+    );
+    const shopping = await getShoppingListWorkflow(
+      ctx.db,
+      shoppingListInput.parse({ from: "2026-09-21", to: "2026-09-21" }),
+      createTestRequestContext(ctx.db).services.availability,
+    );
+    expect(shopping.items).toEqual([
+      expect.objectContaining({
+        ingredientId: ingredient.shortcode,
+        needValue: 300,
+        perMeal: [
+          expect.objectContaining({ lineIndex: 0, scale: 1, needValue: 100 }),
+          expect.objectContaining({ lineIndex: 1, scale: 2, needValue: 200 }),
+        ],
+      }),
+    ]);
+  });
 
   it("commits portions atomically without auto-decrementing inventory", async () => {
     const ingredient = await seedIngredientWithStock(

@@ -25,8 +25,8 @@ ingredient quantities and the batch yield proportionally before recording a
 second share. Ask when an unknown yield is material; otherwise keep the yield
 explicitly estimated.
 
-After `add_recipe_to_meal`, use `get_meal_preparations` to obtain its
-`mealRecipeId`; adding the join alone does not log intake. Save each eater's
+`add_recipe_to_meal` returns its `mealRecipeId`; retain that occurrence
+handle, because adding the join alone does not log intake. Save each eater's
 preparation against that join. A single-eater recipe built to the plate has
 `actualYieldGrams` equal to `grams`. Use `estimatedYieldGrams` rather than
 `actualYieldGrams` for a guess. Keep `scale: 1` unless intentionally logging a

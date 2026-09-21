@@ -99,6 +99,9 @@ subscriber accumulates in reused isolates.
 
 ## MCP and observability traps
 
+Read [MCP operating patterns](mcp.md) for bounded reads, batch writes, file
+uploads, and verification.
+
 MCP clients reject `structuredContent` on an `isError` result, so a domain
 refusal is returned as data (the `canProceed` shape), never as an error with
 structured content. A bare Zod issue array from a tool that names a field

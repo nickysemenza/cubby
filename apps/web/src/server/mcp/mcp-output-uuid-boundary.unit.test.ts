@@ -37,6 +37,9 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "get_entities.item.unitMappings[].id",
   "get_entities.items[].product[].unitMappings[].id",
   "get_entities.items[].unitMappings[].id",
+  // MealRecipe has no shortcode. The add result exposes the newly inserted
+  // occurrence handle needed by the dedicated update/remove workflow tools.
+  "add_recipe_to_meal.mealRecipeId",
   "get_meal_preparations.preparations[].mealRecipeId",
   // Import findings are internal review proposals. Their own id is the write
   // handle for apply/dismiss, while proposed fixes retain the exact internal

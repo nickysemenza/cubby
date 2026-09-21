@@ -58,7 +58,10 @@ export const generatePresignedUploadUrl = async ({
       headers: { "content-type": contentType },
     }),
     {
-      aws: { signQuery: true },
+      // aws4fetch deliberately excludes Content-Type from its default signed
+      // header set. R2 must bind the validated MIME type into this presign, so
+      // force all supplied headers into X-Amz-SignedHeaders.
+      aws: { signQuery: true, allHeaders: true },
     },
   );
   return signed.url;

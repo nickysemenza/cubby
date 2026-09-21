@@ -458,17 +458,17 @@ export const addRecipeToMeal = async (
   mealId: MealId,
   input: MealRecipeInput,
   actor: ActorContext,
-): Promise<MealOut> => {
-  await withTransaction(db, async (tx) => {
+): Promise<{ meal: MealOut; mealRecipeId: MealRecipeId }> => {
+  const mealRecipeId = await withTransaction(db, async (tx) => {
     const recipeId = await resolveOrThrow(tx, "recipe", input.recipeId);
     // Repeats are INTENTIONAL, not a duplicate bug: a meal may serve the same
     // recipe more than once at different scales, and each occurrence must stay
     // a distinguishable shopping-list contribution. Guard-backed by
-    // "gives each planned line its own index when a meal repeats a recipe"
-    // (api/routers/meal.integration.test.ts). So no unique index on
+    // "returns distinct occurrence handles for repeated recipes and preserves shopping contributions"
+    // (repo/meal.integration.test.ts). So no unique index on
     // (mealId, recipeId) and no upsert — retry-safety for a re-sent MCP call
     // would need an explicit idempotency key, which this deliberately is not.
-    await insertAndReturn(tx, mealRecipe, {
+    const occurrence = await insertAndReturn(tx, mealRecipe, {
       mealId,
       recipeId,
       scale: input.scale,
@@ -479,8 +479,9 @@ export const addRecipeToMeal = async (
       entityId: mealId,
       action: "update",
     });
+    return occurrence.id;
   });
-  return requireMeal(db, mealId);
+  return { meal: await requireMeal(db, mealId), mealRecipeId };
 };
 
 /** Resolve the parent meal of a (non-deleted) meal-recipe row. */
