@@ -1,5 +1,6 @@
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 
+import { useHydrationGate } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
 
 interface SwitchProps extends SwitchPrimitive.Root.Props {
@@ -7,6 +8,7 @@ interface SwitchProps extends SwitchPrimitive.Root.Props {
 }
 
 function Switch({ className, ...props }: SwitchProps) {
+  const gate = useHydrationGate(props.disabled);
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
@@ -15,9 +17,11 @@ function Switch({ className, ...props }: SwitchProps) {
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "bg-input data-checked:bg-primary",
+        gate["data-hydrating"] !== undefined && "disabled:opacity-100",
         className,
       )}
       {...props}
+      {...gate}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"

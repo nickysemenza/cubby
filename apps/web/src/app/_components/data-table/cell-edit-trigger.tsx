@@ -3,6 +3,7 @@
 import { Pencil } from "lucide-react";
 import * as React from "react";
 
+import { useHydrationGate } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
 
 import {
@@ -119,6 +120,7 @@ export function CellEditTrigger<TSaved>({
     });
   }, [hasClipboard, cellSelectionMode]);
 
+  const gate = useHydrationGate(rest.disabled);
   return (
     <button
       type="button"
@@ -155,6 +157,7 @@ export function CellEditTrigger<TSaved>({
             }
       }
       {...rest}
+      {...gate}
     >
       {children}
       {!hidePencilIcon && (
