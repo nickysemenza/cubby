@@ -5,6 +5,11 @@ description: Turn a seasonal garden plan document (beds, per-bed per-season plan
 
 # Import a seasonal garden plan
 
+> Planned change: cultivars become `Plant` records and seed/live-plant
+> Products may precede purchase — see
+> `docs/plans/garden-plants-and-verdicts.md`. Until that lands, this skill
+> is current.
+
 Cubby has no bespoke garden workflow — a plan becomes ordinary generic-entity
 records: `Location`s for beds, one `Project` for the season, `Task`s for its
 calendar rows and shopping lines, and planned `Planting`s. This skill is the

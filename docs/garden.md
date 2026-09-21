@@ -1,5 +1,9 @@
 # Garden
 
+> Planned change: a `Plant` entity at cultivar grain, verdicts and outcomes —
+> see [docs/plans/garden-plants-and-verdicts.md](plans/garden-plants-and-verdicts.md)
+> and ADR 0004. Everything below describes the model as it is today.
+
 Garden is `planting` and `gardenEntry`, two generic manifest entities with no
 bespoke UI, workflow module, or hand-registered MCP tools. `/plantings` is
 the list entry point; `/garden` is gone. See
