@@ -526,11 +526,10 @@ history is the archive. Permanent product constraints live in the
   changing global filters or contracts. Archive expected noise only after the
   narrow classifier is proved; do not hide unrelated transport or query errors.
 
-- **Audit legacy Product external-id kinds after compatibility lands.** Keep
-  writes on the canonical enum and let reads preserve service by projecting an
-  unknown stored kind as `legacy_unspecified`; separately inspect distinct
-  production values and migrate only aliases whose intended canonical kind is
-  provable. Do not rewrite ambiguous identifiers just to empty the worklist.
+- **Generate a `/new` contract for every creatable entity.** Keep rich Product
+  and Recipe creation pages; generate redirects from dialog-created entities'
+  `/new` URLs into their list `?create=true` deep links. Validate recipe
+  share-target and direct-link behavior before changing routes.
 
 - **Merge redirects.** A merged-away shortcode in a URL, note, or MCP
   client resolves to nothing today; `finalizeMerge` records no forward.

@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalExternalIdUrl,
   externalIdInputs,
-  externalIdKind,
   externalIdSource,
-  persistedExternalIdKind,
   storedExternalIdUrl,
 } from "./external-id";
 
@@ -27,12 +25,6 @@ describe("external identifiers", () => {
         { source: "home-depot", kind: "retailer_sku", externalId: "2" },
       ]).success,
     ).toBe(true);
-  });
-
-  it("maps retired persisted kinds to the legacy display bucket without widening writes", () => {
-    expect(persistedExternalIdKind("retired_kind")).toBe("legacy_unspecified");
-    expect(persistedExternalIdKind(null)).toBe("legacy_unspecified");
-    expect(externalIdKind.safeParse("retired_kind").success).toBe(false);
   });
 
   it("derives Amazon product URLs from ASIN instead of storing them", () => {
