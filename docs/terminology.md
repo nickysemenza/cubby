@@ -59,7 +59,7 @@ sometimes wears three different names across layers.
 | Vendor | "Vendor" | `Vendor` / `vendor` | `Vendor` | The roster of places money goes (name unique, website, notes). Identity only — no money. |
 | Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | One vendor order/receipt event: identity (`vendorId` + optional `orderId`), vendor date, literal never-summed `statedTotal`, and documents. ⚠️ Renamed meaning — see below. |
 | Expense | "Expense" | `Expense` / `expense` | `Expense` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.** |
-| Financial account | "Account" | `FinancialAccount` / `financialAccount` | `FinancialAccount` | A statement/receipt account identity, possibly provisional, with source aliases. |
+| Financial account | "Account" | `FinancialAccount` / `financialAccount` | `FinancialAccount` | A statement/receipt account identity, possibly provisional, with source aliases and `cardNumbers` — the dated history of every last-four it has presented (primary card and reissues, wallet device numbers, sibling cards, gift-card instances). |
 | Financial transaction | "Transaction" | `FinancialTransaction` / `financialTransaction` | `FinancialTransaction` | Settlement evidence with a signed amount, allocated across zero or more Purchases. Never spend. |
 | Merchant | "Merchant" | `merchant` | provider fields on `FinancialTransaction` / `StatementRow` | A provider-supplied settlement label that may name a processor or marketplace. Evidence text, not canonical Vendor identity. |
 | Allocation | "Allocation" | `FinancialTransactionAllocation` | `FinancialTransactionAllocation` | How much of one transaction settled one Purchase. Evidence only; never spend. |

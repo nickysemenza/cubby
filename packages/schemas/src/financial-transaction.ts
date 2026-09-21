@@ -16,6 +16,7 @@ import {
   purchaseShortcode,
 } from "./identifiers";
 import {
+  financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountSourceAliases,
 } from "./financial-account";
@@ -462,6 +463,7 @@ const financialStatementImportProposedTransaction = z.object({
 const financialStatementProvisionalAccount = z.object({
   name: z.string().min(1),
   identity: financialAccountIdentity,
+  cardNumbers: financialAccountCardNumbers,
   provisional: z.literal(true),
   sourceAliases: financialAccountSourceAliases,
 });

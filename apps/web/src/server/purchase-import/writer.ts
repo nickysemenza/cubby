@@ -4,6 +4,7 @@ import {
   expenseLineKindValues,
   type ExpenseLineKind,
 } from "@cubby/schemas/expense-line-kind";
+import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import {
   parseEntityId,
   userId as userIdSchema,
@@ -1191,7 +1192,7 @@ export async function importVendorOrder(
           id: financialTransaction.id,
           amount: financialTransaction.amount,
           transactionDate: financialTransaction.transactionDate,
-          accountIdentity: financialAccount.identity,
+          accountCardNumbers: financialAccount.cardNumbers,
         })
         .from(financialTransaction)
         .innerJoin(
@@ -1228,10 +1229,10 @@ export async function importVendorOrder(
                   id: row.id,
                   amount: row.amount,
                   occurredAt: new Date(`${row.transactionDate}T12:00:00.000Z`),
-                  cardLastFour:
-                    "last4" in row.accountIdentity
-                      ? row.accountIdentity.last4
-                      : null,
+                  cardLastFours: cardLastFoursOn(
+                    row.accountCardNumbers,
+                    row.transactionDate,
+                  ),
                 },
               ]
             : [],

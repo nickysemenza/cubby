@@ -51,8 +51,16 @@ describe("settlement allocations — write path", () => {
             kind: "credit_card",
             issuer: null,
             network: "visa",
-            last4: "2125",
           },
+          cardNumbers: [
+            {
+              last4: "2125",
+              kind: "primary",
+              validFrom: null,
+              validTo: null,
+              note: null,
+            },
+          ],
         }),
         ctx.actor,
       )

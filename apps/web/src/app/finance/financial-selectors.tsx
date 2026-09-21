@@ -1,3 +1,7 @@
+import {
+  currentLast4,
+  type FinancialAccountCardNumber,
+} from "@cubby/schemas/financial-account";
 import type {
   FinancialAccountShortcode,
   LedgerPartyShortcode,
@@ -19,15 +23,18 @@ import {
 import type { WithEntitySearchProps } from "../_components/combobox/with-search-hook";
 import { ledgerParty } from "./finance.functions";
 
-const accountIdentityFacts = (identity: {
-  kind: string;
-  issuer?: string | null;
-  institution?: string | null;
-  provider?: string | null;
-  last4?: string | null;
-}) => {
+const accountIdentityFacts = (
+  identity: {
+    kind: string;
+    issuer?: string | null;
+    institution?: string | null;
+    provider?: string | null;
+  },
+  cardNumbers: FinancialAccountCardNumber[],
+) => {
   const owner = identity.issuer ?? identity.institution ?? identity.provider;
-  return [owner, identity.last4 ? `•••• ${identity.last4}` : null].filter(
+  const last4 = currentLast4(cardNumbers);
+  return [owner, last4 ? `•••• ${last4}` : null].filter(
     (fact): fact is string => fact != null,
   );
 };
@@ -109,7 +116,7 @@ export function WithFinancialAccountSearch({
           status: a.provisional
             ? { label: "Provisional", tone: "warning" as const }
             : undefined,
-          facts: accountIdentityFacts(a.identity),
+          facts: accountIdentityFacts(a.identity, a.cardNumbers),
         },
       })),
     [account.data],

@@ -92,6 +92,7 @@ const columns = {
   identity: financialAccount.identity,
   provisional: financialAccount.provisional,
   sourceAliases: financialAccount.sourceAliases,
+  cardNumbers: financialAccount.cardNumbers,
   inventoryOwnerDefaultEnabled: financialAccount.inventoryOwnerDefaultEnabled,
   ledgerPartyShortcode: sql<
     string | null
@@ -121,6 +122,7 @@ const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
     identity: financialAccountIdentity.parse(row.identity),
     provisional: row.provisional,
     sourceAliases: row.sourceAliases,
+    cardNumbers: row.cardNumbers,
     inventoryOwnerDefaultEnabled: row.inventoryOwnerDefaultEnabled,
     ledgerPartyId: row.ledgerPartyShortcode
       ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
@@ -200,8 +202,15 @@ export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
           [filters.identityKind].flat(),
         )
       : undefined,
+    // Any card the account has ever presented, not just today's primary:
+    // a receipt's digits are the usual reason someone filters by last four.
     filters.last4
-      ? sql`"FinancialAccount"."identity"->>'last4' = ${filters.last4}`
+      ? sql`EXISTS (
+          SELECT 1 FROM jsonb_array_elements(CASE
+            WHEN jsonb_typeof("FinancialAccount"."cardNumbers") = 'array'
+            THEN "FinancialAccount"."cardNumbers" ELSE '[]'::jsonb END) card
+          WHERE card->>'last4' = ${filters.last4}
+        )`
       : undefined,
     aliasCondition(
       filters.source ? [filters.source].flat() : undefined,

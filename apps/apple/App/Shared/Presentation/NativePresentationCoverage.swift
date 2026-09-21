@@ -58,6 +58,7 @@ enum NativePresentationCoverage {
         case .productCategoryPath,
             .financialAccountIdentity,
             .financialAccountSourceAliases,
+            .financialAccountCardNumbers,
             .financialTransactionSourceRefs,
             .financialTransactionVendorInference,
             .ledgerTransferClassification,

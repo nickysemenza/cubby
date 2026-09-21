@@ -18,10 +18,17 @@ import {
 } from "./generated/entity-field-schemas.financialAccount.gen";
 
 export {
+  cardLastFoursOn,
+  currentLast4,
+  financialAccountCardNumber,
+  financialAccountCardNumberKind,
+  financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountIdentityKind,
   financialAccountSourceAlias,
   financialAccountSourceAliases,
+  type FinancialAccountCardNumber,
+  type FinancialAccountCardNumberKind,
   type FinancialAccountIdentity,
   type FinancialAccountIdentityKind,
   type FinancialAccountSourceAlias,

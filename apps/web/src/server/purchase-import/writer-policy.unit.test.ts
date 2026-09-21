@@ -69,19 +69,53 @@ describe("purchase import writer policy", () => {
         id: "txn-1",
         amount: 12,
         occurredAt: new Date("2026-09-18T18:00:00Z"),
-        cardLastFour: null,
+        cardLastFours: [],
       },
       {
         id: "txn-2",
         amount: 8,
         occurredAt: new Date("2026-09-19T18:00:00Z"),
-        cardLastFour: null,
+        cardLastFours: [],
       },
     ];
 
     expect(matchCompletePaymentSet(payments, transactions)).toHaveLength(2);
     expect(
       matchCompletePaymentSet(payments, transactions.slice(0, 1)),
+    ).toBeNull();
+  });
+
+  it("matches receipt digits against any card the account carried, and stays out on a tie", () => {
+    const payment = [
+      {
+        amount: 226.05,
+        chargedAt: "2026-09-19T10:00:00.000Z",
+        cardLastFour: "4700",
+      },
+    ];
+    const walletCharge = {
+      id: "txn-atmos",
+      amount: 226.05,
+      occurredAt: new Date("2026-09-19T18:00:00Z"),
+      // Statement labels the account ...2125; the terminal saw the Apple Pay
+      // device number 4700.
+      cardLastFours: ["2125", "4700"],
+    };
+    const otherCard = {
+      ...walletCharge,
+      id: "txn-other",
+      cardLastFours: ["2125"],
+    };
+
+    expect(matchCompletePaymentSet(payment, [walletCharge, otherCard])).toEqual(
+      [{ transactionId: "txn-atmos", paymentIndex: 0, amount: 226.05 }],
+    );
+    expect(matchCompletePaymentSet(payment, [otherCard])).toBeNull();
+    expect(
+      matchCompletePaymentSet(payment, [
+        walletCharge,
+        { ...walletCharge, id: "txn-twin" },
+      ]),
     ).toBeNull();
   });
 

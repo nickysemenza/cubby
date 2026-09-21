@@ -609,38 +609,41 @@ const normalizeSourceAliases = (value: EntityEditValue) => {
 
 const financialAccountIdentity = (patch: EntityEditValueBag) => {
   const kind = patch.kind;
-  const last4 = String(patch.last4 ?? "").trim() || null;
   let identity: EntityEditValue;
   if (kind === "credit_card") {
     identity = {
       kind,
       issuer: String(patch.issuer ?? "").trim() || null,
       network: String(patch.network ?? "").trim() || null,
-      last4,
     };
   } else if (kind === "bank_account") {
     identity = {
       kind,
       institution: String(patch.institution ?? "").trim() || null,
       accountType: String(patch.accountType ?? "checking"),
-      last4,
     };
   } else if (kind === "stored_value") {
-    identity = {
-      kind,
-      provider: String(patch.provider ?? "").trim(),
-      last4,
-    };
+    identity = { kind, provider: String(patch.provider ?? "").trim() };
   } else if (kind === "other") {
     identity = {
       kind,
       institution: String(patch.institution ?? "").trim() || null,
-      last4,
     };
   } else {
     identity = { kind: "cash" };
   }
   return identity;
+};
+
+/**
+ * The editor's single "Last four" becomes the account's current primary card;
+ * the full dated `cardNumbers` history is MCP-only.
+ */
+const financialAccountCardNumbers = (patch: EntityEditValueBag) => {
+  const last4 = String(patch.last4 ?? "").trim();
+  return last4 && patch.kind !== "cash"
+    ? [{ last4, kind: "primary", validFrom: null, validTo: null, note: null }]
+    : [];
 };
 
 /** Creates flatten the identity discriminant; updates patch it in place. */
@@ -650,6 +653,7 @@ const financialAccountCreateData = (
   name: patch.name,
   provisional: patch.provisional,
   identity: financialAccountIdentity(patch),
+  cardNumbers: financialAccountCardNumbers(patch),
   sourceAliases: normalizeSourceAliases(patch.sourceAliases),
   notes: patch.notes,
 });
@@ -932,9 +936,10 @@ export const entityEditRegistry: EntityEditRegistry = {
     create: {
       // `kind`, `issuer`, `network`, `institution`, `accountType`,
       // `provider`, and `last4` are editor-only fields that flatten into the
-      // stored `identity` discriminant at submit time (see
-      // `financialAccountCreateData` below) — none of them has a model field
-      // or generated schema to derive a default from.
+      // stored `identity` discriminant (and `last4` into the primary
+      // `cardNumbers` entry) at submit time (see `financialAccountCreateData`
+      // below) — none of them has a model field or generated schema to derive
+      // a default from.
       capture: {
         defaults: {
           name: "",
