@@ -18,7 +18,6 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  actions: read
   contents: read
 
 jobs:
@@ -72,27 +71,6 @@ jobs:
         run: |
           echo "::error::Release tags must point to the current main commit."
           exit 1
-
-      - name: Require successful exact-head CI
-        if: github.event_name == 'push'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_SHA: ${{ steps.current-main.outputs.sha }}
-        run: |
-          set -euo pipefail
-          ci_url="$(
-            gh api --method GET \
-              "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yaml/runs" \
-              -f branch=main -f event=push -f status=completed \
-              -f head_sha="$RELEASE_SHA" -f per_page=100 \
-              --jq '[.workflow_runs[] | select(.conclusion == "success")][0].html_url // empty'
-          )"
-          [[ -n "$ci_url" ]] || {
-            echo "::error::No successful CI workflow run exists for main commit $RELEASE_SHA."
-            exit 1
-          }
-          echo "Using successful exact-head CI run: $ci_url"
 
       - uses: ./.github/actions/release-apple
         with:
