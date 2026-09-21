@@ -14,6 +14,84 @@ import { cn } from "~/lib/utils";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 
+export interface GroupedFlowGroup<T> {
+  id: string;
+  label: string;
+  count: number;
+  items: readonly T[];
+}
+
+export function groupedFlowSectionId(groupId: string): string {
+  return `grouped-flow-group-${encodeURIComponent(groupId)}`;
+}
+
+/**
+ * Ordered groups sharing one compact grid. Group markers participate in normal
+ * auto-placement so a new group never fills space left before its divider.
+ */
+export function GroupedFlow<T>({
+  groups,
+  getItemKey,
+  dividerAccentClassName,
+  renderItem,
+}: {
+  groups: readonly GroupedFlowGroup<T>[];
+  getItemKey: (item: T) => string;
+  dividerAccentClassName?: string;
+  renderItem: (
+    item: T,
+    group: GroupedFlowGroup<T>,
+    headingId: string,
+  ) => ReactNode;
+}) {
+  return (
+    <div
+      className={cn(shelfGridClass(true), "@container/grouped-flow")}
+      data-testid="grouped-flow"
+    >
+      {groups.flatMap((group) => {
+        const headingId = `${groupedFlowSectionId(group.id)}-heading`;
+        return [
+          <div
+            key={`${group.id}-divider`}
+            id={groupedFlowSectionId(group.id)}
+            data-grouped-flow-group={group.id}
+            className="col-span-full scroll-mt-28 self-start border-y border-[var(--border)] bg-muted/40 px-2 py-2 md:scroll-mt-24 md:@min-[13rem]/grouped-flow:col-span-2 md:@min-[13rem]/grouped-flow:self-stretch"
+          >
+            <div className="flex items-baseline gap-2">
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 bg-muted-foreground",
+                  dividerAccentClassName,
+                )}
+                aria-hidden
+              />
+              <h2
+                id={headingId}
+                className="text-sm font-semibold text-foreground"
+              >
+                {group.label}
+              </h2>
+              <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                {group.count}
+              </span>
+            </div>
+          </div>,
+          ...group.items.map((item) => (
+            <div
+              key={`${group.id}-item-${getItemKey(item)}`}
+              data-grouped-flow-item-group={group.id}
+              className="min-w-0"
+            >
+              {renderItem(item, group, headingId)}
+            </div>
+          )),
+        ];
+      })}
+    </div>
+  );
+}
+
 /**
  * Card grids adapt to the work surface rather than the viewport: an open
  * desktop inspector simply yields fewer columns. Compact targets about twice

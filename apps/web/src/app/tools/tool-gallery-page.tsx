@@ -17,7 +17,12 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { shelfGridClass } from "~/app/_components/data-table/shelf";
+import {
+  GroupedFlow,
+  type GroupedFlowGroup,
+  groupedFlowSectionId,
+  shelfGridClass,
+} from "~/app/_components/data-table/shelf";
 import { EntityWorkbenchInspector } from "~/app/_components/entity-workbench-inspector";
 import {
   type EntityPreviewRendererProps,
@@ -71,9 +76,7 @@ const GROUP_NOUN = {
   trade: "trade",
 } as const satisfies Record<ToolGalleryGroupBy, string>;
 
-function toolGroupSectionId(groupKey: string): string {
-  return `tool-gallery-group-${encodeURIComponent(groupKey)}`;
-}
+export type ToolGalleryPresentation = "cards" | "compact" | "flow";
 
 export function toolLocationPath(entry: ToolGalleryInventoryEntryOut): string {
   return [...entry.location.ancestors, entry.location]
@@ -127,6 +130,7 @@ export function ToolCard({
   item,
   compact = false,
   current,
+  describedBy,
   onInspect,
   onHover,
   onHoverEnd,
@@ -134,6 +138,7 @@ export function ToolCard({
   item: ToolGalleryItemOut;
   compact?: boolean;
   current: boolean;
+  describedBy?: string;
   onInspect: () => void;
   onHover: () => void;
   onHoverEnd: () => void;
@@ -149,6 +154,7 @@ export function ToolCard({
     <button
       type="button"
       aria-current={current ? "true" : undefined}
+      aria-describedby={describedBy}
       onClick={onInspect}
       onMouseEnter={onHover}
       onMouseLeave={onHoverEnd}
@@ -348,6 +354,7 @@ function GroupJumpBar({
   return (
     <nav
       aria-label="Tool gallery sections"
+      data-tool-group-jump-bar
       className="sticky top-[var(--app-chrome-top)] z-20 -mx-2 mb-4 border-y border-[var(--border)] bg-background px-2 py-2 md:-mx-6 md:px-6"
     >
       <div className="flex min-w-0 items-center gap-2">
@@ -409,6 +416,7 @@ function useToolGroupNavigation({
   section,
   groups,
   loadedPageCount,
+  layoutKey,
   ready,
   fetchNextPage,
   onSectionChange,
@@ -418,6 +426,7 @@ function useToolGroupNavigation({
   section?: string;
   groups: ToolGalleryGroupOut[];
   loadedPageCount: number;
+  layoutKey: string;
   ready: boolean;
   fetchNextPage: () => Promise<{ isError: boolean }>;
   onSectionChange: (section: string | undefined) => void;
@@ -425,6 +434,17 @@ function useToolGroupNavigation({
   const [visibleGroupKey, setVisibleGroupKey] = useState<string>();
   const jumpingRef = useRef<string | undefined>(undefined);
   const handledSectionRef = useRef<string | undefined>(undefined);
+  const navigationVersionRef = useRef(0);
+
+  useEffect(() => {
+    navigationVersionRef.current += 1;
+    setVisibleGroupKey(undefined);
+    handledSectionRef.current = undefined;
+    jumpingRef.current = undefined;
+    return () => {
+      navigationVersionRef.current += 1;
+    };
+  }, [groupBy, query]);
 
   const scrollToGroup = useCallback(
     async (groupKey: string, behavior: ScrollBehavior, force = false) => {
@@ -438,24 +458,28 @@ function useToolGroupNavigation({
       }
 
       jumpingRef.current = requestKey;
+      const navigationVersion = navigationVersionRef.current + 1;
+      navigationVersionRef.current = navigationVersion;
       try {
         const targetPage = Math.floor(target.startIndex / PAGE_SIZE);
         for (let page = loadedPageCount; page <= targetPage; page += 1) {
           const result = await fetchNextPage();
           if (result.isError) return;
+          if (navigationVersion !== navigationVersionRef.current) return;
         }
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         );
+        if (navigationVersion !== navigationVersionRef.current) return;
         const targetSection = document.getElementById(
-          toolGroupSectionId(groupKey),
+          groupedFlowSectionId(groupKey),
         );
         if (!targetSection) return;
         targetSection.scrollIntoView({ block: "start", behavior });
         handledSectionRef.current = requestKey;
         setVisibleGroupKey(groupKey);
       } finally {
-        jumpingRef.current = undefined;
+        if (jumpingRef.current === requestKey) jumpingRef.current = undefined;
       }
     },
     [
@@ -470,32 +494,73 @@ function useToolGroupNavigation({
   );
 
   useEffect(() => {
-    if (section) void scrollToGroup(section, "auto");
-  }, [scrollToGroup, section]);
+    handledSectionRef.current = undefined;
+  }, [layoutKey]);
 
   useEffect(() => {
-    const sections = document.querySelectorAll<HTMLElement>(
-      "[data-tool-gallery-group]",
+    if (section) void scrollToGroup(section, "auto");
+  }, [layoutKey, scrollToGroup, section]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const sections = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        "[data-tool-gallery-group], [data-grouped-flow-group], [data-grouped-flow-item-group]",
+      ),
     );
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entering = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort(
-            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top,
-          )[0];
-        const target = entering?.target;
-        const groupKey =
-          target instanceof HTMLElement
-            ? target.dataset.toolGalleryGroup
-            : undefined;
-        if (groupKey !== undefined) setVisibleGroupKey(groupKey);
-      },
-      { rootMargin: "-104px 0px -70% 0px" },
-    );
+    if (sections.length === 0) return;
+
+    const groupKeyFor = (node: HTMLElement) =>
+      node.dataset.toolGalleryGroup ??
+      node.dataset.groupedFlowGroup ??
+      node.dataset.groupedFlowItemGroup;
+    const updateVisibleGroup = () => {
+      const jumpBar = document.querySelector<HTMLElement>(
+        "[data-tool-group-jump-bar]",
+      );
+      const activationTop = jumpBar?.getBoundingClientRect().bottom ?? 104;
+      const positioned = sections.map((node) => ({
+        node,
+        rect: node.getBoundingClientRect(),
+      }));
+      const eligible = positioned.filter(
+        ({ rect }) => rect.top <= activationTop,
+      );
+      const closestTop = Math.max(
+        ...eligible.map(({ rect }) => rect.top),
+        Number.NEGATIVE_INFINITY,
+      );
+      const active =
+        eligible
+          .filter(({ rect }) => Math.abs(rect.top - closestTop) < 1)
+          .sort((a, b) => a.rect.left - b.rect.left)[0]?.node ?? sections[0];
+      const groupKey = active ? groupKeyFor(active) : undefined;
+      if (groupKey !== undefined) setVisibleGroupKey(groupKey);
+    };
+    let frame: number | undefined;
+    const scheduleUpdate = () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(updateVisibleGroup);
+    };
+    const observer = new IntersectionObserver(scheduleUpdate, {
+      rootMargin: "-104px 0px -70% 0px",
+    });
     sections.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [loadedPageCount]);
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    for (const parent of new Set(sections.map((node) => node.parentElement))) {
+      if (parent) resizeObserver.observe(parent);
+    }
+    document.addEventListener("scroll", scheduleUpdate, true);
+    window.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+    return () => {
+      observer.disconnect();
+      resizeObserver.disconnect();
+      document.removeEventListener("scroll", scheduleUpdate, true);
+      window.removeEventListener("resize", scheduleUpdate);
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
+  }, [groups, layoutKey, loadedPageCount, ready]);
 
   const jumpToGroup = useCallback(
     (groupKey: string) => {
@@ -520,7 +585,7 @@ function useToolGroupNavigation({
 
 function GalleryGroups({
   groups,
-  compact,
+  presentation,
   groupMetadata,
   isPlaceholderData,
   error,
@@ -533,7 +598,7 @@ function GalleryGroups({
   onRetryMore,
 }: {
   groups: Map<string, ToolGalleryItemOut[]>;
-  compact: boolean;
+  presentation: ToolGalleryPresentation;
   groupMetadata: Map<string, ToolGalleryGroupOut>;
   isPlaceholderData: boolean;
   error: Error | null;
@@ -545,6 +610,35 @@ function GalleryGroups({
   onHoverEnd: (item: ToolGalleryItemOut) => void;
   onRetryMore: () => void;
 }) {
+  const compact = presentation !== "cards";
+  const renderToolCard = (item: ToolGalleryItemOut, describedBy?: string) => (
+    <ToolCard
+      key={item.productId}
+      item={item}
+      compact={compact}
+      current={currentProductId === item.productId}
+      describedBy={describedBy}
+      onInspect={() => onInspect(item)}
+      onHover={() => onHover(item)}
+      onHoverEnd={() => onHoverEnd(item)}
+    />
+  );
+  const flowGroups: GroupedFlowGroup<ToolGalleryItemOut>[] = [
+    ...groupMetadata,
+  ].flatMap(([groupKey, metadata]) => {
+    const groupItems = groups.get(groupKey);
+    return groupItems
+      ? [
+          {
+            id: groupKey,
+            label: metadata.label,
+            count: metadata.itemCount,
+            items: groupItems,
+          },
+        ]
+      : [];
+  });
+
   return (
     <div
       aria-busy={isPlaceholderData}
@@ -553,45 +647,46 @@ function GalleryGroups({
         isPlaceholderData && "pointer-events-none opacity-55",
       )}
     >
-      {[...groups].map(([groupKey, groupItems]) => {
-        const metadata = groupMetadata.get(groupKey);
-        const sectionId = toolGroupSectionId(groupKey);
-        const headingId = `${sectionId}-heading`;
-        return (
-          <section
-            key={groupKey}
-            id={sectionId}
-            data-tool-gallery-group={groupKey}
-            aria-labelledby={headingId}
-            className="scroll-mt-28 md:scroll-mt-24"
-          >
-            <div className="mb-2 flex items-baseline gap-2 border-l-2 border-[var(--domain-house)] pl-2">
-              <h2
-                id={headingId}
-                className="text-sm font-semibold text-foreground"
-              >
-                {metadata?.label ?? groupItems[0]?.groupLabel}
-              </h2>
-              <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-                {metadata?.itemCount ?? groupItems.length}
-              </span>
-            </div>
-            <div className={shelfGridClass(compact)}>
-              {groupItems.map((item) => (
-                <ToolCard
-                  key={item.productId}
-                  item={item}
-                  compact={compact}
-                  current={currentProductId === item.productId}
-                  onInspect={() => onInspect(item)}
-                  onHover={() => onHover(item)}
-                  onHoverEnd={() => onHoverEnd(item)}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      {presentation === "flow" ? (
+        <GroupedFlow
+          groups={flowGroups}
+          getItemKey={(item) => item.productId}
+          dividerAccentClassName="bg-[var(--domain-house)]"
+          renderItem={(item, _group, headingId) =>
+            renderToolCard(item, headingId)
+          }
+        />
+      ) : (
+        [...groups].map(([groupKey, groupItems]) => {
+          const metadata = groupMetadata.get(groupKey);
+          const sectionId = groupedFlowSectionId(groupKey);
+          const headingId = `${sectionId}-heading`;
+          return (
+            <section
+              key={groupKey}
+              id={sectionId}
+              data-tool-gallery-group={groupKey}
+              aria-labelledby={headingId}
+              className="scroll-mt-28 md:scroll-mt-24"
+            >
+              <div className="mb-2 flex items-baseline gap-2 border-l-2 border-[var(--domain-house)] pl-2">
+                <h2
+                  id={headingId}
+                  className="text-sm font-semibold text-foreground"
+                >
+                  {metadata?.label ?? groupItems[0]?.groupLabel}
+                </h2>
+                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                  {metadata?.itemCount ?? groupItems.length}
+                </span>
+              </div>
+              <div className={shelfGridClass(compact)}>
+                {groupItems.map((item) => renderToolCard(item))}
+              </div>
+            </section>
+          );
+        })
+      )}
 
       {error ? (
         <div className="space-y-2">
@@ -619,7 +714,7 @@ function GalleryGroups({
 
 export function ToolGalleryPage({
   query,
-  compact = false,
+  presentation = "cards",
   groupBy,
   section,
   onQueryChange,
@@ -628,7 +723,7 @@ export function ToolGalleryPage({
   operations = productionOperations,
 }: {
   query: string;
-  compact?: boolean;
+  presentation?: ToolGalleryPresentation;
   groupBy: ToolGalleryGroupBy;
   section?: string;
   onQueryChange: (query: string | undefined) => void;
@@ -636,6 +731,7 @@ export function ToolGalleryPage({
   onSectionChange: (section: string | undefined) => void;
   operations?: ToolGalleryPageOperations;
 }) {
+  const compact = presentation !== "cards";
   const hydrated = useHydrated();
   const [draftQuery, setDraftQuery] = useState(query);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -775,7 +871,8 @@ export function ToolGalleryPage({
     section,
     groups: groupOptions,
     loadedPageCount: pages.length,
-    ready: data !== undefined && !isPlaceholderData,
+    layoutKey: presentation,
+    ready: hydrated && data !== undefined && !isPlaceholderData,
     fetchNextPage: loadNextPage,
     onSectionChange,
   });
@@ -798,7 +895,7 @@ export function ToolGalleryPage({
     content = (
       <GalleryGroups
         groups={groups}
-        compact={compact}
+        presentation={presentation}
         groupMetadata={groupMetadata}
         isPlaceholderData={isPlaceholderData}
         error={error}

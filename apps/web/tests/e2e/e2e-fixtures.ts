@@ -106,7 +106,11 @@ async function createFixture<Input>(
   return createdEntitySchema.parse(result.item);
 }
 
-const productFixtureInput = (name: string, manufacturer: string) =>
+const productFixtureInput = (
+  name: string,
+  manufacturer: string,
+  category?: "tools",
+) =>
   productCreateInput.parse({
     name,
     aliases: [],
@@ -117,6 +121,7 @@ const productFixtureInput = (name: string, manufacturer: string) =>
     notes: null,
     expectedQuantity: null,
     ingredientId: null,
+    category,
   });
 
 export const seedTaskPrerequisite = (
@@ -232,6 +237,39 @@ export const seedInventoryPrerequisites = (
     }
     return { products, location };
   })();
+
+export async function seedToolFlowPrerequisite(
+  page: Page,
+  groups: ReadonlyArray<{
+    locationName: string;
+    productNames: readonly string[];
+  }>,
+) {
+  const seededGroups = [];
+  for (const group of groups) {
+    const location = await seedLocationPrerequisite(page, group.locationName);
+    const products = [];
+    for (const name of group.productNames) {
+      const product = await createFixture(
+        page,
+        "product",
+        productFixtureInput(name, "Flow fixture maker", "tools"),
+      );
+      await createFixture(
+        page,
+        "inventory",
+        inventoryCreatePayloadData.parse({
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        }),
+      );
+      products.push(product);
+    }
+    seededGroups.push({ ...group, location, products });
+  }
+  return seededGroups;
+}
 
 export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
   const db = getFixtureDb();
