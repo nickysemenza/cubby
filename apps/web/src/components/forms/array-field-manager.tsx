@@ -5,6 +5,8 @@ import { type Control, type FieldValues, useFieldArray } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
+import { FormSection } from "./form-section";
+
 /**
  * Generic array field manager for react-hook-form.
  *
@@ -36,6 +38,41 @@ interface ArrayFieldManagerProps<
   itemClassName?: string;
   showRemoveButton?: boolean;
   maxItems?: number;
+  /**
+   * Tabular mode: one header row of the given column labels above the
+   * unlabeled row controls (`children` still owns each row's actual
+   * fields), and the title + "+ Add" button move into `FormSection`'s own
+   * header slot instead of this component's plain title row. `className`
+   * on a column aligns its header label with the matching row control's own
+   * width class; omit it to fall back to `flex-1`, matching a row control
+   * with no explicit width of its own.
+   */
+  columns?: readonly { label: string; className?: string }[];
+}
+
+/** 28px, no dashed border — the shared "+ Add" affordance for every array
+ * field, tabular or not (DESIGN.md: ghost buttons are quiet at rest). */
+function AddRowButton({
+  addButtonText,
+  onClick,
+  disabled,
+}: {
+  addButtonText: string;
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <Plus className="mr-2 size-3.5" />
+      {addButtonText}
+    </Button>
+  );
 }
 
 export const ArrayFieldManager = <
@@ -53,6 +90,7 @@ export const ArrayFieldManager = <
   itemClassName,
   showRemoveButton = true,
   maxItems,
+  columns,
 }: ArrayFieldManagerProps<T, TFieldValues>) => {
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -80,6 +118,73 @@ export const ArrayFieldManager = <
   };
 
   const canAdd = !maxItems || fields.length < maxItems;
+  const emptyLabel = (
+    <div className="text-sm text-muted-foreground italic">
+      No {title.toLowerCase()} added yet
+    </div>
+  );
+
+  // Ledger rows: dashed rules between entries instead of boxed cards.
+  const rows = (
+    <div className="divide-y divide-dashed divide-border">
+      {fields.map((field, index) => (
+        <div
+          key={field.id}
+          className={cn("flex flex-wrap items-end gap-2 py-2", itemClassName)}
+        >
+          {renderField(field, index)}
+          {showRemoveButton && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="mb-1"
+              aria-label={`Remove ${title.slice(0, -1).toLowerCase()} ${index + 1}`}
+              onClick={() => handleRemove(index)}
+            >
+              <X className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  if (columns) {
+    return (
+      <FormSection
+        title={title}
+        action={
+          <AddRowButton
+            addButtonText={addButtonText}
+            onClick={handleAdd}
+            disabled={!canAdd}
+          />
+        }
+      >
+        <div className={cn("space-y-2", className)}>
+          {fields.length === 0 ? (
+            emptyLabel
+          ) : (
+            <div className="flex flex-wrap gap-2 text-xs font-medium text-muted-foreground">
+              {columns.map((column) => (
+                <span
+                  key={column.label}
+                  className={column.className ?? "flex-1"}
+                >
+                  {column.label}
+                </span>
+              ))}
+              {/* Reserves the trailing ✕ column's width so labels line up
+                  with their row controls, not the remove button. */}
+              {showRemoveButton && <span className="w-9" aria-hidden />}
+            </div>
+          )}
+          {rows}
+        </div>
+      </FormSection>
+    );
+  }
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -92,48 +197,14 @@ export const ArrayFieldManager = <
         >
           {title}
         </h3>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="border-[1.5px] border-dashed border-border"
+        <AddRowButton
+          addButtonText={addButtonText}
           onClick={handleAdd}
           disabled={!canAdd}
-        >
-          <Plus className="mr-2 size-3.5" />
-          {addButtonText}
-        </Button>
+        />
       </div>
-
-      {fields.length === 0 && (
-        <div className="text-sm text-muted-foreground italic">
-          No {title.toLowerCase()} added yet
-        </div>
-      )}
-
-      {/* Ledger rows: dashed rules between entries instead of boxed cards */}
-      <div className="divide-y divide-dashed divide-border">
-        {fields.map((field, index) => (
-          <div
-            key={field.id}
-            className={cn("flex flex-wrap items-end gap-2 py-2", itemClassName)}
-          >
-            {renderField(field, index)}
-            {showRemoveButton && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="mb-1"
-                aria-label={`Remove ${title.slice(0, -1).toLowerCase()} ${index + 1}`}
-                onClick={() => handleRemove(index)}
-              >
-                <X className="size-3.5" />
-              </Button>
-            )}
-          </div>
-        ))}
-      </div>
+      {fields.length === 0 && emptyLabel}
+      {rows}
     </div>
   );
 };

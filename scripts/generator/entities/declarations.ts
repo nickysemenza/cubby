@@ -111,6 +111,8 @@ type EntityFieldControl = Readonly<{
   renderer: string | null;
   options: readonly Readonly<{ value: string; label: string }>[] | null;
   section: string;
+  /** Pairs with the next consecutive `"half"` field on one row. */
+  width: "half" | null;
   placeholder: string | null;
   initial: "today" | null;
   suggest: Readonly<{ basis: readonly string[] }> | null;

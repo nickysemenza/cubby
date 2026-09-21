@@ -208,6 +208,10 @@ const metadataSchemas = () => {
         .optional()
         .default(null),
       section: nonEmptyString().optional().default("main"),
+      /** A short field the generic editor pairs with the next consecutive
+       * `"half"` field on one row (`SideBySideFields`), instead of the
+       * default full-width control. */
+      width: z.literal("half").nullable().optional().default(null),
       /** Editor placeholder text, generic-editor only. */
       placeholder: nonEmptyString().nullable().optional().default(null),
       /**
@@ -762,6 +766,9 @@ const metadataSchemas = () => {
                   id: sectionId,
                   title: nonEmptyString(),
                   fields: z.array(fieldKey).min(1),
+                  /** Render the section's body behind a disclosure that
+                   * starts closed (a rarely-used section, e.g. Nutrition). */
+                  collapsed: z.boolean().optional().default(false),
                 })
                 .strict(),
             )
