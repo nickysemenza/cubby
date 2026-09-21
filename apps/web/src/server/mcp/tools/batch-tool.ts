@@ -1,3 +1,4 @@
+import { mcpResultDetail } from "@cubby/schemas/mcp-detail";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
@@ -74,8 +75,7 @@ function batchOutputSchema<TItemOutput extends z.ZodType>(
 }
 
 function batchResultDetailParam(fallback: BatchResultDetail) {
-  return z
-    .enum(["summary", "full"])
+  return mcpResultDetail
     .default(fallback)
     .describe(
       `How much of each result to return. 'summary' gives {index, status, reference}; 'full' also includes the parsed item. This tool defaults to '${fallback}'.`,

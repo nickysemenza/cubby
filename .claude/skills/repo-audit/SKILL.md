@@ -25,14 +25,21 @@ those calls into the current host's subagent operations.
 ## Run the audit
 
 1. Announce that the full audit uses delegated agents and can take time.
-2. Fan out the workflow's independent audit lanes with subagents, respecting the
-   host's concurrency limit. Invoking this skill explicitly authorizes this
-   delegation. Use the current/default model unless the user requests another;
-   do not copy Claude model names into Codex configuration.
+2. Fan out only the workflow's independent audit lanes, respecting the host's
+   concurrency limit. Invoking this skill explicitly authorizes this
+   delegation. Translate each workflow lane through
+   `docs/agents/model-routing.md`: use the workflow's declared Claude model and
+   effort on Claude, or its matching explicit Codex model and effort on Codex.
+   Do not blanket-inherit the current model.
 3. Require every lane to return the workflow's `FINDINGS_SCHEMA`. Preserve an
    empty findings list rather than padding weak observations.
-4. Run the mechanical `gates` lane exactly as written. Treat command output as
-   ground truth and do not send it through adversarial verification.
+4. The root runs `pnpm check` once and `cargo fmt --manifest-path
+   recipebridge/Cargo.toml -- --check` once, then supplies concise pass/fail and
+   raw failure evidence as `rootGateResults: [{ command, status: "pass" |
+   "fail", output }]` to the workflow, covering both commands. Treat it as
+   ground truth and do not send it through adversarial verification. Without
+   that argument, the workflow must report its mechanical gate unchecked and
+   the audit incomplete.
 5. For every other candidate finding, delegate a fresh adversarial verifier
    using the workflow's verifier prompt and `VERDICT_SCHEMA`. Give the verifier
    the candidate plus repository access, not the auditor's hidden reasoning.

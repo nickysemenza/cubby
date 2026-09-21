@@ -1,7 +1,9 @@
 # Vendor case notes
 
-Use these as reminders to seek evidence, not as rules that override a current
-source.
+Read only the section for the current vendor. These are source-navigation and
+interpretation notes, not household history or rules that override current
+evidence. Examples are synthetic; resolve account, project, and entity references
+from the live authorized workflow.
 
 ## Amazon
 
@@ -54,13 +56,9 @@ source.
   not allocate or estimate them across merchandise lines.
 - Never infer that a missing email proves no event without first establishing
   the mailbox/source coverage window.
-- The CSV importer also wrote `costType: "materials"` for nearly every row
-  regardless of item — as of 2026-08 that is 603 of 633 rows carrying the
-  `Imported from Home Depot purchase-history CSV` note, tool boxes and power
-  tools included, while `trade` was assigned sensibly. Treat `materials` on a
-  CSV-imported row as unverified rather than as a human classification, and
-  reclassify obvious tools when touching one. The remainder is a worklist, not
-  settled data.
+- A legacy CSV importer may assign `costType: "materials"` indiscriminately.
+  Treat imported classifications as unverified and reclassify only from source
+  evidence when touching a row; do not treat importer defaults as human choices.
 - `homedepot.com` returns 403 to WebFetch and curl; reach product pages through
   the signed-in browser instead. `homedepot.com/s/<MODEL>` redirects straight to
   the page on an exact model match, otherwise scroll the lazy results grid before
@@ -82,12 +80,9 @@ source.
 - Every receipt separates `Merchandise`, `Sales Tax`, and `Shipping`, so the
   split is fully evidenced — never allocate shipping or tax across lines.
 - **The printed part number is sometimes a family number, not a unique SKU.**
-  One receipt listed `7715T31` three times for black-50 ft, white-50 ft, and
-  green-25 ft wire, and `6642T6` twice for coveralls in M and XL. The vendor's
-  own line text carries the distinguishing variant, so these are separate
-  Products; do not collapse them, and do not attach the shared number to each as
-  a `retailer_sku` external ID — that asserts a uniqueness the vendor does not.
-  Record it in notes instead. Genuinely unique numbers go in `externalIds` as
+  A family number can span several colours, lengths, or garment sizes. Use
+  the vendor line text to distinguish variants; do not attach a shared family
+  number as a unique `retailer_sku` on several Products. Record it in notes instead. Genuinely unique numbers go in `externalIds` as
   `source: "mcmaster"`, `kind: "retailer_sku"`, with `https://www.mcmaster.com/<part>/`.
 - Items are house-brand or unattributed; the receipt names no manufacturer. Use
   `generic` rather than inventing one, and leave `model` unset — McMaster part
@@ -101,7 +96,7 @@ source.
   receipt; a `Cash Sales Invoice` carries `Invoice No` plus a separate
   `Order Reference`. Record the number the document leads with, and keep the
   other in notes.
-- Tax bases, verified across several orders — do not "correct" them: sales tax
+- Check the printed tax bases rather than recomputing them: sales tax
   applies to the **full** subtotal including delivery, while the 1% CA lumber
   products assessment applies to wood lines only, delivery exempt. Not every wood
   line is assessable (primed pine casing was not; cedar and Doug fir were). Book
@@ -113,7 +108,7 @@ source.
 ## Muller Construction Supply
 
 - Invoices are numbered `C#####/2`; the bare digits are the order number
-  (`C02791/2` ↔ order 202791). Returns get their own `CASH REFUND` document,
+  (`C#####/2` ↔ the corresponding order digits). Returns get their own `CASH REFUND` document,
   `C#####/2` again, printed with the originating invoice number on every line.
 - A refund Purchase can never satisfy `primary_document` — a credit memo is not
   a primary kind and no invoice was ever issued for a return. Record
@@ -141,21 +136,17 @@ source.
   is illegible — book from the tape and describe from the body.
 - The `ORDER`/`SHIP` columns use foot ticks (`20'`, `5'`) to mean linear feet
   rather than pieces. Missing that turns 5 ft of copper into 5 fittings.
-- Ledger rows for this vendor may be hand-entered approximations. One sat at a
-  round $100.00 against a real $127.91 charge for a year. The receipt supersedes
-  the round number; correct it and say so.
+- Ledger rows may be hand-entered approximations. The itemized receipt
+  supersedes a rounded estimate; correct it with the evidence recorded.
 
 ## California Marble & Stone
 
 - Numbers nothing: the proposal contract, the final invoice and the `INVOICE #`
   field are all blank. Identify documents by date and record `order_id` as
   `not_issued`.
-- The deposit and the balance currently sit as two Purchases, each with
-  `statedTotal` equal to its own payment rather than the contract sum. That is a
-  real tension with the general rule that one fixed-scope order is one Purchase —
-  the contract *is* fixed-scope. Leave the existing shape alone unless the user
-  asks; do not merge them silently, and do not set either `statedTotal` to the
-  full contract value.
+- When legacy records split a fixed-scope contract into deposit and balance
+  Purchases, do not silently merge them or set each payment to the full contract
+  value. Reconcile the documented scope and obtain the required merge approval.
 
 ## Weee!
 
@@ -180,11 +171,9 @@ source.
   line (`productQuantity: -1`) plus a `refund` transaction on the wallet, and
   the later spend as a `purchase` transaction on the wallet beside the card's.
 - Card descriptors: Monarch `WEEE INC.`, Copilot `Weee Inc` and `Grocery Weee!`.
-- Listing titles drift over the years for one SKU (`LKK Soy Sauce 500ml` →
-  `Lee Kum Kee Premium Soy Sauce 500 ml`, Aroy-D `13oz` → `14 oz` for the same
-  400 ml can). Alias the product with the older title rather than minting a
-  twin, and say so in the Expense note.
-- Older orders (2021) can freeze the browser renderer so every scripting tool
+- Listing titles can change for one SKU. Confirm the variant and package
+  quantity, then retain an older title as an alias rather than minting a twin.
+- Older order pages can freeze the browser renderer so every scripting tool
   times out and sibling weee.com tabs hang with it. Have the operator copy the
   page text and paste it; images then come from the public search above.
 
@@ -209,8 +198,8 @@ source.
   spend.** Cross-check every backfilled order against refunds before booking;
   fully-refunded orders are goods never owned.
 - The ASIN column is free identity for every line — never scrape for ASINs.
-- **Refunds mostly settle to gift-card balance, not the card.** A missing card
-  credit is the normal case and never on its own proves money is owed. The
+- **Refunds can settle to gift-card balance instead of the card.** A missing
+  card credit alone never proves money is owed. The
   destination is proven per row from the `return@amazon.com` final notice
   ("available now in your Amazon Account" = the stored-value account; card
   wording = the card); never inferred from the base rate. Model the balance as
@@ -230,22 +219,16 @@ source.
   line and reports the pre-discount subtotal as Grand Total; take Whole Foods
   totals from `/your-orders/order-details` and book the savings as one
   order-level `discount`. `/fopo/order-details?orderID=` is the surface that
-  carries `/dp/` links and images for in-store scale items; only Amazon Fresh
+  carries `/dp/` links and images for in-store scale items; Amazon Fresh
   (`112-`) orders link produce ASINs on the ordinary details page.
 - A Product often needs **two ASINs** (Whole Foods storefront id and Amazon
   Fresh id). A Product may hold several `amazon/asin` slots: add the second
   with `patch_products_external_ids` `upsert` and `isPrimary: false` — the
-  existing primary survives (verified 2026-09-14 on PRD-KMK2). Do **not** park
-  it as `legacy_unspecified`; that older advice predates multi-slot support.
-  The one place a second slot is still lost is `entity merge product`, which
-  discards the loser's colliding `(source, kind)` — re-add it by hand after a
-  merge (PRD-WDHJ's note is that case). A collision check returning `unique`
-  against a *different* Product for a grocery item is a duplicate signal, and
-  the reverse is common too: `find_product_external_id_collisions` says
-  `missing` while the Product exists under the other storefront's ASIN. Run
-  `global_search` on the noun (`banana`, `cauliflower`, `ground beef`) before
-  creating any grocery Product — `resolve_products` returned nothing for
-  "Organic Banana" while `global_search` found `Organic Whole Trade Banana`.
+  existing primary survives. Do not use `legacy_unspecified` for a known ASIN.
+  Verify all source identifiers after a merge and restore any confirmed missing
+  slot through the supported write path. A collision on another Product may
+  indicate a duplicate; a missing ASIN match does not prove the Product is new.
+  Search the generic noun and inspect alternate storefront identifiers first.
 - **Scraping the current-order surfaces from the Chrome tool.** Use
   [amazon-print-extract.js](amazon-print-extract.js) verbatim on each
   printable invoice: it dumps `ORDER / PAY / summary / STATUS / LINES` into a
@@ -254,23 +237,18 @@ source.
   string. So the loop is `navigate` → `javascript_tool` → `get_page_text`,
   three calls per order, and the order list is paged by navigating
   `/your-orders/orders?timeFilter=months-3&startIndex=N` (10 per page) and
-  reading `.order-card` text. A 2026 `111-` order prefix is ordinary retail;
+  reading `.order-card` text. A `111-` order prefix is ordinary retail;
   `112-` is Fresh (details page redirects to `/uff/` and hides lines past five
   behind "View all items" — the print page lists them all); `113-` is Whole
-  Foods, both in-store trips and shipped SWOON-style marketplace orders.
-- **Booking conventions on these orders** (mirror the existing rows rather than
-  re-deriving them): `costType: materials`, `trade: other`; consumables
-  (groceries, supplements, batteries, tissues, dog treats, body wash) go on
-  `PRJ-HSHD`, durables (tools, cookware, books, pet gear) carry no project; tax
-  follows the lines it fell on. Row names: `Sales tax`, `Paper bag fee`,
-  `Bottle deposit fee`, `Driver tip`, `Whole Foods savings` (one order-level
-  `discount` at the details page's Total Savings, lines at list price),
-  `Buy Again & Save discount`, `Exclusive promotion`. The driver tip is inside
-  `statedTotal` on the invoice's Grand Total. Weight-priced produce, butcher
-  and Mary's chicken lines take `productQuantity: null`; a title ending
-  `1 Each` / `1 Bunch` takes `1`. A `$0.00` "No current charges" order that
-  re-ships an ASIN bought days earlier is booked as a `$0` principal with
-  `productQuantity: null` and a note naming the original order.
+  Foods, both in-store trips and shipped marketplace orders.
+- Resolve project and cost classification from the authorized import context;
+  never copy household-specific assignments from examples. Preserve the source
+  labels for tax, bag/deposit fees, tips, and discounts. Do not count savings
+  twice when the invoice already nets them into line prices. Check whether a
+  driver tip is included in the printed total before treating it as extra.
+  Weight-priced goods use `productQuantity: null`; explicit `Each` or `Bunch`
+  lines use the documented count. A no-charge replacement keeps its documented
+  relationship to the original order and does not imply another received unit.
 - Amazon may print a payment token (`Visa *NNNN`) that matches no real card; the
   statement row names the real one. Never mint an account for it.
 - `/cpe/yourpayments/transactions` is the charge→order ledger and the only
@@ -410,9 +388,9 @@ source.
   transaction report (one year per report; set both dates explicitly or you get
   a one-day report), netted **per order number across all row types** — a
   cancelled sale still produces a positive `Order` row with an offsetting
-  `Refund` a day later. Managed payments began 2021-04; earlier sales settled
-  through PayPal, have no eBay transaction record, and are necessarily booked
-  GROSS with `GROSS` said in the note. The PayPal processing cut on those is
+  `Refund` a day later. Sales before an account's managed-payments coverage may settle through
+  PayPal without an eBay transaction record; where only gross evidence exists,
+  mark the gross basis explicitly in the note. The PayPal processing cut on those is
   unrecoverable — do not estimate it into a row.
 - Pre-managed-payments sales from Gmail: searching the bare item number finds
   the listing, sale, PayPal and feedback threads at once. Principal at gross
@@ -422,7 +400,7 @@ source.
   debit date**, never as a line on a sale. A monthly invoice equal to exactly
   10% of one sale's buyer-paid total belongs to that sale — record it as an
   inference. A sale Purchase trips `paperwork_mismatch` permanently (positive
-  `statedTotal`, negative Expenses) and pre-2019 sales have no modern order id.
+  `statedTotal`, negative Expenses) and older sales may have no modern order id.
 - "You made the sale" emails **truncate the listing title**, which silently
   costs the Product link. `ebay.com/sh/ord/?filter=status:ALL_ORDERS` renders
   every order with the full title, item id, order number and status
@@ -470,8 +448,7 @@ source.
   detail page is the whole primary source (per-item price, ASIN, colour, size,
   return status, each credit with its date).
 - **The list page's Total is the NET after returns**, not the order total —
-  `statedTotal` comes from the detail page. Try-several-return-most is the
-  normal shape; only kept pairs become Products. Zappos **charges per
+  `statedTotal` comes from the detail page. Returns can materially change the list total; only kept pairs become Products. Zappos **charges per
   shipment**, and one charge can span two items.
 - A "Refund Issued" item with no credit line and a `$0.00` re-shipment of the
   same ASIN two days later is a **replacement**, not a refund: keep the Product
@@ -644,8 +621,8 @@ source.
   price/total** — the vendor's own post-discount line amounts, plus the Mfr #
   the public listing sometimes hides and the payment transaction id. Pages are
   client-rendered: wait ~3 s after navigate. `Download PDF` has no href.
-- Zoro # → Mfr # is safe; **Mfr # → Zoro # is ambiguous** (one Rubbermaid model
-  returned four live Zoro listings at different prices). The order line, not a
+- Zoro # → Mfr # is safe; **Mfr # → Zoro # is ambiguous** (one maker model can
+  have several live Zoro listings at different prices). The order line, not a
   catalog search, disambiguates.
 - Drive a vendor enrichment pass off its **principal Expense lines**, not its
   Products — a product worklist cannot see an expense with no Product.
@@ -654,8 +631,9 @@ source.
 
 - Shipped Marketplace sales leave a full email trail from
   `noreply@marketplace.facebook.com`. **Local cash handoffs leave nothing**, and
-  the listing export does not reach back before 2026 — do not burn a sweep
-  re-searching email for them. Book from the operator's recollection with a
+  listing-export coverage must be established before using absence as evidence.
+  Do not repeatedly search sources already confirmed not to cover the event.
+  Book from the operator's recollection with a
   placeholder date, say `DATE IS APPROXIMATE` plus the empty sweep in both the
   Expense and Purchase notes, at full earnings (no fee, no label).
 - A lot sale covering several items still gets one Expense per Product (an
@@ -688,7 +666,7 @@ source.
   trustworthy. A row with no Receipt panel — Amazon, eBay, Home Depot, and any
   other non-Shopify retailer — is shop.app merely parsing a shipping/tracking
   notification for its own UI; the price and quantity shown can be wildly
-  wrong (a real case: a $108 Harrods candle rendered as `x10 $12,000.00`).
+  wrong, including both inflated quantity and price.
   **Never book from a receipt-less row.** Cross-check its order id against
   existing Purchases first (Amazon/eBay/Home Depot usually already have their
   own import pipeline and the row is a duplicate you'd otherwise re-book), and
@@ -698,7 +676,7 @@ source.
   an informational `Order discount` amount, but it is not subtracted again —
   `Subtotal + Shipping + Tax` (using the shown per-line prices) equals `Total`.
   Do not re-derive a discount Expense from that line.
-- Deposits/rentals (seen on a keg-rental order) can render as `$0.00` per line
+- Deposits/rentals can render as `$0.00` per line
   while the receipt's `Subtotal` still includes their real value — the
   difference between the sum of visible line prices and `Subtotal` is the
   hidden deposit total. Cross-check against a later partial refund: if the

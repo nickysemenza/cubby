@@ -1,4 +1,3 @@
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -39,6 +38,10 @@ import {
   READ_ONLY_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
+import {
+  entitySummaryResultSchema,
+  projectEntityResult,
+} from "./response-projection";
 import type { McpToolRegistrationRuntime } from "./tool-registration";
 
 const entityToolInput = z.object({ command: entityMcpCommandSchema });
@@ -49,38 +52,6 @@ const entityReadToolOutput = z.union([
   generatedMcpEntityListResultSchema,
   entitySearchResultSchema,
 ]);
-const externalIdSummarySchema = z.object({
-  source: z.string(),
-  kind: z.string(),
-  externalId: z.string(),
-  isPrimary: z.boolean().optional(),
-});
-const recipeCoverageSchema = z.object({
-  cost: z.unknown(),
-  kcal: z.unknown(),
-});
-const productCoverageSchema = z.object({
-  status: z.string().nullable(),
-  missingChecks: z.array(z.string()),
-  defectChecks: z.array(z.string()),
-});
-const coverageSchema = z.union([recipeCoverageSchema, productCoverageSchema]);
-const summaryItemSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    externalIds: z.array(externalIdSummarySchema).optional(),
-    coverage: coverageSchema.optional(),
-  })
-  .strict();
-const entitySummaryResultSchema = z
-  .object({
-    action: z.enum(["get", "list", "create", "update", "merge"]),
-    entity: z.enum(ENTITY_KERNEL_ENTITIES),
-    item: summaryItemSchema.nullable().optional(),
-    items: z.array(summaryItemSchema).optional(),
-  })
-  .passthrough();
 const entityToolOutput = z.union([
   entityReadToolOutput,
   generatedMcpEntityMutationCreateResultSchema,
@@ -92,137 +63,9 @@ const entityToolOutput = z.union([
   entitySummaryResultSchema,
 ]);
 
-type DetailCommand = z.infer<typeof entityMcpCommandSchema>;
-
-const projectionItemSchema = z
-  .object({
-    id: z.string(),
-    name: z.string().nullish(),
-    book: z.string().nullish(),
-    displayName: z.string().nullish(),
-    fromPartyName: z.string().nullish(),
-    description: z.string().nullish(),
-    filename: z.string().nullish(),
-    externalIds: z.array(externalIdSummarySchema).optional(),
-    totals: z
-      .object({
-        cost: z.unknown(),
-        nutrition: z.object({ kcal: z.unknown() }).passthrough(),
-      })
-      .nullish(),
-    dataQuality: z
-      .object({
-        status: z.string().optional(),
-        gaps: z
-          .array(
-            z.object({
-              check: z.string(),
-              kind: z.string(),
-            }),
-          )
-          .optional(),
-      })
-      .nullish(),
-  })
-  .passthrough();
-type ProjectionItem = z.infer<typeof projectionItemSchema>;
-
-const coverageFor = (
-  entity: keyof typeof entitySummary,
-  item: ProjectionItem,
-) => {
-  if (entity === "recipe") {
-    return {
-      cost: item.totals?.cost ?? null,
-      kcal: item.totals?.nutrition.kcal ?? null,
-    };
-  }
-  if (entity === "product") {
-    const quality = item.dataQuality;
-    return {
-      status: quality?.status ?? null,
-      missingChecks: [
-        ...new Set(
-          (quality?.gaps ?? [])
-            .filter((gap) => gap.kind === "missing")
-            .map((gap) => String(gap.check)),
-        ),
-      ],
-      defectChecks: [
-        ...new Set(
-          (quality?.gaps ?? [])
-            .filter((gap) => gap.kind === "defect")
-            .map((gap) => String(gap.check)),
-        ),
-      ],
-    };
-  }
-  return undefined;
-};
-
-const summarizeItem = (
-  entity: keyof typeof entitySummary,
-  item: unknown,
-  write: boolean,
-): z.infer<typeof summaryItemSchema> | null => {
-  const record = projectionItemSchema.nullable().parse(item);
-  if (record === null) return null;
-  const title = z
-    .string()
-    .catch(record.id)
-    .parse(record[entitySummary[entity].titleField]);
-  const summary: z.infer<typeof summaryItemSchema> = {
-    id: record.id,
-    name: title,
-  };
-  if (entity === "product" && record.externalIds) {
-    summary.externalIds = record.externalIds;
-  }
-  if (write) {
-    const coverage = coverageFor(entity, record);
-    if (coverage) summary.coverage = coverage;
-  }
-  return summary;
-};
-
-const projectEntityResult = (command: DetailCommand, result: EntityResult) => {
-  if (!("resultDetail" in command) || command.resultDetail === "full") {
-    return result;
-  }
-  if (!["get", "list", "create", "update", "merge"].includes(result.action)) {
-    return result;
-  }
-  const payload = z
-    .object({
-      action: z.enum(["get", "list", "create", "update", "merge"]),
-      entity: z.enum(ENTITY_KERNEL_ENTITIES),
-      item: z.unknown().optional(),
-      items: z.array(z.unknown()).optional(),
-    })
-    .passthrough()
-    .parse(result);
-  const entity = payload.entity;
-  if (result.action === "list") {
-    return {
-      ...result,
-      items: (payload.items ?? []).map((item) =>
-        summarizeItem(entity, item, false),
-      ),
-    };
-  }
-  return {
-    ...result,
-    item: summarizeItem(
-      entity,
-      payload.item,
-      result.action === "create" ||
-        result.action === "update" ||
-        result.action === "merge",
-    ),
-  };
-};
-
-const kernelCommand = (command: DetailCommand): EntityCommand => {
+const kernelCommand = (
+  command: z.infer<typeof entityMcpCommandSchema>,
+): EntityCommand => {
   if (!("resultDetail" in command)) return entityCommandSchema.parse(command);
   const { resultDetail: _resultDetail, ...rest } = command;
   return entityCommandSchema.parse(rest);
@@ -311,9 +154,11 @@ export function registerEntityTools(
           getEntityKernelContext(extra),
           kernelCommand(command),
         );
-        return z
-          .union([entityReadToolOutput, entitySummaryResultSchema])
-          .parse(projectEntityResult(command, result));
+        // SAFETY: the shared registration seam parses this projection through
+        // the declared union once before emitting either MCP representation.
+        return projectEntityResult(command, result) as z.output<
+          typeof entityReadToolOutput | typeof entitySummaryResultSchema
+        >;
       },
     },
     runtime,
@@ -359,7 +204,11 @@ export function registerEntityTools(
           getEntityKernelContext(extra),
           kernelCommand(command),
         );
-        return entityToolOutput.parse(projectEntityResult(command, result));
+        // SAFETY: the shared registration seam parses this projection through
+        // the declared union once before emitting either MCP representation.
+        return projectEntityResult(command, result) as z.output<
+          typeof entityToolOutput
+        >;
       },
     },
     runtime,

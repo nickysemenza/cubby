@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginatedMetaSchema } from "./pagination";
 import {
   dataTypeEnum,
   fdcId,
@@ -232,6 +233,9 @@ export const problemsTypeSliceOut = z.object({
   type: z.string(),
   items: z.array(z.unknown()),
   total: z.number().int(),
+  meta: paginatedMetaSchema
+    .extend({ pageSize: z.number().int().positive().max(100) })
+    .optional(),
 });
 
 export const problemsUnknownTypeOut = z.object({

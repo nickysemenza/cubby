@@ -1,3 +1,4 @@
+import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { inventoryMcpOut } from "@cubby/schemas/inventory";
 import { mcpUsdaFoodListItemOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
@@ -190,6 +191,162 @@ export function respond<TInput, TOutput>(
 
 export interface ProjectedList<TItem> {
   items: TItem[];
+}
+
+const externalIdSummarySchema = z.object({
+  source: z.string(),
+  kind: z.string(),
+  externalId: z.string(),
+  isPrimary: z.boolean().optional(),
+});
+const recipeCoverageSchema = z.object({
+  cost: z.unknown(),
+  kcal: z.unknown(),
+});
+const productCoverageSchema = z.object({
+  status: z.string().nullable(),
+  missingChecks: z.array(z.string()),
+  defectChecks: z.array(z.string()),
+});
+const coverageSchema = z.union([recipeCoverageSchema, productCoverageSchema]);
+
+const entitySummaryItemSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    externalIds: z.array(externalIdSummarySchema).optional(),
+    coverage: coverageSchema.optional(),
+  })
+  .strict();
+
+export const entitySummaryResultSchema = z
+  .object({
+    action: z.enum(["get", "list", "create", "update", "merge"]),
+    entity: z.enum(entityKeys),
+    item: entitySummaryItemSchema.nullable().optional(),
+    items: z.array(entitySummaryItemSchema).optional(),
+  })
+  .passthrough();
+
+const projectionItemSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().nullish(),
+    book: z.string().nullish(),
+    displayName: z.string().nullish(),
+    fromPartyName: z.string().nullish(),
+    description: z.string().nullish(),
+    filename: z.string().nullish(),
+    externalIds: z.array(externalIdSummarySchema).optional(),
+    totals: z
+      .object({
+        cost: z.unknown(),
+        nutrition: z.object({ kcal: z.unknown() }).passthrough(),
+      })
+      .nullish(),
+    dataQuality: z
+      .object({
+        status: z.string().optional(),
+        gaps: z
+          .array(z.object({ check: z.string(), kind: z.string() }))
+          .optional(),
+      })
+      .nullish(),
+  })
+  .passthrough();
+type ProjectionItem = z.infer<typeof projectionItemSchema>;
+
+function coverageFor(entity: keyof typeof entitySummary, item: ProjectionItem) {
+  if (entity === "recipe") {
+    return {
+      cost: item.totals?.cost ?? null,
+      kcal: item.totals?.nutrition.kcal ?? null,
+    };
+  }
+  if (entity === "product") {
+    const quality = item.dataQuality;
+    return {
+      status: quality?.status ?? null,
+      missingChecks: [
+        ...new Set(
+          (quality?.gaps ?? [])
+            .filter((gap) => gap.kind === "missing")
+            .map((gap) => String(gap.check)),
+        ),
+      ],
+      defectChecks: [
+        ...new Set(
+          (quality?.gaps ?? [])
+            .filter((gap) => gap.kind === "defect")
+            .map((gap) => String(gap.check)),
+        ),
+      ],
+    };
+  }
+  return undefined;
+}
+
+function summarizeEntityItem(
+  entity: keyof typeof entitySummary,
+  item: unknown,
+  write: boolean,
+): z.output<typeof entitySummaryItemSchema> | null {
+  const record = projectionItemSchema.nullable().parse(item);
+  if (record === null) return null;
+  const name = z
+    .string()
+    .catch(record.id)
+    .parse(record[entitySummary[entity].titleField]);
+  const summary: z.output<typeof entitySummaryItemSchema> = {
+    id: record.id,
+    name,
+  };
+  if (entity === "product" && record.externalIds)
+    summary.externalIds = record.externalIds;
+  if (write) {
+    const coverage = coverageFor(entity, record);
+    if (coverage) summary.coverage = coverage;
+  }
+  return summary;
+}
+
+interface ProjectableEntityResult {
+  action: string;
+  entity: keyof typeof entitySummary;
+}
+
+export function projectEntityResult<TResult extends ProjectableEntityResult>(
+  command: { action?: string; resultDetail?: "summary" | "full" },
+  result: TResult,
+) {
+  if (command.resultDetail === "full") return result;
+  const payload = z
+    .object({
+      action: z.string(),
+      entity: z.enum(entityKeys),
+      item: z.unknown().optional(),
+      items: z.array(z.unknown()).optional(),
+    })
+    .passthrough()
+    .parse(result);
+  if (!["get", "list", "create", "update", "merge"].includes(payload.action))
+    return result;
+  if (payload.action === "list") {
+    return {
+      ...payload,
+      items: (payload.items ?? []).map((item) =>
+        summarizeEntityItem(payload.entity, item, false),
+      ),
+    };
+  }
+  return {
+    ...payload,
+    item: summarizeEntityItem(
+      payload.entity,
+      payload.item,
+      ["create", "update", "merge"].includes(payload.action),
+    ),
+  };
 }
 
 export function respondList<TInput, TOutput>(

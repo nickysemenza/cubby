@@ -15,7 +15,7 @@
 
 | Plan concept | Field |
 |---|---|
-| Season name ("Duboce Beds Fall/Winter 2026–27") | `name` |
+| Season name ("Example Beds Fall/Winter 2026–27") | `name` |
 | — | `kind: "garden"` |
 | Season start/end, if stated | `startDate` / `endDate` |
 | Watering schedule prose | `notes` |

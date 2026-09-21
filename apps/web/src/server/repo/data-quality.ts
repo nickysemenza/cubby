@@ -153,7 +153,7 @@ const EXCEPTION_REASONS = {
   // A check absent from this map admits NO reason at all, so its gap can never
   // be closed even when the fact provably does not exist. The three identity
   // checks below sat in that state: a kit component the manufacturer never
-  // catalogued separately (PRD-8QSZ, the M12 contractor bag) has no model
+  // catalogued separately (for example, an unbranded carrying bag) has no model
   // number to record, and no exception could say so.
   product_manufacturer: ["not_applicable", "unavailable"],
   product_category: ["not_applicable", "insufficient_detail"],

@@ -1,16 +1,17 @@
 export const meta = {
   name: "repo-audit",
   description:
-    "Full-repo audit: 12 scoped lanes (opus/sonnet/haiku), adversarial verification, opus synthesis",
+    "Full-repo audit: scoped lanes, adversarial verification, and a root-owned mechanical gate",
   whenToUse:
     "Full-repo multi-agent audit; run quarterly or after large refactors",
   phases: [
-    { title: "Audit", detail: "12 parallel domain auditors" },
+    { title: "Audit", detail: "11 scoped domain auditors" },
     { title: "Verify", detail: "adversarial refutation per finding" },
     {
       title: "Synthesize",
-      detail: "opus ranks + writes report",
+      detail: "opus/high ranks + writes report",
       model: "opus",
+      effort: "high",
     },
   ],
 };
@@ -25,6 +26,29 @@ const REPORT_PATH =
   (workflowArgsTag === "[object Object]" && workflowArgs.reportPath) ||
   (workflowArgsTag === "[object String]" && workflowArgs.trim()) ||
   DEFAULT_REPORT_PATH;
+const ROOT_GATES = {
+  owner: "root",
+  commands: [
+    "pnpm check",
+    "cargo fmt --manifest-path recipebridge/Cargo.toml -- --check",
+  ],
+  result:
+    "array of { command, status: pass|fail, output } with compact evidence",
+};
+const suppliedRootGateResults =
+  workflowArgsTag === "[object Object]" ? workflowArgs.rootGateResults : null;
+const rootGateResults =
+  Array.isArray(suppliedRootGateResults) &&
+  ROOT_GATES.commands.every((command) =>
+    suppliedRootGateResults.some(
+      (result) =>
+        result?.command === command &&
+        ["pass", "fail"].includes(result.status) &&
+        Object.prototype.toString.call(result.output) === "[object String]",
+    ),
+  )
+    ? suppliedRootGateResults
+    : null;
 
 const COMMON = `
 You are auditing the cubby monorepo at ${ROOT}. It is a personal (single-user) pantry/recipe/meal-planning app: TanStack Start + tRPC + Drizzle/Postgres web app on Cloudflare Workers (apps/web), a Rust WASM crate (recipebridge), two smaller CF Workers (apps/upc-lookup, apps/usda-api), and shared packages (packages/*).
@@ -97,6 +121,9 @@ const LANES = [
   {
     key: "security",
     model: "opus",
+    effort: "high",
+    codexModel: "gpt-6-astra",
+    codexEffort: "high",
     prompt: `${COMMON}
 LANE: Security audit.
 Scope: apps/web/src/server (tRPC routers/procedures in server/api, auth middleware, MCP server in server/mcp, agent endpoints in server/agent, AI endpoints in server/ai), apps/upc-lookup, apps/usda-api.
@@ -105,6 +132,9 @@ Look for: missing auth checks on mutating tRPC procedures or server routes (comp
   {
     key: "server-correctness",
     model: "opus",
+    effort: "high",
+    codexModel: "gpt-6-astra",
+    codexEffort: "high",
     prompt: `${COMMON}
 LANE: Server-side correctness.
 Scope: apps/web/src/server/repo, server/services, server/api (routers), background-queue.ts, queue-recompute.ts.
@@ -113,6 +143,9 @@ Look for: transaction boundaries that leave data inconsistent on partial failure
   {
     key: "client-correctness",
     model: "opus",
+    effort: "high",
+    codexModel: "gpt-6-astra",
+    codexEffort: "high",
     prompt: `${COMMON}
 LANE: Client/React correctness.
 Scope: apps/web/src/app (413 files — prioritize _components, inventory, recipes, products), src/hooks, src/components.
@@ -121,6 +154,9 @@ Look for: hook-dependency bugs (stale closures, missing deps that cause real sta
   {
     key: "architecture",
     model: "opus",
+    effort: "high",
+    codexModel: "gpt-6-astra",
+    codexEffort: "high",
     prompt: `${COMMON}
 LANE: Architecture & layering.
 Read AGENTS.md's "Where logic lives", "Service vs. Direct Repo Boundary", and "Opaque Database Type" sections carefully — they define the rules.
@@ -129,16 +165,22 @@ Look for: TS code reimplementing logic that recipebridge WASM owns (costing, ava
   },
   {
     key: "rust",
-    model: "sonnet",
+    model: "opus",
+    effort: "high",
+    codexModel: "gpt-6-astra",
+    codexEffort: "high",
     prompt: `${COMMON}
 LANE: Rust crate quality (recipebridge).
 Scope: recipebridge/src (~3.3k lines), recipebridge/tests, recipebridge/Cargo.toml.
 Rules from memory/AGENTS.md: no unwrap/expect/panic in prod code (CI-enforced clippy gate, tests exempt); tracing on the WASM hot path must be level=trace + skip_all (workerd CPU-leak incident); edition 2024.
-Look for: unwrap/expect/panic/indexing that could panic in prod paths; #[tracing::instrument] on per-call functions at INFO/DEBUG or without skip_all; f64 accumulation bugs in costing math; unbounded recursion without cycle guards (sub-recipe graphs — there is a cycle-taint memo, check it is used everywhere recursion happens); serde/tsify boundary mismatches where a W* type diverges from the TS zod schema consuming it; allocation-heavy hot loops. Run cargo clippy --workspace --all-targets 2>&1 | tail -40 from recipebridge/ if it compiles quickly, and cargo fmt --check.`,
+Look for: unwrap/expect/panic/indexing that could panic in prod paths; #[tracing::instrument] on per-call functions at INFO/DEBUG or without skip_all; f64 accumulation bugs in costing math; unbounded recursion without cycle guards (sub-recipe graphs — there is a cycle-taint memo, check it is used everywhere recursion happens); serde/tsify boundary mismatches where a W* type diverges from the TS zod schema consuming it; allocation-heavy hot loops. The root owns mechanical commands; report only code evidence.`,
   },
   {
     key: "performance",
-    model: "sonnet",
+    model: "opus",
+    effort: "high",
+    codexModel: "gpt-6-astra",
+    codexEffort: "high",
     prompt: `${COMMON}
 LANE: Performance.
 Scope: apps/web/src/server (repo queries, routers, services), apps/web/src/app list pages, apps/usda-api.
@@ -148,26 +190,21 @@ Look for: N+1 query patterns in repos (loop of awaited queries where one IN quer
   {
     key: "conventions",
     model: "sonnet",
+    effort: "medium",
+    codexModel: "gpt-5.6-terra",
+    codexEffort: "medium",
     prompt: `${COMMON}
 LANE: Convention drift.
 Read the current AGENTS.md, docs/agents/domain-rules.md, and docs/agents/web-runtime.md before auditing. Respect their caveats and carve-outs; re-flagging an explicit carve-out is the #1 failure mode of this lane.
 Scope: apps/web/src.
-Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Run pnpm lint and pnpm format:check if quick. Cross-check every candidate against the carve-out list before reporting.`,
-  },
-  {
-    key: "gates",
-    model: "haiku",
-    prompt: `${COMMON}
-LANE: Mechanical gates — run the repo's own quality commands and report ground truth. From ${ROOT}:
-1. pnpm run typecheck (or the workspace equivalent — check package.json scripts first)
-2. pnpm run lint && pnpm run format:check
-3. pnpm run knip 2>&1 | tail -40
-4. cargo fmt --manifest-path recipebridge/Cargo.toml -- --check
-Each command may take a few minutes — that is fine. Report each command's pass/fail and the exact failing output as findings (category 'gate'). If everything passes, return findings: [] and say so in laneSummary. Do NOT editorialize or invent findings beyond command output.`,
+Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Cross-check every candidate against the carve-out list before reporting.`,
   },
   {
     key: "deps-deadcode",
     model: "haiku",
+    effort: "default",
+    codexModel: "gpt-5.6-luna",
+    codexEffort: "low",
     prompt: `${COMMON}
 LANE: Dependency & dead-code hygiene.
 Scope: all package.json files (root, apps/*, packages/*), Cargo.toml files, knip.json.
@@ -175,7 +212,10 @@ Look for: dependencies listed but never imported (spot-check with grep, do not t
   },
   {
     key: "tests",
-    model: "sonnet",
+    model: "opus",
+    effort: "high",
+    codexModel: "gpt-6-astra",
+    codexEffort: "high",
     prompt: `${COMMON}
 LANE: Test health & coverage gaps.
 Scope: all *.test.ts / *.spec.ts / e2e files in apps/web, recipebridge/tests, vitest/playwright configs.
@@ -184,6 +224,9 @@ Look for: high-risk modules with zero test coverage (server/repo transactional m
   {
     key: "docs-ci",
     model: "haiku",
+    effort: "default",
+    codexModel: "gpt-5.6-luna",
+    codexEffort: "low",
     prompt: `${COMMON}
 LANE: Docs & CI accuracy.
 Scope: README.md, AGENTS.md, docs/, .github/workflows/, scripts/, docker-compose.yml, .env.example.
@@ -191,7 +234,10 @@ Look for: README claims that contradict the actual code (commands that no longer
   },
   {
     key: "workers-apps",
-    model: "sonnet",
+    model: "opus",
+    effort: "high",
+    codexModel: "gpt-6-astra",
+    codexEffort: "high",
     prompt: `${COMMON}
 LANE: Cloudflare Workers apps & config.
 Scope: apps/upc-lookup, apps/usda-api, apps/web wrangler config + cf-server.ts + cf-env.ts, packages/worker-tracing, packages/wasm.
@@ -200,7 +246,9 @@ Look for: floating promises (unawaited async without ctx.waitUntil — silently 
 ];
 
 phase("Audit");
-log(`Fanning out ${LANES.length} audit lanes (4 opus, 5 sonnet, 3 haiku)`);
+log(
+  `Fanning out ${LANES.length} audit lanes with explicit model/effort assignments`,
+);
 
 const verifyFinding = (f, laneKey) =>
   agent(
@@ -223,41 +271,28 @@ If uncertain after reading the code, set isReal=false. Also re-grade severity ho
       label: `verify:${laneKey}:${f.file.split("/").pop()}`,
       phase: "Verify",
       schema: VERDICT_SCHEMA,
-      model: "sonnet",
-      effort: "low",
+      model: "opus",
+      effort: "high",
     },
   ).then((v) => (v ? { ...f, lane: laneKey, verdict: v } : null));
 
 const laneResults = await pipeline(
   LANES,
-  (lane) =>
-    agent(lane.prompt, {
+  (lane) => {
+    const options = {
       label: `audit:${lane.key}`,
       phase: "Audit",
       schema: FINDINGS_SCHEMA,
       model: lane.model,
-    }),
+    };
+    if (lane.effort !== "default") options.effort = lane.effort;
+    return agent(lane.prompt, options);
+  },
   (result, lane) => {
     if (!result)
       return { lane: lane.key, summary: "(lane failed)", findings: [] };
     const fs = (result.findings || []).slice(0, 10);
     log(`${lane.key}: ${fs.length} findings → verifying`);
-    // 'gates' lane is raw command output — ground truth, skip adversarial verify
-    if (lane.key === "gates") {
-      return {
-        lane: lane.key,
-        summary: result.laneSummary || "",
-        findings: fs.map((f) => ({
-          ...f,
-          lane: lane.key,
-          verdict: {
-            isReal: true,
-            severity: f.severity,
-            note: "command output (not adversarially verified)",
-          },
-        })),
-      };
-    }
     return parallel(fs.map((f) => () => verifyFinding(f, lane.key))).then(
       (vs) => ({
         lane: lane.key,
@@ -281,7 +316,18 @@ log(`Confirmed ${confirmed.length} findings, refuted ${refuted.length}`);
 
 phase("Synthesize");
 const report = await agent(
-  `You are synthesizing a full-repo audit of the cubby monorepo (${ROOT}) into a final report. Every finding below was adversarially verified against the code (except 'gates' lane items, which are raw command output).
+  `You are synthesizing a full-repo audit of the cubby monorepo (${ROOT}) into a final report. Every finding below was adversarially verified against the code.
+
+ROOT MECHANICAL GATES:
+${JSON.stringify(ROOT_GATES, null, 2)}
+
+ROOT GATE RESULTS:
+${JSON.stringify(rootGateResults, null, 2)}
+
+If ROOT GATE RESULTS is null, the report must call the audit incomplete and put
+the root-gate requirement in the Verdict and Scorecard. Do not imply that
+mechanical validation ran. When results are present, render their compact raw
+evidence as root-owned ground truth; do not adversarially verify it.
 
 LANE SUMMARIES:
 ${JSON.stringify(
@@ -306,16 +352,23 @@ Tasks:
 3. Write a markdown report to ${REPORT_PATH} with this structure:
    - "# Cubby Repo Audit" (include the run date if you can determine it from repo state; otherwise omit)
    - "## Verdict" — 3-4 sentence overall health assessment (this repo has strong conventions; be honest about whether the findings are serious or polish)
-   - "## Scorecard" — table of the 12 lanes with a letter grade (A-F) and one-line rationale each
+   - "## Scorecard" — table of the audit lanes plus root mechanical gates, with a letter grade (A-F) and one-line rationale each
    - "## Findings" — grouped by severity (Critical, High, Medium, Low), each finding: title, file:line as a code span, what/why, and a concrete fix. Number them F1, F2, ...
    - "## Cleared" — brief bullet list of notable things checked and found solid (from refuted list + lane summaries)
    - "## Suggested attack order" — a short prioritized punch list (what to fix first and why, grouping related fixes into single PRs)
 4. Return as your final output a JSON-ish summary: the verdict paragraph, counts by severity, and the top 5 findings (title + file + severity) — the full report lives in the file.`,
-  { label: "synthesize-report", phase: "Synthesize", model: "opus" },
+  {
+    label: "synthesize-report",
+    phase: "Synthesize",
+    model: "opus",
+    effort: "high",
+  },
 );
 
 return {
   reportPath: REPORT_PATH,
+  complete: rootGateResults !== null,
+  rootGateRequired: rootGateResults === null ? ROOT_GATES : null,
   confirmedCount: confirmed.length,
   refutedCount: refuted.length,
   laneSummaries: lanes.map((l) => ({

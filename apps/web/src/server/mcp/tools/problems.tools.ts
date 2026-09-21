@@ -3,6 +3,7 @@ import {
   problemsTypeSliceOut,
   problemsUnknownTypeOut,
 } from "@cubby/schemas/mcp";
+import { mcpPaginationFields } from "@cubby/schemas/pagination";
 import {
   allProblemsMcpSchema,
   assembleAllProblems,
@@ -42,7 +43,7 @@ export function registerProblemsTools(server: McpServer) {
         .boolean()
         .optional()
         .describe(
-          "Return only per-type counts and a total, not the full lists",
+          "Defaults to counts when no type is supplied. Set false without a type for the complete report; true always returns counts.",
         ),
       type: z
         .string()
@@ -50,6 +51,7 @@ export function registerProblemsTools(server: McpServer) {
         .describe(
           "Return only this problem category (e.g. 'orphanedProducts'). Ignored when countsOnly is true.",
         ),
+      ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
     }),
     outputSchema: z.union([
       problemsCountSchema,
@@ -59,11 +61,19 @@ export function registerProblemsTools(server: McpServer) {
     ]),
     annotations: READ_ONLY_CLOSED,
     // Counts are the KV snapshot computation and retain its authoritative
-    // detector reads; the detail displays share the normal cache policy.
-    readPolicy: (params) => (params.countsOnly ? "strong" : "context"),
+    // detector reads; a requested type is a paged detail read unless counts
+    // were explicitly requested.
+    readPolicy: (params) =>
+      params.countsOnly === true ||
+      (params.countsOnly === undefined && params.type === undefined)
+        ? "strong"
+        : "context",
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      if (params.countsOnly) {
+      if (
+        params.countsOnly === true ||
+        (params.countsOnly === undefined && params.type === undefined)
+      ) {
         return await caller.problems.getCounts();
       }
       if (params.type !== undefined) {
@@ -77,9 +87,19 @@ export function registerProblemsTools(server: McpServer) {
         const definition = problemQuery(parsedProblemKey.data);
         if (!definition)
           throw new Error("Problem query registry is incomplete");
-        return projectProblemTypeSlice(
+        const slice = projectProblemTypeSlice(
           await caller.problems.getByType({ key: definition.key }),
         );
+        const start = params.pageIndex * params.pageSize;
+        return {
+          ...slice,
+          items: slice.items.slice(start, start + params.pageSize),
+          meta: {
+            pageIndex: params.pageIndex,
+            pageSize: params.pageSize,
+            totalCount: slice.total,
+          },
+        };
       }
       const [fast, coverage, upc, tracker, views] = await Promise.all([
         caller.problems.getFast(),

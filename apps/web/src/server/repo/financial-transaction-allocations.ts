@@ -46,7 +46,7 @@ type AllocationRow = {
 /** Allocations per transaction, for the audit diff and the quality-target union. */
 export type AllocationSnapshot = Map<FinancialTransactionId, AllocationRow[]>;
 
-/** Stable, readable audit payload: `["PUR-9QXK:-8.96", "PUR-9ZMQ:-7.80"]`. */
+/** Stable, readable audit payload: `["PUR-TSTA:-10.00", "PUR-TSTB:-5.00"]`. */
 const allocationAuditRows = (rows: readonly AllocationRow[]) =>
   rows.map((row) => `${row.purchaseShortcode}:${row.amount.toFixed(2)}`).sort();
 

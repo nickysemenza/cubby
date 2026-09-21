@@ -1,7 +1,15 @@
 import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
 import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
-import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";
+import {
+  mcpResultDetail,
+  mcpResultDetailFields,
+} from "@cubby/schemas/mcp-detail";
+import {
+  MAX_PAGE_SIZE,
+  MAX_SORTS,
+  mcpPaginationFields,
+} from "@cubby/schemas/pagination";
 import {
   relatedSearchOutSchema,
   searchableEntitySchema,
@@ -61,8 +69,11 @@ const listFields = {
   groupBy: z.string().min(1).optional(),
 };
 
-const resultDetail = z.enum(["summary", "full"]).default("summary");
-const resultDetailFields = z.object({ resultDetail });
+const resultDetail = mcpResultDetail;
+const resultDetailFields = z.object(mcpResultDetailFields);
+const mcpListPagination = z
+  .object(mcpPaginationFields({ defaultPageSize: 10, maxPageSize: 500 }))
+  .default({ pageIndex: 0, pageSize: 10 });
 
 const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
   (entity) => {
@@ -81,7 +92,7 @@ const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
       entity: z.literal(entity),
       filters,
       sort: listFields.sort,
-      pagination: listFields.pagination,
+      pagination: mcpListPagination,
       groupBy: listFields.groupBy,
       resultDetail,
     });

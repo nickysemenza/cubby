@@ -281,12 +281,76 @@ describe("MCP workflow tools", () => {
     expect(getCounts).toHaveBeenCalledOnce();
   });
 
+  it("defaults unscoped problem triage to counts and pages an explicit type report", async () => {
+    const getCounts = vi.fn(async () => mock(problemsCountSchema));
+    const getByType = vi.fn(async () => ({
+      type: "orphanedProducts" as const,
+      items: [{ id: "synthetic-1" }, { id: "synthetic-2" }],
+      total: 2,
+    }));
+    const counts = await callMcpTool(
+      createMcpServer(),
+      "list_problems",
+      {},
+      { problems: { getCounts, getByType } },
+    );
+    const page = await callMcpTool(
+      createMcpServer(),
+      "list_problems",
+      {
+        countsOnly: false,
+        type: "orphanedProducts",
+        pageIndex: 0,
+        pageSize: 1,
+      },
+      { problems: { getCounts, getByType } },
+    );
+
+    expect(counts.isError).not.toBe(true);
+    expect(getCounts).toHaveBeenCalledOnce();
+    expect(getByType).toHaveBeenCalledOnce();
+    expect(page.structuredContent).toEqual({
+      type: "orphanedProducts" as const,
+      items: [{ id: "synthetic-1" }],
+      total: 2,
+      meta: { pageIndex: 0, pageSize: 1, totalCount: 2 },
+    });
+
+    const finalPage = await callMcpTool(
+      createMcpServer(),
+      "list_problems",
+      { type: "orphanedProducts", pageIndex: 1, pageSize: 1 },
+      { problems: { getByType } },
+    );
+    const emptyPage = await callMcpTool(
+      createMcpServer(),
+      "list_problems",
+      { type: "orphanedProducts", pageIndex: 3, pageSize: 1 },
+      { problems: { getByType } },
+    );
+    const explicitCounts = await callMcpTool(
+      createMcpServer(),
+      "list_problems",
+      { countsOnly: true, type: "orphanedProducts" },
+      { problems: { getCounts, getByType } },
+    );
+    expect(finalPage.structuredContent).toMatchObject({
+      items: [{ id: "synthetic-2" }],
+      meta: { pageIndex: 1, pageSize: 1, totalCount: 2 },
+    });
+    expect(emptyPage.structuredContent).toMatchObject({
+      items: [],
+      meta: { pageIndex: 3, pageSize: 1, totalCount: 2 },
+    });
+    expect(explicitCounts.isError).not.toBe(true);
+  });
+
   it("projects internal diagnostic ids out of problem slices", async () => {
     const diagnostic = mock(referentialLivenessViolationSchema);
     const result = await callMcpTool(
       createMcpServer(),
       "list_problems",
-      { type: "referentialLivenessViolations" },
+      { countsOnly: false, type: "referentialLivenessViolations" },
       {
         problems: {
           getByType: async () => ({
@@ -464,7 +528,7 @@ describe("MCP workflow tools", () => {
     const full = await callMcpTool(
       server,
       "explain_recipe_costing",
-      { id: "RCP-4K7M" },
+      { id: "RCP-4K7M", detail: "full" },
       { recipe: { explainCosting } },
     );
     const lines = await callMcpTool(
