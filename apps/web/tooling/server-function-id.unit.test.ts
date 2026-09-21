@@ -24,7 +24,7 @@ describe("generateServerFunctionId", () => {
       generateServerFunctionId({
         ...detailFunction,
         filename:
-          "/Users/nicky/.codex/worktrees/86b3/cubby/apps/web/src/entities/entity-detail.functions.ts?server-fn-split",
+          "/Users/example/.codex/worktrees/test/cubby/apps/web/src/entities/entity-detail.functions.ts?server-fn-split",
       }),
     ).toBe(expected);
     expect(

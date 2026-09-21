@@ -6,7 +6,7 @@ in [mapping.md](mapping.md). Shortcodes below are placeholders
 household codes into a skill file; resolve and create against the live
 catalog instead.
 
-Assume the season Project already exists: `PRJ-DUBC` ("Duboce Beds Fall/
+Assume the season Project already exists: `PRJ-TEST` ("Example Beds Fall/
 Winter 2026–27", `kind: "garden"`).
 
 ## Row 1 — "Broccoli ×3, bed 3, plant now, DiCicco or Belstar"
@@ -21,7 +21,7 @@ plus a planted Task's Planting.
 3. Create the `Task`:
    ```json
    { "action": "create", "entity": "task",
-     "data": { "name": "Direct-sow broccoli — bed 3", "projectId": "PRJ-DUBC",
+     "data": { "name": "Direct-sow broccoli — bed 3", "projectId": "PRJ-TEST",
                "dueDate": "2026-09-20" } }
    ```
    → `TSK-BRC3`
@@ -45,7 +45,7 @@ Produces a Task plus a planned Planting with `locationId: null`.
 2. Create the `Task`:
    ```json
    { "action": "create", "entity": "task",
-     "data": { "name": "Sow fava beans", "projectId": "PRJ-DUBC",
+     "data": { "name": "Sow fava beans", "projectId": "PRJ-TEST",
                "dueDate": "2026-11-01" } }
    ```
    → `TSK-FAVA`
@@ -66,7 +66,7 @@ A shopping-list line with no crop and no bed — Task only, no Planting.
 
 ```json
 { "action": "create", "entity": "task",
-  "data": { "name": "Buy mesh drawstring bags ×20", "projectId": "PRJ-DUBC",
+  "data": { "name": "Buy mesh drawstring bags ×20", "projectId": "PRJ-TEST",
             "dueDate": "2026-10-01" } }
 ```
 → `TSK-BAG2`. Check `resolve_products` first in case a matching Product
@@ -78,7 +78,7 @@ skill never creates a Product for an unbought line.
 - `entity list planting {filters:{taskId:"TSK-BRC3"}}` and `{filters:
   {taskId:"TSK-FAVA"}}` each return exactly the one planned Planting created
   above.
-- `entity list task {filters:{projectId:"PRJ-DUBC"}}` includes all three
+- `entity list task {filters:{projectId:"PRJ-TEST"}}` includes all three
   Tasks, with `dueDate` matching the plan's headings.
 - The planning calendar shows `TSK-BRC3`/`TSK-FAVA`/`TSK-BAG2` on their due
   dates once the batch completes.

@@ -71,6 +71,7 @@
     "./meal-classification": "./src/meal-classification.ts",
     "./meal-shared": "./src/meal-shared.ts",
     "./mcp": "./src/mcp.ts",
+    "./mcp-detail": "./src/mcp-detail.ts",
     "./oauth": "./src/oauth.ts",
     "./problems": "./src/problems.ts",
     "./recipe": "./src/recipe.ts",

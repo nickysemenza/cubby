@@ -80,6 +80,7 @@ const mcpContractTests = [
   "src/server/mcp/mcp-apps.unit.test.ts",
   "src/server/mcp/mcp-output-uuid-boundary.unit.test.ts",
   "src/server/mcp/mcp-protocol.unit.test.ts",
+  "src/server/mcp/mcp-response-policies.unit.test.ts",
   "src/server/mcp/mcp-workflow-tools.unit.test.ts",
   "src/server/mcp/tools/contract-envelope.unit.test.ts",
   "src/server/mcp/tools/tool-json-schema.unit.test.ts",

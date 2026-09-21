@@ -198,17 +198,18 @@ history is the archive. Permanent product constraints live in the
   kind views yet, so they are unreachable on Apple platforms even where a
   native slot component exists.
 
-- **`resolve_ingredients` suggests product links.** It created `ground chicken`
-  (ING-ZEU3) while PRD-FGC5 "Ground Chicken Breast" sat unlinked; four of the
-  five products in that meal had `ingredientId: null`, so nothing costed until
-  hand-linked. Return `candidateProducts` by name similarity and accept
+- **`resolve_ingredients` suggests product links.** A newly resolved ingredient
+  can remain unlinked to an existing matching product. Products with
+  `ingredientId: null` do not contribute costing until hand-linked. Return
+  `candidateProducts` by name similarity and accept
   `linkProductId` in the same call. Pairs with the coverage-visibility entry
   above.
 
-- **`resolve_products` should share `global_search`'s lexical engine.** It
-  returned no candidates for `Organic Banana`, `Organic Cauliflower`, `Organic
-  Green Kiwi` while `global_search` found `Organic Whole Trade Banana`,
-  `Cauliflower`, `Organic Kiwi` at once. For grocery the ASIN collision check
+- **`resolve_products` should share `global_search`'s lexical engine.** Name
+  variants such as
+  `Organic Example Fruit` and `Example Fruit` should resolve through the same
+  lexical matching that powers `global_search`. For grocery the ASIN collision
+  check
   misses the Fresh / Whole Foods / in-store ASIN split constantly, so the name
   fallback is load-bearing. Ideal shape: one call taking `{name,
   externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
@@ -231,10 +232,10 @@ history is the archive. Permanent product constraints live in the
 
 - **Coverage diagnostics on recipe and product writes.** Recipe create returned
   `totals: pending`, so finding the uncosted lines took a separate
-  `explain_recipe_costing` per recipe per fix (five calls that evening). Return
+  `explain_recipe_costing` per recipe per fix. Return
   the per-line `missing: [price|weight|nutrients]` list inline on recipe
   create/update, and on product updates report which recipe lines the change
-  closed (the jar-weight mapping on PRD-Q7KK fixed 14 recipes silently).
+  closed: one corrected package-weight mapping can repair many recipes.
 
 - **Duplicate a meal or copy last week.** Add the remaining calendar round-trip
   shortcuts for repeating an individual meal or a prior week without rebuilding
@@ -280,10 +281,8 @@ history is the archive. Permanent product constraints live in the
   `mismatch`, `financial-reconciliation.ts`) lives on `/purchases`. Add a
   derived transaction column with a filter over: bare (no Purchase), linked to
   a single productless lump line (order booked, not itemized), itemized and
-  reconciled, itemized and mismatched. Measured 2026-09-14 over 3,337 non-void
-  rows: 657 bare, 147 lump-line, 1,567 reconciled, 944 one-of-several charges
-  on a shared purchase (installments, combined Amazon charges — not
-  mismatches), 22 true sole-charge mismatches. Count product-linked lines per
+  reconciled, itemized and mismatched. Distinguish sole-charge mismatches from multiple charges
+  on a shared purchase (installments or combined charges). Count product-linked lines per
   allocated purchase; do not compare a shared purchase's lines against one
   charge's amount.
 
@@ -347,18 +346,17 @@ history is the archive. Permanent product constraints live in the
   by giving cookbooks durable identity plus a merge/repoint path.
 
 - **Count units resolve on the ingredient, never via product `each`.** `1 whole
-  yellow onion` costed as 1,360 g because the linked product is a 48 oz bag and
-  its `each` satisfied `whole`. Product `each` means *package*; recipe
-  `whole/bunch/crown/clove` means *piece*. Garlic resolved correctly only
-  because a USDA portion supplied clove → 3 g. Rule: piece units come from USDA
+  example vegetable` must not resolve to the weight of an entire linked bag
+  because its `each` satisfies `whole`. Product `each` means *package*; recipe
+  `whole/bunch/crown/clove` means *piece*. A USDA portion can supply the
+  ingredient-specific piece-to-gram mapping. Rule: piece units come from USDA
   `portionInfo` or an ingredient-level mapping, and product `each` prices the
   package only — it must never satisfy a piece unit.
 
 - **Line-level discounts with a Product link.** Whole Foods promos and Amazon
   Buy-Again are per line, but a `discount` row cannot carry `productId`, so
   they are booked order-level and every promoted grocery's cost basis is list
-  price (Applegate patties $14.79, paid $11.10; 8× Ellenos at $3.49 list
-  inside a $15.86 order savings). Allow `productId` (no quantity) on
+  price (synthetic example: a $10 item discounted to $8). Allow `productId` (no quantity) on
   `discount` rows and fold linked discounts into derived cost basis without
   changing `SUM(Expense.cost)`.
 
@@ -367,17 +365,16 @@ history is the archive. Permanent product constraints live in the
   checked state persist across date ranges and devices. Keep the list independent
   of inventory writes.
 
-- **Measured quantity on Expense lines.** Amazon states `0.99 lb @ $8.99/lb`
-  and `0.77 lb @ $3.49/lb`; the only legal booking is `productQuantity: null`,
-  which discards the fact a pantry cares about most and leaves weight-priced
-  Products (Mary's chicken breast: $11.89 / $14.98 / $15.58 / $34.52 booked
-  as four "units") with a meaningless derived unit price. Let
+- **Measured quantity on Expense lines.** A receipt can state `0.5 lb @ $4/lb`
+  (synthetic example); the current legal booking is `productQuantity: null`,
+  which discards the measured quantity. Booking variable-weight purchases as
+  individual "units" instead produces a meaningless derived unit price. Let
   `productQuantity` carry `{value, unit}` (lb, oz, each) and normalize through
   the Product's `unitMappings`, so derived pricing becomes price-per-measure
   for weight lines and stays per-unit for packaged ones.
 
-- **Portion shares alongside grams.** Once the household stops weighing and
-  serves by eye ("Nicky ~36% of the pot"), grams are a proxy that goes stale
+- **Portion shares alongside grams.** Once a household stops weighing and
+  serves by eye ("one diner ~40% of the pot"), grams are a proxy that goes stale
   when `estimatedYieldGrams` changes. Accept `{share}` per portion in
   `save_meal_recipe_preparation` and derive grams at read time from the
   current yield.
@@ -998,8 +995,8 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
   and record known counts on existing Product-linked acquisition rows; do not freeze
   a changing row count into this file.
 
-- **Register the household's other payment instruments.** Every card or bank
-  account either member pays vendors with belongs in Cubby as a
+- **Register missing payment instruments.** Every card or bank
+  account used to pay vendors belongs in Cubby as a
   `FinancialAccount`, or its statement rows can never settle anything. Add the
   missing ones with aliases before the next statement import.
 
@@ -1008,6 +1005,6 @@ Deferred from the 2026-09 manifest-rendering PRs; unordered.
   (`match_expenses`, `suggest_financial_transfer_pairs`). Itemize lump-line
   orders only where a receipt is on hand.
 
-- **Ingest the Duboce Beds 2026–27 plan with `garden-plan-import`.** Turn the
-  household's written seasonal plan into Locations, one season Project,
+- **Ingest a seasonal garden plan with `garden-plan-import`.** Turn a
+  written seasonal plan into Locations, one season Project,
   due-dated Tasks, and planned Plantings by following the skill's playbook.

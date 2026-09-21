@@ -75,7 +75,7 @@ Both copies stay live, and the pair is hard to see: the hand row carries the
 project and a colloquial title; the import carries products, order id and
 vendor with `projectId: null`; amounts differ (hand rows are from-memory
 approximations, and CSV lines may be pre-tax) and **dates can be months off** —
-a CSV can date an order by its *return* transaction. Four shapes, all confirmed:
+a CSV can date an order by its *return* transaction. Check these four possible shapes:
 
 1. **Lump = the order.** Aggregate equals the import's `expenseTotal` or
    `statedTotal` to the cent, *or* CSV lines + tax. Test the flat tie before the
@@ -102,7 +102,7 @@ a CSV can date an order by its *return* transaction. Four shapes, all confirmed:
    one order split by delivery date with the labels crossed; a buy half and a
    refund half can sit in two different Purchases and net to zero.
 
-Resolution the operator approved: move the hand row's `projectId` (and its
+When the operator approves deduplication: move the hand row's `projectId` (and its
 `costType`/`trade` where the human judgment is better than the import's) onto
 the imported rows, preserve its title as `Purchase.displayLabel`, add the
 missing tax row when the import is pre-tax, then delete the hand row and record
@@ -125,8 +125,8 @@ keeper's actual contents, that merge was wrong.
 
 A backfill note saying "was missing from the ledger" is a red flag: check
 whether a hand-entered aggregate on the same project already covered it. A
-hand-entered row in the pre-import tail is more often a duplicate of something
-itemized than a missing record.
+hand-entered row in the pre-import tail may duplicate an itemized record;
+establish which case applies before importing.
 
 ## Attribution by siblings — adjustments only
 
@@ -144,7 +144,7 @@ accruing on the transaction date*, not by item type — verify with
 proposing one. Purchases cluster a few days before a project's pinned window
 (materials bought ahead), so −15 d..+5 d is normal.
 
-Project notes often carry a Notion-era shopping table with retailer URLs; those
+Project notes may carry an imported shopping table with retailer URLs; those
 identifiers usually resolve to Products that already exist, already enriched,
 so the work is attribution, not creation. A Home Depot URL slug carries the
 `retailer_sku` *and* the internet number — grep both slots. Two false-positive
@@ -165,9 +165,8 @@ project's sale rows have stranded buys.
 - `list expense` filtered by `productId` cannot see the unlinked buys you are
   hunting; search by name/model and by the vendor's other purchases, and grep
   notes for "no product yet".
-- **Read the notes on a row before calling it a defect.** Twice in one session a
-  correction was proposed to correct data because only the typed columns were
-  read.
+- **Read the notes on a row before calling it a defect.** Typed columns alone
+  may omit the evidence explaining an intentional value.
 - Same-name generics from different stores are different Products (own SKU,
   packer, price basis); do not flag them as merge candidates. Same-name items
   from different manufacturers likewise.
@@ -178,11 +177,10 @@ project's sale rows have stranded buys.
 - Trigram similarity finds obvious matches but happily pairs an M12 tool with a
   Ryobi one, or sibling grits and gauges; a second pass matching the product's
   `model` against the row name is the only evidence strong enough to link on.
-  The one true duplicate in a vendor pass was found by **model**, with no
-  distinctive word in common.
+  A duplicate may match by **model** without any distinctive word in common.
 - A `PRODUCT_ALREADY_EXISTS` / identifier collision from a write is a duplicate
   detector — read the conflict, don't route around it.
-- Productless spend is mostly services and deposits; split by `costType` before
+- Productless spend can include services and deposits; split by `costType` before
   calling it a backlog. Sale rows whose category never gets a Product (trading
   cards, books, personal apparel, in-box accessories, loose PC components) take
   the sentinel `Orphan-exit sweep <date>: intentionally productless.` plus the

@@ -311,7 +311,7 @@ export function registerRecipeTools(server: McpServer) {
       'Explain a recipe\'s cost/calorie totals with per-ingredient diagnostics. `detail: "lines"` drops the two full nutrient-totals blocks and the drift record and returns only the per-line diagnostics plus a cost/kcal coverage headline — use it when hunting the uncovered line, not the number.',
     inputSchema: z.object({
       id: idParam("recipe"),
-      detail: recipeCostingExplainDetail.default("full"),
+      detail: recipeCostingExplainDetail.default("lines"),
     }),
     outputSchema: recipeCostingExplainMcpOut,
     annotations: READ_ONLY_CLOSED,

@@ -13,45 +13,32 @@ drag from Photos can transcode HEIC to JPEG; edits change bytes; Messages,
 AirDrop, Slack, screenshots, and MCP attachments may arrive without EXIF. A
 Photos cloud identifier exists only on the app path, original-byte SHA-256
 breaks on transcoding, and `IMG_NNNN` filenames collide across devices and
-years. In the experiment, three of five filename-matched pairs were different
-photos. Perceptual similarity is therefore the durable primary signal.
+years. Filename matches can refer to different photos. Perceptual similarity
+is therefore the durable primary signal.
 
-## Experiment (2026-09-13)
+## Experiment findings
 
 The experiment computed a 64-bit DCT pHash (32×32 grayscale, DCT-II, top-left
-8×8, bits above the median) through CoreGraphics on both sides. It compared the
-`cdn-cgi` 256px thumbnail of all 5,807 Cubby images with local 256px thumbnails
-of all 6,555 Photos-library assets from the previous 12 months, fetched by a Mac
+8×8, bits above the median) through CoreGraphics on both sides. It compared
+`cdn-cgi` 256px thumbnails with local 256px Photos thumbnails fetched by a Mac
 PhotoKit CLI. Distance is Hamming distance; the median threshold makes every
-distance even.
+distance even. Private library counts and source records are omitted here.
 
-| Distance | 0 | 2 | 4 | 6 | 8 | 10 | 12 or more |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Nearest pairs | 40 | 11 | 5 | 2 | 14 | 53 | 5,680 |
-
-- Distances 0–2 were all real matches. Renames, HEIC-to-JPEG conversion,
-  downscaling, and EXIF removal remained at distance 0; the second-nearest
-  asset was usually 12–18 away. Portrait rotation also agreed across both
-  sides.
-- Distances 4–6 were mixed: four real and three false. Each false result was a
-  square catalog image matched to a 4:3 photo, so an aspect-ratio gate rejected
-  it.
-- Distances 8–10 were all false. Low-texture library images acted as attractors
-  for scraped product-on-white images, and none was aspect-consistent.
-- Only about 55 of 5,807 Cubby images were library photos. The threshold is
-  supported by a wide positive separation and 5,750 non-library negatives with
-  no false match at distance 0–2, but the 4–6 band should be measured again
-  after Cubby holds a few hundred real photos.
-- The 37 images exactly 2048px wide came from in-app `CameraPicker` captures,
-  which never entered Photos, and matched nothing. Pixel dimensions describe
-  some export paths but do not reliably identify phone photos: 2000×1500 was
-  21/21 phone photos while 1600×1600 was mostly retailer noise.
-- About 8% of library assets had another library asset within distance 6 due to
-  bursts, retakes, and duplicates. Treating a burst twin as probably in Cubby
-  is the desired behavior.
-- Hashing the same bytes with Sharp and CoreGraphics differed by at least eight
-  bits in 8% of cases. The resampler caused the drift, which is large enough to
-  break the strict threshold.
+- Distances 0–2 separated matches well. Renames, HEIC-to-JPEG conversion,
+  downscaling, and EXIF removal remained at distance 0; portrait rotation
+  also agreed across both sides.
+- Distances 4–6 mixed true and false matches. An aspect-ratio gate rejected
+  square catalog images falsely matched to 4:3 photos.
+- Distances 8–10 produced false matches: low-texture library images acted as
+  attractors for scraped product-on-white images without matching aspect ratios.
+- The 4–6 band needs further measurement on representative, consented photo
+  samples before relaxing the strict threshold.
+- In-app `CameraPicker` captures may never enter Photos. Pixel dimensions
+  describe export paths but do not reliably identify phone photos.
+- Bursts, retakes, and duplicates can put another library asset within distance
+  6. Treating a burst twin as probably in Cubby is the desired behavior.
+- Hashing the same bytes with Sharp and CoreGraphics can differ by at least
+  eight bits. Resampler drift is large enough to break the strict threshold.
 
 ## Accepted design
 

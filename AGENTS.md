@@ -23,8 +23,12 @@
   implementation, investigation, test, and log-analysis subagents to the cheaper
   tier; use another frontier agent only for independent review of broad or risky
   work.
-- Public text and fixtures contain no real household or production data. Use
-  placeholders; internal shortcodes are safe.
+- Use synthetic data in repository content and outward-facing engineering text.
+  Never include personal or household information, real Cubby entity identifiers
+  or records, or private source material in docs, comments, fixtures, examples,
+  logs/screenshots, PR titles or bodies, review comments, or commit messages.
+  Preserve functional public links; describe regressions using sanitized
+  examples.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not
   narration.
 - A test earns its place by failing on a behavior regression the type system
@@ -44,9 +48,10 @@
   if it changed since you read it, and read a region of a large one. Never `cd`
   — use absolute paths, `git -C`, and `pnpm --dir`, which also survives the
   per-call working directory reset.
-- **Model, delegation, and context routing:** use the cheapest model that can
-  independently validate the task; load [model routing](docs/agents/model-routing.md)
-  when choosing a model, effort level, subagent, or context boundary.
+- **Model, delegation, and context routing:** before spawning, load [model
+  routing](docs/agents/model-routing.md), select an explicit supported
+  model/effort pair, and use its compact handoff contract. Preserve an explicit
+  user model choice and the current main session.
 
 ## Product constraints
 

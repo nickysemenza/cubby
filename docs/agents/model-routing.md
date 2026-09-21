@@ -1,35 +1,43 @@
 # Agent model and context routing
 
-Use the cheapest model that can independently validate the task. Provider names
-and aliases are host configuration, not repository contracts. Start with a
-fast model for searches, logs, focused tests, and mechanical edits; use a
-capable model for bounded implementation; reserve the strongest available model
-for architecture, migrations, competing evidence, or independent adversarial
-review. Escalate when evidence conflicts or the first attempt fails for a
-non-obvious reason, not merely because the repository is large. Preserve an
-explicit user model selection.
+Use the cheapest lane that can independently validate the work. Preserve an
+explicit user model choice and the current main session. Provider configuration
+is host state; these supported pairs are the Cubby routing contract.
 
-## Delegation and context
+| Work | Codex | Claude |
+| --- | --- | --- |
+| Targeted search, log extraction, mechanical sanitization | `gpt-5.6-luna` / low | haiku / default |
+| Bounded implementation, focused tests, docs restructure | `gpt-5.6-terra` / medium | sonnet / medium |
+| Hard diagnosis, cross-subsystem work | `gpt-5.6-sol` / high | opus / high |
+| Independent broad or high-risk review | `gpt-6-astra` / high | opus / high |
 
-- Delegate only independent, bounded work that materially advances the task.
-- Give each subagent exact scope, owned files, allowed commands, exclusions,
-  and a compact evidence-return format.
-- Keep architecture decisions, migration ownership, full verification, and
-  final integration with the main agent.
-- Let one agent own each expensive gate; do not repeat full typecheck, test,
-  database, E2E, or Apple gates in parallel.
-- Prefer targeted search, file regions, diffs, test output, and page text over
-  whole-file dumps or screenshots.
-- Have delegated work return the result, commands, duration, relevant output,
-  and limitations rather than a transcript.
-- Start a fresh task after a completed PR or deliverable, or when the work
-  changes to a materially different scope. Replaying a day-long history across
-  unrelated follow-up work costs more than a compact handoff.
-- Bound routine shell output to the smallest useful summary (about 4,000 tokens
-  unless the evidence itself requires more), and use one bounded CI wait rather
-  than repeatedly streaming unchanged check state.
+Escalate when evidence conflicts or a diagnosis has a demonstrated gap. Do not
+escalate just because the repository is large.
 
-## Cubby application models
+When no lane has a stronger need, use `gpt-5.6-terra` / medium on Codex or
+sonnet / medium on Claude. These are fallbacks, not a reason to override an
+explicit user selection or move the current main session.
 
-`typesafe/jev`, `claude-sonnet-5`, and `claude-haiku-4-5` are Cubby runtime
-models. They are not Codex or Claude Code agent-routing choices.
+## Before delegation
+
+Load this file before spawning. Assign the lane's explicit model and supported
+effort; do not inherit a model by default. A small task is main agent only, with
+no subagents; list the main agent for both host assignments. Delegate only
+independent bounded work that advances the task.
+
+Every implementation plan names its lane owner, both host assignments, owned
+files, dependencies, and validation owner. Lanes use disjoint edits or an
+explicit shared-file handoff. Keep architecture, migrations, final integration,
+and the one root final check with the main agent.
+
+## Compact context
+
+Give a lane its scope, allowed commands, exclusions, completion criterion, and
+return shape. Return result, commands, duration, relevant output, and limits;
+keep routine output to 2,000–4,000 tokens rather than a transcript. Start from
+a self-contained brief and targeted files/searches, not full history. Escalate
+diagnosed gaps with the evidence needed to resolve them.
+
+One owner runs each expensive gate. Reuse cached results when inputs have not
+changed and use bounded CI waits rather than unchanged polling. Application
+runtime model names are unrelated to agent routing.

@@ -29,7 +29,7 @@ Receipt photo ─bounded vision extraction────────────�
 ```
 
 Goals: near-zero human involvement for known vendors; token cost on the order
-of a cent or two per order; Rebecca's full Amazon history backfilled; every
+of a cent or two per order; the provider history is backfilled; every
 fetched order carries its primary document; no layout-specific extractors.
 
 Non-goals: automatic receiving into inventory (never); server-side vendor
@@ -72,17 +72,17 @@ store.
 |---|---|---|
 | 1 | What "assigned to a user" means | The vendor **login** (`VendorAccount` owned by a `LedgerParty`). Purchaser is *derived on read*, never stored *(review: a third stored "who" beside `FinancialAccount.ledgerPartyId` and `ExpenseAttribution` was redundant)*. |
 | 2 | Device identity | Real member auth: better-auth user ↔ `LedgerParty.userId`. |
-| 3 | Rebecca's client | She runs the Mac app. |
+| 3 | Account-owner client | The account owner runs the Mac app. |
 | 4 | Discovery | Charge-driven: a statement charge at an `online_account` vendor is *something to hunt*; a server-side Gmail pull (per member mailbox, history-based, hourly cron) resolves its order id and event stream; the browser then fetches that one order by `orderUrlTemplate`. The orders-list walk is only for backfill and vendors with no email senders. |
 | 5 | Automation scope | Everything automatic except receiving. |
 | 6 | Auditor autonomy | Applies reversible relinks/reclassifies only, and only on rows written by the same run; everything else is an open finding with the fix attached. |
 | 7 | Exception surface | Problems page is the source of truth; the Mac app posts one local notification per run with a count. No APNs *(review: none exists)*. |
 | 8 | Vendor scope | Generic, all vendors. `Vendor.orderEvidence` drives expectations. |
-| 9 | Backfill | Yes, paced, newest-first; Rebecca's history jump-started from an Amazon export via the MCP client. |
+| 9 | Backfill | Yes, paced, newest-first; history can be jump-started from an Amazon export via the MCP client. |
 | 10 | Enrichment fetching | Same client, same worklist protocol, second phase. |
 | 11 | Vendor challenge | Human solves it in their real browser; agent pauses. |
 | 12 | Purchaser | Derived: account owner → card owner → null. No column. |
-| 13 | Session ownership | Strict everywhere: a VendorAccount is only driven from a Mac signed in as its owner, and an MCP write naming a `vendorAccountId` must come from that owner's OAuth session (`@better-auth/oauth-provider` already ties every MCP call to a `user.id`). Rebecca runs her own one-off imports. |
+| 13 | Session ownership | Strict everywhere: a VendorAccount is only driven from a Mac signed in as its owner, and an MCP write naming a `vendorAccountId` must come from that owner's OAuth session (`@better-auth/oauth-provider` already ties every MCP call to a `user.id`). The account owner runs one-off imports. |
 | 14 | Vendor evidence flag | `orderEvidence: online_account \| receipt_only \| not_expected \| null`; `null` behaves as `online_account` until classified. A one-time classification pass uses Jev `vendor-evidence-suggest` (name, website, charge descriptors, presence of order mail): high-probability values auto-apply, the rest are one batch review. Expectation checks are *derived* Problems detectors: an `online_account` charge whose hunt (decision 47) failed; a `receipt_only` charge without a document. |
 | 15 | Receiving | Never automatic. "All shipments delivered" (read off the order page) files an `arrived` finding once per Purchase; the human receives through the existing flow. No delivery column. |
 | 16 | Existing lines | If the Purchase's live Expenses are exactly one unlinked `principal` row whose cost equals the extracted lines' sum, the writer replaces it with the lines, carrying the aggregate's title, `costType`, trade, and project onto them (the skill's snapshot rule). Any other shape — a linked row, a partial split, a sum that disagrees — writes **no lines** and files `duplicate_lines` with the extracted lines for review *(review: plain "fill gaps" would double-count)*. Populated header fields are never overwritten. |
@@ -141,7 +141,7 @@ is `(): AnyPgColumn =>` across modules), unique, CHECK `userId IS NULL OR kind
 |---|---|
 | `vendorId` | FK Vendor |
 | `ledgerPartyId` | FK LedgerParty (member); the owner |
-| `label` | e.g. "Nicky's Amazon" |
+| `label` | e.g. "TEST-ACCOUNT" |
 | `cursor` | JSON `{ newestOrderAt, orderIdsOnNewestDate[], backfillBeforeOrderAt, earliestAvailableOrderAt }` — order ids are not monotonic, so the cursor is a date plus the ids already seen on it; `earliestAvailableOrderAt` is the oldest order the site still shows, which bounds what backfill can ever recover |
 | `status` | `active \| paused_auth \| paused_offline \| disabled` — the vendor-account connection state; run lifecycle is recorded separately on `ImportRun` |
 | `lastRunAt`, `lastSuccessAt` | |
@@ -435,8 +435,8 @@ a socket is attached. A hunt whose walk found nothing files the
 
 *Receipt hunts.* For a `receipt_only` vendor's charge: look for a receipt
 photo within ±3 days (the photo import's date index) → `receipt-photo-
-extract` → writer; none → Problem "photograph the receipt for Sloat
-$212.40 on Sep 12", which accepts a photo directly (decision 50).
+extract` → writer; none → Problem "photograph the receipt for Example Garden Store
+$25.00 on Jan 15", which accepts a photo directly (decision 50).
 
 *Events.* `refunded` mail with no matching negative Expense → `refund_unbooked`
 finding with the proposed row; `delivered` on a Purchase whose Vendor has
@@ -476,19 +476,19 @@ transactional writer resolves the owned VendorAccount from that run scope.
    starts → orders list via hints or discovery → for each order newer than
    `cursor.newestOrderAt` (or on that date and not in
    `orderIdsOnNewestDate`): `import_order_page` → cursor advances →
-   `finish_run` → auditor → local notification "Amazon (Nicky): 6 imported,
+   `finish_run` → auditor → local notification "Amazon: 6 imported,
    1 needs you".
-2. **Charge-driven hunt.** Monarch syncs a $84.12 Amazon charge on
-   Rebecca's card → routed to her Amazon VendorAccount → the hourly cron
-   finds her order mail for $84.12 two days earlier → `{ orderId }` on her
-   worklist → her Mac's next run fetches that one order by
+2. **Charge-driven hunt.** Monarch sync reports an Amazon charge on a
+   linked card → routed to the matching VendorAccount → the hourly cron
+   finds an order mail for the same amount → `{ orderId }` on the
+   worklist → the owner's next Mac run fetches that one order by
    `orderUrlTemplate` → `import_order_page` → the charge is allocated. No
-   mail match → the run walks her orders list for the charge date ±7 days →
+   mail match → the run walks the account orders list for the charge date ±7 days →
    still nothing → `expected order not found` on Problems.
 3. **Backfill.** `trigger = backfill` walks older than
    `backfillBeforeOrderAt`, newest first, paced; auditor per 25.
 4. **Export jump-start.** Claude Code reads the Amazon export, posts the
-   payload with Rebecca's `vendorAccountId`; Purchases land with lines and
+   payload with the account owner's `vendorAccountId`; Purchases land with lines and
    Products; the enrichment worklist fills images by ASIN.
 5. **Sign-in / captcha.** `auth_required` → `status = paused_auth`, Problem
    shown, window raised → member signs in → app sends `resumed` → run

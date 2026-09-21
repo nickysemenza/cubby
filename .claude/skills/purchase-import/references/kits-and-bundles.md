@@ -42,8 +42,9 @@ SKUs) is free, not missing spend.
 3. Link any sale/exit Expenses to the component actually flipped
    (`productQuantity: -1`). **Always search the ledger for an exit before
    stocking a component** (`entity list expense` by name/model with
-   `costMax: 0` in the months after the purchase): the operator routinely buys a
-   kit for one part and flips the rest, and those sale rows sit unlinked.
+   `costMax: 0` in the months after the purchase): a
+   kit may have been bought for one part and the rest sold, leaving unlinked
+   sale rows.
 4. Delete the kit's inventory entry, create one per component still owned.
 5. Delete the kit Product. `block-live-project-use` refuses when the kit has
    `ProjectToolUsage` rows — `preview_entity_operation` shows it; repoint the

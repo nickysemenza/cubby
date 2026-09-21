@@ -26,6 +26,7 @@ import {
 import { callMcpTool } from "./mcp-test-utils";
 import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
 import { type ExecuteEntity, registerEntityTools } from "./tools/entity.tools";
+import { projectEntityResult } from "./tools/response-projection";
 
 describe("MCP protocol smoke", () => {
   it("publishes command and read-only entity capabilities with a discoverable catalog", async () => {
@@ -132,6 +133,80 @@ describe("MCP protocol smoke", () => {
     expect(recordDatabaseWrite).not.toHaveBeenCalled();
   });
 
+  it("materializes entity list pagination and rejects invalid boundaries", () => {
+    expect(
+      entityMcpReadCommandSchema.parse({ action: "list", entity: "expense" }),
+    ).toMatchObject({ pagination: { pageIndex: 0, pageSize: 10 } });
+    for (const pagination of [
+      { pageIndex: -1, pageSize: 10 },
+      { pageIndex: 0, pageSize: 501 },
+      { pageIndex: 0.5, pageSize: 10 },
+    ]) {
+      expect(
+        entityMcpReadCommandSchema.safeParse({
+          action: "list",
+          entity: "expense",
+          pagination,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it.each([
+    ["cookbook", { id: "CBK-2ABC", book: "Synthetic book" }, "Synthetic book"],
+    [
+      "purchase",
+      { id: "PUR-2ABC", displayName: "Synthetic receipt" },
+      "Synthetic receipt",
+    ],
+    [
+      "ledgerTransfer",
+      { id: "LTR-2ABC", fromPartyName: "Synthetic transfer" },
+      "Synthetic transfer",
+    ],
+  ] as const)(
+    "derives a %s summary name from its manifest title field",
+    (entity, item, name) => {
+      expect(
+        projectEntityResult(
+          { resultDetail: "summary" },
+          { action: "get", entity, item },
+        ),
+      ).toMatchObject({ item: { id: item.id, name } });
+    },
+  );
+
+  it("retains write coverage in summary results", () => {
+    expect(
+      projectEntityResult(
+        { resultDetail: "summary" },
+        {
+          action: "update",
+          entity: "product",
+          item: {
+            id: "PRD-2ABC",
+            name: "Synthetic product",
+            dataQuality: {
+              status: "needs_attention",
+              gaps: [
+                { check: "cover", kind: "missing" },
+                { check: "barcode", kind: "defect" },
+              ],
+            },
+          },
+        },
+      ),
+    ).toMatchObject({
+      item: {
+        coverage: {
+          status: "needs_attention",
+          missingChecks: ["cover"],
+          defectChecks: ["barcode"],
+        },
+      },
+    });
+  });
+
   it("defaults entity reads to identity summaries and keeps compact product ids", async () => {
     const product = mock(productWithFoodOut, {
       overrides: {
@@ -191,6 +266,60 @@ describe("MCP protocol smoke", () => {
         ],
       },
     });
+  });
+
+  it("keeps explicit full entity reads complete and measures the compact default", async () => {
+    const product = mock(productWithFoodOut, {
+      overrides: { externalIds: [], notes: "synthetic detail ".repeat(40) },
+    });
+    const runEntity: ExecuteEntity = async () => ({
+      action: "get",
+      entity: "product",
+      item: { ...product, displayImages: [], attachments: [] },
+    });
+    const summaryServer = new McpServer({ name: "test", version: "1.0.0" });
+    const fullServer = new McpServer({ name: "test", version: "1.0.0" });
+    registerEntityTools(summaryServer, runEntity);
+    registerEntityTools(fullServer, runEntity);
+    const extra = {
+      entityKernel: {
+        db: null,
+        readDb: null,
+        actorContext: null,
+        usdaClient: null,
+        upcLookupClient: null,
+        services: null,
+      },
+    };
+    const [summary, full] = await Promise.all([
+      callMcpTool(
+        summaryServer,
+        "get_entities",
+        { command: { action: "get", entity: "product", id: product.id } },
+        {},
+        extra,
+      ),
+      callMcpTool(
+        fullServer,
+        "get_entities",
+        {
+          command: {
+            action: "get",
+            entity: "product",
+            id: product.id,
+            resultDetail: "full",
+          },
+        },
+        {},
+        extra,
+      ),
+    ]);
+    const summaryJson = JSON.stringify(summary.structuredContent);
+    const fullJson = JSON.stringify(full.structuredContent);
+    expect(summaryJson.length).toBeLessThan(fullJson.length);
+    expect(fullJson).toContain(product.notes);
+    expect(summary.content).toEqual([{ type: "text", text: summaryJson }]);
+    expect(full.content).toEqual([{ type: "text", text: fullJson }]);
   });
 
   it("projects storage-only child ids out of generic entity results", async () => {

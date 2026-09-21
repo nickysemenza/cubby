@@ -1,5 +1,8 @@
 # Financial settlement
 
+Read the section needed for the current settlement question. All worked amounts
+and identifiers below are synthetic; derive live references from authorized reads.
+
 ## Authority and signs
 
 Vendor documents establish Purchase identity, literal stated total, and
@@ -31,9 +34,9 @@ Record it as **one** transaction carrying an `allocations` array:
 
 ```
 entity({ command: { action: "update", entity: "financialTransaction",
-  id: "FTX-…", data: { allocations: [
-    { purchaseId: "PUR-9QXK", amount: -8.96 },
-    { purchaseId: "PUR-9ZMQ", amount: -7.80 },
+  id: "FTX-TEST", data: { allocations: [
+    { purchaseId: "PUR-TSTA", amount: -10.00 },
+    { purchaseId: "PUR-TSTB", amount: -5.00 },
   ] } } })
 ```
 
@@ -101,12 +104,9 @@ and silently discarded — the write reports success, `sourceRefs` comes back
 the Purchase drops out of `entity list purchase` with `filters:{dataStatus:"needs_data"}`.
 
 **`entity create financialTransaction` does take `sourceRefs`,** so the backfill pass
-above is only for transactions that were created without one — not a mandatory
-second step after every create. Verified 2026-08-03: a 304-row backfill passed
-`sourceRefs` on create and all 304 persisted, 304 distinct, none empty. Treat a
-create + backfill sequence as a smell: it is two writes where one would do, and
-the intermediate row is briefly indistinguishable from a genuinely
-reference-less import.
+above is only for transactions created without one. Include refs in the initial
+create when available; a create-plus-backfill sequence adds an unnecessary write
+and briefly leaves the transaction indistinguishable from a reference-less import.
 
 The ref is a **content hash of the statement row** (account, date, amount,
 original statement), so it is only stable for a row that has settled. Do not
@@ -133,7 +133,7 @@ the row itself. `update_statement_rows` takes a `{filter}` selector for the long
 tail that will never match; `disposition: "ignored"` requires BOTH a reason and
 a note, enforced by a CHECK.
 
-Three traps, each found the hard way:
+Three reconciliation traps:
 
 - **Submit `providerAmount` charges-negative, always.** Monarch signs charges
   negative, but Copilot signs them positive, Mint leaves them unsigned with the
@@ -145,8 +145,8 @@ Three traps, each found the hard way:
   against an account carrying only a `monarch` alias. Add the provider's aliases
   before ingesting it, or every row lands unresolved.
 - **Never bulk-load rows through a model.** Transcribing evidence corrupts it:
-  one pass silently rewrote `🪝` (U+1FA9D) as `🦝` (U+1F99D) — same byte length,
-  different hash — storing a fabricated statement line beside the real one. MCP
+  visually similar Unicode characters can differ while retaining the same byte
+  length, changing the identity hash and fabricating a second statement row. MCP
   is the write path for ordinary imports, where a few hundred rows is
   unremarkable; a backfill big enough that a model cannot carry it is a one-off
   migration script, not a reason to fork the write path permanently. Reconcile
@@ -177,7 +177,7 @@ fee, shipping label and ad fee belong in the note, not in separate rows.
 Marketplace-collected sales tax is excluded entirely: the marketplace remits it,
 so it was never seller money. Set `statedTotal` to the same earnings figure. A
 sale line is an exit like any other: its `productQuantity` is `−|units sold|`
-(EXP-GW5X), never positive.
+rather than positive.
 
 The payout is `kind: "income"` and links to the sale Purchase; linked income
 must be negative. It is **not** a `refund` — that means "the vendor gave money
@@ -194,9 +194,8 @@ unfalsifiable, and both are invisible in bank rows and payout emails:
   order — so a single-order payout may still not equal that order's earnings.
 
 Fee arithmetic with an unknown label and an unknown ad fee has two free
-parameters per order, so any target value can be made to "close exactly". Two
-independent fee models were built this way and both were wrong while appearing
-precise. Take earnings from the marketplace, never from a calculation.
+parameters per order, so any target value can be made to "close exactly".
+Take earnings from the marketplace, never from a calculation.
 
 **Payout emails do not itemize their orders** — they carry only a total and a
 payout id. The Seller Hub payout-detail page does itemize, and Payments →
@@ -210,18 +209,16 @@ only when no label crossed a payout boundary. Allocate the contribution, not the
 earnings: where a label settled in a different transaction, that transaction
 carries its own slice and the Purchase reconciles across both.
 
-FTX-SZ2R is the worked example. Its two orders earned -$44.58 and -$41.90, but
-the payout is -$96.87, because the edging plate's $10.39 label was charged to the
-bank separately. Allocating earnings gives -$86.48 and is rejected. The truthful
-set is the contributions -$54.97 and -$41.90; the label leg (FTX-SSVR, +$10.39)
-then allocates to PUR-TUXP, whose two slices net to its -$44.58 earnings.
+Synthetic example: orders A and B earn -$30 and -$20, with a +$5 label
+charged separately for A. The payout is -$55, allocated as -$35 to A and
+-$20 to B. Allocate the separate +$5 label to A; its two slices net to
+-$30. Allocating earnings directly would sum to -$50 and fail validation.
 
 **Resolve a payout's orders by `Purchase.orderId`, not by note prose.** eBay sale
 Purchases are keyed by the eBay order number, which is exactly what a payout note
-cites, so the order id is a direct lookup. Older notes assert a sale is "NOT
-recorded in Cubby"; most of those are stale — 31 of 33 order ids cited across
-FAC-4KED resolve to live Purchases. Check the id before believing the sentence,
-and correct it when you touch the row.
+cites, so the order id is a direct lookup. Notes claiming that an order is
+unrecorded can be stale; check its identity before creating a new Purchase and
+correct an obsolete note when touching that record.
 
 A label bought against an already-open payout is deducted from a *different*
 payout than the one carrying its order. Where eBay charged that leg to the bank
@@ -230,16 +227,11 @@ inside the payout, the truthful split needs an opposite-signed allocation, which
 the same-sign rule forbids — leave that payout unallocated rather than putting the
 whole amount on one order, which over-settles it and under-settles the other.
 
-Six FAC-4KED payouts predate that rule and are already allocated whole to one
-order: FTX-RR5W/PUR-QF9Y, FTX-4QU2/PUR-KS4H, FTX-FBUP/PUR-JJWT, FTX-8C9F/PUR-YTQV,
-FTX-P94H/PUR-EXXD, FTX-DWRR/PUR-3NHY. **Leave them.** Each delta is a stray label
-(-6.90, -6.87, -6.68, +6.68, -1.38, -1.22) and no separate bank leg exists for any
-of them, so there is nothing to allocate the offset to. The allocation is still
-true as a statement of what the bank moved toward that order; the mismatch is the
-gap between bank movement and final earnings, which diverge precisely when a label
-settles elsewhere. Do not "fix" these by fitting numbers, and do not unallocate
-them — that would destroy a true fact to quiet a detector. They are expected to
-show in the settlement-mismatch Problems section permanently.
+An older allocation may truthfully record bank movement while differing from
+final earnings because a label settled elsewhere. Preserve evidence-backed
+allocations; do not fit numbers or unallocate solely to quiet a mismatch
+detector. Document any unresolved cross-payout leg without inventing a
+transaction for it.
 
 ## Card exports: signs, coverage, and what they cannot prove
 
@@ -248,12 +240,13 @@ show in the settlement-mismatch Problems section permanently.
   inverted** (positive = charge), carries the account mask directly. Mint-era
   exports: unsigned amount with a `Transaction Type` column, card named by
   *product* with no last-four, and no external id — rows sourced from them get
-  no `sourceRef`. Merge Copilot and Monarch: they cover different cards and
-  different eras, and each often has only one leg of a charge/credit pair.
+  no `sourceRef`. Combine overlapping exports only after establishing their
+  source coverage;
+  different files may each carry only one leg of a charge/credit pair.
 - Copilot posts on posting date, Monarch on transaction date, so one event
   appears 1–3 days apart in each; dedupe on vendor + amount within ~5 days.
-- **Absence from every export is not evidence a charge did not happen** — real
-  vendor-confirmed receipts have been missing from all files inside the covered
+- **Absence from every export is not evidence a charge did not happen** — a
+  vendor-confirmed receipt can be missing from every file inside the covered
   window. Grep the raw amount across every file; when nothing turns up, record
   the vendor-printed tender hint in the Purchase notes and leave it unsettled.
 - Aggregators sometimes double-represent a return as an extra charge+refund
@@ -269,8 +262,8 @@ show in the settlement-mismatch Problems section permanently.
 - **A last-four printed by a vendor is never grounds for a new account.** Apple
   Pay device numbers, reissued cards and vendor display tokens all print digits
   the statement does not carry. Map to the statement row.
-- Another household member's card rows are in scope but unenrichable: their
-  vendor histories sit behind logins the operator does not have. Stamp
+- When vendor histories require another account owner's unavailable login,
+  the statement rows can remain in scope without being enrichable. Stamp
   `accountId` for ownership and leave the rows `open`/`unmatched` — that is the
   correct resting state, not a backlog. Never disposition them `ignored`, and do
   not write a per-row note explaining the blocker.
@@ -294,8 +287,8 @@ show in the settlement-mismatch Problems section permanently.
   `supersededByExternalId` on the thinner row, and where a transaction already
   carries the old ref, **append the new ref to that same transaction**.
 - Disposition by `sourceCategory` is a first pass only. **Provider categories
-  are wrong often enough to bury modelled spend** — a storage-crate vendor filed
-  as Clothing, a vehicle purchase filed as fuel/parking. When two providers
+  are wrong often enough to bury modelled spend** — a durable-goods purchase can be
+  classified as a recurring expense. When two providers
   disagree on a category, the ignore is suspect. Sweep the ignored tail **by
   amount** as well as by merchant: no plausible fuel charge is five figures, and
   a bare `Check` has no payee to triage on. Ask of each row "is this an
@@ -322,14 +315,14 @@ show in the settlement-mismatch Problems section permanently.
   source-ref conflict. Deleting the orphan without grafting throws the hash
   away and the next sync recreates it. Deleted rows' hashes stay readable via
   `deletedAt IS NOT NULL`.
-- Shapes that defeat amount matching, all seen for real: split tender (card +
+- Shapes that defeat amount matching: split tender (card +
   gift card, so no row equals the total); per-shipment billing (N legs summing
   to the order); store-fulfilled legs under the store descriptor; several
   refunds from **different orders** posting as one credit, grouped by card, not
   by return visit (retire the merged row and graft its hash onto the largest
   constituent — a merged row spanning orders can never link to one Purchase);
-  a discount posting as a separate credit; a penny gap that is our tax line, not
-  theirs; a synthesized aggregate booked from an order header facing two real
+  a discount posting as a separate credit; a tax-rounding gap between recorded and
+  printed lines; a synthesized aggregate booked from an order header facing two real
   statement legs (prefer the statement rows). Sum before concluding a mismatch,
   and check the vendor's tender strip before concluding a row is missing.
 - When the constituents of a merged credit are already booked as vendor legs,
@@ -338,7 +331,7 @@ show in the settlement-mismatch Problems section permanently.
 ## Reading a settlement gap
 
 Comparing posted refunds against negative Expenses finds returned-but-unbooked
-money, but most nonzero gaps are benign. Causes, in order of frequency:
+money, but most nonzero gaps are benign. Check these causes:
 
 1. **Repriced / net-settled.** The credit was applied by reducing the original
    Expense, so `statedTotal − net expense` equals the refund exactly. Also the
@@ -382,7 +375,7 @@ money, but most nonzero gaps are benign. Causes, in order of frequency:
 - **Amazon: the charge→order ledger is the only arbiter.** A subset of charges
   that sums exactly to `statedTotal`, uniquely in its window, is still not
   evidence — grocery orders bill in many small legs and coincidental sums are
-  common; every audited subset-sum match was wrong. Scrape
+  possible even when the arithmetic closes. Scrape
   `/cpe/yourpayments/transactions` (20 rows per POST page; render results into
   the DOM and read with `get_page_text`, since `javascript_tool` truncates
   returns), join free transactions to charges on (amount, date ±6 d) to get the

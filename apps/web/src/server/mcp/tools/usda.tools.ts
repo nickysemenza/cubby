@@ -1,5 +1,5 @@
 import { usdaFoodMcpListOut, usdaFoodMcpOut } from "@cubby/schemas/mcp";
-import { mcpPaginationParams } from "@cubby/schemas/pagination";
+import { mcpPaginationFields } from "@cubby/schemas/pagination";
 import { dataTypeEnum, fdcId, ndb, upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -21,14 +21,7 @@ export function registerUsdaTools(server: McpServer) {
     dataType: dataTypeEnum
       .optional()
       .describe("Optional exact USDA data-type filter"),
-    ...mcpPaginationParams,
-    pageSize: z
-      .number()
-      .int()
-      .min(1)
-      .max(100)
-      .optional()
-      .describe("Items per page (default 25, max 100)"),
+    ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
   });
   const findUsdaFoodInput = z
     .object({
@@ -62,15 +55,15 @@ export function registerUsdaTools(server: McpServer) {
         params.dataType,
         { orderBy: "relevance", direction: "asc" },
         {
-          pageIndex: params.pageIndex ?? 0,
-          pageSize: params.pageSize ?? 25,
+          pageIndex: params.pageIndex,
+          pageSize: params.pageSize,
         },
         true,
       );
       return {
         meta: {
-          pageIndex: params.pageIndex ?? 0,
-          pageSize: params.pageSize ?? 25,
+          pageIndex: params.pageIndex,
+          pageSize: params.pageSize,
           totalCount: result.count,
         },
         items: result.data.map(slimUsdaFoodListItem),

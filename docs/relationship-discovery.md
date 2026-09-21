@@ -67,8 +67,7 @@ native app releases. No database migration is required.
 ## Validation record — September 14, 2026
 
 Implementation lives on `codex/relationship-discovery`, based on freshly fetched
-`origin/main` at `896f2702d`, in
-`/Users/nicky/.codex/worktrees/relationship-discovery/cubby`.
+`origin/main` at `896f2702d`, in the dedicated relationship-discovery checkout.
 
 | Check | Result |
 | --- | --- |

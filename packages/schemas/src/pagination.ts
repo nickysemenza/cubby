@@ -127,35 +127,35 @@ const paginationParams = z.object({
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
 });
 
-export const mcpPaginationParams = {
-  pageIndex: z
-    .number()
-    .int()
-    .min(0)
-    .optional()
-    .describe("Page index, 0-based (default 0)"),
-  pageSize: z
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .optional()
-    .describe("Items per page (default 50, max 100)"),
-};
-
-export function mcpPageSizeParam(opts?: {
-  defaultPageSize?: number;
-  max?: number;
+export function mcpPageSizeParam(opts: {
+  defaultPageSize: number;
+  maxPageSize: number;
 }) {
-  const max = opts?.max ?? 100;
-  const def = opts?.defaultPageSize ?? 50;
+  const { defaultPageSize, maxPageSize } = opts;
   return z
     .number()
     .int()
     .min(1)
-    .max(max)
-    .optional()
-    .describe(`Items per page (default ${def}, max ${max})`);
+    .max(maxPageSize)
+    .default(defaultPageSize)
+    .describe(
+      `Items per page (default ${defaultPageSize}, max ${maxPageSize})`,
+    );
+}
+
+export function mcpPaginationFields(opts: {
+  defaultPageSize: number;
+  maxPageSize: number;
+}) {
+  return {
+    pageIndex: z
+      .number()
+      .int()
+      .min(0)
+      .default(0)
+      .describe("Page index, 0-based (default 0)"),
+    pageSize: mcpPageSizeParam(opts),
+  };
 }
 
 export function mcpListInputFields(
@@ -164,10 +164,9 @@ export function mcpListInputFields(
 ) {
   return {
     ...filterFields,
-    pageIndex: mcpPaginationParams.pageIndex,
-    pageSize: mcpPageSizeParam({
-      defaultPageSize: opts?.defaultPageSize,
-      max: opts?.maxPageSize,
+    ...mcpPaginationFields({
+      defaultPageSize: opts?.defaultPageSize ?? 50,
+      maxPageSize: opts?.maxPageSize ?? 100,
     }),
   };
 }

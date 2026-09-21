@@ -6,6 +6,7 @@ import {
   entityFilter,
   entityFilterList,
   MAX_SORTS,
+  mcpPaginationFields,
   normalizeSorts,
   sortPaginationCombo,
 } from "./pagination";
@@ -35,6 +36,27 @@ describe("exact entity filters", () => {
       entityFilterList(shortcode).safeParse(["PRD-4K7M", "Milwaukee drill"])
         .success,
     ).toBe(false);
+  });
+});
+
+describe("MCP pagination", () => {
+  const fields = mcpPaginationFields({
+    defaultPageSize: 25,
+    maxPageSize: 100,
+  });
+  const schema = z.object(fields);
+
+  it("materializes defaults and rejects invalid page boundaries", () => {
+    expect(schema.parse({})).toEqual({ pageIndex: 0, pageSize: 25 });
+    for (const input of [
+      { pageIndex: -1 },
+      { pageIndex: 0.5 },
+      { pageSize: 0 },
+      { pageSize: 101 },
+      { pageSize: 1.5 },
+    ]) {
+      expect(schema.safeParse(input).success).toBe(false);
+    }
   });
 });
 
