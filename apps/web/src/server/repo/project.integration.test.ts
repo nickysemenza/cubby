@@ -298,7 +298,7 @@ describe("project repository", () => {
       deleteProjects(ctx.db, [projectWithTask.id], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "PROJECT_HAS_TASKS" },
+      reason: "PROJECT_HAS_TASKS",
     });
 
     const { output: projectWithExpense } = await createProject(
@@ -321,7 +321,7 @@ describe("project repository", () => {
       deleteProjects(ctx.db, [projectWithExpense.id], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "PROJECT_HAS_EXPENSES" },
+      reason: "PROJECT_HAS_EXPENSES",
     });
   });
 
@@ -344,7 +344,7 @@ describe("project repository", () => {
       deleteProjects(ctx.db, [parent.id], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "PROJECT_HAS_CHILDREN" },
+      reason: "PROJECT_HAS_CHILDREN",
     });
 
     await deleteProjects(ctx.db, [child.id], ctx.actor);

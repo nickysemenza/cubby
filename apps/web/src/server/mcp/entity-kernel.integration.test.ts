@@ -138,7 +138,7 @@ describe("MCP entity kernel boundary", () => {
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      cause: { reason: "LIST_SORT_FIELD_UNSUPPORTED" },
+      reason: "LIST_SORT_FIELD_UNSUPPORTED",
     });
     await expect(
       executeEntity(context, {
@@ -149,7 +149,7 @@ describe("MCP entity kernel boundary", () => {
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      cause: { reason: "LIST_GROUP_BY_FIELD_UNSUPPORTED" },
+      reason: "LIST_GROUP_BY_FIELD_UNSUPPORTED",
     });
   });
 

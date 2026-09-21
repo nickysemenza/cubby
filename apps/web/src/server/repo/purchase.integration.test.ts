@@ -636,7 +636,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     await expect(
       updatePurchase(ctx.db, moving.id, { vendorId: homeDepot }, ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
+      reason: "PURCHASE_MERGE_ORDER_COLLISION",
     });
     expect(
       (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, moving.id)))
@@ -655,7 +655,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     await expect(
       updatePurchase(ctx.db, sibling.id, { orderId: "#11325" }, ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
+      reason: "PURCHASE_MERGE_ORDER_COLLISION",
     });
     expect(
       (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, held.id)))
@@ -772,7 +772,7 @@ describe("purchase repository — deletion cascades", () => {
         [emptyPurchase.id, line.purchaseId!],
         ctx.actor,
       ),
-    ).rejects.toMatchObject({ cause: { reason: "PURCHASE_NOT_EMPTY" } });
+    ).rejects.toMatchObject({ reason: "PURCHASE_NOT_EMPTY" });
 
     await expect(
       getPurchaseByShortcode(ctx.db, emptyPurchase.id),

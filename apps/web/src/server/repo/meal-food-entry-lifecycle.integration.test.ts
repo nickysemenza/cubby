@@ -204,7 +204,7 @@ describe("meal food entry lifecycle", () => {
 
     await expect(
       deleteProducts(ctx.db, [product.id], ctx.actor),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
 
     await getDb(ctx.db)
       .update(mealFoodEntry)
@@ -230,7 +230,7 @@ describe("meal food entry lifecycle", () => {
     await expect(
       deleteIngredients(ctx.db, [source.id], ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "INGREDIENT_HAS_MEAL_FOOD_ENTRIES" },
+      reason: "INGREDIENT_HAS_MEAL_FOOD_ENTRIES",
     });
 
     await getDb(ctx.db)

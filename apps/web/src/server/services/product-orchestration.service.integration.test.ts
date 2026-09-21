@@ -284,7 +284,7 @@ describe("findOrCreateByCode", () => {
       ),
     ).rejects.toMatchObject({
       message: "That's a recipe label — nothing that sits on a shelf.",
-      cause: { reason: "SCAN_CODE_UNRECOGNIZED" },
+      reason: "SCAN_CODE_UNRECOGNIZED",
     });
   });
 });

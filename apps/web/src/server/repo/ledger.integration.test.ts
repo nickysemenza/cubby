@@ -623,7 +623,7 @@ describe("consolidated household ledger", () => {
     await expect(
       updateExpense(ctx.db, created.output.id, { cost: 11 }, ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "CONSTRAINT_VIOLATION" },
+      reason: "CONSTRAINT_VIOLATION",
     });
 
     const nonMoneyUpdate = await updateExpense(
@@ -790,7 +790,7 @@ describe("consolidated household ledger", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({
-      cause: { reason: "CONSTRAINT_VIOLATION" },
+      reason: "CONSTRAINT_VIOLATION",
     });
 
     const nonMoneyUpdate = await updateLedgerTransfer(

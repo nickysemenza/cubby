@@ -168,7 +168,7 @@ describe("product ⟷ product component links (kit composition)", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({
-      cause: { reason: "PRODUCT_COMPONENT_SELF_REFERENCE" },
+      reason: "PRODUCT_COMPONENT_SELF_REFERENCE",
     });
   });
 
@@ -219,7 +219,7 @@ describe("product ⟷ product component links (kit composition)", () => {
           ctx.actor,
         ),
       ).rejects.toMatchObject({
-        cause: { reason: "PRODUCT_COMPONENT_CYCLE" },
+        reason: "PRODUCT_COMPONENT_CYCLE",
       });
 
       expect(await livePairs(c.entityId)).toHaveLength(0);
@@ -248,7 +248,7 @@ describe("product ⟷ product component links (kit composition)", () => {
       await expect(
         deleteProducts(ctx.db, [part.entityId], ctx.actor),
       ).rejects.toMatchObject({
-        cause: { reason: "PRODUCT_HAS_KIT_LINKS" },
+        reason: "PRODUCT_HAS_KIT_LINKS",
       });
 
       await detachProductComponents(

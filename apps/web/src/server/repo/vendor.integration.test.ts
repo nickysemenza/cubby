@@ -236,7 +236,7 @@ describe("vendor repository — deletion guard", () => {
     await expect(
       deleteVendors(ctx.db, [vendorShortcode], ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "VENDOR_HAS_PURCHASES" },
+      reason: "VENDOR_HAS_PURCHASES",
     });
 
     await deletePurchases(
@@ -247,7 +247,7 @@ describe("vendor repository — deletion guard", () => {
     await deleteVendors(ctx.db, [vendorShortcode], ctx.actor);
 
     await expect(getVendorByID(ctx.db, vendorId)).rejects.toMatchObject({
-      cause: { reason: "VENDOR_NOT_FOUND" },
+      reason: "VENDOR_NOT_FOUND",
     });
     expect((await vendorList(ctx.db, {}, [], page)).count).toBe(0);
   });
@@ -424,7 +424,7 @@ describe("vendor repository — mergeVendors", () => {
     ).toEqual([40]);
 
     await expect(getVendorByID(ctx.db, loser)).rejects.toMatchObject({
-      cause: { reason: "VENDOR_NOT_FOUND" },
+      reason: "VENDOR_NOT_FOUND",
     });
 
     // A merge relocates spend; it must never mint or destroy any.
@@ -492,7 +492,7 @@ describe("vendor repository — mergeVendors", () => {
 
     expect((await chargeRow(dead))?.deletedAt).not.toBeNull();
     await expect(getPurchaseByID(ctx.db, dead)).rejects.toMatchObject({
-      cause: { reason: "PURCHASE_NOT_FOUND" },
+      reason: "PURCHASE_NOT_FOUND",
     });
 
     // The folded charge's money moved to the survivor, it did not disappear

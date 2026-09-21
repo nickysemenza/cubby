@@ -327,7 +327,7 @@ describe("expense repository — CRUD", () => {
     await expect(
       updateExpense(ctx.db, productExpense.id, { lineKind: "tax" }, ctx.actor),
     ).rejects.toMatchObject({
-      cause: { reason: "CONSTRAINT_VIOLATION" },
+      reason: "CONSTRAINT_VIOLATION",
     });
     expect(
       (await getExpenseByShortcode(ctx.db, productExpense.id))?.productId,
@@ -341,7 +341,7 @@ describe("expense repository — CRUD", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({
-      cause: { reason: "CONSTRAINT_VIOLATION" },
+      reason: "CONSTRAINT_VIOLATION",
     });
     expect(
       (await getExpenseByShortcode(ctx.db, inferredTax.id))?.productId,

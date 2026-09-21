@@ -183,7 +183,7 @@ describe("location kernel — bulkUpdate (the guards, through the kernel)", () =
     );
 
     await expect(bulkUpdate([room.id], shelf.id)).rejects.toMatchObject({
-      cause: { reason: "LOCATION_CYCLE_DETECTED" },
+      reason: "LOCATION_CYCLE_DETECTED",
     });
   });
 });
@@ -232,7 +232,7 @@ describe("deleteLocations hierarchy", () => {
       deleteLocations(ctx.db, [stockedId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "LOCATION_HAS_INVENTORY" },
+      reason: "LOCATION_HAS_INVENTORY",
     });
 
     await deleteInventoryEntries(ctx.db, [entryId], ctx.actor);
@@ -272,7 +272,7 @@ describe("deleteLocations hierarchy", () => {
       deleteLocations(ctx.db, [bedId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "LOCATION_HAS_PLANTINGS" },
+      reason: "LOCATION_HAS_PLANTINGS",
     });
   });
 
@@ -304,7 +304,7 @@ describe("deleteLocations hierarchy", () => {
       deleteLocations(ctx.db, [bedId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "LOCATION_HAS_PLANTINGS" },
+      reason: "LOCATION_HAS_PLANTINGS",
     });
   });
 
@@ -337,7 +337,7 @@ describe("deleteLocations hierarchy", () => {
       deleteLocations(ctx.db, [bedId], ctx.actor),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
-      cause: { reason: "LOCATION_HAS_GARDEN_HISTORY" },
+      reason: "LOCATION_HAS_GARDEN_HISTORY",
     });
   });
 });
