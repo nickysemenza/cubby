@@ -107,8 +107,9 @@ export interface EntityFormControllerConfig<
   extend?: Record<string, z.ZodTypeAny>;
   defaultValues: DefaultValues<TFieldValues>;
   /** Override a reference field's combobox-item path (defaults to the field
-   * key without its trailing "Id"). */
-  referencePaths?: Partial<Record<string, string>>;
+   * key without its trailing "Id"). Set a field to `null` when its form
+   * stores the persisted reference ID directly rather than a ComboboxItem. */
+  referencePaths?: Partial<Record<string, string | null>>;
   /** Scalar keys diffed via `buildUpdateObject` in edit mode. Defaults to
    * every non-reference field in `fields`. */
   editableScalarKeys?: readonly string[];
@@ -185,29 +186,43 @@ export function useEntityFormController<
     config.fields ?? generatedEntityEditIntents[entity].fields.full;
   const referencePaths = config.referencePaths;
 
-  const { scalarKeys, referenceFields, references } = useMemo(() => {
-    const refFields = model.fields.filter(
-      (field): field is SingularReferenceField =>
-        hasSingularReference(field) && fieldKeys.includes(field.key),
-    );
-    const refKeySet = new Set<string>(refFields.map((field) => field.key));
-    const scalars = fieldKeys.filter((key) => !refKeySet.has(key));
-    const refs: Record<string, EntityFormReferenceField> = {};
-    for (const field of refFields) {
-      refs[field.key] = {
-        key: field.key,
-        path: referencePaths?.[field.key] ?? defaultItemPath(field.key),
-        entity: field.reference.entity,
-        nullable: field.nullable,
-        label: field.label,
+  const { scalarKeys, scalarReferenceKeys, referenceFields, references } =
+    useMemo(() => {
+      const scalarReferenceFields = model.fields.filter(
+        (field): field is SingularReferenceField =>
+          hasSingularReference(field) &&
+          fieldKeys.includes(field.key) &&
+          referencePaths?.[field.key] === null,
+      );
+      const refFields = model.fields.filter(
+        (field): field is SingularReferenceField =>
+          hasSingularReference(field) &&
+          fieldKeys.includes(field.key) &&
+          referencePaths?.[field.key] !== null,
+      );
+      const refKeySet = new Set<string>(refFields.map((field) => field.key));
+      const scalars = fieldKeys.filter((key) => !refKeySet.has(key));
+      const refs: Record<string, EntityFormReferenceField> = {};
+      for (const field of refFields) {
+        refs[field.key] = {
+          key: field.key,
+          path: referencePaths?.[field.key] ?? defaultItemPath(field.key),
+          entity: field.reference.entity,
+          nullable: field.nullable,
+          label: field.label,
+        };
+      }
+      return {
+        scalarKeys: scalars,
+        scalarReferenceKeys: new Set(
+          scalarReferenceFields
+            .filter((field) => field.nullable)
+            .map((field) => field.key),
+        ),
+        referenceFields: refFields,
+        references: refs,
       };
-    }
-    return {
-      scalarKeys: scalars,
-      referenceFields: refFields,
-      references: refs,
-    };
-  }, [model, fieldKeys, referencePaths]);
+    }, [model, fieldKeys, referencePaths]);
 
   // SAFETY: the generated schema map is keyed by every field this entity
   // declares; `entity` selects the map, so the lookup always resolves.
@@ -218,6 +233,15 @@ export function useEntityFormController<
 
   const resolverSchema = useMemo(() => {
     const resolverFields = pick(schemaMap, scalarKeys);
+    for (const key of scalarReferenceKeys) {
+      const schema = resolverFields[key];
+      if (schema) {
+        resolverFields[key] = z.preprocess(
+          (value) => (value === "" ? null : value),
+          schema,
+        );
+      }
+    }
     for (const field of Object.values(references)) {
       resolverFields[field.path] = field.nullable
         ? ComboboxItem.nullable()
@@ -227,7 +251,7 @@ export function useEntityFormController<
     }
     Object.assign(resolverFields, extend ?? {});
     return z.object(resolverFields);
-  }, [schemaMap, scalarKeys, references, extend]);
+  }, [schemaMap, scalarKeys, scalarReferenceKeys, references, extend]);
 
   // SAFETY: the resolver schema is assembled at runtime from the generated
   // schema map, discovered reference fields, and `extend` — every RHF path

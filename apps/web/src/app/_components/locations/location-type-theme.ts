@@ -1,4 +1,4 @@
-import type { ProductCategory } from "@cubby/schemas/product";
+import type { ProductCategory } from "@cubby/shared";
 import { getLocationTypeColor, type LocationType } from "@cubby/shared";
 import {
   Box,
@@ -112,5 +112,5 @@ export const getLocationGlyph = (location: {
 }): LucideIcon => {
   if (location.type) return locationIcons[location.type];
   const category = location.product?.category;
-  return category ? getCategoryIcon(category) : Package;
+  return category ? getCategoryIcon(category.feature) : Package;
 };

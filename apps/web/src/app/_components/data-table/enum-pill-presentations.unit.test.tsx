@@ -5,6 +5,7 @@ import { LocationTypeLabel } from "~/app/_components/locations/LocationTypeLabel
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
 import { tradeOptions } from "~/app/projects/trade-options";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import { renderOptionCell } from "./columnHelpers";
 
 afterEach(cleanup);
@@ -19,8 +20,10 @@ function pillFor(label: string) {
 
 describe("enum pill icons", () => {
   it("shows the existing category and location-type glyphs", () => {
-    const category = render(<CategoryLabel category="supplies" />);
-    expect(pillFor("supplies").querySelectorAll("svg")).toHaveLength(1);
+    const category = render(
+      <CategoryLabel category={categorySummaryFixture("supplies")} />,
+    );
+    expect(pillFor("Supplies").querySelectorAll("svg")).toHaveLength(1);
     category.unmount();
 
     render(<LocationTypeLabel type="drawer" product={null} />);

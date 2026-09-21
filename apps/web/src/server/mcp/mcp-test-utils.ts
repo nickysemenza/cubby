@@ -123,6 +123,11 @@ const unavailableCaller = {
     summary: unavailableCallerMethod,
   },
   usda: { getByAlternateID: unavailableCallerMethod },
+  imageProcessing: {
+    schedule: unavailableCallerMethod,
+    get: unavailableCallerMethod,
+    correctDescription: unavailableCallerMethod,
+  },
 } satisfies McpWorkflowCaller;
 
 export function createCallerWithOverrides(
@@ -145,6 +150,10 @@ export function createCallerWithOverrides(
       ...caller.householdContribution,
     },
     image: { ...unavailableCaller.image, ...caller.image },
+    imageProcessing: {
+      ...unavailableCaller.imageProcessing,
+      ...caller.imageProcessing,
+    },
     ingredient: { ...unavailableCaller.ingredient, ...caller.ingredient },
     inventory: { ...unavailableCaller.inventory, ...caller.inventory },
     meal: completeCallerSection<McpWorkflowCaller["meal"]>(

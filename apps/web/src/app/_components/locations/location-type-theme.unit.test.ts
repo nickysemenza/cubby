@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import {
   getLocationGlyph,
   getLocationIcon,
@@ -30,11 +31,11 @@ describe("product-backed locations (null type)", () => {
   it("resolves the glyph from the product's category", () => {
     const storage = getLocationGlyph({
       type: null,
-      product: { category: "storage" },
+      product: { category: categorySummaryFixture("storage") },
     });
     const tools = getLocationGlyph({
       type: null,
-      product: { category: "tools" },
+      product: { category: categorySummaryFixture("tools") },
     });
     expect(storage).not.toBe(tools);
   });
@@ -50,7 +51,10 @@ describe("product-backed locations (null type)", () => {
   it("prefers an explicit type over the product when both are somehow set", () => {
     // Not a state the writers produce, but the resolver must be total.
     expect(
-      getLocationGlyph({ type: "room", product: { category: "storage" } }),
+      getLocationGlyph({
+        type: "room",
+        product: { category: categorySummaryFixture("storage") },
+      }),
     ).toBe(getLocationIcon("room"));
   });
 });

@@ -6,7 +6,7 @@ import Testing
 @Suite("EntityPatch")
 struct EntityPatchTests {
     private let original: JSONValue = [
-        "id": "PRD-2345", "name": "Skillet", "manufacturer": "Acme", "category": "tools",
+        "id": "PRD-2345", "name": "Skillet", "manufacturer": "Acme", "categoryId": "CAT-2224",
         "notes": nil, "expectedQuantity": 2,
     ]
 
@@ -18,15 +18,15 @@ struct EntityPatchTests {
             draft: [
                 "name": "Skillet",  // unchanged
                 "manufacturer": "Lodge",  // changed
-                "category": nil,  // held → cleared
+                "categoryId": nil,  // held → cleared
                 "notes": nil,  // original null → unchanged
                 "model": nil,  // original absent → unchanged
                 "expectedQuantity": 3,  // changed number
             ],
-            nullableKeys: ["category", "notes", "model"]
+            nullableKeys: ["categoryId", "notes", "model"]
         )
         #expect(patch.values == ["manufacturer": "Lodge", "expectedQuantity": 3])
-        #expect(patch.cleared == ["category"])
+        #expect(patch.cleared == ["categoryId"])
         #expect(!patch.isEmpty)
     }
 
@@ -40,7 +40,7 @@ struct EntityPatchTests {
     /// Clearing a key the server does not accept `null` for must fail before a request exists.
     @Test func clearingANonNullableKeyThrows() {
         #expect(throws: EntityPatch.DiffError.clearedNonNullableKey("name")) {
-            _ = try EntityPatch.diff(original: original, draft: ["name": nil], nullableKeys: ["category"])
+            _ = try EntityPatch.diff(original: original, draft: ["name": nil], nullableKeys: ["categoryId"])
         }
     }
 
@@ -48,7 +48,7 @@ struct EntityPatchTests {
     /// is simply nothing to send, and every non-null value is a change.
     @Test func withoutAnOriginalEveryValueIsAChangeAndNullIsNothing() throws {
         let patch = try EntityPatch.diff(
-            original: nil, draft: ["name": "Skillet", "category": nil], nullableKeys: [])
+            original: nil, draft: ["name": "Skillet", "categoryId": nil], nullableKeys: [])
         #expect(patch.values == ["name": "Skillet"])
         #expect(patch.cleared.isEmpty)
     }

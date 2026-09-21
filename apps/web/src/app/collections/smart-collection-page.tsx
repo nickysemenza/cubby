@@ -36,7 +36,8 @@ const PAGE_SIZE = 50;
 
 const RULE_KIND_LABELS = {
   effectiveOwnerEquals: "Effective owner",
-  categoryEquals: "Product category",
+  categoryEquals: "Classification subtree",
+  categoryFeatureEquals: "Classification feature",
   productTagEquals: "Product tag equals",
   manufacturerEquals: "Manufacturer equals",
   locationNameContains: "Location or ancestor contains",
@@ -69,6 +70,12 @@ function ruleDescription(rule: SmartCollectionRuleDraft): string {
   }
   if (rule.kind === "manufacturerEquals") {
     return `Manufacturer is “${rule.value}”`;
+  }
+  if (rule.kind === "categoryEquals") {
+    return `Classification subtree is ${rule.value}`;
+  }
+  if (rule.kind === "categoryFeatureEquals") {
+    return `Classification feature is ${rule.value}`;
   }
   return `Product tag is “${rule.value}”`;
 }

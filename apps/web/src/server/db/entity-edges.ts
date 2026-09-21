@@ -107,6 +107,7 @@ import {
   orderMail,
   orderMailAttachment,
   product,
+  productCategory,
   productComponent,
   productConversionCoverage,
   productExternalId,
@@ -695,6 +696,24 @@ export const ENTITY_EDGES = {
       label: "source products",
       description:
         "A planting can retain the seed packet, seedling, or plant it came from.",
+      liveness: { kind: "must-target-live" },
+    },
+  }),
+  productCategory: edges({
+    "ProductCategory.parentId": {
+      column: productCategory.parentId,
+      role: "hierarchy",
+      label: "child categories",
+      description:
+        "A child category is classified beneath this parent in the bounded product taxonomy.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Product.categoryId": {
+      column: product.categoryId,
+      role: "reference",
+      label: "products",
+      description:
+        "A product retains its chosen most-specific category until it is explicitly reassigned.",
       liveness: { kind: "must-target-live" },
     },
   }),

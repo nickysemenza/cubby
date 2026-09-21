@@ -106,6 +106,7 @@ import {
   inventoryPlacementEnum,
   recipeSourceEnum,
 } from "./generated/entity-columns.gen";
+import { productCategory } from "./product-category-schema";
 
 export {
   recipeSourceEnum,
@@ -493,12 +494,17 @@ export const mealFoodEntry = pgTable(
   ],
 );
 
+export { productCategory } from "./product-category-schema";
+
 export const product = pgTable(
   "Product",
-  generatedProductColumns({ ingredient: (): AnyPgColumn => ingredient.id }),
+  generatedProductColumns({
+    ingredient: (): AnyPgColumn => ingredient.id,
+    productCategory: (): AnyPgColumn => productCategory.id,
+  }),
   (table) => [
     shortcodeUnique("Product", table.shortcode),
-    index("Product_category_idx").on(table.category),
+    index("Product_categoryId_idx").on(table.categoryId),
     uniqueIndex("Product_name_manufacturer_key")
       .on(table.name, table.manufacturer)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -875,6 +881,8 @@ export const productImage = pgTable(
       .references(() => image.id),
     // Display order; 0 default means legacy rows tie-break on createdAt.
     sortOrder: integer("sortOrder").notNull().default(0),
+    // `null` is the legacy item role and deliberately remains displayable.
+    purpose: text("purpose", { enum: ["item", "label"] as const }),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -884,6 +892,10 @@ export const productImage = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("ProductImage_productId_idx").on(table.productId),
     index("ProductImage_imageId_idx").on(table.imageId),
+    check(
+      "ProductImage_purpose_check",
+      sql`${table.purpose} IS NULL OR ${table.purpose} IN ('item', 'label')`,
+    ),
   ],
 );
 
@@ -2730,6 +2742,10 @@ export const mealFoodEntryRelations = relations(mealFoodEntry, ({ one }) => ({
 }));
 
 export const productRelations = relations(product, ({ one, many }) => ({
+  category: one(productCategory, {
+    fields: [product.categoryId],
+    references: [productCategory.id],
+  }),
   ingredient: one(ingredient, {
     fields: [product.ingredientId],
     references: [ingredient.id],

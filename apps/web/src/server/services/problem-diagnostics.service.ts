@@ -122,7 +122,7 @@ const runTitleSizeProposals = async (
       id: row.shortcode,
       name: row.name,
       manufacturer: row.manufacturer,
-      category: row.category,
+      category: row.category?.path.map((node) => node.name).join(" > ") ?? null,
       proposed: proposal.amount,
       token: proposal.token,
     });

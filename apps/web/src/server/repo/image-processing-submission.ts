@@ -1,7 +1,9 @@
 import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { withTransactionDatabase } from "~/server/repo/database-helpers";
+import { productImage } from "~/server/db/schema";
+import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -10,6 +12,7 @@ import {
   createImageProcessingJob,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  loadImageRepresentations,
 } from "./image-processing";
 import {
   createImageProcessingSubmission,
@@ -41,6 +44,20 @@ export async function persistImageProcessingSubmission(
     );
     if (!source)
       throw new Error("Image must be uploaded and integrity-verified first");
+    // Labels are supporting evidence: describe them, but never spend a
+    // subject-lift job on package text. Null is the legacy item role.
+    const productAttachments = await getDb(transactionDb)
+      .select({ purpose: productImage.purpose })
+      .from(productImage)
+      .where(
+        and(eq(productImage.imageId, imageId), isNull(productImage.deletedAt)),
+      );
+    const labelOnly =
+      productAttachments.length > 0 &&
+      productAttachments.every((attachment) => attachment.purpose === "label");
+    const representation = (
+      await loadImageRepresentations(transactionDb, [source.shortcode])
+    ).get(source.shortcode);
     const submission = input.automatic
       ? null
       : (input.submission ??
@@ -48,6 +65,10 @@ export async function persistImageProcessingSubmission(
     const jobIds: string[] = [];
     for (const kind of new Set(input.kinds)) {
       if (kind === "subject_lift") {
+        // A label and an image with a ready transparent derivative are both
+        // terminal for cutout scheduling. Keep rendering the retained
+        // original when a cutout failed or was never produced.
+        if (labelOnly || representation?.transparent != null) continue;
         const scheduled = await createTransparentDerivativeAndJob(
           transactionDb,
           {
@@ -55,6 +76,7 @@ export async function persistImageProcessingSubmission(
             sourceContentHash: source.sha256,
             // Every actual dispatch rotates this placeholder to a fresh key.
             key: `pending/${crypto.randomUUID()}.png`,
+            reviveLabelOnlySkip: !input.automatic,
           },
         );
         if (scheduled) jobIds.push(scheduled.jobId);

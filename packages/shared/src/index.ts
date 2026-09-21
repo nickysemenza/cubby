@@ -18,12 +18,8 @@ export type { AppErrorReason } from "./error-utils";
 
 export {
   inventoryPlacementValues,
-  productCategoryValues,
-  categoryColors,
   getCategoryColor,
   formatCategoryLabel,
-  FOOD_CATEGORY,
-  isNonFoodCategory,
 } from "./category-theme";
 export type { InventoryPlacement, ProductCategory } from "./category-theme";
 
@@ -52,3 +48,5 @@ export {
   validateExternalHttpUrl,
 } from "./external-fetch";
 export type { ExternalFetchOptions } from "./external-fetch";
+
+export { isNonFoodCategory } from "./category-theme";

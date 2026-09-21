@@ -24,10 +24,10 @@ import { basisValueOf } from "~/app/_components/ai/field-suggestion";
 import { FormFieldResolution } from "~/app/_components/ai/form-field-resolution";
 import type { EntitySearchScope } from "~/app/_components/combobox/entity-search-hooks";
 import {
-  WithEntitySearch,
-  type WithEntitySearchProps,
-} from "~/app/_components/combobox/with-search-hook";
-import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
+  isReferencePickerEntity,
+  referenceEntitySearch as sharedReferenceEntitySearch,
+} from "~/app/_components/combobox/reference-entity-search";
+import type { WithEntitySearchProps } from "~/app/_components/combobox/with-search-hook";
 import {
   NullableNumericField,
   PlainDateField,
@@ -566,25 +566,14 @@ function specializedRendererFor(
   return undefined;
 }
 
-/**
- * One reference field's search provider: the vendor picker needs its own
- * shortcode-typed wrapper (vendor has no shared picker default — see
- * `with-vendor-search.tsx`); every other reference entity gets the generic
- * `WithEntitySearch` shell.
- */
+/** Use the same reference providers as inline edits and product forms. */
 function referenceEntitySearch(
   referenceEntity: string,
 ): (props: WithEntitySearchProps<string>) => ReactNode {
-  if (referenceEntity === "vendor") {
-    // SAFETY: `WithVendorShortcodeSearch` is keyed to `VendorShortcode`, a
-    // string-branded type; the caller's id path is a plain string RHF field.
-    return WithVendorShortcodeSearch as never;
+  if (!isReferencePickerEntity(referenceEntity)) {
+    throw new Error(`No reference picker for ${referenceEntity}`);
   }
-  return (props) => (
-    // SAFETY: `referenceEntity` is a manifest-declared reference target,
-    // always one of `WithEntitySearch`'s supported (non-vendor) entities.
-    <WithEntitySearch entity={referenceEntity as never} {...props} />
-  );
+  return sharedReferenceEntitySearch(referenceEntity);
 }
 
 /**

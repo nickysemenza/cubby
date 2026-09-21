@@ -590,6 +590,33 @@ fields combine, and uniqueness or workflow collisions reject the operation.
 There is no generic merge preview. Entity-specific merge code remains only for
 irreducible transaction and collision rules.
 
+## Product classification and photos
+
+`ProductCategory` is an editable, at-most-three-level tree. `Product.categoryId`
+references the most specific known node; its read-only `category` projection
+contains the complete root-first path and inherited behavior binding. Products
+can stop at any depth or remain unclassified. Filters include descendants.
+Names, aliases, descriptions, and display order are editable; stable root
+bindings preserve Food, Books, Tools, Software, and other domain behavior when
+names change. Moving a subtree validates all affected Products against the
+same identity and dependency constraints as a direct Product change.
+
+Classification suggestions choose existing taxonomy references using metadata
+and retained original-image evidence. Confirmed description corrections take
+precedence over model text. Taxonomy contents participate in the proposal
+basis, so changing vocabulary invalidates old proposals without rerunning
+vision or introducing an inference cache.
+
+An Image has provenance (`own`, `catalog`, or `unknown`, plus optional supplying
+source name/page/asset URLs). Its Product attachment has nullable purpose
+(`item` or `label`). Unset legacy purposes keep their existing gallery behavior;
+labels are supporting evidence and cannot supply direct or borrowed covers.
+Product reads retain separate item and label arrays with attachment purposes.
+MCP detail exposes all attachments, while `imageCount` counts every attachment
+for upload preconditions and item/label image counts count displayable images.
+A cutout is a rendition of one Image: original bytes remain the analysis source
+and fallback, and the original can be selected explicitly.
+
 ## Adding an entity
 
 1. Add one typed `.entity.ts` declaration with field validation, storage, mutation

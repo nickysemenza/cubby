@@ -313,6 +313,20 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/problems/getCounts`.
     /// - Remark: Generated from `#/paths//api/v1/problems/getCounts/get(problems.getCounts)`.
     func problems_getCounts(_ input: Operations.Problems_getCounts.Input) async throws -> Operations.Problems_getCounts.Output
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/product-categories`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/get(resources.productCategory.list)`.
+    func resources_productCategory_list(_ input: Operations.Resources_productCategory_list.Input) async throws -> Operations.Resources_productCategory_list.Output
+    /// - Remark: HTTP `POST /api/v1/product-categories`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/post(resources.productCategory.create)`.
+    func resources_productCategory_create(_ input: Operations.Resources_productCategory_create.Input) async throws -> Operations.Resources_productCategory_create.Output
+    /// - Remark: HTTP `GET /api/v1/product-categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/get(resources.productCategory.get)`.
+    func resources_productCategory_get(_ input: Operations.Resources_productCategory_get.Input) async throws -> Operations.Resources_productCategory_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/product-categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/patch(resources.productCategory.update)`.
+    func resources_productCategory_update(_ input: Operations.Resources_productCategory_update.Input) async throws -> Operations.Resources_productCategory_update.Output
     /// - Remark: HTTP `POST /api/v1/product/findOrCreateByCode`.
     /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByCode/post(product.findOrCreateByCode)`.
     func product_findOrCreateByCode(_ input: Operations.Product_findOrCreateByCode.Input) async throws -> Operations.Product_findOrCreateByCode.Output
@@ -1500,6 +1514,54 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//api/v1/problems/getCounts/get(problems.getCounts)`.
     public func problems_getCounts(headers: Operations.Problems_getCounts.Input.Headers = .init()) async throws -> Operations.Problems_getCounts.Output {
         try await problems_getCounts(Operations.Problems_getCounts.Input(headers: headers))
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/product-categories`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/get(resources.productCategory.list)`.
+    public func resources_productCategory_list(
+        query: Operations.Resources_productCategory_list.Input.Query = .init(),
+        headers: Operations.Resources_productCategory_list.Input.Headers = .init()
+    ) async throws -> Operations.Resources_productCategory_list.Output {
+        try await resources_productCategory_list(Operations.Resources_productCategory_list.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/product-categories`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/post(resources.productCategory.create)`.
+    public func resources_productCategory_create(
+        headers: Operations.Resources_productCategory_create.Input.Headers = .init(),
+        body: Operations.Resources_productCategory_create.Input.Body? = nil
+    ) async throws -> Operations.Resources_productCategory_create.Output {
+        try await resources_productCategory_create(Operations.Resources_productCategory_create.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/product-categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/get(resources.productCategory.get)`.
+    public func resources_productCategory_get(
+        path: Operations.Resources_productCategory_get.Input.Path,
+        headers: Operations.Resources_productCategory_get.Input.Headers = .init()
+    ) async throws -> Operations.Resources_productCategory_get.Output {
+        try await resources_productCategory_get(Operations.Resources_productCategory_get.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/product-categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/product-categories/{id}/patch(resources.productCategory.update)`.
+    public func resources_productCategory_update(
+        path: Operations.Resources_productCategory_update.Input.Path,
+        headers: Operations.Resources_productCategory_update.Input.Headers = .init(),
+        body: Operations.Resources_productCategory_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_productCategory_update.Output {
+        try await resources_productCategory_update(Operations.Resources_productCategory_update.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
     }
     /// - Remark: HTTP `POST /api/v1/product/findOrCreateByCode`.
     /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByCode/post(product.findOrCreateByCode)`.

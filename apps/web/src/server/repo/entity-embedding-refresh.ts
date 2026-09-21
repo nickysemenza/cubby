@@ -35,6 +35,7 @@ import {
 } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
 import { loadAllGtins } from "~/server/repo/product/gtin";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { embeddingTextHash } from "~/server/semantic/hash";
@@ -277,11 +278,18 @@ async function getProductEmbeddingTexts(
             )
           : undefined,
       ),
+      extras: {
+        category: sql<
+          string | null
+        >`${categorySummarySql(sql`${product.categoryId}`)}->>'name'`.as(
+          "category",
+        ),
+      },
       columns: {
         id: true,
         name: true,
         manufacturer: true,
-        category: true,
+        categoryId: true,
         model: true,
         notes: true,
         aliases: true,
@@ -589,7 +597,9 @@ async function getInventoryEmbeddingTexts(
       locationName: location.name,
       productName: product.name,
       manufacturer: product.manufacturer,
-      category: product.category,
+      category: sql<
+        string | null
+      >`${categorySummarySql(sql`${product.categoryId}`)}->>'name'`,
       model: product.model,
       productId: product.id,
       notes: product.notes,

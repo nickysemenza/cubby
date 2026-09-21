@@ -65,6 +65,7 @@ export const INCOMING_EDGES = {
   meal: projectIncomingEdges(ENTITY_EDGES.meal),
   ledgerParty: projectIncomingEdges(ENTITY_EDGES.ledgerParty),
   product: projectIncomingEdges(ENTITY_EDGES.product),
+  productCategory: projectIncomingEdges(ENTITY_EDGES.productCategory),
   location: projectIncomingEdges(ENTITY_EDGES.location),
   project: projectIncomingEdges(ENTITY_EDGES.project),
   task: projectIncomingEdges(ENTITY_EDGES.task),

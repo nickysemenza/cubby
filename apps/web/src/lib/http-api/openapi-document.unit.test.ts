@@ -184,7 +184,7 @@ describe("generated HTTP OpenAPI document", () => {
     // (see the fold-bug regression test below): the old replacer-array
     // allowlist erased distinct nested shapes down to `{}`, so it had been
     // incorrectly folding distinct positionals together and undercounting.
-    expect(positional.length).toBeLessThanOrEqual(70);
+    expect(positional.length).toBeLessThanOrEqual(72);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
@@ -261,7 +261,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(355);
+    expect(operations).toHaveLength(360);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -319,7 +319,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 165, post: 150, patch: 20, delete: 20 });
+    expect(methods).toEqual({ get: 167, post: 151, patch: 21, delete: 21 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();
@@ -392,16 +392,17 @@ describe("generated HTTP OpenAPI document", () => {
       .filter(
         (value) => schemaNode.safeParse(value).data?.format === "uri",
       ).length;
-    // Targeted import evidence adds canonical, requested, and served source
-    // URLs without collapsing their distinct positional schemas.
-    expect(uriPropertyCount).toBeLessThanOrEqual(54);
+    // Image provenance adds source-page/asset URLs to six contracts. The
+    // flattened Product attachment schema contributes its own three URLs;
+    // it cannot intersect a closed ImageOut without native decode failures.
+    expect(uriPropertyCount).toBeLessThanOrEqual(69);
   });
 
   it("shares one ListPageMeta across every list page", () => {
     const pages = Object.entries(schemas).filter(([name]) =>
       name.endsWith("ListPage"),
     );
-    expect(pages).toHaveLength(19);
+    expect(pages).toHaveLength(20);
     for (const [, page] of pages)
       expect(schemaNode.parse(page.properties?.meta).$ref).toBe(
         `${COMPONENT}ListPageMeta`,

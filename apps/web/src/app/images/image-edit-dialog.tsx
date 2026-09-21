@@ -21,6 +21,14 @@ export function ImageEditDialog({
   onClose: () => void;
 }) {
   const [filename, setFilename] = useState(record.filename);
+  const [source, setSource] = useState(record.source ?? "unknown");
+  const [sourceName, setSourceName] = useState(record.sourceName ?? "");
+  const [sourcePageUrl, setSourcePageUrl] = useState(
+    record.sourcePageUrl ?? "",
+  );
+  const [sourceAssetUrl, setSourceAssetUrl] = useState(
+    record.sourceAssetUrl ?? "",
+  );
   const update = useImageUpdateMutation({
     mutationFn: () => imageOperations.update.mutationOptions(),
   });
@@ -28,7 +36,16 @@ export function ImageEditDialog({
     const next = filename.trim();
     if (!next) return;
     void update
-      .mutateAsync({ id: record.id, data: { filename: next } })
+      .mutateAsync({
+        id: record.id,
+        data: {
+          filename: next,
+          source,
+          sourceName: sourceName.trim() || null,
+          sourcePageUrl: sourcePageUrl.trim() || null,
+          sourceAssetUrl: sourceAssetUrl.trim() || null,
+        },
+      })
       .then(onClose);
   };
   return (
@@ -49,13 +66,58 @@ export function ImageEditDialog({
         </DialogFooter>
       }
     >
-      <div className="space-y-2">
+      <div className="space-y-3">
         <Label htmlFor="image-filename">Filename</Label>
         <Input
           id="image-filename"
           value={filename}
           onChange={(event) => setFilename(event.target.value)}
         />
+        <div className="space-y-2">
+          <Label htmlFor="image-source">Source</Label>
+          <select
+            className="h-9 w-full rounded-sm border border-input bg-background px-2 text-sm"
+            id="image-source"
+            value={source}
+            onChange={(event) =>
+              setSource(
+                event.target.value === "own" || event.target.value === "catalog"
+                  ? event.target.value
+                  : "unknown",
+              )
+            }
+          >
+            <option value="own">Our photo</option>
+            <option value="catalog">Catalog</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="image-source-name">Source name</Label>
+          <Input
+            id="image-source-name"
+            value={sourceName}
+            onChange={(event) => setSourceName(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="image-source-page">Source page URL</Label>
+          <Input
+            id="image-source-page"
+            type="url"
+            value={sourcePageUrl}
+            onChange={(event) => setSourcePageUrl(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="image-source-asset">Source asset URL</Label>
+          <Input
+            id="image-source-asset"
+            type="url"
+            value={sourceAssetUrl}
+            onChange={(event) => setSourceAssetUrl(event.target.value)}
+          />
+        </div>
       </div>
     </ResponsiveDialog>
   );

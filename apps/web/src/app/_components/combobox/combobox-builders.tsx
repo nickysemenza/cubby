@@ -21,6 +21,7 @@ import {
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import { formatCategoryLabel, type ProductCategory } from "@cubby/shared";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { locationToSegments } from "~/app/_components/locations/location-breadcrumb";
@@ -133,7 +134,7 @@ export const buildProductComboboxItem = (
     id: ProductShortcode;
     name: string;
     manufacturer: string;
-    category?: string | null;
+    category?: ProductCategory | null;
     coverImageUrl?: string | null;
     images?: Array<{
       url: string;
@@ -212,7 +213,9 @@ function productPickerBase(
     name: product.name,
     aliases: product.aliases ?? [],
     secondary: product.manufacturer,
-    detail: product.category ?? undefined,
+    detail: product.category
+      ? formatCategoryLabel(product.category)
+      : undefined,
     icon: (
       <SearchPickerIcon
         entity="product"

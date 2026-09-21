@@ -33,6 +33,7 @@ import {
   type ImageStorageStatus,
   isDisplayableImageFile,
 } from "@cubby/schemas/image";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   primaryPurchaseDocumentKinds,
   RECONCILIATION_TOLERANCE,
@@ -82,11 +83,21 @@ import {
 } from "~/server/repo/image-displayability";
 import { cents } from "~/server/repo/money";
 import {
+  categorySummarySql,
+  categoryFeatureSql,
+} from "~/server/repo/product-category-sql";
+import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+
+// Called only with repository-owned SQL identifiers, never user text.
+const categoryFeatureRaw = (column: string) => `(WITH RECURSIVE ancestors AS (
+  SELECT c."id", c."parentId", c."feature", 0 depth FROM "ProductCategory" c WHERE c."id" = ${column} AND c."deletedAt" IS NULL
+  UNION ALL SELECT p."id", p."parentId", p."feature", a.depth + 1 FROM ancestors a JOIN "ProductCategory" p ON p."id" = a."parentId" WHERE p."deletedAt" IS NULL AND a.depth < 2
+) SELECT "feature" FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1)`;
 
 const AMAZON_SOURCE = "amazon";
 const MODEL_REQUIRED_CATEGORIES = [
@@ -269,7 +280,7 @@ const productHasDisplayableImage = sql`EXISTS (
   SELECT 1 FROM "ProductImage" dq_pimg
   JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
   WHERE dq_pimg."productId" = ${product.id}
-    AND dq_pimg."deletedAt" IS NULL
+    AND dq_pimg."deletedAt" IS NULL AND dq_pimg."purpose" IS DISTINCT FROM 'label'
     AND ${sql.raw(displayableImageRawSql("dq_img"))}
 )`;
 
@@ -312,10 +323,10 @@ const productFingerprintSql = (check: ProductDataCheck): SQL => {
     case "product_manufacturer":
       return evidenceFingerprintSql(check, [sql`${product.manufacturer}`]);
     case "product_category":
-      return evidenceFingerprintSql(check, [sql`${product.category}`]);
+      return evidenceFingerprintSql(check, [sql`${product.categoryId}`]);
     case "product_model":
       return evidenceFingerprintSql(check, [
-        sql`${product.category}`,
+        sql`${product.categoryId}`,
         sql`${product.model}`,
       ]);
     case "product_image":
@@ -350,12 +361,14 @@ export const productDataGapCondition = (check: ProductDataCheck): SQL => {
       missing = sql`(trim(${product.manufacturer}) = '' OR lower(trim(${product.manufacturer})) = lower(${UNSPECIFIED_MANUFACTURER}))`;
       break;
     case "product_category":
-      missing = sql`${product.category} IS NULL`;
+      missing = sql`${product.categoryId} IS NULL`;
       break;
     case "product_model":
-      missing = sql`${product.category} IN (${sql.join(
-        MODEL_REQUIRED_CATEGORIES.map((category) => sql`${category}`),
-        sql`, `,
+      missing = sql`(${sql.join(
+        MODEL_REQUIRED_CATEGORIES.map((feature) =>
+          categoryFeatureSql(sql`${product.categoryId}`, feature),
+        ),
+        sql` OR `,
       )}) AND (${product.model} IS NULL OR trim(${product.model}) = '')`;
       break;
     case "product_image":
@@ -417,7 +430,7 @@ const productFingerprintRaw = (
     WHERE dq_inventory."productId" = ${alias}."id" AND dq_inventory."deletedAt" IS NULL)`;
   const hasDisplayableImage = `EXISTS (SELECT 1 FROM "ProductImage" dq_pimg
     JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
-    WHERE dq_pimg."productId" = ${alias}."id" AND dq_pimg."deletedAt" IS NULL
+    WHERE dq_pimg."productId" = ${alias}."id" AND dq_pimg."deletedAt" IS NULL AND dq_pimg."purpose" IS DISTINCT FROM 'label'
       AND ${displayableImageRawSql("dq_img")})`;
   const hasAmazonPurchase = `EXISTS (SELECT 1 FROM "Expense" dq_ae
     JOIN "Purchase" dq_ap ON dq_ap."id" = dq_ae."purchaseId" AND dq_ap."deletedAt" IS NULL
@@ -438,10 +451,10 @@ const productFingerprintRaw = (
     case "product_manufacturer":
       return evidenceFingerprintRaw(check, [`${alias}."manufacturer"`]);
     case "product_category":
-      return evidenceFingerprintRaw(check, [`${alias}."category"`]);
+      return evidenceFingerprintRaw(check, [`${alias}."categoryId"`]);
     case "product_model":
       return evidenceFingerprintRaw(check, [
-        `${alias}."category"`,
+        `${alias}."categoryId"`,
         `${alias}."model"`,
       ]);
     case "product_image":
@@ -493,10 +506,10 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
       condition = `AND (trim(dq_pr."manufacturer") = '' OR lower(trim(dq_pr."manufacturer")) = lower('${UNSPECIFIED_MANUFACTURER}'))`;
       break;
     case "product_category":
-      condition = `AND dq_pr."category" IS NULL`;
+      condition = `AND dq_pr."categoryId" IS NULL`;
       break;
     case "product_model":
-      condition = `AND dq_pr."category" IN (${MODEL_REQUIRED_CATEGORIES.map((category) => `'${category}'`).join(", ")})
+      condition = `AND (${categoryFeatureRaw('dq_pr."categoryId"')}) IN (${MODEL_REQUIRED_CATEGORIES.map((category) => `'${category}'`).join(", ")})
                AND (dq_pr."model" IS NULL OR trim(dq_pr."model") = '')`;
       break;
     case "product_image":
@@ -509,7 +522,7 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
                AND NOT EXISTS (
                  SELECT 1 FROM "ProductImage" dq_pimg
                  JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
-                 WHERE dq_pimg."productId" = dq_pr."id" AND dq_pimg."deletedAt" IS NULL
+                 WHERE dq_pimg."productId" = dq_pr."id" AND dq_pimg."deletedAt" IS NULL AND dq_pimg."purpose" IS DISTINCT FROM 'label'
                    AND ${displayableImageRawSql("dq_img")}
                )`;
       break;
@@ -987,8 +1000,13 @@ const uniqueTargetExceptions = (
 
 type ProductQualityRow = Pick<
   typeof product.$inferSelect,
-  "id" | "shortcode" | "manufacturer" | "category" | "model" | "dataExceptions"
->;
+  | "id"
+  | "shortcode"
+  | "manufacturer"
+  | "categoryId"
+  | "model"
+  | "dataExceptions"
+> & { category: ProductCategorySummary | null };
 
 type ProductQualityEvidence = {
   expenseLinked: boolean;
@@ -1013,9 +1031,9 @@ const productFingerprint = (
     case "product_manufacturer":
       return evidenceFingerprint(check, [row.manufacturer]);
     case "product_category":
-      return evidenceFingerprint(check, [row.category]);
+      return evidenceFingerprint(check, [row.categoryId]);
     case "product_model":
-      return evidenceFingerprint(check, [row.category, row.model]);
+      return evidenceFingerprint(check, [row.categoryId, row.model]);
     case "product_image":
       return evidenceFingerprint(check, [
         evidence.inventoryLinked,
@@ -1060,7 +1078,9 @@ const buildProductDataQuality = (
     }
     const modelRequired =
       row.category !== null &&
-      MODEL_REQUIRED_CATEGORIES.some((category) => category === row.category);
+      MODEL_REQUIRED_CATEGORIES.some(
+        (category) => category === row.category?.feature,
+      );
     if (modelRequired) {
       expectedChecks.push("product_model");
     }
@@ -1122,6 +1142,7 @@ export const loadProductDetailDataQuality = async (
       deletedAt: Date | null;
     }>;
     images: Array<{
+      purpose?: "item" | "label" | null;
       deletedAt?: Date | null;
       image: {
         deletedAt: Date | null;
@@ -1175,6 +1196,7 @@ export const loadProductDetailDataQuality = async (
     ),
     imageLinked: row.images.some(
       (edge) =>
+        edge.purpose !== "label" &&
         edge.deletedAt == null &&
         edge.image.deletedAt === null &&
         isDisplayableImageFile(edge.image),
@@ -1202,7 +1224,8 @@ export const loadProductDataQualities = async (
         id: product.id,
         shortcode: product.shortcode,
         manufacturer: product.manufacturer,
-        category: product.category,
+        categoryId: product.categoryId,
+        category: categorySummarySql(sql`${product.categoryId}`),
         model: product.model,
         dataExceptions: product.dataExceptions,
       })
@@ -1280,6 +1303,7 @@ export const loadProductDataQualities = async (
         and(
           inArray(productImage.productId, uniqueIds),
           notDeleted(productImage),
+          sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
           displayableImageWhere,
         ),
       ),

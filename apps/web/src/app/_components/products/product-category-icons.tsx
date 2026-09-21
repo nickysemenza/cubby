@@ -1,4 +1,4 @@
-import { type ProductCategory, productCategory } from "@cubby/schemas/product";
+import type { ProductCategory } from "@cubby/shared";
 
 import { getCategoryColor, getCategoryIcon } from "./category-theme";
 
@@ -16,7 +16,7 @@ export function CategoryIcon({
   size = 16,
   colored,
 }: CategoryIconProps) {
-  const IconComponent = getCategoryIcon(category);
+  const IconComponent = getCategoryIcon(category.feature);
   return (
     <IconComponent
       className={className}
@@ -25,16 +25,3 @@ export function CategoryIcon({
     />
   );
 }
-
-/**
- * Product category options with colored icons for dropdowns. The shared static
- * picker suppresses its fallback swatch when an option already has an icon, so
- * each row carries exactly one categorical mark.
- */
-export const productCategoryOptionsWithTheme = productCategory.options.map(
-  (cat) => ({
-    value: cat,
-    label: cat.replace("-", " "),
-    icon: <CategoryIcon category={cat} size={14} colored />,
-  }),
-);

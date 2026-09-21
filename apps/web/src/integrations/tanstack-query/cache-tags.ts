@@ -196,6 +196,13 @@ export const ripple = {
     ["relatedness", "product"],
   ]),
   product: productBase,
+  /** A taxonomy move can change both the visible classification and Jev's
+   * evidence revision on every affected product. */
+  productCategory: rippleTags([
+    ["productCategory"],
+    ["product"],
+    ["inventory"],
+  ]),
   /**
    * Product MERGE moves far more than a product write does. A rename touches
    * the product row and the surfaces that embed its name; a merge re-parents

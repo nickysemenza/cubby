@@ -35,11 +35,12 @@ import type {
 import { toPublicImpact } from "@cubby/schemas/entity-integrity";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { AppErrorReason } from "@cubby/shared";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { createBlockedError } from "~/server/errors/app-error";
+import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 
 /**
  * What a relation pre-validation found, in the id space the repo works in.
@@ -110,7 +111,7 @@ interface RelationProductRow {
   id: ProductId;
   shortcode: string;
   /** Nullable in the schema — an uncategorized Product is never eligible. */
-  category: string | null;
+  reusable: boolean;
   live: boolean;
 }
 
@@ -133,7 +134,10 @@ export async function loadRelationProducts(
     .select({
       id: product.id,
       shortcode: product.shortcode,
-      category: product.category,
+      reusable: sql<boolean>`(
+        ${categoryFeatureSql(sql`${product.categoryId}`, "tools")}
+        OR ${categoryFeatureSql(sql`${product.categoryId}`, "software")}
+      )`,
       deletedAt: product.deletedAt,
     })
     .from(product)
@@ -141,7 +145,7 @@ export async function loadRelationProducts(
   const rows: RelationProductRow[] = found.map((row) => ({
     id: row.id,
     shortcode: row.shortcode,
-    category: row.category,
+    reusable: Boolean(row.reusable),
     live: row.deletedAt === null,
   }));
   return {

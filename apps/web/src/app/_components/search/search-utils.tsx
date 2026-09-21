@@ -4,7 +4,7 @@ import type {
   SearchDestination,
   SearchHit,
 } from "@cubby/schemas/search";
-import { locationTypeValues, productCategoryValues } from "@cubby/shared";
+import { locationTypeValues } from "@cubby/shared";
 
 import { ProjectMark } from "~/app/projects/project-mark";
 import { EntityCover } from "~/components/entity/entity-cover";
@@ -16,7 +16,6 @@ import {
   getLocationIcon,
   getLocationTypeColor,
 } from "../locations/location-type-theme";
-import { getCategoryColor, getCategoryIcon } from "../products/category-theme";
 
 export type { SearchHit } from "@cubby/schemas/search";
 
@@ -80,10 +79,6 @@ function asLocationType(hint: string | null | undefined) {
   return locationTypeValues.find((value) => value === hint);
 }
 
-function asProductCategory(hint: string | null | undefined) {
-  return productCategoryValues.find((value) => value === hint);
-}
-
 function SearchHitIcon({
   item,
   className = "size-4 shrink-0",
@@ -102,19 +97,6 @@ function SearchHitIcon({
       <Icon
         className={className}
         style={{ color: getLocationTypeColor(locationType) }}
-      />
-    );
-  }
-  const category =
-    item.entityType === "product" || item.entityType === "inventory"
-      ? asProductCategory(item.typeHint)
-      : undefined;
-  if (category) {
-    const Icon = getCategoryIcon(category);
-    return (
-      <Icon
-        className={className}
-        style={{ color: getCategoryColor(category) }}
       />
     );
   }

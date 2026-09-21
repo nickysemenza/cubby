@@ -27,6 +27,7 @@ class InMemoryMutationSideEffectPorts {
   readonly refreshed: Array<{ entityType: string; entityId: string }> = [];
   readonly inventoryRefs: Array<{ entityType: "inventory"; entityId: string }> =
     [];
+  readonly productRefs: Array<{ entityType: "product"; entityId: string }> = [];
   readonly plantingRefs: Array<{ entityType: "planting"; entityId: string }> =
     [];
   readonly gardenEntryRefs: Array<{
@@ -39,6 +40,7 @@ class InMemoryMutationSideEffectPorts {
     },
     findChildTaskEmbeddingRefs: async () => [],
     findInventoryEmbeddingRefsForProducts: async () => this.inventoryRefs,
+    findProductEmbeddingRefsForCategories: async () => this.productRefs,
     findInventoryEmbeddingRefsForLocations: async () => [],
     findRecipeEmbeddingRefsForIngredients: async () => [],
     findTaskEmbeddingRefsForProducts: async () => [],
@@ -130,6 +132,52 @@ describe("runMutationSideEffects", () => {
       expect.arrayContaining([
         { entityType: "product", entityId: productId },
         { entityType: "inventory", entityId: inventoryId },
+      ]),
+    );
+  });
+
+  it("refreshes Product and Inventory projections after a taxonomy mutation", async () => {
+    const categoryId = testEntityId(
+      "productCategory",
+      "00000000-0000-4000-8000-000000000021",
+    );
+    const productId = testEntityId(
+      "product",
+      "00000000-0000-4000-8000-000000000022",
+    );
+    const inventoryId = testEntityId(
+      "inventory",
+      "00000000-0000-4000-8000-000000000023",
+    );
+    memory.productRefs.push({ entityType: "product", entityId: productId });
+    memory.inventoryRefs.push({
+      entityType: "inventory",
+      entityId: inventoryId,
+    });
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "productCategory", id: categoryId },
+        source: "product-category.update",
+      },
+      memory.ports,
+    );
+
+    expect(memory.refreshed).toEqual(
+      expect.arrayContaining([
+        { entityType: "product", entityId: productId },
+        { entityType: "inventory", entityId: inventoryId },
+      ]),
+    );
+    expect(memory.embeddingRefreshTasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entityType: "product", entityId: productId }),
+        expect.objectContaining({
+          entityType: "inventory",
+          entityId: inventoryId,
+        }),
       ]),
     );
   });
@@ -435,6 +483,7 @@ describe("mutation side effects manifest", () => {
       "meal",
       "planting",
       "product",
+      "productCategory",
       "project",
       "purchase",
       "recipe",

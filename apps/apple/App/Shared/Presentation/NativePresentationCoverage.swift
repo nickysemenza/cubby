@@ -55,7 +55,8 @@ enum NativePresentationCoverage {
             .implemented
         case .effectiveOwnership:
             .ownedElsewhere
-        case .financialAccountIdentity,
+        case .productCategoryPath,
+            .financialAccountIdentity,
             .financialAccountSourceAliases,
             .financialTransactionSourceRefs,
             .financialTransactionVendorInference,
@@ -76,7 +77,8 @@ enum NativePresentationCoverage {
     static func detailSlot(_ id: String) -> Status {
         switch id {
         case "ledgerParty.wardrobe", "meal.nutrition": .implemented
-        case "product.nutrition",
+        case "product.labels",
+            "product.nutrition",
             "product.unit-mappings",
             "product.fits-with",
             "product.cookbooks",

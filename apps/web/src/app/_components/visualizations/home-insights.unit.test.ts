@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { entitySearch } from "~/entities/generated/entity-search.gen";
-
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import {
   LOCATION_SUNBURST_DESCRIPTION,
   LOCATION_SUNBURST_METRIC,
@@ -16,11 +15,11 @@ describe("Home insight metric and drilldown contracts", () => {
   });
 
   it("routes the uncategorized slice to the null-category roster", () => {
-    expect(
-      entitySearch.product.schema.parse(productCategoryDrilldown(null)),
-    ).toEqual({
+    expect(productCategoryDrilldown(null)).toEqual({
       category: "__none__",
     });
-    expect(productCategoryDrilldown("food")).toEqual({ category: "food" });
+    expect(productCategoryDrilldown(categorySummaryFixture("food"))).toEqual({
+      category: categorySummaryFixture("food").id,
+    });
   });
 });

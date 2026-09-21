@@ -350,7 +350,7 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
     entityListFor("product").queryOptions({
       filters: {
         nameFilter: debouncedProductSearch.trim() || undefined,
-        categoryFilter: "tools",
+        categoryFeatureFilter: ["tools"],
       },
       sort: [{ orderBy: "name", direction: "asc" }],
       pagination: { pageIndex: 0, pageSize: 50 },

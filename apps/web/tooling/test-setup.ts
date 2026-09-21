@@ -1,5 +1,6 @@
 import { testServiceConfig } from "./test-service-config";
 import { schemaTemplateInputs } from "./schema-template-inputs";
+import { taxonomyRootFixtures } from "./product-category-fixtures";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type ActorContext,
@@ -207,6 +208,11 @@ async function seedTestHome(rawDb: ReturnType<typeof drizzle>) {
   });
 }
 
+/** Stable taxonomy roots give test Product writes the same behavior bindings. */
+async function seedTestProductCategories(rawDb: ReturnType<typeof drizzle>) {
+  await rawDb.insert(schema.productCategory).values(taxonomyRootFixtures);
+}
+
 /**
  * The database for THIS test file.
  *
@@ -371,6 +377,7 @@ async function resetTestDb() {
   await pool.query(`TRUNCATE ${truncateTargets} RESTART IDENTITY CASCADE`);
   await seedTestUser(rawDb);
   await seedTestHome(rawDb);
+  await seedTestProductCategories(rawDb);
   return (await getFileDb()).db;
 }
 

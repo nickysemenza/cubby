@@ -55,6 +55,7 @@ export type PickerEntity =
   | "ingredient"
   | "location"
   | "product"
+  | "productCategory"
   | "recipe"
   | "project"
   | "task"

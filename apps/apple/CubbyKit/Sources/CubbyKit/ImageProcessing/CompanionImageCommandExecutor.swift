@@ -104,6 +104,8 @@ public struct CompanionImageCommandExecutor: Sendable {
                             kind: .subjectLift, status: .completed, sha256: artifact.sha256,
                             contentType: .imagePng, width: artifact.width, height: artifact.height))),
                 diagnostics: artifact.diagnostics)
+        case .alreadyTransparent:
+            return .init(outcome: skipped(.subjectLift, reason: .notSuitable), diagnostics: .init())
         case .noSubject:
             return .init(outcome: skipped(.subjectLift, reason: .noSubject), diagnostics: .init())
         case .unsupportedFormat:

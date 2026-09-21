@@ -482,12 +482,10 @@ export default defineEntity({
       {
         columnId: "category",
         field: "categoryFilter",
-        kind: "multiselect",
-        placeholder: "Filter by category...",
-        optionsRef: {
-          module: "~/app/_components/products/product-category-icons",
-          export: "productCategoryOptionsWithTheme",
-        },
+        kind: "idMulti",
+        placeholder: "Filter classification...",
+        brandRef: { entity: "productCategory" },
+        optionsKey: "productCategories",
       },
       {
         columnId: "verifiedAt",

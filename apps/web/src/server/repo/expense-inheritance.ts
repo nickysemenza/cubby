@@ -17,6 +17,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { unwrapDb } from "~/server/repo/database-helpers";
+import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 import { effectiveProjectTradeSql } from "./task-project-inheritance";
@@ -54,7 +55,7 @@ export const effectiveExpenseProjectSql = (
         SELECT 1 FROM "Product" food_product
         WHERE food_product."id" = ${productId}
           AND food_product."deletedAt" IS NULL
-          AND food_product."category" = 'food'
+          AND ${categoryFeatureSql(column("food_product", "categoryId"), "food")}
       ) THEN (
         SELECT household_project."id"
         FROM "Project" household_project
@@ -109,7 +110,7 @@ export const expenseInheritanceReadExtras = (alias = '"expense"') => {
         SELECT 1 FROM "Product" food_product
         WHERE food_product."id" = ${productId}
           AND food_product."deletedAt" IS NULL
-          AND food_product."category" = 'food'
+          AND ${categoryFeatureSql(column("food_product", "categoryId"), "food")}
       ) THEN (SELECT household_project."id" FROM "Project" household_project
         WHERE household_project."shortcode" = 'PRJ-HSHD'
           AND household_project."deletedAt" IS NULL LIMIT 1) END
@@ -332,7 +333,7 @@ export async function resolveDraftExpenseFields(
       resolved.fallback_trade AS "fallbackTrade",
       purchase_project."shortcode" AS "purchaseDefaultProjectShortcode",
       live_purchase."defaultTrade" AS "purchaseDefaultTrade",
-      coalesce(live_product."category" = 'food'
+      coalesce(${categoryFeatureSql(column("live_product", "categoryId"), "food")}
         AND purchase_project."id" IS NULL, false) AS "foodDefaulted"
     FROM resolved
     LEFT JOIN "Project" effective_project

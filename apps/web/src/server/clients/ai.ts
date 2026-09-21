@@ -3,7 +3,6 @@ import type {
   LocationDescription,
   ProductIdentification,
 } from "@cubby/schemas/ai";
-import { productCategoryValues } from "@cubby/schemas/product";
 import type { RecipeFlowAiPlan } from "@cubby/schemas/recipe-flow";
 import type { ImagePart } from "@tanstack/ai";
 
@@ -18,23 +17,14 @@ import {
   type AiRunContext,
   runStructuredFeature,
 } from "~/server/ai/run-feature";
-import { CATEGORY_DESCRIPTIONS } from "~/server/ai/vocabularies";
 
 function buildProductIdentificationSystemPrompt(): string {
-  const categoryList = productCategoryValues
-    .map((cat) => `- "${cat}": ${CATEGORY_DESCRIPTIONS[cat]}`)
-    .join("\n");
-
   return `You are a product identification assistant. Given one or more photos of a product, identify what it is.
 
 Extract:
 - "name": the product name WITHOUT the brand (e.g., "packing tape roll", "digital scale")
 - "manufacturer": the brand/manufacturer if visible, or "(unspecified)" if not identifiable
-- "category": the most appropriate category from the list below, or null if unclear
 - "model": the model number if visible on the product/packaging, or null
-
-Available categories:
-${categoryList}
 
 Rules:
 1. Read any text visible on the product or packaging (labels, brand names, model numbers)
@@ -79,7 +69,6 @@ For each item:
 - "manufacturer": visible brand/manufacturer, or "(unspecified)"
 - "estimatedQuantity": quantity visible; use 1 for a single folded/rolled item
 - "unit": usually "each" for household/shop items
-- "category": one of the product categories, or null if unclear
 - "evidence": one short sentence explaining the visual/location-name evidence
 - "isMisc": true only for unidentified groups or low-detail bulk placeholders
 
@@ -176,7 +165,7 @@ function buildProductIdentificationRequest(imageUrls: string[]): AiChatRequest {
           {
             type: "text",
             content:
-              "Identify this product from the photo(s). Determine the product name, manufacturer, category, and model number if visible.",
+              "Identify this product from the photo(s). Determine the product name, manufacturer and model number if visible.",
           },
         ],
       },

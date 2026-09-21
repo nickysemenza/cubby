@@ -1,3 +1,4 @@
+import type { DataQuality } from "@cubby/schemas/data-quality";
 /**
  * Internal helpers + types shared across the ingredient repository modules.
  *
@@ -6,8 +7,6 @@
  * search/list modules, so they live here rather than being duplicated. None of
  * these are re-exported from the package barrel.
  */
-
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { IngredientOut } from "@cubby/schemas/ingredient";
@@ -16,6 +15,7 @@ import {
   type IngredientWithRecipesAndProductOut,
   ingredientListItemOut,
 } from "@cubby/schemas/ingredient";
+import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import type { RecipeRef } from "@cubby/schemas/recipe";
 import { inArray, isNull, or, sql } from "drizzle-orm";
 
@@ -55,7 +55,10 @@ import {
 import { computeRecipeUsages, dbRecipeToTopLevel } from "../recipe";
 
 type IngredientSelect = typeof ingredient.$inferSelect;
-type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
+type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect> & {
+  category: ProductCategorySummary | null;
+  classificationEvidence: string;
+};
 
 export type IngredientDeepDB = typeof ingredient.$inferSelect & {
   product: Array<

@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/collection";
 import { describe, expect, it } from "vitest";
 
+import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import {
   evaluateSmartCollections,
   type SmartCollectionGraph,
@@ -148,9 +149,24 @@ describe("parameterized wardrobe predicates", () => {
   it("requires both apparel and effective owner while a shared catalog item can belong to two wardrobes", () => {
     const graph: SmartCollectionGraph = {
       products: [
-        { id: "shirt", manufacturer: "", tags: [], category: "apparel" },
-        { id: "drill", manufacturer: "", tags: [], category: "tools" },
-        { id: "shoes", manufacturer: "", tags: [], category: "apparel" },
+        {
+          id: "shirt",
+          manufacturer: "",
+          tags: [],
+          category: categorySummaryFixture("apparel"),
+        },
+        {
+          id: "drill",
+          manufacturer: "",
+          tags: [],
+          category: categorySummaryFixture("tools"),
+        },
+        {
+          id: "shoes",
+          manufacturer: "",
+          tags: [],
+          category: categorySummaryFixture("apparel"),
+        },
       ],
       inventory: [
         {
@@ -185,7 +201,7 @@ describe("parameterized wardrobe predicates", () => {
         match: "all",
         rules: [
           { kind: "effectiveOwnerEquals", value: owner },
-          { kind: "categoryEquals", value: "apparel" },
+          { kind: "categoryFeatureEquals", value: "apparel" },
         ],
       }),
     );

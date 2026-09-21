@@ -128,6 +128,7 @@ public actor CubbyClient {
         let entityType: Operations.FieldExplanation_explain.Input.Query.EntityTypePayload =
             switch subject.entity {
             case .product: .product
+            case .productCategory: .productCategory
             case .recipe: .recipe
             case .ingredient: .ingredient
             case .cookbook: .cookbook

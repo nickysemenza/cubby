@@ -1,7 +1,7 @@
 # Product writes and images
 
 Manufacturer pages are authoritative for manufacturer, model, concise canonical
-name, and category. Exact retailer pages are authoritative for UPC, retailer
+name, and evidence for an existing taxonomy choice. Do not silently add categories. Exact retailer pages are authoritative for UPC, retailer
 SKU, exact image, and current direct offer. A current `price` override replaces
 the Expense-derived fallback; never infer it from a marketplace, crossed-out
 price, aggregator, or receipt quantity. Nutrition decisions (`fdc_id` or
@@ -20,10 +20,12 @@ replacement: preserve every intended ID and remove MCP-only timestamps first.
 
 For settled attachments, call `attach_files({items})`; every item supplies an
 `entityId`, one `url` or `uploadId`, its idempotency key, and the freshly read
-`expectedImageCount` for a Product gallery. Multiple files for one Product
-are dependent count changes, so prefer separate target batches. It returns
-ordered independent results, so retry only the failed indices after a fresh
-read. A mismatch means another writer changed that gallery.
+`expectedImageCount` for a Product gallery. This count includes all attachments,
+including labels and PDFs. Use `itemImageCount` to find Products without item
+imagery. Multiple files for one Product are dependent count changes, so prefer
+separate target batches. Results preserve input indices independently; retry
+only failed items after a fresh read, retaining their logical idempotency keys.
+A count mismatch means the gallery changed.
 Keep a write singular when it needs judgment during the mutation: a collision,
 gallery drift, cover replacement, or fresh display-order decision.
 

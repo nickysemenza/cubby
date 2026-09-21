@@ -3,6 +3,10 @@ import {
   locationListRefOut,
 } from "@cubby/schemas/location";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  categorySummaryFixture,
+  taxonomyId,
+} from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
 import { resolveProductPricing } from "~/server/repo/product/pricing";
@@ -120,7 +124,8 @@ const product = {
   model: null,
   notes: null,
   expectedQuantity: null,
-  category: "food" as const,
+  categoryId: taxonomyId("food"),
+  category: categorySummaryFixture("food"),
   price: 4.5,
   usdaUnavailable: null,
   stockTracked: null,
@@ -236,7 +241,7 @@ describe("location mappers", () => {
           model: null,
           notes: null,
           expectedQuantity: null,
-          category: "food",
+          category: categorySummaryFixture("food"),
           price: 4.5,
           usdaUnavailable: null,
           createdAt: CREATED_AT,

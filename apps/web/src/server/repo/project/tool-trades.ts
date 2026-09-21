@@ -1,11 +1,12 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { Trade } from "@cubby/schemas/project";
-import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
 import type { DrizzleClient } from "~/server/db";
 import { expense, product } from "~/server/db/schema";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { effectiveExpenseTradeSql } from "~/server/repo/expense-inheritance";
+import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 
 const effectiveTrade = effectiveExpenseTradeSql();
 
@@ -33,7 +34,7 @@ export async function deriveToolTrades(
       product,
       and(
         eq(product.id, expense.productId),
-        eq(product.category, "tools"),
+        categoryFeatureSql(sql`${product.categoryId}`, "tools"),
         notDeleted(product),
       ),
     )

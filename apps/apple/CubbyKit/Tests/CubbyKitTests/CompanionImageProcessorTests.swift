@@ -61,6 +61,32 @@ struct CompanionImageProcessorTests {
         #expect(try Data(contentsOf: fixtureURL) == sourceBytes)
     }
 
+    @Test("Retains an already transparent original without uploading another cutout")
+    func transparentOriginalDoesNotUpload() async throws {
+        let context = try #require(
+            CGContext(
+                data: nil, width: 16, height: 16, bitsPerComponent: 8, bytesPerRow: 64,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.clear(CGRect(x: 0, y: 0, width: 16, height: 16))
+        context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 4, y: 4, width: 8, height: 8))
+        let bytes = try ImageEncoding.encode(#require(context.makeImage()), as: .png)
+        let upload = UploadProbe()
+        let processor = CompanionImageProcessor(
+            download: { _ in bytes },
+            put: { data, url, contentType in await upload.record(data, url: url, contentType: contentType) })
+        let result = try await processor.makeTransparentCutout(
+            source: CompanionImageSource(
+                url: URL(string: "https://images.example.invalid/transparent.png")!,
+                sha256: Self.sha256(bytes), contentType: "image/png"),
+            output: CompanionImageOutput(
+                uploadURL: URL(string: "https://uploads.example.invalid/cutout.png")!,
+                contentType: "image/png"))
+        #expect(result == .alreadyTransparent)
+        #expect(await upload.count == 0)
+    }
+
     @Test("Returns no subject without uploading a uniform canvas")
     func uniformCanvasDoesNotUpload() async throws {
         let sourceBytes = try ImageEncoding.encode(

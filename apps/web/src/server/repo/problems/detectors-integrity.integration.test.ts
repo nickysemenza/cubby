@@ -406,6 +406,8 @@ const mkRecipeSection = async (db: Database) => {
 /** One live-row factory per entity that appears as a `targetEntity` among the
  * must-target-live edges below. */
 const TARGET_FACTORIES = {
+  productCategory: (db: Database) =>
+    insertWithShortcode(db, "productCategory", { name: uniq("Category") }),
   cookbook: mkCookbook,
   expense: mkExpense,
   image: mkImage,
@@ -432,6 +434,17 @@ const TARGET_FACTORIES = {
  * (named by the edge key) points at `targetId`. Every other required column on
  * the source row is filled with an unrelated, always-live fixture. */
 const SOURCE_FACTORIES = {
+  "ProductCategory.parentId": (db, targetId) =>
+    insertWithShortcode(db, "productCategory", {
+      name: uniq("Child category"),
+      parentId: parseEntityId("productCategory", targetId),
+    }),
+  "Product.categoryId": (db, targetId) =>
+    insertWithShortcode(db, "product", {
+      name: uniq("Classified product"),
+      manufacturer: "Test Mfr",
+      categoryId: parseEntityId("productCategory", targetId),
+    }),
   "ImageDerivative.imageId": (db, targetId) =>
     insertAndReturn(db, imageDerivative, {
       imageId: parseEntityId("image", targetId),
@@ -1191,15 +1204,6 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
     }),
 
-  "Purchase.defaultProjectId": async (db, targetId) => {
-    const vendor = await mkVendor(db);
-    return insertWithShortcode(db, "purchase", {
-      vendorId: vendor.id,
-      defaultProjectId: parseEntityId("project", targetId),
-      date: "2024-01-15",
-    });
-  },
-
   "Expense.purchaseId": (db, targetId) =>
     insertWithShortcode(db, "expense", {
       name: uniq("Expense"),
@@ -1415,11 +1419,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 110 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 111 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(110);
+    expect(derivedMustTargetLiveEdges).toHaveLength(111);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

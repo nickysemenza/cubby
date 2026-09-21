@@ -1,16 +1,12 @@
+import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import {
-  formatCategoryLabel,
-  getCategoryColor,
-  type ProductCategory,
-} from "@cubby/shared";
-import {
-  AppWindow,
   Archive,
   Bolt,
   BookOpen,
   Cpu,
   Disc,
   type LucideIcon,
+  Package,
   Settings,
   Shirt,
   Sofa,
@@ -22,9 +18,7 @@ import {
 // Re-export colors/helpers from @cubby/shared for existing consumers
 export { formatCategoryLabel, getCategoryColor };
 
-// Exhaustive at construction: a new ProductCategory without a key here is a
-// compile error (replaces the old assertNever default-case guarantee).
-const categoryIcons = {
+const featureIcons = {
   food: Utensils,
   tools: Wrench,
   "tool-consumables": Disc,
@@ -32,15 +26,17 @@ const categoryIcons = {
   storage: Archive,
   hardware: Bolt,
   electronics: Cpu,
-  software: AppWindow,
+  software: Package,
   books: BookOpen,
   household: Sofa,
   supplies: Sparkles,
   apparel: Shirt,
-} satisfies Record<ProductCategory, LucideIcon>;
+} satisfies Record<string, LucideIcon>;
 
 /**
  * Get the icon component for a product category
  */
-export const getCategoryIcon = (category: ProductCategory): LucideIcon =>
-  categoryIcons[category]; // safe: complete Record keyed by the enum
+export const getCategoryIcon = (
+  feature: string | null | undefined,
+): LucideIcon =>
+  Object.entries(featureIcons).find(([key]) => key === feature)?.[1] ?? Package;

@@ -1,12 +1,10 @@
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
-  productCategory,
-  productCategoryValues,
   type ProductFilters,
   type ProductListItem,
 } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
-import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
+import { formatCategoryLabel } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -17,7 +15,6 @@ import {
   createBooleanColumn,
   createCurrencyColumn,
   createExternalLinkColumn,
-  createFilterableSelectColumn,
   createInventoryEntriesColumn,
   createPlainDateColumn,
   createSingleEntityInlineLinkColumn,
@@ -37,12 +34,12 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
 import { useProductTagOptions } from "~/app/_components/hooks/useProductTagOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/app/_components/inventory/inventory-entries-quick-edit-dialog";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
-import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
 import { TruncatedList } from "~/app/_components/TruncatedList";
 import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
 import {
@@ -101,6 +98,7 @@ const columnHelper = createCubbyColumnHelper<ProductTreeRow>();
 // synthetic columns and `components` is a relation column — none has a
 // matching `model.fields` entry, so they stay hand-declared here.
 const PRODUCT_INITIAL_COLUMN_VISIBILITY = {
+  categoryFeature: false,
   dataGaps: false,
   modelPresence: false,
   upcPresence: false,
@@ -192,6 +190,7 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
 function useProductFilterOptions() {
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
+  const { categories } = useProductCategories();
   const projectOptions = useDeferredFilterOptions("project");
   const locationOptions = useDeferredFilterOptions("locationWithInventory");
   const ingredientOptions = useDeferredFilterOptions("ingredientWithProduct");
@@ -254,6 +253,20 @@ function useProductFilterOptions() {
   );
   return useFilterOptions({
     tags: tagOptions,
+    productCategories: categories.map((category) => ({
+      value: category.id,
+      label: category.path.map((node) => node.name).join(" / "),
+    })),
+    productCategoryFamilies: categories.flatMap((category) =>
+      category.feature
+        ? [
+            {
+              value: category.feature,
+              label: category.name,
+            },
+          ]
+        : [],
+    ),
     productVendors: vendorOptions,
     project: projectOptions,
     productLocations: locationOptions,
@@ -265,12 +278,7 @@ function useProductFilterOptions() {
 }
 
 const groupKeyFn = (item: ProductTreeRow) => formatCategoryLabel(item.category);
-const groupColorFn = (key: string) => {
-  const category = productCategoryValues.find(
-    (candidate) => formatCategoryLabel(candidate) === key,
-  );
-  return getCategoryColor(category ?? null);
-};
+const groupColorFn = (_key: string) => "var(--chart-neutral)";
 const PRODUCT_GROUP_CONFIG: GroupConfig<ProductTreeRow> = {
   field: "category",
   keyFn: groupKeyFn,
@@ -307,24 +315,13 @@ export const productListOverride = defineListOverride<
       () =>
         createCubbyColumnCollection<ProductTreeRow>((add) => {
           add(
-            createFilterableSelectColumn(columnHelper, "category", {
-              header: "Category",
-              className: "w-32",
-              placeholder: "Filter by category...",
-              selectOptions: productCategoryOptionsWithTheme,
-              renderCell: (cat) => <CategoryLabel category={cat} />,
-              // Mobile lists group by category (section headers), so the
-              // chip is redundant per-row — manufacturer is the subtitle.
-              mobile: { slot: "subtitle", priority: 30 },
-              editable: {
-                parseValue: (value) => productCategory.nullable().parse(value),
-                onSave: async (newCategory, product) => {
-                  await updateProductMutation.mutateAsync({
-                    id: product.id,
-                    data: { category: newCategory },
-                  });
-                },
+            columnHelper.accessor("category", {
+              header: "Classification",
+              meta: {
+                className: "w-48",
+                mobile: { slot: "subtitle", priority: 30 },
               },
+              cell: (info) => <CategoryLabel category={info.getValue()} />,
             }),
           );
           add(
@@ -746,6 +743,24 @@ export const productListOverride = defineListOverride<
                   },
                   clearable: true,
                 },
+              },
+            ),
+          );
+          add(
+            columnHelper.accessor(
+              (row) => row.category?.path[0]?.name ?? null,
+              {
+                id: "categoryFeature",
+                header: "Category family",
+                meta: {
+                  provenance: relationshipFieldProvenance(
+                    "product",
+                    "category",
+                    "reference",
+                  ),
+                },
+                enableSorting: false,
+                cell: (info) => info.getValue() ?? <NoneValue />,
               },
             ),
           );

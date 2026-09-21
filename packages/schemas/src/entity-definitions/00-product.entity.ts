@@ -11,19 +11,20 @@ import {
   imageShortcode,
   ingredientShortcode,
   productShortcode,
+  productCategoryShortcode,
 } from "../identifier-fields.js";
-import { imageOut } from "./field-primitives.js";
+import { productAttachmentImageOut } from "./field-primitives.js";
 import { money } from "@cubby/schemas/money";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import {
   moneyNullable,
   positiveMoneyNullable,
-  productCategory,
   productPricingOut,
 } from "@cubby/schemas/product-fields";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { productCategorySummary } from "../product-category-fields";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
@@ -60,7 +61,7 @@ export default defineEntity({
             "manufacturer",
             "model",
             "price",
-            "category",
+            "categoryId",
             "primaryGtin",
             "fdc_id",
             "ingredientId",
@@ -143,6 +144,7 @@ export default defineEntity({
           title: "Movements",
           placement: "full",
         },
+        { kind: "slot", id: "labels", title: "Labels" },
         { kind: "slot", id: "nutrition", title: "Nutrition" },
         // `unitMappings` is composed onto the detail read beside the generated
         // read map (it is not a read-projection field), so it cannot be a
@@ -359,26 +361,65 @@ export default defineEntity({
         },
       },
       {
-        key: "category",
-        kind: "enum",
+        key: "categoryId",
+        kind: "identifier",
+        label: "Classification",
         nullable: true,
+        reference: { entity: "productCategory" },
         control: {
-          kind: "select",
+          kind: "specialized",
+          renderer: "entity-select",
           section: "category",
-          suggest: { basis: ["name", "manufacturer"] },
+          suggest: {
+            basis: ["name", "manufacturer", "notes", "classificationEvidence"],
+          },
         },
         display: {
           list: true,
-          listOrder: 0,
           detail: true,
+          columnId: "category",
+          listOrder: 0,
           detailOrder: 5,
-          width: "sm",
+          width: "md",
           mobile: { slot: "subtitle", priority: 30 },
         },
         validation: {
-          read: productCategory.nullable(),
-          create: productCategory.nullable().optional(),
-          update: productCategory.nullable().optional(),
+          read: productCategoryShortcode.nullable(),
+          create: productCategoryShortcode.nullable().optional(),
+          update: productCategoryShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "category",
+        kind: "json",
+        nullable: true,
+        validation: {
+          read: productCategorySummary.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "classificationEvidence",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
+        key: "itemImageCount",
+        kind: "number",
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "labelImageCount",
+        kind: "number",
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -576,6 +617,20 @@ export default defineEntity({
         },
       },
       {
+        key: "pendingImagePurposes",
+        kind: "json",
+        readKey: null,
+        validation: {
+          read: null,
+          create: z
+            .record(imageShortcode, z.enum(["item", "label"]))
+            .optional(),
+          update: z
+            .record(imageShortcode, z.enum(["item", "label"]))
+            .optional(),
+        },
+      },
+      {
         key: "removeImageIds",
         kind: "identifier",
         label: "Remove Image IDs",
@@ -655,6 +710,15 @@ export default defineEntity({
         },
       },
       {
+        key: "labelImages",
+        kind: "json",
+        validation: {
+          read: z.array(productAttachmentImageOut),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "images",
         kind: "json",
         display: { list: true, standard: "image", columnId: "image" },
@@ -676,7 +740,7 @@ export default defineEntity({
           ],
         },
         validation: {
-          read: z.array(imageOut),
+          read: z.array(productAttachmentImageOut),
           create: null,
           update: null,
         },
@@ -1085,7 +1149,7 @@ export default defineEntity({
       "deletedAt",
       { key: "ingredientId", reference: "ingredient" },
       { key: "growsIngredientId", reference: "ingredient" },
-      { key: "category", specialized: "enum:category" },
+      { key: "categoryId", reference: "productCategory" },
       {
         key: "tags",
         default: "literal",
@@ -1114,7 +1178,7 @@ export default defineEntity({
       "model",
       "notes",
       "expectedQuantity",
-      "category",
+      "categoryId",
       "ingredientId",
       "growsIngredientId",
       "price",
@@ -1124,6 +1188,7 @@ export default defineEntity({
       "usdaUnavailable",
       "stockTracked",
       "pendingImageIds",
+      "pendingImagePurposes",
     ],
     update: [
       "name",
@@ -1136,7 +1201,7 @@ export default defineEntity({
       "model",
       "notes",
       "expectedQuantity",
-      "category",
+      "categoryId",
       "ingredientId",
       "growsIngredientId",
       "price",
@@ -1146,6 +1211,7 @@ export default defineEntity({
       "usdaUnavailable",
       "stockTracked",
       "pendingImageIds",
+      "pendingImagePurposes",
       "removeImageIds",
       "imageOrder",
     ],
@@ -1155,7 +1221,7 @@ export default defineEntity({
       "aliases",
       "tags",
       "manufacturer",
-      "category",
+      "categoryId",
       "externalIds",
       "fdc_id",
       "model",
@@ -1191,6 +1257,7 @@ export default defineEntity({
       ],
       default: "createdAt",
       computed: [
+        "category",
         "location",
         "ingredient",
         "expenseTotal",
@@ -1212,7 +1279,7 @@ export default defineEntity({
           "aliases",
           "manufacturer",
           "model",
-          "category",
+          "categoryId",
           "ingredientId",
           "growsIngredientId",
           "upc",
@@ -1223,7 +1290,7 @@ export default defineEntity({
           "labelNutrition",
           "notes",
         ],
-        identity: ["name", "aliases", "manufacturer", "model", "category"],
+        identity: ["name", "aliases", "manufacturer", "model", "categoryId"],
         price: ["price"],
         stock: ["stockTracked"],
       },
@@ -1241,7 +1308,7 @@ export default defineEntity({
       "model",
       "notes",
       "expectedQuantity",
-      "category",
+      "categoryId",
       "growsIngredientId",
       "images",
       "externalIds",
@@ -1253,6 +1320,11 @@ export default defineEntity({
       "dataQuality",
       "createdAt",
       "updatedAt",
+      "category",
+      "itemImageCount",
+      "labelImageCount",
+      "labelImages",
+      "classificationEvidence",
     ],
   },
   fields: {
@@ -1348,22 +1420,21 @@ export default defineEntity({
         ],
       },
       {
+        columnId: "categoryFeature",
+        field: "categoryFeatureFilter",
+        kind: "multiselect",
+        placeholder: "Filter category family...",
+        optionsKey: "productCategoryFamilies",
+        nullable: { field: "categoryPresenceFilter", label: "classification" },
+      },
+      {
         columnId: "category",
         field: "categoryFilter",
-        kind: "multiselect",
-        placeholder: "Filter by category...",
-        deriveSchema: true,
-        stored: true,
-        schemaRef: {
-          module: "@cubby/schemas/product-fields",
-          export: "productCategory",
-        },
-        schemaDescription: "Filter by category",
-        optionsRef: {
-          module: "~/app/_components/products/product-category-icons",
-          export: "productCategoryOptionsWithTheme",
-        },
-        nullable: { field: "categoryPresenceFilter", label: "category" },
+        kind: "idMulti",
+        placeholder: "Filter classification...",
+        brandRef: { entity: "productCategory" },
+        optionsKey: "productCategories",
+        nullable: { field: "categoryPresenceFilter", label: "classification" },
       },
       {
         columnId: "location",
@@ -1868,6 +1939,19 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "category",
+      label: "Classification",
+      target: "productCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Product.categoryId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Product.categoryId", direction: "incoming" }],
+      },
+    },
     {
       key: "ingredient",
       label: "Ingredient",

@@ -319,13 +319,13 @@ describe("buildProductWhere", () => {
     { name: "notes", filters: { notesFilter: "gift" }, contains: '"notes"' },
     {
       name: "category",
-      filters: { categoryFilter: "food" } as const,
-      contains: '"category"',
+      filters: { categoryFeatureFilter: "food" } as const,
+      contains: '"categoryId"',
     },
     {
       name: "category presence",
       filters: { categoryPresenceFilter: "none" } as const,
-      contains: '"category"',
+      contains: '"categoryId"',
     },
     {
       name: "manufacturerExact",

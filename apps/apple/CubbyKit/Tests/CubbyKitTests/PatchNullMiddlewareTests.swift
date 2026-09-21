@@ -80,14 +80,14 @@ struct PatchNullMiddlewareTests {
             await #expect(throws: CubbyAPIError.self) {
                 try await client.update(
                     EntityCatalog[.product], id: "PRD-2345",
-                    patch: EntityPatch(values: ["manufacturer": "Lodge"], cleared: ["category"]))
+                    patch: EntityPatch(values: ["manufacturer": "Lodge"], cleared: ["categoryId"]))
             }
         }
         let request = try #require(requests.first)
         #expect(requests.count == 1)
         #expect(request.method == "PATCH")
         #expect(request.path == "/api/v1/products/PRD-2345")
-        #expect(request.body == ["manufacturer": "Lodge", "category": .null])
+        #expect(request.body == ["manufacturer": "Lodge", "categoryId": .null])
         // The rewritten body's length, not the generated client's.
         #expect(request.contentLength == String(try JSONEncoder().encode(request.body).count))
     }
@@ -131,7 +131,7 @@ struct PatchNullMiddlewareTests {
             await #expect(throws: DecodingError.self) {
                 try await client.update(
                     EntityCatalog[.product], id: "PRD-2345",
-                    patch: EntityPatch(values: ["category": "not-a-category"]))
+                    patch: EntityPatch(values: ["categoryId": ["unexpected": "object"]]))
             }
         }
         #expect(requests.isEmpty)

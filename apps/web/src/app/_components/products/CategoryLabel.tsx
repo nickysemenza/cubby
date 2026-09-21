@@ -1,4 +1,4 @@
-import type { ProductCategory } from "@cubby/schemas/product";
+import type { ProductCategory } from "@cubby/shared";
 
 import { EnumPill } from "~/components/ui/enum-pill";
 import { NoneValue } from "~/components/ui/none-value";
@@ -18,7 +18,7 @@ export function CategoryLabel({ category }: CategoryLabelProps) {
       color={getCategoryColor(category)}
       icon={<CategoryIcon category={category} />}
     >
-      {category.replace("-", " ")}
+      {category.path.map((node) => node.name).join(" / ")}
     </EnumPill>
   );
 }

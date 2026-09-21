@@ -3,7 +3,7 @@ import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -35,6 +35,7 @@ import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
 } from "./image-processing";
 import { updateImageProcessingSettings } from "./image-processing-maintenance";
+import { persistImageProcessingSubmission } from "./image-processing-submission";
 import { hydrateImageReadProjection } from "./image-read-projection";
 import { createProductFixture, makeProductInput } from "./repo.fixtures";
 
@@ -203,6 +204,96 @@ describe("durable image representations", () => {
       .where(eq(imageProcessingJob.id, row.jobId));
     expect(job?.state).toBe("pending");
     expect(job?.attempts).toBe(0);
+  });
+
+  it("skips label-only cutouts at claim time but keeps shared item images eligible", async () => {
+    const labelOnly = await source();
+    const labelOwner = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Label-only image owner" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .insert(productImage)
+      .values({
+        productId: labelOwner.entityId,
+        imageId: parseEntityId("image", labelOnly.id),
+        sortOrder: 0,
+        purpose: "label",
+      });
+
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        jobId: labelOnly.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60000,
+      }),
+    ).toBeNull();
+    const [skippedJob] = await getDb(ctx.db)
+      .select({ state: imageProcessingJob.state })
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, labelOnly.jobId));
+    const [skippedDerivative] = await getDb(ctx.db)
+      .select({ status: imageDerivative.status })
+      .from(imageDerivative)
+      .where(eq(imageDerivative.id, labelOnly.derivativeId));
+    expect(skippedJob?.state).toBe("skipped");
+    expect(skippedDerivative?.status).toBe("skipped");
+
+    await getDb(ctx.db)
+      .update(productImage)
+      .set({ purpose: "item" })
+      .where(
+        and(
+          eq(productImage.productId, labelOwner.entityId),
+          eq(productImage.imageId, parseEntityId("image", labelOnly.id)),
+        ),
+      );
+    expect(
+      (
+        await persistImageProcessingSubmission(ctx.db, {
+          id: labelOnly.shortcode,
+          kinds: ["subject_lift"],
+        })
+      ).jobIds,
+    ).toContain(labelOnly.jobId);
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        jobId: labelOnly.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60000,
+      }),
+    ).toMatchObject({ id: labelOnly.jobId, kind: "subject_lift" });
+
+    const shared = await source();
+    const itemOwner = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Item image owner" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .insert(productImage)
+      .values([
+        {
+          productId: labelOwner.entityId,
+          imageId: parseEntityId("image", shared.id),
+          sortOrder: 1,
+          purpose: "label",
+        },
+        {
+          productId: itemOwner.entityId,
+          imageId: parseEntityId("image", shared.id),
+          sortOrder: 0,
+          purpose: "item",
+        },
+      ]);
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        jobId: shared.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60000,
+      }),
+    ).toMatchObject({ id: shared.jobId, kind: "subject_lift" });
   });
 
   it("keeps immutable analysis history and confirmed corrections while refreshing image search", async () => {

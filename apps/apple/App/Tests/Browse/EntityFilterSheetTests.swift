@@ -17,9 +17,9 @@ struct EntityFilterSheetTests {
         #expect(draft.state["productNameFilter"] == .single("skillet"))
 
         let multi = try #require(inventory.filter("category"))
-        draft.setMany(["tools", "cookware"], for: multi)
-        #expect(draft.state["categoryFilter"] == .many(["tools", "cookware"]))
-        #expect(draft.many(multi) == ["tools", "cookware"])
+        draft.setMany(["CAT-2345", "CAT-6789"], for: multi)
+        #expect(draft.state["categoryFilter"] == .many(["CAT-2345", "CAT-6789"]))
+        #expect(draft.many(multi) == ["CAT-2345", "CAT-6789"])
 
         let id = try #require(inventory.filter("productId"))
         draft.setSingle("PRD-1", for: id)

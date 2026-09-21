@@ -3,6 +3,7 @@ import type {
   FinancialAccountId,
   IngredientId,
   LocationId,
+  ProductCategoryId,
   ProductId,
   PlantingId,
   ProjectId,
@@ -29,6 +30,7 @@ import {
   meal,
   mealRecipe,
   planting,
+  product,
   purchase,
   recipe,
   recipeSection,
@@ -45,6 +47,7 @@ import {
   uuidArrayParam,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   getOrphanedSearchDocumentRefs,
   type SearchDocumentCursor,
@@ -150,6 +153,22 @@ export async function findInventoryEmbeddingRefsForProducts(
     columns: { id: true },
   });
   return rows.map((row) => ({ entityType: "inventory", entityId: row.id }));
+}
+
+/** Product embeddings include their category name, including inherited roots. */
+export async function findProductEmbeddingRefsForCategories(
+  db: Database | DrizzleTransaction,
+  categoryIds: ProductCategoryId[],
+): Promise<SearchableEntityRef[]> {
+  if (categoryIds.length === 0) return [];
+  const rows = await unwrapDb(db).query.product.findMany({
+    where: and(
+      sql`${product.categoryId} IN ${categoryDescendantsSql(categoryIds)}`,
+      notDeleted(product),
+    ),
+    columns: { id: true },
+  });
+  return rows.map((row) => ({ entityType: "product", entityId: row.id }));
 }
 
 /** Tasks embed their subject product's name, so a product rename must refresh

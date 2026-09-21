@@ -3,12 +3,14 @@ import type {
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
 import { TRADE_LABELS } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
   FieldSuggestSpec,
   ReferenceSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
+import { FIELD_SUGGEST_REGISTRY } from "~/server/ai/field-suggest/registry";
 import type { JevPort } from "~/server/ai/jev";
 import type { Database } from "~/server/db";
 
@@ -141,11 +143,11 @@ describe("suggestFields", () => {
     {
       name: "an all-null basis resolves to null without calling the model",
       entity: "product",
-      targets: ["category"],
+      targets: ["categoryId"],
       basis: {},
       jev: jevPortPicking("food:"),
       assert: (out, jev) => {
-        expect(out.suggestions.category).toBeNull();
+        expect(out.suggestions.categoryId).toBeNull();
         expect(jev).not.toHaveBeenCalled();
       },
     },
@@ -162,6 +164,34 @@ describe("suggestFields", () => {
       assert(out, jev);
     },
   );
+
+  it("renders every category's full hierarchy and lexical evidence", () => {
+    const spec = FIELD_SUGGEST_REGISTRY["product.categoryId"];
+    expect(spec.kind).toBe("reference");
+    if (spec.kind !== "reference") return;
+
+    const rootId = testShortcode("productCategory", "CAT-1ABC");
+    const groupId = testShortcode("productCategory", "CAT-2ABC");
+    const leafId = testShortcode("productCategory", "CAT-3ABC");
+    expect(
+      spec.renderLine({
+        id: leafId,
+        name: "Rain shell",
+        path: [
+          { id: rootId, name: "Apparel" },
+          { id: groupId, name: "Outerwear" },
+          { id: leafId, name: "Rain shell" },
+        ],
+        aliases: ["waterproof jacket"],
+        description: "Outer layer for wet weather.",
+        ancestorIds: [rootId, groupId],
+        feature: "apparel",
+      }),
+    ).toBe(
+      "CAT-3ABC | Apparel > Outerwear > Rain shell — aliases: waterproof jacket — description: Outer layer for wet weather.",
+    );
+    expect(spec.maxCandidates).toBe(Number.MAX_SAFE_INTEGER);
+  });
 
   it.each(["provided", "suggested"] as const)(
     "runs independent fields concurrently in %s mode",

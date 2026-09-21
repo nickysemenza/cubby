@@ -8,6 +8,7 @@ import { inventory } from "~/app/inventory/inventory.functions";
 import { recommendations } from "~/lib/recommendations.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import { InventoryPlacementSuggestion } from "./inventory-placement-suggestion";
 
 const INVENTORY_ID = testShortcode("inventory", "INV-PARK");
@@ -59,7 +60,7 @@ const inventoryitem = inventoryWithLocationAndProductOut.parse({
     primaryGtin: null,
     fdc_id: null,
     expectedQuantity: null,
-    category: "food",
+    category: categorySummaryFixture("food"),
     price: null,
     usdaUnavailable: null,
     images: [],

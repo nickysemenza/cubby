@@ -167,29 +167,17 @@ function getFurnitureSpec(type: LocationType | null): FurnitureSpec {
 }
 
 export function getItemHeight(category: ProductCategory | null): number {
-  switch (category) {
+  switch (category?.feature) {
     case "food":
       return 0.5;
     case "tools":
       return 0.65;
-    case "electronics":
-      return 0.3;
     case "books":
       return 0.3;
-    case "hardware":
-      return 0.4;
-    case "storage":
-      return 0.5;
-    case "tool-consumables":
-      return 0.35;
-    case "tool-accessories":
-      return 0.45;
-    case "household":
-      return 0.45;
-    case "supplies":
-      return 0.38;
-    case "apparel":
+    case "software":
       return 0.3;
+    case "apparel":
+      return 0.45;
     default:
       return 0.4;
   }

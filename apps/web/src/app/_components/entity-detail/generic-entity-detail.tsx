@@ -6,7 +6,7 @@ import {
 import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { partitionEntityFiles } from "@cubby/schemas/image";
+import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { Link } from "@tanstack/react-router";
 import { Clock, FileText, ImageIcon, Info, Link2, Puzzle } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
@@ -503,6 +503,25 @@ function editRequestFor<E extends GenericDetailEntity>(
   return request as EntityEditDialogRequest<EditableEntity>;
 }
 
+/** Keep the complete attachment list separate from Product's item gallery. */
+function detailFiles<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+  bag: DetailRecordBag,
+) {
+  const attachments = partitionEntityFiles(bag.attachments ?? []);
+  // Product's domain gallery excludes confirmed labels; the universal
+  // attachment list remains complete for documents and write preconditions.
+  const images =
+    entity === "product"
+      ? partitionEntityFiles(
+          readRecordField(record, "images", z.array(imageOut).default([])),
+        ).images
+      : attachments.images;
+  const { documents } = attachments;
+  return { images, documents };
+}
+
 /**
  * The one detail page: every section, the hero and the edit affordance come
  * from `entitySummary[entity].detail`; a slot is the only hand-written fill
@@ -529,7 +548,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
     heroActions.includes("edit") &&
     (EditOverride !== undefined || isGeneratedBrowserCrudEntity(entity));
 
-  const { images, documents } = partitionEntityFiles(bag.attachments ?? []);
+  const { images, documents } = detailFiles(entity, record, bag);
   const heroImages = detail.hero.images ? images : undefined;
   const sections = declaredSections(entity, record, bag, operations);
 

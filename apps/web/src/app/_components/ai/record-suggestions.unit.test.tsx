@@ -40,7 +40,7 @@ afterEach(() => {
 });
 const id = testShortcode("product", "first");
 const food = {
-  value: "food",
+  value: "CAT-2222",
   label: "Food",
   confidence: "high" as const,
   probability: 0.97,
@@ -57,22 +57,22 @@ function Surface({
   operations: EntitySuggestionsOperations;
   visible?: boolean;
 }) {
-  const record = { id, name, manufacturer: null, category: null };
+  const record = { id, name, manufacturer: null, categoryId: null };
   return (
     <RecordSuggestionsProvider
       entity="product"
       records={visible ? [record] : []}
-      fieldKeys={["category"]}
+      fieldKeys={["categoryId"]}
       operations={operations}
     >
       {visible ? (
-        <RecordFieldSuggestion record={record} field="category">
+        <RecordFieldSuggestion record={record} field="categoryId">
           <span>Empty category</span>
           <FieldSuggestionApply
             source={{
               entity: "product",
               basisMode: "provided",
-              targets: ["category"],
+              targets: ["categoryId"],
               basis: { name, manufacturer: null },
             }}
             currentValue={null}
@@ -96,7 +96,7 @@ describe("record suggestions", () => {
           return new Promise((resolve) => {
             finish = resolve;
           });
-        return { suggestions: { category: food } };
+        return { suggestions: { categoryId: food } };
       }),
     };
     const view = render(<Surface name="red apple" operations={operations} />, {
@@ -110,7 +110,9 @@ describe("record suggestions", () => {
     await waitFor(() => expect(calls).toHaveLength(2));
     await act(async () => {
       finish({
-        suggestions: { category: { ...food, value: "tools", label: "Tools" } },
+        suggestions: {
+          categoryId: { ...food, value: "CAT-2224", label: "Tools" },
+        },
       });
     });
     await screen.findByText("Suggested: Tools");

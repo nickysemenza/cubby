@@ -77,14 +77,14 @@ struct GenericEntityEditModelTests {
     // Minimal typed mutation results: the generated client decodes the response before the
     // model sees it, so the stub must answer with every required key of the item schema.
     nonisolated private static let productUpdated = Data(
-        #"{"action":"update","entity":"product","item":{"id":"PRD-2345","name":"Sample","aliases":[],"tags":[],"manufacturer":"x","model":null,"notes":null,"expectedQuantity":null,"images":[],"externalIds":[],"pricing":{"source":"explicit","knownExpenseCount":0,"unknownExpenseCount":0,"knownUnitCount":0,"partial":false},"usdaUnavailable":null,"stockTracked":null,"dataQuality":{"status":"complete","score":100,"facets":[],"gaps":[],"exceptions":[],"relatedGaps":[],"relatedExceptions":[]},"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","coverImageUrl":null},"sideEffects":{"backgroundBatches":[]}}"#
+        #"{"action":"update","entity":"product","item":{"id":"PRD-2345","name":"Sample","aliases":[],"tags":[],"manufacturer":"x","model":null,"notes":null,"expectedQuantity":null,"categoryId":null,"images":[],"externalIds":[],"pricing":{"source":"explicit","knownExpenseCount":0,"unknownExpenseCount":0,"knownUnitCount":0,"partial":false},"usdaUnavailable":null,"stockTracked":null,"dataQuality":{"status":"complete","score":100,"facets":[],"gaps":[],"exceptions":[],"relatedGaps":[],"relatedExceptions":[]},"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z","category":null,"itemImageCount":0,"labelImageCount":0,"labelImages":[],"classificationEvidence":"","coverImageUrl":null},"sideEffects":{"backgroundBatches":[]}}"#
             .utf8)
     nonisolated private static let locationCreated = Data(
         #"{"action":"create","entity":"location","item":{"id":"LOC-9ABC","name":"Bin 9","aliases":[],"notes":null,"lastBulkInventory":null,"aiDescription":null,"images":[],"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"},"sideEffects":{"backgroundBatches":[]}}"#
             .utf8)
 
     private static let productOriginal: JSONValue = [
-        "id": "PRD-2345", "name": "Skillet", "manufacturer": "Sample Co", "category": "tools",
+        "id": "PRD-2345", "name": "Skillet", "manufacturer": "Sample Co", "categoryId": "CAT-2224",
         "attachments": [["id": "IMG-2345"], ["id": "IMG-3456"], ["id": "IMG-4567"]],
     ]
 
@@ -96,7 +96,7 @@ struct GenericEntityEditModelTests {
             original: Self.productOriginal)
         #expect(!model.canSave)
         model.draft["manufacturer"] = "Lodge"
-        model.draft["category"] = .null
+        model.draft["categoryId"] = .null
         #expect(model.canSave)
         let saved = await model.save()
         #expect(saved)
@@ -105,7 +105,7 @@ struct GenericEntityEditModelTests {
         #expect(requests.count == 1)
         #expect(requests.first?.method == "PATCH")
         #expect(requests.first?.path == "/api/v1/products/PRD-2345")
-        #expect(requests.first?.body == ["manufacturer": "Lodge", "category": .null])
+        #expect(requests.first?.body == ["manufacturer": "Lodge", "categoryId": .null])
     }
 
     @Test func createPostsTheDraftAndReturnsTheID() async throws {

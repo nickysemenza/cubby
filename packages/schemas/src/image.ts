@@ -23,7 +23,12 @@ import {
 } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
-import { id, imageShortcode, projectShortcode } from "./identifiers";
+import {
+  id,
+  imageShortcode,
+  productShortcode,
+  projectShortcode,
+} from "./identifiers";
 import {
   generatedImageFieldSchemas,
   generatedImageFilterFields,
@@ -167,6 +172,10 @@ const initiateUploadFields = {
   filename: z.string(),
   size: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES),
   entityType: entityImage.optional(),
+  source: generatedImageFieldSchemas.update.source,
+  sourcePageUrl: generatedImageFieldSchemas.update.sourcePageUrl,
+  sourceAssetUrl: generatedImageFieldSchemas.update.sourceAssetUrl,
+  sourceName: generatedImageFieldSchemas.update.sourceName,
 };
 
 export const initiateUploadWithoutEntitySchema = z.object({
@@ -245,6 +254,9 @@ export const attachableImageEntity = z.enum(
 );
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
 
+export const productImagePurpose = z.enum(["item", "label"]);
+export type ProductImagePurpose = z.infer<typeof productImagePurpose>;
+
 const attachableImageEntities = nonEmptyTuple<ShortcodeEntity>(
   attachableImageEntity.options,
 );
@@ -252,13 +264,27 @@ export const attachableImageEntityId = anyShortcodeSchema(
   attachableImageEntities,
 );
 
-export const imageAttachExistingInput = z.object({
-  imageId: imageShortcode.describe("Existing uploaded image shortcode"),
-  targetId: attachableImageEntityId.describe(
-    "Shortcode of a live gallery record to attach the image to",
-  ),
-  sortOrder: z.number().int().nonnegative().optional(),
-});
+export const imageAttachExistingInput = z
+  .object({
+    imageId: imageShortcode.describe("Existing uploaded image shortcode"),
+    targetId: attachableImageEntityId.describe(
+      "Shortcode of a live gallery record to attach the image to",
+    ),
+    sortOrder: z.number().int().nonnegative().optional(),
+    purpose: productImagePurpose.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.purpose !== undefined &&
+      !productShortcode.safeParse(value.targetId).success
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["purpose"],
+        message: "purpose is only supported for Product attachments",
+      });
+    }
+  });
 export type ImageAttachExistingInput = z.infer<typeof imageAttachExistingInput>;
 
 export const imageAttachExistingOutput = z.object({
@@ -324,8 +350,17 @@ export const attachFileFields = {
     .nonnegative()
     .optional()
     .describe(
-      "Optional current displayable-image count; attachment fails if it has changed.",
+      "Optional current attachment count for Products (including labels and documents), or displayable-image count for other records; attachment fails if it has changed.",
     ),
+  purpose: productImagePurpose
+    .optional()
+    .describe(
+      "Product-only attachment role. Labels remain attached but do not supply covers.",
+    ),
+  source: generatedImageFieldSchemas.update.source,
+  sourcePageUrl: generatedImageFieldSchemas.update.sourcePageUrl,
+  sourceAssetUrl: generatedImageFieldSchemas.update.sourceAssetUrl,
+  sourceName: generatedImageFieldSchemas.update.sourceName,
 };
 
 export const mcpAttachFileInput = z
@@ -343,6 +378,13 @@ export const mcpAttachFileInput = z
         code: "custom",
         path: ["documentKind"],
         message: "documentKind is required for Purchase attachments",
+      });
+    }
+    if (value.purpose !== undefined && value.entityType !== "product") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["purpose"],
+        message: "purpose is only supported for Product attachments",
       });
     }
   });
@@ -515,6 +557,10 @@ export const imageWithEntitySchema = z.object({
   sha256: z.string().nullable(),
   renderStatus: ImageRenderStatus.nullable(),
   storageStatus: ImageStorageStatus.nullable(),
+  source: generatedImageFieldSchemas.read.source,
+  sourcePageUrl: generatedImageFieldSchemas.read.sourcePageUrl,
+  sourceAssetUrl: generatedImageFieldSchemas.read.sourceAssetUrl,
+  sourceName: generatedImageFieldSchemas.read.sourceName,
   useOriginal: generatedImageFieldSchemas.read.useOriginal,
   representations: generatedImageFieldSchemas.read.representations,
   verifiedAt: z.date().nullable(),

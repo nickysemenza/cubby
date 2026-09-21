@@ -40,6 +40,7 @@ import { mealNameUpdate } from "~/entities/list-columns/meal";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import { resolveListView } from "./generic-entity-list";
 import { listSlotFor } from "./list-slots";
 
@@ -342,7 +343,7 @@ describe("GenericEntityList", () => {
         id: testShortcode("product", "PRD-4K7M"),
         name: "Cast iron skillet",
         price: 42,
-        category: "household",
+        category: categorySummaryFixture("household"),
         externalIds: [],
         displayImages: [],
       },
@@ -352,7 +353,7 @@ describe("GenericEntityList", () => {
         id: testShortcode("product", "PRD-ZX4C"),
         name: "Mystery gadget",
         price: null,
-        category: "tools",
+        category: categorySummaryFixture("tools"),
         externalIds: [],
         displayImages: [],
       },

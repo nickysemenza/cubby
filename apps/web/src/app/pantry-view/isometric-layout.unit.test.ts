@@ -2,6 +2,7 @@ import { type InfLocation, infLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
+import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { buildRooms, type InventoryData } from "./isometric-layout";
 
 describe("isometric pantry layout", () => {
@@ -42,7 +43,10 @@ describe("isometric pantry layout", () => {
         id: "inventory-1",
         amount: { value: 1, unit: "each" },
         valuation: 20,
-        product: { name: "String lights", category: "household" },
+        product: {
+          name: "String lights",
+          category: categorySummaryFixture("household"),
+        },
         location: { id: tote.id, name: tote.name, type: null },
       },
     ];
@@ -64,7 +68,7 @@ describe("isometric pantry layout", () => {
         id: "inventory-1",
         amount: { value: 2, unit: "each" },
         valuation: 8,
-        product: { name: "Coffee", category: "food" },
+        product: { name: "Coffee", category: categorySummaryFixture("food") },
         location: { id: shelf.id, name: shelf.name, type: shelf.type },
       },
     ];

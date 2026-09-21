@@ -40,6 +40,10 @@ const uploadedImage: ImageWithEntity = {
   renderStatus: null,
   storageStatus: null,
   verifiedAt: null,
+  source: "unknown",
+  sourcePageUrl: null,
+  sourceAssetUrl: null,
+  sourceName: null,
 };
 
 describe("reconcilePhotoImport", () => {

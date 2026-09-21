@@ -142,6 +142,10 @@ filter:
     - resources.product.list
     - resources.product.timeline
     - resources.product.update
+    - resources.productCategory.create
+    - resources.productCategory.get
+    - resources.productCategory.list
+    - resources.productCategory.update
     - resources.project.create
     - resources.project.get
     - resources.project.list

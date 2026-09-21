@@ -53,6 +53,7 @@ class MemoryImageStorage {
     [existingImageCode, testEntityId("image", "existing-image")],
   ]);
   imageByKey: { shortcode: string; key: string; url: string } | null = null;
+  isOurBucket = false;
   stagedRow:
     | {
         key: string;
@@ -154,7 +155,7 @@ class MemoryImageStorage {
         if (this.deleteObjectError) throw this.deleteObjectError;
         this.deletedKeys.push(key);
       },
-      extractKeyFromUrl: () => null,
+      extractKeyFromUrl: () => "cubby/images/existing.jpg",
       fetchAndStoreImage: async () => this.imported,
       generateDocumentKey: (filename, folder) =>
         `cubby/documents/${folder ? `${folder}/` : ""}${filename}`,
@@ -162,7 +163,7 @@ class MemoryImageStorage {
       generatePresignedUploadUrl: async () => "https://r2.example/put",
       getObject: async () => this.stagedObject,
       getPublicUrl: (key) => `https://images.example/${key}`,
-      isOurBucketUrl: () => false,
+      isOurBucketUrl: () => this.isOurBucket,
       upload: async ({ key, body, contentType }) => {
         if (this.uploadError) throw this.uploadError;
         this.uploaded.push({ key, contentType, size: body.length });
@@ -247,6 +248,28 @@ describe("image storage ports", () => {
 
     expect(imageShortcode.safeParse(result?.imageId).success).toBe(true);
     expect(result?.imageId).toBe("IMG-7QRS");
+    expect(result?.created).toBe(true);
+  });
+
+  it("marks a same-bucket existing image as not created", async () => {
+    const { service, storage } = setup();
+    storage.isOurBucket = true;
+    storage.imageByKey = {
+      shortcode: testShortcode("image", "IMG-OLD1"),
+      key: "cubby/images/existing.jpg",
+      url: "https://images.example/cubby/images/existing.jpg",
+    };
+
+    const result = await service.importImageFromUrl(database, {
+      sourceUrl: "https://images.example/cubby/images/existing.jpg",
+      filenamePrefix: "product-enrichment",
+    });
+
+    expect(result).toMatchObject({
+      imageId: testShortcode("image", "IMG-OLD1"),
+      created: false,
+    });
+    expect(storage.createdUploads).toHaveLength(0);
   });
 
   it("allocates a readable document key and dedupes collisions", async () => {

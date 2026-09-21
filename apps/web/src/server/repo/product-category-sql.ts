@@ -1,0 +1,70 @@
+import type { ProductCategoryId } from "@cubby/schemas/identifiers";
+import {
+  PRODUCT_CATEGORY_MAX_DEPTH,
+  type ProductCategoryFeature,
+  type ProductCategorySummary,
+} from "@cubby/schemas/product-category-fields";
+import { type SQL, sql } from "drizzle-orm";
+
+/** True only when the closest non-null ancestor feature matches. */
+export const categoryFeatureSql = (
+  categoryIdExpr: SQL,
+  feature: ProductCategoryFeature,
+) => sql<boolean>`COALESCE((
+  WITH RECURSIVE ancestors AS (
+    SELECT c."id", c."parentId", c."feature", 0 AS depth, ARRAY[c."id"] AS visited
+    FROM "ProductCategory" c WHERE c."id" = ${categoryIdExpr} AND c."deletedAt" IS NULL
+    UNION ALL
+    SELECT parent."id", parent."parentId", parent."feature", a.depth + 1, a.visited || parent."id"
+    FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
+    WHERE parent."deletedAt" IS NULL AND a.depth < ${PRODUCT_CATEGORY_MAX_DEPTH - 1}
+      AND NOT parent."id" = ANY(a.visited)
+  ) SELECT "feature" = ${feature} FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
+), false)`;
+
+/** Parenthesized id subquery containing the selected categories and descendants. */
+export const categoryDescendantsSql = (
+  selectedIds: readonly ProductCategoryId[],
+) =>
+  selectedIds.length === 0
+    ? sql<ProductCategoryId>`(SELECT NULL::uuid WHERE false)`
+    : sql<ProductCategoryId>`(
+      WITH RECURSIVE descendants AS (
+        SELECT c."id", ARRAY[c."id"] AS visited
+        FROM "ProductCategory" c
+        WHERE c."id" IN (${sql.join(
+          selectedIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )}) AND c."deletedAt" IS NULL
+        UNION ALL
+        SELECT child."id", d.visited || child."id"
+        FROM descendants d JOIN "ProductCategory" child ON child."parentId" = d."id"
+        WHERE child."deletedAt" IS NULL AND array_length(d.visited, 1) < ${PRODUCT_CATEGORY_MAX_DEPTH}
+          AND NOT child."id" = ANY(d.visited)
+      ) SELECT "id" FROM descendants
+    )`;
+
+/** A nullable JSON summary expression for product and relation projections. */
+export const categorySummarySql = (categoryIdExpr: SQL) =>
+  sql<ProductCategorySummary | null>`(
+    WITH RECURSIVE ancestors AS (
+      SELECT c."id", c."parentId", c."shortcode", c."name", c."feature", 0 AS depth,
+             ARRAY[c."id"] AS visited
+      FROM "ProductCategory" c
+      WHERE c."id" = ${categoryIdExpr} AND c."deletedAt" IS NULL
+      UNION ALL
+      SELECT parent."id", parent."parentId", parent."shortcode", parent."name", parent."feature", a.depth + 1,
+             a.visited || parent."id"
+      FROM ancestors a
+      JOIN "ProductCategory" parent ON parent."id" = a."parentId"
+      WHERE parent."deletedAt" IS NULL AND a.depth < ${PRODUCT_CATEGORY_MAX_DEPTH - 1}
+        AND NOT parent."id" = ANY(a.visited)
+    )
+    SELECT json_build_object(
+      'id', (SELECT "shortcode" FROM ancestors ORDER BY depth LIMIT 1),
+      'name', (SELECT "name" FROM ancestors ORDER BY depth LIMIT 1),
+      'path', json_agg(json_build_object('id', "shortcode", 'name', "name") ORDER BY depth DESC),
+      'feature', (SELECT "feature" FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1)
+    ) FROM ancestors
+    HAVING count(*) > 0
+  )`;

@@ -1,8 +1,8 @@
 import { GTIN_SOURCE } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { ProductCreateInput } from "@cubby/schemas/product";
 import { and, asc, eq } from "drizzle-orm";
+import { taxonomyId } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -35,6 +35,8 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
+import type { ProductRepoCreateInput } from "./crud";
+
 /**
  * `mergeProducts` exists to resolve two structural collisions that a blind FK
  * re-point cannot survive — the per-product `(source, kind)` identifier slot and
@@ -58,13 +60,14 @@ describe("mergeProducts", () => {
   const seedProduct = async (
     name: string,
     overrides: Omit<
-      Partial<ProductCreateInput>,
-      "ingredientId" | "growsIngredientId"
-    > = {},
+      Partial<ProductRepoCreateInput>,
+      "ingredientId" | "growsIngredientId" | "categoryId"
+    > & { categoryId?: ProductRepoCreateInput["categoryId"] } = {},
   ) => {
+    const { categoryId = null, ...productOverrides } = overrides;
     const created = await createProduct(
       ctx.db,
-      makeProductInput({ name, ...overrides }),
+      makeProductInput({ name, ...productOverrides, categoryId }),
       TEST_ACTOR,
     );
     return {
@@ -174,6 +177,54 @@ describe("mergeProducts", () => {
         columns: { sourceProductId: true },
       }),
     ).toEqual({ sourceProductId: loser.id });
+  });
+
+  it("rejects a carried Food classification when the survivor is a planting source", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Merge category crop" },
+      TEST_ACTOR,
+    );
+    const keeper = await seedProduct("Garden source", {
+      categoryId: taxonomyId("tools"),
+    });
+    const loser = await seedProduct("Food evidence donor");
+    await createPlanting(
+      ctx.db,
+      {
+        ingredientId: crop.id,
+        sourceProductId: keeper.shortcode,
+        status: "planned",
+      },
+      TEST_ACTOR,
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ fdc_id: 12345 })
+      .where(eq(product.id, loser.id));
+
+    const preview = await previewMergeProducts(ctx.db, {
+      keepId: keeper.id,
+      mergeIds: [loser.id],
+    });
+    expect(preview.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "block-garden-source-food-category" }),
+      ]),
+    );
+    await expect(
+      mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/planting source Product must be a garden product/);
+    expect(
+      await getDb(ctx.db).query.product.findFirst({
+        where: eq(product.id, keeper.id),
+        columns: { categoryId: true },
+      }),
+    ).toEqual({ categoryId: taxonomyId("tools") });
   });
 
   const liveUnitMappings = (productId: ProductId) =>
@@ -295,6 +346,39 @@ describe("mergeProducts", () => {
       columns: { imageId: true },
     });
     expect(liveImages).toEqual([{ imageId: keeperImage.id }]);
+  });
+
+  it("adopts an explicit duplicate image role only when the keeper is legacy-null", async () => {
+    const keeper = await seedProduct("Legacy image role keeper");
+    const loser = await seedProduct("Label image role loser");
+    const image = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}-shared.jpg`,
+      filename: "shared.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+    });
+    await getDb(ctx.db)
+      .insert(productImage)
+      .values([
+        { productId: keeper.id, imageId: image.id, purpose: null },
+        { productId: loser.id, imageId: image.id, purpose: "label" },
+      ]);
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+
+    const [surviving] = await getDb(ctx.db).query.productImage.findMany({
+      where: and(
+        eq(productImage.productId, keeper.id),
+        eq(productImage.imageId, image.id),
+        notDeleted(productImage),
+      ),
+      columns: { purpose: true },
+    });
+    expect(surviving?.purpose).toBe("label");
   });
 
   it("demotes rather than destroys a colliding external-id slot", async () => {

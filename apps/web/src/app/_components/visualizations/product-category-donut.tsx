@@ -1,4 +1,4 @@
-import type { ProductCategory } from "@cubby/schemas/product";
+import type { ProductCategory } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
@@ -55,13 +55,10 @@ export default function ProductCategoryDonut() {
   return <DonutChart data={data} />;
 }
 
-// getCategoryColor reserves --chart-1 (Live Ultramarine) for "food" — but food
-// is almost always the majority slice here, so painting the dominant wedge in
-// the interaction accent breaks the One Loud Thing rule (DESIGN.md: ultramarine
-// marks an action/focus/one live value, not decorates a whole panel). Route it
-// to the darkest ink tone instead; every other category keeps the shared ramp.
 function sliceFillColor(category: ProductCategory | null): string {
-  return category === "food" ? "var(--chart-2)" : getCategoryColor(category);
+  return category?.feature === "food"
+    ? "var(--chart-2)"
+    : getCategoryColor(category);
 }
 
 // Which slice fills need light-on-dark labels vs dark-on-light labels, sized
@@ -87,7 +84,7 @@ interface DonutChartProps {
 }
 
 export function productCategoryDrilldown(category: ProductCategory | null) {
-  return { category: category ?? FILTER_NONE };
+  return { category: category?.id ?? FILTER_NONE };
 }
 
 function DonutChart({ data }: DonutChartProps) {
@@ -199,14 +196,14 @@ function DonutChart({ data }: DonutChartProps) {
           transform={`translate(${dimensions.width / 2}, ${dimensions.height / 2})`}
         >
           {slices.map((slice) => {
-            const isHovered = hoveredSlice?.category === slice.category;
+            const isHovered = hoveredSlice?.category?.id === slice.category?.id;
             const labelPos = getLabelPosition(slice.startAngle, slice.endAngle);
             const showLabel = shouldShowLabel(slice.startAngle, slice.endAngle);
             const fill = sliceFillColor(slice.category);
             const categoryLabel = formatCategoryLabel(slice.category);
 
             return (
-              <g key={slice.category ?? "uncategorized"}>
+              <g key={slice.category?.id ?? "unclassified"}>
                 <Link
                   to="/products"
                   search={productCategoryDrilldown(slice.category)}

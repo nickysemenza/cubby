@@ -27,12 +27,14 @@ import {
   type PreparePurchaseImportInput,
   type ValidatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
-import { and, asc, eq, ilike, inArray, or } from "drizzle-orm";
+import * as Sentry from "@sentry/tanstackstart-react";
+import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
   expense,
+  image,
   importPreparedLine,
   importPreparedOrder,
   importHunt,
@@ -56,7 +58,9 @@ import {
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { deleteImages } from "~/server/repo/image";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
+import { assertProductCategoryChange } from "~/server/repo/product/classification";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import {
   deleteStoredObjects,
   importImageFromUrl,
@@ -1077,7 +1081,7 @@ export async function commitProductEnrichment(
   }
   const changedFields = z
     .array(
-      z.enum(["manufacturer", "category", "model", "identifiers", "image"]),
+      z.enum(["manufacturer", "categoryId", "model", "identifiers", "image"]),
     )
     .parse(Object.keys(changes));
   const [targetRef] = await database
@@ -1092,6 +1096,9 @@ export async function commitProductEnrichment(
     .limit(1);
   if (!targetRef) throw new Error("Product enrichment target was not found");
   let importedImageId: Awaited<ReturnType<typeof resolveOrThrow>> | null = null;
+  let importedImageShortcode: string | null = null;
+  let importedImageCreated = false;
+  let importedImageSourcePageUrl: string | null = null;
   if (changes.image) {
     const [evidence] = await database
       .select({ metadata: importRunEvidence.sourceMetadata })
@@ -1109,6 +1116,7 @@ export async function commitProductEnrichment(
       .object({
         requestedAmazonAsin: z.string().nullable(),
         servedAmazonAsin: z.string().nullable(),
+        sourceURL: z.url().optional(),
         variantMarkers: z.array(z.string()),
         images: z.array(
           z.object({
@@ -1145,6 +1153,9 @@ export async function commitProductEnrichment(
     if (!imported)
       throw new Error("Verified Product image could not be stored");
     importedImageId = await resolveOrThrow(db, "image", imported.imageId);
+    importedImageShortcode = imported.imageId;
+    importedImageCreated = imported.created;
+    importedImageSourcePageUrl = metadata.data!.sourceURL ?? null;
   }
   try {
     await withTransaction(
@@ -1181,7 +1192,7 @@ export async function commitProductEnrichment(
           .select({
             name: product.name,
             manufacturer: product.manufacturer,
-            category: product.category,
+            categoryId: product.categoryId,
             model: product.model,
             updatedAt: product.updatedAt,
           })
@@ -1197,28 +1208,12 @@ export async function commitProductEnrichment(
           throw new Error("Product enrichment target changed before commit");
         if (
           (changes.manufacturer && live.manufacturer.trim()) ||
-          (changes.category && live.category) ||
+          (changes.categoryId && live.categoryId) ||
           (changes.model && live.model)
         )
           throw new Error(
             "Overwriting a populated Product field requires typed approval",
           );
-        if (changes.image) {
-          const [existingImage] = await tx
-            .select({ id: productImage.id })
-            .from(productImage)
-            .where(
-              and(
-                eq(productImage.productId, productId),
-                notDeleted(productImage),
-              ),
-            )
-            .limit(1);
-          if (existingImage)
-            throw new Error(
-              "Overwriting a populated Product image requires typed approval",
-            );
-        }
         await tx.insert(importRunOperation).values({
           runId: scope.public.runId,
           operationId,
@@ -1230,12 +1225,22 @@ export async function commitProductEnrichment(
           .update(product)
           .set({
             manufacturer: changes.manufacturer,
-            category: changes.category,
+            categoryId: changes.categoryId
+              ? await assertProductCategoryChange(
+                  tx,
+                  productId,
+                  await resolveOrThrow(
+                    tx,
+                    "productCategory",
+                    changes.categoryId,
+                  ),
+                )
+              : undefined,
             model: changes.model,
             updatedAt: new Date(),
           })
           .where(eq(product.id, productId));
-        if (changes.category !== undefined)
+        if (changes.categoryId !== undefined)
           await validateLiveEffectiveTrades(tx);
         for (const identifier of changes.identifiers ?? []) {
           const [identifierEvidence] = await tx
@@ -1274,12 +1279,64 @@ export async function commitProductEnrichment(
             url: identifier.url,
           });
         }
-        if (importedImageId)
-          await tx.insert(productImage).values({
-            productId,
-            imageId: importedImageId,
-            sortOrder: 0,
+        if (importedImageId) {
+          const existingAttachment = await tx.query.productImage.findFirst({
+            where: and(
+              eq(productImage.productId, productId),
+              eq(productImage.imageId, importedImageId),
+              notDeleted(productImage),
+            ),
+            columns: { id: true, purpose: true },
           });
+          if (existingAttachment?.purpose === "label")
+            throw new Error(
+              "Catalog enrichment cannot turn a confirmed label into an item cover",
+            );
+          // Only this import owns a newly-created row. A same-bucket URL can
+          // resolve an existing household image; neither its provenance nor its
+          // lifetime belongs to this enrichment attempt.
+          if (importedImageCreated) {
+            await tx
+              .update(image)
+              .set({
+                source: "catalog",
+                sourcePageUrl: importedImageSourcePageUrl,
+                sourceAssetUrl: changes.image!.url,
+                sourceName: importedImageSourcePageUrl
+                  ? new URL(importedImageSourcePageUrl).hostname
+                  : null,
+              })
+              .where(eq(image.id, importedImageId));
+          }
+          // A verified catalog image becomes the item cover without removing
+          // household photos or label evidence; their relative order is kept.
+          await tx
+            .update(productImage)
+            .set({ sortOrder: sql`${productImage.sortOrder} + 1` })
+            .where(
+              and(
+                eq(productImage.productId, productId),
+                notDeleted(productImage),
+              ),
+            );
+          if (existingAttachment) {
+            // The same stored image may already be an item attachment. Its
+            // link is unique per live Product/Image pair, so promote it in
+            // place instead of attempting a duplicate insert; do not rewrite
+            // its purpose or Image provenance merely because this URL recurs.
+            await tx
+              .update(productImage)
+              .set({ sortOrder: 0 })
+              .where(eq(productImage.id, existingAttachment.id));
+          } else {
+            await tx.insert(productImage).values({
+              productId,
+              imageId: importedImageId,
+              sortOrder: 0,
+              purpose: "item",
+            });
+          }
+        }
         await tx.insert(importRunMutation).values({
           runId: scope.public.runId,
           targetType: "product",
@@ -1321,11 +1378,26 @@ export async function commitProductEnrichment(
       },
     );
   } catch (error) {
-    if (importedImageId) {
+    if (importedImageId && importedImageCreated) {
       const removed = await deleteImages(db, [importedImageId]);
       await deleteStoredObjects(removed.deletedKeys);
     }
     throw error;
+  }
+  if (importedImageShortcode) {
+    try {
+      await scheduleImageProcessingJobs(db, {
+        id: importedImageShortcode,
+        kinds: ["describe_image", "subject_lift"],
+        automatic: true,
+      });
+    } catch (error) {
+      // Enrichment has committed. Optional processing cannot turn a successful
+      // import into a reported failure; the original remains displayable.
+      Sentry.captureException(error, {
+        tags: { operation: "product-enrichment.schedule-image-processing" },
+      });
+    }
   }
   return commitProductEnrichmentOut.parse({
     runPublicId: scope.public.publicId,
@@ -1372,7 +1444,7 @@ export async function overwriteProductEnrichment(
       .select({
         name: product.name,
         manufacturer: product.manufacturer,
-        category: product.category,
+        categoryId: product.categoryId,
         model: product.model,
         updatedAt: product.updatedAt,
       })
@@ -1385,6 +1457,21 @@ export async function overwriteProductEnrichment(
       input.targetFingerprint
     )
       throw new Error("Product enrichment target changed after proposal");
+
+    const categoryId =
+      input.change.field === "categoryId"
+        ? await assertProductCategoryChange(
+            database,
+            resolvedProductId,
+            input.change.value
+              ? await resolveOrThrow(
+                  database,
+                  "productCategory",
+                  input.change.value,
+                )
+              : null,
+          )
+        : undefined;
     const [updated] =
       input.change.field === "manufacturer"
         ? await database
@@ -1400,10 +1487,10 @@ export async function overwriteProductEnrichment(
               ),
             )
             .returning({ id: product.id })
-        : input.change.field === "category"
+        : input.change.field === "categoryId"
           ? await database
               .update(product)
-              .set({ category: input.change.value, updatedAt: new Date() })
+              .set({ categoryId, updatedAt: new Date() })
               .where(
                 and(
                   eq(product.id, resolvedProductId),
@@ -1422,7 +1509,7 @@ export async function overwriteProductEnrichment(
               )
               .returning({ id: product.id });
     if (!updated) throw new Error("Product changed while applying approval");
-    if (input.change.field === "category")
+    if (input.change.field === "categoryId")
       await validateLiveEffectiveTrades(database);
     await database
       .update(importRunTarget)

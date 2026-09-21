@@ -13,13 +13,16 @@ source-backed batch report.
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.
-For a backlog, list Products with inventory present and no image, sorted by
-identity strength, in pages of 25. Start with summary/count reads, then request
+For a backlog, inspect Products with inventory present and missing item imagery
+or missing verified catalog imagery, sorted by identity strength, in pages of 25. Start with summary/count reads, then request
 the relevant page; request full records only for candidates being researched.
 
-Read a candidate immediately before every write. `imageCount` is the
-displayable-image count; skip a gallery that already has an image unless the
-user asked to replace or expand it.
+Read a candidate immediately before every write. `imageCount` is the complete
+attachment count used by upload preconditions; `itemImageCount` and
+`labelImageCount` describe the split. A label-only Product still needs an item
+photo. Existing own photos or labels do not disqualify a Product from catalog
+enrichment. Inspect source, purpose, identity evidence, and current order before
+adding another image; skip redundant catalog views.
 
 ## Research and identity
 
@@ -54,9 +57,18 @@ failed item; do not increment a stale image count.
 
 For one cover, choose a clean exact manufacturer asset or exact retailer asset.
 Reject lifestyle, bundle, watermarked, thumbnail, and unproven-variant images.
-Attach once with a fresh product read, `expectedImageCount`, and a deterministic
-per-product key. Verify every mutation, including retained identity facts,
-gallery order, cover, display position, integrity metadata, and exact variant.
+Keep catalog evidence with `source: catalog`, `sourcePageUrl`, `sourceAssetUrl`,
+and `sourceName`; retain own photos as `source: own`, and use `unknown` only
+when the provenance is unavailable. On Product attachments, set `purpose` to
+`item` or `label`. Attach once with a fresh product read, `expectedImageCount`,
+and a deterministic per-product key. Explicitly select the verified exact-product
+catalog overview as the cover while preserving our photos and labels. Later
+manual order remains authoritative until another explicit replacement. Schedule
+original analysis and useful item cutouts through `schedule_image_processing`;
+skip label cutouts and already-transparent assets, preserve pairs, and let
+pending/failed processing fall back to the original. Verify every mutation, including retained
+identity facts, gallery order, cover, display position, integrity metadata, and
+exact variant.
 
 ## Report
 

@@ -38,6 +38,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
+import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -363,7 +364,7 @@ async function resolveToolProductIds(
   const tools = await tx.query.product.findMany({
     where: and(
       inArray(product.id, ids),
-      eq(product.category, "tools"),
+      categoryFeatureSql(sql`${product.categoryId}`, "tools"),
       notDeleted(product),
     ),
     columns: { id: true },

@@ -49,7 +49,11 @@ extension EntityDescriptor {
             fields.filter { $0.mobileSlot == "subtitle" }
             .sorted { ($0.mobilePriority ?? .max) < ($1.mobilePriority ?? .max) }
             .compactMap { field -> String? in
-                guard let value = object[field.key]?.stringValue, !value.isEmpty else { return nil }
+                // Reference columns may project a named summary separately from their stored ID.
+                let raw = object[field.reference == nil ? field.key : (field.columnId ?? field.key)]
+                guard let value = raw?.stringValue ?? raw?["name"]?.stringValue, !value.isEmpty else {
+                    return nil
+                }
                 return value
             }
             .first

@@ -1,4 +1,5 @@
-import { locationTypeValues, productCategoryValues } from "@cubby/shared";
+import { productCategorySummary } from "./product-category-fields";
+import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
 
 import { imageOut } from "./entity-definitions/field-primitives";
@@ -47,7 +48,7 @@ export const locationIdentityProductOut = z.object({
   name: z.string(),
   manufacturer: z.string(),
   model: z.string().nullable(),
-  category: z.enum(productCategoryValues).nullable(),
+  category: productCategorySummary.nullable(),
   coverImage: imageOut.nullable(),
   price: moneyNullable,
 });

@@ -17,6 +17,7 @@ import { financialTransactionDetailFields } from "./financial-transaction";
 import { inventoryDetailFields } from "./inventory";
 import { ledgerTransferDetailFields } from "./ledger-transfer";
 import { productDetailFields } from "./product";
+import { productCategoryDetailFields } from "./product-category";
 import { recipeDetailFields } from "./recipe";
 import { vendorDetailFields } from "./vendor";
 import { wishDetailFields } from "./wish";
@@ -64,6 +65,11 @@ export const detailRendererCoverage = {
       productDetailFields["product-external-ids"],
     ),
     "product-tags": implemented(productDetailFields["product-tags"]),
+  },
+  productCategory: {
+    "product-category-path": implemented(
+      productCategoryDetailFields["product-category-path"],
+    ),
   },
   recipe: {
     "recipe-meta": implemented(recipeDetailFields["recipe-meta"]),
@@ -122,6 +128,8 @@ const detailCoverageFor = (
       return detailRendererCoverage.expense;
     case "product":
       return detailRendererCoverage.product;
+    case "productCategory":
+      return detailRendererCoverage.productCategory;
     case "recipe":
       return detailRendererCoverage.recipe;
     case "vendor":

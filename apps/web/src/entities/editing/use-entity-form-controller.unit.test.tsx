@@ -29,6 +29,17 @@ interface LocationRecord {
   parent: { id: string; name: string } | null;
 }
 
+interface ProductScalarReferenceFormValues {
+  name: string;
+  categoryId: string | null;
+}
+
+interface ProductScalarReferenceRecord {
+  id: string;
+  name: string;
+  categoryId: string | null;
+}
+
 /** What `transform.edit` hands back in the reference-diff test below — just
  * the two reference fields this test cares about, never a bare dictionary. */
 interface LocationUpdatePayload {
@@ -244,5 +255,91 @@ describe("useEntityFormController", () => {
     const [updates] = onEdit.mock.calls[0] as [LocationUpdatePayload];
     expect(updates).toHaveProperty("parentId");
     expect(updates).not.toHaveProperty("productId");
+  });
+
+  it("keeps an opted-in reference ID scalar and records changes including clears", async () => {
+    const record: ProductScalarReferenceRecord = {
+      id: "PRD-4K7M",
+      name: "Sample product",
+      categoryId: "CAT-4K7M",
+    };
+    const onEdit = vi.fn();
+    const props: EntityFormProps<
+      { name: string; categoryId: string | null },
+      Partial<ProductScalarReferenceRecord>,
+      ProductScalarReferenceRecord
+    > = { mode: "edit", isPending: false, entity: record, onEdit };
+
+    const { result } = renderHook(() =>
+      useEntityFormController<
+        "product",
+        ProductScalarReferenceFormValues,
+        ProductScalarReferenceRecord,
+        { name: string; categoryId: string | null },
+        Partial<ProductScalarReferenceRecord>
+      >("product", props, {
+        fields: ["name", "categoryId"],
+        referencePaths: { categoryId: null },
+        defaultValues: { name: record.name, categoryId: record.categoryId },
+        transform: {
+          create: (values) => ({
+            name: values.name,
+            categoryId: values.categoryId,
+          }),
+          edit: (updates) => updates,
+        },
+      }),
+    );
+
+    // `categoryId` remains a generated scalar resolver field, not a sibling
+    // combobox item whose missing value would make the resolver reject submit.
+    expect(result.current.references.categoryId).toBeUndefined();
+
+    act(() => {
+      // EntityValueField emits an empty string when cleared.
+      result.current.form.setValue("categoryId", "");
+    });
+    await act(async () => {
+      await result.current.form.handleSubmit(result.current.handleSubmit)();
+    });
+    expect(onEdit).toHaveBeenCalledWith({ categoryId: null });
+  });
+
+  it("accepts a valid scalar reference on create", async () => {
+    const onCreate = vi.fn();
+    const props: EntityFormProps<
+      { name: string; categoryId: string | null },
+      Partial<ProductScalarReferenceRecord>,
+      ProductScalarReferenceRecord
+    > = { mode: "create", isPending: false, onCreate };
+
+    const { result } = renderHook(() =>
+      useEntityFormController<
+        "product",
+        ProductScalarReferenceFormValues,
+        ProductScalarReferenceRecord,
+        { name: string; categoryId: string | null },
+        Partial<ProductScalarReferenceRecord>
+      >("product", props, {
+        fields: ["name", "categoryId"],
+        referencePaths: { categoryId: null },
+        defaultValues: { name: "Sample product", categoryId: "CAT-4K7M" },
+        transform: {
+          create: (values) => ({
+            name: values.name,
+            categoryId: values.categoryId,
+          }),
+          edit: (updates) => updates,
+        },
+      }),
+    );
+
+    await act(async () => {
+      await result.current.form.handleSubmit(result.current.handleSubmit)();
+    });
+    expect(onCreate).toHaveBeenCalledWith({
+      name: "Sample product",
+      categoryId: "CAT-4K7M",
+    });
   });
 });

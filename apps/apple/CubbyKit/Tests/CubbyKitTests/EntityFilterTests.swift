@@ -79,8 +79,9 @@ struct EntityFilterTests {
             shape: "array<string>", entity: .product, wire: "tagFilters", value: .many(["a", "b"]),
             expected: ["tagFilters=a", "tagFilters=b"]),
         Row(
-            shape: "array<enum>", entity: .product, wire: "categoryFilter", value: .many(["food", "tools"]),
-            expected: ["categoryFilter=food", "categoryFilter=tools"]),
+            shape: "array<enum>", entity: .product, wire: "categoryFeatureFilter",
+            value: .many(["food", "tools"]),
+            expected: ["categoryFeatureFilter=food", "categoryFeatureFilter=tools"]),
         Row(
             shape: "anyOf[string, const]", entity: .inventory, wire: "productIdFilter",
             value: .single("PRD-2345"), expected: ["productIdFilter=PRD-2345"]),

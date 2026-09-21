@@ -12,13 +12,14 @@ import type {
 } from "@cubby/schemas/project";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
 import { getProductImagesByProductIds } from "~/server/repo/product";
+import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 
 import { deriveToolTrades } from "./tool-trades";
 import { EMPTY_METRICS, loadResourceMetrics } from "./tools";
@@ -205,7 +206,12 @@ export async function projectToolGallery(
       location,
       and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
     )
-    .where(and(eq(product.category, "tools"), notDeleted(product)))
+    .where(
+      and(
+        categoryFeatureSql(sql`${product.categoryId}`, "tools"),
+        notDeleted(product),
+      ),
+    )
     .orderBy(
       asc(product.name),
       asc(product.shortcode),

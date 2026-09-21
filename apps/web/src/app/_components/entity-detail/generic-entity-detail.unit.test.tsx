@@ -27,6 +27,7 @@ import { inventoryListItem } from "~/entities/generated/entity-lists.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { GenericEntityDetail } from "./generic-entity-detail";
 
@@ -54,10 +55,10 @@ const emptyTotals = {
 /**
  * The generator cannot satisfy a few cross-field refinements (external-id
  * slugs, nutrition coverage); those fields are pinned to their empty shapes.
- * `attachments` stays empty so no gallery mounts under jsdom.
+ * Attachment and Product gallery collections stay empty under jsdom.
  */
 const fixtureOverrides = {
-  product: { externalIds: [], attachments: [] },
+  product: { externalIds: [], attachments: [], images: [], labelImages: [] },
   ingredient: { product: [], attachments: [] },
   inventory: { product: { externalIds: [] }, attachments: [] },
   meal: { recipes: [], totals: emptyTotals, attachments: [] },
@@ -204,7 +205,7 @@ describe("GenericEntityDetail", () => {
   it("renders a product whose external ids are structured records", () => {
     const product = mock(getEntityDetailOutputSchema("product"), {
       seed: 11,
-      overrides: { attachments: [] },
+      overrides: { attachments: [], images: [], labelImages: [] },
     });
     expect(product.externalIds.length).toBeGreaterThan(0);
     render(
@@ -228,7 +229,7 @@ describe("GenericEntityDetail", () => {
       ...record,
       manufacturer: "Milwaukee",
       model: "2853-20",
-      category: "tools" as const,
+      category: categorySummaryFixture("tools"),
       tags: [],
       externalIds: [],
       ingredient: null,
@@ -255,18 +256,18 @@ describe("GenericEntityDetail", () => {
     ).toHaveAttribute("href", "/products?manufacturer=Milwaukee");
     expect(
       screen.getByRole("link", {
-        name: "Show all products with category tools",
+        name: "Show all products with classification Tools",
       }),
-    ).toHaveAttribute("href", "/products?category=tools");
+    ).toHaveAttribute("href", "/products?category=CAT-2224");
     expect(
       screen.queryByRole("link", { name: /with model/i }),
     ).not.toBeInTheDocument();
-    // The inline editor and the cohort link are siblings, never nested.
-    const categoryEdit = screen.getByRole("button", { name: "tools" });
+    // The category record and cohort action remain separate links.
+    const categoryRecord = screen.getByRole("link", { name: "Tools" });
     const categoryFilter = screen.getByRole("link", {
-      name: "Show all products with category tools",
+      name: "Show all products with classification Tools",
     });
-    expect(categoryEdit.contains(categoryFilter)).toBe(false);
+    expect(categoryRecord.contains(categoryFilter)).toBe(false);
   });
 
   it("labels a book barcode as its ISBN and keeps the declared field order", () => {

@@ -9,6 +9,10 @@ import { describe, expect, it } from "vitest";
 import { Database } from "~/server/db";
 
 import {
+  categorySummaryFixture,
+  taxonomyId,
+} from "../../../../tooling/product-category-fixtures";
+import {
   dbIngredientToAPI,
   dbIngredientToTopLevel,
   type IngredientDeepDB,
@@ -59,7 +63,9 @@ const baseProduct = {
   updatedAt: UPDATED_AT,
   deletedAt: null,
   ingredientId: INGREDIENT_ID,
-  category: "food" as const,
+  categoryId: taxonomyId("food"),
+  category: categorySummaryFixture("food"),
+  classificationEvidence: "",
   price: 4.5,
   usdaUnavailable: null,
   stockTracked: null,

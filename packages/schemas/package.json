@@ -117,7 +117,9 @@
     "./entity-fields": "./src/entity-fields.ts",
     "./inventory-ownership": "./src/inventory-ownership.ts",
     "./image-processing": "./src/image-processing.ts",
-    "./field-explanation": "./src/field-explanation.ts"
+    "./field-explanation": "./src/field-explanation.ts",
+    "./product-category": "./src/product-category.ts",
+    "./product-category-fields": "./src/product-category-fields.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

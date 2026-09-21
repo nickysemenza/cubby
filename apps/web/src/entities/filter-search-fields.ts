@@ -35,10 +35,17 @@ export const problemFilterSemantics = {
       kind: "presence",
     },
     {
+      columnId: "categoryFeature",
+      field: "categoryFeatureFilter",
+      kind: "multiselect",
+      nullable: { field: "categoryPresenceFilter", label: "classification" },
+    },
+    {
       columnId: "category",
       field: "categoryFilter",
-      kind: "multiselect",
-      nullable: { field: "categoryPresenceFilter", label: "category" },
+      kind: "idMulti",
+      brand: (value) => parseEntityId("productCategory", value),
+      nullable: { field: "categoryPresenceFilter", label: "classification" },
     },
     {
       columnId: "expectedQuantity",

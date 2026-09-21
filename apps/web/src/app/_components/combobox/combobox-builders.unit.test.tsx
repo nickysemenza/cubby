@@ -3,6 +3,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
@@ -172,7 +173,7 @@ describe("product stock picker evidence", () => {
     id: product,
     name: "Back Brace",
     manufacturer: "BraceAbility",
-    category: "household",
+    category: categorySummaryFixture("household"),
     quantityLedger: {
       acquiredUnits: 1,
       exitedUnits: 0,

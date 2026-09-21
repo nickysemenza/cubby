@@ -69,6 +69,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
+import { getCategoryFeature } from "~/server/repo/product-category";
 import {
   resolveAllOrThrow,
   resolveFilterIds,
@@ -124,10 +125,10 @@ const validatePlantingSource = async (
       eq(product.id, parseEntityId("product", sourceProductId)),
       isNull(product.deletedAt),
     ),
-    columns: { category: true, growsIngredientId: true },
+    columns: { categoryId: true, growsIngredientId: true },
   });
   if (!source) return;
-  if (source.category === "food") {
+  if ((await getCategoryFeature(db, source.categoryId)) === "food") {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "A planting source Product must be a garden product, not a food Product.",

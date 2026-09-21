@@ -22,6 +22,7 @@ export function AttachExistingImageDialog({
   onClose: () => void;
 }) {
   const [targetId, setTargetId] = useState("");
+  const [purpose, setPurpose] = useState<"item" | "label">("item");
   const queryClient = useQueryClient();
   const attachedIds = new Set(image.associations.map((item) => item.entityId));
   const targetSearch = useQuery({
@@ -65,6 +66,7 @@ export function AttachExistingImageDialog({
               void attach.mutateAsync({
                 imageId: image.id,
                 targetId: normalized,
+                purpose: normalized.startsWith("PRD-") ? purpose : undefined,
               })
             }
             disabled={!normalized || duplicate || attach.isPending}
@@ -83,6 +85,22 @@ export function AttachExistingImageDialog({
           onChange={(event) => setTargetId(event.target.value)}
           aria-invalid={duplicate}
         />
+        {normalized.startsWith("PRD-") && (
+          <>
+            <Label htmlFor="existing-image-purpose">Product image use</Label>
+            <select
+              className="h-9 w-full rounded-sm border border-input bg-background px-2 text-sm"
+              id="existing-image-purpose"
+              value={purpose}
+              onChange={(event) =>
+                setPurpose(event.target.value === "label" ? "label" : "item")
+              }
+            >
+              <option value="item">Item photo</option>
+              <option value="label">Label or tag</option>
+            </select>
+          </>
+        )}
         {targetSearch.data && targetSearch.data.length > 0 && (
           <div className="divide-y divide-border overflow-hidden rounded-sm border border-border">
             {targetSearch.data

@@ -51,8 +51,8 @@ describe("EntityFilterLink", () => {
             filterAction: (
               <EntityFilterLink
                 to="/products"
-                search={{ category: "tools" }}
-                label="Show all products in tools"
+                search={{ category: "CAT-2224" }}
+                label="Show all products in Tools"
               />
             ),
           },
@@ -62,7 +62,7 @@ describe("EntityFilterLink", () => {
 
     const edit = screen.getByRole("button", { name: "Edit category" });
     const filter = screen.getByRole("link", {
-      name: "Show all products in tools",
+      name: "Show all products in Tools",
     });
     expect(edit.contains(filter)).toBe(false);
     expect(filter).toHaveClass("size-10", "sm:size-7");

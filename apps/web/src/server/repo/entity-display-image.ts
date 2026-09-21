@@ -130,6 +130,13 @@ const rootLiveCondition = (entity: Entity, alias: string): SQL =>
 const optionalColumn = (alias: string, column: string): SQL =>
   sql.raw(`${alias}."${column}"`);
 
+/** Nutrition/package labels are evidence on a Product, never its cover.
+ * Legacy joins have a null purpose and retain their historical item behavior. */
+const displayAttachmentCondition = (target: Entity, alias: string): SQL =>
+  target === "product"
+    ? sql`COALESCE(${optionalColumn(alias, "purpose")}, 'item') <> 'label'`
+    : sql`TRUE`;
+
 /**
  * Direct storage is also resolved through its manifest relationship. Gallery
  * ordering remains the join row's sortOrder/createdAt; covers and logos have
@@ -164,6 +171,7 @@ const directStorageBranch = (entity: Entity): SQL | null => {
         WHERE refs."entityType" = ${entity}
           AND s.id = refs."entityId"
           AND ${rootLiveCondition(entity, "s")}
+          AND ${displayAttachmentCondition(entity, attachmentHop?.alias ?? "")}
           AND ${displayableImageSql("i")}`;
 };
 
@@ -211,6 +219,7 @@ const displaySourceBranch = (source: DisplaySource, index: number): SQL => {
         WHERE refs."entityType" = ${source.entity}
           AND s.id = refs."entityId"
           AND ${rootLiveCondition(source.entity, "s")}
+          AND ${displayAttachmentCondition(source.target, attachmentHop?.alias ?? "")}
           AND ${displayableImageSql("i")}`;
 };
 
@@ -510,10 +519,12 @@ export async function withUniversalEntityMedia<
         displayImages,
         attachments: entityId ? (attachments.get(entityId) ?? []) : [],
       };
-      // Purchase images carry document classification from PurchaseImage.
-      // Keep that specialized projection while exposing the same files through
-      // the entity-generic attachment surface.
-      return entityType !== "purchase" && "images" in row
+      // Purchase documents and Product item/label galleries retain attachment
+      // metadata in their specialized projections. Generic attachments still
+      // expose every file without replacing those domain-shaped galleries.
+      return entityType !== "purchase" &&
+        entityType !== "product" &&
+        "images" in row
         ? { ...projected, images: projected.attachments }
         : projected;
     }),

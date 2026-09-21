@@ -22,10 +22,11 @@ import {
 } from "~/app/_components/entity-media/entity-display-images";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
+import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
+import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { InventoryValuationSummary } from "~/app/_components/locations/inventory-valuation-summary";
 import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
-import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
 import { TableLink } from "~/app/_components/table/TableLink";
 import { Stack } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
@@ -87,6 +88,13 @@ export const inventoryListOverride = defineListOverride<
   InventoryFilters
 >({
   use() {
+    const { categories } = useProductCategories();
+    const filterOptions = useFilterOptions({
+      productCategories: categories.map((category) => ({
+        value: category.id,
+        label: category.path.map((node) => node.name).join(" / "),
+      })),
+    });
     const updateMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("inventory", "update"),
       entity: "inventory",
@@ -252,7 +260,6 @@ export const inventoryListOverride = defineListOverride<
                 filterConfig: {
                   placeholder: "Filter by category...",
                   filterType: "multiselect",
-                  options: productCategoryOptionsWithTheme,
                 },
               },
               cell: (info) => <CategoryLabel category={info.getValue()} />,
@@ -268,10 +275,11 @@ export const inventoryListOverride = defineListOverride<
     const list = useMemo(
       () => ({
         deletable,
+        filterOptions,
         subject: PRODUCT_SUBJECT,
         initialColumnVisibility: INVENTORY_INITIAL_COLUMN_VISIBILITY,
       }),
-      [deletable],
+      [deletable, filterOptions],
     );
 
     return {

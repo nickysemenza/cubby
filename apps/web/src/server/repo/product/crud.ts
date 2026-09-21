@@ -12,6 +12,7 @@ import type {
   IngredientId,
   LocationId,
   ProductId,
+  ProductCategoryId,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
@@ -27,7 +28,6 @@ import type {
 } from "@cubby/schemas/product";
 import {
   hasFoodIndicators,
-  type ProductCategory,
   type ProductCreateInput,
   type ProductTopLevelOut,
   type ProductUpdateInput,
@@ -89,7 +89,6 @@ import {
   associatePendingImages,
   auditDateWhereConditions,
   countWhere,
-  eqAny,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -125,6 +124,16 @@ import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
+  resolveProductCategory,
+  getCategoryFeature,
+  loadCategorySummaries,
+} from "~/server/repo/product-category";
+import {
+  categorySummarySql,
+  categoryFeatureSql,
+} from "~/server/repo/product-category-sql";
+import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
+import {
   relatedSortExpression,
   relatedWhereConditions,
 } from "~/server/repo/related-view";
@@ -132,12 +141,15 @@ import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
+  resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
 
 import { hydrateImageReadProjection } from "../image-read-projection";
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
+import { assertProductCategoryChange } from "./classification";
+import { getProductClassificationEvidence } from "./classification-evidence";
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,
@@ -275,6 +287,11 @@ const resolveProductSort = (sort: SortParams) => {
       ),
     ];
   }
+
+  if (sort.orderBy === "category")
+    return [
+      sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path' ${sql.raw(dirSql)}`,
+    ];
 
   if (sort.orderBy === "identity_strength") {
     return [
@@ -457,6 +474,7 @@ export const getProductImagesByProductIds = async (
       and(
         inArray(productImage.productId, uniqueIds),
         notDeleted(productImage),
+        sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
         notDeleted(image),
       ),
     )
@@ -510,6 +528,29 @@ export const getProductsByShortcodes = async (
     ),
   );
 };
+
+const categoryFilterCondition = async (
+  db: Database,
+  filters: ProductFilters,
+) =>
+  filters.categoryFilter?.length || filters.categoryFeatureFilter?.length
+    ? or(
+        filters.categoryFilter?.length
+          ? sql`${product.categoryId} IN ${categoryDescendantsSql(await resolveAllOrThrow(db, "productCategory", Array.isArray(filters.categoryFilter) ? filters.categoryFilter : [filters.categoryFilter]))}`
+          : undefined,
+        ...(filters.categoryFeatureFilter
+          ? (Array.isArray(filters.categoryFeatureFilter)
+              ? filters.categoryFeatureFilter
+              : [filters.categoryFeatureFilter]
+            ).map((feature) =>
+              categoryFeatureSql(sql`${product.categoryId}`, feature),
+            )
+          : []),
+        filters.categoryPresenceFilter === "none"
+          ? isNull(product.categoryId)
+          : undefined,
+      )
+    : presenceCondition(product.categoryId, filters.categoryPresenceFilter);
 
 /**
  * The complete WHERE for a product list. `getEntityCounts` calls it with `{}`
@@ -629,7 +670,13 @@ export const buildProductWhere = async (
       image,
       and(eq(image.id, productImage.imageId), notDeleted(image)),
     )
-    .where(and(notDeleted(productImage), displayableImageWhere));
+    .where(
+      and(
+        notDeleted(productImage),
+        sql`${productImage.purpose} IS DISTINCT FROM 'label'`,
+        displayableImageWhere,
+      ),
+    );
 
   const productIdsWithUnitMappings = dbClient
     .select({ productId: productUnitMappings.productId })
@@ -935,6 +982,7 @@ export const buildProductWhere = async (
   // the model/notes/stockTracked presence filters are declared stored
   // filters — applied by `productScaffold.where` before the conditions below.
   const whereClause = productScaffold.where(filters, [
+    await categoryFilterCondition(db, filters),
     ...classificationConditions(),
     ...inventoryConditions(),
     ...ledgerConditions(),
@@ -1178,7 +1226,11 @@ export const productSearch = async (
   db: Database,
   filters: Pick<
     ProductFilters,
-    "nameFilter" | "manufacturerFilter" | "upcFilter" | "categoryFilter"
+    | "nameFilter"
+    | "manufacturerFilter"
+    | "upcFilter"
+    | "categoryFilter"
+    | "categoryFeatureFilter"
   >,
   sorts: SortParams[],
   pagination: PaginationParams,
@@ -1193,9 +1245,21 @@ export const productSearch = async (
           sql`EXISTS (SELECT 1 FROM unnest(${product.aliases}) AS alias WHERE alias ILIKE ${`%${name}%`})`,
         )
       : undefined,
+    filters.categoryFeatureFilter?.length
+      ? or(
+          ...(Array.isArray(filters.categoryFeatureFilter)
+            ? filters.categoryFeatureFilter
+            : [filters.categoryFeatureFilter]
+          ).map((feature) =>
+            categoryFeatureSql(sql`${product.categoryId}`, feature),
+          ),
+        )
+      : undefined,
     formatSearchTerm(product.manufacturer, filters.manufacturerFilter),
     filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
-    eqAny(product.category, filters.categoryFilter),
+    filters.categoryFilter?.length
+      ? sql`${product.categoryId} IN ${categoryDescendantsSql(await resolveAllOrThrow(db, "productCategory", Array.isArray(filters.categoryFilter) ? filters.categoryFilter : [filters.categoryFilter]))}`
+      : undefined,
   );
 
   const orderByArray = productListOrderBy(sorts);
@@ -1214,6 +1278,7 @@ export const productSearch = async (
     countWhere(db, product, whereClause),
   );
 
+  const categories = await loadCategorySummaries(db);
   const resultIds = results.map((result) => result.id);
   const [quantities, coverImageUrls, prices] = await Promise.all([
     loadProductPickerQuantities(db, resultIds),
@@ -1223,6 +1288,7 @@ export const productSearch = async (
   const data = results.map((result) =>
     dbProductToPickerItemAPI({
       ...result,
+      category: categories.get(result.categoryId!) ?? null,
       ...quantities.get(result.id)!,
       price: prices.get(result.id) ?? null,
       coverImageUrl: coverImageUrls.get(result.id) ?? null,
@@ -1246,9 +1312,10 @@ export const getProductPickerItemsByIds = async (
       shortcode: true,
       name: true,
       manufacturer: true,
-      category: true,
+      categoryId: true,
     },
   });
+  const categories = await loadCategorySummaries(db);
   const rowIds = rows.map((row) => row.id);
   const [quantities, coverImageUrls, prices] = await Promise.all([
     loadProductPickerQuantities(db, rowIds),
@@ -1260,6 +1327,7 @@ export const getProductPickerItemsByIds = async (
       row.id,
       dbProductToPickerItemAPI({
         ...row,
+        category: categories.get(row.categoryId!) ?? null,
         ...quantities.get(row.id)!,
         price: prices.get(row.id) ?? null,
         coverImageUrl: coverImageUrls.get(row.id) ?? null,
@@ -1450,6 +1518,7 @@ export const createProduct = async (
     unitMappings,
     externalIds,
     pendingImageIds,
+    pendingImagePurposes,
     ...productData
   } = data;
 
@@ -1477,11 +1546,15 @@ export const createProduct = async (
         incomingGtin === undefined || incomingGtin === null
           ? (externalIds ?? [])
           : foldGtinIntoExternalIds(externalIds ?? [], incomingGtin);
-      const category = hasFoodIndicators({ ...data, ingredientId })
-        ? "food"
-        : externalIdsContainIsbn(desiredExternalIds)
-          ? "books"
-          : (data.category ?? null);
+      const categoryId = await resolveProductCategory(
+        tx,
+        data.categoryId ?? null,
+        hasFoodIndicators({ ...data, ingredientId })
+          ? "food"
+          : externalIdsContainIsbn(desiredExternalIds)
+            ? "books"
+            : null,
+      );
       await assertExternalIdsAvailable(tx, desiredExternalIds);
       const newProduct = await insertWithShortcode(tx, "product", {
         ...columnData,
@@ -1489,7 +1562,7 @@ export const createProduct = async (
           tx,
           productData.manufacturer,
         ),
-        category,
+        categoryId,
         ingredientId: ingredientId ?? null,
       });
 
@@ -1534,6 +1607,29 @@ export const createProduct = async (
           newProduct.id,
           resolvedImageIds,
         );
+        if (pendingImagePurposes) {
+          const resolvedByCode = await resolveLiveShortcodes(
+            tx,
+            pendingImageIds,
+            "image",
+          );
+          for (const [shortcode, purpose] of Object.entries(
+            pendingImagePurposes,
+          )) {
+            const imageId = resolvedByCode.get(shortcode);
+            if (!imageId) continue;
+            await tx
+              .update(productImage)
+              .set({ purpose })
+              .where(
+                and(
+                  eq(productImage.productId, newProduct.id),
+                  eq(productImage.imageId, imageId),
+                  notDeleted(productImage),
+                ),
+              );
+          }
+        }
 
         images = await tx
           .select()
@@ -1572,6 +1668,12 @@ export const createProduct = async (
       };
       const qualities = await reads.loadProductDataQualities(tx, [created.id]);
       return dbProductToTopLevelAPI({
+        classificationEvidence: await getProductClassificationEvidence(
+          tx,
+          newProduct.id,
+        ),
+        category:
+          (await loadCategorySummaries(tx)).get(newProduct.categoryId!) ?? null,
         ...created,
         pricing: resolveProductPricing(created.price),
         dataQuality: qualities.get(created.id)!,
@@ -1599,6 +1701,7 @@ export const updateProduct = async (
     unitMappings,
     externalIds,
     pendingImageIds,
+    pendingImagePurposes,
     removeImageIds,
     imageOrder,
     ...productData
@@ -1616,7 +1719,8 @@ export const updateProduct = async (
     upc?: string | null;
   } | null = null;
 
-  const prepareUpdate = (
+  const prepareUpdate = async (
+    tx: DrizzleTransaction,
     beforeProduct: typeof product.$inferSelect,
     beforeExternalIds: Array<typeof productExternalId.$inferSelect>,
   ) => {
@@ -1650,13 +1754,31 @@ export const updateProduct = async (
             ]);
     if (
       hasFoodIndicators({
-        fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
-        ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
+        fdc_id:
+          updateData.fdc_id === undefined
+            ? beforeProduct.fdc_id
+            : updateData.fdc_id,
+        ingredientId:
+          updateData.ingredientId === undefined
+            ? beforeProduct.ingredientId
+            : updateData.ingredientId,
       })
     ) {
-      updateData.category = "food";
+      updateData.categoryId = await resolveProductCategory(
+        tx,
+        updateData.categoryId === undefined
+          ? beforeProduct.categoryId
+          : updateData.categoryId,
+        "food",
+      );
     } else if (externalIdsContainIsbn(resultingExternalIds)) {
-      updateData.category = "books";
+      updateData.categoryId = await resolveProductCategory(
+        tx,
+        updateData.categoryId === undefined
+          ? beforeProduct.categoryId
+          : updateData.categoryId,
+        "books",
+      );
     }
     return { desiredExternalIds, incomingGtin, updateData };
   };
@@ -1665,7 +1787,10 @@ export const updateProduct = async (
     tx: DrizzleTransaction,
     updateData: Partial<typeof product.$inferInsert>,
   ) => {
-    if (updateData.category === undefined || updateData.category === "tools") {
+    if (
+      updateData.categoryId === undefined ||
+      (await getCategoryFeature(tx, updateData.categoryId)) === "tools"
+    ) {
       return;
     }
     const candidate = await tx.query.wishCandidate.findFirst({
@@ -1683,7 +1808,9 @@ export const updateProduct = async (
   const syncProductUpdateDependents = async (
     tx: DrizzleTransaction,
     incomingGtin: string | null | undefined,
-    desiredExternalIds: ReturnType<typeof prepareUpdate>["desiredExternalIds"],
+    desiredExternalIds: Awaited<
+      ReturnType<typeof prepareUpdate>
+    >["desiredExternalIds"],
   ) => {
     if (unitMappings !== undefined) {
       await syncProductUnitMappings(tx, id, unitMappings);
@@ -1727,10 +1854,8 @@ export const updateProduct = async (
         ),
       });
 
-      const { desiredExternalIds, incomingGtin, updateData } = prepareUpdate(
-        beforeProduct,
-        beforeExternalIds,
-      );
+      const { desiredExternalIds, incomingGtin, updateData } =
+        await prepareUpdate(tx, beforeProduct, beforeExternalIds);
 
       // Wishlist candidates are tools by domain definition. Check the final
       // category after the food-indicator correction too, so a linked ingredient
@@ -1755,16 +1880,27 @@ export const updateProduct = async (
         ? await updateLiveAndReturn(tx, product, updateData, id)
         : beforeProduct;
 
-      if (updated.category !== beforeProduct.category)
+      if (updated.categoryId !== beforeProduct.categoryId)
         await validateLiveEffectiveTrades(tx);
 
       // Conversion coverage and inventory valuation are invalidated only after
       // mappings land; both are projections of the resulting conversion graph.
       await syncProductUpdateDependents(tx, incomingGtin, desiredExternalIds);
+      const admittedCategoryId = await assertProductCategoryChange(
+        tx,
+        id,
+        updated.categoryId,
+      );
+      if (admittedCategoryId !== updated.categoryId)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Product classification conflicts with its identity evidence.",
+        );
       detachedImageKeys = await syncProductImages(
         tx,
         id,
         pendingImageIds,
+        pendingImagePurposes,
         removeImageIds,
         imageOrder,
       );
@@ -1807,6 +1943,12 @@ export const updateProduct = async (
       const pricing = await loadProductPricing(tx, [updated]);
       const qualities = await loadProductDataQualities(tx, [updated.id]);
       return dbProductToTopLevelAPI({
+        classificationEvidence: await getProductClassificationEvidence(
+          tx,
+          updated.id,
+        ),
+        category:
+          (await loadCategorySummaries(tx)).get(updated.categoryId!) ?? null,
         ...updated,
         pricing:
           pricing.get(updated.id) ?? resolveProductPricing(updated.price),
@@ -2059,6 +2201,12 @@ export const patchProductExternalIds = async (
     // here rather than reused from `before`.
     const qualities = await loadProductDataQualities(tx, [before.id]);
     return dbProductToTopLevelAPI({
+      classificationEvidence: await getProductClassificationEvidence(
+        tx,
+        before.id,
+      ),
+      category:
+        (await loadCategorySummaries(tx)).get(before.categoryId!) ?? null,
       ...before,
       pricing: pricing.get(before.id) ?? resolveProductPricing(before.price),
       dataQuality: qualities.get(before.id)!,
@@ -2080,7 +2228,7 @@ export const quickCreateProduct = async (
     fdc_id?: number | null;
     ingredientId?: IngredientId | null;
     price?: number | null;
-    category?: ProductCategory | null;
+    categoryId?: ProductCategoryId | null;
     shortcode?: string; // Optional shortcode from import (preserves sheet shortcodes)
     createdAt?: Date;
     updatedAt?: Date;
@@ -2091,14 +2239,18 @@ export const quickCreateProduct = async (
     upc: data.upc,
     isbn: data.isbn,
   });
-  const category = hasFoodIndicators(data)
-    ? "food"
-    : incomingGtin != null &&
-        externalIdsContainIsbn([
-          { source: GTIN_SOURCE, externalId: incomingGtin },
-        ])
-      ? "books"
-      : (data.category ?? null);
+  const categoryId = await resolveProductCategory(
+    db,
+    data.categoryId ?? null,
+    hasFoodIndicators(data)
+      ? "food"
+      : incomingGtin != null &&
+          externalIdsContainIsbn([
+            { source: GTIN_SOURCE, externalId: incomingGtin },
+          ])
+        ? "books"
+        : null,
+  );
 
   const values = {
     name: data.name,
@@ -2111,7 +2263,7 @@ export const quickCreateProduct = async (
     expectedQuantity: data.expectedQuantity ?? null,
     ingredientId: data.ingredientId ?? null,
     price: data.price ?? null,
-    category,
+    categoryId,
     ...(data.createdAt && { createdAt: data.createdAt }),
     ...(data.updatedAt && { updatedAt: data.updatedAt }),
   };
@@ -2152,6 +2304,12 @@ export const quickCreateProduct = async (
 
   const qualities = await loadProductDataQualities(db, [newProduct.id]);
   return dbProductToTopLevelAPI({
+    classificationEvidence: await getProductClassificationEvidence(
+      db,
+      newProduct.id,
+    ),
+    category:
+      (await loadCategorySummaries(db)).get(newProduct.categoryId!) ?? null,
     ...newProduct,
     pricing: resolveProductPricing(newProduct.price),
     dataQuality: qualities.get(newProduct.id)!,
@@ -2378,16 +2536,18 @@ export const deleteProducts = async (
 
 export type ProductRepoCreateInput = Omit<
   ProductCreateInput,
-  "ingredientId" | "growsIngredientId"
+  "ingredientId" | "growsIngredientId" | "categoryId"
 > & {
   ingredientId: IngredientId | null;
   growsIngredientId?: IngredientId | null;
+  categoryId?: ProductCategoryId | null;
 };
 
 export type ProductRepoUpdateData = Omit<
   ProductUpdateInput["data"],
-  "ingredientId" | "growsIngredientId"
+  "ingredientId" | "growsIngredientId" | "categoryId"
 > & {
   ingredientId?: IngredientId | null;
   growsIngredientId?: IngredientId | null;
+  categoryId?: ProductCategoryId | null;
 };

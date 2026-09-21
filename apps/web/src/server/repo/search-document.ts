@@ -21,6 +21,7 @@ import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/repo/entity-embedding";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { normalizeSearchText } from "~/server/semantic/text";
 
@@ -312,7 +313,7 @@ async function getSearchDocumentSources(
       FROM "Image" i WHERE i."deletedAt" IS NULL AND 'image' IN (${types}) AND ${requested(sql`i."id"`)}`,
     product: sql`
       SELECT 'product'::text AS "entityType", p."id"::text AS "entityId", p."shortcode",
-        p."name" AS title, p."manufacturer" AS subtitle, p."category" AS "typeHint",
+        p."name" AS title, p."manufacturer" AS subtitle, ${categorySummarySql(sql`p."categoryId"`)}->>'name' AS "typeHint",
         p."aliases" AS aliases,
         COALESCE((SELECT array_agg(pei."externalId") FROM "ProductExternalId" pei
                   WHERE pei."productId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
@@ -333,7 +334,7 @@ async function getSearchDocumentSources(
         l."type", l."aliases", ARRAY[l."type"]::text[]
       FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND ${requested(sql`l."id"`)}`,
     inventory: sql`
-      SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", p."category", p."aliases",
+      SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", ${categorySummarySql(sql`p."categoryId"`)}->>'name', p."aliases",
         ARRAY[l."name", l."type", p."manufacturer"]::text[] ||
         COALESCE((SELECT array_agg(pei."externalId") FROM "ProductExternalId" pei
                   WHERE pei."productId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),

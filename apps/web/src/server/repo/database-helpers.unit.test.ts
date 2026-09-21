@@ -90,9 +90,9 @@ describe("buildOrderBy", () => {
       buildOrderBy(
         product,
         [{ orderBy: "name", direction: "asc" }],
-        ["category", "name"],
+        ["categoryId", "name"],
         {
-          groupBy: "category",
+          groupBy: "categoryId",
           resolve: (sort) =>
             sort.orderBy === "name" ? [asc(product.manufacturer)] : null,
           tieBreaker: asc(product.shortcode),
@@ -101,7 +101,7 @@ describe("buildOrderBy", () => {
     );
 
     expect(sql).toHaveLength(4);
-    expect(sql[0]).toContain('"Product"."category" asc nulls last');
+    expect(sql[0]).toContain('"Product"."categoryId" asc nulls last');
     expect(sql.at(-1)).toContain('"Product"."id" asc');
   });
 });
@@ -109,19 +109,19 @@ describe("buildOrderBy", () => {
 describe("eqAnyOrPresence", () => {
   it("returns undefined when value is empty/undefined and presence is unset (no constraint)", () => {
     expect(
-      eqAnyOrPresence(product.category, undefined, undefined),
+      eqAnyOrPresence(product.categoryId, undefined, undefined),
     ).toBeUndefined();
-    expect(eqAnyOrPresence(product.category, [], undefined)).toBeUndefined();
+    expect(eqAnyOrPresence(product.categoryId, [], undefined)).toBeUndefined();
   });
 
   it("ORs the value clause with the presence clause: a picked value plus (none) widens, it never ANDs into a contradiction", () => {
     const result = eqAnyOrPresence(
-      product.category,
+      product.categoryId,
       ["food", "produce"],
       "none",
     );
     expect(result && dialect.sqlToQuery(result).sql).toBe(
-      `("Product"."category" in ($1, $2) or "Product"."category" is null)`,
+      `("Product"."categoryId" in ($1, $2) or "Product"."categoryId" is null)`,
     );
     expect(result && dialect.sqlToQuery(result).params).toEqual([
       "food",

@@ -150,6 +150,34 @@ describe("PendingImageUpload", () => {
     expect(onExistingImagesRemove).toHaveBeenCalledWith(["IMG-COVER"]);
   });
 
+  it("reports an explicit role correction for an existing Product image", () => {
+    const onExistingImagesPurposeChange = vi.fn();
+    render(
+      <PendingImageUpload
+        entityType="PRODUCT"
+        existingImages={[
+          {
+            id: "IMG-EXISTING",
+            url: "https://example.com/existing.jpg",
+            filename: "Existing photo",
+            key: "existing",
+            purpose: "item",
+          },
+        ]}
+        onExistingImagesPurposeChange={onExistingImagesPurposeChange}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(
+      screen.getByLabelText("Attachment role for Existing photo"),
+      { target: { value: "label" } },
+    );
+    expect(onExistingImagesPurposeChange).toHaveBeenLastCalledWith({
+      "IMG-EXISTING": "label",
+    });
+  });
+
   it("imports a URL into the pending list without attaching a record", async () => {
     const onImagesChange = vi.fn();
     const importFromUrl = imageUpload.importFromUrl.withTransport(async () => ({
@@ -178,6 +206,41 @@ describe("PendingImageUpload", () => {
         id: expect.stringMatching(/^IMG-/),
         filename: "imported.jpg",
       }),
+    ]);
+  });
+
+  it("sends the selected source with a local upload", async () => {
+    const file = new File(["catalog"], "catalog.jpg", { type: "image/jpeg" });
+    const onImagesChange = vi.fn();
+    const uploadImage = imageUpload.uploadImage.withTransport(async (input) => {
+      expect(input.input.source).toBe("catalog");
+      return {
+        imageId: testShortcode("image", "IMG-CATALOG"),
+        uploadUrl: "https://storage.example.test/upload",
+        key: "catalog.jpg",
+        url: "https://storage.example.test/catalog.jpg",
+      };
+    });
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 200 }));
+    render(
+      <PendingImageUpload
+        entityType="PRODUCT"
+        onImagesChange={onImagesChange}
+        operations={{ uploadImage, importFromUrl: imageUpload.importFromUrl }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("Photo source"), {
+      target: { value: "catalog" },
+    });
+    fireEvent.change(screen.getByLabelText("Attach as"), {
+      target: { value: "label" },
+    });
+    chooseImages(file);
+    expect(await screen.findByAltText("catalog.jpg")).toBeInTheDocument();
+    expect(onImagesChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ purpose: "label" }),
     ]);
   });
 

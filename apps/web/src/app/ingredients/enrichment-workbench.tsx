@@ -761,7 +761,6 @@ export function EnrichmentWorkbench({
           expectedQuantity: null,
           ingredientId: row.id,
           fdc_id: suggestions[row.id]!.food.fdc_id,
-          category: "food" as const,
           price: eachPrice,
           unitMappings: mapping ? [mapping] : [],
         };

@@ -2,14 +2,12 @@ import {
   type ExternalIdInput,
   externalIdKind,
 } from "@cubby/schemas/external-id";
-import { ingredientShortcode } from "@cubby/schemas/identifiers";
-import { hasFoodIndicators, productCategory } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { isMiscProduct } from "@cubby/shared";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 import { ChevronRight, Search } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import type {
   FieldPathByValue,
   FieldValues,
@@ -41,6 +39,7 @@ import { upc } from "~/lib/upc.functions";
 import { wasm } from "~/lib/wasm";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
+import { referenceEntitySearch } from "../combobox/reference-entity-search";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
   NullableNumericField,
@@ -49,6 +48,7 @@ import {
   UnifiedTextField,
 } from "../form-utils";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
+import { EntityValueField } from "../form-utils/entity-value-field";
 import {
   type PendingDocument,
   PendingDocumentUpload,
@@ -100,6 +100,7 @@ type ImageHandlers = Pick<
   ReturnType<typeof useImageState>,
   | "handlePendingImagesChange"
   | "handleRemovedImagesChange"
+  | "handleExistingImagePurposesChange"
   | "handlePendingDocumentsChange"
   | "handleRemovedDocumentsChange"
 >;
@@ -144,7 +145,7 @@ export interface ProductFormFieldPaths<TFieldValues extends FieldValues> {
   manufacturer: ProductTextPath<TFieldValues>;
   model: ProductTextPath<TFieldValues>;
   notes: ProductTextPath<TFieldValues>;
-  category: ProductTextPath<TFieldValues>;
+  categoryId: ProductTextPath<TFieldValues>;
   upc: ProductTextPath<TFieldValues>;
   isbn: ProductTextPath<TFieldValues>;
   fdcId: ProductNumberPath<TFieldValues>;
@@ -182,7 +183,7 @@ function setProductField<
 >(
   form: UseFormReturn<TFieldValues>,
   name: TName,
-  value: string | number | z.infer<typeof productCategory>,
+  value: string | number,
   options?: Parameters<UseFormReturn<TFieldValues>["setValue"]>[2],
 ) {
   // SAFETY: `ProductFormFieldPaths` pairs every mutation target with this
@@ -198,8 +199,6 @@ const observedProductFieldsSchema = z.object({
   isbn: z.string().nullable(),
   ingredient: z.unknown(),
 });
-
-const ingredientReferenceSchema = z.object({ id: z.string() });
 
 /**
  * Client-side counterpart to the deleted `@cubby/schemas/isbn`'s `isbn` Zod
@@ -229,7 +228,7 @@ export interface ProductFormFieldValues extends FieldValues {
   manufacturer: string;
   model: string | null;
   notes: string | null;
-  category: z.infer<typeof productCategory> | null;
+  categoryId: string | null;
   upc: string | null;
   isbn: string | null;
   fdc_id: number | null;
@@ -271,18 +270,15 @@ type ProductFormSectionProps<TFieldValues extends ProductFormFieldValues> =
 
 function ProductDetailsFields<TFieldValues extends ProductFormFieldValues>({
   mode,
+  form,
   paths,
   compact,
   hideNameField,
   isMisc,
-  isFoodForced,
-  isBookForced,
-}: Omit<ProductFormSectionProps<TFieldValues>, "form"> & {
+}: ProductFormSectionProps<TFieldValues> & {
   mode: EditMode;
   hideNameField: boolean;
   isMisc: boolean;
-  isFoodForced: boolean;
-  isBookForced: boolean;
 }) {
   return (
     <FormSection title="Product details" compact={compact} plate>
@@ -326,21 +322,15 @@ function ProductDetailsFields<TFieldValues extends ProductFormFieldValues>({
               manufacturer: { placeholder: "Enter manufacturer" },
             }}
           />
-          <EntityPrimitiveFields
-            entity="product"
-            mode={mode}
-            section="category"
-            paths={{ category: paths.category }}
-            options={{
-              category: {
-                disabled: isFoodForced || isBookForced,
-                description: isFoodForced
-                  ? "Forced to 'food' (has USDA link or ingredient)"
-                  : isBookForced
-                    ? "Forced to 'books' (has a valid ISBN)"
-                    : undefined,
-              },
-            }}
+          <EntityValueField
+            form={form}
+            name={paths.categoryId}
+            entity="productCategory"
+            label="Classification"
+            placeholder="Search classifications…"
+            clearable
+            SearchProvider={referenceEntitySearch("productCategory")}
+            suggestField="categoryId"
           />
         </SideBySideFields>
       )}
@@ -712,6 +702,9 @@ function ProductMediaFields<TFieldValues extends ProductFormFieldValues>({
         onImagesChange={imageHandlers.handlePendingImagesChange}
         existingImages={existingImages}
         onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
+        onExistingImagesPurposeChange={
+          imageHandlers.handleExistingImagePurposesChange
+        }
       />
       {/* Unconditional: the button disables itself and says why. Gating it
           here is what made the affordance vanish, so nobody learned that a
@@ -857,8 +850,8 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
   const [isLookingUp, setIsLookingUp] = useState(false);
   const identityForm = {
     setValue: (update: {
-      field: "name" | "manufacturer" | "model" | "category";
-      value: string | z.infer<typeof productCategory>;
+      field: "name" | "manufacturer" | "model";
+      value: string;
     }) => {
       switch (update.field) {
         case "name":
@@ -866,9 +859,6 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
           return;
         case "manufacturer":
           setProductField(form, paths.manufacturer, update.value);
-          return;
-        case "category":
-          setProductField(form, paths.category, update.value);
           return;
         case "model":
           setProductField(form, paths.model, update.value);
@@ -878,33 +868,8 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
 
   // Watch fields for conditional rendering
   const observedFields = observedProductFieldsSchema.parse(form.watch());
-  const {
-    name: nameValue,
-    fdc_id: fdcValue,
-    upc: upcValue,
-    isbn: isbnValue,
-  } = observedFields;
-  const ingredientReference = ingredientReferenceSchema.safeParse(
-    observedFields.ingredient,
-  );
-  const ingredientId = ingredientReference.success
-    ? ingredientShortcode.safeParse(ingredientReference.data.id).data
-    : undefined;
-
+  const { name: nameValue, fdc_id: fdcValue, upc: upcValue } = observedFields;
   const isMisc = isMiscProduct(nameValue);
-  const isFoodForced = hasFoodIndicators({
-    fdc_id: fdcValue,
-    ingredientId,
-  });
-  const isBookForced =
-    !isFoodForced &&
-    isbnValue != null &&
-    wasm.normalize_isbn(isbnValue) != null;
-
-  useEffect(() => {
-    if (!isBookForced) return;
-    setProductField(form, paths.category, "books", { shouldDirty: true });
-  }, [form, isBookForced, paths.category]);
 
   const handleUpcLookup = async () => {
     const upcValue = observedProductFieldsSchema.parse(form.getValues()).upc;
@@ -954,12 +919,11 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
     <>
       <ProductDetailsFields
         mode={mode}
+        form={form}
         paths={paths}
         compact={compact}
         hideNameField={hideNameField}
         isMisc={isMisc}
-        isFoodForced={isFoodForced}
-        isBookForced={isBookForced}
       />
 
       <ProductTagFields form={form} compact={compact} />

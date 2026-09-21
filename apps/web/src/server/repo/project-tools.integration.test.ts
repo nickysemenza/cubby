@@ -13,6 +13,7 @@ import {
   projectSetToolUsageWorkflow,
 } from "~/server/workflows/project.server";
 
+import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
 import { getDb, notDeleted } from "./database-helpers";
 import { deleteProducts } from "./product";
 import { createProject, deleteProjects } from "./project";
@@ -33,12 +34,18 @@ describe("project reusable resources", () => {
     );
     const source = await createProduct(
       ctx.db,
-      makeProductInput({ name: "Source drill", category: "tools" }),
+      makeProductInput({
+        name: "Source drill",
+        categoryId: taxonomyShortcode("tools"),
+      }),
       ctx.actor,
     );
     const target = await createProduct(
       ctx.db,
-      makeProductInput({ name: "Replacement drill", category: "tools" }),
+      makeProductInput({
+        name: "Replacement drill",
+        categoryId: taxonomyShortcode("tools"),
+      }),
       ctx.actor,
     );
     const projectId = project.output.id;
@@ -104,7 +111,10 @@ describe("project reusable resources", () => {
     );
     const tool = await createProduct(
       ctx.db,
-      makeProductInput({ name: "History-only tool", category: "tools" }),
+      makeProductInput({
+        name: "History-only tool",
+        categoryId: taxonomyShortcode("tools"),
+      }),
       ctx.actor,
     );
     await attachProjectResources(ctx.db, projectId, [tool.entityId], ctx.actor);
@@ -150,12 +160,18 @@ describe("repointProjectUses", () => {
     const [kit, component] = await Promise.all([
       createProduct(
         ctx.db,
-        makeProductInput({ name: `${name} kit`, category: "tools" }),
+        makeProductInput({
+          name: `${name} kit`,
+          categoryId: taxonomyShortcode("tools"),
+        }),
         ctx.actor,
       ),
       createProduct(
         ctx.db,
-        makeProductInput({ name: `${name} bare tool`, category: "tools" }),
+        makeProductInput({
+          name: `${name} bare tool`,
+          categoryId: taxonomyShortcode("tools"),
+        }),
         ctx.actor,
       ),
     ]);
@@ -233,7 +249,10 @@ describe("repointProjectUses", () => {
     const { kitchen, kit } = await seed("Category");
     const consumable = await createProduct(
       ctx.db,
-      makeProductInput({ name: "Category screws", category: "hardware" }),
+      makeProductInput({
+        name: "Category screws",
+        categoryId: taxonomyShortcode("hardware"),
+      }),
       ctx.actor,
     );
     await attachProjectResources(
