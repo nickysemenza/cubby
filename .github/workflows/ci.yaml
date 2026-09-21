@@ -498,25 +498,6 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 1
 
-  # Branch protection requires a check named exactly "E2E tests (chromium)".
-  # With chromium split into two shards, this summary job carries that name
-  # and fails unless every test-e2e matrix leg passed, so the shard count can
-  # change without editing the required-checks list. It needs a runner only
-  # for a few seconds and starts when the slower shard finishes.
-  test-e2e-chromium:
-    name: E2E tests (chromium)
-    needs: [scope, test-e2e]
-    if: always() && needs.scope.outputs.verify == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require every E2E lane to pass
-        env:
-          RESULT: ${{ needs.test-e2e.result }}
-        run: |
-          echo "test-e2e result: $RESULT"
-          [[ "$RESULT" == "success" ]]
-
   # Host `swift test` for CubbyKit's package tests; not folded into test-apple
   # below. Measured 2026-09-21: running these on the iOS Simulator inside the
   # build job cost about 6 minutes to boot plus ~10 minutes of CPU starvation

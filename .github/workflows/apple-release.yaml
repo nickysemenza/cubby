@@ -32,12 +32,10 @@ on:
         description: "validate or upload"
         value: ${{ jobs.coordinates.outputs.mode }}
 
-concurrency:
-  # github.workflow is the caller's name for a workflow_call, and every
-  # release-dry-run PR uses the same version (0.0.0) — group on the ref too,
-  # or every PR's dry run would serialize behind every other PR's.
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.version }}
-  cancel-in-progress: false
+# No `concurrency` here on purpose: this workflow is only ever called, and a
+# called workflow that declares the same group as its caller (which
+# apple-testflight.yaml does, since `github.workflow` is the caller's name)
+# deadlocks and fails within seconds. Callers own concurrency.
 
 permissions:
   contents: read
