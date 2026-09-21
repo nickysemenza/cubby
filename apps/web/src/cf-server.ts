@@ -20,6 +20,7 @@ import { httpRouteTemplate } from "./lib/http-route-template";
 import { observeResponseBody } from "./lib/response-body-observer";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { resolveWorkerSentryEnvironment } from "./lib/sentry-environment";
+import { SENTRY_IGNORED_ERRORS } from "./lib/sentry-noise";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
 import { rewriteLegacyStartRequest } from "./lib/start-dispatch-url";
 import {
@@ -500,129 +501,154 @@ const handler = {
       });
       return;
     }
-    await withTrace(
-      "cf.scheduled",
+    // The free plan includes exactly one cron monitor, so only the daily job
+    // (the sole remaining fallthrough below) is monitored; the `*/5 * * * *`
+    // and `0 * * * *` branches above return early and are unmonitored.
+    await Sentry.withMonitor(
+      "daily-maintenance",
       async () => {
-        try {
-          await withTrace(
-            "cf.scheduled.job",
-            async () =>
-              await (
-                await calendarFeedStateFor(env.APP_ORIGIN)
-              ).refreshNow("cron.daily"),
-            { "cubby.scheduled.job": "calendar-feed" },
-          );
-        } catch (error) {
-          // Calendar keeps serving its previous atomic snapshot. Keep the
-          // independent assertion below running while surfacing the failure
-          // through both the errored child span and Sentry.
-          Sentry.captureException(error);
-        }
-        // The clock is a legitimate input for the calendar above. This job is
-        // not a repair: it only reads the markers that "Settle now" acts on
-        // and reports when they are non-zero, which is the evidence that a
-        // wakeup was lost — the cue to look, not a sweep that would hide it.
-        // (The vector-reconcile job below IS a repair — see its comment.)
-        await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-          const [{ db }, { countAwaitingWork }] = await Promise.all([
-            import("./server/db"),
-            import("./server/services/awaiting-work.service"),
-          ]);
-          await withTrace(
-            "cf.scheduled.job",
-            async (span) => {
-              try {
-                const awaiting = await countAwaitingWork(db);
-                span.setAttributes({
-                  "cubby.awaiting.stale_recipe_totals":
-                    awaiting.staleRecipeTotals,
-                  "cubby.awaiting.unembedded_entities":
-                    awaiting.unembeddedEntities,
-                  "cubby.awaiting.pending_uploads": awaiting.pendingUploads,
-                });
-                console.log("[scheduled] awaiting work", awaiting);
-                if (
-                  awaiting.staleRecipeTotals > 0 ||
-                  awaiting.unembeddedEntities > 0 ||
-                  awaiting.pendingUploads > 0
-                ) {
-                  Sentry.captureMessage(
-                    `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads`,
-                    "warning",
-                  );
-                }
-              } catch (error) {
-                span.setError("Awaiting-work assertion failed");
-                Sentry.captureException(error);
-              }
-            },
-            { "cubby.scheduled.job": "awaiting-work-assertion" },
-          );
-        });
-        // This job IS a repair, unlike the assert-only sibling above:
-        // Vectorize cannot join the Postgres transaction that soft-deletes
-        // `SearchDocument`/`EntityEmbedding` (`softDeleteEntitySearchArtifactsTx`),
-        // so a removed entity's vector otherwise lingers in Vectorize forever.
-        // `deleteByIds` is idempotent, so re-running or overlapping passes
-        // over the same refs are safe.
-        try {
-          await withTrace(
-            "cf.scheduled.job",
-            async (span) => {
-              const { semanticEmbeddingsConfigured } =
-                await import("./server/semantic/embeddings");
-              if (!semanticEmbeddingsConfigured()) {
-                span.setAttribute("cubby.vectorReconcile.skipped", true);
-                return;
-              }
-              await withRequestDbClient(
-                env.HYPERDRIVE.connectionString,
-                async () => {
-                  const [
-                    { db },
-                    { selectRecentlySoftDeletedSearchRefs },
-                    { productionVectorStore },
-                  ] = await Promise.all([
-                    import("./server/db"),
-                    import("./server/repo/entity-embedding-cleanup"),
-                    import("./server/semantic/vector-store"),
-                  ]);
-                  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-                  let cursor: SearchDocumentCursor | undefined;
-                  let deletedCount = 0;
-                  do {
-                    const page = await selectRecentlySoftDeletedSearchRefs(db, {
-                      since,
-                      cursor,
-                    });
-                    if (page.refs.length > 0) {
-                      await productionVectorStore.deleteByIds(page.refs);
-                      deletedCount += page.refs.length;
+        await withTrace(
+          "cf.scheduled",
+          async () => {
+            try {
+              await withTrace(
+                "cf.scheduled.job",
+                async () =>
+                  await (
+                    await calendarFeedStateFor(env.APP_ORIGIN)
+                  ).refreshNow("cron.daily"),
+                { "cubby.scheduled.job": "calendar-feed" },
+              );
+            } catch (error) {
+              // Calendar keeps serving its previous atomic snapshot. Keep the
+              // independent assertion below running while surfacing the failure
+              // through both the errored child span and Sentry.
+              Sentry.captureException(error);
+            }
+            // The clock is a legitimate input for the calendar above. This job is
+            // not a repair: it only reads the markers that "Settle now" acts on
+            // and reports when they are non-zero, which is the evidence that a
+            // wakeup was lost — the cue to look, not a sweep that would hide it.
+            // (The vector-reconcile job below IS a repair — see its comment.)
+            await withRequestDbClient(
+              env.HYPERDRIVE.connectionString,
+              async () => {
+                const [{ db }, { countAwaitingWork }] = await Promise.all([
+                  import("./server/db"),
+                  import("./server/services/awaiting-work.service"),
+                ]);
+                await withTrace(
+                  "cf.scheduled.job",
+                  async (span) => {
+                    try {
+                      const awaiting = await countAwaitingWork(db);
+                      span.setAttributes({
+                        "cubby.awaiting.stale_recipe_totals":
+                          awaiting.staleRecipeTotals,
+                        "cubby.awaiting.unembedded_entities":
+                          awaiting.unembeddedEntities,
+                        "cubby.awaiting.pending_uploads":
+                          awaiting.pendingUploads,
+                      });
+                      console.log("[scheduled] awaiting work", awaiting);
+                      if (
+                        awaiting.staleRecipeTotals > 0 ||
+                        awaiting.unembeddedEntities > 0 ||
+                        awaiting.pendingUploads > 0
+                      ) {
+                        Sentry.captureMessage(
+                          `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads`,
+                          "warning",
+                        );
+                      }
+                    } catch (error) {
+                      span.setError("Awaiting-work assertion failed");
+                      Sentry.captureException(error);
                     }
-                    cursor = page.nextCursor ?? undefined;
-                  } while (cursor);
-                  span.setAttribute(
-                    "cubby.vectorReconcile.deletedCount",
-                    deletedCount,
+                  },
+                  { "cubby.scheduled.job": "awaiting-work-assertion" },
+                );
+              },
+            );
+            // This job IS a repair, unlike the assert-only sibling above:
+            // Vectorize cannot join the Postgres transaction that soft-deletes
+            // `SearchDocument`/`EntityEmbedding` (`softDeleteEntitySearchArtifactsTx`),
+            // so a removed entity's vector otherwise lingers in Vectorize forever.
+            // `deleteByIds` is idempotent, so re-running or overlapping passes
+            // over the same refs are safe.
+            try {
+              await withTrace(
+                "cf.scheduled.job",
+                async (span) => {
+                  const { semanticEmbeddingsConfigured } =
+                    await import("./server/semantic/embeddings");
+                  if (!semanticEmbeddingsConfigured()) {
+                    span.setAttribute("cubby.vectorReconcile.skipped", true);
+                    return;
+                  }
+                  await withRequestDbClient(
+                    env.HYPERDRIVE.connectionString,
+                    async () => {
+                      const [
+                        { db },
+                        { selectRecentlySoftDeletedSearchRefs },
+                        { productionVectorStore },
+                      ] = await Promise.all([
+                        import("./server/db"),
+                        import("./server/repo/entity-embedding-cleanup"),
+                        import("./server/semantic/vector-store"),
+                      ]);
+                      const since = new Date(
+                        Date.now() - 7 * 24 * 60 * 60 * 1000,
+                      );
+                      let cursor: SearchDocumentCursor | undefined;
+                      let deletedCount = 0;
+                      do {
+                        const page = await selectRecentlySoftDeletedSearchRefs(
+                          db,
+                          {
+                            since,
+                            cursor,
+                          },
+                        );
+                        if (page.refs.length > 0) {
+                          await productionVectorStore.deleteByIds(page.refs);
+                          deletedCount += page.refs.length;
+                        }
+                        cursor = page.nextCursor ?? undefined;
+                      } while (cursor);
+                      span.setAttribute(
+                        "cubby.vectorReconcile.deletedCount",
+                        deletedCount,
+                      );
+                    },
                   );
                 },
+                { "cubby.scheduled.job": "vector-reconcile" },
               );
-            },
-            { "cubby.scheduled.job": "vector-reconcile" },
-          );
-        } catch (error) {
-          // Mirror the calendar job above: report and move on rather than
-          // failing the whole scheduled invocation over one job.
-          Sentry.captureException(error);
-        }
+            } catch (error) {
+              // Mirror the calendar job above: report and move on rather than
+              // failing the whole scheduled invocation over one job.
+              Sentry.captureException(error);
+            }
+          },
+          {
+            "cubby.workload": "scheduled",
+            // The trigger's identity lives in attributes rather than the span name:
+            // a hardcoded `cf.scheduled.problem-counts` would silently mislabel the
+            // second cron the day one is added, since this handler receives every
+            // trigger on the worker.
+            "cloudflare.cron": controller.cron,
+          },
+        );
       },
       {
-        "cubby.workload": "scheduled",
-        // The trigger's identity lives in attributes rather than the span name:
-        // a hardcoded `cf.scheduled.problem-counts` would silently mislabel the
-        // second cron the day one is added, since this handler receives every
-        // trigger on the worker.
-        "cloudflare.cron": controller.cron,
+        schedule: { type: "crontab", value: "0 12 * * *" },
+        checkinMargin: 10,
+        maxRuntime: 30,
+        timezone: "Etc/UTC",
+        failureIssueThreshold: 1,
+        recoveryThreshold: 1,
       },
     );
   },
@@ -1036,6 +1062,8 @@ export default Sentry.withSentry(
     // even though the SDK no longer sends default PII.
     beforeSend: scrubSentryEvent,
     beforeSendTransaction: scrubSentryEvent,
+    // Drop known-noise messages before send — free-plan quota hygiene.
+    ignoreErrors: SENTRY_IGNORED_ERRORS,
     // Mirror the client's prod 10% trace sampling (router.tsx). Head-based
     // sampling decisions propagate client→server via the `sentry-trace` header,
     // so matching the rate keeps front-to-back traces connected without the

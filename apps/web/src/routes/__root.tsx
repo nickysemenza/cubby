@@ -22,6 +22,7 @@ import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { AuthenticatedAppShell } from "~/app/_components/navigation/authenticated-app-shell";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
+import { ErrorDetailsDialogHost } from "~/components/feedback/error-details-dialog";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { RouteNotFound } from "~/components/lazy-route-not-found";
 import { Toaster } from "~/components/ui/sonner";
@@ -320,6 +321,7 @@ function RootComponent() {
         </React.Suspense>
       )}
       <Toaster />
+      <ErrorDetailsDialogHost />
       <PerfOverlayMount />
       <DevtoolsWrapper />
     </Provider>

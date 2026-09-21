@@ -11,6 +11,7 @@ import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import { installNavigationTracker } from "~/lib/perf/navigation-tracker";
 import { SENTRY_DSN } from "~/lib/sentry-dsn";
 import { sentryEnvironment } from "~/lib/sentry-environment";
+import { SENTRY_IGNORED_ERRORS } from "~/lib/sentry-noise";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
 
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
@@ -69,6 +70,8 @@ export const getRouter = () => {
         window.location.origin,
         isProd ? "production" : "development",
       ),
+      // Drop known-noise messages before send — free-plan quota hygiene.
+      ignoreErrors: SENTRY_IGNORED_ERRORS,
       // Keep the scrubber as defense in depth for manually attached request
       // data, even though the SDK no longer sends default PII.
       beforeSend: (event, hint) => {

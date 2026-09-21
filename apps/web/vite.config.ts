@@ -1,6 +1,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { sentryTanstackStart } from "@sentry/tanstackstart-react/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -17,6 +18,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",
 }).trim();
+// Full SHA for the Sentry release's commit association (setCommits below) —
+// the short `gitCommit` above is what actually names the release, matching
+// the runtime `release` in router.tsx and cf-server.ts.
+const fullSha = execSync("git rev-parse HEAD", { encoding: "utf-8" }).trim();
+const repoRoot = path.resolve(__dirname, "../..");
 const sourceCommit = process.env.CUBBY_SOURCE_COMMIT?.slice(0, 7) || gitCommit;
 // Source time keeps identical checkouts byte-stable across repeated builds.
 const sourceDate = execFileSync(
@@ -329,6 +335,56 @@ export default defineConfig(async ({ command, mode }) => {
         },
       }),
       viteReact(),
+      // Sentry source maps, CF production build only (the plugin already
+      // no-ops under NODE_ENV=development). Last in `plugins` so it sees the
+      // final client/server output. `autoInstrumentMiddleware` stays off: it
+      // would inject `wrapMiddlewaresWithSentry` imports from
+      // `@sentry/tanstackstart-react`, which the SSR build resolves to
+      // `cfSentryShim` (no such export). Maps are "hidden" (no
+      // `sourceMappingURL`), uploaded once per Vite environment from that
+      // environment's own output dir, then deleted so none ship as public
+      // assets. Map sources are output-relative (`../../src/x.ts` from
+      // dist/server, `../../../src/x.ts` from dist/client/assets); rewriting
+      // them repo-relative (`apps/web/src/x.ts`, `packages/schemas/src/y.ts`)
+      // lets one Sentry code mapping (repo root -> repo root on main) resolve
+      // browser and Worker frames. Without SENTRY_AUTH_TOKEN (PR/preview CI) the plugin warns,
+      // skips the upload, and still injects debug IDs and deletes the maps.
+      ...(isCloudflare && command === "build"
+        ? [
+            sentryTanstackStart({
+              org: "nicky-semenza",
+              project: "recipehub", // Sentry project slug; the display name is "cubby"
+              authToken: process.env.SENTRY_AUTH_TOKEN,
+              telemetry: false,
+              autoInstrumentMiddleware: false,
+              release: {
+                name: `cubby@${gitCommit}`, // must equal the runtime `release` in router.tsx and cf-server.ts
+                setCommits: {
+                  repo: "nickysemenza/cubby",
+                  commit: process.env.CUBBY_SOURCE_COMMIT ?? fullSha,
+                },
+                deploy: { env: "production" },
+              },
+              sourcemaps: {
+                // Resolve relative map sources against the map's own directory
+                // so `apps/web/src/...` and workspace `packages/*/src/...` both
+                // come out repo-relative (a fixed `apps/web/` prefix would
+                // mangle the packages).
+                rewriteSources: (source, _map, context) =>
+                  /^\.\.?\//.test(source) && context?.mapDir
+                    ? path
+                        .relative(
+                          repoRoot,
+                          path.resolve(context.mapDir, source),
+                        )
+                        .split(path.sep)
+                        .join("/")
+                    : source,
+                filesToDeleteAfterUpload: ["./dist/**/*.map"],
+              },
+            }),
+          ]
+        : []),
     ],
   };
 });

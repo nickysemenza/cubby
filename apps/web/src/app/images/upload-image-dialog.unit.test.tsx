@@ -196,7 +196,10 @@ describe("UploadImageDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Import" }));
 
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("import unavailable"),
+      expect(errorSpy).toHaveBeenCalledWith(
+        "import unavailable",
+        expect.objectContaining({ id: expect.any(String) }),
+      ),
     );
     expect(errorSpy).toHaveBeenCalledTimes(1);
     // Cleared only on success (upload-image-dialog.tsx onSuccess) — a failed

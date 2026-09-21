@@ -204,26 +204,36 @@ test("server error references remain usable on desktop and narrow screens", asyn
     .getByRole("button", { name: "Details", exact: true })
     .first()
     .click();
-  const details = page
-    .locator("details")
-    .filter({ hasText: "Technical details" })
-    .first();
-  await details.locator("summary").click();
-  await expect(details).toContainText("entity.list / dispatch");
+  const dialog = page.getByRole("dialog", { name: "Technical details" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("entity.list / dispatch");
   await expect(
-    details.getByRole("link", { name: "View in Sentry" }),
+    dialog.getByRole("link", { name: "View in Sentry" }),
   ).toHaveAttribute(
     "href",
     "https://nicky-semenza.sentry.io/issues/?query=0123456789abcdef0123456789abcdef",
   );
-  await details.getByRole("button", { name: "Copy details" }).click();
+  // The source toast is dismissed when its "Details" action opens the dialog
+  // (sonner's default post-onClick behavior), so there is exactly one dialog
+  // and no leftover "Details" button behind it.
+  await expect(
+    page.getByRole("button", { name: "Details", exact: true }),
+  ).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Copy details" }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
     "diagnostic-test-request",
   );
+  await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("error-desktop.png") });
+  // ResponsiveDialog swaps its Dialog tree for a Sheet tree below 768px,
+  // remounting the body and resetting the "Copied" state back to "Copy
+  // details" — assert the clipboard/"Copied" state above, before resizing.
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(details.getByRole("button", { name: "Copied" })).toBeVisible();
-  const bounds = await details.boundingBox();
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Copy details" }),
+  ).toBeVisible();
+  const bounds = await dialog.boundingBox();
   expect(bounds).not.toBeNull();
   expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: testInfo.outputPath("error-mobile.png") });
