@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  cardLastFoursOn,
+  currentLast4,
+  type FinancialAccountCardNumber,
+  type FinancialAccountCardNumberKind,
   financialAccountCreateInput,
   financialAccountUpdateData,
 } from "./financial-account";
@@ -8,14 +12,25 @@ import {
   purchaseSettlementCheckExpression,
 } from "./financial-transaction";
 
+const card = (
+  last4: string,
+  kind: FinancialAccountCardNumberKind = "primary",
+) => ({
+  last4,
+  kind,
+  validFrom: null,
+  validTo: null,
+  note: null,
+});
+
 const account = {
-  name: "Visa ····4242",
+  name: "Visa ····3692",
   identity: {
     kind: "credit_card" as const,
     issuer: null,
     network: "visa" as const,
-    last4: "3692",
   },
+  cardNumbers: [card("3692")],
 };
 
 describe("financial account contracts", () => {
@@ -27,18 +42,22 @@ describe("financial account contracts", () => {
     expect(
       financialAccountCreateInput.safeParse({
         ...account,
-        identity: {
-          ...account.identity,
-          last4: "692",
-        },
+        cardNumbers: [card("692")],
+      }).success,
+    ).toBe(false);
+    // Digits no longer live on the identity — a stale caller must fail loudly.
+    expect(
+      financialAccountCreateInput.safeParse({
+        ...account,
+        identity: { ...account.identity, last4: "3692" },
       }).success,
     ).toBe(false);
     expect(
-      financialAccountCreateInput.safeParse({
+      financialAccountCreateInput.parse({
         name: "Cash",
         identity: { kind: "cash" },
-      }).success,
-    ).toBe(true);
+      }),
+    ).toMatchObject({ cardNumbers: [] });
     expect(
       financialAccountCreateInput.safeParse({
         name: "Checking",
@@ -46,10 +65,49 @@ describe("financial account contracts", () => {
           kind: "bank_account",
           institution: "Credit union",
           accountType: "checking",
-          last4: "1234",
         },
+        cardNumbers: [card("1234")],
       }).success,
     ).toBe(true);
+  });
+
+  it("keeps card numbers unique, dated in order, with one current primary", () => {
+    const parse = (cardNumbers: FinancialAccountCardNumber[]) =>
+      financialAccountCreateInput.safeParse({ ...account, cardNumbers })
+        .success;
+    expect(parse([card("3692"), card("3692", "wallet_token")])).toBe(false);
+    expect(parse([card("3692"), card("2002")])).toBe(false);
+    expect(
+      parse([card("3692"), { ...card("2002"), validTo: "2024-11-30" }]),
+    ).toBe(true);
+    expect(
+      parse([
+        { ...card("2002"), validFrom: "2024-12-01", validTo: "2024-11-30" },
+      ]),
+    ).toBe(false);
+    // Not a fresh literal, so the extra key reaches the strict schema.
+    const withExtraKey = { ...card("4700", "wallet_token"), extra: 1 };
+    expect(parse([withExtraKey])).toBe(false);
+  });
+
+  it("derives the current digits and the digits presentable on a date", () => {
+    const history = [
+      { ...card("1004"), validTo: "2023-04-30" },
+      { ...card("2002"), validFrom: "2023-04-01", validTo: "2024-11-30" },
+      { ...card("3000"), validFrom: "2024-11-01" },
+      card("4700", "wallet_token"),
+    ];
+    expect(currentLast4(history)).toBe("3000");
+    expect(currentLast4([card("4700", "wallet_token")])).toBeNull();
+    expect(cardLastFoursOn(history, "2023-11-14")).toEqual(["2002", "4700"]);
+    expect(cardLastFoursOn(history, "2023-04-15")).toEqual([
+      "1004",
+      "2002",
+      "4700",
+    ]);
+    expect(cardLastFoursOn(history, "2026-09-19")).toEqual(["3000", "4700"]);
+    // Undated evidence can only be matched by cards that were never bounded.
+    expect(cardLastFoursOn(history, null)).toEqual(["4700"]);
   });
 
   it("rejects duplicate aliases and does not apply create defaults on updates", () => {

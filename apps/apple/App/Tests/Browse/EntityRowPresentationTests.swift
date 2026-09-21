@@ -6,7 +6,7 @@ import Testing
 
 @Suite("Entity row presentation")
 struct EntityRowPresentationTests {
-    @Test func resolvesDeclaredFactsReferencesArraysAndEditTime() throws {
+    @Test func resolvesOnlyDeclaredFactsInMetadataOrder() throws {
         let descriptor = EntityCatalog[.product]
         let row = EntityRow(
             id: "PRD-1001", title: "Cast Iron Skillet", subtitle: "ignored", imageURL: nil,
@@ -15,15 +15,17 @@ struct EntityRowPresentationTests {
                 "tags": ["kitchen", "cast-iron"], "updatedAt": "2026-09-12T10:00:00.000Z",
             ])
 
-        let presentation = EntityRowPresentation.resolve(descriptor: descriptor, row: row)
+        let presentation = EntityRowPresentation.resolve(
+            descriptor: descriptor, row: row, columns: ["tags", "manufacturer"])
 
         #expect(presentation.title == "Cast Iron Skillet")
         #expect(presentation.shortcode == "PRD-1001")
+        #expect(presentation.facts.map(\.id) == ["tags", "manufacturer"])
         #expect(presentation.facts.contains { $0.value == "Lodge" })
         #expect(presentation.facts.contains { $0.value == "kitchen, cast-iron" })
-        #expect(presentation.facts.contains { $0.id == "updatedAt" })
         #expect(presentation.factLine?.contains("Manufacturer: Lodge") == true)
         #expect(presentation.accessibilityText.contains("Manufacturer, Lodge"))
+        #expect(!presentation.accessibilityText.contains("PRD-1001"))
     }
 
     @Test func relationColumnsResolveRenamedReferencesAndZeroCurrency() throws {

@@ -33,6 +33,7 @@ const identifierTypeNames = {
 const storageJsonTypes = {
   "cookbook.rawJson": "CookbookExtraction",
   "cookbook.report": "CookbookRunReport | null",
+  "financialAccount.cardNumbers": "FinancialAccountCardNumber[]",
   "financialAccount.identity": "FinancialAccountIdentity",
   "financialAccount.sourceAliases": "FinancialAccountSourceAlias[]",
   "financialTransaction.sourceRefs": "FinancialTransactionSourceRef[]",
@@ -199,7 +200,7 @@ export const renderEntityColumnsArtifact = (
     generatedHeader +
     'import type { Amount } from "@cubby/schemas/codec";\n' +
     'import type { DataException } from "@cubby/schemas/data-quality";\n' +
-    'import type { FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
+    'import type { FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
     'import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";\n' +
     `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
     'import { imageStatusValues } from "@cubby/schemas/image";\n' +

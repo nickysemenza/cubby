@@ -1,5 +1,8 @@
 import { entityRefKey } from "@cubby/schemas/entity";
-import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account";
+import type {
+  FinancialAccountCardNumber,
+  FinancialAccountIdentity,
+} from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
@@ -835,27 +838,31 @@ async function getPurchaseEmbeddingTexts(
 const presentIdentityTerms = (terms: Array<string | null>): string[] =>
   terms.filter((term): term is string => term !== null && term.length > 0);
 
-const identityTerms = (identity: FinancialAccountIdentity): string[] => {
+const identityTerms = (
+  identity: FinancialAccountIdentity,
+  cardNumbers: FinancialAccountCardNumber[],
+): string[] => {
+  const last4s = cardNumbers.map((card) => card.last4);
   switch (identity.kind) {
     case "credit_card":
       return presentIdentityTerms([
         identity.kind,
         identity.issuer,
         identity.network,
-        identity.last4,
+        ...last4s,
       ]);
     case "bank_account":
       return presentIdentityTerms([
         identity.kind,
         identity.institution,
         identity.accountType,
-        identity.last4,
+        ...last4s,
       ]);
     case "stored_value":
       return presentIdentityTerms([
         identity.kind,
         identity.provider,
-        identity.last4,
+        ...last4s,
       ]);
     case "cash":
       return [identity.kind];
@@ -863,7 +870,7 @@ const identityTerms = (identity: FinancialAccountIdentity): string[] => {
       return presentIdentityTerms([
         identity.kind,
         identity.institution,
-        identity.last4,
+        ...last4s,
       ]);
   }
 };
@@ -888,6 +895,7 @@ async function getFinancialAccountEmbeddingTexts(
         name: true,
         identity: true,
         sourceAliases: true,
+        cardNumbers: true,
         notes: true,
       },
     },
@@ -899,7 +907,7 @@ async function getFinancialAccountEmbeddingTexts(
     entityId: row.id,
     embeddingText: buildFinancialAccountEmbeddingText({
       name: row.name,
-      identityTerms: identityTerms(row.identity),
+      identityTerms: identityTerms(row.identity, row.cardNumbers),
       sourceAliasTerms: row.sourceAliases.flatMap((alias) => [
         alias.source,
         alias.alias,

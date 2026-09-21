@@ -192,12 +192,16 @@ describe("statement row ledger", () => {
         ctx.db,
         financialAccountCreateInput.parse({
           name: "Test Card",
-          identity: {
-            kind: "credit_card",
-            issuer: null,
-            network: "amex",
-            last4: "4242",
-          },
+          identity: { kind: "credit_card", issuer: null, network: "amex" },
+          cardNumbers: [
+            {
+              last4: "4242",
+              kind: "primary",
+              validFrom: null,
+              validTo: null,
+              note: null,
+            },
+          ],
           sourceAliases: [],
         }),
         ctx.actor,
@@ -259,12 +263,16 @@ describe("statement row ledger", () => {
         ctx.db,
         financialAccountCreateInput.parse({
           name: "Shared Card",
-          identity: {
-            kind: "credit_card",
-            issuer: null,
-            network: "amex",
-            last4: "4242",
-          },
+          identity: { kind: "credit_card", issuer: null, network: "amex" },
+          cardNumbers: [
+            {
+              last4: "4242",
+              kind: "primary",
+              validFrom: null,
+              validTo: null,
+              note: null,
+            },
+          ],
           sourceAliases: [],
         }),
         ctx.actor,

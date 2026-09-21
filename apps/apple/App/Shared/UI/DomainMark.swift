@@ -44,29 +44,6 @@ struct DomainMark: View {
     }
 }
 
-/// The domain line(s) a top-level section works in. Capture acts on House records, and Browse and
-/// Search preview all four lines because they span all of them. Today, Photos, and Dev are shell
-/// surfaces and get no mark. The macOS sidebar shows this beside the row; the iOS tab bar cannot
-/// carry a custom view, so there it sits in the section's navigation bar instead.
-struct SectionDomainMarks: View {
-    let section: AppSection
-
-    var body: some View {
-        switch section {
-        case .capture:
-            DomainMark(.house, size: 7)
-        case .browse, .search, .graph:
-            HStack(spacing: 3) {
-                ForEach(AppDomain.allCases) { domain in
-                    DomainMark(domain, size: 5)
-                }
-            }
-        case .today, .activity, .photos, .dev:
-            EmptyView()
-        }
-    }
-}
-
 #Preview("Domain marks") {
     VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
         ForEach(AppDomain.allCases) { domain in
@@ -82,13 +59,6 @@ struct SectionDomainMarks: View {
             Text("Products").font(.porcelainBody)
             DomainMark(.expense)
             Text("Expenses").font(.porcelainBody)
-        }
-        PanelDivider(inset: 0)
-        ForEach(AppSection.allCases) { section in
-            HStack(spacing: PorcelainTokens.Space.sm) {
-                Text(section.title).font(.porcelainBody)
-                SectionDomainMarks(section: section)
-            }
         }
     }
     .padding(PorcelainTokens.Space.lg)

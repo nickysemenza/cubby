@@ -26,7 +26,7 @@ export function ProductEditDialog({
     <ResponsiveDialog
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open && !editMode.isPending) onClose();
       }}
       title="Edit product"
       size="lg"
@@ -37,7 +37,9 @@ export function ProductEditDialog({
         onEdit={editMode.submit}
         isPending={editMode.isPending}
         error={editMode.error}
-        onCancel={onClose}
+        onCancel={() => {
+          if (!editMode.isPending) onClose();
+        }}
       />
     </ResponsiveDialog>
   );

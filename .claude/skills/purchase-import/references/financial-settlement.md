@@ -8,8 +8,9 @@ and identifiers below are synthetic; derive live references from authorized read
 Vendor documents establish Purchase identity, literal stated total, and
 Expense detail. Statements establish FinancialTransaction amount, Account,
 status, and posted date. Do not overwrite one source's facts with the other.
-Vendor-reported card/payment hints are evidence for notes or a future structured
-reference; they do not establish a Financial Account identity.
+Vendor-reported card/payment hints do not establish a Financial Account
+identity; once the funding account is known, they belong in that account's
+`cardNumbers` (below), not in notes.
 
 Cubby signs are positive charge/outflow and negative refund/inflow. Monarch
 exports invert this for ordinary charges, so normalize before previewing.
@@ -61,8 +62,18 @@ uniqueness makes later full-history imports no-op for unchanged rows; it does
 not authorize writing through a conflict.
 
 Resolve an Account by source external ID, source aliases, then one unambiguous
-network/last-four candidate. Last four alone is not unique. A provisional
-Account is correct when evidence is incomplete; do not invent provider data.
+network/last-four candidate across every account's `cardNumbers` (`entity list
+financialAccount {filters:{last4}}` searches them all). Last four alone is not
+unique. A provisional Account is correct when evidence is incomplete; do not
+invent provider data.
+
+**An account's digits are a dated history, not one number.** `cardNumbers`
+holds every last-four the account has presented: the `primary` card the
+statement labels it with (a reissue is an older primary with `validTo`, and only
+one primary may be open-ended), `wallet_token` device numbers, `supplementary`
+sibling cards, `physical_card` gift-card instances, or `unknown` for attested
+digits nothing explains yet. Settlement matching and the statement preview read
+this list, so a receipt only auto-settles against digits registered there.
 
 **A receipt's card digits need not match the statement's.** There are two
 distinct mechanisms, and the statement row tells you which:
@@ -70,7 +81,7 @@ distinct mechanisms, and the statement row tells you which:
 - *Wallet tokenization.* A wallet payment presents a device account number to
   the merchant terminal, so the invoice prints one set of last-four while the
   statement shows the funding card's — an `AplPay` or similar prefix on the
-  statement row is the tell.
+  statement row is the tell, though many providers (Monarch included) drop it.
 - *Card reissue or a sibling card on one account.* No wallet prefix, and the
   mismatch is stable across older receipts but absent from newer ones. A
   reissued or replaced card changes the printed last-four while the account
@@ -79,11 +90,14 @@ distinct mechanisms, and the statement row tells you which:
   card member number and the account differ, and supplementary cards share an
   account.
 
-Either way, treat it as consistent and say so in the note; do not mint a
-provisional Account for the digits the receipt printed, and do not reject an
-otherwise exact date/amount/vendor match over it. Do not assert *which*
-mechanism applies unless the statement supports it — record the vendor-printed
-digits as a hint and leave the cause open.
+Either way: first look the digits up across `cardNumbers`. If they are absent
+and the statement row identifies the funding account (date, amount, vendor),
+`entity update financialAccount` that account with the digits appended —
+`wallet_token` when the statement or provider confirms a wallet, a dated
+`primary` when the mismatch is a reissue, `unknown` when the cause is open —
+with a `note` citing the receipt. Do not mint a provisional Account for the
+digits the receipt printed, do not leave them as prose in notes, and do not
+reject an otherwise exact date/amount/vendor match over them.
 
 When a second export covers the same window, check the charge in both. Agreement
 across two independently-synced sources is cheap corroboration, and it converts
@@ -261,7 +275,8 @@ transaction for it.
   discriminator. Cubby has no restore — a wrong account merge is permanent.
 - **A last-four printed by a vendor is never grounds for a new account.** Apple
   Pay device numbers, reissued cards and vendor display tokens all print digits
-  the statement does not carry. Map to the statement row.
+  the statement does not carry. Map to the statement row, then register the
+  digits on that account's `cardNumbers` so the next receipt settles itself.
 - When vendor histories require another account owner's unavailable login,
   the statement rows can remain in scope without being enrichable. Stamp
   `accountId` for ownership and leave the rows `open`/`unmatched` — that is the
@@ -420,7 +435,8 @@ credit to zero the spend (keeping `productQuantity` clear on the charge lines so
 no phantom unit enters the derived-price sample), with the outstanding money as
 `status: "expected"` refunds per funding account, and a matching posted draw for
 any gift-card leg. A stored-value refund may come back on a different card than
-the one debited; keep one generic stored-value account per vendor with
-`last4: null` rather than pinning it. Where a vendor's phone/online support
+the one debited; keep one generic stored-value account per vendor and record
+each physical card as a `physical_card` entry in `cardNumbers` rather than one
+account per card. Where a vendor's phone/online support
 does nothing, a physical return desk can recall the original receipt and issue
 the refund directly.

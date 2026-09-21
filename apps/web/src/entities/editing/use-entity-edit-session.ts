@@ -1,7 +1,7 @@
 import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 
 import { entityEditRegistry } from "./definitions";
 import {
@@ -27,7 +27,6 @@ type RuntimeEntityEditDraft = FieldValues;
 export interface EntityEditSession<E extends EditableEntity> {
   /** Exposed so specialized form adapters can use RHF's native field helpers. */
   readonly form: UseFormReturn<RuntimeEntityEditDraft>;
-  readonly values: Readonly<RuntimeEntityEditDraft>;
   readonly access: EntityEditAccess | null;
   readonly isPending: boolean;
   readonly issues: readonly EntityEditIssue[];
@@ -85,8 +84,6 @@ export function useEntityEditSession<E extends EditableEntity>(
   const form = useForm<RuntimeEntityEditDraft>({
     defaultValues: initialValues,
   });
-  useWatch({ control: form.control });
-  const values = form.getValues();
 
   useEffect(() => {
     form.reset(initialValues);
@@ -106,6 +103,7 @@ export function useEntityEditSession<E extends EditableEntity>(
   const applyIssues = useCallback(
     (nextIssues: readonly EntityEditIssue[]) => {
       form.clearErrors();
+      let focusRequested = false;
       for (const nextIssue of nextIssues) {
         const error = {
           type: nextIssue.source,
@@ -113,7 +111,10 @@ export function useEntityEditSession<E extends EditableEntity>(
         };
         const values = form.getValues();
         if (nextIssue.field && isDraftField(values, nextIssue.field)) {
-          form.setError(nextIssue.field, error);
+          form.setError(nextIssue.field, error, {
+            shouldFocus: !focusRequested,
+          });
+          focusRequested = true;
         } else {
           form.setError("root.server", error);
         }
@@ -147,7 +148,6 @@ export function useEntityEditSession<E extends EditableEntity>(
 
   return {
     form,
-    values,
     access,
     isPending: commands.isPending,
     issues,

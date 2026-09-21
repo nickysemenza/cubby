@@ -28,4 +28,27 @@ export const financialAccountDetailFields = {
         <NoneValue />
       ),
   }),
+  "financial-account-card-numbers": (account) => ({
+    value:
+      account.cardNumbers.length > 0 ? (
+        <ul className="space-y-0.5 font-mono text-xs">
+          {account.cardNumbers.map((card) => (
+            <li key={card.last4}>
+              {[
+                `•••• ${card.last4}`,
+                card.kind.replaceAll("_", " "),
+                card.validFrom || card.validTo
+                  ? `${card.validFrom ?? "…"} → ${card.validTo ?? "…"}`
+                  : null,
+                card.note,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <NoneValue />
+      ),
+  }),
 } satisfies EntityDetailFieldRenderers<"financialAccount">;

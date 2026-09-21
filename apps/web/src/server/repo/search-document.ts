@@ -365,6 +365,8 @@ async function getSearchDocumentSources(
           FROM jsonb_array_elements(fa."sourceAliases") alias,
             LATERAL unnest(ARRAY[alias->>'source', alias->>'alias', alias->>'externalAccountId']) term
           WHERE term IS NOT NULL AND term <> ''
+        ) || ARRAY(
+          SELECT card->>'last4' FROM jsonb_array_elements(fa."cardNumbers") card
         )
       FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND 'financialAccount' IN (${types}) AND ${requested(sql`fa."id"`)}`,
     financialTransaction: sql`

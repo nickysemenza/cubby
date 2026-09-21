@@ -720,8 +720,10 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
           error={fieldState.error}
         >
           <EntityPicker
+            inputId={name}
+            inputRef={field.ref}
             entity={entity}
-            label={label?.toLowerCase() ?? "item"}
+            label={label ?? "item"}
             items={items.map((item) => {
               const disabledReason = disabledItemReasons?.[item.id];
               return disabledReason
@@ -975,6 +977,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
         >
           <StaticPicker
             inputId={controlId}
+            inputRef={field.ref}
             items={items}
             value={field.value ?? (nullable ? "__none__" : null)}
             onOpenChange={(open) => {
@@ -985,7 +988,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
               field.onChange(value === "__none__" ? null : value);
             }}
             placeholder={placeholder || `Select ${label.toLowerCase()}`}
-            label={label.toLowerCase()}
+            label={label}
             aria-describedby={description ? descriptionId : undefined}
             disabled={disabled}
           />

@@ -134,13 +134,14 @@ export function MobileListScreen<TItem extends RowData>({
         />
       )}
 
+      {Boolean(error) && (
+        <div className="py-6">
+          <ErrorDisplay error={error} onRetry={refreshControls?.onRefresh} />
+        </div>
+      )}
       {isLoading || !hydrated ? (
         <MobileCardSkeletonList {...mobileListLayout(table)} />
-      ) : error ? (
-        <div className="py-6">
-          <ErrorDisplay error={error} />
-        </div>
-      ) : (
+      ) : error && table.getRowModel().rows.length === 0 ? null : (
         (() => {
           const cardView = (
             <MobileCardView

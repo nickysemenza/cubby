@@ -684,7 +684,7 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
   z.object({
     entity: z.literal("financialAccount"),
     id: financialAccountShortcode,
-    field: z.enum(["identity", "sourceAliases"]),
+    field: z.enum(["identity", "sourceAliases", "cardNumbers"]),
     message: z.string(),
   }),
   z.object({

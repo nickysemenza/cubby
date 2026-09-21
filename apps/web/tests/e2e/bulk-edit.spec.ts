@@ -38,7 +38,7 @@ test("task board multi-select bulk-edits status without touching other fields", 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Bulk edit 2 Tasks?")).toBeVisible();
 
-  await dialog.getByRole("combobox", { name: "status", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
   await page.getByRole("option", { name: "Done", exact: true }).click();
 
   await dialog.getByRole("button", { name: "Update", exact: true }).click();
@@ -96,7 +96,7 @@ test("plantings list bulk-edits status finished plus a date in one write", async
   ).toBeDisabled();
   await expect(dialog.getByText(/cannot proceed/iu)).toHaveCount(0);
 
-  await dialog.getByRole("combobox", { name: "status", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
   await page.getByRole("option", { name: "Finished", exact: true }).click();
   await dialog.getByLabel("Finished", { exact: true }).fill("2026-06-01");
 

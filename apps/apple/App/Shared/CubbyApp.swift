@@ -56,7 +56,12 @@ struct CubbyApp: App {
             .environment(model)
             .tint(PorcelainTokens.cobalt)
             .task { await model.restoreSession() }
-            .onAppear { model.setCompanionSceneActive(scenePhase == .active) }
+            .onAppear {
+                #if os(macOS)
+                    DockBadge.clear()
+                #endif
+                model.setCompanionSceneActive(scenePhase == .active)
+            }
             .onChange(of: scenePhase) { _, phase in
                 model.setCompanionSceneActive(phase == .active)
             }

@@ -1,5 +1,6 @@
 import { defineEntity } from "./definition.js";
 import {
+  financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account-fields";
@@ -42,6 +43,7 @@ export default defineEntity({
             "identity",
             "provisional",
             "sourceAliases",
+            "cardNumbers",
             "ledgerPartyId",
             "inventoryOwnerDefaultEnabled",
             "notes",
@@ -117,6 +119,23 @@ export default defineEntity({
           read: financialAccountSourceAliases,
           create: financialAccountSourceAliases.default([]),
           update: financialAccountSourceAliases.optional(),
+        },
+      },
+      {
+        key: "cardNumbers",
+        kind: "json",
+        label: "Card numbers",
+        description:
+          "Every last four this account has presented, dated: the primary card the statement labels it with (a reissue is an older primary with validTo), wallet device numbers, sibling cards, or gift-card instances.",
+        control: { kind: "specialized", renderer: "structured-field" },
+        display: {
+          detail: true,
+          renderer: { detail: "financial-account-card-numbers" },
+        },
+        validation: {
+          read: financialAccountCardNumbers,
+          create: financialAccountCardNumbers.default([]),
+          update: financialAccountCardNumbers.optional(),
         },
       },
       {
@@ -238,6 +257,12 @@ export default defineEntity({
         defaultValue: "'[]'::jsonb",
         specialized: "json:sourceAliases",
       },
+      {
+        key: "cardNumbers",
+        default: "literal",
+        defaultValue: "'[]'::jsonb",
+        specialized: "json:cardNumbers",
+      },
       { key: "ledgerPartyId", reference: "ledgerParty" },
       {
         key: "inventoryOwnerDefaultEnabled",
@@ -254,6 +279,7 @@ export default defineEntity({
       "identity",
       "provisional",
       "sourceAliases",
+      "cardNumbers",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
       "notes",
@@ -263,6 +289,7 @@ export default defineEntity({
       "identity",
       "provisional",
       "sourceAliases",
+      "cardNumbers",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
       "notes",
@@ -273,6 +300,7 @@ export default defineEntity({
       "identity",
       "provisional",
       "sourceAliases",
+      "cardNumbers",
       "notes",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
@@ -332,6 +360,7 @@ export default defineEntity({
       "identity",
       "provisional",
       "sourceAliases",
+      "cardNumbers",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",
       "notes",

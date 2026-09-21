@@ -178,7 +178,7 @@ describe("BulkEditDialogBody", () => {
         ...(entityInspectorMetadata.task.lifecycle.bulkUpdate?.fields ?? []),
       ],
       item: { id: "TSK-1", name: "Hang drywall" },
-      fieldLabel: "trade",
+      fieldLabel: "Trade",
       optionLabel: "Electrical & Lighting",
       expected: { trade: "electrical" },
     },
@@ -186,7 +186,7 @@ describe("BulkEditDialogBody", () => {
       entity: "planting",
       fieldKeys: ["status", "finishedOn", "locationId"],
       item: { id: "PLT-1", name: "Tomato bed" },
-      fieldLabel: "status",
+      fieldLabel: "Status",
       optionLabel: "Finished",
       expected: { status: "finished" },
     },
@@ -277,7 +277,7 @@ describe("BulkEditDialogBody", () => {
     fireEvent.click(modes.getByRole("button", { name: "Clear" }));
     fireEvent.click(modes.getByRole("button", { name: "Leave unchanged" }));
     expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
-    const input = screen.getByRole("combobox", { name: "trade" });
+    const input = screen.getByRole("combobox", { name: "Trade" });
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.click(
       screen.getByRole("option", { name: "Electrical & Lighting" }),

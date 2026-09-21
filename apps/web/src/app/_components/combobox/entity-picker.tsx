@@ -57,6 +57,7 @@ export function matchesPickerItem(
 
 export interface EntityPickerProps<TId extends string> {
   inputId?: string;
+  inputRef?: React.RefCallback<HTMLInputElement>;
   "aria-describedby"?: string;
   entity?: PickerEntity;
   /**
@@ -412,7 +413,7 @@ function EntityPickerInput<TId extends string>({
   inputId?: string;
   ariaDescribedBy?: string;
   anchorRef: React.RefObject<HTMLDivElement | null>;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  inputRef: React.Ref<HTMLInputElement>;
   /** Visible caption (or entity fallback) — accessible name for the input. */
   ariaLabel: string;
   /** "Clear <caption>" — names the field the control clears. */
@@ -482,6 +483,7 @@ function EntityPickerInput<TId extends string>({
  */
 export function EntityPicker<TId extends string>({
   inputId,
+  inputRef: fieldRef,
   "aria-describedby": ariaDescribedBy,
   entity,
   label,
@@ -507,6 +509,13 @@ export function EntityPicker<TId extends string>({
   const [debouncedQuery] = useDebouncedValue(query, { wait: 150 });
   const anchorRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const setInputRef = React.useCallback(
+    (input: HTMLInputElement | null) => {
+      inputRef.current = input;
+      return fieldRef?.(input);
+    },
+    [fieldRef],
+  );
 
   const { ariaLabel, noun, clearLabel, placeholderDefault } = pickerNaming(
     entity,
@@ -628,7 +637,7 @@ export function EntityPicker<TId extends string>({
         inputId={inputId}
         ariaDescribedBy={ariaDescribedBy}
         anchorRef={anchorRef}
-        inputRef={inputRef}
+        inputRef={setInputRef}
         ariaLabel={ariaLabel}
         clearLabel={clearLabel}
         placeholderDefault={placeholderDefault}

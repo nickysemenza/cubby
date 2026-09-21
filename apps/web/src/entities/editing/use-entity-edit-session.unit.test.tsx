@@ -64,13 +64,13 @@ describe("useEntityEditSession", () => {
     );
 
     act(() => result.current.set("name", "draft name"));
-    expect(result.current.values.name).toBe("draft name");
+    expect(result.current.form.getValues("name")).toBe("draft name");
 
     rerender({ name: "saved" });
-    expect(result.current.values.name).toBe("draft name");
+    expect(result.current.form.getValues("name")).toBe("draft name");
 
     rerender({ name: "server refresh" });
-    expect(result.current.values.name).toBe("server refresh");
+    expect(result.current.form.getValues("name")).toBe("server refresh");
     harness.dispose();
   });
 

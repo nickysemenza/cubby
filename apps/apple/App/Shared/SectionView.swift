@@ -20,15 +20,7 @@ struct SectionView: View {
             }
         }
         #if os(iOS)
-            // The tab bar renders only a title and an image, so the mark the macOS sidebar shows
-            // beside each row lives in the section root's navigation bar here. Pushed routes have
-            // their own toolbars and do not inherit it.
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    SectionDomainMarks(section: section)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
+            .navigationBarTitleDisplayMode(.inline)
         #endif
         .navigationDestination(for: Route.self) { route in
             RouteDestinationView(route: route)

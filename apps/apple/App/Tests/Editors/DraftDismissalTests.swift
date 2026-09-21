@@ -25,21 +25,21 @@ struct DraftDismissalTests {
         #expect(state.confirmation == .discardChanges)
     }
 
-    @Test func inFlightSaveRequiresExplicitClose() {
+    @Test func inFlightSaveCannotDismissTheSheet() {
         var state = DraftDismissalState()
         var didDismiss = false
 
         state.request(isDirty: false, isSaving: true) { didDismiss = true }
 
         #expect(!didDismiss)
-        #expect(state.confirmation == .closeWhileSaving)
+        #expect(state.confirmation == nil)
     }
 
-    @Test func inFlightSaveTakesPriorityOverDirtyDraft() {
+    @Test func inFlightSaveBlocksEvenADirtyDraft() {
         var state = DraftDismissalState()
 
         state.request(isDirty: true, isSaving: true) {}
 
-        #expect(state.confirmation == .closeWhileSaving)
+        #expect(state.confirmation == nil)
     }
 }

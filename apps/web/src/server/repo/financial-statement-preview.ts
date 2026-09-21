@@ -1,5 +1,7 @@
 import {
+  type FinancialAccountCardNumber,
   type FinancialAccountIdentity,
+  financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
@@ -53,16 +55,17 @@ const provisionalAccountFor = (
   const network = networkFromDescriptor(row.account);
   const identity: FinancialAccountIdentity =
     last4 || network
-      ? {
-          kind: "credit_card",
-          issuer: null,
-          network: network ?? "other",
-          last4,
-        }
-      : { kind: "other", institution: null, last4: null };
+      ? { kind: "credit_card", issuer: null, network: network ?? "other" }
+      : { kind: "other", institution: null };
+  // A statement labels the account with its current card, so the digits it
+  // carries are the primary card as of today, not a dated historical one.
+  const cardNumbers: FinancialAccountCardNumber[] = last4
+    ? [{ last4, kind: "primary", validFrom: null, validTo: null, note: null }]
+    : [];
   return {
     name: row.account.trim(),
     identity,
+    cardNumbers,
     provisional: true as const,
     sourceAliases: [
       {
@@ -110,6 +113,7 @@ export async function previewFinancialStatementImport(
         name: financialAccount.name,
         identity: financialAccount.identity,
         sourceAliases: financialAccount.sourceAliases,
+        cardNumbers: financialAccount.cardNumbers,
       })
       .from(financialAccount)
       .where(notDeleted(financialAccount)),
@@ -142,6 +146,7 @@ export async function previewFinancialStatementImport(
     ...account,
     identity: financialAccountIdentity.parse(account.identity),
     sourceAliases: financialAccountSourceAliases.parse(account.sourceAliases),
+    cardNumbers: financialAccountCardNumbers.parse(account.cardNumbers),
   }));
   const parsedTransactions = transactions.map((transaction) => ({
     ...transaction,
@@ -179,10 +184,12 @@ export async function previewFinancialStatementImport(
     const identityMatches =
       aliasMatches.length === 0 && last4
         ? parsedAccounts.filter((account) => {
+            // Any card the account has carried, not just the current one: a
+            // provider that froze an older label still names this account.
             const identity = account.identity;
             return (
               identity.kind === "credit_card" &&
-              identity.last4 === last4 &&
+              account.cardNumbers.some((card) => card.last4 === last4) &&
               (network === null || identity.network === network)
             );
           })

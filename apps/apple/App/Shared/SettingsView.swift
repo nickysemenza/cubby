@@ -21,7 +21,6 @@ struct SettingsView: View {
     /// from this view's disappearance callback.
     @State private var opensDeveloperToolsAfterDismissal = false
     #if os(macOS)
-        @AppStorage(DockBadge.showInDockDefaultsKey) private var showProblemsInDock = true
         @AppStorage("purchaseImport.browser") private var purchaseImportBrowser = BrowserChoice.chrome
         @AppStorage("purchaseImport.enhancedEvidence") private var enhancedEvidence = false
         @State private var browserPermissions = MacBrowserPermissionSnapshot.current(browser: .chrome)
@@ -116,19 +115,15 @@ struct SettingsView: View {
 
             #if os(macOS)
                 if model.phase == .signedIn { purchaseImportSection }
-
-                Section {
-                    Toggle("Show problem count in Dock", isOn: $showProblemsInDock)
-                        .frame(minHeight: PorcelainTokens.touchTarget - 12)
-                } header: {
-                    Eyebrow("Dock")
-                }
             #endif
         }
         .formStyle(.grouped)
         .font(.porcelainBody)
         .porcelainScreen()
         .navigationTitle("Settings")
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
         .onAppear {
             synchronizeServerSelection()
             photosReady = model.photoAnalysisStore != nil
@@ -174,9 +169,6 @@ struct SettingsView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         #endif
         #if os(macOS)
-            .onChange(of: showProblemsInDock) { _, enabled in
-                if !enabled { DockBadge.clear() }
-            }
             .onChange(of: purchaseImportBrowser) { _, browser in
                 browserPermissions = .current(browser: browser)
                 model.browserBridge.reconnect(

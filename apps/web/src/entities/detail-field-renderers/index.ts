@@ -88,6 +88,9 @@ export const detailRendererCoverage = {
     "financial-account-source-aliases": implemented(
       financialAccountDetailFields["financial-account-source-aliases"],
     ),
+    "financial-account-card-numbers": implemented(
+      financialAccountDetailFields["financial-account-card-numbers"],
+    ),
   },
   financialTransaction: {
     "financial-transaction-vendor-inference": implemented(

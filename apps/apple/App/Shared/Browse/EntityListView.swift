@@ -4,12 +4,18 @@ import SwiftUI
 private struct EntityListSearchModifier: ViewModifier {
     let enabled: Bool
     @Binding var text: String
+    @Binding var isPresented: Bool
     let prompt: String
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if enabled {
-            content.searchable(text: $text, prompt: prompt)
+            #if os(iOS)
+                content.searchable(
+                    text: $text, isPresented: $isPresented, placement: .navigationBarDrawer, prompt: prompt)
+            #else
+                content.searchable(text: $text, isPresented: $isPresented, prompt: prompt)
+            #endif
         } else {
             content
         }
@@ -38,6 +44,9 @@ struct EntityListView: View {
     @State private var selecting = false
     @State private var selectedIDs: Set<String> = []
     @State private var searchText = ""
+    @State private var searchPresented = false
+    @State private var retainedSearchText = ""
+    @State private var clearingSearchExplicitly = false
     @State private var confirmingDelete = false
     @State private var deleteError: String?
     @State private var cardDensity = ListPresentationChoice.cards
@@ -117,16 +126,20 @@ struct EntityListView: View {
         }
         .porcelainScreen()
         .navigationTitle(descriptor.plural)
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
         .accessibilityIdentifier("browse.\(key.rawValue).list")
         .modifier(
             EntityListSearchModifier(
                 enabled: descriptor.primarySearch != nil,
                 text: $searchText,
+                isPresented: $searchPresented,
                 prompt: descriptor.primarySearch?.placeholder
                     ?? "Search \(descriptor.plural.lowercased()) or shortcode"
             )
         )
-        .onChange(of: searchText) { _, value in model?.setSearchQuery(value) }
+        .onChange(of: searchText) { _, value in applySearchText(value) }
         .toolbar { toolbarContent }
         #if os(iOS)
             .environment(\.editMode, .constant(selecting ? .active : .inactive))
@@ -175,46 +188,140 @@ struct EntityListView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        #if os(iOS)
+            if key.nativeActions.contains(.create) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        creating = true
+                    } label: {
+                        Label("New \(descriptor.singular)", systemImage: "plus")
+                    }
+                    .accessibilityIdentifier("browse.\(key.rawValue).create")
+                }
+            }
+            if hasControls {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        controlsMenu
+                    } label: {
+                        Label("Controls", systemImage: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel("List controls")
+                }
+            }
+        #else
+            if let model, presentationChoices.count > 1 {
+                ToolbarItem(placement: .primaryAction) {
+                    presentationPicker(model)
+                }
+            }
+            if !descriptor.filters.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingFilters = true
+                    } label: {
+                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                    .badge(model?.filters.activeCount ?? 0)
+                    .accessibilityLabel(filterAccessibilityLabel)
+                    .accessibilityIdentifier("browse.\(key.rawValue).filter")
+                }
+            }
+            if key.nativeActions.contains(.create) {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        creating = true
+                    } label: {
+                        Label("New \(descriptor.singular)", systemImage: "plus")
+                    }
+                    .accessibilityIdentifier("browse.\(key.rawValue).create")
+                }
+            }
+            if canDelete, model?.view == .table {
+                ToolbarItem(placement: .secondaryAction) {
+                    if selecting {
+                        Button("Delete selected", role: .destructive) { confirmingDelete = true }
+                            .disabled(selectedIDs.isEmpty)
+                        Button("Done") {
+                            selecting = false
+                            selectedIDs = []
+                        }
+                    } else {
+                        Button("Select") { selecting = true }
+                    }
+                }
+            }
+        #endif
+    }
+
+    private var hasControls: Bool {
+        (model != nil && presentationChoices.count > 1) || !descriptor.filters.isEmpty
+            || (canDelete && model?.view == .table) || descriptor.primarySearch != nil
+    }
+
+    @ViewBuilder
+    private var controlsMenu: some View {
+        if descriptor.primarySearch != nil {
+            Button("Search", systemImage: "magnifyingglass") { searchPresented = true }
+            if !searchText.isEmpty {
+                Button("Clear search", systemImage: "xmark.circle") { clearSearch() }
+            }
+        }
         if let model, presentationChoices.count > 1 {
-            ToolbarItem(placement: .primaryAction) {
-                presentationPicker(model)
+            Menu("View") {
+                ForEach(presentationChoices) { choice in
+                    Button {
+                        selectPresentation(choice.id, model: model)
+                    } label: {
+                        Label(choice.label, systemImage: choice.symbol)
+                    }
+                }
             }
         }
         if !descriptor.filters.isEmpty {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingFilters = true
-                } label: {
-                    Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
-                }
-                .badge(model?.filters.activeCount ?? 0)
-                .accessibilityLabel(filterAccessibilityLabel)
-                .accessibilityIdentifier("browse.\(key.rawValue).filter")
+            Button {
+                showingFilters = true
+            } label: {
+                Label(filterAccessibilityLabel, systemImage: "line.3.horizontal.decrease.circle")
             }
-        }
-        if key.nativeActions.contains(.create) {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    creating = true
-                } label: {
-                    Label("New \(descriptor.singular)", systemImage: "plus")
-                }
-                .accessibilityIdentifier("browse.\(key.rawValue).create")
-            }
+            .accessibilityIdentifier("browse.\(key.rawValue).filter")
         }
         if canDelete, model?.view == .table {
-            ToolbarItem(placement: .secondaryAction) {
-                if selecting {
-                    Button("Delete selected", role: .destructive) { confirmingDelete = true }
-                        .disabled(selectedIDs.isEmpty)
-                    Button("Done") {
-                        selecting = false
-                        selectedIDs = []
-                    }
-                } else {
-                    Button("Select") { selecting = true }
+            if selecting {
+                Button("Delete selected", role: .destructive) { confirmingDelete = true }
+                    .disabled(selectedIDs.isEmpty)
+                Button("Done selecting") {
+                    selecting = false
+                    selectedIDs = []
                 }
+            } else {
+                Button("Select") { selecting = true }
             }
+        }
+    }
+
+    private func clearSearch() {
+        clearingSearchExplicitly = true
+        searchText = ""
+    }
+
+    /// Search cancellation can write an empty string after the field has already stopped being
+    /// presented. Preserve that query; deliberate erasure while the field is presented and the
+    /// explicit Controls command both clear it on every platform.
+    private func applySearchText(_ value: String) {
+        if value.isEmpty {
+            if clearingSearchExplicitly || searchPresented {
+                retainedSearchText = ""
+                clearingSearchExplicitly = false
+                model?.setSearchQuery("")
+            } else if !retainedSearchText.isEmpty {
+                searchText = retainedSearchText
+            } else {
+                model?.setSearchQuery("")
+            }
+        } else {
+            retainedSearchText = value
+            model?.setSearchQuery(value)
         }
     }
 
@@ -569,8 +676,8 @@ struct EntityRowView: View {
                     .frame(width: thumbnailSize, height: thumbnailSize)
                     .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl))
                     .accessibilityHidden(true)
-            } else {
-                Thumb(url: presentation.imageURL, size: thumbnailSize, symbol: entitySymbol(for: key))
+            } else if let imageURL = presentation.imageURL {
+                Thumb(url: imageURL, size: thumbnailSize, symbol: entitySymbol(for: key))
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(presentation.title)
@@ -581,12 +688,14 @@ struct EntityRowView: View {
                     Text(factLine)
                         .font(.caption)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .lineLimit(2)
+                }
+                if photoMode {
+                    Text(presentation.shortcode)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
                         .lineLimit(1)
                 }
-                Text(presentation.shortcode)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                    .lineLimit(1)
             }
             Spacer(minLength: PorcelainTokens.Space.sm)
         }
@@ -594,7 +703,10 @@ struct EntityRowView: View {
         .frame(minHeight: 56, alignment: .center)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(presentation.accessibilityText)
+        .accessibilityLabel(
+            photoMode
+                ? "\(presentation.accessibilityText), \(presentation.shortcode)"
+                : presentation.accessibilityText)
     }
 }
 

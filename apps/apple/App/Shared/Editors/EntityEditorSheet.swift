@@ -27,7 +27,6 @@ struct EntityEditorSheet: View {
     @State private var isUploading = false
     @State private var draftDismissal = DraftDismissalState()
     @State private var saveTask: Task<Void, Never>?
-    @State private var finishesAfterDismissal = false
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -66,9 +65,10 @@ struct EntityEditorSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(isSaving ? "Close" : "Cancel") {
+                    Button("Cancel") {
                         draftDismissal.request(isDirty: isDirty, isSaving: isSaving, dismiss: dismiss)
                     }
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { startSave() }
@@ -82,15 +82,9 @@ struct EntityEditorSheet: View {
         .nativeSheet(.editor)
         .draftDismissal(
             $draftDismissal, isDirty: isDirty, isSaving: isSaving,
-            onDiscard: { dismiss() },
-            onCloseWhileSaving: {
-                finishesAfterDismissal = true
-                dismiss()
-            }
+            onDiscard: { dismiss() }
         )
-        .onDisappear {
-            if !finishesAfterDismissal { saveTask?.cancel() }
-        }
+        .onDisappear { saveTask?.cancel() }
         .task { await setup() }
     }
 
