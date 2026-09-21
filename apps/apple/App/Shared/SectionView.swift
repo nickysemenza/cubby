@@ -10,6 +10,7 @@ struct SectionView: View {
         Group {
             switch section {
             case .today: TodayView()
+            case .activity: ActivityView()
             case .capture: CaptureView()
             case .photos: PhotosRootView()
             case .browse: BrowseRootView()
@@ -42,6 +43,7 @@ struct RouteDestinationView: View {
         switch route {
         case .graph(let root): GraphWorkspaceView(initialRoot: root)
         case .nutrition(let day): DailyNutritionView(day: day)
+        case .activityDetail(let id): ActivityDetailView(id: id)
         case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))
         case .entityDetail(let key, let id): EntityDetailView(key: key, id: id)
         case .wardrobe(let ownerID, let ownerName):

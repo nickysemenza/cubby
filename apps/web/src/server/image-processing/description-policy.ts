@@ -21,6 +21,10 @@ export const preferredImageDescriptionPolicy = {
 const imageDescriptionInputFingerprintSchema = z
   .object({
     feature: z.literal(IMAGE_DESCRIPTION_FEATURE.feature),
+    renditionHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     sourceContentHash: z.string().min(1),
     contentType: z.string().min(1),
     provider: z.string().min(1),

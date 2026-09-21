@@ -549,9 +549,19 @@ export async function recordImportRunDispatchAttempt(
       ),
     )
     .returning({ id: importRun.id, status: importRun.status });
-  if (!run)
-    throw new Error("Import run dispatch generation is no longer active");
-  return run;
+  if (run) return run;
+  const [settled] = await getDb(db)
+    .select({ id: importRun.id, status: importRun.status })
+    .from(importRun)
+    .where(
+      and(
+        eq(importRun.id, runId),
+        eq(importRun.dispatchEventId, input.eventId),
+      ),
+    )
+    .limit(1);
+  if (settled) return settled;
+  throw new Error("Import run dispatch generation is no longer active");
 }
 
 /** Consumer-side fence: only the active event generation may admit Flue. */
@@ -773,17 +783,55 @@ export async function pauseImportRunForAuthorization(
 export async function resumeAuthorizedImportRuns(
   db: Database,
   actorUserId: string,
+  now = new Date(),
 ) {
-  return getDb(db)
-    .update(importRun)
-    .set({ status: "running", updatedAt: new Date() })
-    .where(
-      and(
-        eq(importRun.actorUserId, userId.parse(actorUserId)),
-        eq(importRun.status, "paused_auth"),
-      ),
-    )
-    .returning({ id: importRun.id, publicId: importRun.publicId });
+  const owner = userId.parse(actorUserId);
+  const repairCutoff = new Date(now.getTime() - 60_000);
+  return withTransaction(db, async (tx) => {
+    const resumed = await tx
+      .update(importRun)
+      .set({
+        status: "running",
+        dispatchEventId: sql`gen_random_uuid()`,
+        dispatchError: null,
+        failureCode: null,
+        endedAt: null,
+        coordinatorStartedAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(importRun.actorUserId, owner),
+          eq(importRun.status, "paused_auth"),
+        ),
+      )
+      .returning({
+        id: importRun.id,
+        publicId: importRun.publicId,
+        purpose: importRun.purpose,
+        coordinatorModel: importRun.coordinatorModel,
+        eventId: importRun.dispatchEventId,
+      });
+    const interrupted = await tx
+      .select({
+        id: importRun.id,
+        publicId: importRun.publicId,
+        purpose: importRun.purpose,
+        coordinatorModel: importRun.coordinatorModel,
+        eventId: importRun.dispatchEventId,
+      })
+      .from(importRun)
+      .where(
+        and(
+          eq(importRun.actorUserId, owner),
+          eq(importRun.status, "running"),
+          isNull(importRun.coordinatorStartedAt),
+          isNotNull(importRun.dispatchEventId),
+          lt(importRun.updatedAt, repairCutoff),
+        ),
+      );
+    return [...resumed, ...interrupted];
+  });
 }
 
 export async function pauseAuthorizedImportRuns(
@@ -2285,7 +2333,7 @@ export async function loadImportRunByPublicId(
     database
       .select({
         pricedSubtotal: sql<number>`coalesce(sum(${aiUsage.estimatedCost}) filter (where ${aiUsage.estimatedCost} is not null), 0)`,
-        unpricedCount: sql<number>`count(*) filter (where ${aiUsage.estimatedCost} is null and ${aiUsage.status} = 'succeeded')`,
+        unpricedCount: sql<number>`(count(*) filter (where ${aiUsage.estimatedCost} is null and ${aiUsage.status} = 'succeeded'))::int`,
       })
       .from(aiUsage)
       .where(

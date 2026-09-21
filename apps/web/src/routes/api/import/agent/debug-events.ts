@@ -42,6 +42,9 @@ export const Route = createFileRoute("/api/import/agent/debug-events")({
             and(
               inArray(importRun.id, runIds),
               eq(importRun.ledgerPartyId, party.id),
+              // A party peer cannot attach arbitrary device metadata to the
+              // run started by another actor.
+              eq(importRun.actorUserId, context.auth.userId),
             ),
           );
         const ownedRunIds = new Set(ownedRuns.map((run) => run.id));
@@ -62,6 +65,7 @@ export const Route = createFileRoute("/api/import/agent/debug-events")({
               inputFingerprint: event.id,
               state: "completed",
               result: event,
+              executor: event.executor ?? null,
               completedAt: new Date(),
             })),
           )

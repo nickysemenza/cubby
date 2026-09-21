@@ -252,7 +252,10 @@ extension ImageOut {
 }
 
 extension ImageWithEntity {
-    public var imageURL: URL? { URL(string: url) }
+    /// The server owns original-versus-derived selection; every native image surface follows it.
+    public var imageURL: URL? { URL(string: representations?.preferred ?? url) }
+    public var originalImageURL: URL? { URL(string: representations?.original ?? url) }
+    public var transparentImageURL: URL? { representations?.transparent.flatMap(URL.init(string:)) }
 }
 
 extension ImageAssociation: Identifiable {

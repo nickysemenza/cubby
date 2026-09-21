@@ -54,6 +54,7 @@ import {
   imageDerivative,
   imageDescriptionCorrection,
   imageProcessingOrphan,
+  imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
 import {
@@ -1901,6 +1902,22 @@ const deleteImagesTx = async (
       )
       .onConflictDoNothing();
   }
+  const inputs = await tx
+    .select({ key: imageProcessingAttempt.inputKey })
+    .from(imageProcessingAttempt)
+    .innerJoin(
+      imageProcessingJob,
+      eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
+    )
+    .where(inArray(imageProcessingJob.imageId, ids));
+  const inputKeys = inputs.flatMap((input) => (input.key ? [input.key] : []));
+  if (inputKeys.length)
+    await tx
+      .insert(imageProcessingOrphan)
+      .values(
+        inputKeys.map((key) => ({ key, reason: "original_image_deleted" })),
+      )
+      .onConflictDoNothing();
   const affectedPurchases = await tx
     .selectDistinct({ purchaseId: purchaseImage.purchaseId })
     .from(purchaseImage)

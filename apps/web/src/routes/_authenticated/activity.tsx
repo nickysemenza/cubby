@@ -1,10 +1,7 @@
-import { type AuditEntityType, auditEntitySchema } from "@cubby/schemas/audit";
-import {
-  APPLICATION_AUDIT_SOURCES,
-  type AuditSource,
-  auditSourceSchema,
-} from "@cubby/schemas/context";
-import { auditableEntities } from "@cubby/schemas/entity-manifest";
+import { activityKind, activityRunId } from "@cubby/schemas/activity";
+import { auditEntitySchema } from "@cubby/schemas/audit";
+import { auditSourceSchema } from "@cubby/schemas/context";
+import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   stripSearchParams,
@@ -12,15 +9,40 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { listChromePage } from "~/app/_components/routing/entity-routes";
-import { Row, Stack } from "~/components/layout";
-import { NativeSelect } from "~/components/ui/native-select";
-import { entityPluralLabel } from "~/entities/entities";
+import { ActivityChanges } from "~/app/activity/activity-changes";
+import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
+import { ActivityRuns } from "~/app/activity/activity-runs";
+import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-agent-connection";
+import { StatusText } from "~/components/ui/status-text";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { activity } from "~/lib/activity.functions";
 import { auditLogListOptions } from "~/lib/audit-log.functions";
 import { pageTitle } from "~/lib/page-title";
+import { purchaseAgentConnectionStatus } from "~/lib/purchase-import-run-detail";
 
 const searchSchema = z.object({
+  tab: z.enum(["runs", "changes", "connections"]).optional().catch(undefined),
+  agent: purchaseAgentConnectionStatus.optional().catch(undefined),
+  purchaseAgent: purchaseAgentConnectionStatus.optional().catch(undefined),
+  view: z.enum(["runs", "changes", "connections"]).optional().catch(undefined),
+  kind: activityKind.optional().catch(undefined),
+  executor: z
+    .enum(["all", "cloud", "device", "unknown"])
+    .optional()
+    .catch(undefined),
+  selectedRun: activityRunId.optional().catch(undefined),
+  state: z.string().max(50).optional().catch(undefined),
+  subjectId: z.string().max(100).optional().catch(undefined),
+  submissionId: z
+    .string()
+    .regex(/^IPS-[A-Z0-9]+$/u)
+    .optional()
+    .catch(undefined),
+  from: z.iso.datetime().optional().catch(undefined),
+  to: z.iso.datetime().optional().catch(undefined),
+  sort: z.enum(["newest", "oldest"]).optional().catch(undefined),
+  deviceId: z.uuid().optional().catch(undefined),
   // The feed's only controls — `auditLogListInput` already accepts both,
   // this just exposes them (and keeps a filtered view linkable/refreshable).
   entityType: auditEntitySchema.optional().catch(undefined),
@@ -31,7 +53,21 @@ const searchSchema = z.object({
   source: auditSourceSchema.optional().catch(undefined),
 });
 
-const searchDefaults = { entityType: undefined, source: undefined } as const;
+const searchDefaults = {
+  view: undefined,
+  kind: undefined,
+  executor: undefined,
+  selectedRun: undefined,
+  state: undefined,
+  subjectId: undefined,
+  submissionId: undefined,
+  from: undefined,
+  to: undefined,
+  sort: undefined,
+  deviceId: undefined,
+  entityType: undefined,
+  source: undefined,
+} as const;
 
 // Bound to a const, not inlined into the options object below: see
 // `entity-routes.tsx`'s doc comment on why the splitter needs a literal
@@ -52,6 +88,9 @@ export const Route = createFileRoute("/_authenticated/activity")({
   // filter) or the cache won't be reused — hence the `loaderDeps`. prefetch
   // (not ensure) so a cold feed never blocks navigation.
   loaderDeps: ({ search }) => ({
+    view: search.view,
+    kind: search.kind,
+    executor: search.executor,
     entityType: search.entityType,
     source: search.source,
   }),
@@ -67,108 +106,132 @@ export const Route = createFileRoute("/_authenticated/activity")({
   component: ActivityPage,
 });
 
-/**
- * Scope filter over the auditable entity set (manifest-derived, so a newly
- * auditable entity appears here automatically). Native select, matching the
- * cookbook scope filter's idiom.
- */
-function EntityTypeFilter({
-  value,
-  onChange,
-}: {
-  value: AuditEntityType | undefined;
-  onChange: (entityType: AuditEntityType | undefined) => void;
-}) {
-  return (
-    <Row as="label" align="center" gap="sm" className="w-fit text-sm">
-      <span className="text-muted-foreground">Entity</span>
-      <NativeSelect
-        value={value ?? ""}
-        onChange={(e) =>
-          onChange(auditEntitySchema.safeParse(e.target.value).data)
-        }
-      >
-        <option value="">All entities</option>
-        {auditableEntities.map((entity) => (
-          <option key={entity} value={entity}>
-            {entityPluralLabel(entity)}
-          </option>
-        ))}
-      </NativeSelect>
-    </Row>
-  );
-}
-
-/**
- * Source filter over the closed `APPLICATION_AUDIT_SOURCES` set — the
- * open-ended `script:<slug>` family has no bounded list to enumerate here, so
- * it's reachable only via a deep link that sets `?source=script:...` directly
- * (the search schema still accepts it; this select just can't produce it).
- */
-function SourceFilter({
-  value,
-  onChange,
-}: {
-  value: AuditSource | undefined;
-  onChange: (source: AuditSource | undefined) => void;
-}) {
-  return (
-    <Row as="label" align="center" gap="sm" className="w-fit text-sm">
-      <span className="text-muted-foreground">Source</span>
-      <NativeSelect
-        value={value ?? ""}
-        onChange={(e) =>
-          onChange(auditSourceSchema.safeParse(e.target.value).data)
-        }
-      >
-        <option value="">All sources</option>
-        {APPLICATION_AUDIT_SOURCES.map((source) => (
-          <option key={source} value={source}>
-            {source}
-          </option>
-        ))}
-      </NativeSelect>
-    </Row>
-  );
-}
-
 function ActivityBody() {
-  const { entityType, source } = Route.useSearch();
+  const search = Route.useSearch();
+  const {
+    deviceId,
+    entityType,
+    executor = "all",
+    from,
+    kind,
+    selectedRun,
+    source,
+    state,
+    subjectId,
+    submissionId,
+    to,
+  } = search;
+  const sort = search.sort ?? "newest";
+  const view =
+    search.tab ?? search.view ?? (entityType || source ? "changes" : "runs");
   const navigate = useNavigate({ from: Route.fullPath });
+  const submission = useQuery({
+    ...activity.submission.queryOptions({ id: submissionId ?? "IPS-000000" }),
+    enabled: submissionId !== undefined,
+    refetchInterval: (query) => (query.state.data?.remaining ? 15_000 : false),
+    refetchIntervalInBackground: false,
+  });
 
   return (
-    <Stack className="max-w-3xl">
-      <Row justify="between" align="center" gap="sm" wrap>
-        {/* Every auditable entity writes here (products through projects,
-            tasks and expenses) — kept generic rather than listing a subset
-            that drifts as the manifest grows. */}
-        <p className="text-muted-foreground">
-          Recent changes across all entities.
-        </p>
-        <Row gap="sm" wrap>
-          <EntityTypeFilter
-            value={entityType}
-            onChange={(next) =>
+    <Tabs
+      value={view}
+      onValueChange={(next) =>
+        navigate({
+          search: (prev) => ({
+            ...prev,
+            tab: z.enum(["runs", "changes", "connections"]).parse(next),
+            view: undefined,
+          }),
+        })
+      }
+    >
+      <TabsList variant="line" aria-label="Activity views">
+        <TabsTrigger value="runs">Runs</TabsTrigger>
+        <TabsTrigger value="changes">Changes</TabsTrigger>
+        <TabsTrigger value="connections">Connections</TabsTrigger>
+      </TabsList>
+      <TabsContent value="runs">
+        <ActivityRuns
+          kind={kind}
+          state={state}
+          subjectId={subjectId}
+          submissionId={submissionId}
+          from={from}
+          to={to}
+          sort={sort}
+          deviceId={deviceId}
+          executor={executor}
+          onKindChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, kind: next }) })
+          }
+          onStateChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, state: next }) })
+          }
+          onSubjectIdChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, subjectId: next }) })
+          }
+          onSubmissionIdChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, submissionId: next }) })
+          }
+          onFromChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, from: next }) })
+          }
+          onToChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, to: next }) })
+          }
+          onSortChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, sort: next }) })
+          }
+          onDeviceIdChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, deviceId: next }) })
+          }
+          onExecutorChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, executor: next }) })
+          }
+          onSelect={(id) =>
+            navigate({ search: (prev) => ({ ...prev, selectedRun: id }) })
+          }
+        />
+        {submissionId && submission.data ? (
+          <StatusText>
+            {submission.data.total} jobs · {submission.data.newlyQueued} queued
+            · {submission.data.reused} reused · {submission.data.alreadyRunning}{" "}
+            already running · {submission.data.completed} completed ·{" "}
+            {submission.data.skipped} skipped · {submission.data.failed} failed
+            · {submission.data.remaining} remaining · Cost{" "}
+            {submission.data.estimatedCost === null
+              ? "unavailable"
+              : `$${submission.data.estimatedCost.toFixed(4)}`}
+          </StatusText>
+        ) : null}
+        {selectedRun ? (
+          <ActivityRunDetail
+            id={selectedRun}
+            onClose={() =>
               navigate({
-                search: (prev) => ({ ...prev, entityType: next }),
+                search: (prev) => ({ ...prev, selectedRun: undefined }),
               })
             }
           />
-          <SourceFilter
-            value={source}
-            onChange={(next) =>
-              navigate({
-                search: (prev) => ({ ...prev, source: next }),
-              })
-            }
-          />
-        </Row>
-      </Row>
-      <AuditLogList
-        showEntityLink={true}
-        entityType={entityType}
-        source={source}
-      />
-    </Stack>
+        ) : null}
+      </TabsContent>
+      <TabsContent value="changes">
+        <ActivityChanges
+          entityType={entityType}
+          source={source}
+          onEntityTypeChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, entityType: next }) })
+          }
+          onSourceChange={(next) =>
+            navigate({ search: (prev) => ({ ...prev, source: next }) })
+          }
+        />
+      </TabsContent>
+      <TabsContent value="connections">
+        <PurchaseImportAgentConnection
+          feedback={search.purchaseAgent ?? search.agent}
+        />
+      </TabsContent>
+    </Tabs>
   );
 }

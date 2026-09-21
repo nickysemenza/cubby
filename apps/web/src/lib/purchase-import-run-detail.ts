@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+export const purchaseAgentConnectionStatus = z.enum([
+  "authorized",
+  "denied",
+  "failed",
+  "dispatch_failed",
+]);
+export type PurchaseAgentConnectionStatus = z.infer<
+  typeof purchaseAgentConnectionStatus
+>;
+
 export const importRunPublicId = z
   .string()
   .regex(/^PIR-[A-Z0-9]{10}$/u, "Import run was not found");

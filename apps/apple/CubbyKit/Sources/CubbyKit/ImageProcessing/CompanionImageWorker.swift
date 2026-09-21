@@ -1,7 +1,29 @@
 import Foundation
 
+public struct CompanionImageWorkerActivity: Sendable, Equatable {
+    public enum Phase: Sendable, Equatable {
+        case stopped
+        case connecting
+        case idle
+        case processing
+    }
+
+    public let phase: Phase
+    public let jobID: String?
+    public let kind: String?
+    public let startedAt: Date?
+
+    public init(phase: Phase, jobID: String? = nil, kind: String? = nil, startedAt: Date? = nil) {
+        self.phase = phase
+        self.jobID = jobID
+        self.kind = kind
+        self.startedAt = startedAt
+    }
+}
+
 public actor CompanionImageWorker {
     public typealias FailureObserver = @Sendable (any Error) -> Void
+    public typealias ActivityObserver = @Sendable (CompanionImageWorkerActivity) -> Void
 
     private let baseURL: URL
     private let credentials: CredentialProvider
@@ -9,6 +31,7 @@ public actor CompanionImageWorker {
     private let executor: CompanionImageCommandExecutor
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     private let failureObserver: FailureObserver?
+    private let activityObserver: ActivityObserver?
     private let deviceID: UUID
     private var foreground: Bool
     private var shouldRun = false
@@ -24,7 +47,8 @@ public actor CompanionImageWorker {
         outbox: CompanionResultOutbox<ImageProcessingResult>,
         session: URLSession = .cubbyShared,
         executor: CompanionImageCommandExecutor = CompanionImageCommandExecutor(),
-        failureObserver: FailureObserver? = nil
+        failureObserver: FailureObserver? = nil,
+        activityObserver: ActivityObserver? = nil
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
@@ -34,6 +58,7 @@ public actor CompanionImageWorker {
         self.session = session
         self.executor = executor
         self.failureObserver = failureObserver
+        self.activityObserver = activityObserver
     }
 
     deinit {
@@ -43,6 +68,7 @@ public actor CompanionImageWorker {
 
     public func start() {
         shouldRun = true
+        activityObserver?(.init(phase: .connecting))
         reconcileConnection()
     }
 
@@ -53,6 +79,7 @@ public actor CompanionImageWorker {
         connectionTask = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
+        activityObserver?(.init(phase: .stopped))
     }
 
     /// Signing out ends the authenticated principal that owns every pending attempt. Do not let
@@ -108,6 +135,7 @@ public actor CompanionImageWorker {
                 socket?.cancel(with: .abnormalClosure, reason: nil)
                 socket = nil
                 failureObserver?(error)
+                activityObserver?(.init(phase: .connecting))
                 do {
                     try await Task.sleep(
                         for: AuthenticatedSocketSupport.reconnectDelay(attempt: attempt))
@@ -152,6 +180,7 @@ public actor CompanionImageWorker {
                 deviceID: deviceID, foreground: advertisedForeground,
                 imageDescriptionAvailable: descriptionAvailable),
             on: socket)
+        activityObserver?(.init(phase: .idle))
         for pending in try await outbox.pending() {
             try await send(.companionResult(pending.result), on: socket)
         }
@@ -182,10 +211,15 @@ public actor CompanionImageWorker {
                 try await send(.companionResult(completed), on: socket)
                 return
             }
+            activityObserver?(
+                .init(
+                    phase: .processing, jobID: command.companionJobID,
+                    kind: command.companionKind, startedAt: .now))
             let result = await executor.execute(command)
             try Task.checkCancellation()
             try await outbox.record(result, for: key)
             try await send(.companionResult(result), on: socket)
+            activityObserver?(.init(phase: .idle))
         }
     }
 

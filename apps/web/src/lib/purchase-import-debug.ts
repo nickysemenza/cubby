@@ -1,3 +1,4 @@
+import { activityExecutor } from "@cubby/schemas/activity";
 import { z } from "zod";
 
 import { importRunPublicId } from "~/lib/purchase-import-run-detail";
@@ -54,6 +55,8 @@ export const purchaseImportDebugEvent = z.object({
   messageType: safeMetadata.nullable().optional(),
   errorType: safeMetadata.nullable().optional(),
   errorCode: z.number().int().min(-100_000).max(100_000).nullable().optional(),
+  // Device identity is accepted only by the actor-owned run ingestion route.
+  executor: activityExecutor.nullable().optional(),
 });
 
 export const purchaseImportDebugEventsRequest = z.object({

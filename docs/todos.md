@@ -444,6 +444,20 @@ history is the archive. Permanent product constraints live in the
 
 ### Needs a decision or investigation
 
+- **Evaluate Cloudflare Workflows across durable background work.** Compare
+  image description/eligibility/companion processing, purchase import and
+  targeted validation/enrichment, and bounded backfills/maintenance against
+  their existing queue, lease, and Flue orchestration; use search-index repair's
+  existing Workflow as a concrete reference. Include cookbook imports only if
+  unattended/resumable execution becomes necessary. Reverse-connected clients
+  can complete external-event waits through the authenticated server; retain
+  the device bridge, authorization, idempotency, and output validation. For each
+  candidate identify orchestration code replaced, retry/state ownership,
+  recovery behavior, operational cost, and test/deployment impact before
+  adopting it. Keep shared run history independent of the execution engine.
+  See the [purchase-import plan](plans/purchase-import-redesign.md) for the
+  existing runtime boundaries.
+
 - **Durable Entity identity and shared files.** Three patterns
   coexist for a row that points at any of several entity types: untyped
   `entityType + entityId` with no FK (search index, embeddings, AI analysis,

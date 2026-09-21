@@ -1,4 +1,10 @@
 import {
+  imageAnalysisHistoryInput,
+  imageAnalysisHistoryOutput,
+  retryImageProcessingInput,
+  retryImageProcessingOutput,
+} from "@cubby/schemas/activity";
+import {
   imageDescriptionCorrectionInput,
   imageDescriptionCorrectionOutput,
   evaluateAppleImageDescriptionInput,
@@ -19,6 +25,16 @@ import { defineContract, mutation, query } from "~/contracts/define";
  * the same durable job state to every supported client.
  */
 export const imageProcessingContract = defineContract("imageProcessing", {
+  analyses: query({
+    native: "Image analysis history",
+    input: imageAnalysisHistoryInput,
+    output: imageAnalysisHistoryOutput,
+  }),
+  retry: mutation({
+    native: "Retry failed image processing",
+    input: retryImageProcessingInput,
+    output: retryImageProcessingOutput,
+  }),
   // WebSockets do not have an OpenAPI operation of their own. This native-only
   // validation operation makes the exact shared wire unions generator-visible
   // without inventing a second set of Swift DTOs or carrying binary data over

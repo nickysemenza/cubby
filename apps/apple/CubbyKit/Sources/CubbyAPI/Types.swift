@@ -12,6 +12,21 @@ public import struct Foundation.Date
 public import CubbyAPISupport
 /// A type that performs HTTP operations defined by the OpenAPI document.
 public protocol APIProtocol: Sendable {
+    /// - Remark: HTTP `GET /api/v1/activity/detail`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/detail/get(activity.detail)`.
+    func activity_detail(_ input: Operations.Activity_detail.Input) async throws -> Operations.Activity_detail.Output
+    /// - Remark: HTTP `GET /api/v1/activity/devices`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/devices/get(activity.devices)`.
+    func activity_devices(_ input: Operations.Activity_devices.Input) async throws -> Operations.Activity_devices.Output
+    /// - Remark: HTTP `GET /api/v1/activity/events`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/events/get(activity.events)`.
+    func activity_events(_ input: Operations.Activity_events.Input) async throws -> Operations.Activity_events.Output
+    /// - Remark: HTTP `GET /api/v1/activity/list`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/list/get(activity.list)`.
+    func activity_list(_ input: Operations.Activity_list.Input) async throws -> Operations.Activity_list.Output
+    /// - Remark: HTTP `GET /api/v1/activity/submission`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/submission/get(activity.submission)`.
+    func activity_submission(_ input: Operations.Activity_submission.Input) async throws -> Operations.Activity_submission.Output
     /// - Remark: HTTP `POST /api/v1/collection/referenceDetail`.
     /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)`.
     func collection_referenceDetail(_ input: Operations.Collection_referenceDetail.Input) async throws -> Operations.Collection_referenceDetail.Output
@@ -122,12 +137,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/image/uploadImage`.
     /// - Remark: Generated from `#/paths//api/v1/image/uploadImage/post(image.uploadImage)`.
     func image_uploadImage(_ input: Operations.Image_uploadImage.Input) async throws -> Operations.Image_uploadImage.Output
+    /// - Remark: HTTP `GET /api/v1/imageProcessing/analyses`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/analyses/get(imageProcessing.analyses)`.
+    func imageProcessing_analyses(_ input: Operations.ImageProcessing_analyses.Input) async throws -> Operations.ImageProcessing_analyses.Output
     /// - Remark: HTTP `POST /api/v1/imageProcessing/correctDescription`.
     /// - Remark: Generated from `#/paths//api/v1/imageProcessing/correctDescription/post(imageProcessing.correctDescription)`.
     func imageProcessing_correctDescription(_ input: Operations.ImageProcessing_correctDescription.Input) async throws -> Operations.ImageProcessing_correctDescription.Output
     /// - Remark: HTTP `POST /api/v1/imageProcessing/evaluateAppleDescription`.
     /// - Remark: Generated from `#/paths//api/v1/imageProcessing/evaluateAppleDescription/post(imageProcessing.evaluateAppleDescription)`.
     func imageProcessing_evaluateAppleDescription(_ input: Operations.ImageProcessing_evaluateAppleDescription.Input) async throws -> Operations.ImageProcessing_evaluateAppleDescription.Output
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/retry`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/retry/post(imageProcessing.retry)`.
+    func imageProcessing_retry(_ input: Operations.ImageProcessing_retry.Input) async throws -> Operations.ImageProcessing_retry.Output
     /// - Remark: HTTP `POST /api/v1/imageProcessing/schedule`.
     /// - Remark: Generated from `#/paths//api/v1/imageProcessing/schedule/post(imageProcessing.schedule)`.
     func imageProcessing_schedule(_ input: Operations.ImageProcessing_schedule.Input) async throws -> Operations.ImageProcessing_schedule.Output
@@ -447,6 +468,55 @@ public protocol APIProtocol: Sendable {
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// - Remark: HTTP `GET /api/v1/activity/detail`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/detail/get(activity.detail)`.
+    public func activity_detail(
+        query: Operations.Activity_detail.Input.Query,
+        headers: Operations.Activity_detail.Input.Headers = .init()
+    ) async throws -> Operations.Activity_detail.Output {
+        try await activity_detail(Operations.Activity_detail.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/activity/devices`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/devices/get(activity.devices)`.
+    public func activity_devices(headers: Operations.Activity_devices.Input.Headers = .init()) async throws -> Operations.Activity_devices.Output {
+        try await activity_devices(Operations.Activity_devices.Input(headers: headers))
+    }
+    /// - Remark: HTTP `GET /api/v1/activity/events`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/events/get(activity.events)`.
+    public func activity_events(
+        query: Operations.Activity_events.Input.Query,
+        headers: Operations.Activity_events.Input.Headers = .init()
+    ) async throws -> Operations.Activity_events.Output {
+        try await activity_events(Operations.Activity_events.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/activity/list`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/list/get(activity.list)`.
+    public func activity_list(
+        query: Operations.Activity_list.Input.Query = .init(),
+        headers: Operations.Activity_list.Input.Headers = .init()
+    ) async throws -> Operations.Activity_list.Output {
+        try await activity_list(Operations.Activity_list.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/activity/submission`.
+    /// - Remark: Generated from `#/paths//api/v1/activity/submission/get(activity.submission)`.
+    public func activity_submission(
+        query: Operations.Activity_submission.Input.Query,
+        headers: Operations.Activity_submission.Input.Headers = .init()
+    ) async throws -> Operations.Activity_submission.Output {
+        try await activity_submission(Operations.Activity_submission.Input(
+            query: query,
+            headers: headers
+        ))
+    }
     /// - Remark: HTTP `POST /api/v1/collection/referenceDetail`.
     /// - Remark: Generated from `#/paths//api/v1/collection/referenceDetail/post(collection.referenceDetail)`.
     public func collection_referenceDetail(
@@ -819,6 +889,17 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// - Remark: HTTP `GET /api/v1/imageProcessing/analyses`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/analyses/get(imageProcessing.analyses)`.
+    public func imageProcessing_analyses(
+        query: Operations.ImageProcessing_analyses.Input.Query,
+        headers: Operations.ImageProcessing_analyses.Input.Headers = .init()
+    ) async throws -> Operations.ImageProcessing_analyses.Output {
+        try await imageProcessing_analyses(Operations.ImageProcessing_analyses.Input(
+            query: query,
+            headers: headers
+        ))
+    }
     /// - Remark: HTTP `POST /api/v1/imageProcessing/correctDescription`.
     /// - Remark: Generated from `#/paths//api/v1/imageProcessing/correctDescription/post(imageProcessing.correctDescription)`.
     public func imageProcessing_correctDescription(
@@ -837,6 +918,17 @@ extension APIProtocol {
         body: Operations.ImageProcessing_evaluateAppleDescription.Input.Body? = nil
     ) async throws -> Operations.ImageProcessing_evaluateAppleDescription.Output {
         try await imageProcessing_evaluateAppleDescription(Operations.ImageProcessing_evaluateAppleDescription.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/imageProcessing/retry`.
+    /// - Remark: Generated from `#/paths//api/v1/imageProcessing/retry/post(imageProcessing.retry)`.
+    public func imageProcessing_retry(
+        headers: Operations.ImageProcessing_retry.Input.Headers = .init(),
+        body: Operations.ImageProcessing_retry.Input.Body? = nil
+    ) async throws -> Operations.ImageProcessing_retry.Output {
+        try await imageProcessing_retry(Operations.ImageProcessing_retry.Input(
             headers: headers,
             body: body
         ))

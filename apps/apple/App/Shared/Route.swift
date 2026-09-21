@@ -5,6 +5,7 @@ import SwiftUI
 enum Route: Hashable {
     case graph(EntityRef?)
     case nutrition(day: String)
+    case activityDetail(String)
     /// A generic list, optionally opened with filters already applied (keyed by wire name).
     case entityList(EntityKey, filters: EntityFilterState = EntityFilterState())
     case entityDetail(EntityKey, id: String)
@@ -22,13 +23,14 @@ enum Route: Hashable {
 
 /// Top-level sections. Tabs on iOS, sidebar rows on macOS.
 enum AppSection: String, CaseIterable, Identifiable {
-    case today, capture, photos, browse, search, graph, dev
+    case today, activity, capture, photos, browse, search, graph, dev
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .today: "Today"
+        case .activity: "Activity"
         case .capture: "Capture"
         case .photos: "Photos"
         case .browse: "Browse"
@@ -41,6 +43,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .today: "sun.horizon"
+        case .activity: "clock.arrow.trianglehead.counterclockwise.rotate.90"
         case .capture: "barcode.viewfinder"
         case .photos: "photo.on.rectangle.angled"
         case .browse: "square.grid.2x2"
@@ -50,8 +53,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Dev is a pushed screen on iOS so the tab bar stays at four tabs + the search pill; macOS
-    /// keeps it as a sidebar row.
+    /// Dev and Graph are pushed screens on iOS; macOS keeps them as sidebar rows.
     static var tabs: [AppSection] {
         #if os(iOS)
             allCases.filter { $0 != .dev && $0 != .graph }

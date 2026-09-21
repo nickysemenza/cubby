@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./activity": "./src/activity.ts",
     "./availability": "./src/availability.ts",
     "./codec": "./src/codec.ts",
     "./collection": "./src/collection.ts",

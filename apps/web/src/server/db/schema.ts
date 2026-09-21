@@ -1647,6 +1647,10 @@ export const importRunOperation = pgTable(
   "ImportRunOperation",
   {
     id: pkUuid(),
+    executor:
+      jsonb("executor").$type<
+        import("@cubby/schemas/activity").ActivityExecutor
+      >(),
     runId: uuid("runId")
       .notNull()
       .references(() => importRun.id),
@@ -3418,6 +3422,10 @@ export const pgStatStatementsInfo = pgView("pg_stat_statements_info", {
 export {
   imageDerivative,
   imageProcessingJob,
+  imageProcessingAttempt,
+  imageProcessingEvent,
+  imageProcessingSubmission,
+  imageProcessingSubmissionJob,
   imageDescriptionCorrection,
   imageProcessingOrphan,
 } from "./image-processing-schema";

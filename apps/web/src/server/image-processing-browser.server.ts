@@ -1,10 +1,12 @@
 import { imageProcessingContract } from "~/contracts/image-processing.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { imageAnalysisHistory } from "~/server/repo/activity";
 import {
   getImageProcessingReadProjection,
   saveImageDescriptionCorrection,
 } from "~/server/repo/image-processing";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { retryImageProcessingFailures } from "~/server/services/image-processing.service";
 import {
   scheduleAppleImageDescriptionEvaluation,
   scheduleImageProcessingJobs,
@@ -22,6 +24,9 @@ export const imageProcessingHandlers = implementOperationDomain(
         context.db,
         await resolveOrThrow(context.db, "image", input.id),
       ),
+    analyses: async (context, input) => imageAnalysisHistory(context.db, input),
+    retry: async (context, input) =>
+      retryImageProcessingFailures(context.db, input),
     schedule: async (context, input) =>
       scheduleImageProcessingJobs(context.db, input),
     evaluateAppleDescription: async (context, input) =>

@@ -9,13 +9,25 @@ import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
+import { db, withRequestDbClient } from "~/server/db";
+import {
+  assignImageProcessingExecutor,
+  isAssignedImageProcessingDevice,
+} from "~/server/repo/image-processing-history";
+
 import type { ImageProcessingCompanionRpc } from "./contracts";
+import { safeImageProcessingError } from "./safe-error";
 
 declare const WebSocketPair: { new (): { 0: WebSocket; 1: CfWebSocket } };
 
 const socketAttachment = z.object({
   protocolVersion: z.literal(1),
   userId: z.string().min(1),
+  deviceId: z.uuid().optional(),
+  connectionId: z.uuid().optional(),
+  deviceName: z.string().optional(),
+  appVersion: z.string().optional(),
+  osVersion: z.string().optional(),
   platform: z.enum(["macos", "ios"]),
   capabilities: imageProcessingCapabilities,
 });
@@ -55,6 +67,7 @@ export class ImageProcessingDurableObject
     server.serializeAttachment({
       protocolVersion: 1,
       userId,
+      connectionId: crypto.randomUUID(),
       platform: "ios",
       capabilities: {
         visionSubjectLift: { available: false },
@@ -85,7 +98,9 @@ export class ImageProcessingDurableObject
             : attachment.data.capabilities.actualImageDescription.available;
         // iOS processing is only valid while foregrounded. macOS continuously
         // advertises foreground=true for its resident companion worker.
-        return capable && attachment.data.capabilities.foreground
+        return capable &&
+          attachment.data.deviceId &&
+          attachment.data.capabilities.foreground
           ? [{ socket, attachment: attachment.data }]
           : [];
       })
@@ -96,6 +111,27 @@ export class ImageProcessingDurableObject
       );
     const target = compatible[0];
     if (!target) return false;
+    const assigned = await withRequestDbClient(
+      this.env.HYPERDRIVE.connectionString,
+      () =>
+        assignImageProcessingExecutor(db, {
+          jobId: command.jobId,
+          attemptId: command.attemptId,
+          executor: {
+            kind: "device",
+            deviceId: target.attachment.deviceId ?? null,
+            name:
+              target.attachment.deviceName ??
+              (target.attachment.platform === "macos" ? "Mac" : "iOS device"),
+            platform: target.attachment.platform,
+            appVersion: target.attachment.appVersion ?? null,
+            osVersion: target.attachment.osVersion ?? null,
+          },
+          userId: target.attachment.userId,
+          connectionId: target.attachment.connectionId,
+        }),
+    );
+    if (!assigned) return false;
     target.socket.send(
       JSON.stringify(
         imageProcessingServerMessage.parse({
@@ -119,9 +155,46 @@ export class ImageProcessingDurableObject
       socket.serializeAttachment({
         protocolVersion: 1,
         userId: previous.userId,
+        connectionId: previous.connectionId ?? crypto.randomUUID(),
+        deviceId: parsed.data.deviceId,
+        deviceName: parsed.data.deviceName,
+        appVersion: parsed.data.appVersion,
+        osVersion: parsed.data.osVersion,
         platform: parsed.data.platform,
         capabilities: parsed.data.capabilities,
       } satisfies SocketAttachment);
+      return;
+    }
+    const connection = socketAttachment.parse(socket.deserializeAttachment());
+    const result = parsed.data.result;
+    if (result.outcome.status === "failed")
+      result.outcome.reason = safeImageProcessingError(
+        new Error(result.outcome.reason),
+      );
+    const deviceId = connection.deviceId;
+    if (
+      !deviceId ||
+      !(await withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
+        isAssignedImageProcessingDevice(db, {
+          jobId: result.jobId,
+          attemptId: result.attemptId,
+          deviceId,
+          userId: connection.userId,
+        }),
+      ))
+    ) {
+      // A deleted/legacy attempt can remain in an older companion outbox. Drop
+      // it without adopting anything, but acknowledge so it cannot replay forever.
+      socket.send(
+        JSON.stringify(
+          imageProcessingServerMessage.parse({
+            protocolVersion: 1,
+            type: "acknowledge",
+            jobId: result.jobId,
+            attemptId: result.attemptId,
+          }),
+        ),
+      );
       return;
     }
     await this.env.BACKGROUND_QUEUE.send(

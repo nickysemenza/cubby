@@ -14,6 +14,7 @@ import { plantingCreateInput } from "@cubby/schemas/planting";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { Page } from "@playwright/test";
 import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -718,4 +719,61 @@ export async function seedWardrobePrerequisites(page: Page, name: string) {
     }),
   );
   return { owner, other, location, otherLocation, product, entry };
+}
+
+/** Durable failed history only; this fixture never dispatches or calls AI. */
+export async function seedActivityHistory(name: string) {
+  const db = getFixtureDb();
+  const source = await createUploadedImageRecord(db, {
+    key: `tests/${crypto.randomUUID()}.png`,
+    filename: `${name}.png`,
+    contentType: "image/png",
+    size: 100,
+  });
+  const database = getDb(db);
+  const [job] = await database
+    .insert(schema.imageProcessingJob)
+    .values({
+      imageId: parseEntityId("image", source.id),
+      kind: "describe_image",
+      sourceContentHash: "a".repeat(64),
+      processorRevision: 1,
+      state: "failed",
+      attempts: 1,
+      lastError: "Synthetic provider failure",
+    })
+    .returning();
+  if (!job) throw new Error("Activity fixture job not created");
+  await database.insert(schema.imageProcessingAttempt).values({
+    id: crypto.randomUUID(),
+    jobId: job.id,
+    number: 1,
+    state: "failed",
+    executor: {
+      kind: "cloud",
+      deviceId: null,
+      name: "Test provider",
+      platform: "cloud",
+      appVersion: null,
+      osVersion: null,
+    },
+    diagnostics: {
+      provider: "test",
+      model: "synthetic-vision",
+      inputAvailability: "historical input unavailable",
+    },
+    result: { status: "failed", reason: "Synthetic provider failure" },
+    completedAt: new Date(),
+  });
+  await database.insert(schema.imageProcessingEvent).values({
+    jobId: job.id,
+    eventKey: "test-completed",
+    event: "attempt.completed",
+    details: { status: "failed" },
+  });
+  return {
+    imageId: source.shortcode,
+    runId: job.publicId,
+    filename: source.filename,
+  };
 }

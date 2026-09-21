@@ -96,6 +96,9 @@ export const imageProcessingJob = pgTable(
   "ImageProcessingJob",
   {
     id: pkUuid(),
+    publicId: text("publicId")
+      .notNull()
+      .default(sql`'IPR-' || upper(replace(gen_random_uuid()::text, '-', ''))`),
     imageId: uuid("imageId")
       .notNull()
       .$type<ImageId>()
@@ -107,6 +110,10 @@ export const imageProcessingJob = pgTable(
     state: text("state").notNull().$type<ImageProcessingJobState>(),
     sourceContentHash: text("sourceContentHash").notNull(),
     processorRevision: integer("processorRevision").notNull(),
+    submissionId: uuid("submissionId").references(
+      (): AnyPgColumn => imageProcessingSubmission.id,
+      { onDelete: "set null" },
+    ),
     attemptId: uuid("attemptId"),
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
     attempts: integer("attempts").notNull().default(0),
@@ -121,6 +128,7 @@ export const imageProcessingJob = pgTable(
     ...timestamps(),
   },
   (table) => [
+    uniqueIndex("ImageProcessingJob_publicId_key").on(table.publicId),
     uniqueIndex("ImageProcessingJob_identity_key").on(
       table.imageId,
       table.kind,
@@ -188,5 +196,130 @@ export const imageProcessingOrphan = pgTable(
   (table) => [
     uniqueIndex("ImageProcessingOrphan_key_key").on(table.key),
     index("ImageProcessingOrphan_createdAt_idx").on(table.createdAt),
+  ],
+);
+
+/** A lease is archived independently of the mutable dispatch row. */
+export const imageProcessingAttempt = pgTable(
+  "ImageProcessingAttempt",
+  {
+    id: uuid("id").primaryKey(),
+    jobId: uuid("jobId")
+      .notNull()
+      .references((): AnyPgColumn => imageProcessingJob.id, {
+        onDelete: "cascade",
+      }),
+    number: integer("number").notNull(),
+    submissionId: uuid("submissionId").references(
+      (): AnyPgColumn => imageProcessingSubmission.id,
+      { onDelete: "set null" },
+    ),
+    inputKey: text("inputKey"),
+    state: text("state").notNull(),
+    executor:
+      jsonb("executor").$type<
+        import("@cubby/schemas/activity").ActivityExecutor
+      >(),
+    assignedUserId: text("assignedUserId"),
+    assignedConnectionId: text("assignedConnectionId"),
+    diagnostics: jsonb("diagnostics").$type<unknown>(),
+    result: jsonb("result").$type<unknown>(),
+    error: text("error"),
+    startedAt: timestamp("startedAt", { mode: "date" }).notNull().defaultNow(),
+    completedAt: timestamp("completedAt", { mode: "date" }),
+  },
+  (table) => [
+    uniqueIndex("ImageProcessingAttempt_job_number_key").on(
+      table.jobId,
+      table.number,
+    ),
+    index("ImageProcessingAttempt_device_idx").on(
+      sql`(${table.executor}->>'deviceId')`,
+    ),
+    index("ImageProcessingAttempt_submission_idx").on(table.submissionId),
+    check("ImageProcessingAttempt_number_check", sql`${table.number} > 0`),
+    check(
+      "ImageProcessingAttempt_state_check",
+      sql`${table.state} IN ('leased','running','waiting','expired','ready','skipped','failed')`,
+    ),
+  ],
+);
+
+export const imageProcessingEvent = pgTable(
+  "ImageProcessingEvent",
+  {
+    id: pkUuid(),
+    jobId: uuid("jobId")
+      .notNull()
+      .references((): AnyPgColumn => imageProcessingJob.id, {
+        onDelete: "cascade",
+      }),
+    eventKey: text("eventKey").notNull(),
+    attempt: integer("attempt"),
+    event: text("event").notNull(),
+    level: text("level").notNull().default("info"),
+    source: text("source").notNull().default("server"),
+    details: jsonb("details").$type<unknown>(),
+    occurredAt: timestamp("occurredAt", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ImageProcessingEvent_job_event_key").on(
+      table.jobId,
+      table.eventKey,
+    ),
+    index("ImageProcessingEvent_job_time_idx").on(
+      table.jobId,
+      table.occurredAt,
+      table.id,
+    ),
+  ],
+);
+
+export const imageProcessingSubmission = pgTable(
+  "ImageProcessingSubmission",
+  {
+    id: pkUuid(),
+    publicId: text("publicId")
+      .notNull()
+      .default(sql`'IPS-' || upper(replace(gen_random_uuid()::text, '-', ''))`),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ImageProcessingSubmission_publicId_key").on(table.publicId),
+  ],
+);
+
+export const imageProcessingSubmissionJob = pgTable(
+  "ImageProcessingSubmissionJob",
+  {
+    id: pkUuid(),
+    submissionId: uuid("submissionId")
+      .notNull()
+      .references((): AnyPgColumn => imageProcessingSubmission.id, {
+        onDelete: "cascade",
+      }),
+    jobId: uuid("jobId")
+      .notNull()
+      .references((): AnyPgColumn => imageProcessingJob.id, {
+        onDelete: "cascade",
+      }),
+    disposition: text("disposition").notNull(),
+    baselineAttempts: integer("baselineAttempts").notNull(),
+  },
+  (table) => [
+    uniqueIndex("ImageProcessingSubmissionJob_membership_key").on(
+      table.submissionId,
+      table.jobId,
+    ),
+    check(
+      "ImageProcessingSubmissionJob_disposition_check",
+      sql`${table.disposition} IN ('new','reused','running','retry')`,
+    ),
+    check(
+      "ImageProcessingSubmissionJob_baseline_check",
+      sql`${table.baselineAttempts} >= 0`,
+    ),
   ],
 );

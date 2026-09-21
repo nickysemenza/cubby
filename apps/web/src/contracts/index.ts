@@ -1,3 +1,4 @@
+export { activityContract } from "./activity.contract";
 /**
  * Every operation contract, by export name. The registry generator imports
  * this barrel at build time; the HTTP router imports it at runtime. A contract

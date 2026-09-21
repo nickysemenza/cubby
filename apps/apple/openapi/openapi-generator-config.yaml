@@ -38,6 +38,11 @@ filter:
     - BrowserPaymentEvidence
     - BrowserChoice
   operations:
+    - activity.detail
+    - activity.devices
+    - activity.events
+    - activity.list
+    - activity.submission
     - collection.referenceDetail
     - cookbook.detail
     - cookbook.list
@@ -55,8 +60,10 @@ filter:
     - image.setPerceptualHashes
     - image.uploadDocument
     - image.uploadImage
+    - imageProcessing.analyses
     - imageProcessing.correctDescription
     - imageProcessing.evaluateAppleDescription
+    - imageProcessing.retry
     - imageProcessing.schedule
     - imageProcessing.status
     - imageProcessing.validateCompanionMessage

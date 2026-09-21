@@ -460,6 +460,119 @@ public actor CubbyClient {
         }
     }
 
+    public func imageAnalyses(
+        _ id: ImageCode, cursor: String? = nil, limit: Int = 10
+    ) async throws -> ImageAnalysisHistoryOutput {
+        try await perform {
+            try await api.imageProcessing_analyses(
+                query: .init(id: id.rawValue, cursor: cursor, limit: limit)
+            ).ok.body.json
+        }
+    }
+
+    public func imageProcessingStatus(_ id: ImageCode) async throws -> ImageProcessingStatusOutput {
+        try await perform {
+            try await api.imageProcessing_status(query: .init(id: id.rawValue)).ok.body.json
+        }
+    }
+
+    // MARK: - Activity
+
+    public struct ActivityFilters: Sendable, Hashable {
+        public enum Executor: Sendable, Hashable {
+            case all
+            case cloud
+            case unknown
+            case device(String)
+        }
+
+        public var kind: ActivityKind?
+        public var state: String?
+        public var subjectID: String?
+        public var submissionID: String?
+        public var executor: Executor
+        public var from: Date?
+        public var to: Date?
+
+        public init(
+            kind: ActivityKind? = nil, state: String? = nil, subjectID: String? = nil,
+            submissionID: String? = nil, executor: Executor = .all, from: Date? = nil,
+            to: Date? = nil
+        ) {
+            self.kind = kind
+            self.state = state
+            self.subjectID = subjectID
+            self.submissionID = submissionID
+            self.executor = executor
+            self.from = from
+            self.to = to
+        }
+    }
+
+    public func activityRuns(
+        filters: ActivityFilters = .init(), cursor: String? = nil, limit: Int = 20
+    ) async throws -> ActivityListOutput {
+        let executor: Operations.Activity_list.Input.Query.ExecutorPayload
+        let deviceID: String?
+        switch filters.executor {
+        case .all:
+            executor = .all
+            deviceID = nil
+        case .cloud:
+            executor = .cloud
+            deviceID = nil
+        case .unknown:
+            executor = .unknown
+            deviceID = nil
+        case .device(let id):
+            executor = .device
+            deviceID = id
+        }
+        return try await perform {
+            try await api.activity_list(
+                query: .init(
+                    kind: filters.kind.map(activityListKind), state: filters.state,
+                    subjectId: filters.subjectID, submissionId: filters.submissionID,
+                    executor: executor, deviceId: deviceID, from: filters.from, to: filters.to,
+                    sort: .newest, cursor: cursor, limit: limit)
+            ).ok.body.json
+        }
+    }
+
+    private func activityListKind(
+        _ kind: ActivityKind
+    ) -> Operations.Activity_list.Input.Query.KindPayload {
+        switch kind {
+        case .purchaseImport: .purchaseImport
+        case .purchaseValidation: .purchaseValidation
+        case .productEnrichment: .productEnrichment
+        case .describeImage: .describeImage
+        case .subjectLift: .subjectLift
+        }
+    }
+
+    public func activityDetail(
+        _ id: String, cursor: String? = nil, limit: Int = 20
+    ) async throws -> ActivityDetailOutput {
+        try await perform {
+            try await api.activity_detail(query: .init(id: id, cursor: cursor, limit: limit))
+                .ok.body.json
+        }
+    }
+
+    public func activityEvents(
+        _ id: String, cursor: String? = nil, limit: Int = 50
+    ) async throws -> ActivityEventsOutput {
+        try await perform {
+            try await api.activity_events(query: .init(id: id, cursor: cursor, limit: limit))
+                .ok.body.json
+        }
+    }
+
+    public func activityDevices() async throws -> ActivityDevicesOutput {
+        try await perform { try await api.activity_devices().ok.body.json }
+    }
+
     /// The device-run local analysis persisted at import time (`photo-local-analysis`), or `nil`
     /// when none has been recorded yet (`image.analysis` turns a `null` result into a 404, per
     /// `router.ts`'s nullable-output convention — the same shape `row(_:id:)` above unwraps).

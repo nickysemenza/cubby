@@ -12,6 +12,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { createImageProcessingSubmission } from "~/server/repo/image-processing-history";
 
 import {
   reclaimExpiredImageProcessingLeases,
@@ -124,10 +125,17 @@ export async function backfillImageProcessing(
     await import("~/server/services/image-processing.service");
   const settings = await readImageProcessingSettings(db);
   if (settings.paused) return { scheduled: 0, paused: true };
+  const submission = await createImageProcessingSubmission(db);
   if (input.retryFailures) {
-    const jobs = await retryFailedImageProcessingJobs(db, input.batchSize);
+    const jobs = await retryFailedImageProcessingJobs(db, input.batchSize, {
+      submissionId: submission.id,
+    });
     await publishImageProcessingWakeups(db, jobs);
-    return { scheduled: jobs.length, paused: false };
+    return {
+      scheduled: jobs.length,
+      paused: false,
+      submissionId: submission.publicId,
+    };
   }
   // A batch contains only images missing a current description or cutout decision.
   // Existing failed/skipped work is not silently reclassified or retried.
@@ -148,11 +156,16 @@ export async function backfillImageProcessing(
       id: row.shortcode,
       kinds: ["describe_image", "subject_lift"],
       publish: false,
+      submission,
     });
     jobs.push(...scheduled.jobIds);
   }
   await publishImageProcessingWakeups(db, jobs);
-  return { scheduled: rows.length, paused: false };
+  return {
+    scheduled: rows.length,
+    paused: false,
+    submissionId: submission.publicId,
+  };
 }
 
 export async function repairImageProcessingWork(db: Database) {

@@ -14,7 +14,19 @@ import type {
   ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
-import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -22,6 +34,8 @@ import {
   imageDescriptionCorrection,
   imageProcessingOrphan,
   imageProcessingJob,
+  imageProcessingAttempt,
+  imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
 import { aiAnalysis, image } from "~/server/db/schema";
 import {
@@ -41,6 +55,8 @@ import {
   generateImageKey,
   PRESIGNED_URL_DEFAULT_EXPIRY_SECONDS,
 } from "~/server/utils/s3";
+
+import { recordImageProcessingEvent } from "./image-processing-history";
 
 export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 1;
 
@@ -286,23 +302,51 @@ export async function reclaimExpiredImageProcessingLeases(
   clock?: Date,
 ): Promise<number> {
   const now = clock ?? sql`now()`;
-  const result = await getDb(db)
-    .update(imageProcessingJob)
-    .set({
-      state: "pending",
-      attemptId: null,
-      leaseExpiresAt: null,
-      nextAttemptAt: now,
-      lastError: "Companion lease expired",
-    })
-    .where(
-      and(
-        eq(imageProcessingJob.state, "leased"),
-        lte(imageProcessingJob.leaseExpiresAt, now),
-      ),
-    )
-    .returning({ id: imageProcessingJob.id });
-  return result.length;
+  return withTransaction(db, async (tx) => {
+    const expired = await tx
+      .select({
+        id: imageProcessingJob.id,
+        attemptId: imageProcessingJob.attemptId,
+        attempts: imageProcessingJob.attempts,
+      })
+      .from(imageProcessingJob)
+      .where(
+        and(
+          eq(imageProcessingJob.state, "leased"),
+          lte(imageProcessingJob.leaseExpiresAt, now),
+        ),
+      )
+      .for("update");
+    for (const job of expired) {
+      if (job.attemptId)
+        await tx
+          .update(imageProcessingAttempt)
+          .set({
+            state: "expired",
+            completedAt: now,
+            error: "Execution lease expired",
+          })
+          .where(eq(imageProcessingAttempt.id, job.attemptId));
+      await recordImageProcessingEvent(tx, {
+        jobId: job.id,
+        eventKey: `${job.attemptId}:expired`,
+        event: "attempt.expired",
+        attempt: job.attempts,
+        level: "error",
+      });
+      await tx
+        .update(imageProcessingJob)
+        .set({
+          state: "pending",
+          attemptId: null,
+          leaseExpiresAt: null,
+          nextAttemptAt: now,
+          lastError: "Execution lease expired",
+        })
+        .where(eq(imageProcessingJob.id, job.id));
+    }
+    return expired.length;
+  });
 }
 
 /** Claim one job with a bounded lease. No HTTP path waits for device work. */
@@ -332,6 +376,7 @@ export async function claimImageProcessingJob(
         processorRevision: imageProcessingJob.processorRevision,
         attempts: imageProcessingJob.attempts,
         previousAttemptId: imageProcessingJob.attemptId,
+        submissionId: imageProcessingJob.submissionId,
         derivativeId: imageProcessingJob.derivativeId,
         originalKey: image.key,
         originalContentType: image.contentType,
@@ -421,6 +466,26 @@ export async function claimImageProcessingJob(
       .returning({ leaseExpiresAt: imageProcessingJob.leaseExpiresAt });
     if (!leased?.leaseExpiresAt)
       throw new Error("Image-processing lease was not persisted");
+    await tx.insert(imageProcessingAttempt).values({
+      id: attemptId,
+      jobId: candidate.id,
+      number: candidate.attempts + 1,
+      submissionId: candidate.submissionId,
+      state: "leased",
+      diagnostics: {
+        sourceContentHash: candidate.sourceContentHash,
+        sourceKey: candidate.originalKey,
+        inputAvailability: "recorded original",
+        processorRevision: candidate.processorRevision,
+        contentType: candidate.originalContentType,
+      },
+    });
+    await recordImageProcessingEvent(tx, {
+      jobId: candidate.id,
+      eventKey: `${attemptId}:claimed`,
+      event: "attempt.claimed",
+      attempt: candidate.attempts + 1,
+    });
     const { previousAttemptId: _previousAttemptId, ...claimed } = candidate;
     return {
       ...claimed,
@@ -493,21 +558,40 @@ export async function markImageProcessingWaitingForDevice(
   db: Database,
   input: { jobId: string; attemptId: string },
 ): Promise<void> {
-  await getDb(db)
-    .update(imageProcessingJob)
-    .set({
-      state: "waiting_for_device",
-      attemptId: null,
-      leaseExpiresAt: null,
-      nextAttemptAt: sql`now() + interval '1 minute'`,
-    })
-    .where(
-      and(
-        eq(imageProcessingJob.id, input.jobId),
-        eq(imageProcessingJob.attemptId, input.attemptId),
-        eq(imageProcessingJob.state, "leased"),
-      ),
-    );
+  await withTransaction(db, async (tx) => {
+    const rows = await tx
+      .update(imageProcessingJob)
+      .set({
+        state: "waiting_for_device",
+        attemptId: null,
+        leaseExpiresAt: null,
+        nextAttemptAt: sql`now() + interval '1 minute'`,
+      })
+      .where(
+        and(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.attemptId, input.attemptId),
+          eq(imageProcessingJob.state, "leased"),
+        ),
+      )
+      .returning({ id: imageProcessingJob.id });
+    if (rows.length) {
+      await tx
+        .update(imageProcessingAttempt)
+        .set({ state: "waiting", completedAt: sql`now()` })
+        .where(
+          and(
+            eq(imageProcessingAttempt.id, input.attemptId),
+            eq(imageProcessingAttempt.state, "leased"),
+          ),
+        );
+      await recordImageProcessingEvent(tx, {
+        jobId: input.jobId,
+        eventKey: `${input.attemptId}:waiting`,
+        event: "dispatch.waiting",
+      });
+    }
+  });
 }
 
 /** The current cloud decision gates companion cutout work; absent means wait. */
@@ -536,14 +620,89 @@ export async function getCurrentImageCutoutEligibility(
     : null;
 }
 
+/**
+ * Retire a bounded page of jobs whose immutable source is gone before looking
+ * for repair wakeups. Otherwise old pending rows sort ahead of every live job,
+ * while the claim's source fence rejects them one at a time forever.
+ */
+async function skipObsoleteImageProcessingDispatchJobs(
+  db: Database,
+  limit: number,
+): Promise<void> {
+  await withTransaction(db, async (tx) => {
+    const obsolete = await tx
+      .select({
+        id: imageProcessingJob.id,
+        attempts: imageProcessingJob.attempts,
+      })
+      .from(imageProcessingJob)
+      .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
+      .where(
+        and(
+          inArray(imageProcessingJob.state, ["pending", "waiting_for_device"]),
+          or(
+            isNotNull(image.deletedAt),
+            ne(image.status, "UPLOADED"),
+            isNull(image.sha256),
+            ne(image.sha256, imageProcessingJob.sourceContentHash),
+          ),
+        ),
+      )
+      .orderBy(
+        asc(imageProcessingJob.nextAttemptAt),
+        asc(imageProcessingJob.id),
+      )
+      .limit(limit)
+      .for("update", { of: [imageProcessingJob, image], skipLocked: true });
+    if (!obsolete.length) return;
+
+    const ids = obsolete.map((job) => job.id);
+    await tx
+      .update(imageProcessingJob)
+      .set({
+        state: "skipped",
+        attemptId: null,
+        leaseExpiresAt: null,
+        completedAt: sql`now()`,
+        lastError: "Original image is no longer current",
+      })
+      .where(
+        and(
+          inArray(imageProcessingJob.id, ids),
+          inArray(imageProcessingJob.state, ["pending", "waiting_for_device"]),
+        ),
+      );
+    for (const job of obsolete) {
+      await recordImageProcessingEvent(tx, {
+        jobId: job.id,
+        eventKey: "source-obsolete",
+        event: "dispatch.skipped_obsolete_source",
+        attempt: job.attempts,
+        level: "info",
+        details: { reason: "Original image is no longer current" },
+      });
+    }
+  });
+}
+
 /** Bounded repair after a post-commit queue publication was missed. */
 export async function findImageProcessingDispatchRepairs(
   db: Database,
   limit: number,
 ): Promise<string[]> {
+  await skipObsoleteImageProcessingDispatchJobs(db, limit);
   const rows = await getDb(db)
     .select({ id: imageProcessingJob.id })
     .from(imageProcessingJob)
+    .innerJoin(
+      image,
+      and(
+        eq(image.id, imageProcessingJob.imageId),
+        notDeleted(image),
+        eq(image.status, "UPLOADED"),
+        eq(image.sha256, imageProcessingJob.sourceContentHash),
+      ),
+    )
     .where(
       or(
         eq(imageProcessingJob.state, "pending"),
@@ -559,17 +718,64 @@ export async function findImageProcessingDispatchRepairs(
 export async function retryFailedImageProcessingJobs(
   db: Database,
   limit: number,
+  options?: { imageId?: ImageId; submissionId?: string },
 ): Promise<string[]> {
   return await withTransaction(db, async (tx) => {
     const rows = await tx
-      .select({ id: imageProcessingJob.id })
+      .select({
+        id: imageProcessingJob.id,
+        attempts: imageProcessingJob.attempts,
+      })
       .from(imageProcessingJob)
-      .where(eq(imageProcessingJob.state, "failed"))
+      .innerJoin(
+        image,
+        and(
+          eq(image.id, imageProcessingJob.imageId),
+          notDeleted(image),
+          eq(image.sha256, imageProcessingJob.sourceContentHash),
+        ),
+      )
+      .where(
+        and(
+          eq(imageProcessingJob.state, "failed"),
+          options?.imageId
+            ? eq(imageProcessingJob.imageId, options.imageId)
+            : undefined,
+          or(
+            and(
+              eq(imageProcessingJob.kind, "subject_lift"),
+              eq(
+                imageProcessingJob.processorRevision,
+                IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+              ),
+            ),
+            and(
+              eq(imageProcessingJob.kind, "describe_image"),
+              inArray(imageProcessingJob.processorRevision, [
+                IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+                IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+              ]),
+            ),
+          ),
+        ),
+      )
       .orderBy(asc(imageProcessingJob.completedAt), asc(imageProcessingJob.id))
       .limit(limit)
       .for("update", { skipLocked: true });
     if (!rows.length) return [];
     const ids = rows.map((row) => row.id);
+    if (options?.submissionId)
+      await tx
+        .insert(imageProcessingSubmissionJob)
+        .values(
+          rows.map((row) => ({
+            submissionId: options.submissionId!,
+            jobId: row.id,
+            disposition: "retry",
+            baselineAttempts: row.attempts,
+          })),
+        )
+        .onConflictDoNothing();
     await tx
       .update(imageProcessingJob)
       .set({
@@ -578,6 +784,8 @@ export async function retryFailedImageProcessingJobs(
         leaseExpiresAt: null,
         nextAttemptAt: sql`now()`,
         lastError: null,
+        completedAt: null,
+        submissionId: options?.submissionId ?? null,
       })
       .where(inArray(imageProcessingJob.id, ids));
     return ids;
@@ -603,6 +811,14 @@ export async function findImageProcessingWakeupsForImage(
   return rows.map((row) => row.id);
 }
 
+type DescriptionAnalysisIdentity = {
+  provider: string;
+  model: string;
+  promptRevision: number;
+  resultSchemaRevision: number;
+  inputFingerprint: string;
+};
+
 type CompletionInput = {
   result: ImageProcessingResult;
   runtime?: AiAnalysisRuntime;
@@ -612,14 +828,9 @@ type CompletionInput = {
     width: number;
     height: number;
   };
-  /** Inserted with ready adoption so a crashed Apple completion remains replay-safe. */
-  appleAnalysis?: {
-    provider: string;
-    model: string;
-    promptRevision: number;
-    resultSchemaRevision: number;
-    inputFingerprint: string;
-  };
+  /** Analysis insertion and artifact adoption share the current-attempt fence. */
+  appleAnalysis?: DescriptionAnalysisIdentity;
+  cloudAnalysis?: DescriptionAnalysisIdentity;
   /** A rejected output belongs to this verified attempt and is retired atomically. */
   orphanOutputKey?: string;
 };
@@ -764,18 +975,19 @@ async function adoptSuccessfulCompletion(
         ),
       );
   }
-  if (input.appleAnalysis && outcome.kind === "describe_image") {
+  const analysis = input.appleAnalysis ?? input.cloudAnalysis;
+  if (analysis && outcome.kind === "describe_image") {
     await tx
       .insert(aiAnalysis)
       .values({
         entityType: "image",
         entityId: job.imageId,
         feature: "image-description",
-        provider: input.appleAnalysis.provider,
-        model: input.appleAnalysis.model,
-        promptVersion: String(input.appleAnalysis.promptRevision),
-        resultSchemaRevision: input.appleAnalysis.resultSchemaRevision,
-        inputFingerprint: input.appleAnalysis.inputFingerprint,
+        provider: analysis.provider,
+        model: analysis.model,
+        promptVersion: String(analysis.promptRevision),
+        resultSchemaRevision: analysis.resultSchemaRevision,
+        inputFingerprint: analysis.inputFingerprint,
         result: outcome.description,
         runtime: input.runtime ?? null,
       })
@@ -833,13 +1045,52 @@ export async function completeImageProcessingJob(
       )
       .where(eq(imageProcessingJob.id, input.result.jobId))
       .for("update", { of: [imageProcessingJob, image] });
-    if (!canAdoptCompletion(job, input))
+    if (!canAdoptCompletion(job, input)) {
+      const attempt = await tx.query.imageProcessingAttempt.findFirst({
+        where: and(
+          eq(imageProcessingAttempt.id, input.result.attemptId),
+          eq(imageProcessingAttempt.jobId, input.result.jobId),
+        ),
+      });
+      if (attempt && !["ready", "skipped", "failed"].includes(attempt.state)) {
+        await recordImageProcessingEvent(tx, {
+          jobId: attempt.jobId,
+          eventKey: `${attempt.id}:rejected`,
+          event: "completion.rejected",
+          attempt: attempt.number,
+          level: "debug",
+          details: {
+            reason: "Attempt, source, or lease no longer current",
+            result: input.result.outcome,
+            diagnostics: input.result.diagnostics ?? null,
+          },
+        });
+      }
       return { adopted: false, orphanKey: null };
-    if (await adoptTerminalCompletion(tx, job, input))
-      return { adopted: true, orphanKey: null };
-    return (await adoptSuccessfulCompletion(tx, job, input))
-      ? { adopted: true, orphanKey: null }
-      : { adopted: false, orphanKey: null };
+    }
+    const adopted =
+      (await adoptTerminalCompletion(tx, job, input)) ||
+      (await adoptSuccessfulCompletion(tx, job, input));
+    if (!adopted) return { adopted: false, orphanKey: null };
+    const outcome = input.result.outcome;
+    await tx
+      .update(imageProcessingAttempt)
+      .set({
+        state: outcome.status === "completed" ? "ready" : outcome.status,
+        completedAt: sql`now()`,
+        result: outcome,
+        diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ runtime: input.runtime ?? null, device: input.result.diagnostics ?? null, validation: input.verifiedDerivative ? { outcome: "validated transparent PNG", ...input.verifiedDerivative } : input.orphanOutputKey ? { outcome: "rejected output" } : null })}::jsonb`,
+        error: outcome.status === "completed" ? null : outcome.reason,
+      })
+      .where(eq(imageProcessingAttempt.id, input.result.attemptId));
+    await recordImageProcessingEvent(tx, {
+      jobId: job.id,
+      eventKey: `${input.result.attemptId}:completed`,
+      event: `execution.${outcome.status}`,
+      level: outcome.status === "failed" ? "error" : "info",
+      details: outcome,
+    });
+    return { adopted: true, orphanKey: null };
   });
 }
 

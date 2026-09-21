@@ -43,6 +43,8 @@ final class AppModel {
         @ObservationIgnored private var browserBridgeController: MacBrowserBridgeController?
     #endif
     @ObservationIgnored private var companionImageWorker: CompanionImageWorker?
+    @ObservationIgnored private var companionImageWorkerGeneration = UUID()
+    private(set) var companionImageActivity = CompanionImageWorkerActivity(phase: .stopped)
     @ObservationIgnored private var companionSceneActive = false
     /// The SQLite cache opens away from the UI actor and attaches matching/classification once
     /// available. Local photo browsing never waits for it.
@@ -337,17 +339,26 @@ final class AppModel {
 
     private func configureCompanionImageWorker() {
         let previous = companionImageWorker
+        let generation = UUID()
+        companionImageWorkerGeneration = generation
+        companionImageActivity = .init(phase: .stopped)
         do {
             let outbox = try CompanionResultOutbox<ImageProcessingResult>.applicationSupport(
                 namespace: host)
             companionImageWorker = CompanionImageWorker(
                 baseURL: baseURL,
                 credentials: credentials,
-                deviceID: Self.companionDeviceID,
+                deviceID: AppInstallationID.current,
                 foreground: companionSceneActive,
                 outbox: outbox,
                 failureObserver: { error in
                     Diagnostics.report(error, context: "imageProcessing.socket")
+                },
+                activityObserver: { [weak self] activity in
+                    Task { @MainActor [weak self] in
+                        guard self?.companionImageWorkerGeneration == generation else { return }
+                        self?.companionImageActivity = activity
+                    }
                 })
         } catch {
             companionImageWorker = nil
@@ -356,14 +367,15 @@ final class AppModel {
         if let previous { Task { await previous.stop() } }
     }
 
-    private static var companionDeviceID: UUID {
-        let key = "cubby.companionImageProcessing.deviceID"
-        if let value = UserDefaults.standard.string(forKey: key), let id = UUID(uuidString: value) {
-            return id
+    var localExecutionLabel: String? {
+        if companionImageActivity.phase == .processing {
+            return companionImageActivity.kind == "subject_lift"
+                ? "Creating image cutout" : "Describing image"
         }
-        let id = UUID()
-        UserDefaults.standard.set(id.uuidString.lowercased(), forKey: key)
-        return id
+        #if os(macOS)
+            if browserBridge.isSyncing { return "Running purchase import" }
+        #endif
+        return nil
     }
 
     #if os(macOS)

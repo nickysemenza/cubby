@@ -113,6 +113,7 @@ export const imageProcessingBatchInput = z.object({
   retryFailures: z.boolean().default(false),
 });
 export const imageProcessingBatchOutput = z.object({
+  submissionId: z.string().nullable().optional(),
   scheduled: z.number().int().nonnegative(),
   paused: z.boolean(),
 });
