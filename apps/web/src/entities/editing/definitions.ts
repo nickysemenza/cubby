@@ -437,8 +437,12 @@ const makeIntent = <E extends EditableEntity>(
   validate: options.validate,
   defaults: options.defaults,
   build: ({ record, patch, context }) => {
-    const keys = Object.keys(patch);
     const data = options.buildData ? options.buildData(patch, context) : patch;
+    // Computed from the post-`buildData` patch, not the pre-`buildData`
+    // dirty-field patch: a `buildData` that injects a fixed key (e.g.
+    // settle's unconditional `future: false`) must make an otherwise-empty
+    // edit submit. See `entities/editing/definitions.unit.test.ts`.
+    const keys = Object.keys(data);
     if (operation === "create") {
       return {
         ok: true,
@@ -906,6 +910,16 @@ export const entityEditRegistry: EntityEditRegistry = {
             ? readOnly("Recorded expenses stay read-only in the calendar.")
             : editable,
         validate: validateExpenseDate,
+      },
+      // "Mark purchased" — the date default is re-evaluated per session
+      // (not a module-level constant) so a dialog left open overnight still
+      // seeds today. `future: false` is unconditional: the whole point is a
+      // no-touch "same-day settling" submit, which is why `changed` above
+      // reads the post-`buildData` patch instead of the raw dirty fields.
+      settle: {
+        defaults: () => ({ date: householdLocalDate() }),
+        validate: validateExpenseDate,
+        buildData: (patch) => ({ ...patch, future: false }),
       },
     },
   })),
