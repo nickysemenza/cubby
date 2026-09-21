@@ -79,17 +79,23 @@ function workerdAgentConfig() {
   };
 }
 
-function workerdWebConfig() {
+function workerdWebConfig(databaseUrl: string) {
   const config = JSON.parse(
     readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
   ) as Record<string, unknown> & {
     main?: string;
+    hyperdrive?: Array<Record<string, unknown>>;
     services?: Array<Record<string, unknown>>;
   };
-  // Keep the current compiled Worker but mirror E2E global setup: neither
-  // binding has a local runtime and this harness owns agent queue delivery.
+  // Keep the current compiled Worker but remove production-only remote
+  // bindings; the harness supplies its isolated database and owns agent queue
+  // delivery, so starting it must never require Cloudflare credentials.
   delete config.ai;
   delete config.vectorize;
+  config.hyperdrive = config.hyperdrive?.map((binding) => ({
+    ...binding,
+    localConnectionString: databaseUrl,
+  }));
   const queues = config.queues as Record<string, unknown> | undefined;
   if (queues) queues.consumers = [];
   // `configPath` resolves this relative to dist/server; the inline config is
@@ -140,7 +146,7 @@ function createWorkerdHarness(databaseUrl: string) {
         },
       },
       {
-        config: workerdWebConfig(),
+        config: workerdWebConfig(databaseUrl),
         vars: {
           ALLOW_SIGNUP: "true",
           INSECURE_AUTH_COOKIES: "true",
