@@ -199,6 +199,23 @@ describe("GenericEntityDetail", () => {
     );
   });
 
+  // Regression: the hero chip read only static `control.options`, so a task
+  // (whose status labels live in the rich option table) stamped the raw
+  // `not_started` on its own page while every other surface said "Not started".
+  it("stamps the hero chip with the enum's rich label", () => {
+    const record = { ...recordFor("task"), status: "not_started" as const };
+    render(
+      <GenericEntityDetail
+        entity="task"
+        record={record}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getAllByText("Not started").length).toBeGreaterThan(0);
+    expect(screen.queryByText("not_started")).toBeNull();
+  });
+
   // Regression: `externalIds` is a `text-array` field whose read shape is an
   // array of objects; deriving its cohort link used to parse it as strings
   // and crash the whole product page.

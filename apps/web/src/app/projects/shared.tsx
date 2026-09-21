@@ -2,22 +2,11 @@ import {
   canClearExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
 } from "@cubby/schemas/expense-fields";
-import {
-  expenseLineBasisSchema,
-  expenseLineKindSchema,
-  type ExpenseLineBasis,
-  type ExpenseLineKind,
-} from "@cubby/schemas/expense-line-kind";
-import {
-  costTypeSchema,
-  type CostType,
-  type ExpenseOut,
-  type ProjectStatus,
-  type TaskOut,
-  type TaskStatus,
-  taskStatusSchema,
-  type Trade,
-  tradeSchema,
+import type {
+  ExpenseOut,
+  ProjectStatus,
+  TaskOut,
+  TaskStatus,
 } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { ListFilter } from "lucide-react";
@@ -35,12 +24,10 @@ import {
 import {
   createBooleanColumn,
   createCurrencyColumn,
-  createFilterableSelectColumn,
   createPlainDateColumn,
   createTextColumn,
   type FilterConfig,
   type MobileColumnMeta,
-  renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
@@ -51,13 +38,7 @@ import {
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
-import {
-  costTypeOptions,
-  expenseFutureOptions,
-  expenseLineBasisOptions,
-  expenseLineKindOptions,
-} from "~/app/expenses/expense-options";
-import { taskStatusOptions } from "~/app/tasks/task-options";
+import { expenseFutureOptions } from "~/app/expenses/expense-options";
 import { VendorCell } from "~/components/entity/vendor-cell";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
@@ -68,8 +49,6 @@ import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
-
-import { tradeOptions } from "./trade-options";
 
 export { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 export {
@@ -97,57 +76,6 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
     className.split(" ").find((c) => c.startsWith("text-")) ??
     "text-muted-foreground";
   return Icon ? <Icon className={cn("size-4 shrink-0", textClass)} /> : null;
-}
-
-export function taskStatusColumn(
-  helper: ColumnHelper<TaskOut>,
-  save: (status: TaskStatus, task: TaskOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta },
-) {
-  return createFilterableSelectColumn(helper, "status", {
-    header: "Status",
-    className: "w-32",
-    placeholder: "Filter by status...",
-    selectOptions: taskStatusOptions,
-    filterConfig: manifestFilterConfig("task", "status"),
-    mobile: opts?.mobile,
-    editable: {
-      parseValue: (value) => taskStatusSchema.parse(value),
-      onSave: async (newStatus, task) => {
-        await save(newStatus, task);
-      },
-    },
-  });
-}
-
-export function taskTradeColumn(
-  helper: ColumnHelper<TaskOut>,
-  save: (trade: Trade, task: TaskOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta; emptyAsNull?: boolean },
-) {
-  return createFilterableSelectColumn(helper, "trade", {
-    header: "Trade",
-    className: "w-32",
-    placeholder: "Filter by trade...",
-    selectOptions: tradeOptions,
-    filterConfig: manifestFilterConfig("task", "trade"),
-    // Only the empty case differs from the shared render: an embedded table
-    // suppresses the dash entirely rather than showing "no trade" per row.
-    renderCell: (trade: Trade | null) =>
-      trade === null && opts?.emptyAsNull
-        ? null
-        : renderOptionCell(trade, tradeOptions),
-    mobile: opts?.mobile,
-    editable: {
-      parseValue: (value) => tradeSchema.parse(value),
-      onSave: async (newTrade, task) => {
-        // Required field — a cleared select is a no-op, not a null write.
-        if (!newTrade) return;
-        await save(newTrade, task);
-      },
-      suggest: { entity: "task", field: "trade" },
-    },
-  });
 }
 
 export function taskDueColumn(
@@ -179,108 +107,6 @@ export function taskDueColumn(
             : "dueDate",
         );
       },
-    },
-  });
-}
-
-export function expenseLineKindColumn(
-  helper: ColumnHelper<ExpenseOut>,
-  save: (lineKind: ExpenseLineKind, expense: ExpenseOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta },
-) {
-  return createFilterableSelectColumn(helper, "lineKind", {
-    header: "Line Kind",
-    className: "w-36",
-    placeholder: "Filter by line kind...",
-    selectOptions: expenseLineKindOptions,
-    filterConfig: manifestFilterConfig("expense", "lineKind"),
-    mobile: opts?.mobile,
-    editable: {
-      parseValue: (value) => expenseLineKindSchema.parse(value),
-      onSave: async (newLineKind, expense) => {
-        if (!newLineKind) return;
-        await save(newLineKind, expense);
-      },
-    },
-  });
-}
-
-/** Registered even while hidden so its manifest filter has a real column. */
-export function expenseLineBasisColumn(
-  helper: ColumnHelper<ExpenseOut>,
-  save: (lineBasis: ExpenseLineBasis, expense: ExpenseOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta },
-) {
-  return createFilterableSelectColumn(helper, "lineBasis", {
-    header: "Itemization",
-    className: "w-40",
-    placeholder: "Filter by itemization...",
-    selectOptions: expenseLineBasisOptions,
-    filterConfig: manifestFilterConfig("expense", "lineBasis"),
-    mobile: opts?.mobile,
-    editable: {
-      parseValue: (value) => expenseLineBasisSchema.parse(value),
-      onSave: async (newLineBasis, expense) => {
-        if (!newLineBasis) return;
-        await save(newLineBasis, expense);
-      },
-    },
-  });
-}
-
-export function expenseCostTypeColumn(
-  helper: ColumnHelper<ExpenseOut>,
-  save: (costType: CostType, expense: ExpenseOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta },
-) {
-  return createFilterableSelectColumn(helper, "costType", {
-    header: "Cost Type",
-    className: "w-28",
-    placeholder: "Filter by cost type...",
-    selectOptions: costTypeOptions,
-    filterConfig: manifestFilterConfig("expense", "costType"),
-    mobile: opts?.mobile,
-    editable: {
-      parseValue: (value) => costTypeSchema.parse(value),
-      onSave: async (newCostType, expense) => {
-        // Required field — a cleared select is a no-op, not a null write.
-        if (!newCostType) return;
-        await save(newCostType, expense);
-      },
-      suggest: { entity: "expense", field: "costType" },
-    },
-  });
-}
-
-export function expenseTradeColumn(
-  helper: ColumnHelper<ExpenseOut>,
-  save: (trade: Trade, expense: ExpenseOut) => Promise<void>,
-  opts?: {
-    mobile?: MobileColumnMeta;
-    emptyAsNull?: boolean;
-  },
-) {
-  return createFilterableSelectColumn(helper, "trade", {
-    header: "Trade",
-    className: "w-32",
-    placeholder: "Filter by trade...",
-    selectOptions: tradeOptions,
-    filterConfig: manifestFilterConfig("expense", "trade"),
-    // Only the empty case differs from the shared render: an embedded table
-    // suppresses the dash entirely rather than showing "no trade" per row.
-    renderCell: (trade: Trade | null) =>
-      trade === null && opts?.emptyAsNull
-        ? null
-        : renderOptionCell(trade, tradeOptions),
-    mobile: opts?.mobile,
-    editable: {
-      parseValue: (value) => tradeSchema.parse(value),
-      onSave: async (newTrade, expense) => {
-        // Required field — a cleared select is a no-op, not a null write.
-        if (!newTrade) return;
-        await save(newTrade, expense);
-      },
-      suggest: { entity: "expense", field: "trade" },
     },
   });
 }

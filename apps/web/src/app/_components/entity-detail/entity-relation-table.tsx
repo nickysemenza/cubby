@@ -15,7 +15,10 @@ import { useCallback, useMemo, useState } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
-import type { EditableEntity } from "~/entities/editing/types";
+import type {
+  EditableEntity,
+  EntityMutationPort,
+} from "~/entities/editing/types";
 import {
   defaultSortDirectionFor,
   defaultSortFor,
@@ -36,6 +39,7 @@ import {
 } from "../data-table/table-features";
 import { type BaseListRow, useEntityList } from "../hooks/useEntityList";
 import type { ListQueryOptionsFn } from "../hooks/usePaginatedTableCore";
+import { useEntityFieldSave } from "../hooks/useUpdateMutation";
 
 type RelationSection = Extract<
   CompiledEntityPresentation["detail"]["sections"][number],
@@ -177,6 +181,8 @@ const DEFAULT_RELATION_PAGE_SIZE = 50;
 
 export interface EntityRelationTableOperations {
   list: typeof entityList.list;
+  /** Test seam: a local operation adapter for the rows' inline field edits. */
+  mutationPort?: EntityMutationPort;
 }
 
 const productionOperations: EntityRelationTableOperations = {
@@ -423,12 +429,18 @@ export function EntityRelationTable({
     () => ({ [plan.filterKey]: recordId }),
     [plan.filterKey, recordId],
   );
+  // The same inline scalar editing the target's own list page offers: a row
+  // here is the target entity's record, so its update command applies as-is.
+  const onSaveField = useEntityFieldSave(target, {
+    mutationPort: operations.mutationPort,
+  });
   const columns = useMemo(
     () =>
       createEntityDisplayColumns<RelationRow>(target, helper, undefined, {
         only: plan.columns ?? undefined,
+        onSaveField,
       }),
-    [helper, plan.columns, target],
+    [helper, onSaveField, plan.columns, target],
   );
   const tableStateOptions = useMemo(
     () => ({

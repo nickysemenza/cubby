@@ -21,14 +21,10 @@ import { ExpenseSummaryStrip } from "~/app/expenses/expense-summary-strip";
 import { expense } from "~/app/expenses/expense.functions";
 import {
   expenseCostColumn,
-  expenseCostTypeColumn,
   expenseDateColumn,
   expenseFutureColumn,
-  expenseLineBasisColumn,
-  expenseLineKindColumn,
   expenseOrderIdColumn,
   expenseProductQuantityColumn,
-  expenseTradeColumn,
   expenseVendorColumn,
 } from "~/app/projects/shared";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
@@ -165,51 +161,6 @@ export const expenseListOverride = defineListOverride<
                 });
               },
               { mobile: { slot: "subtitle", priority: 15 } },
-            ),
-          );
-          add(
-            expenseLineKindColumn(
-              columnHelper,
-              async (lineKind, row) => {
-                await updateExpenseMutation.mutateAsync(
-                  lineKind === "principal"
-                    ? { id: row.id, data: { lineKind } }
-                    : { id: row.id, data: { lineKind, projectId: null } },
-                );
-              },
-              { mobile: { slot: "meta", priority: 18 } },
-            ),
-          );
-          add(
-            expenseLineBasisColumn(columnHelper, async (lineBasis, row) => {
-              await updateExpenseMutation.mutateAsync({
-                id: row.id,
-                data: { lineBasis },
-              });
-            }),
-          );
-          add(
-            expenseCostTypeColumn(
-              columnHelper,
-              async (costType, row) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: row.id,
-                  data: { costType },
-                });
-              },
-              { mobile: { slot: "meta", priority: 20 } },
-            ),
-          );
-          add(
-            expenseTradeColumn(
-              columnHelper,
-              async (trade, row) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: row.id,
-                  data: { trade },
-                });
-              },
-              { mobile: { slot: "meta", priority: 60 } },
             ),
           );
           add(

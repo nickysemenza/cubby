@@ -9,7 +9,6 @@ import { useMemo } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createEntityInlineLinkColumn,
-  createFilterableSelectColumn,
   createImageColumn,
   createInventoryEntriesColumn,
   createSingleEntityInlineLinkColumn,
@@ -27,8 +26,6 @@ import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useLocationParentOptions } from "~/app/_components/hooks/useLocationParentOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { InventoryValuationSummary } from "~/app/_components/locations/inventory-valuation-summary";
-import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
-import { LocationTypeLabel } from "~/app/_components/locations/LocationTypeLabel";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
@@ -99,28 +96,6 @@ export const locationListOverride = defineListOverride<
             }),
           );
           add(
-            createFilterableSelectColumn(columnHelper, "type", {
-              header: "Type",
-              className: "w-32",
-              placeholder: "Filter by type...",
-              selectOptions: locationTypeOptionsWithTheme,
-              // A linked location has no type of its own; "Is a" carries it.
-              renderCell: (type) => (
-                <LocationTypeLabel type={type} product={null} />
-              ),
-              mobile: { slot: "subtitle", priority: 15 },
-              editable: {
-                parseValue: (value) => locationType.nullable().parse(value),
-                onSave: async (newType, location) => {
-                  await updateLocationMutation.mutateAsync({
-                    id: location.id,
-                    data: { type: newType },
-                  });
-                },
-              },
-            }),
-          );
-          add(
             createSingleEntityInlineLinkColumn(
               columnHelper,
               "product",
@@ -168,7 +143,6 @@ export const locationListOverride = defineListOverride<
             }),
           );
         }),
-      // oxlint-disable-next-line react/exhaustive-deps -- updateLocationMutation changes every render but is functionally stable
       [],
     );
 

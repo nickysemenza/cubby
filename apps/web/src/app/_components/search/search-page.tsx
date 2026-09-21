@@ -27,6 +27,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { entities } from "~/entities/entities";
+import { enumFieldLabel } from "~/entities/enum-field-display";
 import { useIsMobile } from "~/hooks/useMobile";
 import { search } from "~/lib/search.functions";
 import { cn } from "~/lib/utils";
@@ -414,7 +415,7 @@ function SearchRow({
 
 const formatPlacement = (placement: SearchInventoryPlacement) => {
   const { value, upperValue, unit } = placement.amount;
-  return `${value}${upperValue === undefined ? "" : `–${upperValue}`} ${unit} · ${placement.placement}`;
+  return `${value}${upperValue === undefined ? "" : `–${upperValue}`} ${unit} · ${enumFieldLabel("inventory", "placement", placement.placement)}`;
 };
 
 const placementSearchDestination = (

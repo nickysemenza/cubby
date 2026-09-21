@@ -28,6 +28,7 @@ import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import type { StandardEntity } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { readReferenceField } from "~/entities/entity-references";
+import { enumFieldLabel } from "~/entities/enum-field-display";
 import { generatedBrowserCrudEntities } from "~/entities/generated/entity-routes.gen";
 
 import {
@@ -106,9 +107,7 @@ function recordValue(
   const value = basisValueOf(record[field.readKey ?? key]);
   return {
     value,
-    label:
-      field.control?.options?.find((option) => option.value === value)?.label ??
-      value,
+    label: field.kind === "enum" ? enumFieldLabel(entity, key, value) : value,
   };
 }
 

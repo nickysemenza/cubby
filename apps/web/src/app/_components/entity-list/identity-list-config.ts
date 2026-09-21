@@ -4,10 +4,6 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 
 const DEFAULT_IDENTITY_WIDTH = "w-64";
 
-export function identityPatch(titleField: string, newValue: string) {
-  return { [titleField]: newValue };
-}
-
 export function identityWidthClassName(
   width: (typeof entityFieldModels)[BrowserRoutedEntity]["fields"][number]["display"]["width"],
 ): string {

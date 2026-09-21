@@ -63,7 +63,7 @@ function shelfSubtitle(entity: BrowserRoutedEntity, row: ShelfRow): ReactNode {
       (Array.isArray(value) && value.length === 0)
     )
       continue;
-    return renderDetailFieldValue(row, field);
+    return renderDetailFieldValue(entity, row, field);
   }
   return undefined;
 }

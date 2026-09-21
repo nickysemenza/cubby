@@ -221,6 +221,12 @@ describe("task list display columns", () => {
     expect(screen.getByText("Sep 20, 2026")).toBeVisible();
   });
 
+  it("renders the generic status column as its rich label, never the stored value", () => {
+    render(<>{renderTaskCell("status", TASK_ROW)}</>);
+    expect(screen.getByText("In progress")).toBeVisible();
+    expect(screen.queryByText("in_progress")).toBeNull();
+  });
+
   it("renders the project override's own cell against the row", () => {
     render(<>{renderTaskCell("project", TASK_ROW)}</>);
     expect(screen.getByText("Kitchen remodel")).toBeVisible();

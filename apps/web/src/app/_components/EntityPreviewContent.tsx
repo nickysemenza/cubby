@@ -38,6 +38,7 @@ import { cookbook } from "~/entities/cookbook.functions";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { fdcIdFromParam } from "~/entities/entity-query";
+import { enumFieldLabel } from "~/entities/enum-field-display";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { image } from "~/entities/image.functions";
 import { usdaFood } from "~/entities/usda.functions";
@@ -632,7 +633,7 @@ export function toProjectCard(
 ): ManifestCardProps {
   const identity = [
     PROJECT_STATUS_LABELS[data.status],
-    data.kind ? capitalize(data.kind) : null,
+    enumFieldLabel("project", "kind", data.kind),
     data.locations.length > 0 ? data.locations.join(", ") : null,
   ]
     .filter(Boolean)
@@ -924,8 +925,8 @@ export function toFinancialTransactionCard(
     name: data.displayName,
     tag: "transaction",
     identity: [
-      capitalize(data.kind.replaceAll("_", " ")),
-      capitalize(data.status),
+      enumFieldLabel("financialTransaction", "kind", data.kind),
+      enumFieldLabel("financialTransaction", "status", data.status),
     ].join(" · "),
     crossLinks: [
       financialAccountCrossLink(
@@ -1012,7 +1013,10 @@ export function toPlantingCard(
       {
         kind: "stats",
         stats: [
-          { label: "Status", value: capitalize(data.status) },
+          {
+            label: "Status",
+            value: enumFieldLabel("planting", "status", data.status),
+          },
           {
             label: "Location",
             value: data.locationId ? (
@@ -1096,7 +1100,7 @@ export function toImageCard(data: ImageWithEntity): ManifestCardProps {
     icon: <EntityIcon entity="image" size={14} colored />,
     name: data.filename,
     tag: "image",
-    identity: data.status.toLowerCase(),
+    identity: enumFieldLabel("image", "status", data.status),
     crossLinks:
       data.associations.length > 0
         ? data.associations.map(imageAssociationCrossLink)

@@ -621,15 +621,31 @@ export const updateExpense = async (
 
   type UpdateState = Awaited<ReturnType<typeof loadUpdateState>>;
 
+  // Reclassifying a principal line as an adjustment drops its project: an
+  // adjustment cannot store one (`validateExpenseInheritance` rejects it),
+  // and every editing surface — list, embedded relation table, detail —
+  // relies on the server owning that rule rather than each sending
+  // `projectId: null` alongside.
+  const dropProjectOnReclassify = (update: ResolvedExpenseUpdate) => {
+    if (
+      update.lineKind !== undefined &&
+      update.lineKind !== "principal" &&
+      update.projectId === undefined
+    ) {
+      update.projectId = null;
+    }
+  };
+
   const validateUpdateState = async (
     tx: DrizzleTransaction,
     state: UpdateState,
     update: ResolvedExpenseUpdate,
     resultingPurchaseId: PurchaseId | null,
   ) => {
+    const previous = state.qualityBefore;
+    dropProjectOnReclassify(update);
     // Detaching a source preserves its effective attribution unless the same
     // edit explicitly replaces or resets that assignment.
-    const previous = state.qualityBefore;
     if (
       previous?.purchaseId &&
       resultingPurchaseId === null &&

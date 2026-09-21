@@ -399,6 +399,40 @@ describe("expense repository — CRUD", () => {
     expect(discount.lineKind).toBe("discount");
     expect(taxRefund).toMatchObject({ lineKind: "tax", cost: -8.5 });
   });
+
+  // Regression guard: reclassifying a principal line as an adjustment used to
+  // be a client-side companion write (`projectId: null` sent alongside from
+  // the expense list only); the server owns the rule now so an embedded
+  // relation table's inline edit reaches the same outcome.
+  it("drops the project when a principal line becomes an adjustment", async () => {
+    const { output: project } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "line role reclassify project" }),
+      ctx.actor,
+    );
+    const principal = await unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: "Order handling",
+            cost: 12,
+            lineKind: "principal",
+            projectId: project.id,
+            vendor: "Line role fixture vendor",
+            orderId: "LINE-ROLE-2",
+          }),
+        ),
+        ctx.actor,
+      ),
+    );
+    expect(principal.projectId).toBe(project.id);
+
+    const reclassified = await unwrap(
+      updateExpense(ctx.db, principal.id, { lineKind: "fee" }, ctx.actor),
+    );
+    expect(reclassified).toMatchObject({ lineKind: "fee", projectId: null });
+  });
 });
 
 describe("expense workflow", () => {

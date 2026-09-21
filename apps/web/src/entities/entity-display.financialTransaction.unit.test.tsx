@@ -83,15 +83,15 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 
 /**
  * Builds the financial transaction list's columns the same way
- * `financial-transaction-list.tsx` does: overrides for the eight columns
+ * `financial-transaction-list.tsx` does: overrides for the six columns
  * that render specially (`accountId`/`purchaseId` are `identifier` fields
  * with a `reference`, and `vendorInference`/`sourceRefs` are `json` fields —
  * `createEntityDisplayColumns` throws without an override for any of these;
- * `kind`/`status`/`amount`/`postedDate` keep their existing
- * select/currency/date renderers rather than falling back to the generic
- * one). Everything else (`transactionDate`, `merchant`, `rawDescription`,
- * `sourceCategory`, `notes`) is left generic to exercise the declaration's
- * own width/format/mobile metadata. The stubs below are test-local, not the
+ * `amount`/`postedDate` keep their existing currency/date renderers rather
+ * than falling back to the generic one). Everything else (`kind`, `status`,
+ * `transactionDate`, `merchant`, `rawDescription`, `sourceCategory`,
+ * `notes`) is left generic to exercise the declaration's own
+ * width/format/mobile metadata. The stubs below are test-local, not the
  * production renderers (which need router/query context) — same approach as
  * `entity-display.task.unit.test.tsx`.
  */
@@ -107,18 +107,6 @@ function buildFinancialTransactionColumns() {
           cell: ({ row }) => (
             <span>{row.original.accountName ?? row.original.accountId}</span>
           ),
-        }),
-      );
-      add(
-        helper.display({
-          id: "kind",
-          cell: ({ row }) => <span>{row.original.kind}</span>,
-        }),
-      );
-      add(
-        helper.display({
-          id: "status",
-          cell: ({ row }) => <span>{row.original.status}</span>,
         }),
       );
       add(
@@ -301,8 +289,6 @@ describe("financial transaction list display columns", () => {
         helper,
         createCubbyColumnCollection((add) => {
           add(helper.display({ id: "accountId", cell: () => null }));
-          add(helper.display({ id: "kind", cell: () => null }));
-          add(helper.display({ id: "status", cell: () => null }));
           add(helper.display({ id: "amount", cell: () => null }));
           add(helper.display({ id: "purchaseId", cell: () => null }));
           add(helper.display({ id: "postedDate", cell: () => null }));

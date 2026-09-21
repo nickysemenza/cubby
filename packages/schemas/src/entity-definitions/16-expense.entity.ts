@@ -187,7 +187,13 @@ export default defineEntity({
         kind: "enum",
         label: "Line kind",
         control: { kind: "select", section: "details" },
-        display: { list: true, detail: true, detailOrder: 40 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 40,
+          width: "md",
+          mobile: { slot: "meta", priority: 18 },
+        },
         validation: {
           read: expenseLineKindSchema.describe(
             "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
@@ -206,6 +212,7 @@ export default defineEntity({
           detail: true,
           detailOrder: 140,
           listHidden: true,
+          width: "md",
         },
         validation: {
           read: expenseLineBasisSchema.describe(
@@ -223,7 +230,13 @@ export default defineEntity({
           section: "details",
           suggest: { basis: ["name", "productId", "vendor"] },
         },
-        display: { list: true, detail: true, detailOrder: 50 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 50,
+          width: "sm",
+          mobile: { slot: "meta", priority: 20 },
+        },
         validation: {
           read: costTypeSchema,
           create: costTypeSchema,
@@ -241,7 +254,13 @@ export default defineEntity({
             basis: ["name", "notes", "productId", "vendor", "projectId"],
           },
         },
-        display: { list: true, detail: true, detailOrder: 60 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 60,
+          width: "sm",
+          mobile: { slot: "meta", priority: 60 },
+        },
         resolution: {
           reset: { trade: null },
           redundancy: "eligible",

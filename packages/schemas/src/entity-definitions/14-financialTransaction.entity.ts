@@ -131,15 +131,15 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "purchase", label: "purchase" },
-            { value: "refund", label: "refund" },
-            { value: "account_transfer", label: "account transfer" },
-            { value: "credit_card_payment", label: "credit card payment" },
-            { value: "fee", label: "fee" },
-            { value: "interest", label: "interest" },
-            { value: "income", label: "income" },
-            { value: "adjustment", label: "adjustment" },
-            { value: "other", label: "other" },
+            { value: "purchase", label: "Purchase" },
+            { value: "refund", label: "Refund" },
+            { value: "account_transfer", label: "Account transfer" },
+            { value: "credit_card_payment", label: "Card payment" },
+            { value: "fee", label: "Fee" },
+            { value: "interest", label: "Interest" },
+            { value: "income", label: "Income" },
+            { value: "adjustment", label: "Adjustment" },
+            { value: "other", label: "Other" },
           ],
         },
         display: {
@@ -161,10 +161,10 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "expected", label: "expected" },
-            { value: "pending", label: "pending" },
-            { value: "posted", label: "posted" },
-            { value: "void", label: "void" },
+            { value: "expected", label: "Expected" },
+            { value: "pending", label: "Pending" },
+            { value: "posted", label: "Posted" },
+            { value: "void", label: "Void" },
           ],
         },
         display: {

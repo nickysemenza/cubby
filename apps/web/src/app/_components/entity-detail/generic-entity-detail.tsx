@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import {
   entityFieldModels,
@@ -54,6 +55,7 @@ import {
   readRecordField,
   readReferenceField,
 } from "~/entities/entity-references";
+import { enumFieldLabel } from "~/entities/enum-field-display";
 import { FieldExplanation } from "~/entities/field-explanation";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -218,16 +220,14 @@ const chipValue = z.union([z.string(), z.boolean()]).nullish();
 
 /** The label a chip field's value reads as: its option label, or Yes/Not for a boolean. */
 function chipLabel(
+  entity: Entity,
   field: DisplayField,
   value: z.output<typeof chipValue>,
 ): string | null {
   if (value === null || value === undefined) return null;
   if (value === true) return field.label;
   if (value === false) return `Not ${field.label.toLocaleLowerCase()}`;
-  return (
-    field.control?.options?.find((option) => option.value === value)?.label ??
-    value
-  );
+  return enumFieldLabel(entity, field.key, value);
 }
 
 /** The chip, stats and breadcrumb the hero declares, read off the record. */
@@ -242,6 +242,7 @@ function heroOf<E extends GenericDetailEntity>(
   const chipField = hero.chip === null ? undefined : field(hero.chip);
   const chip = chipField
     ? chipLabel(
+        entity,
         chipField,
         readRecordField(record, chipField.readKey ?? chipField.key, chipValue),
       )
@@ -254,7 +255,7 @@ function heroOf<E extends GenericDetailEntity>(
       ? [
           {
             label: statField.label,
-            value: renderDetailFieldValue(record, statField),
+            value: renderDetailFieldValue(entity, record, statField),
           },
         ]
       : [];

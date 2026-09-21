@@ -191,7 +191,12 @@ export default defineEntity({
       {
         key: "status",
         kind: "enum",
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 20 },
+        },
         validation: {
           read: z.enum(generatedImageStatusValues),
           create: null,

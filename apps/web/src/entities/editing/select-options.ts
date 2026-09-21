@@ -3,8 +3,15 @@ import type { ReactNode } from "react";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import {
   costTypeOptions,
+  expenseLineBasisOptions,
   expenseLineKindOptions,
 } from "~/app/expenses/expense-options";
+import {
+  financialTransactionKindOptions,
+  financialTransactionStatusOptions,
+} from "~/app/finance/financial-transaction-kind-options";
+import { ledgerPartyKindOptions } from "~/app/finance/ledger-party-options";
+import { imageStatusOptions } from "~/app/images/image-options";
 import { mealKindOptions, mealTypeOptions } from "~/app/meals/meal-options";
 import {
   PROJECT_STATUS_OPTIONS,
@@ -75,6 +82,11 @@ const ENTITY_SELECT_OPTIONS = {
   "expense.trade": tradeOptions,
   "purchase.defaultTrade": tradeOptions,
   "expense.costType": costTypeOptions,
+  "expense.lineBasis": expenseLineBasisOptions,
+  "financialTransaction.kind": financialTransactionKindOptions,
+  "financialTransaction.status": financialTransactionStatusOptions,
+  "ledgerParty.kind": ledgerPartyKindOptions,
+  "image.status": imageStatusOptions,
   // The capture form's `"auto"` sentinel: `lineKind` is left undecided on
   // create and derived server-side from the name — `buildData` strips it
   // before validation (`entities/editing/definitions.ts`).

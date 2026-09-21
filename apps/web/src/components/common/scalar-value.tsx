@@ -3,12 +3,22 @@ import type { ReactNode } from "react";
 
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import JsonRenderer from "~/app/_components/json-renderer";
+import { EnumPill } from "~/components/ui/enum-pill";
 import { NoneValue } from "~/components/ui/none-value";
 import { parsePlainDate } from "~/lib/plain-date";
 
 export type ScalarDisplayValue =
   | { kind: "empty"; raw: null | undefined }
   | { kind: "text"; raw: string; label: string }
+  /** A declared enum value with its roster presentation; `raw` stays the
+   * stored value for copy, sort, and filter seeds. */
+  | {
+      kind: "enum";
+      raw: string;
+      label: string;
+      color: string;
+      icon?: ReactNode;
+    }
   | { kind: "number"; raw: number }
   | { kind: "boolean"; raw: boolean }
   | { kind: "date"; raw: string }
@@ -36,6 +46,13 @@ export function renderScalarValue(
       return value.raw.length ? value.raw.join(", ") : <NoneValue />;
     case "json":
       return <JsonRenderer input={value.raw} />;
+    case "enum":
+      if (surface === "plain") return value.label;
+      return (
+        <EnumPill color={value.color} icon={value.icon}>
+          {value.label}
+        </EnumPill>
+      );
     case "text":
       if (surface === "plain") return value.label || <NoneValue />;
       return value.label ? (
