@@ -11,12 +11,10 @@ test("phone nutrition focuses a nutrient with legible contributions and repair n
   await waitForAppHydration(page);
   const focus = page.getByRole("combobox", { name: "Focused nutrient" });
   const contributions = page.getByTestId("nutrition-contributions");
-  // A native select can update during the small SSR-to-React handoff window in WebKit. Retry the
-  // harmless selection until the rendered contribution proves React received its change event.
-  await expect(async () => {
-    await focus.selectOption("protein");
-    await expect(contributions).toContainText("5 g–10 g known · partial");
-  }).toPass({ timeout: 5000 });
+  // The select is disabled until its boundary hydrates (`useHydrationGate`),
+  // so `selectOption` waits out the SSR-to-React handoff on its own.
+  await focus.selectOption("protein");
+  await expect(contributions).toContainText("5 g–10 g known · partial");
   await expect(
     contributions.getByText(`${name} measured`, { exact: true }),
   ).toBeVisible();

@@ -14,6 +14,7 @@ import { match } from "ts-pattern";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
+import { useHydrationGate } from "~/hooks/useHydrated";
 import { formatNumberRange } from "~/lib/format-range";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
@@ -559,6 +560,7 @@ export const RecipeIngredientList: React.FC<{
     onColumnVisibilityChange: setColumnVisibility,
   });
 
+  const nutrientSelectGate = useHydrationGate(undefined);
   const selectNutrient = (key: (typeof TIER1_NUTRIENT_KEYS)[number]) => {
     setFocusedNutrient(key);
     const id = `nutrient-${TIER1_NUTRIENTS[key].code}`;
@@ -588,6 +590,7 @@ export const RecipeIngredientList: React.FC<{
                 selectNutrient(nutrientKey.parse(event.target.value))
               }
               className="ml-2 h-11 border border-border bg-background px-2 md:h-8"
+              {...nutrientSelectGate}
             >
               {TIER1_NUTRIENT_KEYS.map((key) => (
                 <option key={key} value={key}>
