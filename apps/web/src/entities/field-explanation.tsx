@@ -2,6 +2,7 @@ import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
 import { fieldExplanationSource } from "@cubby/schemas/field-explanation";
 import { inventoryShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { useState } from "react";
@@ -19,6 +20,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { formatCurrency } from "~/lib/utils";
 
 import { fieldExplanation } from "./field-explanation.functions";
 
@@ -36,11 +38,26 @@ const humanizeKey = (key: string) =>
 function ReadableExplanationValue({
   value,
   depth = 0,
+  property,
 }: {
   value: ExplanationValue;
   depth?: number;
+  property?: string;
 }) {
   if (value === null) return <NoneValue />;
+  const textValue = z.string().safeParse(value);
+  const reference = textValue.success ? parseShortcode(textValue.data) : null;
+  if (reference)
+    return (
+      <ExplanationEntityLink entity={reference.type} id={reference.shortcode} />
+    );
+  const amount = property === "amount" ? z.number().safeParse(value) : null;
+  if (amount?.success)
+    return (
+      <span className="font-mono tabular-nums">
+        {formatCurrency(amount.data)}
+      </span>
+    );
   const scalar = explanationScalar.safeParse(value);
   if (scalar.success) {
     const boolean = z.boolean().safeParse(scalar.data);
@@ -85,7 +102,11 @@ function ReadableExplanationValue({
         <div key={key} className="contents">
           <dt className="text-muted-foreground">{humanizeKey(key)}</dt>
           <dd className="min-w-0">
-            <ReadableExplanationValue value={item} depth={depth + 1} />
+            <ReadableExplanationValue
+              value={item}
+              depth={depth + 1}
+              property={key}
+            />
           </dd>
         </div>
       ))}
@@ -153,26 +174,44 @@ export function FieldExplanation({
       >
         <Info className="size-3.5" />
       </PopoverTrigger>
-      <PopoverContent className="w-80">
+      <PopoverContent className="max-h-[min(32rem,80dvh)] w-80 overflow-y-auto">
         <Stack gap="sm">
           <PopoverTitle>How {label.toLowerCase()} is determined</PopoverTitle>
           {result.isPending ? (
             <p>Loading explanation…</p>
           ) : result.isError ? (
-            <p role="alert">
-              Could not load this explanation. Close and reopen to retry.
-            </p>
+            <div role="alert">
+              <p>Could not load this explanation.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void result.refetch()}
+                disabled={result.isFetching}
+              >
+                Retry explanation
+              </Button>
+            </div>
           ) : (
             <>
               <p className="text-sm">{result.data.rule.description}</p>
-              <div className="text-sm">
-                <span className="text-muted-foreground">Current value</span>
-                <div className="mt-1">
-                  <ReadableExplanationValue value={result.data.value} />
+              {result.data.value !== null ||
+              !result.data.sources.some(
+                (source) =>
+                  source.label === "Project share" ||
+                  source.label === "Unassigned share",
+              ) ? (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Current value</span>
+                  <div className="mt-1">
+                    <ReadableExplanationValue value={result.data.value} />
+                  </div>
                 </div>
-              </div>
+              ) : null}
               {result.data.sources.map((source) => (
-                <div key={explanationSourceKey(source)} className="text-sm">
+                <div
+                  key={explanationSourceKey(source)}
+                  className="grid gap-1 text-sm"
+                >
                   <span className="text-muted-foreground">{source.label}</span>
                   {source.entity ? (
                     <ExplanationEntityLink
@@ -180,7 +219,7 @@ export function FieldExplanation({
                       id={source.entity.entityId}
                     />
                   ) : null}
-                  {source.value !== null ? (
+                  {source.value !== null || source.entity === null ? (
                     <div className="mt-1">
                       <ReadableExplanationValue value={source.value} />
                     </div>

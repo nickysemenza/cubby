@@ -27,7 +27,12 @@ export async function expenseProjectRecommendationContext(
     where: and(eq(expense.shortcode, id), notDeleted(expense)),
     extras: expenseInheritanceReadExtras(),
   });
-  if (!source || source.effectiveTrade === null) return null;
+  if (
+    !source ||
+    source.lineKind !== "principal" ||
+    source.effectiveTrade === null
+  )
+    return null;
   const [projects, history, currentProject] = await Promise.all([
     projectNameOptions(db, source.id),
     getDb(db)

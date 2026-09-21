@@ -8,6 +8,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 
 import { EntityInlineLink } from "./EntityInlineLink";
+import { EntityPreviewLink } from "./EntityPreviewLink";
 
 // Entity types this inline link resolves to a name via the detail transport. Inventory &
 // cookbook are intentionally excluded — they render as plain links below.
@@ -72,6 +73,24 @@ export function EntityInlineLinkById({
       <a href="/cookbooks" className="text-sm font-medium hover:underline">
         Cookbook
       </a>
+    );
+  }
+
+  if (
+    entityType === "project" ||
+    entityType === "task" ||
+    entityType === "purchase"
+  ) {
+    return (
+      <EntityPreviewLink
+        entity={entityType}
+        id={entityId}
+        displayImage={null}
+        showIdentityMark={false}
+        className="text-sm text-primary hover:underline"
+      >
+        {entityId}
+      </EntityPreviewLink>
     );
   }
 

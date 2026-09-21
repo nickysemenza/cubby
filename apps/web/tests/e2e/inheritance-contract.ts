@@ -45,6 +45,39 @@ export function inheritanceContract() {
     await page.goto(`/expenses/${fixture.charge.id}`);
     await waitForAppHydration(page);
     await expect(page.getByText(/purchase allocation/i).first()).toBeVisible();
+    await expect(
+      page.locator(`a[href="/projects/${fixture.project.id}"]`).first(),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "How project is determined", exact: true })
+      .click();
+    const explanation = page.getByRole("dialog");
+    await expect(
+      explanation.getByText("Project share", { exact: true }),
+    ).toBeVisible();
+    await expect(explanation.getByText("$1.00", { exact: true })).toBeVisible();
+    await expect(
+      explanation.getByRole("link", { name: fixture.project.id, exact: true }),
+    ).toHaveAttribute("href", `/projects/${fixture.project.id}`);
+    await expect(
+      explanation.getByText("Stored override", { exact: true }),
+    ).toHaveCount(0);
     await expectViewportBounded(page);
+    if (test.info().project.name === "Authenticated tests") {
+      await page.goto(`/purchases/${fixture.purchase.id}`);
+      await waitForAppHydration(page);
+      const projectCell = page
+        .locator('[data-cell-col="project"]')
+        .filter({ has: page.getByText("purchase default", { exact: true }) })
+        .first();
+      await expect(projectCell).toBeVisible();
+      await expect
+        .poll(() =>
+          projectCell.evaluate(
+            (cell) => cell.scrollWidth <= cell.clientWidth + 1,
+          ),
+        )
+        .toBe(true);
+    }
   });
 }

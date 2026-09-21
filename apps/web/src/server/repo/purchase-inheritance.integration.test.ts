@@ -1,12 +1,24 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { expenseChargeContextOut } from "@cubby/schemas/project";
 import { purchaseUpdateData } from "@cubby/schemas/purchase";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { explainField } from "~/server/field-explanation-browser.server";
+import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
+import { createTestRequestContext } from "~/server/testing/request-context";
+import { expenseChargeContextWorkflow } from "~/server/workflows/expense.server";
+
 import { getDb } from "./database-helpers";
 import { getExpenseByShortcode, updateExpense } from "./expense";
 import { resolveDraftExpenseFields } from "./expense-inheritance";
-import { deletePurchases, mergePurchases, updatePurchase } from "./purchase";
+import {
+  deletePurchases,
+  getPurchaseByID,
+  mergePurchases,
+  updatePurchase,
+} from "./purchase";
 import { insertWithShortcode } from "./shortcode-utils";
 
 const fixtureDate = "2026-09-20";
@@ -75,6 +87,86 @@ describe("purchase inheritance lifecycle", () => {
       projectId: second.shortcode,
       trade: "plumbing",
     });
+  });
+
+  it("reads inherited purchase context and explains allocated shares without scalar overrides", async () => {
+    const { source, item, first, second } = await fixture();
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Second project item",
+      date: fixtureDate,
+      cost: 40,
+      costType: "materials",
+      lineKind: "principal",
+      purchaseId: source.id,
+      projectId: second.id,
+    });
+    const charge = await insertWithShortcode(ctx.db, "expense", {
+      name: "Shared fixture tax",
+      date: fixtureDate,
+      cost: 1,
+      costType: "materials",
+      lineKind: "tax",
+      trade: "building",
+      purchaseId: source.id,
+    });
+    const code = parseShortcodeFor("expense", item.shortcode);
+    const result = expenseChargeContextOut.parse(
+      await expenseChargeContextWorkflow(ctx.db, code),
+    );
+    expect(result?.siblings).toHaveLength(2);
+    await expect(
+      getEntityRecommendations(ctx.db, {
+        entityType: "expense",
+        entityId: code,
+      }),
+    ).resolves.toMatchObject({ source: { entityId: code } });
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    for (const surface of ["detail", "list"] as const) {
+      const explanation = await explainField(context, {
+        entityType: "expense",
+        entityId: charge.shortcode,
+        field: "projectId",
+        surface,
+      });
+      expect(explanation.sources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            entity: { entityType: "project", entityId: first.shortcode },
+            value: expect.objectContaining({ amount: 0.2 }),
+          }),
+          expect.objectContaining({
+            entity: { entityType: "project", entityId: second.shortcode },
+            value: expect.objectContaining({ amount: 0.8 }),
+          }),
+        ]),
+      );
+      expect(explanation.sources.map((s) => s.label)).not.toContain(
+        "Stored override",
+      );
+    }
+    await expect(
+      getEntityRecommendations(ctx.db, {
+        entityType: "expense",
+        entityId: charge.shortcode,
+      }),
+    ).resolves.toMatchObject({ groups: [] });
+  });
+
+  it("sums fractional purchase amounts before converting to floating point", async () => {
+    const { source } = await fixture();
+    for (const cost of [0.1, 0.2]) {
+      await insertWithShortcode(ctx.db, "expense", {
+        name: "Fractional item",
+        date: fixtureDate,
+        cost,
+        costType: "materials",
+        lineKind: "principal",
+        purchaseId: source.id,
+      });
+    }
+    expect((await getPurchaseByID(ctx.db, source.id)).expenseTotal).toBe(10.3);
   });
 
   it("preserves principal attribution when its purchase link is explicitly detached", async () => {

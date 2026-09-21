@@ -374,7 +374,7 @@ export default defineEntity({
         // legitimately disagree — see the reconciliation note on `statedTotal`.
         key: "expenseTotal",
         kind: "number",
-        display: { list: true },
+        display: { list: true, format: "currency" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],

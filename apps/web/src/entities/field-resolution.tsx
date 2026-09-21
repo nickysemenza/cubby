@@ -5,7 +5,13 @@ import {
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
-import { CornerDownRight, RotateCcw, TriangleAlert } from "lucide-react";
+import {
+  CircleSlash,
+  CornerDownRight,
+  PieChart,
+  RotateCcw,
+  TriangleAlert,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -139,16 +145,19 @@ export function FieldResolutionBadge({
   field,
   action,
   interactive = true,
+  compact = false,
 }: {
   record: unknown;
   field: string;
   action?: ReactNode;
   interactive?: boolean;
+  compact?: boolean;
 }) {
   const entry = fieldResolutionEntryFor(record, field);
   if (!entry) return null;
   return (
     <FieldResolutionStatus
+      compact={compact}
       resolution={entry.resolution}
       action={
         action ??
@@ -246,7 +255,7 @@ function BoundFieldResolutionActions({
             void submit({ ...reset });
           }}
         >
-          {resolution.matchesFallback ? "Use inherited value" : "Reset"}
+          Use inherited value
         </Button>
       ) : null}
       {resolution.mode === "inherit" && none ? (
@@ -275,15 +284,37 @@ function BoundFieldResolutionActions({
 export function FieldResolutionStatus({
   resolution,
   action,
+  compact = false,
 }: {
   resolution: FieldResolution;
   action?: ReactNode;
+  compact?: boolean;
 }) {
   const redundant =
     resolution.mode === "explicit" && resolution.matchesFallback;
   const sourceEntity = resolution.sourceEntity
     ? auditEntitySchema.safeParse(resolution.sourceEntity.entityType)
     : null;
+  if (compact) {
+    const Icon = redundant
+      ? TriangleAlert
+      : resolution.mode === "inherit"
+        ? CornerDownRight
+        : resolution.mode === "allocated"
+          ? PieChart
+          : resolution.mode === "none"
+            ? CircleSlash
+            : RotateCcw;
+    return (
+      <span
+        className="inline-flex shrink-0 text-muted-foreground"
+        title={resolutionLabel(resolution)}
+      >
+        <Icon className="size-3.5" aria-hidden="true" />
+        <span className="sr-only">{resolutionLabel(resolution)}</span>
+      </span>
+    );
+  }
   return (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
       <Badge

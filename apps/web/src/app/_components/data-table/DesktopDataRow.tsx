@@ -91,12 +91,13 @@ function resolvedCellContent<TItem extends RowData>(
 ) {
   if (!fieldResolutionFor(cell.row.original, cell.column.id)) return content;
   return (
-    <span className="inline-flex min-w-0 items-center gap-1">
-      <span className="min-w-0">{content}</span>
+    <span className="inline-flex w-full min-w-0 items-center gap-1">
+      <span className="min-w-0 flex-1 truncate">{content}</span>
       <FieldResolutionBadge
         record={cell.row.original}
         field={cell.column.id}
         interactive={false}
+        compact
       />
     </span>
   );

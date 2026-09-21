@@ -4,6 +4,7 @@ import {
   fieldExplanationInput,
   fieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
+import { projectAllocationsSchema } from "@cubby/schemas/field-resolution";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { effectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { parseShortcode } from "@cubby/shared";
@@ -262,6 +263,43 @@ export function explainProjectionSources(
   explanation: Explanation,
   value: Json,
 ): Source[] {
+  if (
+    explanation.ruleId === "expense.effective-project" &&
+    readExplanationPath(projection, "fieldResolutions.projectId.mode").value ===
+      "allocated"
+  ) {
+    const allocations = projectAllocationsSchema.parse(
+      projection.projectAllocations,
+    );
+    const purchase = readExplanationPath(projection, "purchaseId").value;
+    return [
+      {
+        label: "Purchase",
+        entity: entityReferenceFromValue(purchase),
+        value: null,
+      },
+      ...allocations.map((allocation): Source => {
+        const value: JsonRecord = {
+          amount: allocation.amount,
+          basis:
+            allocation.basis === "positive"
+              ? "Proportional to positive item amounts across the whole purchase"
+              : allocation.basis === "refund"
+                ? "Proportional to absolute refund amounts across the whole purchase"
+                : "Purchase default; no priced nonzero items",
+        };
+        if (allocation.incomplete)
+          value.priceCoverage = "Incomplete: unpriced items provide no weight";
+        return {
+          label: allocation.projectId ? "Project share" : "Unassigned share",
+          entity: allocation.projectId
+            ? { entityType: "project", entityId: allocation.projectId }
+            : null,
+          value,
+        };
+      }),
+    ];
+  }
   if (explanation.resolver === "expenseAttribution" && Array.isArray(value)) {
     return value.map((attribution) => {
       const parsed = z
