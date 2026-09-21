@@ -188,7 +188,7 @@ export function registerEntityTools(
     {
       name: "entity",
       description:
-        'Read or mutate one supported household entity through { command }. Start with this tool\'s published command schema; consult entities://catalog only when the supported entity/action remains unclear. This replaces per-entity CRUD tools; workflow-shaped tools remain separate. For many creates/updates in one call use entity_batch. Merge example: {command:{action:"merge",entity:"product",keepId:"PRD-2ABC",mergeIds:["PRD-3DEF"]}}.',
+        'Read or mutate one supported household entity through { command }. Start with this tool\'s published command schema; consult entities://catalog only when the supported entity/action remains unclear. This replaces per-entity CRUD tools; workflow-shaped tools remain separate. For many creates/updates in one call use entity_batch. Merge example: {command:{action:"merge",entity:"product",keepId:"PRD-2ABC",mergeIds:["PRD-3DEF"]}}. A field\'s own description in the command schema (e.g. product.tags) states its contract — follow it rather than a pattern seen on other records.',
       inputSchema: entityToolInput,
       outputSchema: entityToolOutput,
       annotations: WRITE_DESTRUCTIVE_CLOSED,

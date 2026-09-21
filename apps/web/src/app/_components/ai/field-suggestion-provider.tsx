@@ -174,10 +174,17 @@ export function FieldSuggestionProvider({
   }, [record]);
   const targets = useMemo(() => {
     const declared = suggestTargetsFor(entity, fieldKeys);
-    const basisKeys = new Set(
-      declared.targets.flatMap((target) => target.basis),
+    // A `mode: "prune"` target proposes removing entries from a text-array
+    // field, not a value to auto-fill — its review UI needs PR 3's ChipsInput
+    // wiring, so a form-surface provider never requests it, even when the
+    // field itself is rendered (and so already present in `fieldKeys`).
+    // Record surfaces (`RecordSuggestionsProvider`) request it directly
+    // instead of mounting this provider (Amendment 3).
+    const filtered = declared.targets.filter(
+      (target) => target.mode !== "prune",
     );
-    return { targets: declared.targets, basisKeys: [...basisKeys] };
+    const basisKeys = new Set(filtered.flatMap((target) => target.basis));
+    return { targets: filtered, basisKeys: [...basisKeys] };
   }, [entity, fieldKeys]);
 
   const watchedKeys = useMemo(

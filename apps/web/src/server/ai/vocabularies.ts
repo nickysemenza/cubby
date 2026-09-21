@@ -188,3 +188,17 @@ Rules:
 4. A source that is a professional parts distributor (McMaster-Carr, Grainger, DigiKey, and similar) is "catalog_number".
 5. A source that is a consumer retailer (Lowe's, Target, Walmart, Costco, and similar) is "retailer_sku".
 6. A URL containing "/dp/" suggests Amazon ("asin"); "/p/" or "/pd/" suggest a retailer product page ("retailer_sku").`;
+
+/**
+ * One candidate tag at a time, judged against the product's own manufacturer,
+ * classification path, category feature, and aliases (shown in the subject
+ * above it). A `control.suggest.mode: "prune"` target proposes *removals*, so
+ * this only ever answers "does this tag carry no information beyond what's
+ * already on the record" — it never invents a replacement tag.
+ */
+export const TAG_PRUNE_RULES = `You are auditing one household product's compatibility tags. The subject above lists the product's manufacturer, classification, feature, and aliases, plus one candidate tag. Decide whether that candidate tag only restates one of those already-recorded facts (the manufacturer's name, a classification path segment, or a generic category word) or whether it names a genuine compatibility or ecosystem detail — a battery platform, mount, thread, or size standard — worth keeping.
+
+Rules:
+1. A tag matching (or a trivial plural/singular of) the manufacturer name, any classification path segment, or the category feature restates the record — prefer removal.
+2. A tag naming a real compatibility shape (a battery platform like "M18", a mount, a thread size, a size standard) is genuine even if it superficially resembles a category word — prefer keeping it.
+3. When genuinely unsure, prefer keeping the tag: a false "restates" costs a real compatibility signal, while a missed one is caught by a later pass.`;

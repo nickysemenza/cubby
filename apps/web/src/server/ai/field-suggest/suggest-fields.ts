@@ -1,5 +1,6 @@
 import type {
   FieldSuggestion,
+  FieldSuggestionRemoval,
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
@@ -32,7 +33,11 @@ import {
   type RawBasis,
   type ResolvedBasis,
 } from "~/server/ai/field-suggest/registry";
-import type { JevPort } from "~/server/ai/jev";
+import {
+  decisionConfidence,
+  runJevChoice,
+  type JevPort,
+} from "~/server/ai/jev";
 import {
   type AiSelectionSpec,
   type AiSelectionUsage,
@@ -376,9 +381,35 @@ async function resolveTextTarget(
   };
 }
 
-async function resolveOneTarget(
+/** Dispatches to `resolvePruneTarget` or `resolveOneTarget`, the one place
+ * `suggestFields`'s per-target resolution branches on `spec.kind === "prune"`
+ * (a prune spec's `subject` takes a per-candidate `value`, so it can't share
+ * `resolveOneTarget`'s pre-computed `subject` string). */
+async function resolveSpec(
   db: Database,
   spec: FieldSuggestSpec,
+  resolvedBasis: ResolvedBasis,
+  rawBasis: RawBasis,
+  usage: AiSelectionUsage,
+  jev: JevPort | undefined,
+): Promise<TargetResolution> {
+  if (spec.kind === "prune") {
+    return resolvePruneTarget(db, spec, resolvedBasis, rawBasis, usage, jev);
+  }
+  return resolveOneTarget(
+    db,
+    spec,
+    spec.subject(resolvedBasis),
+    resolvedBasis,
+    rawBasis,
+    usage,
+    jev,
+  );
+}
+
+async function resolveOneTarget(
+  db: Database,
+  spec: Exclude<FieldSuggestSpec, { kind: "prune" }>,
   subject: string,
   resolvedBasis: ResolvedBasis,
   rawBasis: RawBasis,
@@ -400,6 +431,130 @@ async function resolveOneTarget(
     );
   }
   return resolveTextTarget(db, spec, subject, resolvedBasis, usage, jev);
+}
+
+/** A tag's stored removal reason for a Jev-classified (not deterministic)
+ * hit — deliberately terser than the Jev choice label below, which is the
+ * full instruction text the model sees. */
+const JEV_TAG_REMOVAL_REASON = "a sibling field";
+/** `runJevChoice`'s two per-tag criteria: index 0 is "redundant", index 1 is
+ * "genuine" — `resolvePruneTarget` only ever acts on index 0. */
+const TAG_PRUNE_CHOICES = [
+  "Restates the manufacturer, the classification, or a generic category word already recorded elsewhere on the product.",
+  "A genuine compatibility or ecosystem token (a battery platform, mount, thread, or size standard) worth keeping.",
+] as const;
+/** A removal needs at least this calibrated probability to surface — the
+ * same "high confidence" floor a `set` suggestion auto-applies at. */
+const PRUNE_INCLUDE_THRESHOLD = 0.85;
+
+/**
+ * Resolves a `mode: "prune"` target: every current entry `redundantTokens`
+ * already flags (probability 1, no Jev call) plus every surviving entry a
+ * per-tag Jev binary call flags at `PRUNE_INCLUDE_THRESHOLD` or above. `null`
+ * when nothing is removable — an empty array, or every entry survives.
+ */
+async function resolvePruneTarget(
+  db: Database,
+  spec: Extract<FieldSuggestSpec, { kind: "prune" }>,
+  resolvedBasis: ResolvedBasis,
+  rawBasis: RawBasis,
+  usage: AiSelectionUsage,
+  jev: JevPort | undefined,
+): Promise<TargetResolution> {
+  const candidates = spec.candidates(resolvedBasis, rawBasis);
+  if (candidates.length === 0) return noSuggestion;
+
+  const deterministic = await spec.deterministic(resolvedBasis, rawBasis, db);
+  const deterministicValues = new Set(
+    deterministic.map((match) => match.value),
+  );
+  const removals: FieldSuggestionRemoval[] = deterministic.map((match) => ({
+    value: match.value,
+    probability: 1,
+    reason: `restates ${match.reason}`,
+  }));
+
+  const survivors = candidates
+    .filter((value) => !deterministicValues.has(value))
+    .slice(0, spec.maxJevCandidates);
+  for (const value of survivors) {
+    const result = await runJevChoice({
+      feature: FIELD_SUGGESTION_FEATURE,
+      subject: spec.subject(resolvedBasis, value),
+      rules: spec.rules,
+      choices: [...TAG_PRUNE_CHOICES],
+      usage,
+      allowNone: false,
+      port: jev,
+    });
+    if (
+      result.selectedIndex === 0 &&
+      result.probability >= PRUNE_INCLUDE_THRESHOLD
+    ) {
+      removals.push({
+        value,
+        probability: result.probability,
+        reason: `restates ${JEV_TAG_REMOVAL_REASON}`,
+      });
+    }
+  }
+
+  if (removals.length === 0) return noSuggestion;
+  const sortedValues = [
+    ...new Set(removals.map((removal) => removal.value)),
+  ].sort();
+  const probability = Math.min(
+    ...removals.map((removal) => removal.probability),
+  );
+  const reasons = [
+    ...new Set(
+      removals.map((removal) => removal.reason.replace(/^restates /u, "")),
+    ),
+  ];
+  return {
+    suggestion: {
+      value: sortedValues.join(", "),
+      label: `Remove ${sortedValues.join(", ")}`,
+      detail: `restates ${reasons.join(", ")}`,
+      confidence: decisionConfidence(probability),
+      probability,
+      reasoning: "",
+      alternatives: [],
+      operation: "remove",
+      removals,
+    },
+    rawValue: null,
+  };
+}
+
+type SuggestFieldsModel =
+  (typeof entityFieldModels)[keyof typeof entityFieldModels];
+
+/** A target's basis keys, plus (Amendment 1) its own key when it is a prune
+ * target — a prune target judges its own current entries, so it is an
+ * implicit self-basis. The manifest compiler rejects naming it explicitly, so
+ * this is the one place that adds it back; without it `resolvePruneTarget`
+ * has nothing to parse. */
+function targetBasisKeysFor(
+  model: SuggestFieldsModel,
+  target: string,
+): readonly string[] {
+  const field = model.fields.find((f) => f.key === target);
+  const declaredBasis = field?.control?.suggest?.basis ?? [];
+  return field?.control?.suggest?.mode === "prune"
+    ? [...declaredBasis, target]
+    : declaredBasis;
+}
+
+/** A JSON-encoded array basis value (a prune target's own self-basis, or a
+ * sibling text-array field like `aliases`) can run well past an ordinary
+ * basis string's length — the same exemption `classificationEvidence`
+ * already gets. */
+function basisValueLimitFor(entity: string, key: string): number {
+  if (entity !== "product") return MAX_BASIS_VALUE_LENGTH;
+  return key === "classificationEvidence" || key === "tags" || key === "aliases"
+    ? 8000
+    : MAX_BASIS_VALUE_LENGTH;
 }
 
 export async function suggestFields(
@@ -457,20 +612,14 @@ export async function suggestFields(
 
   const targetBasisKeys = new Map<string, readonly string[]>();
   for (const target of requestedTargets) {
-    const field = model.fields.find((f) => f.key === target);
-    targetBasisKeys.set(target, field?.control?.suggest?.basis ?? []);
+    targetBasisKeys.set(target, targetBasisKeysFor(model, target));
   }
 
   const clientBasis = new Map<string, string | null>();
   for (const [key, value] of Object.entries(input.basis)) {
     clientBasis.set(
       key,
-      normalizeBasisValue(
-        value,
-        input.entity === "product" && key === "classificationEvidence"
-          ? 8000
-          : MAX_BASIS_VALUE_LENGTH,
-      ),
+      normalizeBasisValue(value, basisValueLimitFor(input.entity, key)),
     );
   }
   const authoritativeKeys = new Set(
@@ -536,10 +685,9 @@ export async function suggestFields(
         cacheStatus: "none",
         force: ports?.force,
       };
-      const { suggestion, rawValue } = await resolveOneTarget(
+      const { suggestion, rawValue } = await resolveSpec(
         db,
         spec,
-        spec.subject(resolvedBasis),
         resolvedBasis,
         rawBasis,
         usage,

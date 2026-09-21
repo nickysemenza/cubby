@@ -5,9 +5,12 @@ import type {
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type {
+  ArrayPruneSuggestSpec,
   FieldSuggestSpec,
+  RawBasis,
   ReferenceSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
 import { FIELD_SUGGEST_REGISTRY } from "~/server/ai/field-suggest/registry";
@@ -58,6 +61,63 @@ function jevPortPicking(...needles: string[]) {
       },
     };
   });
+}
+
+/** A fake `JevPort` pinned to one choice index and probability — for prune
+ * cases where the test cares about the exact threshold boundary, unlike
+ * `jevPortPicking`'s fixed 0.9 winner. */
+function jevPortAt(choiceIndex: number, probability: number): JevPort {
+  return vi.fn(async (input: JevInput) => {
+    const entries = Object.entries(input.questions.selection.criteria);
+    const [choiceKey] = entries[choiceIndex]!;
+    const rest = entries.filter(([key]) => key !== choiceKey);
+    const each = rest.length > 0 ? (1 - probability) / rest.length : 0;
+    const probabilities = Object.fromEntries([
+      [choiceKey, probability],
+      ...rest.map(([key]) => [key, each] as const),
+    ]);
+    return {
+      answers: {
+        selection: {
+          type: "choice" as const,
+          choice: choiceKey,
+          confidence: probability,
+          probabilities,
+        },
+      },
+    };
+  });
+}
+
+const tagsArraySchema = z.array(z.string());
+
+function rawTagsArray(raw: RawBasis): readonly string[] {
+  const value = raw.tags;
+  if (!value) return [];
+  // SAFETY: parsed and shape-checked by `tagsArraySchema` immediately below —
+  // an invalid/absent basis value reads as "no tags", not a thrown error.
+  const parsed: unknown = JSON.parse(value);
+  const result = tagsArraySchema.safeParse(parsed);
+  return result.success ? result.data : [];
+}
+
+/** Test double for `product.tags`'s `ArrayPruneSuggestSpec`: `deterministic`
+ * is caller-supplied (defaults to "nothing is redundant"), so each test only
+ * varies what it needs. Never touches `db` — the real entry's `categoryId`
+ * lookup only fires when the test basis supplies one. */
+function fakeTagPruneSpec(
+  deterministic: ArrayPruneSuggestSpec["deterministic"] = async () => [],
+): ArrayPruneSuggestSpec {
+  return {
+    kind: "prune",
+    rules:
+      "Decide whether the candidate tag restates the subject or is a genuine compatibility token.",
+    arrayKey: "tags",
+    maxJevCandidates: 8,
+    candidates: (_basis, raw) => rawTagsArray(raw),
+    deterministic,
+    subject: (_basis, value) => `Candidate tag: "${value}"`,
+  } satisfies ArrayPruneSuggestSpec;
 }
 
 interface FakeProject {
@@ -168,6 +228,67 @@ describe("suggestFields", () => {
       jev: jevPortPicking("food:"),
       assert: (out, jev) => {
         expect(out.suggestions.categoryId).toBeNull();
+        expect(jev).not.toHaveBeenCalled();
+      },
+    },
+    {
+      name: "a prune target's deterministic hits are included at probability 1 with no Jev call",
+      entity: "product",
+      targets: ["tags"],
+      basis: {
+        manufacturer: "Acme",
+        tags: JSON.stringify(["acme"]),
+      },
+      jev: jevPortPicking("restates"),
+      registry: {
+        "product.tags": fakeTagPruneSpec(async (_basis, raw) =>
+          rawTagsArray(raw)
+            .filter((value) => value === "acme")
+            .map((value) => ({
+              value,
+              reason: "manufacturer",
+              matched: "Acme",
+            })),
+        ),
+      },
+      assert: (out, jev) => {
+        expect(out.suggestions.tags).toEqual({
+          value: "acme",
+          label: "Remove acme",
+          detail: "restates manufacturer",
+          confidence: "high",
+          probability: 1,
+          reasoning: "",
+          alternatives: [],
+          operation: "remove",
+          removals: [
+            { value: "acme", probability: 1, reason: "restates manufacturer" },
+          ],
+        });
+        expect(jev).not.toHaveBeenCalled();
+      },
+    },
+    {
+      name: "a prune target's Jev survivor below the 0.85 include floor is excluded",
+      entity: "product",
+      targets: ["tags"],
+      basis: { manufacturer: "Acme", tags: JSON.stringify(["battery"]) },
+      jev: jevPortAt(0, 0.6),
+      registry: { "product.tags": fakeTagPruneSpec() },
+      assert: (out, jev) => {
+        expect(out.suggestions.tags).toBeNull();
+        expect(jev).toHaveBeenCalledTimes(1);
+      },
+    },
+    {
+      name: "a prune target with no current entries resolves to null",
+      entity: "product",
+      targets: ["tags"],
+      basis: { manufacturer: "Acme", tags: JSON.stringify([]) },
+      jev: jevPortPicking("restates"),
+      registry: { "product.tags": fakeTagPruneSpec() },
+      assert: (out, jev) => {
+        expect(out.suggestions.tags).toBeNull();
         expect(jev).not.toHaveBeenCalled();
       },
     },

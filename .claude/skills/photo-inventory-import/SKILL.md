@@ -18,7 +18,11 @@ order. Keep `dupefile`, `additionalview`, and `physicalcopy` distinct: only the
 last represents another owned instance. Flag unsupported videos separately; never treat a skipped video as imported.
 Keep original label text as evidence;
 image analysis describes visible content and must not guess fabric or replace a
-Product name. Put size in the name and attributes in tags.
+Product name. Put size in the name. Tags are compatibility/ecosystem tokens
+only (battery platform, mount, thread, size standard) — never the manufacturer,
+a classification word, or a path node; a tag agents write that restates
+`manufacturer`/`categoryId` gets flagged for removal by `redundantTokens`
+(`@cubby/shared/redundant-tokens`) the next time the record is viewed.
 
 Create descriptive Products for clear items in the requested batch, even when
 brand or model is unknown. Route uncertain groups to exception review. Verified identical variants may share a Product. Count each physical copy once;

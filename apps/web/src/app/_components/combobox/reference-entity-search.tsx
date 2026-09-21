@@ -73,7 +73,7 @@ export function productCategorySearchItems(
     });
 }
 
-export function WithProductCategorySearch({
+function WithProductCategorySearch({
   children,
 }: WithEntitySearchProps<string>) {
   const [query, setQuery] = useState("");

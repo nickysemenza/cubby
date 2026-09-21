@@ -186,4 +186,52 @@ describe("previewEntity field suggestions", () => {
         "No effective trade is available from this record or its inheritance sources.",
     });
   });
+
+  it("never auto-applies a high-confidence tag-prune (remove) suggestion", async () => {
+    mocks.resolveExpense.mockResolvedValue({});
+    mocks.resolveTask.mockResolvedValue({});
+    mocks.suggestFields.mockResolvedValue({
+      suggestions: {
+        tags: {
+          value: "jacquemus",
+          label: "Remove jacquemus",
+          detail: "restates manufacturer",
+          confidence: "high" as const,
+          probability: 1,
+          reasoning: "",
+          alternatives: [],
+          operation: "remove" as const,
+          removals: [
+            {
+              value: "jacquemus",
+              probability: 1,
+              reason: "restates manufacturer",
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await previewEntity(
+      fromPartial<EntityKernelContext>({}),
+      {
+        entity: "product",
+        data: { name: "Widget" },
+        context: { targets: ["tags"] },
+      },
+      ports,
+    );
+
+    // `tags` has no explicit value and no inheritance resolution, so this
+    // target runs in "suggested" mode — the one basisMode that auto-applies
+    // a plain `set` suggestion at high confidence. A `remove` suggestion must
+    // stay excluded from that regardless: its `value` is a joined removal
+    // string, never a valid replacement for the field.
+    expect(mocks.suggestFields.mock.calls[0]?.[1]).toMatchObject({
+      basisMode: "suggested",
+      targets: ["tags"],
+    });
+    expect(result.suggestions.tags?.applied).toBe(false);
+    expect(result.proposed.tags).not.toBe("jacquemus");
+  });
 });
