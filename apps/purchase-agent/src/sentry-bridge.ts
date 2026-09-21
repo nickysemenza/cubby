@@ -16,9 +16,7 @@ export interface SentryAgentEnv {
   SENTRY_TRACES_SAMPLE_RATE?: string;
 }
 
-export type LogAttributes = NonNullable<
-  Parameters<typeof Sentry.logger.info>[1]
->;
+type LogAttributes = NonNullable<Parameters<typeof Sentry.logger.info>[1]>;
 
 export interface SentryScopeLike {
   setTags(tags: CorrelationTags): void;
@@ -210,7 +208,7 @@ function terminalError(
 // Tag keys use the `flue.*` prefix — the same names the trace spans carry —
 // so pivoting on `flue.instance.id` in Sentry's search finds every issue,
 // log, and span from a single agent instance.
-export type CorrelationTags = {
+type CorrelationTags = {
   "flue.instance.id"?: string;
   "flue.agent.name"?: string;
   "flue.conversation.id"?: string;
