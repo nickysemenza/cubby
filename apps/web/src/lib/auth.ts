@@ -20,10 +20,10 @@ import {
 const isDev = process.env.NODE_ENV !== "production";
 
 // Better Auth 1.7 seeds configured resources during plugin initialization.
-// Unit tests import auth through broad server modules without starting the
-// Postgres harness, so leave seeding to integration/E2E and real runtimes.
+// Vitest and Playwright collect broad server modules before their isolated
+// Postgres databases exist, so leave seeding to Worker and real runtimes.
 const oauthResourceOptions =
-  process.env.VITEST === "true"
+  process.env.NODE_ENV === "test"
     ? {}
     : ({
         resources: [{ identifier: MCP_RESOURCE, name: "Cubby MCP" }],
