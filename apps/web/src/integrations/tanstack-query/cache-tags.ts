@@ -196,11 +196,9 @@ export const ripple = {
     ["relatedness", "product"],
   ]),
   product: productBase,
-  /** A taxonomy move can change both the visible classification and Jev's
-   * evidence revision on every affected product. */
-  productCategory: rippleTags([
+  /** Taxonomy moves change Product evidence and inherited food-project costs. */
+  productCategory: rippleTags(productBase, [
     ["productCategory"],
-    ["product"],
     ["inventory"],
   ]),
   /**

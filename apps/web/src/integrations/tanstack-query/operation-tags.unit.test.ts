@@ -110,9 +110,22 @@ describe("operation cache tags", () => {
       "task",
       "purchase",
       "product",
+      "productCategory",
       "expense",
     ]) {
       expect(entityRipple(entity)).toContainEqual(["ai", "suggestFields"]);
+    }
+  });
+
+  it("refreshes inherited costs after a taxonomy move changes Food membership", () => {
+    const tags = entityRipple("productCategory");
+    for (const entity of [
+      "expense",
+      "project",
+      "purchase",
+      "householdContribution",
+    ]) {
+      expect(tags).toContainEqual([entity]);
     }
   });
 

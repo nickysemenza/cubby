@@ -333,8 +333,9 @@ const assertFeatureBindingRoot = (
 
 /**
  * A hierarchy change is transactional: it must leave every assigned Product
- * admissible in its existing category. Product classification owns the
- * cross-domain checks; the late import avoids its category-resolution cycle.
+ * admissible in its existing category and retain every effective trade. Product
+ * classification and inheritance own the cross-domain checks; late imports
+ * avoid their category-resolution cycles.
  */
 const assertAffectedProductsRemainAdmissible = async (
   tx: DrizzleTransaction,
@@ -364,6 +365,9 @@ const assertAffectedProductsRemainAdmissible = async (
       );
     }
   }
+  const { validateLiveEffectiveTrades } =
+    await import("./inheritance-validation");
+  await validateLiveEffectiveTrades(tx);
 };
 
 export async function createProductCategory(

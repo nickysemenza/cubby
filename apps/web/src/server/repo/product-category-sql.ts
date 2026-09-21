@@ -6,7 +6,9 @@ import {
 } from "@cubby/schemas/product-category-fields";
 import { type SQL, sql } from "drizzle-orm";
 
-/** True only when the closest non-null ancestor feature matches. */
+/** True only when the closest non-null ancestor feature matches.
+ * Inline fixed depth/feature constants so repeated SELECT/GROUP BY expressions
+ * remain identical to PostgreSQL instead of receiving distinct bind indexes. */
 export const categoryFeatureSql = (
   categoryIdExpr: SQL,
   feature: ProductCategoryFeature,
@@ -17,9 +19,9 @@ export const categoryFeatureSql = (
     UNION ALL
     SELECT parent."id", parent."parentId", parent."feature", a.depth + 1, a.visited || parent."id"
     FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-    WHERE parent."deletedAt" IS NULL AND a.depth < ${PRODUCT_CATEGORY_MAX_DEPTH - 1}
+    WHERE parent."deletedAt" IS NULL AND a.depth < ${sql`${PRODUCT_CATEGORY_MAX_DEPTH - 1}`.inlineParams()}
       AND NOT parent."id" = ANY(a.visited)
-  ) SELECT "feature" = ${feature} FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
+  ) SELECT "feature" = ${sql`${feature}`.inlineParams()} FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
 ), false)`;
 
 /** Parenthesized id subquery containing the selected categories and descendants. */
@@ -57,7 +59,7 @@ export const categorySummarySql = (categoryIdExpr: SQL) =>
              a.visited || parent."id"
       FROM ancestors a
       JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-      WHERE parent."deletedAt" IS NULL AND a.depth < ${PRODUCT_CATEGORY_MAX_DEPTH - 1}
+      WHERE parent."deletedAt" IS NULL AND a.depth < ${sql`${PRODUCT_CATEGORY_MAX_DEPTH - 1}`.inlineParams()}
         AND NOT parent."id" = ANY(a.visited)
     )
     SELECT json_build_object(

@@ -5,28 +5,20 @@ import type {
   PurchaseId,
   VendorId,
 } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type ImageRenderStatus,
   type ImageStorageStatus,
   isDisplayableImageFile,
 } from "@cubby/schemas/image";
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
-import { and, inArray, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
-import type { DrizzleTransaction } from "~/server/db";
-import { product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  notDeleted,
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
 } from "~/server/repo/database-helpers";
-import { categoryFeatureSql } from "~/server/repo/product-category-sql";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import type { ExpenseProjectAllocationRow } from "../expense-project-allocation";
@@ -428,76 +420,3 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     updatedAt: row.updatedAt,
   };
 };
-/**
- * The creation-time triage default: a food line with no project belongs to
- * Household.
- *
- * Imports and split replacement rows use it while creating expenses.
- * `updateExpense` deliberately does NOT — an update is an explicit statement
- * about one row the operator is looking at, and re-defaulting on update would
- * make "clear the project on this food line" impossible, bouncing every clear
- * straight back to Household with no error and no audit diff to explain it.
- * Automation triages, humans override, an override is never re-triaged.
- *
- * Returns `null` when no Household project exists, so a database that has not
- * been backfilled (every existing test, any fresh dev DB) behaves exactly as it
- * did before. Absence degrades, it never throws.
- *
- * Scope is `category === 'food'` on purpose. The other backfilled cohort —
- * household/supplies repurchased three or more times — is a retrospective
- * aggregate over a product's history; evaluating it per-insert would cost a
- * grouped query on every create and would triage the third bottle of shampoo
- * while leaving the first two behind.
- */
-export const resolveDefaultProjectIds = async (
-  tx: DrizzleTransaction,
-  inputs: ReadonlyArray<{
-    projectId: ProjectId | null;
-    productId: ProductId | null;
-  }>,
-): Promise<Array<ProjectId | null>> => {
-  const candidates = uniq(
-    inputs.flatMap((input) =>
-      input.projectId === null && input.productId !== null
-        ? [input.productId]
-        : [],
-    ),
-  );
-  if (candidates.length === 0) return inputs.map((input) => input.projectId);
-
-  const foodProducts = new Set(
-    (
-      await tx.query.product.findMany({
-        where: and(
-          inArray(product.id, candidates),
-          notDeleted(product),
-          categoryFeatureSql(sql`${product.categoryId}`, "food"),
-        ),
-        columns: { id: true },
-      })
-    ).map((row) => row.id),
-  );
-  if (foodProducts.size === 0) return inputs.map((input) => input.projectId);
-
-  const householdId = await resolveLiveShortcode(
-    tx,
-    HOUSEHOLD_PROJECT_SHORTCODE,
-    "project",
-  );
-  const parsedHouseholdId = householdId
-    ? parseEntityId("project", householdId)
-    : null;
-  return inputs.map((input) =>
-    input.projectId === null &&
-    input.productId !== null &&
-    foodProducts.has(input.productId)
-      ? parsedHouseholdId
-      : input.projectId,
-  );
-};
-
-export const resolveDefaultProjectId = async (
-  tx: DrizzleTransaction,
-  input: { projectId: ProjectId | null; productId: ProductId | null },
-): Promise<ProjectId | null> =>
-  (await resolveDefaultProjectIds(tx, [input]))[0] ?? null;

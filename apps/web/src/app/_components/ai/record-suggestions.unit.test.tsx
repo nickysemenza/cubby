@@ -242,10 +242,9 @@ describe("record suggestions", () => {
 
   it("rechecks authoritative eligibility before accepting a rendered proposal", async () => {
     const record = {
-      id: testShortcode("product", "stale"),
-      name: "Red apple",
-      manufacturer: null,
-      category: null,
+      id: testShortcode("task", "stale"),
+      name: "Install a circuit breaker",
+      trade: null,
     };
     let calls = 0;
     const commands: EntityBrowserMutationInput[] = [];
@@ -253,26 +252,28 @@ describe("record suggestions", () => {
       suggestFields: ai.suggestFields.withTransport(async () => {
         calls += 1;
         return {
-          suggestions: { category: food },
-          eligibleTargets: ["category"],
+          suggestions: {
+            trade: { ...food, value: "electrical", label: "Electrical" },
+          },
+          eligibleTargets: ["trade"],
         };
       }),
     };
     render(
       <RecordSuggestionsProvider
-        entity="product"
+        entity="task"
         records={[record]}
-        fieldKeys={["category"]}
+        fieldKeys={["trade"]}
         operations={operations}
         readRecord={async () => ({
           ...record,
           fieldResolutions: {
-            category: {
+            trade: {
               mode: "inherit",
               storedValue: null,
-              value: "food",
-              fallbackValue: "food",
-              source: "Parent default",
+              value: "electrical",
+              fallbackValue: "electrical",
+              source: "Project default",
               sourceEntity: null,
               matchesFallback: true,
               canReset: false,
@@ -286,14 +287,14 @@ describe("record suggestions", () => {
           },
         })}
       >
-        <RecordFieldSuggestion record={record} field="category">
-          <span>Empty category</span>
+        <RecordFieldSuggestion record={record} field="trade">
+          <span>Empty trade</span>
         </RecordFieldSuggestion>
       </RecordSuggestionsProvider>,
       { wrapper: harness.wrapper },
     );
 
-    await screen.findByText("Suggested: Food");
+    await screen.findByText("Suggested: Electrical");
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     await screen.findByRole("alert");
     expect(calls).toBe(1);

@@ -1,11 +1,15 @@
+import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { project } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { createExpense } from "~/server/repo/expense";
 import {
   createProductFixture,
+  makeExpenseInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 
@@ -249,5 +253,73 @@ describe("product category hierarchy", () => {
         ctx.actor,
       ),
     ).rejects.toThrow("would invalidate an assigned Product");
+  });
+
+  it("refuses a food move that would remove an inherited household trade", async () => {
+    const foodType = await createProductCategory(
+      ctx.db,
+      {
+        name: "Inherited trade food type",
+        aliases: [],
+        description: null,
+        parentId: taxonomyShortcode("food"),
+        sortOrder: 0,
+        feature: null,
+      },
+      ctx.actor,
+    );
+    const destination = await createProductCategory(
+      ctx.db,
+      {
+        name: "Inherited trade destination",
+        aliases: [],
+        description: null,
+        parentId: null,
+        sortOrder: 0,
+        feature: null,
+      },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .insert(project)
+      .values({
+        shortcode: testShortcode("project", "PRJ-HSHD"),
+        name: "Household project",
+        defaultTrade: "building",
+      });
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Food product with inherited trade",
+        categoryId: foodType.output.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Food principal inheriting household trade",
+        productId: product.id,
+        trade: null,
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      updateProductCategory(
+        ctx.db,
+        foodType.output.id,
+        { parentId: destination.output.id },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+
+    const persisted = (await listProductCategoryTreeOptions(ctx.db)).find(
+      (item) => item.id === foodType.output.id,
+    );
+    expect(persisted?.path.map((part) => part.id)).toEqual([
+      taxonomyShortcode("food"),
+      foodType.output.id,
+    ]);
   });
 });
