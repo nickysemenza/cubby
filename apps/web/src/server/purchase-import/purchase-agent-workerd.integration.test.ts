@@ -10,7 +10,10 @@ import { createTestHarness, type TestHarness } from "wrangler";
 import { z } from "zod";
 
 import {
+  auditLog,
   expense,
+  financialTransaction,
+  financialTransactionAllocation,
   image,
   importRun,
   importRunMutation,
@@ -241,6 +244,9 @@ async function protectedBusinessSnapshot(
       .where(eq(productImage.productId, input.productId)),
     database.select().from(importSourceClaim),
     database.select().from(purchasePaymentEvidence),
+    database.select().from(financialTransaction),
+    database.select().from(financialTransactionAllocation),
+    database.select().from(auditLog),
     database
       .select()
       .from(importRunMutation)

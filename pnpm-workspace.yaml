@@ -26,10 +26,11 @@ strictDepBuilds: false
 minimumReleaseAge: 0
 
 overrides:
-  # @flue/runtime accepts the whole 0.83+ line but its published lock still
-  # resolves the old nominal Provider types unless the pi packages move together.
-  "@earendil-works/pi-agent-core": 0.86.1
-  "@earendil-works/pi-ai": 0.86.1
+  # Flue 2.1.0 cannot replay the system-role turn context emitted by pi 0.86.
+  # Keep its paired runtime packages on the last compatible release until Flue
+  # publishes support; the real two-Worker recovery test enforces this boundary.
+  "@earendil-works/pi-agent-core": 0.83.0
+  "@earendil-works/pi-ai": 0.83.0
   # better-auth pins @better-auth/core to its own exact version while the
   # @better-auth/* plugins peer on a caret range; auto-installed peers resolve
   # to the newest patch, so whenever better-auth lags core (Renovate skips
