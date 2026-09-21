@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { z } from "zod";
 
 /** The `get-session` status observed at a hydration failure, for attribution. */
 async function observedSessionStatus(page: Page): Promise<number | "unknown"> {
@@ -541,4 +542,65 @@ export async function addInventory(
   await expect(page.getByText(productName).first()).toBeVisible({
     timeout: 10000,
   });
+}
+
+/** The two `inspectFeed` fields a mutation leaves a trace in. */
+const calendarFeedTrace = z.object({
+  snapshot: z.object({ revision: z.number() }).nullable(),
+  dirty: z.object({ reason: z.string() }).nullable(),
+});
+/** Reads `/api/v1/calendar/inspectFeed` however the spec is authenticated. */
+type CalendarFeedInspector = () => Promise<object | null>;
+
+/**
+ * The feed revision once nothing is pending, to pass as `before` to
+ * {@link expectCalendarFeedDirtied}. Waiting for the pending mark to clear
+ * matters on a fresh durable object: its constructor marks `initialize`, and
+ * that first publish must not be mistaken for the mutation under test.
+ */
+export async function settledCalendarFeedRevision(
+  inspect: CalendarFeedInspector,
+): Promise<number> {
+  let revision = 0;
+  await expect
+    .poll(
+      async () => {
+        const parsed = calendarFeedTrace.safeParse(await inspect());
+        if (!parsed.success) return "unreadable";
+        revision = parsed.data.snapshot?.revision ?? 0;
+        return parsed.data.dirty
+          ? `pending: ${parsed.data.dirty.reason}`
+          : "settled";
+      },
+      { message: "calendar feed never settled before the test began" },
+    )
+    .toBe("settled");
+  return revision;
+}
+
+/**
+ * A mutation marks the feed dirty with `reason`, and the durable object's
+ * alarm republishes about two seconds later, which clears that mark. Polling
+ * for the mark alone raced the alarm on a slow runner (2026-09-21: the poll
+ * began after two more requests and only ever saw `dirty: null`), so accept
+ * either state: the pending mark, or a snapshot revision past `before` — the
+ * trace the refresh leaves behind. CI runs one worker, so with a settled
+ * `before` a revision bump is this test's own mutation; locally a parallel
+ * spec can bump it too, which can only make the check pass early, never fail.
+ */
+export async function expectCalendarFeedDirtied(
+  inspect: CalendarFeedInspector,
+  reason: string,
+  before: number,
+) {
+  await expect
+    .poll(async () => {
+      const parsed = calendarFeedTrace.safeParse(await inspect());
+      if (!parsed.success) return "unreadable";
+      const { dirty, snapshot } = parsed.data;
+      if (dirty?.reason === reason) return "dirty";
+      if ((snapshot?.revision ?? 0) > before) return "published";
+      return dirty ? `dirty: ${dirty.reason}` : "clean";
+    })
+    .toMatch(/^(dirty|published)$/);
 }

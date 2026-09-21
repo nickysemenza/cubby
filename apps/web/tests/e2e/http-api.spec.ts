@@ -3,6 +3,10 @@ import { request as apiRequest } from "@playwright/test";
 import { z } from "zod";
 import { Pool } from "pg";
 import { createCubbyClient } from "~/lib/http-api/client";
+import {
+  settledCalendarFeedRevision,
+  expectCalendarFeedDirtied,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const keyResult = z.object({
@@ -81,20 +85,22 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     expect(counts.status).toBe(200);
     if (counts.status !== 200) throw new Error("Dashboard failed");
     expect(Object.keys(counts.body).length).toBeGreaterThan(0);
+    const inspectFeed = async () => {
+      const calendar = await client.calendar.inspectFeed({ query: {} });
+      return calendar.status === 200 ? calendar.body : null;
+    };
+    const feedBefore = await settledCalendarFeedRevision(inspectFeed);
     const created = await page.request.post("/api/v1/vendors", {
       headers,
       data: { name: `HTTP fixture ${Date.now()}` },
     });
     expect(created.status()).toBe(201);
     const result = entityCreated.parse(await created.json());
-    await expect
-      .poll(async () => {
-        const calendar = await client.calendar.inspectFeed({ query: {} });
-        return calendar.status === 200
-          ? calendar.body.dirty?.reason
-          : undefined;
-      })
-      .toBe("api.entity.mutate");
+    await expectCalendarFeedDirtied(
+      inspectFeed,
+      "api.entity.mutate",
+      feedBefore,
+    );
     const domainError = await page.request.patch("/api/v1/vendors/VEN-ZZZZ", {
       headers,
       data: { name: "Missing" },

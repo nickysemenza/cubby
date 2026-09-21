@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { Pool } from "pg";
 import { createCubbyClient } from "~/lib/http-api/client";
+import {
+  settledCalendarFeedRevision,
+  expectCalendarFeedDirtied,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const createdSchema = z.object({ item: z.object({ id: z.string() }) });
@@ -17,6 +21,9 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     await (await page.request.get("/api/auth/get-session")).json(),
   );
   const origin = { Origin: baseURL! };
+  const inspectFeed = async () =>
+    (await page.request.get("/api/v1/calendar/inspectFeed")).json();
+  const feedBefore = await settledCalendarFeedRevision(inspectFeed);
   const name = `Resource acceptance ${Date.now()}`;
   const created = await page.request.post("/api/v1/recipes", {
     headers: origin,
@@ -112,16 +119,11 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
         }),
       ]),
     });
-    await expect
-      .poll(
-        async () =>
-          (
-            await (
-              await page.request.get("/api/v1/calendar/inspectFeed")
-            ).json()
-          ).dirty?.reason,
-      )
-      .toBe("api.entity.mutate");
+    await expectCalendarFeedDirtied(
+      inspectFeed,
+      "api.entity.mutate",
+      feedBefore,
+    );
     for (const headers of [undefined, { Origin: "https://foreign.example" }]) {
       expect(
         (
