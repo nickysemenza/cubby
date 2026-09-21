@@ -1,5 +1,5 @@
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { expect, it } from "vitest";
 
 import {
@@ -65,6 +65,7 @@ it("recipe utils", () => {
     name: "",
     meta: null,
     images: [],
+    dataQuality: testCompleteDataQuality(),
     createdAt: new Date(),
     updatedAt: new Date(),
     forkedFromRecipeId: null,
@@ -130,6 +131,7 @@ it("getServingBasis prefers servings and labels yield units", () => {
     meta: null,
     images: [],
     sections: [],
+    dataQuality: testCompleteDataQuality(),
     createdAt: new Date(),
     updatedAt: new Date(),
     forkedFromRecipeId: null,

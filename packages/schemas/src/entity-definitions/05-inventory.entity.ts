@@ -695,6 +695,17 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "inventory_verified",
+          facet: "provenance",
+          weight: 1,
+          label: "Verified",
+          message: "This stock entry has never been verified.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

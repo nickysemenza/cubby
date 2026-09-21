@@ -1,5 +1,5 @@
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -35,6 +35,7 @@ function loc(
     notes: null,
     images: [],
     valuation: null,
+    dataQuality: testCompleteDataQuality(),
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     children,

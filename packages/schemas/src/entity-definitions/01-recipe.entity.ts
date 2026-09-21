@@ -950,6 +950,31 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "recipe_ingredients",
+          facet: "content",
+          weight: 2,
+          label: "Ingredients",
+          message: "No ingredient lines are recorded.",
+        },
+        {
+          id: "recipe_instructions",
+          facet: "content",
+          weight: 2,
+          label: "Instructions",
+          message: "No written instructions are recorded.",
+        },
+        {
+          id: "recipe_source",
+          facet: "provenance",
+          weight: 1,
+          label: "Source",
+          message: "No recipe source is recorded.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

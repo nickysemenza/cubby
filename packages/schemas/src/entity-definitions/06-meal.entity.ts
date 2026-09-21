@@ -777,6 +777,17 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "meal_contents",
+          facet: "content",
+          weight: 2,
+          label: "Contents",
+          message: "No recipes or food entries are recorded for this meal.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

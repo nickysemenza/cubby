@@ -275,6 +275,12 @@ export default defineEntity({
     update: [],
     bulk: [],
     audit: [],
+    sort: {
+      fields: ["name", "recipeCount", "createdAt", "updatedAt"],
+      default: "name",
+      computed: ["recipeCount"],
+      direction: "asc",
+    },
     output: [
       "shortcode",
       "name",
@@ -375,6 +381,26 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "workflow", merge: null },
     mcp: ["list"],
+    dataQuality: {
+      checks: [
+        {
+          id: "cookbook_import_incomplete",
+          facet: "integrity",
+          kind: "defect",
+          weight: 2,
+          label: "Import incomplete",
+          message:
+            "Fewer recipes are imported than the source cookbook contains.",
+        },
+        {
+          id: "cookbook_cover",
+          facet: "provenance",
+          weight: 1,
+          label: "Cover image",
+          message: "No cover image is recorded.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

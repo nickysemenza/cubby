@@ -1,5 +1,9 @@
 import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import {
   categorySummaryFixture,
   taxonomyId,
@@ -111,6 +115,8 @@ describe("inventory mappers", () => {
         unknownExpenseCount: 0,
         knownUnitCount: 1,
       }),
+      testCompleteDataQuality(),
+      testCompleteDataQuality(),
     );
 
     // 8.87 / 1.3 rounds to 6.82; the product's authoritative effective
@@ -189,7 +195,13 @@ describe("inventory mappers", () => {
       },
     } satisfies InventoryEntryDeepDB;
 
-    const result = dbInventoryEntryToAPI(row, resolveProductPricing(4.5));
+    const locationDataQuality = testCompleteDataQuality();
+    const result = dbInventoryEntryToAPI(
+      row,
+      resolveProductPricing(4.5),
+      testCompleteDataQuality(),
+      locationDataQuality,
+    );
 
     expect(result).toEqual({
       id: testShortcode("inventory", "INV-TEST"),
@@ -211,6 +223,7 @@ describe("inventory mappers", () => {
       },
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
+      dataQuality: testCompleteDataQuality(),
       location: {
         id: testShortcode("location", "LOC-TEST"),
         aliases: [],
@@ -224,6 +237,7 @@ describe("inventory mappers", () => {
         type: "room",
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
+        dataQuality: locationDataQuality,
       },
       product: {
         id: testShortcode("product", "PRD-TEST"),

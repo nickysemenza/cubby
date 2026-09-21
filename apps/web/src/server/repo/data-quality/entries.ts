@@ -1,7 +1,14 @@
 import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
+import { cookbookChecks } from "./checks/cookbook";
+import { ingredientChecks } from "./checks/ingredient";
+import { inventoryChecks } from "./checks/inventory";
+import { locationChecks } from "./checks/location";
+import { mealChecks } from "./checks/meal";
 import { productChecks } from "./checks/product";
+import { productCategoryChecks } from "./checks/product-category";
 import { purchaseChecks } from "./checks/purchase";
+import { recipeChecks } from "./checks/recipe";
 import type { EntityChecks, ScoredTable } from "./registry";
 
 /** The registry's owner contract: one entry per scored entity. */
@@ -20,5 +27,12 @@ export const dataQualityEntries = {
   product: productChecks,
   purchase: purchaseChecks,
   // pantry and garden entities
+  recipe: recipeChecks,
+  ingredient: ingredientChecks,
+  cookbook: cookbookChecks,
+  location: locationChecks,
+  inventory: inventoryChecks,
+  meal: mealChecks,
+  productCategory: productCategoryChecks,
   // finance and project entities
 } satisfies DataQualityEntries;

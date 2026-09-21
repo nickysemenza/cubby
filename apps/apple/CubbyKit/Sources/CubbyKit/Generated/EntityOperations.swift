@@ -288,6 +288,8 @@ extension EntityDescriptor {
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "nameFilter": query.nameFilter = try value.string(name)
                 case "usuallyOnHand": query.usuallyOnHand = try value.bool(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "productPresenceFilter": query.productPresenceFilter = try value.enumCase(name)
                 case "ownRecipePresenceFilter": query.ownRecipePresenceFilter = try value.enumCase(name)
                 case "recipePresenceFilter": query.recipePresenceFilter = try value.enumCase(name)
@@ -319,6 +321,8 @@ extension EntityDescriptor {
                 case "ingredientId": query.ingredientId = value.strings
                 case "ingredientPresenceFilter": query.ingredientPresenceFilter = try value.enumCase(name)
                 case "ingredientSearch": query.ingredientSearch = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "productNameFilter": query.productNameFilter = try value.string(name)
                 case "locationNameFilter": query.locationNameFilter = try value.string(name)
                 case "locationIdFilter": query.locationIdFilter = .init(value1: try value.string(name))
@@ -404,6 +408,8 @@ extension EntityDescriptor {
                 case "aiDescriptionPresenceFilter": query.aiDescriptionPresenceFilter = try value.enumCase(name)
                 case "nameFilter": query.nameFilter = try value.string(name)
                 case "itemTypeFilter": query.itemTypeFilter = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "productId": query.productId = value.strings.map { .init(value1: $0) }
                 case "productPresenceFilter": query.productPresenceFilter = try value.enumCase(name)
                 case "parentId": query.parentId = value.strings.map { .init(value1: $0) }
@@ -437,6 +443,8 @@ extension EntityDescriptor {
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "mealType": query.mealType = try value.enumCases(name)
                 case "mealKind": query.mealKind = try value.enumCases(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "mealTypePresenceFilter": query.mealTypePresenceFilter = try value.enumCase(name)
                 case "recipeCostCoverage": query.recipeCostCoverage = try value.enumCase(name)
                 case "from": query.from = try value.string(name)
@@ -599,6 +607,8 @@ extension EntityDescriptor {
                 case "updatedFrom": query.updatedFrom = try value.string(name)
                 case "updatedTo": query.updatedTo = try value.string(name)
                 case "search": query.search = try value.string(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "groupBy": query.groupBy = try value.enumCase(name)
                 default: throw EntityFilterError.unknownParameter(.productCategory, name)
                 }
@@ -727,6 +737,8 @@ extension EntityDescriptor {
                 case "tagFilters": query.tagFilters = value.strings
                 case "totalMinutesMin": query.totalMinutesMin = try value.double(name)
                 case "totalMinutesMax": query.totalMinutesMax = try value.double(name)
+                case "dataStatus": query.dataStatus = try value.enumCases(name)
+                case "dataGap": query.dataGap = try value.enumCases(name)
                 case "cookbookId": query.cookbookId = value.strings.map { .init(value1: $0) }
                 case "cookbookPresenceFilter": query.cookbookPresenceFilter = try value.enumCase(name)
                 case "tagsPresenceFilter": query.tagsPresenceFilter = try value.enumCase(name)
@@ -943,22 +955,26 @@ extension EntityDescriptor {
             }
         case .ingredient:
             switch wireKey {
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["ingredient_product"]
                 case "productPresenceFilter": ["has", "none"]
                 case "ownRecipePresenceFilter": ["has", "none"]
                 case "recipePresenceFilter": ["has", "none"]
                 case "mealPresenceFilter": ["has", "none"]
                 case "eaterPresenceFilter": ["has", "none"]
-                case "groupBy": ["createdAt", "updatedAt", "name", "appearsInRecipes", "product"]
+                case "groupBy": ["createdAt", "updatedAt", "name", "appearsInRecipes", "product", "dataQuality"]
                 default: nil
             }
         case .inventory:
             switch wireKey {
                 case "ingredientPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["inventory_verified"]
                 case "placementFilter": ["stock", "installed", "all"]
                 case "locationRole": ["global_unknown"]
                 case "verifiedPresenceFilter": ["has", "none"]
                 case "valuationStatus": ["valued", "missing", "missing_with_priced_product"]
-                case "groupBy": ["createdAt", "updatedAt", "name", "product", "location", "amount", "valuation", "verifiedAt"]
+                case "groupBy": ["createdAt", "updatedAt", "name", "product", "location", "amount", "valuation", "verifiedAt", "dataQuality"]
                 default: nil
             }
         case .ledgerParty:
@@ -979,6 +995,8 @@ extension EntityDescriptor {
                 case "ingredientPresenceFilter": ["has", "none"]
                 case "aiDescriptionPresenceFilter": ["has", "none"]
                 case "itemTypeFilter": ["house", "room", "area", "bed", "planter", "bag", "box", "shelf", "table", "drawer", "cart", "cabinet"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["location_ai_description", "location_type"]
                 case "productPresenceFilter": ["has", "none"]
                 case "parentPresenceFilter": ["has", "none"]
                 case "inventoryPresenceFilter": ["has", "none"]
@@ -991,13 +1009,15 @@ extension EntityDescriptor {
             switch wireKey {
                 case "mealType": ["breakfast", "brunch", "lunch", "snack", "dinner", "dessert"]
                 case "mealKind": ["cooked", "leftovers", "eating_out", "takeout", "other"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["meal_contents"]
                 case "mealTypePresenceFilter": ["has", "none"]
                 case "recipeCostCoverage": ["understated"]
                 case "recipePresenceFilter": ["has", "none"]
                 case "foodProductPresenceFilter": ["has", "none"]
                 case "foodIngredientPresenceFilter": ["has", "none"]
                 case "eaterPresenceFilter": ["has", "none"]
-                case "groupBy": ["date", "name", "mealType", "createdAt", "updatedAt"]
+                case "groupBy": ["date", "name", "mealType", "createdAt", "updatedAt", "dataQuality"]
                 default: nil
             }
         case .planting:
@@ -1051,7 +1071,9 @@ extension EntityDescriptor {
             }
         case .productCategory:
             switch wireKey {
-                case "groupBy": ["name", "sortOrder", "updatedAt"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["category_description", "category_feature"]
+                case "groupBy": ["name", "sortOrder", "updatedAt", "dataQuality"]
                 default: nil
             }
         case .project:
@@ -1092,6 +1114,8 @@ extension EntityDescriptor {
             switch wireKey {
                 case "ingredientPresenceFilter": ["has", "none"]
                 case "mealPresenceFilter": ["has", "none"]
+                case "dataStatus": ["complete", "needs_data", "defect"]
+                case "dataGap": ["recipe_ingredients", "recipe_instructions", "recipe_source"]
                 case "cookbookPresenceFilter": ["has", "none"]
                 case "tagsPresenceFilter": ["has", "none"]
                 case "imagePresenceFilter": ["has", "none"]

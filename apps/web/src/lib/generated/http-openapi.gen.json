@@ -6750,6 +6750,38 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "ingredient_product"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "productPresenceFilter",
             "in": "query",
             "schema": {
@@ -6900,7 +6932,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, appearsInRecipes, product. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, appearsInRecipes, product, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -6911,7 +6943,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: createdAt, updatedAt, name, appearsInRecipes, product",
+            "description": "Group rows by one field. One of: createdAt, updatedAt, name, appearsInRecipes, product, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -6919,7 +6951,8 @@
                 "updatedAt",
                 "name",
                 "appearsInRecipes",
-                "product"
+                "product",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -7218,6 +7251,38 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "inventory_verified"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "productNameFilter",
             "in": "query",
             "description": "Filter by product name (substring)",
@@ -7421,7 +7486,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -7432,7 +7497,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt",
+            "description": "Group rows by one field. One of: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -7443,7 +7508,8 @@
                 "location",
                 "amount",
                 "valuation",
-                "verifiedAt"
+                "verifiedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -9505,6 +9571,39 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "location_ai_description",
+                  "location_type"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "productId",
             "in": "query",
             "schema": {
@@ -9713,7 +9812,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, type, parent, lastBulkInventory, valuation, inventoryEntries. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, type, parent, lastBulkInventory, valuation, inventoryEntries, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -11047,6 +11146,38 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "meal_contents"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "mealTypePresenceFilter",
             "in": "query",
             "schema": {
@@ -11276,7 +11407,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, mealType, createdAt, updatedAt. Default: -date",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, mealType, createdAt, updatedAt, dataQuality. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -11287,7 +11418,7 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: date, name, mealType, createdAt, updatedAt",
+            "description": "Group rows by one field. One of: date, name, mealType, createdAt, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
@@ -11295,7 +11426,8 @@
                 "name",
                 "mealType",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -12980,6 +13112,39 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "category_description",
+                  "category_feature"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -13006,7 +13171,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt. Default: -sortOrder",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, sortOrder, updatedAt, dataQuality. Default: -sortOrder",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -13017,13 +13182,14 @@
           {
             "name": "groupBy",
             "in": "query",
-            "description": "Group rows by one field. One of: name, sortOrder, updatedAt",
+            "description": "Group rows by one field. One of: name, sortOrder, updatedAt, dataQuality",
             "schema": {
               "type": "string",
               "enum": [
                 "name",
                 "sortOrder",
-                "updatedAt"
+                "updatedAt",
+                "dataQuality"
               ]
             },
             "style": "form",
@@ -20532,6 +20698,40 @@
             "explode": true
           },
           {
+            "name": "dataStatus",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dataGap",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "recipe_ingredients",
+                  "recipe_instructions",
+                  "recipe_source"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "cookbookId",
             "in": "query",
             "schema": {
@@ -20719,7 +20919,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes. Default: -createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes, dataQuality. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -27584,7 +27784,7 @@
             "const": "capture"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema162"
+            "$ref": "#/components/schemas/input_schema164"
           },
           "enhancedEvidence": {
             "type": "boolean"
@@ -27632,7 +27832,7 @@
             "maxLength": 200
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema162"
+            "$ref": "#/components/schemas/input_schema164"
           }
         },
         "required": [
@@ -27654,7 +27854,7 @@
             "format": "uri"
           },
           "allowedHosts": {
-            "$ref": "#/components/schemas/input_schema162"
+            "$ref": "#/components/schemas/input_schema164"
           }
         },
         "required": [
@@ -31445,6 +31645,9 @@
           "product": {
             "$ref": "#/components/schemas/CookbookProductSummary"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -31458,6 +31661,7 @@
           "coverUrl",
           "sourceRecipeCount",
           "needsReextract",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -31712,6 +31916,16 @@
           "product_image",
           "amazon_asin",
           "duplicate_external_id",
+          "recipe_ingredients",
+          "recipe_instructions",
+          "recipe_source",
+          "ingredient_product",
+          "cookbook_import_incomplete",
+          "cookbook_cover",
+          "location_ai_description",
+          "location_type",
+          "inventory_verified",
+          "meal_contents",
           "purchase_date",
           "order_id",
           "stated_total",
@@ -31720,7 +31934,9 @@
           "unpriced_expense",
           "paperwork_mismatch",
           "settlement_reference",
-          "settlement_mismatch"
+          "settlement_mismatch",
+          "category_description",
+          "category_feature"
         ]
       },
       "DataExceptionEntity": {
@@ -31883,7 +32099,14 @@
             "type": "string",
             "enum": [
               "product",
-              "purchase"
+              "recipe",
+              "ingredient",
+              "cookbook",
+              "location",
+              "inventory",
+              "meal",
+              "purchase",
+              "productCategory"
             ]
           },
           "targetId": {
@@ -32817,6 +33040,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "product": {
             "type": "array",
             "items": {
@@ -32907,6 +33133,7 @@
           "guideTransplantWindow",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "product",
           "recipeCount",
           "cookbookOnly",
@@ -35384,12 +35611,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema130"
+                "$ref": "#/components/schemas/input_schema132"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema130"
+                  "$ref": "#/components/schemas/input_schema132"
                 }
               }
             ]
@@ -35420,12 +35647,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema133"
+                "$ref": "#/components/schemas/input_schema135"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema133"
+                  "$ref": "#/components/schemas/input_schema135"
                 }
               }
             ]
@@ -35484,12 +35711,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema137"
+                "$ref": "#/components/schemas/input_schema139"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema137"
+                  "$ref": "#/components/schemas/input_schema139"
                 }
               }
             ]
@@ -42809,6 +43036,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "children": {
             "$ref": "#/components/schemas/output_schema202"
           },
@@ -42843,7 +43073,8 @@
           "aiDescription",
           "images",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -43175,6 +43406,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "recipe": {
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
@@ -43204,6 +43438,7 @@
           "guideTransplantWindow",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "recipeUsages",
           "appearsInRecipes",
           "product",
@@ -43308,6 +43543,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -43339,6 +43577,7 @@
           "guideTransplantWindow",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "product",
           "appearsInRecipes",
@@ -43580,6 +43819,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -43591,7 +43833,8 @@
           "guideSowWindow",
           "guideTransplantWindow",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -43861,6 +44104,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "product": {
             "type": "array",
             "items": {
@@ -43878,6 +44124,7 @@
           "guideTransplantWindow",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "product"
         ],
         "additionalProperties": false
@@ -43969,6 +44216,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "recipe": {
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
@@ -43992,6 +44242,7 @@
           "guideTransplantWindow",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "recipeUsages",
           "appearsInRecipes",
           "product"
@@ -44330,7 +44581,7 @@
         ],
         "additionalProperties": false
       },
-      "input_schema101": {
+      "input_schema103": {
         "anyOf": [
           {
             "type": "string"
@@ -44343,7 +44594,7 @@
           }
         ]
       },
-      "input_schema112": {
+      "input_schema114": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -44357,7 +44608,7 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema120": {
+      "input_schema122": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -44397,7 +44648,7 @@
           }
         }
       },
-      "input_schema130": {
+      "input_schema132": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -44411,7 +44662,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema133": {
+      "input_schema135": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -44425,7 +44676,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema137": {
+      "input_schema139": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -44439,7 +44690,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema150": {
+      "input_schema152": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -44456,7 +44707,7 @@
           }
         }
       },
-      "input_schema152": {
+      "input_schema154": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -44470,7 +44721,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema162": {
+      "input_schema164": {
         "minItems": 1,
         "maxItems": 20,
         "type": "array",
@@ -44480,7 +44731,7 @@
           "maxLength": 253
         }
       },
-      "input_schema173": {
+      "input_schema175": {
         "type": "object",
         "properties": {
           "kind": {
@@ -44496,7 +44747,7 @@
           "value"
         ]
       },
-      "input_schema177": {
+      "input_schema179": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -44520,7 +44771,7 @@
           }
         }
       },
-      "input_schema178": {
+      "input_schema180": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -44638,7 +44889,7 @@
           "$ref": "#/components/schemas/ImageShortcode"
         }
       },
-      "input_schema70": {
+      "input_schema72": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -44652,7 +44903,7 @@
         "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "product shortcode, e.g. PRD-4K7M"
       },
-      "input_schema72": {
+      "input_schema74": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/LocationShortcode"
@@ -44666,7 +44917,7 @@
         "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "location shortcode, e.g. LOC-4K7M"
       },
-      "input_schema83": {
+      "input_schema85": {
         "$ref": "#/components/schemas/MealFoodEntryId"
       },
       "IntegrityCatalog": {
@@ -45124,6 +45375,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "product": {
             "$ref": "#/components/schemas/InventoryDetailProductOut"
           },
@@ -45149,6 +45403,7 @@
           "effectiveOwnership",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "product",
           "location",
           "displayName",
@@ -45300,6 +45555,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -45310,7 +45568,8 @@
           "ownershipMode",
           "effectiveOwnership",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -45357,6 +45616,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -45379,6 +45641,7 @@
           "effectiveOwnership",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "product",
           "location",
@@ -45868,6 +46131,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "product": {
             "$ref": "#/components/schemas/InventoryDetailProductOut"
           },
@@ -45887,6 +46153,7 @@
           "effectiveOwnership",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "product",
           "location",
           "displayName"
@@ -47189,14 +47456,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema177"
+                "$ref": "#/components/schemas/input_schema179"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema177"
+                  "$ref": "#/components/schemas/input_schema179"
                 }
               }
             ]
@@ -47370,6 +47637,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "children": {
             "$ref": "#/components/schemas/output_schema202"
           },
@@ -47411,6 +47681,7 @@
           "images",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -47484,15 +47755,59 @@
               }
             ]
           },
-          "productId": {
+          "dataStatus": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema70"
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "needs_data",
+                  "defect"
+                ]
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema70"
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "needs_data",
+                    "defect"
+                  ]
+                }
+              }
+            ]
+          },
+          "dataGap": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "location_ai_description",
+                  "location_type"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "location_ai_description",
+                    "location_type"
+                  ]
+                }
+              }
+            ]
+          },
+          "productId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/input_schema72"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/input_schema72"
                 }
               }
             ]
@@ -47508,12 +47823,12 @@
           "parentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema72"
+                "$ref": "#/components/schemas/input_schema74"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema72"
+                  "$ref": "#/components/schemas/input_schema74"
                 }
               }
             ]
@@ -47701,6 +48016,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -47833,6 +48151,7 @@
           "images",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "children",
           "inventoryEntries"
@@ -47934,6 +48253,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -47945,7 +48267,8 @@
           "aiDescription",
           "images",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -48365,6 +48688,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "parentName": {
             "type": [
               "string",
@@ -48382,6 +48708,7 @@
           "images",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "parentName"
         ],
         "additionalProperties": false
@@ -49006,6 +49333,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -49026,6 +49356,7 @@
           "recipeNames",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -49172,6 +49503,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -49189,6 +49523,7 @@
           "recipeNames",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -49614,6 +49949,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -49628,7 +49966,8 @@
           "displayName",
           "recipeNames",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -51499,6 +51838,9 @@
                 "format": "date-time",
                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
               },
+              "dataQuality": {
+                "$ref": "#/components/schemas/DataQuality"
+              },
               "displayImage": {
                 "$ref": "#/components/schemas/ImageUrlSummary"
               },
@@ -51519,6 +51861,7 @@
               "images",
               "createdAt",
               "updatedAt",
+              "dataQuality",
               "ancestors"
             ],
             "additionalProperties": false
@@ -54312,6 +54655,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -54329,6 +54675,7 @@
           "path",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -54446,6 +54793,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -54460,6 +54810,7 @@
           "path",
           "createdAt",
           "updatedAt",
+          "dataQuality",
           "displayImages"
         ],
         "additionalProperties": false
@@ -54531,6 +54882,9 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -54542,7 +54896,8 @@
           "parentName",
           "path",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -55490,7 +55845,7 @@
           },
           "tagFilters": {
             "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema103"
           },
           "dataStatus": {
             "anyOf": [
@@ -55629,12 +55984,12 @@
           "locationIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema72"
+                "$ref": "#/components/schemas/input_schema74"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema72"
+                  "$ref": "#/components/schemas/input_schema74"
                 }
               }
             ]
@@ -55645,12 +56000,12 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema112"
+                "$ref": "#/components/schemas/input_schema114"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema112"
+                  "$ref": "#/components/schemas/input_schema114"
                 }
               }
             ]
@@ -55658,12 +56013,12 @@
           "growsIngredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema112"
+                "$ref": "#/components/schemas/input_schema114"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema112"
+                  "$ref": "#/components/schemas/input_schema114"
                 }
               }
             ]
@@ -57407,14 +57762,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema120"
+                "$ref": "#/components/schemas/input_schema122"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema120"
+                  "$ref": "#/components/schemas/input_schema122"
                 }
               }
             ]
@@ -60012,7 +60367,7 @@
           },
           "location": {
             "description": "Any exact match against locations[]",
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema103"
           },
           "dateFrom": {
             "$ref": "#/components/schemas/input_schema37"
@@ -60041,12 +60396,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema130"
+                "$ref": "#/components/schemas/input_schema132"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema130"
+                  "$ref": "#/components/schemas/input_schema132"
                 }
               }
             ]
@@ -61514,14 +61869,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema150"
+                "$ref": "#/components/schemas/input_schema152"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema150"
+                  "$ref": "#/components/schemas/input_schema152"
                 }
               }
             ]
@@ -63020,6 +63375,9 @@
               "null"
             ]
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
@@ -63036,6 +63394,7 @@
           "sections",
           "images",
           "forkedFromRecipeName",
+          "dataQuality",
           "displayImages",
           "attachments"
         ],
@@ -63129,6 +63488,9 @@
               "string",
               "null"
             ]
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         },
         "required": [
@@ -63139,7 +63501,8 @@
           "meta",
           "sections",
           "images",
-          "forkedFromRecipeName"
+          "forkedFromRecipeName",
+          "dataQuality"
         ],
         "additionalProperties": false
       },
@@ -64150,6 +64513,9 @@
               "null"
             ]
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
           },
@@ -64174,6 +64540,7 @@
           "updatedAt",
           "meta",
           "forkedFromRecipeName",
+          "dataQuality",
           "mealCount",
           "sectionCount",
           "displayImages"
@@ -65057,6 +65424,9 @@
               "null"
             ]
           },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
           "sideEffects": {
             "$ref": "#/components/schemas/MutationSideEffects"
           }
@@ -65070,6 +65440,7 @@
           "sections",
           "images",
           "forkedFromRecipeName",
+          "dataQuality",
           "sideEffects"
         ],
         "additionalProperties": false
@@ -66622,7 +66993,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema83"
+            "$ref": "#/components/schemas/input_schema85"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -66659,7 +67030,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema83"
+            "$ref": "#/components/schemas/input_schema85"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -66702,7 +67073,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema83"
+            "$ref": "#/components/schemas/input_schema85"
           },
           "mealId": {
             "$ref": "#/components/schemas/MealShortcode"
@@ -66797,7 +67168,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema173"
+                "$ref": "#/components/schemas/input_schema175"
               }
             ],
             "description": "The scanned code."
@@ -69287,12 +69658,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema152"
+                "$ref": "#/components/schemas/input_schema154"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema152"
+                  "$ref": "#/components/schemas/input_schema154"
                 }
               }
             ]
@@ -69335,12 +69706,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema130"
+                "$ref": "#/components/schemas/input_schema132"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema130"
+                  "$ref": "#/components/schemas/input_schema132"
                 }
               }
             ]
@@ -69348,12 +69719,12 @@
           "subjectProductId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema70"
+                "$ref": "#/components/schemas/input_schema72"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema70"
+                  "$ref": "#/components/schemas/input_schema72"
                 }
               }
             ]
@@ -71149,14 +71520,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema178"
+                "$ref": "#/components/schemas/input_schema180"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema178"
+                  "$ref": "#/components/schemas/input_schema180"
                 }
               }
             ]

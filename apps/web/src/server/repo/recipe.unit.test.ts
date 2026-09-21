@@ -5,7 +5,11 @@ import {
   recipeOut,
   recipeUsageOut,
 } from "@cubby/schemas/recipe";
-import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import {
+  testCompleteDataQuality,
+  testEntityId,
+  testShortcode,
+} from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
@@ -164,6 +168,7 @@ const recipeShallowOut = recipeListItemOut.omit({
   mealCount: true,
   sectionCount: true,
   displayImages: true,
+  dataQuality: true,
 });
 
 describe("recipe repository helpers", () => {
@@ -234,7 +239,7 @@ describe("recipe repository helpers", () => {
   });
 
   it("maps full recipe detail rows exactly and filters soft-deleted relations", () => {
-    const result = dbRecipeToAPI(fullRecipeRow);
+    const result = dbRecipeToAPI(fullRecipeRow, testCompleteDataQuality());
 
     expect(result).toMatchObject({
       id: testShortcode("recipe", "RCP-A3F2"),

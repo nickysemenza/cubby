@@ -151,7 +151,7 @@ const firstResult = <T>(items: T[]): T => {
 
 describe("ingredient product mappers", () => {
   it("maps ingredient scalar rows without DB-only fields", () => {
-    const result = dbIngredientToTopLevel(baseIngredient);
+    const result = dbIngredientToTopLevel(baseIngredient, completeDataQuality);
 
     expect(result).toEqual({
       id: testShortcode("ingredient", "ING-TEST"),
@@ -162,6 +162,7 @@ describe("ingredient product mappers", () => {
       gardenGuideKey: null,
       guideSowWindow: null,
       guideTransplantWindow: null,
+      dataQuality: completeDataQuality,
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
     });
@@ -288,6 +289,7 @@ describe("ingredient product mappers", () => {
     const liveRecipe = { ...baseRecipe, deletedAt: null };
     const result = await dbIngredientToAPI(unusedDatabase, {
       ...baseIngredient,
+      dataQuality: completeDataQuality,
       recipe: liveRecipe,
       product: [
         {

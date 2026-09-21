@@ -33,7 +33,10 @@ import {
   guideWindowsFor,
   resolveGardenGuideKey,
 } from "~/server/garden-guides/windows";
-import { attachDataQuality } from "~/server/repo/data-quality";
+import {
+  attachDataQuality,
+  loadDataQualities,
+} from "~/server/repo/data-quality";
 import {
   buildSearchConditions,
   formatSearchTerm,
@@ -61,6 +64,10 @@ type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect> & {
 };
 
 export type IngredientDeepDB = typeof ingredient.$inferSelect & {
+  // Optional pre-supplied so unit fixtures can prove `dbIngredientToAPI`'s
+  // pure projection without opening a database connection (mirrors the
+  // product relation's own optional `dataQuality` below).
+  dataQuality?: DataQuality;
   product: Array<
     ProductSelect & {
       pricing?: ProductPricing;
@@ -127,6 +134,7 @@ type IngredientLeanDB = typeof ingredient.$inferSelect & {
 
 export const dbIngredientToTopLevel = (
   ingredientData: IngredientSelect,
+  dataQuality: DataQuality,
 ): IngredientOut => {
   const gardenGuideKey = resolveGardenGuideKey(ingredientData.gardenGuideKey);
   const { sow, transplant } = guideWindowsFor(gardenGuideKey);
@@ -141,6 +149,7 @@ export const dbIngredientToTopLevel = (
     guideTransplantWindow: transplant,
     createdAt: ingredientData.createdAt,
     updatedAt: ingredientData.updatedAt,
+    dataQuality,
   };
 };
 
@@ -154,9 +163,10 @@ type IngredientListDB = IngredientSelect & {
 export const dbIngredientToListAPI = (
   ingredientData: IngredientListDB,
   displayImages: DisplayImageSummary[],
+  dataQuality: DataQuality,
 ): IngredientListItem => {
   const result = {
-    ...dbIngredientToTopLevel(ingredientData),
+    ...dbIngredientToTopLevel(ingredientData, dataQuality),
     displayImages,
     product: mapIngredientProducts(ingredientData.product),
     appearsInRecipes: ingredientData.appearsInRecipes ?? [],
@@ -194,6 +204,11 @@ export const dbIngredientToAPI = async (
   db: Database | DrizzleTransaction,
   ingredientData: IngredientDeepDB,
 ): Promise<IngredientWithRecipesAndProductOut> => {
+  const dataQuality =
+    ingredientData.dataQuality ??
+    (await loadDataQualities(db, "ingredient", [ingredientData.id])).get(
+      ingredientData.id,
+    )!;
   const {
     product: productRel,
     recipe: recipeRel,
@@ -221,7 +236,7 @@ export const dbIngredientToAPI = async (
   );
 
   return {
-    ...dbIngredientToTopLevel(ingredientData),
+    ...dbIngredientToTopLevel(ingredientData, dataQuality),
     recipe:
       recipeRel && recipeRel.deletedAt === null
         ? dbRecipeToTopLevel(recipeRel)

@@ -25,6 +25,7 @@ import {
   computeChanges,
   logAuditEntries,
 } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
   getDb,
@@ -479,14 +480,29 @@ export const bulkProcessInventoryEntries = async (
     },
   );
 
-  const [pricing, ownership] = await Promise.all([
-    loadInventoryEntryPricing(db, processedItems),
-    loadEffectiveInventoryOwnership(db, processedItems),
-  ]);
+  const [pricing, ownership, dataQualities, locationQualities] =
+    await Promise.all([
+      loadInventoryEntryPricing(db, processedItems),
+      loadEffectiveInventoryOwnership(db, processedItems),
+      loadDataQualities(
+        db,
+        "inventory",
+        processedItems.map((entry) => entry.id),
+      ),
+      loadDataQualities(
+        db,
+        "location",
+        processedItems.map((entry) => entry.location.id),
+      ),
+    ]);
   return processedItems.map((entry) =>
     dbInventoryEntryToAPI(
       entry,
       requireLoadedProductPricing(pricing, entry.product.id),
+      // SAFETY: `entry` came from `processedItems`, which `dataQualities`/
+      // `locationQualities` were loaded for.
+      dataQualities.get(entry.id)!,
+      locationQualities.get(entry.location.id)!,
       ownership.get(entry.id),
     ),
   );
@@ -747,15 +763,30 @@ export const addInventoryEntries = async (
     },
   );
 
-  const [pricing, ownership] = await Promise.all([
-    loadInventoryEntryPricing(db, processed.results),
-    loadEffectiveInventoryOwnership(db, processed.results),
-  ]);
+  const [pricing, ownership, dataQualities, locationQualities] =
+    await Promise.all([
+      loadInventoryEntryPricing(db, processed.results),
+      loadEffectiveInventoryOwnership(db, processed.results),
+      loadDataQualities(
+        db,
+        "inventory",
+        processed.results.map((entry) => entry.id),
+      ),
+      loadDataQualities(
+        db,
+        "location",
+        processed.results.map((entry) => entry.location.id),
+      ),
+    ]);
   return {
     items: processed.results.map((entry) =>
       dbInventoryEntryToAPI(
         entry,
         requireLoadedProductPricing(pricing, entry.product.id),
+        // SAFETY: `entry` came from `processed.results`, which `dataQualities`/
+        // `locationQualities` were loaded for.
+        dataQualities.get(entry.id)!,
+        locationQualities.get(entry.location.id)!,
         ownership.get(entry.id),
       ),
     ),
@@ -1115,14 +1146,29 @@ export const moveInventoryEntries = async (
     },
   );
 
-  const [pricing, ownership] = await Promise.all([
-    loadInventoryEntryPricing(db, processedItems),
-    loadEffectiveInventoryOwnership(db, processedItems),
-  ]);
+  const [pricing, ownership, dataQualities, locationQualities] =
+    await Promise.all([
+      loadInventoryEntryPricing(db, processedItems),
+      loadEffectiveInventoryOwnership(db, processedItems),
+      loadDataQualities(
+        db,
+        "inventory",
+        processedItems.map((entry) => entry.id),
+      ),
+      loadDataQualities(
+        db,
+        "location",
+        processedItems.map((entry) => entry.location.id),
+      ),
+    ]);
   return processedItems.map((entry) =>
     dbInventoryEntryToAPI(
       entry,
       requireLoadedProductPricing(pricing, entry.product.id),
+      // SAFETY: `entry` came from `processedItems`, which `dataQualities`/
+      // `locationQualities` were loaded for.
+      dataQualities.get(entry.id)!,
+      locationQualities.get(entry.location.id)!,
       ownership.get(entry.id),
     ),
   );
@@ -1484,15 +1530,30 @@ export const reconcileLocationSession = async (
     },
   );
 
-  const [pricing, ownership] = await Promise.all([
-    loadInventoryEntryPricing(db, processed),
-    loadEffectiveInventoryOwnership(db, processed),
-  ]);
+  const [pricing, ownership, dataQualities, locationQualities] =
+    await Promise.all([
+      loadInventoryEntryPricing(db, processed),
+      loadEffectiveInventoryOwnership(db, processed),
+      loadDataQualities(
+        db,
+        "inventory",
+        processed.map((entry) => entry.id),
+      ),
+      loadDataQualities(
+        db,
+        "location",
+        processed.map((entry) => entry.location.id),
+      ),
+    ]);
   return {
     items: processed.map((entry) =>
       dbInventoryEntryToAPI(
         entry,
         requireLoadedProductPricing(pricing, entry.product.id),
+        // SAFETY: `entry` came from `processed`, which `dataQualities`/
+        // `locationQualities` were loaded for.
+        dataQualities.get(entry.id)!,
+        locationQualities.get(entry.location.id)!,
         ownership.get(entry.id),
       ),
     ),

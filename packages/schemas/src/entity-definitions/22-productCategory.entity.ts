@@ -341,6 +341,25 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "category_description",
+          facet: "content",
+          weight: 1,
+          label: "Description",
+          message: "No description is recorded.",
+        },
+        {
+          id: "category_feature",
+          facet: "identity",
+          weight: 1,
+          label: "Feature",
+          message:
+            "No feature classification is recorded for this root category.",
+        },
+      ],
+    },
   },
   extensions: {
     countFilter: null,

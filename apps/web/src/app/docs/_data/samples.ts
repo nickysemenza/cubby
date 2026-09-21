@@ -21,6 +21,18 @@ const ts = { createdAt: now, updatedAt: now };
 let locationSeq = 0;
 const shortcodeAlphabet = SHORTCODE_CHARS;
 
+// A demo fixture has nothing to say about data quality — every scored
+// entity's read shape still requires the field.
+const demoDataQuality = {
+  status: "complete" as const,
+  score: 100,
+  facets: [],
+  gaps: [],
+  exceptions: [],
+  relatedGaps: [],
+  relatedExceptions: [],
+};
+
 // Helper to create a location
 const makeLocation = (
   name: string,
@@ -41,6 +53,7 @@ const makeLocation = (
     notes: null,
     images: [],
     valuation: null,
+    dataQuality: demoDataQuality,
     ...ts,
   };
   if (children !== undefined) location.children = children;

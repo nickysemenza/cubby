@@ -332,15 +332,23 @@ export const getIngredientsByIDsLean = async (
     // Expense_productId_idx cover the two join keys.
     loadProductPricingForIngredientIds(db, ids),
   ]);
-  const qualityById = await loadDataQualities(
-    db,
-    "product",
-    rows.flatMap((row) => row.product.map((product) => product.id)),
-  );
+  const [qualityById, ingredientQualityById] = await Promise.all([
+    loadDataQualities(
+      db,
+      "product",
+      rows.flatMap((row) => row.product.map((product) => product.id)),
+    ),
+    loadDataQualities(
+      db,
+      "ingredient",
+      rows.map((row) => row.id),
+    ),
+  ]);
   return rows.map((row) => {
     const { product: productRel } = row;
     return {
-      ...dbIngredientToTopLevel(row),
+      // SAFETY: `row` came from `rows`, which `ingredientQualityById` was loaded for.
+      ...dbIngredientToTopLevel(row, ingredientQualityById.get(row.id)!),
       product: mapIngredientProductsLean(
         productRel.map((product) => ({
           ...product,
@@ -421,18 +429,26 @@ export const enrichmentWorkbenchIngredients = async (
   const pricingById = new Map(
     pricedProducts.map((product) => [product.id, product.pricing]),
   );
-  const qualifiedProducts = await attachDataQuality(
-    db,
-    "product",
-    rows.flatMap((row) => row.product),
-  );
+  const [qualifiedProducts, ingredientQualityById] = await Promise.all([
+    attachDataQuality(
+      db,
+      "product",
+      rows.flatMap((row) => row.product),
+    ),
+    loadDataQualities(
+      db,
+      "ingredient",
+      rows.map((row) => row.id),
+    ),
+  ]);
   const qualityById = new Map(
     qualifiedProducts.map((product) => [product.id, product.dataQuality]),
   );
   return rows.map((row) => {
     const { product: productRel, recipeCount, cookbookOnly } = row;
     return {
-      ...dbIngredientToTopLevel(row),
+      // SAFETY: `row` came from `rows`, which `ingredientQualityById` was loaded for.
+      ...dbIngredientToTopLevel(row, ingredientQualityById.get(row.id)!),
       product: mapIngredientProducts(
         productRel.map((product) => ({
           ...product,
@@ -723,11 +739,18 @@ const ingredientListImpl = async (
   const pricingById = new Map(
     pricedProducts.map((product) => [product.id, product.pricing]),
   );
-  const qualifiedProducts = await attachDataQuality(
-    db,
-    "product",
-    results.flatMap((row) => row.product),
-  );
+  const [qualifiedProducts, ingredientQualityById] = await Promise.all([
+    attachDataQuality(
+      db,
+      "product",
+      results.flatMap((row) => row.product),
+    ),
+    loadDataQualities(
+      db,
+      "ingredient",
+      results.map((row) => row.id),
+    ),
+  ]);
   const qualityById = new Map(
     qualifiedProducts.map((product) => [product.id, product.dataQuality]),
   );
@@ -747,6 +770,9 @@ const ingredientListImpl = async (
             })),
           },
           displayImages,
+          // SAFETY: `row` came from `results`, which `ingredientQualityById` was
+          // loaded for.
+          ingredientQualityById.get(row.id)!,
         ),
     ),
     count: totalCount,

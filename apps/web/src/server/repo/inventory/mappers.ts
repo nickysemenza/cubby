@@ -1,3 +1,4 @@
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   inventoryDisplayName,
@@ -52,6 +53,7 @@ const unresolvedOwnership = (
 
 const inventoryEntryBaseFields = (
   entry: InventoryEntryBaseDB,
+  dataQuality: DataQuality,
   ownership: EffectiveInventoryOwnership = unresolvedOwnership(entry),
 ) => ({
   id: parseShortcodeFor("inventory", entry.shortcode),
@@ -64,6 +66,7 @@ const inventoryEntryBaseFields = (
   effectiveOwnership: ownership,
   createdAt: entry.createdAt,
   updatedAt: entry.updatedAt,
+  dataQuality,
 });
 
 /** `loadProductPricing` returns one row per requested Product; fail loudly if
@@ -82,16 +85,20 @@ export const requireLoadedProductPricing = (
 export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
   pricing: ProductPricing,
+  dataQuality: DataQuality,
+  locationDataQuality: DataQuality,
   ownership?: EffectiveInventoryOwnership,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (
   inventoryentry,
   pricing,
+  dataQuality,
+  locationDataQuality,
   ownership,
 ) => {
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseFields(inventoryentry, ownership),
+    ...inventoryEntryBaseFields(inventoryentry, dataQuality, ownership),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       lastBulkInventory: location.lastBulkInventory,
@@ -113,6 +120,7 @@ export const dbInventoryEntryToAPI: (
       product: mapLocationIdentityProduct(location),
       createdAt: location.createdAt,
       updatedAt: location.updatedAt,
+      dataQuality: locationDataQuality,
     },
     product: {
       ...mapDbProductToInventoryEmbed({
@@ -137,16 +145,18 @@ export const dbInventoryEntryToAPI: (
 export const dbInventoryEntryToListAPI: (
   inventoryentry: InventoryEntryListDB,
   pricing: ProductPricing,
+  dataQuality: DataQuality,
   ownership?: EffectiveInventoryOwnership,
 ) => Omit<z.infer<typeof inventoryListItemOut>, "displayImages"> = (
   inventoryentry,
   pricing,
+  dataQuality,
   ownership,
 ) => {
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseFields(inventoryentry, ownership),
+    ...inventoryEntryBaseFields(inventoryentry, dataQuality, ownership),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       name: location.name,

@@ -22,6 +22,7 @@ import { dataQualityOptions } from "~/lib/data-quality-options";
 import {
   implemented,
   type PresentationCoverage,
+  unsupported,
 } from "./presentation-coverage";
 
 type ListRowOf<E extends ListEntity> =
@@ -31,12 +32,21 @@ type ListRenderer<E extends ListEntity> = (
   helper: CubbyColumnHelper<ListRowOf<E>>,
 ) => CubbyColumnCollection<ListRowOf<E>>;
 
+// Ranges over every entity, not just `ListEntity`: a scored entity with no
+// generic list page (cookbook — bespoke browser, no pagination envelope, see
+// cookbook.ts) still gets the manifest's `dataQuality` list-renderer id and
+// must carry an explicit (if `unsupported`) disposition here.
 type ListRendererEntity = {
-  [E in ListEntity]: ListRendererId<E> extends never ? never : E;
-}[ListEntity];
+  [E in Entity]: ListRendererId<E> extends never ? never : E;
+}[Entity];
 
 type EntityListRendererCoverage<E extends ListRendererEntity> = Readonly<
-  Record<ListRendererId<E>, PresentationCoverage<ListRenderer<E>>>
+  Record<
+    ListRendererId<E>,
+    E extends ListEntity
+      ? PresentationCoverage<ListRenderer<E>>
+      : PresentationCoverage<never>
+  >
 >;
 
 const recipeSourceRenderer: ListRenderer<"recipe"> = (helper) =>
@@ -110,10 +120,24 @@ const scoredCoverage = <E extends ScoredListEntity>() => ({
 export const listRendererCoverage = {
   recipe: {
     "recipe-source": implemented(recipeSourceRenderer),
+    ...scoredCoverage<"recipe">(),
   },
   product: scoredCoverage<"product">(),
   purchase: scoredCoverage<"purchase">(),
   // pantry and garden entities
+  ingredient: scoredCoverage<"ingredient">(),
+  // cookbook has no generic list-page contract (bespoke browser, no
+  // pagination envelope — see cookbook.ts): its `dataQuality` column has no
+  // column-collection renderer to implement here.
+  cookbook: {
+    "data-quality": unsupported(
+      "cookbook's list is a bespoke, non-paginated browser (cookbook.ts) with no generic column-collection contract to implement this renderer against",
+    ),
+  },
+  location: scoredCoverage<"location">(),
+  inventory: scoredCoverage<"inventory">(),
+  meal: scoredCoverage<"meal">(),
+  productCategory: scoredCoverage<"productCategory">(),
   // finance and project entities
 } satisfies {
   [E in ListRendererEntity]: EntityListRendererCoverage<E>;
