@@ -358,6 +358,7 @@ export function SplitExpenseDialog({
               </Row>
               <FieldSuggestionApply
                 source={{
+                  basisMode: "provided",
                   entity: "expense",
                   targets: ["trade"],
                   basis: {

@@ -319,14 +319,15 @@ export const aiUsageSummaryOut = z.array(aiUsageSummaryRowSchema);
 export type AiUsageSummaryRow = z.infer<typeof aiUsageSummaryRowSchema>;
 
 /**
- * `ai.suggestFields` — one request per form, resolved server-side in
- * dependency order (`server/ai/field-suggest/suggest-fields.ts`). `targets`
+ * `ai.suggestFields` — one request per record or form. Independent targets
+ * resolve concurrently; only `suggested` mode chains dependencies. `targets`
  * and the keys of `basis` are bare manifest field keys of `entity` (not
  * `entity.field` composites — `entity` already scopes them); `basis` values
  * are shortcodes for reference fields and plain text otherwise, `null` when
- * unset/unknown so the server can chain a sibling target's own resolution.
+ * unset/unknown. `provided` mode never uses another target's proposal as evidence.
  */
 export const fieldSuggestionsInput = z.object({
+  basisMode: z.enum(["provided", "suggested"]),
   entity: z.enum(shortcodeEntities),
   targets: z.array(z.string().min(1)).min(1),
   basis: z.record(z.string(), z.string().nullable()),

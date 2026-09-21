@@ -85,7 +85,8 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
                   // Deselecting the current row clears the field, and an empty
                   // string is what the callers' `.trim() || null` turns into a
                   // null vendor — the same thing emptying the old text input did.
-                  setValue={(item) =>
+                  setValue={(item) => {
+                    field.onBlur();
                     field.onChange(
                       // SAFETY: `name` is a caller-owned Path whose value is
                       // the vendor-name string; RHF cannot derive that value
@@ -94,10 +95,13 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
                         TFieldValues,
                         Path<TFieldValues>
                       >,
-                    )
-                  }
+                    );
+                  }}
                   onCreateNew={onCreateNew}
-                  onOpenChange={onOpenChange}
+                  onOpenChange={(open) => {
+                    if (!open) field.onBlur();
+                    onOpenChange?.(open);
+                  }}
                   clearable
                 />
                 {suggestField && (

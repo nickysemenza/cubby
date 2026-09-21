@@ -263,6 +263,31 @@ describe("useAutoFieldSuggestion", () => {
     expect(isDirtyText("trade")).toBe("true");
   });
 
+  it("protects a deliberate choice equal to the default from create autofill", async () => {
+    const operations = operationsReturning(() => ({
+      suggestions: { trade: tradeSuggestion },
+    }));
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["trade"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={() => {}}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.blur(screen.getByLabelText("trade"));
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "install cabinets" },
+    });
+    await waitFor(() => expect(calls).toHaveLength(1));
+    await delay(100);
+    expect(screen.getByLabelText("trade")).toHaveValue("");
+    expect(calls[0]?.basisMode).toBe("suggested");
+  });
+
   it("never auto-writes in edit mode, but apply() writes and dirties", async () => {
     let form!: UseFormReturn<FieldValues>;
     const operations = operationsReturning(() => ({

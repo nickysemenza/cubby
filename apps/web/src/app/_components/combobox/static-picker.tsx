@@ -19,6 +19,7 @@ interface StaticPickerProps {
   items: readonly StaticPickerOption[];
   value: string | null;
   onValueChange: (value: string | null) => void;
+  onOpenChange?: (open: boolean) => void;
   label: string;
   placeholder?: string;
   className?: string;
@@ -36,6 +37,7 @@ export function StaticPicker({
   items,
   value,
   onValueChange,
+  onOpenChange,
   label,
   placeholder,
   className,
@@ -77,6 +79,7 @@ export function StaticPicker({
         items={pickerItems}
         value={selected}
         setValue={(item) => onValueChange(item?.id ?? null)}
+        onOpenChange={onOpenChange}
         placeholder={placeholder}
         disabled={disabled}
         openOnMount={openOnMount}

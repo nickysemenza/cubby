@@ -14,6 +14,10 @@ import {
   useState,
 } from "react";
 
+import {
+  RecordRowSuggestions,
+  RecordSuggestionBoundary,
+} from "~/app/_components/ai/record-suggestions";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
@@ -535,20 +539,23 @@ function PhoneListRow<TItem extends RowData>({
   };
 
   const content = (
-    <RowContent
-      selectionMode={selectionMode}
-      showThumb={showThumb}
-      thumb={thumb}
-      row={row}
-      title={model.title}
-      href={isLink ? model.detailsHref : undefined}
-      longPress={longPress}
-      subtitleParts={subtitleParts}
-      trailingEntries={trailingEntries}
-      rowActions={rowActions}
-    >
-      {children}
-    </RowContent>
+    <RecordSuggestionBoundary record={row.original}>
+      <RowContent
+        selectionMode={selectionMode}
+        showThumb={showThumb}
+        thumb={thumb}
+        row={row}
+        title={model.title}
+        href={isLink ? model.detailsHref : undefined}
+        longPress={longPress}
+        subtitleParts={subtitleParts}
+        trailingEntries={trailingEntries}
+        rowActions={rowActions}
+      >
+        {children}
+        <RecordRowSuggestions record={row.original} />
+      </RowContent>
+    </RecordSuggestionBoundary>
   );
 
   if (isLink && model.detailsHref) {

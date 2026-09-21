@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 
 import { entityMutation } from "~/entities/entity-mutation.functions";
+import { ai } from "~/lib/ai.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
@@ -68,6 +69,9 @@ const meals: MealOut[] = [tuesdayDinner, cornerDeli];
 
 /** Real operation descriptors with only their unreachable transport replaced. */
 const testOperations: AddToMealOperations = {
+  suggestFields: ai.suggestFields.withTransport(async () => ({
+    suggestions: {},
+  })),
   existingMeals: meal.getByDateRange.withTransport(async () => {
     mealRequests += 1;
     return meals;
@@ -120,9 +124,16 @@ afterEach(() => {
 });
 
 function renderAddToMeal() {
-  return render(<AddToMeal recipeId={recipeId} operations={testOperations} />, {
-    wrapper: harness.wrapper,
-  });
+  return render(
+    <AddToMeal
+      recipeId={recipeId}
+      recipeName="Roasted vegetables"
+      operations={testOperations}
+    />,
+    {
+      wrapper: harness.wrapper,
+    },
+  );
 }
 
 async function openMealPicker() {

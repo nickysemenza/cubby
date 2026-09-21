@@ -64,6 +64,7 @@ const SPECS: EndpointSpec[] = [
     model: DECISION_TIER_MODEL,
     defaultInput: {
       entity: "product",
+      basisMode: "provided",
       targets: ["category"],
       basis: { name: "cordless drill", manufacturer: "DeWalt" },
     },

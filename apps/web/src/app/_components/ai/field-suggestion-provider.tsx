@@ -11,6 +11,8 @@ import {
 } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
+import { Description } from "~/components/ui/description";
+
 import {
   basisValueOf,
   type EntitySuggestionsOperations,
@@ -19,8 +21,10 @@ import {
   suggestTargetsFor,
   useEntitySuggestionsQuery,
 } from "./field-suggestion";
+import { SuggestionVisitProvider } from "./suggestion-review";
 
 export interface FieldSuggestionContextValue {
+  readonly questionKey: string;
   readonly entity: ShortcodeEntity;
   readonly mode: "create" | "edit";
   readonly suggestions: Record<string, FieldSuggestion | null>;
@@ -90,8 +94,7 @@ export function FieldSuggestionProvider({
   /** Restrict targets to this roster of field keys — the mounted intent's
    * field list. Omit to offer every `control.suggest` field the entity's
    * manifest declares, whether or not this form actually renders each one
-   * (an unrendered target simply never gets an `AutoSuggestSlot`/hook to read
-   * its answer, so it costs nothing beyond one basis key in the request). */
+   * (each requested target can incur a separate model decision). */
   fieldKeys?: readonly string[];
   children: ReactNode;
 }) {
@@ -154,12 +157,16 @@ export function FieldSuggestionProvider({
     () =>
       targets.targets.length > 0 && sufficient
         ? {
+            basisMode:
+              mode === "create"
+                ? ("suggested" as const)
+                : ("provided" as const),
             entity,
             targets: targets.targets.map((target) => target.key),
             basis: debouncedBasis,
           }
         : null,
-    [entity, targets, sufficient, debouncedBasis],
+    [entity, mode, targets, sufficient, debouncedBasis],
   );
 
   const { suggestions, isFetching } = useEntitySuggestionsQuery({
@@ -170,15 +177,23 @@ export function FieldSuggestionProvider({
 
   const value = useMemo<FieldSuggestionContextValue>(
     () => ({
+      questionKey: JSON.stringify(source),
       entity,
       mode,
-      suggestions,
-      isFetching,
+      suggestions:
+        JSON.stringify(basis) === JSON.stringify(debouncedBasis)
+          ? suggestions
+          : {},
+      isFetching:
+        isFetching || JSON.stringify(basis) !== JSON.stringify(debouncedBasis),
       markAutoFilled,
       clearAutoFilled,
       isAutoFilled,
     }),
     [
+      source,
+      basis,
+      debouncedBasis,
       entity,
       mode,
       suggestions,
@@ -190,8 +205,15 @@ export function FieldSuggestionProvider({
   );
 
   return (
-    <FieldSuggestionContext.Provider value={value}>
-      {children}
-    </FieldSuggestionContext.Provider>
+    <SuggestionVisitProvider>
+      <FieldSuggestionContext.Provider value={value}>
+        {source && value.isFetching ? (
+          <Description size="xs" as="output">
+            Checking suggestions…
+          </Description>
+        ) : null}
+        {children}
+      </FieldSuggestionContext.Provider>
+    </SuggestionVisitProvider>
   );
 }

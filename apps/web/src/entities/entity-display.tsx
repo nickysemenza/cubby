@@ -18,6 +18,7 @@ import {
   fieldSuggestionBasisFromRecord,
   suggestTargetsFor,
 } from "~/app/_components/ai/field-suggestion";
+import { RecordFieldSuggestion } from "~/app/_components/ai/record-suggestions";
 import {
   isReferencePickerEntity,
   referenceEntitySearch,
@@ -509,6 +510,13 @@ export function EntityBasicInfo<TRecord extends object>({
           {
             label: field.label,
             ...rendered,
+            value: field.control?.suggest ? (
+              <RecordFieldSuggestion record={record} field={field.key}>
+                {rendered.value}
+              </RecordFieldSuggestion>
+            ) : (
+              rendered.value
+            ),
             filterAction:
               filterAction || explanationAction ? (
                 <>
@@ -621,6 +629,7 @@ function renderEditableField<TRecord extends object>(
       const shortcodeEntity = entity as ShortcodeEntity;
       const suggest = control.suggest
         ? {
+            basisMode: "provided" as const,
             entity: shortcodeEntity,
             targets: [key],
             basis: fieldSuggestionBasisFromRecord(

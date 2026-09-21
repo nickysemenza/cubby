@@ -95,6 +95,7 @@ async function applyPreviewSuggestions(args: {
     }, {});
   try {
     const result = await suggestFields(args.context.db, {
+      basisMode: "suggested",
       entity: args.entity,
       targets: [...args.targets],
       basis,

@@ -156,12 +156,65 @@ describe("suggestFields", () => {
     async ({ entity, targets, basis, jev, registry, assert }) => {
       const out = await suggestFields(
         fakeDb,
-        { entity, targets, basis },
+        { entity, targets, basis, basisMode: "suggested" },
         { jev, registry },
       );
       assert(out, jev);
     },
   );
+
+  it.each(["provided", "suggested"] as const)(
+    "runs independent fields concurrently in %s mode",
+    async (basisMode) => {
+      const release: Array<() => void> = [];
+      const pick = jevPortPicking();
+      const jev: JevPort = async (input) => {
+        await new Promise<void>((resolve) => {
+          release.push(resolve);
+        });
+        return pick(input);
+      };
+      const result = suggestFields(
+        fakeDb,
+        {
+          entity: "meal",
+          targets: ["mealType", "mealKind"],
+          basis: { name: "evening meal" },
+          basisMode,
+        },
+        { jev },
+      );
+      await vi.waitFor(() => expect(release).toHaveLength(2));
+      release.forEach((resolve) => resolve());
+      expect(Object.keys((await result).suggestions)).toHaveLength(2);
+    },
+  );
+
+  it("does not turn an unaccepted project proposal into trade evidence", async () => {
+    const jev = jevPortPicking("Kitchen Remodel", "electrical:");
+    const labels = vi.fn(async () => new Map<string, string>());
+    await suggestFields(
+      fakeDb,
+      {
+        entity: "expense",
+        targets: ["projectId", "trade"],
+        basis: { name: "panel upgrade", projectId: null },
+        basisMode: "provided",
+      },
+      {
+        jev,
+        resolveLabels: labels,
+        registry: { "expense.projectId": fakeProjectSpec() },
+      },
+    );
+    const trade = jev.mock.calls.find(([input]) =>
+      Object.values(input.questions.selection.criteria).some((label) =>
+        label.startsWith("electrical:"),
+      ),
+    );
+    expect(trade?.[0].state).not.toContain("Kitchen Remodel");
+    expect(labels.mock.calls.flat()).not.toContain("PRJ-AAAA");
+  });
 
   it("rejects an unknown target without calling the model", async () => {
     const jev = jevPortPicking();
@@ -169,7 +222,12 @@ describe("suggestFields", () => {
     await expect(
       suggestFields(
         fakeDb,
-        { entity: "task", targets: ["notAField"], basis: {} },
+        {
+          basisMode: "provided",
+          entity: "task",
+          targets: ["notAField"],
+          basis: {},
+        },
         { jev },
       ),
     ).rejects.toMatchObject({
@@ -200,6 +258,7 @@ describe("suggestFields", () => {
     const chained = await suggestFields(
       fakeDb,
       {
+        basisMode: "suggested",
         entity: "expense",
         targets: ["projectId", "trade"],
         basis: { name: "panel upgrade", projectId: null },
@@ -223,6 +282,7 @@ describe("suggestFields", () => {
     const explicit = await suggestFields(
       fakeDb,
       {
+        basisMode: "suggested",
         entity: "expense",
         targets: ["projectId", "trade"],
         basis: { name: "panel upgrade", projectId: "PRJ-EXPLICIT" },
