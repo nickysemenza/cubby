@@ -34,6 +34,7 @@ import {
 } from "~/server/db/schema";
 import type { EntityTimelineImplementation } from "~/server/entity-timeline/contracts";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 
 import { getProductsByShortcodes, productList } from "./crud";
@@ -208,7 +209,7 @@ export async function getProductMovementTimeline(
     .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))
     .leftJoin(
       project,
-      and(eq(project.id, expense.projectId), notDeleted(project)),
+      and(eq(project.id, effectiveExpenseProjectSql()), notDeleted(project)),
     )
     .where(and(notDeleted(expense), inArray(expense.productId, productIds)));
 

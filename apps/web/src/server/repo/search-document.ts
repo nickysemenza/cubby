@@ -24,6 +24,15 @@ import {
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { normalizeSearchText } from "~/server/semantic/text";
 
+import { effectiveExpenseTradeSql } from "./expense-inheritance";
+import { expenseProjectNamesSql } from "./expense-project-allocation";
+import {
+  effectiveProjectLocationsSql,
+  effectiveTaskProjectSql,
+  effectiveTaskSubjectProductSql,
+  effectiveTaskTradeSql,
+} from "./task-project-inheritance";
+
 interface SearchDocumentSource {
   entityType: SearchableEntity;
   entityId: string;
@@ -335,11 +344,11 @@ async function getSearchDocumentSources(
       SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
       FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)}`,
     project: sql`
-      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."icon", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[]
+      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."icon", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveProjectLocationsSql(sql`p."id"`)}
       FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)}`,
     task: sql`
-      SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", t."trade", ARRAY[]::text[], ARRAY[t."trade", sp."name"]::text[]
-      FROM "Task" t LEFT JOIN "Project" p ON p."id" = t."projectId" AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = t."subjectProductId" AND sp."deletedAt" IS NULL
+      SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", ${effectiveTaskTradeSql("t")}, ARRAY[]::text[], ARRAY[${effectiveTaskTradeSql("t")}, sp."name"]::text[]
+      FROM "Task" t LEFT JOIN "Project" p ON p."id" = ${effectiveTaskProjectSql("t")} AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = ${effectiveTaskSubjectProductSql("t")} AND sp."deletedAt" IS NULL
       WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND ${requested(sql`t."id"`)}`,
     vendor: sql`
       SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
@@ -362,8 +371,8 @@ async function getSearchDocumentSources(
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
       WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND ${requested(sql`ft."id"`)}`,
     expense: sql`
-      SELECT 'expense', e."id"::text, e."shortcode", e."name", p."name", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", e."trade", e."costType"]::text[]
-      FROM "Expense" e LEFT JOIN "Project" p ON p."id" = e."projectId" AND p."deletedAt" IS NULL
+      SELECT 'expense', e."id"::text, e."shortcode", e."name", ${expenseProjectNamesSql(sql`e."id"`)}, CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType"]::text[]
+      FROM "Expense" e
       WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND ${requested(sql`e."id"`)}`,
     wish: sql`
       SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]

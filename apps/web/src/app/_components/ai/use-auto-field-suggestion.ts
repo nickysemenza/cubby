@@ -50,6 +50,13 @@ type SuggestionWriteValue = string | ComboboxItem | null;
 
 const comboboxItemIdSchema = z.object({ id: z.string() });
 
+function explicitModeField(entity: string | undefined, field: string) {
+  if (entity !== "task") return null;
+  if (field === "projectId") return "projectMode";
+  if (field === "subjectProductId") return "subjectProductMode";
+  return null;
+}
+
 function suggestionSeedItem(suggestion: FieldSuggestion): ComboboxItem | null {
   if (!suggestion.value) return null;
   return {
@@ -131,6 +138,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
   const state = form.getFieldState(name, formState);
   const isDirty = state.isDirty || state.isTouched;
   const suggestion = context?.suggestions[field] ?? null;
+  const resolution = context?.resolutionFor(field) ?? null;
   const current: unknown = form.getValues(name);
   const applied = suggestion
     ? currentEquals(current, suggestion, valueKind)
@@ -143,6 +151,8 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       context.mode !== "create" ||
       isDirty ||
       context.isFetching ||
+      (resolution !== null &&
+        !(resolution.mode === "inherit" && resolution.value === null)) ||
       !suggestion?.value ||
       suggestion.probability == null ||
       suggestion.probability < 0.85 ||
@@ -161,6 +171,15 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
         Path<TFieldValues>
       >,
     );
+    const modeField = explicitModeField(context.entity, field);
+    if (modeField) {
+      // SAFETY: explicitModeField returns only generated Task mode paths, and
+      // both accept the literal `explicit` in the mounted Task form.
+      form.setValue(
+        modeField as Path<TFieldValues>,
+        "explicit" as PathValue<TFieldValues, Path<TFieldValues>>,
+      );
+    }
     context.markAutoFilled(field, suggestion.value);
   }, [
     context,
@@ -172,6 +191,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
     name,
     field,
     valueKind,
+    resolution,
   ]);
 
   useEffect(() => {
@@ -197,6 +217,14 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       return;
     }
     form.resetField(name);
+    const modeField = explicitModeField(context.entity, field);
+    if (modeField) {
+      // SAFETY: explicitModeField returns only generated Task mode paths.
+      form.setValue(
+        modeField as Path<TFieldValues>,
+        "inherit" as PathValue<TFieldValues, Path<TFieldValues>>,
+      );
+    }
     context.clearAutoFilled(field);
   }, [context, disabled, isDirty, suggestion, form, name, field]);
 
@@ -217,7 +245,17 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       >,
       { shouldDirty: true, shouldTouch: true },
     );
-  }, [suggestion, valueKind, form, name, context, current]);
+    const modeField = explicitModeField(context?.entity, field);
+    if (modeField) {
+      // SAFETY: the only two modeField literals name Task form fields whose
+      // generated input contract accepts the literal "explicit".
+      form.setValue(
+        modeField as Path<TFieldValues>,
+        "explicit" as PathValue<TFieldValues, Path<TFieldValues>>,
+        { shouldDirty: true },
+      );
+    }
+  }, [suggestion, valueKind, form, name, context, current, field]);
 
   if (!context) return NO_SUGGESTION;
 

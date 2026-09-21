@@ -9,16 +9,18 @@
  * projects costs 4 queries total, not 200.
  */
 import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
-import { and, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { expense, projectDependency, task } from "~/server/db/schema";
+import { projectDependency, task } from "~/server/db/schema";
 import {
   dependencyIdsFor,
   getDb,
   notDeleted,
+  uuidArrayParam,
 } from "~/server/repo/database-helpers";
-import { expenseAggregateFields } from "~/server/repo/expense-aggregate-sql";
+import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
+import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
 
 import {
@@ -48,33 +50,42 @@ export async function projectRollups(
   if (projectIds.length === 0) return out;
   for (const id of projectIds) out.set(id, { ...EMPTY_PROJECT_OWN_ROLLUP });
 
-  const expenseAggregates = expenseAggregateFields();
-
   const [expenseRows, taskRows] = await Promise.all([
     getDb(db)
-      .select({
-        projectId: expense.projectId,
-        spent: expenseAggregates.net,
-        // Split the blended `spent` into its three economically distinct parts
-        // (see spend.ts / BudgetStrip). actualSpent + committedSpent −
-        // contributions === spent.
-        actualSpent: expenseAggregates.actual,
-        committedSpent: expenseAggregates.committed,
-        contributions: expenseAggregates.credits,
-        expenseCount: expenseAggregates.count,
-      })
-      .from(expense)
-      .where(and(inArray(expense.projectId, projectIds), notDeleted(expense)))
-      .groupBy(expense.projectId),
+      .execute<{
+        projectId: ProjectId | null;
+        spent: number;
+        actualSpent: number;
+        committedSpent: number;
+        contributions: number;
+        expenseCount: number;
+      }>(sql`
+      SELECT allocation."projectId",
+        (coalesce(sum(allocation."attributedCents"::bigint), 0) / 100.0)::double precision AS "spent",
+        (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" >= 0), 0) / 100.0)::double precision AS "actualSpent",
+        (coalesce(sum(allocation."attributedCents"::bigint) filter (where e."future" = true), 0) / 100.0)::double precision AS "committedSpent",
+        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where e."future" = false and e."cost" < 0), 0) / 100.0)::double precision AS "contributions",
+        count(distinct allocation."expenseId")::int AS "expenseCount"
+      FROM (${expenseProjectAllocationSql()}) allocation
+      JOIN "Expense" e ON e."id" = allocation."expenseId"
+      WHERE allocation."projectId" = ANY(${uuidArrayParam(projectIds)})
+      GROUP BY allocation."projectId"
+    `)
+      .then((result) => result.rows),
     getDb(db)
       .select({
-        projectId: task.projectId,
+        projectId: effectiveTaskProjectSql("Task"),
         taskCount: sql<number>`count(*)::int`,
         doneTaskCount: sql<number>`count(*) filter (where ${task.status} = ${"done"})::int`,
       })
       .from(task)
-      .where(and(inArray(task.projectId, projectIds), notDeleted(task)))
-      .groupBy(task.projectId),
+      .where(
+        and(
+          sql`${effectiveTaskProjectSql("Task")} = ANY(${uuidArrayParam(projectIds)})`,
+          notDeleted(task),
+        ),
+      )
+      .groupBy(effectiveTaskProjectSql("Task")),
   ]);
 
   for (const row of expenseRows) {
@@ -128,34 +139,34 @@ export async function projectContentDates(
   const out = new Map<ProjectId, ProjectContentDates>();
   if (projectIds?.length === 0) return out;
 
-  const scope = (column: typeof task.projectId | typeof expense.projectId) =>
+  const scope = (column: SQL) =>
     projectIds ? inArray(column, projectIds) : isNotNull(column);
 
   const [taskRows, expenseRows] = await Promise.all([
     getDb(db)
       .select({
-        projectId: task.projectId,
+        projectId: effectiveTaskProjectSql(),
         contentStart: sql<string | null>`min(${task.dueDate})`,
         contentEnd: sql<string | null>`max(${effectiveTaskDueDateSql()})`,
       })
       .from(task)
-      .where(and(scope(task.projectId), notDeleted(task)))
-      .groupBy(task.projectId),
+      .where(and(scope(effectiveTaskProjectSql()), notDeleted(task)))
+      .groupBy(effectiveTaskProjectSql()),
     getDb(db)
-      .select({
-        projectId: expense.projectId,
-        contentStart: sql<string | null>`min(${expense.date})`,
-        contentEnd: sql<string | null>`max(${expense.date})`,
-      })
-      .from(expense)
-      .where(
-        and(
-          scope(expense.projectId),
-          notDeleted(expense),
-          excludeExpenseId ? ne(expense.id, excludeExpenseId) : undefined,
-        ),
-      )
-      .groupBy(expense.projectId),
+      .execute<{
+        projectId: ProjectId;
+        contentStart: string | null;
+        contentEnd: string | null;
+      }>(sql`
+      SELECT allocation."projectId",
+        min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
+      FROM (${expenseProjectAllocationSql()}) allocation
+      JOIN "Expense" e ON e."id" = allocation."expenseId"
+      WHERE ${scope(sql`allocation."projectId"`)}
+        ${excludeExpenseId ? sql`AND e."id" <> ${excludeExpenseId}` : sql``}
+      GROUP BY allocation."projectId"
+    `)
+      .then((result) => result.rows),
   ]);
 
   for (const row of [...taskRows, ...expenseRows]) {

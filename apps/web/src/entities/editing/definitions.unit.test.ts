@@ -1,7 +1,10 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { projectOut, taskOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+
+import { mock } from "~/lib/test/mock-schema";
 
 import { entityEditRegistry } from "./definitions";
 import {
@@ -29,7 +32,91 @@ it("exposes a Zod 4 default as a plain def.defaultValue property", () => {
   expect(schema.def.defaultValue).toBe("cooked");
 });
 
+const explicitNoneResolution = () => ({
+  mode: "none" as const,
+  storedValue: null,
+  value: null,
+  fallbackValue: null,
+  source: "Explicit choice",
+  sourceEntity: null,
+  matchesFallback: false,
+  canReset: true,
+});
+
 describe("entity edit definitions", () => {
+  it.each([
+    {
+      entity: "task" as const,
+      modes: ["projectMode", "subjectProductMode"],
+      resolutionField: "projectId",
+    },
+    {
+      entity: "project" as const,
+      modes: ["locationsMode"],
+      resolutionField: "locations",
+    },
+  ])(
+    "preserves $entity assignment intent through ordinary form saves",
+    ({ entity, modes, resolutionField }) => {
+      const createRequest = {
+        entity,
+        operation: "create" as const,
+        intent: "full" as const,
+        surface: "dialog" as const,
+      };
+      const createResolved = resolveEntityEdit(
+        entityEditRegistry,
+        createRequest,
+      );
+      if (!("definition" in createResolved))
+        throw new Error("Create must resolve");
+      const createValues = initialEntityEditValues(
+        createResolved,
+        createRequest,
+      );
+      for (const mode of modes) expect(createValues[mode]).toBe("inherit");
+      expect(
+        buildEntityEdit(createResolved, createRequest, {
+          ...createValues,
+          name: "Synthetic work",
+        }).ok,
+      ).toBe(true);
+
+      const record = {
+        ...(entity === "task" ? mock(taskOut) : mock(projectOut)),
+        name: "Synthetic work",
+        images: [],
+        fieldResolutions: { [resolutionField]: explicitNoneResolution() },
+      };
+      const updateRequest = {
+        entity,
+        operation: "update" as const,
+        intent: "full" as const,
+        surface: "dialog" as const,
+        record,
+      };
+      const resolved = resolveEntityEdit(entityEditRegistry, updateRequest);
+      if (!("definition" in resolved)) throw new Error("Update must resolve");
+      const values = initialEntityEditValues(resolved, updateRequest);
+      expect(values[modes[0]!]).toBe("explicit");
+      // An unrelated edit must not emit a hidden mode and suppress the server's
+      // detach-preservation behavior.
+      const result = buildEntityEdit(resolved, updateRequest, {
+        ...values,
+        name: "Renamed work",
+      });
+      if (
+        !result.ok ||
+        !result.changed ||
+        result.command.operation !== "update"
+      )
+        throw new Error("Rename must build an update");
+      expect(result.command.data).toHaveProperty("name", "Renamed work");
+      for (const mode of modes)
+        expect(result.command.data).not.toHaveProperty(mode);
+    },
+  );
+
   it("covers every standard editable entity exactly once", () => {
     expect(Object.keys(entityEditRegistry).sort()).toEqual(
       [...editableEntities].sort(),

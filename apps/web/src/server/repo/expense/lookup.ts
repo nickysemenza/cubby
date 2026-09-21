@@ -46,7 +46,19 @@ import {
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+  expenseInheritanceReadExtras,
+} from "../expense-inheritance";
+import {
+  type ExpenseAllocationProjectScope,
+  expenseAllocationExistsSql,
+  loadExpenseProjectAllocations,
+} from "../expense-project-allocation";
 import { dbExpenseToAPI } from "./helpers";
+
+const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
 
 // Drop malformed, missing, soft-deleted, and wrong-prefix references.
 const toUuids = async (
@@ -118,39 +130,46 @@ const orderIdPresence = (
       );
 };
 
+export const resolveExpenseProjectAllocationScope = async (
+  db: Database,
+  filters: ExpenseFilters,
+): Promise<ExpenseAllocationProjectScope | undefined> => {
+  const codes = filters.projectId ? [filters.projectId].flat() : [];
+  const ids = await toUuids(db, codes, "project");
+  let selectedIds = ids;
+  if (ids.length > 0 && filters.includeSubProjects) {
+    const { childrenByParent } = await loadProjectTree(db);
+    selectedIds = uniq(
+      ids.flatMap((id) => {
+        const projectId = parseEntityId("project", id);
+        return [
+          projectId,
+          ...collectDescendantIds(childrenByParent, projectId),
+        ];
+      }),
+    );
+  }
+  if (codes.length > 0 && selectedIds.length === 0) {
+    return { projectIds: [] };
+  }
+  const projectIds = selectedIds.map((id) => parseEntityId("project", id));
+  if (projectIds.length === 0 && !filters.projectPresenceFilter)
+    return undefined;
+  return {
+    projectIds: projectIds.length > 0 ? projectIds : undefined,
+    presence: filters.projectPresenceFilter,
+  };
+};
+
 const projectFilterCondition = async (
   db: Database,
   filters: ExpenseFilters,
 ): Promise<SQL | undefined> => {
-  const codes = filters.projectId ? [filters.projectId].flat() : [];
-  const ids = await toUuids(db, codes, "project");
-  let selected =
-    ids.length > 0
-      ? eqAny(expense.projectId, ids)
-      : codes.length > 0
-        ? sql`false`
-        : undefined;
-  if (ids.length > 0 && filters.includeSubProjects) {
-    const { childrenByParent } = await loadProjectTree(db);
-    selected = inArray(
-      expense.projectId,
-      uniq(
-        ids.flatMap((id) => {
-          const projectId = parseEntityId("project", id);
-          return [
-            projectId,
-            ...collectDescendantIds(childrenByParent, projectId),
-          ];
-        }),
-      ),
-    );
-  }
+  const scope = await resolveExpenseProjectAllocationScope(db, filters);
+  if (!scope) return undefined;
   // The presence sentinel ORs with the selected projects, so "Kitchen or
   // unassigned" remains one filter rather than an impossible conjunction.
-  return or(
-    selected,
-    presenceCondition(expense.projectId, filters.projectPresenceFilter),
-  );
+  return expenseAllocationExistsSql(sql`${expense.id}`, scope);
 };
 
 const requestedReferenceCondition = (
@@ -273,7 +292,8 @@ export const buildExpenseWhereClause = async (
   // `lineKind`, `lineBasis`, `costType`, `trade` (multiselect) and `future`
   // (boolean) are also declared stored filters — applied by
   // `expenseScaffold.where` before the conditions below.
-  return expenseScaffold.where(filters, [
+  const storedFilters = { ...filters, trade: undefined };
+  return expenseScaffold.where(storedFilters, [
     ...auditDateWhereConditions(expense, filters),
     ...relatedWhereConditions("expense", filters, expense.id),
     ...(options?.extraConditions ?? []),
@@ -281,7 +301,11 @@ export const buildExpenseWhereClause = async (
     projectCondition,
     scopedProjectIds
       ? scopedProjectIds.length > 0
-        ? inArray(expense.projectId, scopedProjectIds)
+        ? expenseAllocationExistsSql(sql`${expense.id}`, {
+            projectIds: scopedProjectIds.map((id) =>
+              parseEntityId("project", id),
+            ),
+          })
         : sql`false`
       : undefined,
     // `productIds.length === 0` is ambiguous by itself — it means either
@@ -331,6 +355,7 @@ export const buildExpenseWhereClause = async (
       expense.productQuantity,
       filters.productQuantityPresenceFilter,
     ),
+    filters.trade ? inArray(effectiveTrade, [filters.trade].flat()) : undefined,
     // `orderId` presence can't be a column-null check any more: it's a column
     // on the CHARGE, and a row with a charge that has no order id is a
     // different state from a row with no charge at all. Both read as "no order
@@ -358,11 +383,12 @@ const resolveExpenseSort = (sort: SortParams) => {
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
 
   if (sort.orderBy === "project") {
+    const direction =
+      sort.direction === "asc" ? sql`asc nulls last` : sql`desc nulls last`;
     return [
-      sql.raw(
-        `(SELECT p."name" FROM "Project" p ` +
-          `WHERE p."id" = "expense"."projectId" AND p."deletedAt" IS NULL) ${dirSql}`,
-      ),
+      sql`(SELECT p."name" FROM "Project" p
+          WHERE p."id" = ${effectiveExpenseProjectSql('"expense"')}
+            AND p."deletedAt" IS NULL) ${direction}`,
     ];
   }
 
@@ -425,13 +451,35 @@ export const expenseList = async (
         orderBy: orderByArray,
         limit: take,
         offset: skip,
+        extras: expenseInheritanceReadExtras(),
         ...relations.expense.withProject,
       }),
     count: () => countWhere(db, expense, whereClause),
   });
+  const allocations = await loadExpenseProjectAllocations(
+    db,
+    rows.map((row) => row.id),
+  );
+  const allocationsByExpense = new Map<
+    (typeof rows)[number]["id"],
+    typeof allocations
+  >();
+  for (const allocation of allocations) {
+    const existing = allocationsByExpense.get(allocation.expenseId) ?? [];
+    existing.push(allocation);
+    allocationsByExpense.set(allocation.expenseId, existing);
+  }
 
   return {
-    data: await withDisplayImages(db, "expense", rows, dbExpenseToAPI),
+    data: await withDisplayImages(
+      db,
+      "expense",
+      rows.map((row) => ({
+        ...row,
+        projectAllocations: allocationsByExpense.get(row.id) ?? [],
+      })),
+      dbExpenseToAPI,
+    ),
     count,
   };
 };

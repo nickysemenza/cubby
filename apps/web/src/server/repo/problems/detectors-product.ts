@@ -1,3 +1,4 @@
+import { displayGtin, GTIN_SOURCE } from "@cubby/schemas/external-id";
 /**
  * Product-centric Problems detectors.
  *
@@ -6,8 +7,6 @@
  * effective-mapping synthesis, plus the coverage data pull, recipe-usage counts,
  * and linked-product-id lookup the service layer composes.
  */
-
-import { displayGtin, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import type {
   IngredientId,
   ProductId,
@@ -86,6 +85,7 @@ import {
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
+import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
 
 export type { ProductWithBetterUpcData };
 
@@ -145,7 +145,12 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
       dbClient
         .select({ id: sql`1` })
         .from(task)
-        .where(and(eq(task.subjectProductId, product.id), notDeleted(task))),
+        .where(
+          and(
+            eq(effectiveTaskSubjectProductSql(), product.id),
+            notDeleted(task),
+          ),
+        ),
     ),
   "ProjectToolUsage.productId": (dbClient) =>
     notExists(

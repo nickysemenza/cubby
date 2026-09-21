@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Throwing something away, as a ledger event.
  *
@@ -26,8 +27,6 @@
  *    just said to do, atomically, so expected and actual cannot diverge in the
  *    gap between two writes.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
 import type {
   ExpenseId,
   InventoryId,
@@ -35,6 +34,7 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -54,6 +54,7 @@ import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export type DiscardProductInput = {
+  trade: Trade;
   productId: ProductId;
   quantity: number;
   date: string;
@@ -114,7 +115,7 @@ const writeDiscardLine = async (
     // A Product may only hang off a principal line.
     lineKind: "principal",
     costType: "tools",
-    trade: "other",
+    trade: tradeSchema.parse(input.trade),
     url: null,
     notes: input.reason,
     future: false,
@@ -254,6 +255,7 @@ export const discardProductUnits = async (
   });
 
 export type DiscardFromInventoryInput = {
+  trade: Trade;
   items: readonly { inventoryEntryId: InventoryId; quantity: number }[];
   date: string;
   reason: string | null;
@@ -349,6 +351,7 @@ export const discardFromInventoryEntries = async (
           {
             productId: entry.productId,
             quantity: item.quantity,
+            trade: input.trade,
             date: input.date,
             reason: input.reason,
             inventoryEntryId: entry.id,

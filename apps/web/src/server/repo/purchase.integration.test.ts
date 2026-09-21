@@ -365,7 +365,7 @@ describe("purchase repository — splitExpense", () => {
     expect(reconcilePurchase(charge)).toBe("match");
   });
 
-  it("ACCEPTS a deliberately mismatched sum and merely reports it", async () => {
+  it("refuses a split that would change the source amount", async () => {
     const { output: combo } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -381,42 +381,43 @@ describe("purchase repository — splitExpense", () => {
     const chargeId = combo.purchaseId!;
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
 
-    // 60 + 25 = 85 against a $100 charge. Nothing validates that the parts add
-    // up, so this write must SUCCEED — a partial refund reduces a line without
-    // changing what the charge stated, so a mismatch is frequently correct.
-    const { items: parts } = await splitExpense(
-      ctx.db,
-      splitExpenseInput.parse({
-        expenseId: combo.id,
-        parts: [
-          {
-            name: "kept portion",
-            cost: 60,
-            costType: "materials",
-            trade: "other",
-          },
-          {
-            name: "refunded portion",
-            cost: 25,
-            costType: "materials",
-            trade: "other",
-          },
-        ],
-      }),
-      ctx.actor,
-    );
-    expect(parts.map((p) => p.cost).sort()).toEqual([25, 60]);
+    // Regression: replacing a ledger row must not silently lose fifteen dollars.
+    await expect(
+      splitExpense(
+        ctx.db,
+        splitExpenseInput.parse({
+          expenseId: combo.id,
+          parts: [
+            {
+              name: "kept portion",
+              cost: 60,
+              costType: "materials",
+              trade: "other",
+            },
+            {
+              name: "refunded portion",
+              cost: 25,
+              costType: "materials",
+              trade: "other",
+            },
+          ],
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
 
     const charge = await getPurchaseByID(ctx.db, chargeUuid);
-    expect(charge.statedTotal).toBe(100);
+    expect(charge.statedTotal).toBeNull();
     expect(
       (await getPurchaseExpenses(ctx.db, chargeUuid)).reduce(
         (sum, l) => sum + (l.cost ?? 0),
         0,
       ),
-    ).toBe(85);
-    expect(charge.expenseTotal).toBe(85);
-    expect(reconcilePurchase(charge)).toBe("mismatch");
+    ).toBe(100);
+    expect(charge.expenseTotal).toBe(100);
+    expect(await getExpenseByShortcode(ctx.db, combo.id)).toMatchObject({
+      cost: 100,
+    });
   });
 });
 

@@ -49,6 +49,9 @@ type Column =
   | "purchases"
   | "expenses"
   | "unpriced"
+  | "items"
+  | "sharedCharges"
+  | "coverage"
   | "netSpend"
   | "latestActivity";
 
@@ -80,6 +83,9 @@ const COLUMN_LABELS = {
   purchases: "Purchases",
   expenses: "Expenses",
   unpriced: "Unpriced",
+  items: "Items",
+  sharedCharges: "Shared charges",
+  coverage: "Coverage",
   netSpend: "Net spend",
   latestActivity: "Latest",
 } satisfies Record<Column, string>;
@@ -320,6 +326,42 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
             enableSorting: sortFieldForColumn(column) !== undefined,
           });
           return;
+        case "items":
+          add({
+            ...createCurrencyColumn(helper, "itemSpend", {
+              header: COLUMN_LABELS.items,
+              className: "w-24",
+            }),
+            id: "items",
+            enableSorting: false,
+          });
+          return;
+        case "sharedCharges":
+          add({
+            ...createCurrencyColumn(helper, "sharedChargeSpend", {
+              header: COLUMN_LABELS.sharedCharges,
+              className: "w-28",
+            }),
+            id: "sharedCharges",
+            enableSorting: false,
+          });
+          return;
+        case "coverage":
+          add({
+            ...helper.accessor((row) => row.incomplete, {
+              id: "coverage",
+              header: COLUMN_LABELS.coverage,
+              meta: { className: "w-24" },
+              cell: (info) =>
+                info.getValue() ? (
+                  <span className="text-warning">Incomplete</span>
+                ) : (
+                  <span className="text-muted-foreground">Complete</span>
+                ),
+            }),
+            enableSorting: false,
+          });
+          return;
         case "latestActivity":
           add({
             ...helper.accessor((row) => row.latestActivity, {
@@ -451,7 +493,16 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
         <span className="min-w-0 truncate text-right font-mono text-2xs text-muted-foreground tabular-nums">
           {summary.count} {summary.count === 1 ? "group" : "groups"}
           {" · "}
-          {formatCurrency(summary.totals.netSpend)} net
+          {columns.includes("items") ? (
+            <>
+              {formatCurrency(summary.totals.itemSpend)} items +{" "}
+              {formatCurrency(summary.totals.sharedChargeSpend)} shared ={" "}
+              {formatCurrency(summary.totals.netSpend)} total
+              {summary.totals.incomplete ? " · incomplete coverage" : ""}
+            </>
+          ) : (
+            <>{formatCurrency(summary.totals.netSpend)} net</>
+          )}
           {summary.totals.unpricedExpenseCount > 0 &&
             ` · ${summary.totals.unpricedExpenseCount} unpriced`}
         </span>

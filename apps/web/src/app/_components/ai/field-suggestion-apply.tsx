@@ -27,7 +27,7 @@ export function FieldSuggestionApply(props: ApplyProps) {
   const row = useContext(RecordSuggestionScope);
   if (
     row &&
-    props.source?.targets.every((target) => row.source.targets.includes(target))
+    props.source?.targets.every((target) => row.sourceByField.has(target))
   )
     return null;
   return <StandaloneSuggestion {...props} />;
@@ -57,6 +57,7 @@ function StandaloneSuggestion({
       applied={applied}
       pending={isFetching}
       onApply={suggestion ? () => onApply(suggestion) : undefined}
+      alternative={source?.basisMode === "provided"}
     />
   );
 }

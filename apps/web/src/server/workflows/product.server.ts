@@ -574,6 +574,7 @@ export const discardProductWorkflow = bindWorkflow(
         {
           productId: resolved.productId,
           quantity: input.quantity,
+          trade: input.trade,
           date: input.date,
           reason: input.reason,
           inventoryEntryId: resolved.inventoryEntryId,

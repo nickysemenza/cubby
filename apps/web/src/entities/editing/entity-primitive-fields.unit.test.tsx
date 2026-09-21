@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -487,6 +487,21 @@ function ExpenseCaptureFields() {
       >
         Set product
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          form.setValue("projectId", "PRJ-4K7M", { shouldDirty: true })
+        }
+      >
+        Set project
+      </button>
+      <button
+        type="button"
+        onClick={() => form.setValue("lineKind", "tax", { shouldDirty: true })}
+      >
+        Set tax
+      </button>
+      <output data-testid="project-value">{form.watch("projectId")}</output>
       <EntityIntentFields entity="expense" intent="capture" />
     </FormProvider>
   );
@@ -552,6 +567,20 @@ describe("EntityIntentFields", () => {
     expect(
       entitySelectOptionsFor("expense", "lineKind", "edit"),
     ).not.toContainEqual(expect.objectContaining({ value: "auto" }));
+  });
+
+  it("clears and hides a direct project when a line becomes a purchase adjustment", async () => {
+    render(<ExpenseCaptureFields />, { wrapper: harness.wrapper });
+    expect(screen.getByLabelText("Project")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Set project" }));
+    expect(screen.getByTestId("project-value")).toHaveTextContent("PRJ-4K7M");
+    fireEvent.click(screen.getByRole("button", { name: "Set tax" }));
+
+    expect(screen.queryByLabelText("Project")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("project-value")).toBeEmptyDOMElement(),
+    );
   });
 
   it("renders every required vendor-account ownership field", () => {

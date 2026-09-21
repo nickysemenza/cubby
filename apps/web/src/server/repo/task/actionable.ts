@@ -84,6 +84,7 @@ import {
   lookupShortcodes,
 } from "~/server/repo/shortcode-resolver";
 
+import { hydrateTaskInheritanceRows } from "../task-project-inheritance";
 import { taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
 import { taskList } from "./lookup";
@@ -347,8 +348,12 @@ export async function listActionableTasks(
       .where(notDeleted(project)),
   ]);
 
+  const hydratedOpenTaskRows = await hydrateTaskInheritanceRows(
+    db,
+    openTaskRows,
+  );
   const tasksById = new Map<TaskId, OpenTaskNode>(
-    openTaskRows.map((row) => [
+    hydratedOpenTaskRows.map((row) => [
       row.id,
       {
         id: row.id,
@@ -391,7 +396,7 @@ export async function listActionableTasks(
   // only) can't supply — a separate grouped query over ALL live subtasks.
   const subtaskCounts = await taskSubtaskCounts(
     db,
-    openTaskRows.map((row) => row.id),
+    hydratedOpenTaskRows.map((row) => row.id),
   );
 
   // `dbTaskToAPI` takes public ids for blockedByIds/blockingIds; the edge
@@ -419,7 +424,7 @@ export async function listActionableTasks(
   const blocked: BlockedTaskOut[] = [];
   const today = householdLocalDate();
 
-  const blockedReasonsFor = (row: (typeof openTaskRows)[number]) => {
+  const blockedReasonsFor = (row: (typeof hydratedOpenTaskRows)[number]) => {
     const reasons: BlockedReason[] = [];
     if (row.status === "blocked") reasons.push({ kind: "manual", chain: [] });
     for (const blockerId of taskEdgesByOwner.get(row.id) ?? []) {
@@ -467,7 +472,7 @@ export async function listActionableTasks(
     return reasons;
   };
 
-  const appendActionableRow = (row: (typeof openTaskRows)[number]) => {
+  const appendActionableRow = (row: (typeof hydratedOpenTaskRows)[number]) => {
     // Checklist items are represented via their parent, not surfaced as
     // independent actionable/blocked rows (they can still appear inside a
     // why-chain below, via `tasksById`/`taskEdgesByOwner` — those stay
@@ -496,7 +501,7 @@ export async function listActionableTasks(
       blocked.push({ task: taskOutRow, reasons });
     }
   };
-  for (const row of openTaskRows) appendActionableRow(row);
+  for (const row of hydratedOpenTaskRows) appendActionableRow(row);
 
   next.sort((a, b) => compareNext(a, b, today));
   later.sort(compareLater);

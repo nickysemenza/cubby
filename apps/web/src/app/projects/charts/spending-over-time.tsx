@@ -98,7 +98,7 @@ export function SpendingOverTime({
   // fold the rest into one "Other" series. `colorById` maps the resulting
   // series labels (TRADE_LABELS / "Other") to their tokens.
   const { tradeSeries, tradeColorById } = useMemo(() => {
-    const totals = new Map<Trade, number>();
+    const totals = new Map<Trade | null, number>();
     for (const p of principalExpenses) {
       if (!p.date || p.cost == null) continue;
       totals.set(p.trade, (totals.get(p.trade) ?? 0) + Math.abs(p.cost));
@@ -110,12 +110,17 @@ export function SpendingOverTime({
 
     const colorById: Record<string, string> = {};
     ranked.slice(0, TRADE_RAMP.length).forEach(([trade], i) => {
-      colorById[TRADE_LABELS[trade]] = TRADE_RAMP[i]!;
+      colorById[trade ? TRADE_LABELS[trade] : "Unassigned trade"] =
+        TRADE_RAMP[i]!;
     });
     if (ranked.length > TRADE_RAMP.length) colorById[OTHER_LABEL] = OTHER_COLOR;
 
     const series = buildStackedCumulativeSpend(principalExpenses, (p) =>
-      topTrades.has(p.trade) ? TRADE_LABELS[p.trade] : OTHER_LABEL,
+      topTrades.has(p.trade)
+        ? p.trade
+          ? TRADE_LABELS[p.trade]
+          : "Unassigned trade"
+        : OTHER_LABEL,
     );
     return { tradeSeries: series, tradeColorById: colorById };
   }, [principalExpenses]);

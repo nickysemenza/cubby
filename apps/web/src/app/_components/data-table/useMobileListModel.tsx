@@ -13,6 +13,10 @@ import {
   FieldProvenance,
   isInspectableFieldProvenance,
 } from "~/entities/field-provenance";
+import {
+  FieldResolutionBadge,
+  fieldResolutionFor,
+} from "~/entities/field-resolution";
 import { extractEntityTitle } from "~/lib/entity-utils";
 
 import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
@@ -291,16 +295,29 @@ function collectMobileSlots<TItem extends RowData>(
       ) : (
         rendered
       );
+    const resolution = fieldResolutionFor(row.original, colId);
+    const resolutionValue = resolution ? (
+      <span className="inline-flex min-w-0 items-center gap-1">
+        <span className="min-w-0 truncate">{inspectedValue}</span>
+        <FieldResolutionBadge
+          record={row.original}
+          field={colId}
+          interactive={false}
+        />
+      </span>
+    ) : (
+      inspectedValue
+    );
     const provenanceValue = meta?.provenance ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">
-        <span className="min-w-0 truncate">{inspectedValue}</span>
+        <span className="min-w-0 truncate">{resolutionValue}</span>
         <FieldProvenance
           provenance={meta.provenance}
           className="inline-flex max-w-36 shrink text-[0.625rem]"
         />
       </span>
     ) : (
-      inspectedValue
+      resolutionValue
     );
     const explanation = resolveColumnExplanation(
       meta?.explanation,

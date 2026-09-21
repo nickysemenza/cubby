@@ -15,6 +15,7 @@ import { useListBulkActions } from "./useListBulkActions";
 
 interface TestRow {
   id: string;
+  fieldResolutions?: unknown;
 }
 
 const rows = (...ids: string[]) =>
@@ -98,6 +99,40 @@ describe("useListBulkActions", () => {
       "bulk-edit",
       "set-stock-tracking",
     ]);
+  });
+
+  it("offers redundant override cleanup only when a selected row can reset", () => {
+    const { result } = renderHook(
+      () => useListBulkActions<TestRow>({ entity: "project" }),
+      { wrapper },
+    );
+    const action = result.current.config?.actions.find(
+      (candidate) => candidate.id === "use-inherited-values",
+    );
+    expect(action).toBeDefined();
+    expect(action?.availability?.(rows("PRJ-PLAIN"))).toEqual({
+      status: "hidden",
+    });
+    const redundant = fromPartial<Row<TestRow>>({
+      original: {
+        id: "PRJ-REDUNDANT",
+        fieldResolutions: {
+          locations: {
+            mode: "explicit",
+            storedValue: ["Main house"],
+            value: ["Main house"],
+            fallbackValue: ["Main house"],
+            source: "Parent project",
+            sourceEntity: null,
+            matchesFallback: true,
+            canReset: true,
+          },
+        },
+      },
+    });
+    expect(action?.availability?.([redundant])).toEqual({
+      status: "available",
+    });
   });
 
   it("offers Copy codes for image now that it has a shortcode", () => {

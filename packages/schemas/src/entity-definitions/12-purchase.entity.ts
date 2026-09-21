@@ -5,6 +5,7 @@ import { financialReconciliationSummary } from "@cubby/schemas/financial-reconci
 import {
   imageShortcode,
   purchaseShortcode,
+  projectShortcode,
   vendorShortcode,
   vendorAccountShortcode,
 } from "../identifier-fields.js";
@@ -15,6 +16,7 @@ import {
   purchaseReconciliation,
 } from "@cubby/schemas/purchase-fields";
 import { z } from "zod";
+import { tradeSchema } from "@cubby/schemas/task-fields";
 export default defineEntity({
   key: "purchase",
   names: { singular: "Purchase", plural: "Purchases" },
@@ -63,6 +65,8 @@ export default defineEntity({
           fields: [
             "vendorId",
             "vendorAccountId",
+            "defaultProjectId",
+            "defaultTrade",
             "orderId",
             "displayLabel",
             "date",
@@ -90,6 +94,37 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "defaultProjectId",
+        kind: "identifier",
+        nullable: true,
+        label: "Default project",
+        reference: { entity: "project" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          section: "details",
+        },
+        display: { detail: true },
+        validation: {
+          read: projectShortcode.nullable(),
+          create: projectShortcode.nullable().default(null),
+          update: projectShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "defaultTrade",
+        kind: "enum",
+        nullable: true,
+        label: "Default trade",
+        control: { kind: "select", section: "details" },
+        display: { detail: true },
+        validation: {
+          read: tradeSchema.nullable(),
+          create: tradeSchema.nullable().default(null),
+          update: tradeSchema.nullable().optional(),
+        },
+      },
       {
         key: "vendorId",
         kind: "identifier",
@@ -573,6 +608,8 @@ export default defineEntity({
       { key: "shortcode", specialized: "shortcode" },
       { key: "vendorId", reference: "vendor" },
       { key: "vendorAccountId", reference: "vendorAccount" },
+      { key: "defaultProjectId", reference: "project" },
+      { key: "defaultTrade", specialized: "enum:trade" },
       "orderId",
       "displayLabel",
       "date",
@@ -591,6 +628,8 @@ export default defineEntity({
     create: [
       "vendorId",
       "vendorAccountId",
+      "defaultProjectId",
+      "defaultTrade",
       "orderId",
       "displayLabel",
       "date",
@@ -601,6 +640,8 @@ export default defineEntity({
     update: [
       "vendorId",
       "vendorAccountId",
+      "defaultProjectId",
+      "defaultTrade",
       "orderId",
       "displayLabel",
       "date",
@@ -614,6 +655,8 @@ export default defineEntity({
     audit: [
       "vendorId",
       "vendorAccountId",
+      "defaultProjectId",
+      "defaultTrade",
       "orderId",
       "displayLabel",
       "date",
@@ -642,6 +685,8 @@ export default defineEntity({
         capture: [
           "vendorId",
           "vendorAccountId",
+          "defaultProjectId",
+          "defaultTrade",
           "date",
           "orderId",
           "displayLabel",
@@ -651,6 +696,8 @@ export default defineEntity({
         full: [
           "vendorId",
           "vendorAccountId",
+          "defaultProjectId",
+          "defaultTrade",
           "date",
           "orderId",
           "displayLabel",
@@ -667,6 +714,8 @@ export default defineEntity({
       "id",
       "vendorId",
       "vendorAccountId",
+      "defaultProjectId",
+      "defaultTrade",
       "orderId",
       "displayLabel",
       "date",
@@ -1107,6 +1156,19 @@ export default defineEntity({
           export: "purchaseProductsRelationAdapter",
         },
         audiences: ["browser", "mcp"],
+      },
+    },
+    {
+      key: "defaultProject",
+      label: "Default project",
+      target: "project",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Purchase.defaultProjectId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Purchase.defaultProjectId", direction: "incoming" }],
       },
     },
     {

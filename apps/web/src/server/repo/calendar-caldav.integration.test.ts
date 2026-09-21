@@ -38,6 +38,7 @@ describe("CalDAV canonical mutation seam", () => {
       event: {
         uid: "client-event@example.test",
         summary: "CalDAV task",
+        trade: "planning",
         startDate: "2026-09-07",
         endDateExclusive: "2026-09-08",
         mealType: null,
@@ -57,6 +58,25 @@ describe("CalDAV canonical mutation seam", () => {
       where: (row, { eq }) => eq(row.source, "caldav"),
     });
     expect(audit).toHaveLength(1);
+  });
+
+  it("refuses an unclassified new task before writing", async () => {
+    await expect(
+      executeCalDavWrite(ctx.db, {
+        actorId: ctx.actor.userId,
+        collection: "tasks",
+        filename: "unclassified.ics",
+        expected: null,
+        event: {
+          uid: "unclassified@example.test",
+          summary: "Needs a trade",
+          startDate: "2026-09-07",
+          endDateExclusive: "2026-09-08",
+          mealType: null,
+        },
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(await getDb(ctx.db).query.task.findMany()).toHaveLength(0);
   });
 
   it("keeps an unnamed meal unnamed when its generated title is echoed, then updates it canonically", async () => {
@@ -127,6 +147,7 @@ describe("CalDAV canonical mutation seam", () => {
       event: {
         uid: "completed@example.test",
         summary: "Done task",
+        trade: "planning" as const,
         startDate: "2026-09-07",
         endDateExclusive: "2026-09-08",
         mealType: null,

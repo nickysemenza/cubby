@@ -58,6 +58,7 @@ describe("purchase deletion embedding fanout", () => {
           purchaseId: purchase.id,
           cost: 25,
           date: "2026-07-01",
+          trade: "other",
         },
       }),
       ctx.actor,

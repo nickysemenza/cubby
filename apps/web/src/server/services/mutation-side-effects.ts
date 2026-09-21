@@ -14,6 +14,7 @@ import {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   findCommercialEmbeddingRefsForExpenses,
+  findChildTaskEmbeddingRefs,
   findEmbeddingRefsForPurchases,
   findEmbeddingRefsForVendors,
   findGardenEntryEmbeddingRefsForLocations,
@@ -86,6 +87,7 @@ export interface MutationSideEffectPorts {
     tasks: readonly BackgroundTaskInput[],
     options: PublishOptions,
   ) => Promise<void>;
+  readonly findChildTaskEmbeddingRefs: typeof findChildTaskEmbeddingRefs;
   readonly findInventoryEmbeddingRefsForProducts: typeof findInventoryEmbeddingRefsForProducts;
   readonly findInventoryEmbeddingRefsForLocations: typeof findInventoryEmbeddingRefsForLocations;
   readonly findRecipeEmbeddingRefsForIngredients: typeof findRecipeEmbeddingRefsForIngredients;
@@ -125,6 +127,7 @@ const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   findEmbeddingRefsForPurchases,
   findTransactionEmbeddingRefsForAccounts,
   findCommercialEmbeddingRefsForExpenses,
+  findChildTaskEmbeddingRefs,
   findDirectImageSearchOwnerRefs,
   refreshSearchDocuments: async (...args) => {
     await refreshSearchDocuments(...args);
@@ -366,6 +369,19 @@ const collectTrackerEmbeddingRefsForProject: EmbeddingRefCollector = async (
   ]);
 };
 
+const collectChildTaskRefs: EmbeddingRefCollector = async (ctx) =>
+  ctx.event.entity.entity === "task"
+    ? ctx.ports.findChildTaskEmbeddingRefs(ctx.db, [ctx.event.entity.id])
+    : [];
+async function refreshChildTaskEmbeddings(ctx: HandlerContext): Promise<void> {
+  return publishEmbeddingRefreshes(
+    ctx.db,
+    await collectChildTaskRefs(ctx),
+    ctx.event,
+    ctx.ports,
+  );
+}
+
 const collectEmbeddingRefsForVendor: EmbeddingRefCollector = async (ctx) => {
   if (ctx.event.entity.entity !== "vendor") return [];
   return ctx.ports.findEmbeddingRefsForVendors(ctx.db, [ctx.event.entity.id]);
@@ -541,6 +557,7 @@ const embeddingRefCollectorByHandler = new Map<
   EmbeddingRefCollector
 >([
   [refreshOwnEmbedding, collectOwnEmbeddingRef],
+  [refreshChildTaskEmbeddings, collectChildTaskRefs],
   [
     refreshInventoryEmbeddingsForProduct,
     collectInventoryEmbeddingRefsForProduct,
@@ -678,7 +695,7 @@ export const mutationSideEffectManifest = {
   },
   task: {
     onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding, refreshChildTaskEmbeddings],
     onDelete: [],
   },
   vendor: {

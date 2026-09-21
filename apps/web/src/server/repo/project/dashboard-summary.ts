@@ -14,7 +14,7 @@ import type {
   ProjectTaskStatusBreakdown,
   TaskStatus,
 } from "@cubby/schemas/project";
-import type { AnyColumn } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import {
   and,
   asc,
@@ -38,6 +38,15 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
+import {
+  expenseAllocatedCostSql,
+  expenseAllocationExistsSql,
+} from "~/server/repo/expense-project-allocation";
+import {
+  effectiveTaskProjectSql,
+  effectiveProjectLocationsSql,
+  hydrateTaskInheritanceRows,
+} from "~/server/repo/task-project-inheritance";
 import { taskDependencyIds, taskSubtaskCounts } from "~/server/repo/task/crud";
 import {
   dbTaskToAPI,
@@ -161,7 +170,7 @@ export async function projectDashboardSummary(
       .where(notDeleted(project)),
     getDb(db)
       .selectDistinct({
-        location: sql<string>`unnest(${project.locations})`,
+        location: sql<string>`unnest(${effectiveProjectLocationsSql(sql`${project.id}`)})`,
       })
       .from(project)
       .where(notDeleted(project)),
@@ -209,7 +218,7 @@ export async function projectDashboardSummary(
    * belongs to the scoped set when its project matched OR it has no project
    * at all — that view keeps inbox rows visible regardless of project scope.
    */
-  const scopedOrInbox = (column: AnyColumn) =>
+  const scopedOrInbox = (column: SQL) =>
     ids.length > 0 ? or(inArray(column, ids), isNull(column)) : isNull(column);
 
   // Same population `committedSpend` reads (each scoped project's own subtree),
@@ -237,24 +246,24 @@ export async function projectDashboardSummary(
     ids.length > 0
       ? getDb(db)
           .select({
-            projectId: task.projectId,
+            projectId: effectiveTaskProjectSql(),
             status: task.status,
             count: sql<number>`count(*)::int`,
           })
           .from(task)
           .where(
             and(
-              inArray(task.projectId, ids),
+              inArray(effectiveTaskProjectSql(), ids),
               notDeleted(task),
               isNull(task.parentTaskId),
             ),
           )
-          .groupBy(task.projectId, task.status)
+          .groupBy(effectiveTaskProjectSql(), task.status)
       : Promise.resolve([]),
     ids.length > 0
       ? getDb(db).query.task.findMany({
           where: and(
-            inArray(task.projectId, ids),
+            inArray(effectiveTaskProjectSql("task"), ids),
             notDeleted(task),
             isNull(task.parentTaskId),
             inArray(task.status, ["not_started", "in_progress"]),
@@ -283,7 +292,7 @@ export async function projectDashboardSummary(
           task,
           and(
             notDeleted(task),
-            scopedOrInbox(task.projectId),
+            scopedOrInbox(effectiveTaskProjectSql()),
             isNull(task.dueDate),
             isNull(task.dueEndDate),
           ),
@@ -296,14 +305,16 @@ export async function projectDashboardSummary(
     expandedProjectIds.length > 0
       ? getDb(db)
           .select({
-            in30Days: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[0])}), 0)::float`,
-            in60Days: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[1])}), 0)::float`,
-            in90Days: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[2])}), 0)::float`,
+            in30Days: sql<number>`coalesce(sum(${expenseAllocatedCostSql(sql`${expense.id}`, { projectIds: expandedProjectIds })}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[0])}), 0)::float`,
+            in60Days: sql<number>`coalesce(sum(${expenseAllocatedCostSql(sql`${expense.id}`, { projectIds: expandedProjectIds })}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[1])}), 0)::float`,
+            in90Days: sql<number>`coalesce(sum(${expenseAllocatedCostSql(sql`${expense.id}`, { projectIds: expandedProjectIds })}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[2])}), 0)::float`,
           })
           .from(expense)
           .where(
             and(
-              inArray(expense.projectId, expandedProjectIds),
+              expenseAllocationExistsSql(sql`${expense.id}`, {
+                projectIds: expandedProjectIds,
+              }),
               notDeleted(expense),
               eq(expense.future, true),
               gt(expense.cost, 0),
@@ -348,8 +359,12 @@ export async function projectDashboardSummary(
   );
   const inScope = new Set(ids);
   const scopeRoots = ids.filter((id) => {
-    const parent = parentById.get(id);
-    return parent == null || !inScope.has(parent);
+    let parent = parentById.get(id);
+    while (parent != null) {
+      if (inScope.has(parent)) return false;
+      parent = parentById.get(parent);
+    }
+    return true;
   });
   const actualSpend = sumBy(scopeRoots, (id) => subtreeOf(id).actualSpent);
   const committedSpend = sumBy(
@@ -412,7 +427,11 @@ export async function projectDashboardSummary(
     taskDependencyIds(db, nextTaskIds),
     taskSubtaskCounts(db, nextTaskIds),
   ]);
-  const nextTasks = nextTaskRows.map((row) => {
+  const hydratedNextTaskRows = await hydrateTaskInheritanceRows(
+    db,
+    nextTaskRows,
+  );
+  const nextTasks = hydratedNextTaskRows.map((row) => {
     const counts = nextSubtaskCounts.get(row.id);
     return dbTaskToAPI(
       row,

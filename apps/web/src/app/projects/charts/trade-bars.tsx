@@ -29,6 +29,8 @@ type BarDatum = {
 const isTrade = (value: string): value is Trade => value in TRADE_LABELS;
 const tradeLabel = (value: string): string =>
   isTrade(value) ? TRADE_LABELS[value] : value;
+const tradeKey = (trade: Trade | null): string =>
+  trade === null ? "Unassigned trade" : trade;
 
 export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
   const { data, hiddenCount, expensesByCell } = useMemo(() => {
@@ -38,7 +40,11 @@ export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
     // bars render bottom-up — reverse to keep the biggest-on-top visual.
     const data: BarDatum[] = rows
       .filter((row) => row.total > 0)
-      .map((row) => ({ trade: row.trade, ...row.cells, total: row.total }))
+      .map((row) => ({
+        trade: tradeKey(row.trade),
+        ...row.cells,
+        total: row.total,
+      }))
       .reverse();
 
     // Trades with a net ≤ $0 (refunds/credits net out the spend) are dropped
@@ -49,7 +55,7 @@ export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
     const expensesByCell = new Map<string, ExpenseOut[]>();
     for (const p of expenses) {
       if (!isPrincipalExpense(p)) continue;
-      const key = `${p.trade}|${p.costType}`;
+      const key = `${tradeKey(p.trade)}|${p.costType}`;
       const list = expensesByCell.get(key);
       if (list) list.push(p);
       else expensesByCell.set(key, [p]);

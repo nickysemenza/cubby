@@ -27,7 +27,10 @@ const summary = relatedSummaryOutput.parse({
       expenseCount: 2,
       purchaseCount: 1,
       unpricedExpenseCount: 0,
+      itemSpend: 18.5,
+      sharedChargeSpend: 0,
       netSpend: 18.5,
+      incomplete: false,
       latestActivity: "2026-01-02",
       knownAcquiredUnits: 3,
       unknownAcquisitionQuantityCount: 1,
@@ -38,7 +41,10 @@ const summary = relatedSummaryOutput.parse({
     expenseCount: 2,
     purchaseCount: 1,
     unpricedExpenseCount: 0,
+    itemSpend: 18.5,
+    sharedChargeSpend: 0,
     netSpend: 18.5,
+    incomplete: false,
     knownAcquiredUnits: 3,
     unknownAcquisitionQuantityCount: 1,
   },
@@ -80,6 +86,51 @@ async function renderTable(operations: RelationshipSummaryOperations) {
 }
 
 describe("RelationshipSummaryTable", () => {
+  it("shows item and shared-charge components with incomplete coverage", async () => {
+    const allocation = relatedSummaryOutput.parse({
+      ...summary,
+      data: [
+        {
+          ...summary.data[0],
+          target: null,
+          itemSpend: 80,
+          sharedChargeSpend: 7.25,
+          netSpend: 87.25,
+          incomplete: true,
+        },
+      ],
+      totals: {
+        ...summary.totals,
+        itemSpend: 80,
+        sharedChargeSpend: 7.25,
+        netSpend: 87.25,
+        incomplete: true,
+      },
+    });
+    await act(async () => {
+      await harness.loadRouter();
+    });
+    render(
+      <RelationshipSummaryTable
+        relationKey="purchase.projects"
+        sourceId="PUR-TEST"
+        columns={["target", "items", "sharedCharges", "netSpend", "coverage"]}
+        defaultSort={{ field: "netSpend", direction: "desc" }}
+        emptyCopy="Nothing yet."
+        nullLabel="Unassigned"
+        expenseHref={() => "/expenses?purchaseId=PUR-TEST"}
+        operations={createOperations(allocation)}
+      />,
+      { wrapper: harness.routerWrapper },
+    );
+
+    expect(await screen.findByText("Unassigned")).toBeVisible();
+    expect(screen.getByText("Incomplete")).toBeVisible();
+    expect(
+      screen.getByText(/\$80\.00 items \+ \$7\.25 shared = \$87\.25 total/),
+    ).toBeVisible();
+  });
+
   it("renders typed aggregate rows through the real table and operation descriptor", async () => {
     await renderTable(createOperations());
 

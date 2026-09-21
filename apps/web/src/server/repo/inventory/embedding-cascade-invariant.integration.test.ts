@@ -209,21 +209,33 @@ describe("removal entrypoints reach the shared cascade (no orphans)", () => {
     const { output: parentTask, entityId: parentTaskId } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
-        overrides: { name: "Cascade Parent", parentTaskId: null },
+        overrides: {
+          name: "Cascade Parent",
+          parentTaskId: null,
+          trade: "other",
+        },
       }),
       TEST_ACTOR,
     );
     const { output: subtask, entityId: subtaskId } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
-        overrides: { name: "Cascade Subtask", parentTaskId: parentTask.id },
+        overrides: {
+          name: "Cascade Subtask",
+          parentTaskId: parentTask.id,
+          trade: "other",
+        },
       }),
       TEST_ACTOR,
     );
     const { output: blocker } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
-        overrides: { name: "Cascade Blocker", parentTaskId: null },
+        overrides: {
+          name: "Cascade Blocker",
+          parentTaskId: null,
+          trade: "other",
+        },
       }),
       TEST_ACTOR,
     );

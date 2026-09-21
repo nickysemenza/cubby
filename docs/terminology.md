@@ -206,6 +206,45 @@ The household project tracker (migrated from Notion) is a self-contained module:
   came from. `lineKind = principal` identifies merchandise/services; ancillary
   receipt roles are productless adjustments.
 
+### Inheritance and explicit choices
+
+A stored override records an intentional choice. Normal reads expose the effective
+value and carry assignment intent and provenance separately in `fieldResolutions`.
+“Use inherited” clears an override; changing a parent/default then updates the
+inheriting record. Scalar edits retain explicit-write meaning.
+
+- Principal expense project: own project → purchase default → Household for food →
+  Unassigned. A null override means inherit, without an explicit None state.
+- Subtask project and “For” product: own value or explicit None → parent task.
+  Reparenting follows the new source; detaching preserves effective values.
+- Project site names: own names or explicit None → parent’s resolved names.
+  Project trade: own default → nearest ancestor default.
+- Task trade: own choice → parent task trade when effective projects match →
+  effective project default. Principal expense trade: own choice → purchase trade
+  default → effective project default. An unresolved required trade blocks writes;
+  Other is available only as a deliberate classification.
+
+Equal-to-fallback overrides can be reset when the field declares that policy.
+Matching pinned prices and confirmed ownership remain intentional choices.
+
+### Shared purchase charges
+
+Tax, shipping, fees, tips, discounts, and other adjustments require a live purchase
+and cannot store a direct project. Their cents are allocated by positive principal
+amounts grouped by effective project, including Unassigned. If there are no positive
+amounts, absolute negative amounts supply the basis; with no priced nonzero basis,
+the purchase project default or Unassigned receives the charge. Planned priced items
+participate, and incomplete price coverage remains visible.
+
+Allocation uses deterministic largest remainder and preserves each charge’s sign and
+exact cents. The entire purchase sets the denominator before report filters apply.
+Project reports sum applicable shares; global spend remains `SUM(Expense.cost)`.
+Derived project shares are neither new expenses nor settlement allocations.
+
+CalDAV task creation requires a valid `X-CUBBY-TRADE` property. Clients that cannot
+supply classification create the task in Cubby first; edits that omit trade preserve
+its existing assignment intent. Individual and bulk discard require an explicit trade.
+
 ---
 
 ## Vendor vs Purchase vs Expense

@@ -2288,6 +2288,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     editable?: {
+      enabled?: (row: T) => boolean;
       onSave: (newProjectId: ProjectShortcode | null, row: T) => Promise<void>;
       /** When the owning field's `control.suggest` exists — the row's own
        * entity and the manifest field key this column edits (`T` is shared
@@ -2297,6 +2298,8 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
   },
 ) {
   const editable = options?.editable;
+  const canEdit = (row: T) =>
+    editable?.enabled?.(row) ?? editable !== undefined;
   const cellData = entityCellData<T, ProjectShortcode>(
     "project",
     (value) => parseShortcodeFor("project", value),
@@ -2307,8 +2310,22 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
             name: row.projectName,
           }
         : null,
-    editable ? (row, id) => editable.onSave(id, row) : undefined,
-    editable ? (row) => editable.onSave(null, row) : undefined,
+    editable
+      ? (row, id) =>
+          canEdit(row)
+            ? editable.onSave(id, row)
+            : Promise.reject(
+                new Error("This project is allocated by its purchase."),
+              )
+      : undefined,
+    editable
+      ? (row) =>
+          canEdit(row)
+            ? editable.onSave(null, row)
+            : Promise.reject(
+                new Error("This project is allocated by its purchase."),
+              )
+      : undefined,
   );
   const columnOptions = {
     id: "project",
@@ -2329,7 +2346,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     ) => {
       const { id, name } = info.getValue();
 
-      if (editable) {
+      if (editable && canEdit(info.row.original)) {
         const current: ComboboxItem<ProjectShortcode> | null =
           id && name ? { id: parseShortcodeFor("project", id), name } : null;
         const row = info.row.original;

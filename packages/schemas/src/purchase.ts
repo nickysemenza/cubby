@@ -251,7 +251,7 @@ export const splitExpenseInput = z.object({
         cost: money,
         lineKind: expenseLineKindSchema.optional(),
         costType: costTypeSchema,
-        trade: tradeSchema,
+        trade: tradeSchema.nullable(),
         projectId: projectShortcode.nullable().default(null),
         productId: productShortcode.nullable().default(null),
         // Signed, zero only on a negative cost — same rule as

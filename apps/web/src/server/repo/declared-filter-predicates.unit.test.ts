@@ -34,7 +34,7 @@ describe("declaredFilterPredicates", () => {
     }
   });
 
-  it("produces the standard predicates for task status and trade", () => {
+  it("leaves effective task trade to the task resolver", () => {
     const defined = (filters: Partial<TaskFilters>) =>
       declaredFilterPredicates("task", task, filters).filter(
         (predicate) => predicate !== undefined,
@@ -45,7 +45,7 @@ describe("declaredFilterPredicates", () => {
         status: ["done", "in_progress"],
         trade: tradeSchema.options[0],
       }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(defined({ status: [] })).toHaveLength(0);
   });
 });

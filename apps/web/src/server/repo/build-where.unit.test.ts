@@ -416,7 +416,7 @@ describe("buildProjectWhere", () => {
     {
       name: "location",
       filters: { location: "Garage" },
-      contains: '"locations" &&',
+      contains: '"locationsMode"',
     },
   ])(
     "still narrows by $name (declared stored filter)",
@@ -425,11 +425,11 @@ describe("buildProjectWhere", () => {
     },
   );
 
-  it("matches name, notes, and locations by element (declared stored text filter)", async () => {
+  it("matches project-owned name and notes while inherited locations use their dedicated filter", async () => {
     const rendered = await where({ search: "shed" });
     expect(rendered).toContain('"name"');
     expect(rendered).toContain('"notes"');
-    expect(rendered).toContain('unnest("Project"."locations")');
+    expect(rendered).not.toContain('unnest("Project"."locations")');
   });
 });
 

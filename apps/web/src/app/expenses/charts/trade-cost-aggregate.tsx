@@ -34,6 +34,9 @@ const costTypeForKey = (value: string): CostType | undefined =>
   COST_KEYS.find((key) => key === value);
 const tradeForKey = (value: string): Trade | undefined =>
   Object.keys(TRADE_LABELS).find((key): key is Trade => key === value);
+const UNASSIGNED_TRADE_KEY = "__unassigned__";
+const tradeLabel = (trade: Trade | null) =>
+  trade === null ? "Unassigned trade" : TRADE_LABELS[trade];
 
 /** Column key is the cost type itself, so cells index `row.cells` directly. */
 const COLUMNS: CrossTabColumn<CostType>[] = COST_KEYS.map((key) => ({
@@ -69,7 +72,11 @@ export function TradeBarsAggregate({
     const { rows } = buildAggregatePivot(tradeCostMatrix);
     const positive = rows
       .filter((row) => row.total > 0)
-      .map((row) => ({ trade: row.trade, ...row.cells, total: row.total }))
+      .map((row) => ({
+        trade: row.trade ?? UNASSIGNED_TRADE_KEY,
+        ...row.cells,
+        total: row.total,
+      }))
       .reverse();
     return {
       rows: positive,
@@ -82,6 +89,7 @@ export function TradeBarsAggregate({
   }
 
   const tradeLabel = (value: string) => {
+    if (value === UNASSIGNED_TRADE_KEY) return "Unassigned trade";
     const trade = tradeForKey(value);
     return trade ? TRADE_LABELS[trade] : value;
   };
@@ -140,7 +148,10 @@ export function TradeBarsAggregate({
   );
 }
 
-export type AggregateMatrixCell = { trade: Trade; costType: CostType | null };
+export type AggregateMatrixCell = {
+  trade: Trade | null;
+  costType: CostType | null;
+};
 
 /** Trade × Cost Type heat-scale table, from the same aggregate pivot — the
  * analytics-view replacement for `TradeCostMatrix` (per-cell hover previews
@@ -160,7 +171,7 @@ export function TradeCostMatrixAggregate({
     [tradeCostMatrix],
   );
 
-  const isActive = (trade: Trade, costType: CostType | null) =>
+  const isActive = (trade: Trade | null, costType: CostType | null) =>
     activeCell?.trade === trade && activeCell.costType === costType;
 
   if (rows.length === 0) {
@@ -175,7 +186,10 @@ export function TradeCostMatrixAggregate({
     <CrossTabTable
       cornerLabel="Trade"
       columns={COLUMNS}
-      rows={rows.map((row) => ({ key: row.trade, data: row }))}
+      rows={rows.map((row) => ({
+        key: row.trade ?? UNASSIGNED_TRADE_KEY,
+        data: row,
+      }))}
       pinned={PINNED}
       bareCells={Boolean(onCellClick)}
       footer={[
@@ -191,7 +205,7 @@ export function TradeCostMatrixAggregate({
         },
       ]}
       renderColumnHeader={({ key }) => capitalize(key)}
-      renderRowHeader={({ data: row }) => TRADE_LABELS[row.trade]}
+      renderRowHeader={({ data: row }) => tradeLabel(row.trade)}
       cellTitle={({ data: row }, { key }) => {
         const costType = costTypeForKey(key);
         const value = costType ? row.cells[costType] : 0;
@@ -205,48 +219,50 @@ export function TradeCostMatrixAggregate({
           : HEAT_CLASSES[heatBucket(value, maxCell)];
       }}
       renderCell={({ data: row }, { key }) => {
+        const trade = row.trade;
         const costType = costTypeForKey(key);
         const value = costType ? row.cells[costType] : 0;
         const label = value !== 0 ? formatCurrency(value, 0) : EMPTY_MARK;
-        if (!onCellClick) return label;
+        if (!onCellClick || trade === null) return label;
         const heat =
           value === 0 ? emptyCell : HEAT_CLASSES[heatBucket(value, maxCell)];
         return (
           <button
             type="button"
             onClick={() => {
-              onCellClick(row.trade, costType ?? null);
+              onCellClick(trade, costType ?? null);
             }}
             title={value !== 0 ? formatCurrency(value, 2) : undefined}
             className={cn(
               cellMono,
               heat,
               interactiveCell,
-              isActive(row.trade, costType ?? null) && activeCellRing,
+              isActive(trade, costType ?? null) && activeCellRing,
             )}
           >
             {label}
           </button>
         );
       }}
-      renderPinnedCell={({ data: row }) =>
-        onCellClick ? (
+      renderPinnedCell={({ data: row }) => {
+        const trade = row.trade;
+        return onCellClick && trade !== null ? (
           <button
             type="button"
-            onClick={() => onCellClick(row.trade, null)}
+            onClick={() => onCellClick(trade, null)}
             className={cn(
               cellMono,
               totalCell,
               interactiveCell,
-              isActive(row.trade, null) && activeCellRing,
+              isActive(trade, null) && activeCellRing,
             )}
           >
             {formatCurrency(row.total, 0)}
           </button>
         ) : (
           formatCurrency(row.total, 0)
-        )
-      }
+        );
+      }}
     />
   );
 }

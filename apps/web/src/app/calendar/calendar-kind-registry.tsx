@@ -193,7 +193,7 @@ const calendarKindRegistry = {
         item.vendor,
         item.productName,
         item.projectName,
-        TRADE_LABELS[item.trade],
+        item.trade ? TRADE_LABELS[item.trade] : "Unassigned trade",
       ]
         .filter(Boolean)
         .join(" · "),

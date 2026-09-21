@@ -59,6 +59,15 @@ import {
   normalizeSearchText,
 } from "~/server/semantic/text";
 
+import { effectiveExpenseTradeSql } from "./expense-inheritance";
+import { expenseProjectNamesSql } from "./expense-project-allocation";
+import {
+  effectiveProjectLocationsSql,
+  effectiveTaskProjectSql,
+  effectiveTaskSubjectProductSql,
+  effectiveTaskTradeSql,
+} from "./task-project-inheritance";
+
 /** Mirrors `GARDEN_ENTRY_KIND_LABELS` in `repo/garden/index.ts` — that map is
  * private to the garden module, and `kind` is a plain `text` column here, not
  * the branded enum, so the label is re-derived rather than imported. */
@@ -643,6 +652,11 @@ async function getProjectEmbeddingTexts(
             )
           : undefined,
       ),
+      extras: {
+        resolvedLocations: effectiveProjectLocationsSql(sql`"project"."id"`).as(
+          "resolvedLocations",
+        ),
+      },
       columns: {
         id: true,
         name: true,
@@ -658,7 +672,10 @@ async function getProjectEmbeddingTexts(
   return rows.map((row) => ({
     entityType: "project",
     entityId: row.id,
-    embeddingText: buildProjectEmbeddingText(row),
+    embeddingText: buildProjectEmbeddingText({
+      ...row,
+      locations: row.resolvedLocations,
+    }),
   }));
 }
 
@@ -671,13 +688,13 @@ async function getTaskEmbeddingTexts(
       id: task.id,
       name: task.name,
       status: task.status,
-      trade: task.trade,
+      trade: effectiveTaskTradeSql(),
       projectName: project.name,
       subjectProductName: product.name,
     })
     .from(task)
-    .leftJoin(project, eq(task.projectId, project.id))
-    .leftJoin(product, eq(task.subjectProductId, product.id))
+    .leftJoin(project, eq(effectiveTaskProjectSql(), project.id))
+    .leftJoin(product, eq(effectiveTaskSubjectProductSql(), product.id))
     .where(
       and(
         notDeleted(task),
@@ -708,14 +725,13 @@ async function getExpenseEmbeddingTexts(
       name: expense.name,
       lineKind: expense.lineKind,
       costType: expense.costType,
-      trade: expense.trade,
+      trade: effectiveExpenseTradeSql(),
       notes: expense.notes,
-      projectName: project.name,
+      projectName: expenseProjectNamesSql(sql`${expense.id}`),
       vendorName: vendor.name,
       orderId: purchase.orderId,
     })
     .from(expense)
-    .leftJoin(project, eq(expense.projectId, project.id))
     .leftJoin(
       purchase,
       and(eq(expense.purchaseId, purchase.id), notDeleted(purchase)),

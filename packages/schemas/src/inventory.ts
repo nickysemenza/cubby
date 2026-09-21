@@ -1,3 +1,4 @@
+import { tradeSchema } from "./task-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
@@ -394,6 +395,7 @@ const inventoryBulkDiscardItem = z.object({
  * ledger-only write-off is still available from the product surfaces.
  */
 export const inventoryBulkDiscardPayload = z.object({
+  trade: tradeSchema,
   items: z.array(inventoryBulkDiscardItem).min(1),
   date: plainDate,
   reason: z

@@ -5,6 +5,9 @@ import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 import type { DrizzleClient } from "~/server/db";
 import { expense, product } from "~/server/db/schema";
 import { notDeleted } from "~/server/repo/database-helpers";
+import { effectiveExpenseTradeSql } from "~/server/repo/expense-inheritance";
+
+const effectiveTrade = effectiveExpenseTradeSql();
 
 /**
  * A tool's trade, taken from its largest principal, non-future, positive
@@ -23,7 +26,7 @@ export async function deriveToolTrades(
   const rows = await dbc
     .selectDistinctOn([expense.productId], {
       productId: expense.productId,
-      trade: expense.trade,
+      trade: effectiveTrade,
     })
     .from(expense)
     .innerJoin(
@@ -47,9 +50,11 @@ export async function deriveToolTrades(
       asc(expense.productId),
       desc(expense.cost),
       asc(expense.date),
-      asc(expense.trade),
+      asc(effectiveTrade),
     );
   return new Map(
-    rows.flatMap((row) => (row.productId ? [[row.productId, row.trade]] : [])),
+    rows.flatMap((row) =>
+      row.productId && row.trade ? [[row.productId, row.trade] as const] : [],
+    ),
   );
 }

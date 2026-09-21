@@ -26,6 +26,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
+import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -289,7 +290,10 @@ const summaryTotalsRowSchema = z.object({
   totalExpenseCount: z.coerce.number().int().nonnegative(),
   totalPurchaseCount: z.coerce.number().int().nonnegative(),
   totalUnpricedExpenseCount: z.coerce.number().int().nonnegative(),
+  totalItemSpend: z.coerce.number(),
+  totalSharedChargeSpend: z.coerce.number(),
   totalNetSpend: z.coerce.number(),
+  totalIncomplete: z.coerce.boolean(),
   totalKnownAcquiredUnits: z.coerce.number().nonnegative(),
   totalUnknownAcquisitionQuantityCount: z.coerce.number().int().nonnegative(),
 });
@@ -304,7 +308,10 @@ const summaryPageFields = {
   expenseCount: z.coerce.number().int().nonnegative(),
   purchaseCount: z.coerce.number().int().nonnegative(),
   unpricedExpenseCount: z.coerce.number().int().nonnegative(),
+  itemSpend: z.coerce.number(),
+  sharedChargeSpend: z.coerce.number(),
   netSpend: z.coerce.number(),
+  incomplete: z.coerce.boolean(),
   latestActivity: z.string().nullable(),
   knownAcquiredUnits: z.coerce.number().nonnegative(),
   unknownAcquisitionQuantityCount: z.coerce.number().int().nonnegative(),
@@ -325,7 +332,10 @@ const summaryEmptyRowSchema = summaryTotalsRowSchema.extend({
   expenseCount: z.null(),
   purchaseCount: z.null(),
   unpricedExpenseCount: z.null(),
+  itemSpend: z.null(),
+  sharedChargeSpend: z.null(),
   netSpend: z.null(),
+  incomplete: z.null(),
   latestActivity: z.null(),
   knownAcquiredUnits: z.null(),
   unknownAcquisitionQuantityCount: z.null(),
@@ -617,8 +627,27 @@ export async function loadRelatedSummary(
   const definition = SUMMARY_DEFINITIONS[input.relationKey];
   const scope = (() => {
     if (input.relationKey.startsWith("vendor.")) {
+      if (input.relationKey === "vendor.projects") {
+        return sql`scoped_expenses AS (
+          SELECT e."id" AS "expenseId",
+            (allocation."attributedCents"::bigint / 100.0)::double precision AS "cost",
+            CASE WHEN allocation.basis = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
+            allocation.incomplete AS "allocationIncomplete",
+            e."productQuantity", e."future", e."date" AS "expenseDate",
+            e."purchaseId", allocation."projectId", e."productId",
+            p."date" AS "purchaseDate", p."vendorId"
+          FROM "Vendor" s
+          JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL
+          JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
+          JOIN (${expenseProjectAllocationSql()}) allocation
+            ON allocation."expenseId" = e."id"
+          WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+        )`;
+      }
       return sql`scoped_expenses AS (
-        SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
+        SELECT e."id" AS "expenseId", e."cost",
+          CASE WHEN e."lineKind" = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
+          false AS "allocationIncomplete", e."productQuantity", e."future",
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
           p."date" AS "purchaseDate", p."vendorId"
         FROM "Vendor" s
@@ -628,8 +657,26 @@ export async function loadRelatedSummary(
       )`;
     }
     if (input.relationKey.startsWith("purchase.")) {
+      if (input.relationKey === "purchase.projects") {
+        return sql`scoped_expenses AS (
+          SELECT e."id" AS "expenseId",
+            (allocation."attributedCents"::bigint / 100.0)::double precision AS "cost",
+            CASE WHEN allocation.basis = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
+            allocation.incomplete AS "allocationIncomplete",
+            e."productQuantity", e."future", e."date" AS "expenseDate",
+            e."purchaseId", allocation."projectId", e."productId",
+            p."date" AS "purchaseDate", p."vendorId"
+          FROM "Purchase" p
+          JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
+          JOIN (${expenseProjectAllocationSql()}) allocation
+            ON allocation."expenseId" = e."id"
+          WHERE p."shortcode" = ${input.sourceId} AND p."deletedAt" IS NULL
+        )`;
+      }
       return sql`scoped_expenses AS (
-        SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
+        SELECT e."id" AS "expenseId", e."cost",
+          CASE WHEN e."lineKind" = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
+          false AS "allocationIncomplete", e."productQuantity", e."future",
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
           p."date" AS "purchaseDate", p."vendorId"
         FROM "Purchase" p
@@ -639,7 +686,9 @@ export async function loadRelatedSummary(
     }
     if (input.relationKey.startsWith("product.")) {
       return sql`scoped_expenses AS (
-        SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
+        SELECT e."id" AS "expenseId", e."cost",
+          CASE WHEN e."lineKind" = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
+          false AS "allocationIncomplete", e."productQuantity", e."future",
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
           p."date" AS "purchaseDate", p."vendorId"
         FROM "Product" s
@@ -658,21 +707,33 @@ export async function loadRelatedSummary(
         JOIN project_scope parent ON child."parentProjectId" = parent."id"
         WHERE child."deletedAt" IS NULL
       ), scoped_expenses AS (
-        SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
-          e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
+        SELECT e."id" AS "expenseId",
+          (allocation."attributedCents"::bigint / 100.0)::double precision AS "cost",
+          CASE WHEN allocation.basis = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
+          allocation.incomplete AS "allocationIncomplete",
+          e."productQuantity", e."future",
+          e."date" AS "expenseDate", e."purchaseId", allocation."projectId", e."productId",
           p."date" AS "purchaseDate", p."vendorId"
         FROM project_scope scope
-        JOIN "Expense" e ON e."projectId" = scope."id" AND e."deletedAt" IS NULL
+        JOIN (${expenseProjectAllocationSql()}) allocation
+          ON allocation."projectId" = scope."id"
+        JOIN "Expense" e ON e."id" = allocation."expenseId" AND e."deletedAt" IS NULL
         LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
         WHERE e."purchaseId" IS NULL OR p."id" IS NOT NULL
       )`;
     }
     return sql`scoped_expenses AS (
-      SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
-        e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
+      SELECT e."id" AS "expenseId",
+        (allocation."attributedCents"::bigint / 100.0)::double precision AS "cost",
+        CASE WHEN allocation.basis = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
+        allocation.incomplete AS "allocationIncomplete",
+        e."productQuantity", e."future",
+        e."date" AS "expenseDate", e."purchaseId", allocation."projectId", e."productId",
         p."date" AS "purchaseDate", p."vendorId"
       FROM "Project" s
-      JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL
+      JOIN (${expenseProjectAllocationSql()}) allocation
+        ON allocation."projectId" = s."id"
+      JOIN "Expense" e ON e."id" = allocation."expenseId" AND e."deletedAt" IS NULL
       LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
       WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
         AND (e."purchaseId" IS NULL OR p."id" IS NOT NULL)
@@ -739,7 +800,10 @@ export async function loadRelatedSummary(
         count(DISTINCT "expenseId")::int AS "expenseCount",
         count(DISTINCT "purchaseId")::int AS "purchaseCount",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" IS NULL)::int AS "unpricedExpenseCount",
+        COALESCE(sum("cost") FILTER (WHERE "costComponent" = 'item'), 0)::float8 AS "itemSpend",
+        COALESCE(sum("cost") FILTER (WHERE "costComponent" = 'shared'), 0)::float8 AS "sharedChargeSpend",
         COALESCE(sum("cost"), 0)::float8 AS "netSpend",
+        COALESCE(bool_or("allocationIncomplete"), false) AS "incomplete",
         max(COALESCE("purchaseDate", "expenseDate"))::text AS "latestActivity",
         COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::double precision AS "knownAcquiredUnits",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "unknownAcquisitionQuantityCount"
@@ -750,7 +814,10 @@ export async function loadRelatedSummary(
         count(DISTINCT "expenseId")::int AS "totalExpenseCount",
         count(DISTINCT "purchaseId")::int AS "totalPurchaseCount",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" IS NULL)::int AS "totalUnpricedExpenseCount",
+        COALESCE(sum("cost") FILTER (WHERE "costComponent" = 'item'), 0)::float8 AS "totalItemSpend",
+        COALESCE(sum("cost") FILTER (WHERE "costComponent" = 'shared'), 0)::float8 AS "totalSharedChargeSpend",
         COALESCE(sum("cost"), 0)::float8 AS "totalNetSpend",
+        COALESCE(bool_or("allocationIncomplete"), false) AS "totalIncomplete",
         COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::double precision AS "totalKnownAcquiredUnits",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "totalUnknownAcquisitionQuantityCount"
       FROM targeted
@@ -770,7 +837,10 @@ export async function loadRelatedSummary(
     expenseCount: 0,
     purchaseCount: 0,
     unpricedExpenseCount: 0,
+    itemSpend: 0,
+    sharedChargeSpend: 0,
     netSpend: 0,
+    incomplete: false,
     knownAcquiredUnits: 0,
     unknownAcquisitionQuantityCount: 0,
   };
@@ -779,7 +849,10 @@ export async function loadRelatedSummary(
         expenseCount: Number(first.totalExpenseCount),
         purchaseCount: Number(first.totalPurchaseCount),
         unpricedExpenseCount: Number(first.totalUnpricedExpenseCount),
+        itemSpend: Number(first.totalItemSpend),
+        sharedChargeSpend: Number(first.totalSharedChargeSpend),
         netSpend: Number(first.totalNetSpend),
+        incomplete: first.totalIncomplete ?? false,
         knownAcquiredUnits: Number(first.totalKnownAcquiredUnits),
         unknownAcquisitionQuantityCount: Number(
           first.totalUnknownAcquisitionQuantityCount,
@@ -813,7 +886,10 @@ export async function loadRelatedSummary(
       expenseCount: Number(row.expenseCount),
       purchaseCount: Number(row.purchaseCount),
       unpricedExpenseCount: Number(row.unpricedExpenseCount),
+      itemSpend: Number(row.itemSpend),
+      sharedChargeSpend: Number(row.sharedChargeSpend),
       netSpend: Number(row.netSpend),
+      incomplete: row.incomplete ?? false,
       latestActivity: row.latestActivity,
       knownAcquiredUnits: Number(row.knownAcquiredUnits),
       unknownAcquisitionQuantityCount: Number(

@@ -16,6 +16,7 @@ function proj(id: string, parentProjectId?: string): ProjectListItemOut {
     status: "planning",
     kind: null,
     locations: [],
+    defaultTrade: null,
     costEstimate: null,
     parentProjectId:
       parentProjectId != null

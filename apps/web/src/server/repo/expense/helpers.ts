@@ -5,29 +5,23 @@ import type {
   PurchaseId,
   VendorId,
 } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type ImageRenderStatus,
   type ImageStorageStatus,
   isDisplayableImageFile,
 } from "@cubby/schemas/image";
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
-import { FOOD_CATEGORY } from "@cubby/shared";
-import { and, inArray } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
-import type { DrizzleTransaction } from "~/server/db";
-import { product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  notDeleted,
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
 } from "~/server/repo/database-helpers";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+import type { ExpenseProjectAllocationRow } from "../expense-project-allocation";
 
 /**
  * Reject a quantity whose sign contradicts the money's direction.
@@ -115,6 +109,15 @@ export type ExpenseRow = {
   notes: string | null;
   future: boolean;
   projectId: ProjectId | null;
+  effectiveProjectId?: ProjectId | null;
+  effectiveProjectShortcode?: string | null;
+  effectiveProjectName?: string | null;
+  effectiveTrade?: ExpenseOut["trade"];
+  fallbackProjectShortcode?: string | null;
+  fallbackTrade?: ExpenseOut["trade"];
+  projectResolutionSource?: string;
+  tradeResolutionSource?: string;
+  projectAllocations?: ExpenseProjectAllocationRow[];
   productId: ProductId | null;
   productQuantity: number | null;
   purchaseId: PurchaseId | null;
@@ -209,11 +212,138 @@ const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
       updatedAt: value.updatedAt,
     }));
 
+const expenseProjectFieldResolution = (
+  row: ExpenseRow,
+  purchaseRow: ExpenseRow["purchase"],
+  storedProjectShortcode: string | null,
+  effectiveProjectShortcode: string | null,
+): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+  let mode: "allocated" | "explicit" | "inherit" = "inherit";
+  if (row.lineKind !== "principal") mode = "allocated";
+  else if (storedProjectShortcode) mode = "explicit";
+
+  const source =
+    row.projectResolutionSource ??
+    (row.lineKind !== "principal"
+      ? "purchase allocation"
+      : storedProjectShortcode
+        ? "expense override"
+        : effectiveProjectShortcode
+          ? "inherited default"
+          : "none");
+  let sourceEntity: NonNullable<
+    ExpenseOut["fieldResolutions"]
+  >[string]["sourceEntity"] = effectiveProjectShortcode
+    ? { entityType: "project" as const, entityId: effectiveProjectShortcode }
+    : null;
+  if (source === "purchase default" && purchaseRow) {
+    sourceEntity = {
+      entityType: "purchase" as const,
+      entityId: purchaseRow.shortcode,
+    };
+  }
+  return {
+    mode,
+    storedValue: storedProjectShortcode,
+    value: effectiveProjectShortcode,
+    fallbackValue: row.fallbackProjectShortcode ?? null,
+    source,
+    sourceEntity,
+    matchesFallback:
+      effectiveProjectShortcode === (row.fallbackProjectShortcode ?? null),
+    canReset: storedProjectShortcode !== null,
+  };
+};
+
+const expenseTradeFieldResolution = (
+  row: ExpenseRow,
+  purchaseRow: ExpenseRow["purchase"],
+  effectiveProjectShortcode: string | null,
+  effectiveTrade: ExpenseOut["trade"],
+): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+  const source =
+    row.tradeResolutionSource ??
+    (row.trade !== null
+      ? "expense override"
+      : effectiveTrade
+        ? "inherited default"
+        : "none");
+  let sourceEntity = null;
+  if (source === "purchase default" && purchaseRow) {
+    sourceEntity = {
+      entityType: "purchase" as const,
+      entityId: purchaseRow.shortcode,
+    };
+  } else if (source === "project default" && effectiveProjectShortcode) {
+    sourceEntity = {
+      entityType: "project" as const,
+      entityId: effectiveProjectShortcode,
+    };
+  }
+  return {
+    mode: row.trade !== null ? "explicit" : effectiveTrade ? "inherit" : "none",
+    storedValue: row.trade,
+    value: effectiveTrade,
+    fallbackValue: row.fallbackTrade ?? null,
+    source,
+    sourceEntity,
+    matchesFallback: effectiveTrade === (row.fallbackTrade ?? null),
+    canReset: row.trade !== null,
+  };
+};
+
+const expenseProjectAllocations = (
+  row: ExpenseRow,
+): ExpenseOut["projectAllocations"] =>
+  row.projectAllocations
+    ?.filter(
+      (
+        allocation,
+      ): allocation is typeof allocation & {
+        basis: "positive" | "refund" | "default";
+      } => allocation.basis !== "principal",
+    )
+    .map((allocation) => ({
+      projectId: allocation.projectShortcode
+        ? parseShortcodeFor("project", allocation.projectShortcode)
+        : null,
+      projectName: allocation.projectName,
+      amount:
+        allocation.attributedCents === null
+          ? null
+          : Number(allocation.attributedCents) / 100,
+      basis: allocation.basis,
+      incomplete: allocation.incomplete,
+    }));
+
+const expenseProjectId = (
+  row: ExpenseRow,
+  effectiveProjectShortcode: string | null,
+) =>
+  toProjectShortcode(
+    row.effectiveProjectShortcode === undefined
+      ? resolveLiveJoinShortcode(row.project)
+      : effectiveProjectShortcode,
+  );
+
+const expenseProjectName = (row: ExpenseRow) =>
+  row.effectiveProjectName === undefined
+    ? resolveLiveJoinName(row.project)
+    : row.effectiveProjectName;
+
 export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
   // A soft-deleted Purchase reads as no Purchase at all — the same rule
   // `resolveLiveJoinName` applies to project/product below, so a deleted parent
   // renders blank rather than as live data.
   const purchaseRow = row.purchase?.deletedAt === null ? row.purchase : null;
+
+  const effectiveProjectShortcode =
+    row.effectiveProjectShortcode === undefined
+      ? resolveLiveJoinShortcode(row.project)
+      : row.effectiveProjectShortcode;
+  const effectiveTrade =
+    row.effectiveTrade === undefined ? row.trade : row.effectiveTrade;
+  const storedProjectShortcode = resolveLiveJoinShortcode(row.project);
 
   return {
     id: parseShortcodeFor("expense", row.shortcode),
@@ -223,12 +353,12 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     lineKind: row.lineKind,
     lineBasis: row.lineBasis,
     costType: row.costType,
-    trade: row.trade,
+    trade: effectiveTrade,
     url: row.url,
     notes: row.notes,
     future: row.future,
-    projectId: toProjectShortcode(resolveLiveJoinShortcode(row.project)),
-    projectName: resolveLiveJoinName(row.project),
+    projectId: expenseProjectId(row, effectiveProjectShortcode),
+    projectName: expenseProjectName(row),
     productId: toProductShortcode(resolveLiveJoinShortcode(row.product)),
     productName: resolveLiveJoinName(row.product),
     productQuantity: row.productQuantity,
@@ -268,79 +398,25 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     beneficiaries: expenseAttributions(row, "beneficiary"),
     funders: expenseAttributions(row, "funder"),
     sourceClaims: expenseSourceClaims(row),
+    fieldResolutions:
+      row.effectiveProjectShortcode === undefined
+        ? undefined
+        : {
+            projectId: expenseProjectFieldResolution(
+              row,
+              purchaseRow,
+              storedProjectShortcode,
+              effectiveProjectShortcode,
+            ),
+            trade: expenseTradeFieldResolution(
+              row,
+              purchaseRow,
+              effectiveProjectShortcode,
+              effectiveTrade,
+            ),
+          },
+    projectAllocations: expenseProjectAllocations(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 };
-
-/**
- * The creation-time triage default: a food line with no project belongs to
- * Household.
- *
- * Imports and split replacement rows use it while creating expenses.
- * `updateExpense` deliberately does NOT — an update is an explicit statement
- * about one row the operator is looking at, and re-defaulting on update would
- * make "clear the project on this food line" impossible, bouncing every clear
- * straight back to Household with no error and no audit diff to explain it.
- * Automation triages, humans override, an override is never re-triaged.
- *
- * Returns `null` when no Household project exists, so a database that has not
- * been backfilled (every existing test, any fresh dev DB) behaves exactly as it
- * did before. Absence degrades, it never throws.
- *
- * Scope is `category === 'food'` on purpose. The other backfilled cohort —
- * household/supplies repurchased three or more times — is a retrospective
- * aggregate over a product's history; evaluating it per-insert would cost a
- * grouped query on every create and would triage the third bottle of shampoo
- * while leaving the first two behind.
- */
-export const resolveDefaultProjectIds = async (
-  tx: DrizzleTransaction,
-  inputs: ReadonlyArray<{
-    projectId: ProjectId | null;
-    productId: ProductId | null;
-  }>,
-): Promise<Array<ProjectId | null>> => {
-  const candidates = uniq(
-    inputs.flatMap((input) =>
-      input.projectId === null && input.productId !== null
-        ? [input.productId]
-        : [],
-    ),
-  );
-  if (candidates.length === 0) return inputs.map((input) => input.projectId);
-
-  const foodProducts = new Set(
-    (
-      await tx.query.product.findMany({
-        where: and(inArray(product.id, candidates), notDeleted(product)),
-        columns: { id: true, category: true },
-      })
-    )
-      .filter((row) => row.category === FOOD_CATEGORY)
-      .map((row) => row.id),
-  );
-  if (foodProducts.size === 0) return inputs.map((input) => input.projectId);
-
-  const householdId = await resolveLiveShortcode(
-    tx,
-    HOUSEHOLD_PROJECT_SHORTCODE,
-    "project",
-  );
-  const parsedHouseholdId = householdId
-    ? parseEntityId("project", householdId)
-    : null;
-  return inputs.map((input) =>
-    input.projectId === null &&
-    input.productId !== null &&
-    foodProducts.has(input.productId)
-      ? parsedHouseholdId
-      : input.projectId,
-  );
-};
-
-export const resolveDefaultProjectId = async (
-  tx: DrizzleTransaction,
-  input: { projectId: ProjectId | null; productId: ProductId | null },
-): Promise<ProjectId | null> =>
-  (await resolveDefaultProjectIds(tx, [input]))[0] ?? null;

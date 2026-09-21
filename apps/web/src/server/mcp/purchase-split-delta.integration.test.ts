@@ -1,5 +1,5 @@
 /**
- * `split_expense`'s MCP-only cue: `originalCost`/`partsSum`/`delta`.
+ * `split_expense`'s MCP result: `originalCost`/`partsSum`/`delta`.
  *
  * The delta arithmetic itself is pure and covered in
  * `packages/schemas/src/purchase.unit.test.ts` (`splitExpenseDelta`). What
@@ -23,7 +23,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { EntityKernelContext } from "~/server/entity-kernel";
-import { createExpense } from "~/server/repo/expense";
+import { createExpense, getExpenseByShortcode } from "~/server/repo/expense";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -128,7 +128,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
     expect(out.delta).toBe(0);
   });
 
-  it("reports a non-zero delta as a cue, without rejecting the split", async () => {
+  it("rejects a nonconserving split and preserves the original expense", async () => {
     const { output: original } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -142,8 +142,6 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
       ctx.actor,
     );
 
-    // A one-sided discount: the parts add up to less than the original —
-    // exactly the "legitimate mismatch" the tool description calls out.
     const result = await callTool(
       "split_expense",
       {
@@ -157,14 +155,17 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
       workflowContext(ctx.db, ctx.actor.userId),
     );
 
-    // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
-    expect(result.isError, errorText(result)).not.toBe(true);
-    const out = structured(result);
-    expect(out.originalCost).toBe(100);
-    expect(out.partsSum).toBe(85);
-    expect(out.delta).toBe(-15);
-    // Not a gate: both parts were still created despite the mismatch.
-    expect(out.items).toHaveLength(2);
+    expect(result.isError).toBe(true);
+    expect(errorText(result)).toContain(
+      "Split parts must conserve the original expense amount exactly.",
+    );
+    await expect(
+      getExpenseByShortcode(ctx.db, original.id),
+    ).resolves.toMatchObject({
+      id: original.id,
+      name: "partially refunded combo",
+      cost: 100,
+    });
   });
 
   it("returns null originalCost/delta when the original has no recorded cost", async () => {

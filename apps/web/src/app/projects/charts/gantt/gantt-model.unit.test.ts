@@ -36,6 +36,7 @@ function project(params: {
     status: params.status ?? "planning",
     kind: params.kind ?? null,
     locations: [],
+    defaultTrade: null,
     costEstimate: null,
     parentProjectId:
       params.parentProjectId != null

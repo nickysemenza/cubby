@@ -6,6 +6,11 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import * as schema from "~/server/db/schema";
+import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
+import {
+  effectiveTaskProjectSql,
+  effectiveTaskSubjectProductSql,
+} from "~/server/repo/task-project-inheritance";
 
 interface EdgeSpec {
   edgeKey: string;
@@ -22,6 +27,7 @@ interface TraversalHop {
   fromColumn: string;
   toColumn: string;
   softDelete: boolean;
+  condition: SQL;
 }
 
 export interface Traversal {
@@ -116,6 +122,26 @@ export const invertPath = (
       direction: step.direction === "incoming" ? "outgoing" : "incoming",
     }));
 
+/** Relationship discovery follows effective assignment, including shared charges. */
+function edgeCondition(
+  edge: EdgeSpec,
+  sourceAlias: string,
+  targetAlias: string,
+): SQL {
+  const target = sql.raw(`${targetAlias}."id"`);
+  if (edge.edgeKey === "Task.projectId")
+    return sql`${effectiveTaskProjectSql(sourceAlias)} = ${target}`;
+  if (edge.edgeKey === "Task.subjectProductId")
+    return sql`${effectiveTaskSubjectProductSql(sourceAlias)} = ${target}`;
+  if (edge.edgeKey === "Expense.projectId")
+    return sql`EXISTS (
+    SELECT 1 FROM (${expenseProjectAllocationSql()}) attributed
+    WHERE attributed."expenseId" = ${sql.raw(`${sourceAlias}."id"`)}
+      AND attributed."projectId" = ${target}
+  )`;
+  return sql`${sql.raw(`${sourceAlias}."${edge.sourceColumn}"`)} = ${target}`;
+}
+
 /**
  * Compile a manifest-only path into structural joins. `aliasPrefix` is trusted
  * server code, and lets two paths meet at a hub without alias collisions.
@@ -156,6 +182,11 @@ export const compileTraversal = (
       softDelete: outgoing
         ? softDeleteForTable(nextTable)
         : edge.sourceSoftDeletable,
+      condition: edgeCondition(
+        edge,
+        outgoing ? currentAlias : alias,
+        outgoing ? alias : currentAlias,
+      ),
     });
     currentTable = nextTable;
     currentAlias = alias;
@@ -176,9 +207,7 @@ const renderJoins = (traversal: Pick<Traversal, "hops">): SQL =>
   sql.join(
     traversal.hops.map(
       (hop) =>
-        sql`JOIN ${sql.raw(`"${hop.table}"`)} ${sql.raw(hop.alias)} ON (${sql.raw(
-          `${hop.fromAlias}."${hop.fromColumn}"`,
-        )} = ${sql.raw(`${hop.alias}."${hop.toColumn}"`)}${
+        sql`JOIN ${sql.raw(`"${hop.table}"`)} ${sql.raw(hop.alias)} ON (${hop.condition}${
           hop.softDelete
             ? sql` AND ${sql.raw(`${hop.alias}."deletedAt"`)} IS NULL`
             : sql``

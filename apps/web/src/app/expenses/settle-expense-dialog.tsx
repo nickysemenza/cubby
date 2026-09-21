@@ -46,7 +46,7 @@ const settleExpenseSchema = z.object({
   date: plainDate,
   projectId: z.string().nullable(),
   costType: costTypeSchema,
-  trade: tradeSchema,
+  trade: tradeSchema.nullable(),
   notes: z.string().nullable(),
   vendor: z.string(),
   orderId: z.string(),
@@ -154,9 +154,16 @@ export function SettleExpenseDialog({
           staticBasis={{
             name: expense.name,
             productId: expense.productId,
+            purchaseId: expense.purchaseId,
+            lineKind: expense.lineKind,
             notes: expense.notes,
           }}
-          fieldKeys={["costType", "trade", "projectId", "vendor"]}
+          fieldKeys={[
+            "costType",
+            "trade",
+            ...(expense.lineKind === "principal" ? ["projectId"] : []),
+            "vendor",
+          ]}
         >
           <NullableNumericField
             form={form}
@@ -179,19 +186,23 @@ export function SettleExpenseDialog({
             name="trade"
             label="Trade"
             options={tradeOptions}
+            nullable
+            description="None keeps the trade inherited from its project or purchase defaults."
             suggestField="trade"
           />
-          <EntityValueField<SettleExpenseValues, "project">
-            form={form}
-            name="projectId"
-            entity="project"
-            label="Project"
-            SearchProvider={(props) => (
-              <WithEntitySearch entity="project" {...props} />
-            )}
-            clearable
-            suggestField="projectId"
-          />
+          {expense.lineKind === "principal" ? (
+            <EntityValueField<SettleExpenseValues, "project">
+              form={form}
+              name="projectId"
+              entity="project"
+              label="Project"
+              SearchProvider={(props) => (
+                <WithEntitySearch entity="project" {...props} />
+              )}
+              clearable
+              suggestField="projectId"
+            />
+          ) : null}
           {/* Roster picker, not free text — see `VendorField`. */}
           <VendorField
             form={form}

@@ -37,6 +37,7 @@ class InMemoryMutationSideEffectPorts {
     publishTasks: async (_db, tasks, options) => {
       this.published.push({ tasks, options });
     },
+    findChildTaskEmbeddingRefs: async () => [],
     findInventoryEmbeddingRefsForProducts: async () => this.inventoryRefs,
     findInventoryEmbeddingRefsForLocations: async () => [],
     findRecipeEmbeddingRefsForIngredients: async () => [],

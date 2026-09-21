@@ -27,6 +27,7 @@ import type {
   TaskOut,
   TaskUpdateInput,
 } from "@cubby/schemas/project";
+import type { Trade } from "@cubby/schemas/task-fields";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -59,6 +60,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { patchEntityRows } from "~/server/repo/entity-patch";
+import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 import { removeEntity } from "~/server/repo/removal";
 import {
   type EntityRef,
@@ -69,6 +71,12 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import {
+  effectiveTaskProjectSql,
+  effectiveTaskSubjectProductSql,
+  effectiveTaskTradeSql,
+  hydrateTaskInheritanceRows,
+} from "../task-project-inheritance";
 import { dbTaskToAPI } from "./helpers";
 
 type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
@@ -219,16 +227,12 @@ async function validateParentTask(
   parentId: TaskId,
 ): Promise<{
   id: TaskId;
-  projectId: ProjectId | null;
-  subjectProductId: ProductId | null;
   parentTaskId: TaskId | null;
 }> {
   const parent = await tx.query.task.findFirst({
     where: and(eq(task.id, parentId), notDeleted(task)),
     columns: {
       id: true,
-      projectId: true,
-      subjectProductId: true,
       parentTaskId: true,
     },
   });
@@ -243,6 +247,40 @@ async function validateParentTask(
   }
   return parent;
 }
+
+/** A task is never persisted without a resolvable effective trade. */
+async function assertEffectiveTaskTrade(
+  tx: DrizzleTransaction,
+  id: TaskId,
+): Promise<void> {
+  const result = await tx.execute<{ trade: string | null }>(sql`
+    SELECT ${effectiveTaskTradeSql()} AS "trade"
+    FROM "Task"
+    WHERE "id" = ${id} AND "deletedAt" IS NULL
+  `);
+  if (result.rows[0]?.trade == null) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Task needs a trade or an inherited trade source.",
+    );
+  }
+}
+
+const taskEffectiveValues = async (tx: DrizzleTransaction, id: TaskId) => {
+  const result = await tx.execute<{
+    projectId: ProjectId | null;
+    subjectProductId: ProductId | null;
+    trade: Trade | null;
+  }>(sql`
+    SELECT
+      ${effectiveTaskProjectSql()} AS "projectId",
+      ${effectiveTaskSubjectProductSql()} AS "subjectProductId",
+      ${effectiveTaskTradeSql()} AS "trade"
+    FROM "Task"
+    WHERE "id" = ${id} AND "deletedAt" IS NULL
+  `);
+  return result.rows[0] ?? null;
+};
 
 /** A task can only target a live product; stale picker/API ids fail clearly. */
 async function assertSubjectProductLive(
@@ -292,8 +330,9 @@ const taskReader = createEntityReader({
       taskSubtaskCounts(db, [row.id]),
     ]);
     const counts = subtaskCounts.get(row.id);
+    const [hydrated] = await hydrateTaskInheritanceRows(db, [row]);
     return dbTaskToAPI(
-      row,
+      hydrated!,
       deps.blockedBy.get(row.id) ?? [],
       deps.blocking.get(row.id) ?? [],
       counts?.count ?? 0,
@@ -320,10 +359,11 @@ export const getTasksByIDs = async (
   ids: TaskId[],
 ): Promise<TaskOut[]> => {
   if (ids.length === 0) return [];
-  const rows = await getDb(db).query.task.findMany({
+  const rawRows = await getDb(db).query.task.findMany({
     where: and(inArray(task.id, ids), notDeleted(task)),
     ...relations.task.withProject,
   });
+  const rows = await hydrateTaskInheritanceRows(db, rawRows);
   const [deps, subtaskCounts] = await Promise.all([
     taskDependencyIds(db, ids),
     taskSubtaskCounts(db, ids),
@@ -346,12 +386,6 @@ export const createTask = async (
   actor: ActorContext,
 ): Promise<{ output: TaskOut; entityId: TaskId }> => {
   const id = await withTransaction(db, async (tx) => {
-    // `projectId` and `parentTaskId` both default to null through zod (see
-    // taskCreateShape), so the repo can't tell "omitted" from "explicitly
-    // null" — a null projectId alongside a parentTaskId is treated as
-    // "inherit the parent's project", which covers both cases and lets an
-    // explicit non-null projectId still win. Both arrive as shortcodes;
-    // resolving THROUGH a live-only lookup is the existence+liveness check.
     let parentTaskId: TaskId | null = null;
     if (data.parentTaskId) {
       parentTaskId = await resolveOrThrow(tx, "task", data.parentTaskId);
@@ -365,15 +399,7 @@ export const createTask = async (
       ? await resolveSubjectProductId(tx, data.subjectProductId)
       : null;
 
-    if (parentTaskId) {
-      const parent = await validateParentTask(tx, parentTaskId);
-      if (projectId == null) {
-        projectId = parent.projectId;
-      }
-      if (subjectProductId == null) {
-        subjectProductId = parent.subjectProductId;
-      }
-    }
+    if (parentTaskId) await validateParentTask(tx, parentTaskId);
     if (subjectProductId) {
       await assertSubjectProductLive(tx, subjectProductId);
     }
@@ -382,12 +408,19 @@ export const createTask = async (
       name: data.name,
       status: data.status,
       projectId,
+      projectMode:
+        data.projectMode ?? (data.projectId === null ? "inherit" : "explicit"),
       subjectProductId,
+      subjectProductMode:
+        data.subjectProductMode ??
+        (data.subjectProductId === null ? "inherit" : "explicit"),
       parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
       trade: data.trade,
     });
+    await assertEffectiveTaskTrade(tx, created.id);
+    await validateLiveEffectiveTrades(tx);
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
       const resolvedImageIds = await resolveAllPresent(
         tx,
@@ -410,6 +443,89 @@ export const createTask = async (
   });
   return { output: await getTaskByID(db, id), entityId: id };
 };
+
+type TaskStoredRow = NonNullable<Awaited<ReturnType<typeof fetchTaskRow>>>;
+
+/** An omitted scalar keeps intent; detach alone snapshots an inherited value. */
+function assignmentAfterParentChange<T>(
+  value: T | null | undefined,
+  mode: "inherit" | "explicit" | undefined,
+  previousMode: "inherit" | "explicit",
+  effectiveBefore: T | null,
+  detaching: boolean,
+) {
+  if (mode === "inherit") return { value: null, mode };
+  if (value !== undefined) return { value, mode: "explicit" as const };
+  if (mode === "explicit") return { value, mode };
+  if (detaching && previousMode === "inherit")
+    return { value: effectiveBefore, mode: "explicit" as const };
+  return { value: undefined, mode: undefined };
+}
+
+async function resolveTaskParentUpdate(
+  tx: DrizzleTransaction,
+  id: TaskId,
+  shortcode: TaskShortcode,
+  parentCode: TaskUpdateData["parentTaskId"],
+) {
+  if (parentCode == null) return parentCode;
+  if (parentCode === shortcode)
+    throw createAppError("SELF_DEPENDENCY", "A task cannot be its own parent.");
+  const parentId = await resolveOrThrow(tx, "task", parentCode);
+  await validateParentTask(tx, parentId);
+  await assertNoLiveSubtasks(tx, id);
+  return parentId;
+}
+
+async function resolveTaskUpdateAssignments(
+  tx: DrizzleTransaction,
+  id: TaskId,
+  shortcode: TaskShortcode,
+  data: TaskUpdateData,
+  before: TaskStoredRow,
+) {
+  const parentTaskId = await resolveTaskParentUpdate(
+    tx,
+    id,
+    shortcode,
+    data.parentTaskId,
+  );
+  const detaching = parentTaskId === null && before.parentTaskId !== null;
+  const previous = detaching ? await taskEffectiveValues(tx, id) : null;
+  const projectId =
+    data.projectId == null
+      ? data.projectId
+      : await resolveOrThrow(tx, "project", data.projectId);
+  const subjectProductId =
+    data.subjectProductId == null
+      ? data.subjectProductId
+      : await resolveSubjectProductId(tx, data.subjectProductId);
+  const project = assignmentAfterParentChange(
+    projectId,
+    data.projectMode,
+    before.projectMode,
+    previous?.projectId ?? null,
+    detaching,
+  );
+  const subject = assignmentAfterParentChange(
+    subjectProductId,
+    data.subjectProductMode,
+    before.subjectProductMode,
+    previous?.subjectProductId ?? null,
+    detaching,
+  );
+  let trade = data.trade;
+  if (trade === undefined && detaching && before.trade === null)
+    trade = previous?.trade ?? null;
+  return {
+    parentTaskId,
+    projectId: project.value,
+    projectMode: project.mode,
+    subjectProductId: subject.value,
+    subjectProductMode: subject.mode,
+    trade,
+  };
+}
 
 export const updateTask = async (
   db: Database,
@@ -436,34 +552,13 @@ export const updateTask = async (
   let detachedImageKeys: string[] = [];
   await withTransaction(db, async (tx) => {
     await hooks?.beforeUpdate?.(tx, id);
-    let parentTaskId: TaskId | null | undefined;
-    if (data.parentTaskId !== undefined && data.parentTaskId !== null) {
-      if (data.parentTaskId === shortcode) {
-        throw createAppError(
-          "SELF_DEPENDENCY",
-          "A task cannot be its own parent.",
-        );
-      }
-      parentTaskId = await resolveOrThrow(tx, "task", data.parentTaskId);
-      await validateParentTask(tx, parentTaskId);
-      await assertNoLiveSubtasks(tx, id);
-    } else if (data.parentTaskId === null) {
-      parentTaskId = null;
-    }
-
-    let projectId: ProjectId | null | undefined;
-    if (data.projectId !== undefined && data.projectId !== null) {
-      projectId = await resolveOrThrow(tx, "project", data.projectId);
-    } else if (data.projectId === null) {
-      projectId = null;
-    }
-
-    const subjectProductId =
-      data.subjectProductId === undefined
-        ? undefined
-        : data.subjectProductId === null
-          ? null
-          : await resolveSubjectProductId(tx, data.subjectProductId);
+    const assignments = await resolveTaskUpdateAssignments(
+      tx,
+      id,
+      shortcode,
+      data,
+      before,
+    );
 
     // Full-replacement set: resolve every requested shortcode to a live uuid
     // up front — `replaceDependencyEdges`'s own not-found check operates on
@@ -480,15 +575,14 @@ export const updateTask = async (
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       status: data.status,
-      projectId,
-      subjectProductId,
-      parentTaskId,
+      ...assignments,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
-      trade: data.trade,
       sortOrder: data.sortOrder,
     });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
+    await assertEffectiveTaskTrade(tx, id);
+    await validateLiveEffectiveTrades(tx);
     ({ detachedImageKeys } = await syncEntityImages(
       tx,
       "task",
@@ -568,7 +662,7 @@ const resolveLiveTaskProjectId = (
 
 type TaskBulkPatch = Pick<
   TaskUpdateData,
-  "projectId" | "status" | "trade" | "dueDate" | "dueEndDate"
+  "projectId" | "projectMode" | "status" | "trade" | "dueDate" | "dueEndDate"
 >;
 
 export const updateTasksInBulk = async (
@@ -594,6 +688,7 @@ export const updateTasksInBulk = async (
 
   const hasPatch =
     data.projectId !== undefined ||
+    data.projectMode !== undefined ||
     data.status !== undefined ||
     data.trade !== undefined ||
     data.dueDate !== undefined ||
@@ -618,6 +713,7 @@ export const updateTasksInBulk = async (
         id: task.id,
         shortcode: task.shortcode,
         projectId: task.projectId,
+        projectMode: task.projectMode,
         status: task.status,
         trade: task.trade,
         dueDate: task.dueDate,
@@ -631,7 +727,10 @@ export const updateTasksInBulk = async (
     }
 
     const values = buildPartialUpdateValues({
-      projectId,
+      projectId: data.projectMode === "inherit" ? null : projectId,
+      projectMode:
+        data.projectMode ??
+        (data.projectId === undefined ? undefined : "explicit"),
       status: data.status,
       trade: data.trade,
       dueDate: data.dueDate,
@@ -641,6 +740,7 @@ export const updateTasksInBulk = async (
       .update(task)
       .set(values)
       .where(and(inArray(task.id, ids), notDeleted(task)));
+    await validateLiveEffectiveTrades(tx);
 
     const auditEntries: AuditEntryInput[] = [];
     for (const row of before) {

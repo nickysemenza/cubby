@@ -100,7 +100,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
     task: TaskOut,
     data: {
       status?: TaskOut["status"];
-      trade?: TaskOut["trade"];
+      trade?: TaskOut["trade"] | null;
       projectId?: string | null;
       sortOrder?: number | null;
     },
@@ -122,7 +122,10 @@ export function useBoardMutations(target: BoardCacheTarget) {
       updatedAt: new Date(),
     };
     if (data.status !== undefined) nextTask.status = data.status;
-    if (data.trade !== undefined) nextTask.trade = data.trade;
+    // A null write resets the raw override; the effective trade can change via
+    // its parent/project, so keep the prior projection until onSettled refetches.
+    if (data.trade !== undefined && data.trade !== null)
+      nextTask.trade = data.trade;
     if (data.sortOrder !== undefined) nextTask.sortOrder = data.sortOrder;
     if ("projectId" in data) {
       // Re-brand at the string→domain boundary (mutation inputs widen branded

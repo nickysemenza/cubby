@@ -175,89 +175,92 @@ export function TradeCostMatrix({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.trade} className={bodyRule}>
-              <th
-                scope="row"
-                className={cn(
-                  stickyRowHeaderCard,
-                  "px-2 py-2 text-left text-sm font-medium",
-                )}
-              >
-                {TRADE_LABELS[row.trade]}
-              </th>
-              {columns.map((key) => {
-                const value = row.cells[key];
-                const bucket = heatBucket(value, maxCell);
-                const heat = value === 0 ? emptyCell : HEAT_CLASSES[bucket];
-                const label =
-                  value !== 0 ? formatCurrency(value, 0) : EMPTY_MARK;
-                const title =
-                  value !== 0 ? formatCurrency(value, 2) : undefined;
+          {rows.map((row) => {
+            const trade = row.trade;
+            return (
+              <tr key={trade ?? "__unassigned__"} className={bodyRule}>
+                <th
+                  scope="row"
+                  className={cn(
+                    stickyRowHeaderCard,
+                    "px-2 py-2 text-left text-sm font-medium",
+                  )}
+                >
+                  {trade ? TRADE_LABELS[trade] : "Unassigned trade"}
+                </th>
+                {columns.map((key) => {
+                  const value = row.cells[key];
+                  const bucket = heatBucket(value, maxCell);
+                  const heat = value === 0 ? emptyCell : HEAT_CLASSES[bucket];
+                  const label =
+                    value !== 0 ? formatCurrency(value, 0) : EMPTY_MARK;
+                  const title =
+                    value !== 0 ? formatCurrency(value, 2) : undefined;
 
-                if (!onCellClick) {
-                  const cell = (
-                    <td className={cn(cellMono, heat)} title={title}>
-                      {label}
+                  if (!onCellClick || trade === null) {
+                    const cell = (
+                      <td className={cn(cellMono, heat)} title={title}>
+                        {label}
+                      </td>
+                    );
+                    return (
+                      <Fragment key={key}>
+                        {value !== 0
+                          ? withPreview(cell, `${trade}|${key}`)
+                          : cell}
+                      </Fragment>
+                    );
+                  }
+                  return (
+                    <td key={key} className="p-0">
+                      {withPreview(
+                        <button
+                          type="button"
+                          onClick={() => onCellClick(trade, key)}
+                          title={title}
+                          className={cn(
+                            cellMono,
+                            heat,
+                            interactiveCell,
+                            isActive(trade, key) && activeCellRing,
+                          )}
+                        >
+                          {label}
+                        </button>,
+                        `${trade}|${key}`,
+                      )}
                     </td>
                   );
-                  return (
-                    <Fragment key={key}>
-                      {value !== 0
-                        ? withPreview(cell, `${row.trade}|${key}`)
-                        : cell}
-                    </Fragment>
-                  );
-                }
-                return (
-                  <td key={key} className="p-0">
+                })}
+                {onCellClick && trade !== null ? (
+                  <td className="p-0">
                     {withPreview(
                       <button
                         type="button"
-                        onClick={() => onCellClick(row.trade, key)}
-                        title={title}
+                        onClick={() => onCellClick(trade, null)}
                         className={cn(
                           cellMono,
-                          heat,
+                          totalCell,
                           interactiveCell,
-                          isActive(row.trade, key) && activeCellRing,
+                          isActive(trade, null) && activeCellRing,
                         )}
                       >
-                        {label}
+                        {formatCurrency(row.total, 0)}
                       </button>,
-                      `${row.trade}|${key}`,
+                      `${trade}|total`,
                     )}
                   </td>
-                );
-              })}
-              {onCellClick ? (
-                <td className="p-0">
-                  {withPreview(
-                    <button
-                      type="button"
-                      onClick={() => onCellClick(row.trade, null)}
-                      className={cn(
-                        cellMono,
-                        totalCell,
-                        interactiveCell,
-                        isActive(row.trade, null) && activeCellRing,
-                      )}
-                    >
+                ) : (
+                  withPreview(
+                    <td className={cn(cellMono, totalCell)}>
                       {formatCurrency(row.total, 0)}
-                    </button>,
-                    `${row.trade}|total`,
-                  )}
-                </td>
-              ) : (
-                withPreview(
-                  <td className={cn(cellMono, totalCell)}>
-                    {formatCurrency(row.total, 0)}
-                  </td>,
-                  `${row.trade}|total`,
-                )
-              )}
-            </tr>
-          ))}
+                    </td>,
+                    `${trade}|total`,
+                  )
+                )}
+              </tr>
+            );
+          })}
         </tbody>
         <tfoot>
           <tr className={footRule}>

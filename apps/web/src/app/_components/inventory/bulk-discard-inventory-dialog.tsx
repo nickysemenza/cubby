@@ -1,3 +1,5 @@
+import { inventoryShortcode } from "@cubby/schemas/identifiers";
+import { tradeSchema } from "@cubby/schemas/task-fields";
 /**
  * BulkDiscardInventoryDialog — write off units from a selection of shelf rows.
  *
@@ -22,8 +24,6 @@
  * Date and reason are shared because they describe the event; quantity is per
  * row because each row holds a different amount.
  */
-
-import { inventoryShortcode } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -34,15 +34,17 @@ import { z } from "zod";
 
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { inventory } from "~/app/inventory/inventory.functions";
+import { tradeOptions } from "~/app/projects/trade-options";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 
-import { PlainDateField, UnifiedTextField } from "../form-utils";
+import { PlainDateField, SelectField, UnifiedTextField } from "../form-utils";
 
 const formSchema = z.object({
+  trade: tradeSchema,
   date: z.string(),
   reason: z.string(),
   quantities: z.record(inventoryShortcode, z.number().nullable()),
@@ -100,6 +102,7 @@ export const BulkDiscardInventoryDialog: FC<
     setError(null);
     form.reset({
       date: form.getValues("date"),
+      trade: form.getValues("trade"),
       reason: form.getValues("reason"),
       quantities: defaultQuantities(items),
     });
@@ -136,12 +139,14 @@ export const BulkDiscardInventoryDialog: FC<
       return;
     }
     setError(null);
+    if (!(await form.trigger())) return;
     const values = form.getValues();
     let result: Awaited<ReturnType<typeof discard.mutateAsync>>;
     try {
       result = await discard.mutateAsync({
         items: lines,
         date: values.date,
+        trade: values.trade,
         reason: values.reason.trim() || null,
       });
     } catch {
@@ -234,6 +239,13 @@ export const BulkDiscardInventoryDialog: FC<
     >
       <Stack gap="sm">
         <PlainDateField form={form} name="date" label="Date" />
+        <SelectField
+          form={form}
+          name="trade"
+          label="Trade"
+          options={tradeOptions}
+          placeholder="Choose a trade…"
+        />
         <UnifiedTextField
           form={form}
           name="reason"

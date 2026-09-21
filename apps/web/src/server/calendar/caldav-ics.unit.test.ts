@@ -15,6 +15,22 @@ const event = (lines: string[]) =>
   ].join("\r\n");
 
 describe("parseCalDavEvent", () => {
+  it("parses explicit task classification and refuses invalid values", () => {
+    const fields = [
+      "UID:classified",
+      "SUMMARY:Paint",
+      "DTSTART;VALUE=DATE:20260920",
+    ];
+    expect(
+      parseCalDavEvent(event([...fields, "X-CUBBY-TRADE:finishes"]), "tasks")
+        .trade,
+    ).toBe("finishes");
+    expect(() =>
+      parseCalDavEvent(event([...fields, "X-CUBBY-TRADE:invented"]), "tasks"),
+    ).toThrow("X-CUBBY-TRADE");
+    expect(parseCalDavEvent(event(fields), "tasks").trade).toBeUndefined();
+  });
+
   it("coerces a timed meal to the nearest household meal slot", () => {
     const parsed = parseCalDavEvent(
       event([

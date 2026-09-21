@@ -1316,7 +1316,7 @@
           "name": "trade",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "url": {
           "name": "url",
@@ -1571,6 +1571,10 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "Expense_live_charge_assignment_check": {
+          "name": "Expense_live_charge_assignment_check",
+          "value": "\"Expense\".\"deletedAt\" IS NOT NULL OR \"Expense\".\"lineKind\" = 'principal' OR (\"Expense\".\"projectId\" IS NULL AND \"Expense\".\"purchaseId\" IS NOT NULL)"
+        },
         "Expense_cost_whole_cent_check": {
           "name": "Expense_cost_whole_cent_check",
           "value": "\"Expense\".\"cost\" IS NULL OR abs(\"Expense\".\"cost\" * 100 - round(\"Expense\".\"cost\" * 100)) < 0.0000001"
@@ -12511,6 +12515,19 @@
           "notNull": true,
           "default": "'{}'::text[]"
         },
+        "locationsMode": {
+          "name": "locationsMode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'inherit'"
+        },
+        "defaultTrade": {
+          "name": "defaultTrade",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "costEstimate": {
           "name": "costEstimate",
           "type": "double precision",
@@ -13146,6 +13163,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "defaultProjectId": {
+          "name": "defaultProjectId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "defaultTrade": {
+          "name": "defaultTrade",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "orderId": {
           "name": "orderId",
           "type": "text",
@@ -13244,6 +13273,21 @@
           ],
           "isUnique": true,
           "where": "\"Purchase\".\"orderId\" IS NOT NULL AND \"Purchase\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Purchase_defaultProjectId_idx": {
+          "name": "Purchase_defaultProjectId_idx",
+          "columns": [
+            {
+              "expression": "defaultProjectId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -13359,6 +13403,19 @@
           "tableTo": "VendorAccount",
           "columnsFrom": [
             "vendorAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Purchase_defaultProjectId_Project_id_fk": {
+          "name": "Purchase_defaultProjectId_Project_id_fk",
+          "tableFrom": "Purchase",
+          "tableTo": "Project",
+          "columnsFrom": [
+            "defaultProjectId"
           ],
           "columnsTo": [
             "id"
@@ -15465,11 +15522,25 @@
           "primaryKey": false,
           "notNull": false
         },
+        "projectMode": {
+          "name": "projectMode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'inherit'"
+        },
         "subjectProductId": {
           "name": "subjectProductId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "subjectProductMode": {
+          "name": "subjectProductMode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'inherit'"
         },
         "parentTaskId": {
           "name": "parentTaskId",
@@ -15493,7 +15564,7 @@
           "name": "trade",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "sortOrder": {
           "name": "sortOrder",

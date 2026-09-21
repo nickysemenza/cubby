@@ -37,6 +37,7 @@ export type InvalidationTagSet = readonly OperationCacheTag[] & {
  * bucket — so the rule is uniform rather than a per-row judgement call.
  */
 const ENTITY_FILTER_OPTIONS: OperationCacheTag = ["entity", "filterOptions"];
+const FIELD_SUGGESTIONS: OperationCacheTag = ["ai", "suggestFields"];
 
 /** Dedupe by tag content — tags are fresh arrays rather than the stable
  * references `queryKeys` handed out, so a group spread into a fan-out that
@@ -87,11 +88,17 @@ const costAndStock = rippleTags([
 ]);
 
 const productBase = rippleTags([
+  FIELD_SUGGESTIONS,
   ["product"],
   ["relatedData"],
   // Task rows embed their subject product's display name. A product rename
   // must not leave the task list/detail cache showing the old name.
   ["task"],
+  ["expense"],
+  ["project"],
+  ["purchase"],
+  ["calendar"],
+  ["householdContribution"],
   ["dashboard"],
   ["wish"],
   // DEPARTURE from the legacy row, deliberate: the Problems page's own fix
@@ -137,9 +144,16 @@ const inventoryRipple = rippleTags([
  * because a vendor merge ripples exactly like a purchase write.
  */
 const purchaseRipple = rippleTags(
-  [["purchase"], ["relatedData"], ["vendor"], ["expense"], ["project"]],
+  [
+    FIELD_SUGGESTIONS,
+    ["purchase"],
+    ["relatedData"],
+    ["vendor"],
+    ["expense"],
+    ["project"],
+  ],
   costAndStock,
-  [["dashboard"]],
+  [["dashboard"], ["calendar"], ["householdContribution"], ["collection"]],
 );
 
 /**
@@ -312,7 +326,14 @@ export const ripple = {
   // Task/expense mutations also invalidate `project`: the dashboard and
   // project rollups (spent/progress) aggregate over them.
   project: rippleTags([
+    FIELD_SUGGESTIONS,
     ["project"],
+    ["task"],
+    ["expense"],
+    ["product"],
+    ["collection"],
+    ["householdContribution"],
+    ["search"],
     ["relatedData"],
     ["calendar"],
     ["dashboard"],
@@ -321,7 +342,16 @@ export const ripple = {
    * change project spend, inventory quantity, or calendar state. */
   projectResource: rippleTags([["project"], ["product"], ["relatedData"]]),
 
-  task: rippleTags([["task"], ["project"], ["calendar"], ["dashboard"]]),
+  task: rippleTags([
+    FIELD_SUGGESTIONS,
+    ["task"],
+    ["project"],
+    ["product"],
+    ["relatedData"],
+    ["calendar"],
+    ["dashboard"],
+    ["search"],
+  ]),
   /** Promoting a task selection into a new project writes on both sides. */
   taskProject: rippleTags([
     ["task"],
@@ -332,7 +362,14 @@ export const ripple = {
   ]),
 
   expense: rippleTags(
-    [["expense"], ["relatedData"], ["project"], ["calendar"], ["dashboard"]],
+    [
+      FIELD_SUGGESTIONS,
+      ["expense"],
+      ["relatedData"],
+      ["project"],
+      ["calendar"],
+      ["dashboard"],
+    ],
     // An expense can link to a product (cost basis / disposition) — recording
     // one from the product page should refresh that product's hero/stamp too.
     costAndStock,

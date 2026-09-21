@@ -27,6 +27,7 @@ import {
   type EntitySuggestionsOperations,
 } from "./field-suggestion";
 import { FieldSuggestionProvider } from "./field-suggestion-provider";
+import { FormFieldResolution } from "./form-field-resolution";
 import { useAutoFieldSuggestion } from "./use-auto-field-suggestion";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -104,6 +105,7 @@ function Probe({
       <button type="button" onClick={apply}>
         Apply {target}
       </button>
+      <FormFieldResolution form={form} field={target} />
     </div>
   );
 }
@@ -115,9 +117,10 @@ function Harness({
   valueKind,
   textFields,
   operations,
+  record,
   onReady,
 }: {
-  entity: "task" | "inventory";
+  entity: "task" | "inventory" | "expense";
   mode: "create" | "edit";
   /** One `Probe` (and one `AutoSuggestSlot`-equivalent hook instance) per
    * key, matching how every suggest-enabled field in a real form mounts its
@@ -126,6 +129,7 @@ function Harness({
   valueKind?: "id" | "item";
   textFields: readonly string[];
   operations: EntitySuggestionsOperations;
+  record?: unknown;
   onReady: (form: UseFormReturn<FieldValues>) => void;
 }) {
   const defaultValues: FieldValues = {};
@@ -140,6 +144,7 @@ function Harness({
         mode={mode}
         fieldKeys={fieldKeys}
         operations={operations}
+        record={record}
       >
         {textFields.map((field) => (
           <input key={field} aria-label={field} {...form.register(field)} />
@@ -162,6 +167,376 @@ const tradeSuggestion = {
 } as const;
 
 describe("useAutoFieldSuggestion", () => {
+  it("keeps auto-filled Task intent out of Jev basis and resets its mode on retraction", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    const operations = operationsReturning((input) => ({
+      suggestions: {
+        projectId: input.basis.name?.includes("kitchen")
+          ? {
+              ...tradeSuggestion,
+              value: "PRJ-KITCHEN",
+              label: "Kitchen",
+            }
+          : null,
+      },
+    }));
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["projectId"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={(ready) => {
+          form = ready;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "paint kitchen" },
+    });
+    await waitFor(() =>
+      expect(form.getValues("projectId")).toBe("PRJ-KITCHEN"),
+    );
+    expect(form.getValues("projectMode")).toBe("explicit");
+    await waitFor(() =>
+      expect(calls.at(-1)?.basis).toMatchObject({
+        projectId: null,
+        projectMode: "inherit",
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "pay invoice" },
+    });
+    await waitFor(() => expect(form.getValues("projectId")).toBe(""));
+    expect(form.getValues("projectMode")).toBe("inherit");
+  });
+
+  it("drops stale resolution intent after a manual field edit", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    render(
+      <Harness
+        entity="task"
+        mode="edit"
+        fieldKeys={["projectId", "trade"]}
+        textFields={["name"]}
+        operations={operationsReturning(() => ({ suggestions: {} }))}
+        record={{
+          fieldResolutions: {
+            projectId: {
+              mode: "inherit",
+              storedValue: null,
+              value: "PRJ-OLD",
+              fallbackValue: "PRJ-OLD",
+              source: "Parent task",
+              sourceEntity: null,
+              matchesFallback: true,
+              canReset: false,
+            },
+          },
+        }}
+        onReady={(ready) => {
+          form = ready;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    act(() =>
+      form.setValue("projectId", "PRJ-NEW", {
+        shouldDirty: true,
+        shouldTouch: true,
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "install a fixture" },
+    });
+    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+    expect(calls.at(-1)?.basis.__resolutionContext ?? "").not.toContain(
+      "projectId",
+    );
+    expect(calls.at(-1)?.basis.projectId).toBe("PRJ-NEW");
+  });
+
+  it("removes allocated expense project targets when line kind changes", async () => {
+    render(
+      <Harness
+        entity="expense"
+        mode="create"
+        fieldKeys={["projectId", "trade"]}
+        textFields={["name", "lineKind"]}
+        operations={operationsReturning(() => ({ suggestions: {} }))}
+        onReady={() => {}}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("lineKind"), {
+      target: { value: "tax" },
+    });
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "sales tax" },
+    });
+    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+    expect(calls.flatMap((call) => call.targets)).not.toContain("projectId");
+    expect(calls.flatMap((call) => call.targets)).toContain("trade");
+  });
+
+  it("keeps reset null deliberate and makes the next picker change explicit", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["projectId"]}
+        textFields={["name"]}
+        operations={operationsReturning(() => ({ suggestions: {} }))}
+        onReady={(ready) => {
+          form = ready;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Use inherited" }));
+    expect(form.getValues("projectMode")).toBe("inherit");
+    expect(form.getValues("projectId")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("projectId"), {
+      target: { value: "PRJ-SELECTED" },
+    });
+    await waitFor(() => expect(form.getValues("projectMode")).toBe("explicit"));
+  });
+
+  it("splits untouched create targets from provided alternatives", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    const operations = operationsReturning(() => ({ suggestions: {} }));
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["projectId", "trade"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={(f) => {
+          form = f;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    act(() => form.setValue("trade", "plumbing", { shouldDirty: true }));
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "replace a valve" },
+    });
+    await waitFor(() => expect(calls).toHaveLength(2));
+
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          basisMode: "suggested",
+          targets: ["projectId"],
+        }),
+        expect.objectContaining({
+          basisMode: "provided",
+          targets: ["trade"],
+        }),
+      ]),
+    );
+  });
+
+  it("routes explicit None to the provided lane", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    const operations = operationsReturning(() => ({ suggestions: {} }));
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["projectId"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={(f) => {
+          form = f;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    act(() => form.setValue("projectMode", "explicit"));
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "replace a valve" },
+    });
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toMatchObject({
+      basisMode: "provided",
+      targets: ["projectId"],
+      basis: { projectId: null, projectMode: "explicit" },
+    });
+  });
+
+  it("reroutes a populated inherited field to a provided alternative batch", async () => {
+    const operations = operationsReturning((input) =>
+      input.basisMode === "suggested"
+        ? {
+            suggestions: {},
+            fieldResolutions: {
+              trade: {
+                mode: "inherit",
+                storedValue: null,
+                value: "plumbing",
+                fallbackValue: "plumbing",
+                source: "Project default",
+                sourceEntity: null,
+                matchesFallback: true,
+                canReset: false,
+              },
+            },
+            eligibleTargets: [],
+          }
+        : { suggestions: {} },
+    );
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["trade"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={() => {}}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "replace a valve" },
+    });
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(
+      calls.map(({ basisMode, targets }) => ({ basisMode, targets })),
+    ).toEqual([
+      { basisMode: "suggested", targets: ["trade"] },
+      { basisMode: "provided", targets: ["trade"] },
+    ]);
+    expect(calls[1]?.basis.__resolutionContext).toContain('"value":"plumbing"');
+  });
+
+  it("keeps a deliberate null edit out of the silent suggestion lane", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    const operations = operationsReturning((input) => ({
+      suggestions:
+        input.basisMode === "suggested"
+          ? { trade: tradeSuggestion }
+          : { trade: null },
+    }));
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["trade"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={(f) => {
+          form = f;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "build cabinets" },
+    });
+    await waitFor(() => expect(form.getValues("trade")).toBe("cabinetry"));
+    act(() => form.setValue("trade", null, { shouldDirty: true }));
+    await waitFor(() =>
+      expect(calls.some((call) => call.basisMode === "provided")).toBe(true),
+    );
+    expect(calls.at(-1)).toMatchObject({
+      basisMode: "provided",
+      targets: ["trade"],
+    });
+  });
+
+  it("never auto-fills a field returned with authoritative inheritance", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    const operations = operationsReturning(() => ({
+      suggestions: { trade: tradeSuggestion },
+      fieldResolutions: {
+        trade: {
+          mode: "inherit",
+          storedValue: null,
+          value: "plumbing",
+          fallbackValue: "plumbing",
+          source: "Project default",
+          sourceEntity: null,
+          matchesFallback: true,
+          canReset: false,
+        },
+      },
+      eligibleTargets: [],
+    }));
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["trade"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={(f) => {
+          form = f;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "replace a valve" },
+    });
+    await waitFor(() => expect(calls).toHaveLength(1));
+    await delay(FIELD_SUGGEST_DEBOUNCE_MS);
+    expect(form.getValues("trade")).toBe("");
+  });
+
+  it("auto-fills an authoritative unresolved inherited target", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    const operations = operationsReturning(() => ({
+      suggestions: { trade: tradeSuggestion },
+      fieldResolutions: {
+        trade: {
+          mode: "inherit",
+          storedValue: null,
+          value: null,
+          fallbackValue: null,
+          source: "No trade source",
+          sourceEntity: null,
+          matchesFallback: true,
+          canReset: false,
+        },
+      },
+      eligibleTargets: ["trade"],
+    }));
+    render(
+      <Harness
+        entity="task"
+        mode="create"
+        fieldKeys={["trade"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={(f) => {
+          form = f;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "build cabinets" },
+    });
+    await waitFor(() => expect(form.getValues("trade")).toBe("cabinetry"));
+  });
+
   it("auto-fills a silently-suggested value in create mode without dirtying the field", async () => {
     let form!: UseFormReturn<FieldValues>;
     const operations = operationsReturning(() => ({
@@ -285,7 +660,7 @@ describe("useAutoFieldSuggestion", () => {
     await waitFor(() => expect(calls).toHaveLength(1));
     await delay(100);
     expect(screen.getByLabelText("trade")).toHaveValue("");
-    expect(calls[0]?.basisMode).toBe("suggested");
+    expect(calls[0]?.basisMode).toBe("provided");
   });
 
   it("never auto-writes in edit mode, but apply() writes and dirties", async () => {

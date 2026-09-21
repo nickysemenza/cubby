@@ -78,13 +78,10 @@ import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
  * real JSON Schema properties" regression guard in catalog schema guard).
  * Mirrors `expenseBulkMcpOut` in project.tools.ts.
  *
- * `originalCost`/`partsSum`/`delta` close the gap the web dialog doesn't have:
- * a human sees the "$X over/under" warning live as they type, but an MCP
- * caller only sees the finished result — so the result carries the same cue.
- * `splitExpenseDelta` is the pure computation (`@cubby/schemas/purchase`);
- * `delta` is non-zero exactly when a partial refund or a one-sided discount
- * legitimately makes the parts disagree with the original, and that is
- * expected, not an error — nothing here rejects it.
+ * `originalCost`/`partsSum`/`delta` confirm that a priced split conserved its
+ * source amount. `splitExpenseDelta` is the pure computation
+ * (`@cubby/schemas/purchase`); the write path rejects a non-zero delta before
+ * replacing the original Expense.
  */
 export const splitExpenseMcpOut = mcpItemsEnvelope(
   fromContract(purchaseContract.ops.split),
@@ -102,7 +99,7 @@ export const splitExpenseMcpOut = mcpItemsEnvelope(
     .number()
     .nullable()
     .describe(
-      "partsSum minus originalCost, in dollars. A CUE, never a gate — a non-zero delta is not rejected and is not back-computed into any part's cost. Null when originalCost is null (nothing to compare against).",
+      "partsSum minus originalCost, in dollars. Priced splits require zero; null when originalCost is null and there is no source amount to conserve.",
     ),
 });
 
@@ -192,7 +189,7 @@ export function registerPurchaseTools(server: McpServer) {
   registerMcpTool(server, {
     name: "commit_purchase_import",
     description:
-      "Commit one exact previously prepared purchase import. Every principal line maps to an existing Product shortcode, an explicit new Product, or unresolved. Unresolved lines create a finding and stop the run for review; they never create a speculative Product. This bounded commit is replay-safe, rechecks targets and evidence, and does not require open-world mutation approval.",
+      "Commit one exact previously prepared purchase import. Supply a deliberate defaultTrade, or a defaultProjectId whose effective defaults provide a trade, for principal lines. Every principal line maps to an existing Product shortcode, an explicit new Product, or unresolved. Unresolved lines create a finding and stop the run for review; they never create a speculative Product. This bounded commit is replay-safe, rechecks targets and evidence, and does not require open-world mutation approval.",
     inputSchema: commitPurchaseImportInput,
     outputSchema: commitPurchaseImportOut,
     annotations: WRITE_CLOSED,
@@ -245,7 +242,7 @@ export function registerPurchaseTools(server: McpServer) {
     description:
       "Split ONE Expense into 2–100 Expenses on the SAME purchase — the way an aggregate spend record (a combo kit or multi-item receipt entered as one Expense) gets a real per-product cost basis instead of staying an unattributed blob. Any product in inventory whose only Expense is inside an aggregate has NO cost basis until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId/productQuantity. productQuantity is SIGNED, and zero only on a negative-cost part. Omitted notes inherit the original Expense notes; explicit null clears them for that part. The original URL, date and future state are preserved. " +
       "This REPLACES the old `(combo, saw portion)` naming convention that used to encode a split inside a single expense's name — do not invent names like that anymore; give each part its own real name instead. " +
-      "Parts are expected to sum to the original expense's cost, but that is a convention, NOT a rule this tool enforces: nothing validates the sum. The response's `originalCost`/`partsSum`/`delta` are a CUE, never a gate — parts are recorded exactly as entered, and a non-zero delta is EXPECTED, not an error, whenever a partial refund or a discount applied to only one part legitimately makes the parts disagree with the original. The same gap is separately DISPLAYED as a purchase-reconciliation cue against statedTotal/expenseTotal; posted refunds that exactly explain it are classified `refund_adjusted`, other differences remain `mismatch`. " +
+      "When the original has a recorded cost, the parts must sum to it exactly or the split is refused without replacing the original. Record a purchase-level discount or refund as its own Expense instead of hiding it in a nonconserving split. The response confirms the accepted `originalCost`, `partsSum`, and zero `delta`; an unpriced original reports null for originalCost and delta. " +
       "The original Expense is soft-deleted and every part is created on the SAME purchase (`purchaseId`) the original had — this only re-labels how one purchase's money is attributed; it never creates a new purchase or moves money to a different vendor. If the purchase had no `statedTotal`, one is seeded from the original expense's cost so the parts have something to reconcile against. " +
       "REFUSES when the Expense has no purchase attached (`purchaseId` is null). Use entity update(expense) with a `vendor` (and `orderId` if known) to give the Expense a purchase, then split it.",
     inputSchema: splitExpenseInput,

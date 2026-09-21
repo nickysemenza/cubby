@@ -15,6 +15,7 @@ import {
   taskDependency,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 
 type ProjectRow = {
   id: ProjectId;
@@ -71,19 +72,19 @@ const fetchGraphRows = async (db: Database): Promise<GraphRows> => {
           locations: true,
         },
       }),
-      dbClient.query.task.findMany({
-        where: notDeleted(task),
-        columns: {
-          id: true,
-          shortcode: true,
-          name: true,
-          status: true,
-          projectId: true,
-          parentTaskId: true,
-          dueDate: true,
-          dueEndDate: true,
-        },
-      }),
+      dbClient
+        .select({
+          id: task.id,
+          shortcode: task.shortcode,
+          name: task.name,
+          status: task.status,
+          projectId: effectiveTaskProjectSql("Task"),
+          parentTaskId: task.parentTaskId,
+          dueDate: task.dueDate,
+          dueEndDate: task.dueEndDate,
+        })
+        .from(task)
+        .where(notDeleted(task)),
       dbClient
         .select({
           projectId: projectDependency.projectId,
@@ -176,21 +177,39 @@ const addHierarchyContext = (
   projects: Map<ProjectId, ProjectRow>,
   tasks: Map<TaskId, TaskRow>,
 ) => {
-  for (const taskId of selectedTasks) {
-    const row = tasks.get(taskId);
-    if (!row) continue;
-    if (row.parentTaskId && tasks.has(row.parentTaskId)) {
-      selectedTasks.add(row.parentTaskId);
+  // Dependency context can introduce an external task whose parent/project in
+  // turn has another ancestor. Close the hierarchy before emitting codes so
+  // every selected node has a visible parent chain.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const taskId of selectedTasks) {
+      const row = tasks.get(taskId);
+      if (!row) continue;
+      if (
+        row.parentTaskId &&
+        tasks.has(row.parentTaskId) &&
+        !selectedTasks.has(row.parentTaskId)
+      ) {
+        selectedTasks.add(row.parentTaskId);
+        changed = true;
+      }
+      if (
+        row.projectId &&
+        projects.has(row.projectId) &&
+        !selectedProjects.has(row.projectId)
+      ) {
+        selectedProjects.add(row.projectId);
+        changed = true;
+      }
     }
-    if (row.projectId && projects.has(row.projectId)) {
-      selectedProjects.add(row.projectId);
-    }
-  }
-  for (const projectId of selectedProjects) {
-    let parent = projects.get(projectId)?.parentProjectId ?? null;
-    while (parent && !selectedProjects.has(parent)) {
-      selectedProjects.add(parent);
-      parent = projects.get(parent)?.parentProjectId ?? null;
+    for (const projectId of selectedProjects) {
+      let parent = projects.get(projectId)?.parentProjectId ?? null;
+      while (parent && !selectedProjects.has(parent)) {
+        selectedProjects.add(parent);
+        changed = true;
+        parent = projects.get(parent)?.parentProjectId ?? null;
+      }
     }
   }
 };

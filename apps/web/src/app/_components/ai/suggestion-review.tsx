@@ -15,12 +15,13 @@ import { Description } from "~/components/ui/description";
 export function actionableSuggestion(
   suggestion: FieldSuggestion | null,
   current: string | null,
+  alternative = false,
 ): suggestion is FieldSuggestion & { value: string } {
   return Boolean(
     suggestion?.value &&
     suggestion.value !== current &&
     suggestion.probability != null &&
-    suggestion.probability >= (current?.trim() ? 0.95 : 0.85),
+    suggestion.probability >= (alternative || current?.trim() ? 0.95 : 0.85),
   );
 }
 
@@ -30,6 +31,14 @@ const SuggestionVisitContext = createContext<{
 } | null>(null);
 
 export const useSuggestionVisit = () => useContext(SuggestionVisitContext);
+
+function reviewCurrentContent(
+  children: ReactNode,
+  currentLabel: ReactNode,
+  currentValue: string,
+) {
+  return children ?? <span>{currentLabel ?? currentValue}</span>;
+}
 
 export function SuggestionVisitProvider({ children }: { children: ReactNode }) {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
@@ -54,6 +63,8 @@ export function SuggestionReview({
   questionKey,
   pending,
   onApply,
+  applyLabel = "Use suggestion",
+  alternative = false,
   children,
 }: {
   children?: ReactNode;
@@ -63,6 +74,8 @@ export function SuggestionReview({
   questionKey: string;
   pending?: boolean;
   onApply: () => void | Promise<void>;
+  applyLabel?: string;
+  alternative?: boolean;
 }) {
   const visit = useSuggestionVisit();
   const [localDismissed, setLocalDismissed] = useState<string | null>(null);
@@ -72,7 +85,7 @@ export function SuggestionReview({
   const key = JSON.stringify([questionKey, currentValue, suggestion?.value]);
   const dismiss = () => (visit ? visit.dismiss(key) : setLocalDismissed(key));
   if (
-    !actionableSuggestion(suggestion, currentValue) ||
+    !actionableSuggestion(suggestion, currentValue, alternative) ||
     visit?.dismissed.has(key) ||
     localDismissed === key
   )
@@ -103,7 +116,7 @@ export function SuggestionReview({
       <Row gap="xs" wrap className="text-xs">
         {currentValue?.trim() ? (
           <>
-            {children ?? <span>{currentLabel ?? currentValue}</span>}
+            {reviewCurrentContent(children, currentLabel, currentValue)}
             <ArrowRight
               className="size-3.5 shrink-0"
               aria-label="suggested replacement"
@@ -123,7 +136,7 @@ export function SuggestionReview({
           disabled={pending || saving}
           onClick={apply}
         >
-          {saving ? "Saving…" : "Use suggestion"}
+          {saving ? "Saving…" : applyLabel}
         </Button>
         <Button
           type="button"

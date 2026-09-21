@@ -4,7 +4,7 @@ import type {
   LedgerPartyId,
   ProjectId,
 } from "@cubby/schemas/identifiers";
-import { and, inArray, lte, type SQL, sql } from "drizzle-orm";
+import { and, lte, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -15,7 +15,13 @@ import {
   financialTransactionAllocation,
   ledgerParty,
 } from "~/server/db/schema";
-import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  notDeleted,
+  unwrapDb,
+  uuidArrayParam,
+} from "~/server/repo/database-helpers";
+import { effectiveExpenseProjectSql } from "~/server/repo/expense-inheritance";
+import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 
 /**
  * Where a row's party came from. One boolean could not carry this once funder
@@ -63,7 +69,11 @@ const scopeCondition = (scope: ExpenseAllocationScope): SQL =>
     scope.asOf ? lte(expense.date, scope.asOf) : undefined,
     scope.includeFuture ? undefined : sql`${expense.future} = false`,
     scope.projectIds
-      ? inArray(expense.projectId, [...scope.projectIds])
+      ? sql`EXISTS (
+          SELECT 1 FROM (${expenseProjectAllocationSql()}) project_allocation
+          WHERE project_allocation."expenseId" = ${expense.id}
+            AND project_allocation."projectId" = ANY(${uuidArrayParam(scope.projectIds)})
+        )`
       : undefined,
     sql`${expense.cost} IS NOT NULL`,
   ) ?? sql`true`;
@@ -102,10 +112,24 @@ export async function loadExpenseAllocations(
       SELECT
         ${expense.id} AS "expenseId",
         ${expense.shortcode} AS "expenseShortcode",
-        ${expense.projectId} AS "projectId",
+        ${
+          scope.projectIds
+            ? sql`(SELECT min(project_allocation."projectId"::text)::uuid
+              FROM (${expenseProjectAllocationSql()}) project_allocation
+              WHERE project_allocation."expenseId" = ${expense.id}
+                AND project_allocation."projectId" = ANY(${uuidArrayParam(scope.projectIds)}))`
+            : effectiveExpenseProjectSql()
+        } AS "projectId",
         ${expense.purchaseId} AS "purchaseId",
         ${expense.future} AS future,
-        round((${expense.cost})::numeric * 100)::bigint AS cost_cents
+        ${
+          scope.projectIds
+            ? sql`(SELECT sum(project_allocation."attributedCents"::bigint)
+              FROM (${expenseProjectAllocationSql()}) project_allocation
+              WHERE project_allocation."expenseId" = ${expense.id}
+                AND project_allocation."projectId" = ANY(${uuidArrayParam(scope.projectIds)}))`
+            : sql`round((${expense.cost})::numeric * 100)::bigint`
+        } AS cost_cents
       FROM ${expense}
       WHERE ${scopeCondition(scope)}
     ), roles(role) AS (

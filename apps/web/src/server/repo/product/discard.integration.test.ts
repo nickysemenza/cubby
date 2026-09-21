@@ -59,6 +59,7 @@ describe("discardProductUnits", () => {
         productId: prod.entityId,
         quantity: 1,
         date: "2026-06-03",
+        trade: "other",
         reason: "Thrown away",
         inventoryEntryId: null,
       },
@@ -90,6 +91,7 @@ describe("discardProductUnits", () => {
         productId: prod.entityId,
         quantity: 2,
         date: "2026-06-03",
+        trade: "other",
         reason: null,
         inventoryEntryId: entry.entityId,
       },
@@ -123,6 +125,7 @@ describe("discardProductUnits", () => {
         productId: prod.entityId,
         quantity: 2,
         date: "2026-06-03",
+        trade: "other",
         reason: null,
         inventoryEntryId: entry.entityId,
       },
@@ -166,6 +169,7 @@ describe("discardProductUnits", () => {
           productId: prod.entityId,
           quantity: 1,
           date: "2026-06-03",
+          trade: "other",
           reason: null,
           // Silently decrementing the shelf that WAS named would take units off
           // the wrong thing — the one failure mode worth being loud about.

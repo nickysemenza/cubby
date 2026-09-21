@@ -26,13 +26,15 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
   return (
     <Stack gap="xs">
       {projectField ? renderDetailFieldValue(expense, projectField) : null}
-      <ProjectSuggestionChips
-        expense={expense}
-        isPending={update.isPending}
-        onAssign={async (projectId) => {
-          await update.mutateAsync({ id: expense.id, data: { projectId } });
-        }}
-      />
+      {expense.lineKind === "principal" ? (
+        <ProjectSuggestionChips
+          expense={expense}
+          isPending={update.isPending}
+          onAssign={async (projectId) => {
+            await update.mutateAsync({ id: expense.id, data: { projectId } });
+          }}
+        />
+      ) : null}
     </Stack>
   );
 }

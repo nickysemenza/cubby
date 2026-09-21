@@ -771,6 +771,14 @@ export const ENTITY_EDGES = {
         "A task filed under this project; deleting the project takes its tasks with it.",
       liveness: { kind: "must-target-live" },
     },
+    "Purchase.defaultProjectId": {
+      column: purchase.defaultProjectId,
+      role: "ledger",
+      label: "purchase defaults",
+      description:
+        "The default project inherited by purchase items without an override.",
+      liveness: { kind: "must-target-live" },
+    },
     "Expense.projectId": {
       column: expense.projectId,
       role: "ledger",

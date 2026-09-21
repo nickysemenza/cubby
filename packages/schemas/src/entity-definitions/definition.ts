@@ -393,6 +393,23 @@ const metadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /** Declarative assignment semantics for fields whose effective read value
+       * may differ from stored intent. UI cleanup actions execute these exact
+       * ordinary update patches; repositories remain the authority that
+       * computes `fieldResolutions`. */
+      resolution: z
+        .strictObject({
+          reset: z.record(z.string(), z.json()),
+          none: z
+            .record(z.string(), z.json())
+            .nullable()
+            .optional()
+            .default(null),
+          redundancy: z.enum(["eligible", "intentional"]).default("eligible"),
+        })
+        .nullable()
+        .optional()
+        .default(null),
       control: entityFieldControlMetadataSchema
         .nullable()
         .optional()

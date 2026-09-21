@@ -90,6 +90,7 @@ describe("mutation side effects integration", () => {
         overrides: {
           name: "Maintain manifest tarp",
           subjectProductId: product.id,
+          trade: "other",
         },
       }),
       ctx.actor,
@@ -127,7 +128,11 @@ describe("mutation side effects integration", () => {
     const { entityId: taskId } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
-        overrides: { name: "Manifest Tracker Task", projectId: project.id },
+        overrides: {
+          name: "Manifest Tracker Task",
+          projectId: project.id,
+          trade: "other",
+        },
       }),
       ctx.actor,
     );
@@ -137,6 +142,7 @@ describe("mutation side effects integration", () => {
         overrides: {
           name: "Manifest Tracker Expense",
           projectId: project.id,
+          trade: "other",
         },
       }),
       ctx.actor,

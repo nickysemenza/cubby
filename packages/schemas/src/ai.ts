@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fieldResolutionsSchema } from "./field-resolution";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { shortcodeEntities } from "./entity-manifest";
 import { moneyNullable } from "./money";
@@ -355,6 +356,10 @@ export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
 
 export const fieldSuggestionsOut = z.object({
   suggestions: z.record(z.string(), fieldSuggestionSchema.nullable()),
+  /** Authoritative inheritance state for this exact draft snapshot. */
+  fieldResolutions: fieldResolutionsSchema.optional(),
+  /** Requested targets the server allowed Jev to evaluate. */
+  eligibleTargets: z.array(z.string()).optional(),
 });
 export type FieldSuggestionsOut = z.infer<typeof fieldSuggestionsOut>;
 

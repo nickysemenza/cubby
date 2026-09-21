@@ -4,7 +4,13 @@ import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { type ComponentType, type ReactNode, useId, useMemo } from "react";
+import {
+  type ComponentType,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+} from "react";
 import {
   Controller,
   useFormContext,
@@ -14,6 +20,7 @@ import {
 } from "react-hook-form";
 
 import { basisValueOf } from "~/app/_components/ai/field-suggestion";
+import { FormFieldResolution } from "~/app/_components/ai/form-field-resolution";
 import type { EntitySearchScope } from "~/app/_components/combobox/entity-search-hooks";
 import {
   WithEntitySearch,
@@ -71,6 +78,18 @@ type PrimitiveFieldOptions = {
    * forced field is disabled) rather than fighting it. */
   description?: ReactNode;
 };
+
+function IntentFieldResolution({
+  form,
+  field,
+  enabled,
+}: {
+  form: UseFormReturn<FieldValues>;
+  field: string;
+  enabled: boolean;
+}) {
+  return enabled ? <FormFieldResolution form={form} field={field} /> : null;
+}
 
 type PrimitiveFieldModel = (typeof entityFieldModels)[Entity]["fields"][number];
 
@@ -633,10 +652,24 @@ export function EntityIntentFields({
     });
     return hidden;
   }, [hiddenWhen, hiddenWhenValues]);
+  const lineKind = basisValueOf(
+    useWatch({ control: form.control, name: "lineKind" }),
+  );
+  const projectIsAllocated =
+    entity === "expense" &&
+    lineKind !== null &&
+    lineKind !== "principal" &&
+    lineKind !== "auto";
+  useEffect(() => {
+    if (projectIsAllocated && basisValueOf(form.getValues("projectId"))) {
+      form.setValue("projectId", null, { shouldDirty: true });
+    }
+  }, [form, projectIsAllocated]);
   const fields = model.fields.filter(
     (field) =>
       intentFieldKeys.includes(field.key) &&
       field.control !== null &&
+      !(projectIsAllocated && field.key === "projectId") &&
       !hiddenFieldKeys.has(field.key),
   );
   const scopedFieldKeys = useMemo(
@@ -669,26 +702,32 @@ export function EntityIntentFields({
           const referenceEntity = field.reference.entity;
           const scope = referenceScopeFor(field.reference, scopedValueRecord);
           return (
-            <EntityValueField
-              key={field.key}
-              form={form}
-              // SAFETY: `field.key` is one of this entity's own declared
-              // model field keys; RHF's conditional path type cannot express
-              // a runtime-selected field roster.
-              name={field.key as never}
-              // SAFETY: `referenceEntity` is a manifest-declared reference
-              // target, always one of the picker's supported entities.
-              entity={referenceEntity as never}
-              label={field.label}
-              clearable={field.nullable}
-              description={<FieldProvenance provenance={field.provenance} />}
-              SearchProvider={referenceEntitySearch(referenceEntity)}
-              scope={scope}
-              suggestField={suggestFieldFor(
-                Boolean(field.control?.suggest),
-                field.key,
-              )}
-            />
+            <div key={field.key} className="space-y-1">
+              <EntityValueField
+                form={form}
+                // SAFETY: `field.key` is one of this entity's own declared
+                // model field keys; RHF's conditional path type cannot express
+                // a runtime-selected field roster.
+                name={field.key as never}
+                // SAFETY: `referenceEntity` is a manifest-declared reference
+                // target, always one of the picker's supported entities.
+                entity={referenceEntity as never}
+                label={field.label}
+                clearable={field.nullable}
+                description={<FieldProvenance provenance={field.provenance} />}
+                SearchProvider={referenceEntitySearch(referenceEntity)}
+                scope={scope}
+                suggestField={suggestFieldFor(
+                  Boolean(field.control?.suggest),
+                  field.key,
+                )}
+              />
+              <IntentFieldResolution
+                form={form}
+                field={field.key}
+                enabled={Boolean(field.resolution && !field.control?.suggest)}
+              />
+            </div>
           );
         }
         const presentation = entityFieldPresentation(entity, field.key, mode);
@@ -724,6 +763,11 @@ export function EntityIntentFields({
                   <FieldProvenance provenance={field.provenance} />
                 </div>
               ) : null}
+              <IntentFieldResolution
+                form={form}
+                field={field.key}
+                enabled={Boolean(field.resolution && !field.control?.suggest)}
+              />
             </fieldset>
           );
         }
@@ -742,7 +786,7 @@ export function EntityIntentFields({
             mode,
           );
         }
-        return renderPrimitiveField({
+        const rendered = renderPrimitiveField({
           entity,
           field,
           presentation,
@@ -752,6 +796,16 @@ export function EntityIntentFields({
           name: field.key,
           mode,
         });
+        return (
+          <div key={field.key} className="space-y-1">
+            {rendered}
+            <IntentFieldResolution
+              form={form}
+              field={field.key}
+              enabled={Boolean(field.resolution && !field.control?.suggest)}
+            />
+          </div>
+        );
       })}
     </>
   );

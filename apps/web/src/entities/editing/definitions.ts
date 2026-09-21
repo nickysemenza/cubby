@@ -6,6 +6,7 @@ import {
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   collectionSlugsFromTags,
@@ -308,6 +309,27 @@ const builderFor = <E extends EditableEntity>(
   const fieldModelByKey = new Map<string, EntityFieldModel["fields"][number]>(
     entityFieldModels[entity].fields.map((field) => [field.key, field]),
   );
+  const resolutionFieldByMode = new Map<string, string>();
+  for (const field of entityFieldModels[entity].fields) {
+    for (const [key, value] of Object.entries(field.resolution?.reset ?? {})) {
+      if (value === "inherit") resolutionFieldByMode.set(key, field.key);
+    }
+  }
+
+  const initialResolutionMode = (
+    id: string,
+    record: EntityEditRecord | undefined,
+  ) => {
+    const resolutionField = resolutionFieldByMode.get(id);
+    if (!resolutionField) return undefined;
+    const resolutions = fieldResolutionsSchema.safeParse(
+      record?.fieldResolutions,
+    );
+    const mode = resolutions.success
+      ? resolutions.data[resolutionField]?.mode
+      : undefined;
+    return mode === "inherit" || mode === undefined ? "inherit" : "explicit";
+  };
 
   const makeField = (id: string, options?: FieldOptions<E>): EditField<E> => ({
     entity,
@@ -321,6 +343,8 @@ const builderFor = <E extends EditableEntity>(
         return operation === "update" ? recordImageIds(record) : [];
       const existing = valueFor(record, id);
       if (existing !== undefined) return existing;
+      const resolutionMode = initialResolutionMode(id, record);
+      if (resolutionMode !== undefined) return resolutionMode;
       const field = fieldModelByKey.get(id);
       if (operation === "update" && record && field) {
         const referenceIds = multipleReferenceIdsFromRecord(
@@ -365,6 +389,10 @@ const builderFor = <E extends EditableEntity>(
         return ids && record && !isEqual(ids, recordImageIds(record))
           ? { imageOrder: ids }
           : undefined;
+      }
+      const resolutionMode = initialResolutionMode(id, record);
+      if (resolutionMode !== undefined) {
+        return isEqual(value, resolutionMode) ? undefined : { [id]: value };
       }
       return changed(record, id, value) ? { [id]: value } : undefined;
     },

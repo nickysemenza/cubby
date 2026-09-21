@@ -76,10 +76,14 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { findOrCreateVendor } from "~/server/repo/vendor";
 
 import {
+  expenseInheritanceReadExtras,
+  validateExpenseInheritance,
+} from "../expense-inheritance";
+import { loadExpenseProjectAllocations } from "../expense-project-allocation";
+import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
   type ExpenseRow,
-  resolveDefaultProjectId,
 } from "./helpers";
 
 export const EXPENSE_DELETE_EDGE_POLICY = {
@@ -189,6 +193,9 @@ export const updateExpensesInBulk = async (
         projectId: expense.projectId,
         trade: expense.trade,
         costType: expense.costType,
+        lineKind: expense.lineKind,
+        productId: expense.productId,
+        purchaseId: expense.purchaseId,
       })
       .from(expense)
       .where(and(inArray(expense.id, ids), notDeleted(expense)))
@@ -205,6 +212,16 @@ export const updateExpensesInBulk = async (
       trade: data.trade,
       costType: data.costType,
     });
+    for (const row of before) {
+      await validateExpenseInheritance(tx, {
+        lineKind: row.lineKind,
+        projectId:
+          values.projectId === undefined ? row.projectId : values.projectId,
+        productId: row.productId,
+        purchaseId: row.purchaseId,
+        trade: values.trade === undefined ? row.trade : values.trade,
+      });
+    }
     await tx
       .update(expense)
       .set(values)
@@ -239,10 +256,18 @@ const fetchExpenseById = (
   db: Database | DrizzleTransaction,
   id: ExpenseId,
 ): Promise<ExpenseRow | undefined> =>
-  unwrapDb(db).query.expense.findFirst({
-    where: and(eq(expense.id, id), notDeleted(expense)),
-    ...relations.expense.withProject,
-  });
+  (async () => {
+    const row = await unwrapDb(db).query.expense.findFirst({
+      where: and(eq(expense.id, id), notDeleted(expense)),
+      extras: expenseInheritanceReadExtras(),
+      ...relations.expense.withProject,
+    });
+    if (!row) return undefined;
+    return {
+      ...row,
+      projectAllocations: await loadExpenseProjectAllocations(db, [id]),
+    };
+  })();
 
 const expenseCrud = createEntityCrud({
   table: expense,
@@ -511,6 +536,19 @@ export const updateExpense = async (
     data.purchaseId === undefined &&
     (data.vendor !== undefined || data.orderId !== undefined);
 
+  const priceCanChange = [
+    data.cost,
+    data.future,
+    data.productId,
+    data.productQuantity,
+  ].some((value) => value !== undefined);
+  const qualityCanChange = [
+    data.cost,
+    data.future,
+    data.productId,
+    data.purchaseId,
+  ].some((value) => value !== undefined);
+
   const loadUpdateState = async (tx: DrizzleTransaction) => {
     const id = await resolveOrThrow(tx, "expense", shortcode);
     const [locked] = await tx
@@ -534,6 +572,7 @@ export const updateExpense = async (
       : undefined;
     const qualityBefore = await tx.query.expense.findFirst({
       where: and(eq(expense.id, id), notDeleted(expense)),
+      extras: expenseInheritanceReadExtras(),
       columns: {
         cost: true,
         productId: true,
@@ -541,6 +580,8 @@ export const updateExpense = async (
         purchaseId: true,
         lineKind: true,
         lineBasis: true,
+        projectId: true,
+        trade: true,
       },
     });
     const nextCost =
@@ -556,6 +597,42 @@ export const updateExpense = async (
   };
 
   type UpdateState = Awaited<ReturnType<typeof loadUpdateState>>;
+
+  const validateUpdateState = async (
+    tx: DrizzleTransaction,
+    state: UpdateState,
+    update: ResolvedExpenseUpdate,
+    resultingPurchaseId: PurchaseId | null,
+  ) => {
+    // Detaching a source preserves its effective attribution unless the same
+    // edit explicitly replaces or resets that assignment.
+    const previous = state.qualityBefore;
+    if (
+      previous?.purchaseId &&
+      resultingPurchaseId === null &&
+      (update.lineKind ?? previous.lineKind) === "principal"
+    ) {
+      if (update.projectId === undefined)
+        update.projectId = previous.effectiveProjectId;
+      if (update.trade === undefined) update.trade = previous.effectiveTrade;
+    }
+    return validateExpenseInheritance(tx, {
+      lineKind: update.lineKind ?? state.qualityBefore?.lineKind ?? "principal",
+      projectId:
+        update.projectId === undefined
+          ? (state.qualityBefore?.projectId ?? null)
+          : update.projectId,
+      productId:
+        update.productId === undefined
+          ? (state.qualityBefore?.productId ?? null)
+          : update.productId,
+      purchaseId: resultingPurchaseId,
+      trade:
+        update.trade === undefined
+          ? (state.qualityBefore?.trade ?? null)
+          : update.trade,
+    });
+  };
 
   const resolveUpdateColumns = async (
     tx: DrizzleTransaction,
@@ -687,11 +764,6 @@ export const updateExpense = async (
       update: rest,
     } = await resolveUpdateColumns(tx, state);
 
-    const priceCanChange =
-      data.cost !== undefined ||
-      data.future !== undefined ||
-      data.productId !== undefined ||
-      data.productQuantity !== undefined;
     const priceCandidates = priceCanChange
       ? pricingProductIds([state.qualityBefore?.productId, resultingProductId])
       : [];
@@ -706,14 +778,17 @@ export const updateExpense = async (
       if (explicitPurchaseId !== undefined) {
         update.purchaseId = explicitPurchaseId;
       }
+      await validateUpdateState(
+        tx,
+        state,
+        update,
+        explicitPurchaseId === undefined
+          ? (state.qualityBefore?.purchaseId ?? null)
+          : explicitPurchaseId,
+      );
       const output = await expenseCrud.update(tx, state.id, update, actor);
       await auditNestedChanges(tx, state, output);
-      if (
-        data.cost !== undefined ||
-        data.future !== undefined ||
-        data.productId !== undefined ||
-        data.purchaseId !== undefined
-      ) {
+      if (qualityCanChange) {
         await touchDataQualityTargets(tx, {
           productIds: [
             state.qualityBefore?.productId,
@@ -758,6 +833,14 @@ export const updateExpense = async (
 
     const update = { ...rest };
     if (resolved !== undefined) update.purchaseId = resolved;
+    await validateUpdateState(
+      tx,
+      state,
+      update,
+      resolved === undefined
+        ? (state.qualityBefore?.purchaseId ?? null)
+        : resolved,
+    );
     const output = await expenseCrud.update(tx, state.id, update, actor);
     await auditNestedChanges(tx, state, output);
     await touchDataQualityTargets(tx, {
@@ -786,9 +869,22 @@ const getExpensesByIDs = async (
   if (ids.length === 0) return [];
   const rows = await getDb(db).query.expense.findMany({
     where: and(inArray(expense.id, ids), notDeleted(expense)),
+    extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
-  return rows.map(dbExpenseToAPI);
+  const allocations = await loadExpenseProjectAllocations(db, ids);
+  const byExpense = new Map<ExpenseId, typeof allocations>();
+  for (const allocation of allocations) {
+    const existing = byExpense.get(allocation.expenseId) ?? [];
+    existing.push(allocation);
+    byExpense.set(allocation.expenseId, existing);
+  }
+  return rows.map((row) =>
+    dbExpenseToAPI({
+      ...row,
+      projectAllocations: byExpense.get(row.id) ?? [],
+    }),
+  );
 };
 
 export const createExpense = async (
@@ -820,10 +916,7 @@ export const createExpense = async (
     const productId = data.productId
       ? await resolveLiveProductId(tx, data.productId)
       : null;
-    const projectId = await resolveDefaultProjectId(tx, {
-      projectId: explicitProjectId,
-      productId,
-    });
+    const projectId = explicitProjectId;
     const lineKind =
       data.lineKind ?? inferExpenseLineKind({ name: data.name, productId });
     if (lineKind !== "principal" && productId !== null) {
@@ -845,6 +938,13 @@ export const createExpense = async (
       );
     }
     assertQuantitySignMatchesCost(data.cost, data.productQuantity);
+    await validateExpenseInheritance(tx, {
+      lineKind,
+      projectId,
+      productId,
+      purchaseId,
+      trade: data.trade,
+    });
     const pricesBefore = await loadEffectiveProductPricesById(
       tx,
       pricingProductIds([productId]),
@@ -920,6 +1020,19 @@ export const setExpensesTrade = async (
   const updatedIds = await withTransaction(db, async (tx) => {
     const ids = await resolveLiveExpenseIds(tx, input.ids);
     if (ids.length === 0) return [];
+
+    const rows = await tx.query.expense.findMany({
+      where: and(inArray(expense.id, ids), notDeleted(expense)),
+      columns: {
+        lineKind: true,
+        projectId: true,
+        productId: true,
+        purchaseId: true,
+      },
+    });
+    for (const row of rows) {
+      await validateExpenseInheritance(tx, { ...row, trade });
+    }
 
     await patchEntityRows(
       tx,

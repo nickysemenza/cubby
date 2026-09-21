@@ -48,6 +48,7 @@ type TaskRow = {
   dueDate: string | null;
   dueEndDate: string | null;
   trade: TaskOut["trade"];
+  fieldResolutions?: TaskOut["fieldResolutions"];
   sortOrder: number | null;
   createdAt: Date;
   updatedAt: Date;
@@ -89,6 +90,7 @@ export const dbTaskToAPI = (
   dueDate: row.dueDate,
   dueEndDate: row.dueEndDate,
   trade: row.trade,
+  fieldResolutions: row.fieldResolutions,
   sortOrder: row.sortOrder,
   // In practice unreachable, since a live task always blocks its project's
   // deletion (see project/crud.ts's PROJECT_HAS_TASKS guard) — but

@@ -172,10 +172,11 @@ export const expenseListOverride = defineListOverride<
             expenseLineKindColumn(
               columnHelper,
               async (lineKind, row) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: row.id,
-                  data: { lineKind },
-                });
+                await updateExpenseMutation.mutateAsync(
+                  lineKind === "principal"
+                    ? { id: row.id, data: { lineKind } }
+                    : { id: row.id, data: { lineKind, projectId: null } },
+                );
               },
               { mobile: { slot: "meta", priority: 18 } },
             ),
@@ -217,6 +218,7 @@ export const expenseListOverride = defineListOverride<
               className: "w-40",
               mobile: { slot: "meta", priority: 40, interactive: true },
               editable: {
+                enabled: (row) => row.lineKind === "principal",
                 onSave: async (newProjectId, row) => {
                   await updateExpenseMutation.mutateAsync({
                     id: row.id,

@@ -15,6 +15,12 @@ import type {
  */
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  fieldResolutionsSchema,
+  type FieldResolution,
+  type FieldResolutions,
+} from "@cubby/schemas/field-resolution";
+import { z } from "zod";
 
 import { classifyWithJev } from "~/server/ai/classify";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
@@ -33,10 +39,12 @@ import {
 } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import {
   lookupEntityLabels,
   resolveShortcodes,
 } from "~/server/repo/shortcode-resolver";
+import { resolveDraftTaskFields } from "~/server/repo/task-project-inheritance";
 
 /** A client-supplied basis value beyond this length is truncated, not rejected. */
 const MAX_BASIS_VALUE_LENGTH = 500;
@@ -68,6 +76,66 @@ export interface SuggestFieldsPorts {
   /** Test-only: overrides individual registry entries (fake rosters) without
    * a database. Keyed the same as `FIELD_SUGGEST_REGISTRY` (`"entity.field"`). */
   registry?: Partial<Record<string, FieldSuggestSpec>>;
+  /** Test seam for authoritative draft inheritance. Production always uses
+   * the repository resolvers below. */
+  resolveInheritance?: (
+    db: Database,
+    input: FieldSuggestionsInput,
+  ) => Promise<FieldResolutions>;
+}
+
+async function resolveSuggestionInheritance(
+  db: Database,
+  input: FieldSuggestionsInput,
+): Promise<FieldResolutions> {
+  const draft = { ...input.basis };
+  const context = fieldResolutionContext(input.basis.__resolutionContext);
+  for (const [field, resolution] of Object.entries(context)) {
+    const stored = scalarBasisValue(resolution.storedValue);
+    draft[field] = stored;
+    if (input.entity === "task" && field === "projectId") {
+      draft.projectMode =
+        resolution.mode === "inherit" ? "inherit" : "explicit";
+    }
+    if (input.entity === "task" && field === "subjectProductId") {
+      draft.subjectProductMode =
+        resolution.mode === "inherit" ? "inherit" : "explicit";
+    }
+  }
+  if (input.entity === "expense") {
+    // SAFETY: the expense branch narrows the entity, and draft contains only
+    // schema-validated suggestion basis values plus reconstructed raw intent.
+    return resolveDraftExpenseFields(
+      db,
+      draft as Parameters<typeof resolveDraftExpenseFields>[1],
+    );
+  }
+  if (input.entity === "task") {
+    // SAFETY: the task branch narrows the entity, and draft contains only
+    // schema-validated suggestion basis values plus reconstructed raw intent.
+    return resolveDraftTaskFields(
+      db,
+      draft as Parameters<typeof resolveDraftTaskFields>[1],
+    );
+  }
+  return {};
+}
+
+function fieldResolutionContext(
+  raw: string | null | undefined,
+): FieldResolutions {
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return fieldResolutionsSchema.catch({}).parse(parsed);
+  } catch {
+    return {};
+  }
+}
+
+function scalarBasisValue(value: FieldResolution["value"]): string | null {
+  const scalar = z.string().safeParse(value);
+  return scalar.success ? normalizeBasisValue(scalar.data) : null;
 }
 
 function normalizeBasisValue(raw: string | null | undefined): string | null {
@@ -114,15 +182,17 @@ function effectiveRawBasis(
   clientBasis: ReadonlyMap<string, string | null>,
   requestedTargets: ReadonlySet<string>,
   resolvedRawByTarget: ReadonlyMap<string, string | null>,
+  authoritativeKeys: ReadonlySet<string>,
 ): RawBasis {
   return Object.fromEntries(
     basisKeys.map((key) => {
       const clientValue = clientBasis.get(key) ?? null;
-      const value =
-        clientValue ??
-        (requestedTargets.has(key)
-          ? (resolvedRawByTarget.get(key) ?? null)
-          : null);
+      const value = authoritativeKeys.has(key)
+        ? clientValue
+        : (clientValue ??
+          (requestedTargets.has(key)
+            ? (resolvedRawByTarget.get(key) ?? null)
+            : null));
       return [key, value] as const;
     }),
   );
@@ -309,12 +379,42 @@ export async function suggestFields(
   input: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
+  if (
+    input.entity === "expense" &&
+    input.targets.includes("projectId") &&
+    input.basis.lineKind != null &&
+    input.basis.lineKind !== "principal"
+  ) {
+    throw createAppError(
+      "SUGGEST_FIELD_FORBIDDEN",
+      "Only principal expense lines can receive project suggestions.",
+    );
+  }
   // SAFETY: `input.entity` is validated by `fieldSuggestionsInput`'s
   // `z.enum(shortcodeEntities)`, a subset of `entityFieldModels`'s keys.
   const model =
     entityFieldModels[input.entity as keyof typeof entityFieldModels];
 
-  const targetSpecs = resolveTargetSpecs(input, ports);
+  // Production calls have no injected ports. Tests inject their Jev/database
+  // seams and deliberately exercise suggestion mechanics in isolation.
+  const fieldResolutions = ports?.resolveInheritance
+    ? await ports.resolveInheritance(db, input)
+    : ports
+      ? {}
+      : await resolveSuggestionInheritance(db, input);
+  const eligibleTargets = input.targets.filter((target) => {
+    if (input.basisMode === "provided") return true;
+    const resolution = fieldResolutions[target];
+    return (
+      resolution === undefined ||
+      (resolution.mode === "inherit" && resolution.value === null)
+    );
+  });
+
+  const targetSpecs = resolveTargetSpecs(
+    { ...input, targets: eligibleTargets },
+    ports,
+  );
   const requestedTargets = new Set(targetSpecs.keys());
 
   const targetBasisKeys = new Map<string, readonly string[]>();
@@ -326,6 +426,20 @@ export async function suggestFields(
   const clientBasis = new Map<string, string | null>();
   for (const [key, value] of Object.entries(input.basis)) {
     clientBasis.set(key, normalizeBasisValue(value));
+  }
+  const authoritativeKeys = new Set(
+    Object.entries(fieldResolutions)
+      .filter(
+        ([key, resolution]) =>
+          input.basisMode === "provided" ||
+          !requestedTargets.has(key) ||
+          resolution.mode !== "inherit" ||
+          resolution.value !== null,
+      )
+      .map(([key]) => key),
+  );
+  for (const [key, resolution] of Object.entries(fieldResolutions)) {
+    clientBasis.set(key, scalarBasisValue(resolution.value));
   }
 
   const resolveLabels = ports?.resolveLabels ?? defaultResolveLabels;
@@ -353,6 +467,7 @@ export async function suggestFields(
         clientBasis,
         requestedTargets,
         input.basisMode === "suggested" ? resolvedRawByTarget : new Map(),
+        authoritativeKeys,
       );
       const resolvedBasis = await resolveDisplayBasis(
         db,
@@ -392,5 +507,5 @@ export async function suggestFields(
   };
   await Promise.all([...requestedTargets].map(resolveTarget));
 
-  return { suggestions };
+  return { suggestions, fieldResolutions, eligibleTargets };
 }

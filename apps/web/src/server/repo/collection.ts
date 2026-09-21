@@ -53,6 +53,7 @@ import {
   deriveCollectionMembership,
   directCollectionMembership,
 } from "./collection-membership";
+import { effectiveExpenseTradeSql } from "./expense-inheritance";
 import { loadEffectiveInventoryOwnership } from "./inventory/ownership";
 import { evaluateSmartCollections } from "./smart-collection-membership";
 
@@ -198,7 +199,10 @@ const loadPurchasesByProductId = async (
     purchaseIds.length === 0
       ? []
       : await client
-          .select({ purchaseId: expense.purchaseId, trade: expense.trade })
+          .select({
+            purchaseId: expense.purchaseId,
+            trade: effectiveExpenseTradeSql(),
+          })
           .from(expense)
           .where(
             and(
@@ -209,7 +213,7 @@ const loadPurchasesByProductId = async (
           );
   const tradesByPurchaseId = new Map<string, Set<Trade>>();
   for (const row of tradeRows) {
-    if (!row.purchaseId) continue;
+    if (!row.purchaseId || !row.trade) continue;
     const trades = tradesByPurchaseId.get(row.purchaseId) ?? new Set<Trade>();
     trades.add(row.trade);
     tradesByPurchaseId.set(row.purchaseId, trades);
@@ -330,7 +334,7 @@ async function loadSmartCollections(
           .select({
             productId: expense.productId,
             shortcode: expense.shortcode,
-            trade: expense.trade,
+            trade: effectiveExpenseTradeSql(),
           })
           .from(expense)
           .where(
@@ -338,7 +342,7 @@ async function loadSmartCollections(
               notDeleted(expense),
               eq(expense.future, false),
               isNotNull(expense.productId),
-              inArray(expense.trade, trades),
+              inArray(effectiveExpenseTradeSql(), trades),
             ),
           )
       : Promise.resolve([]),
@@ -362,7 +366,15 @@ async function loadSmartCollections(
   }
   return {
     graph,
-    evaluated: evaluateSmartCollections({ ...graph, expenses }, definitions),
+    evaluated: evaluateSmartCollections(
+      {
+        ...graph,
+        expenses: expenses.flatMap((row) =>
+          row.trade === null ? [] : [{ ...row, trade: row.trade }],
+        ),
+      },
+      definitions,
+    ),
   };
 }
 

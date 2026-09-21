@@ -47,5 +47,5 @@ export {
   setExpensesTrade,
   updateExpense,
 } from "./crud";
-export { buildExpenseWhereClause, expenseList } from "./lookup";
+export { expenseList } from "./lookup";
 export { matchExpenses } from "./match";

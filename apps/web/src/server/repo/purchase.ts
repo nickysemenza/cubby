@@ -1,6 +1,5 @@
-/** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
-
 import type { ActorContext } from "@cubby/schemas/context";
+/** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type {
   ImpactItem,
@@ -108,7 +107,6 @@ import { withDisplayImages } from "~/server/repo/entity-display-image";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
-  resolveDefaultProjectIds,
 } from "~/server/repo/expense/helpers";
 import {
   calculateFinancialReconciliation,
@@ -151,6 +149,15 @@ import {
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+  expenseInheritanceReadExtras,
+  validateExpenseInheritance,
+} from "./expense-inheritance";
+import { hydrateExpenseProjectAllocations } from "./expense-project-allocation";
+import { validateLiveEffectiveTrades } from "./inheritance-validation";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "ImportRunTarget.purchaseId": {
@@ -288,6 +295,10 @@ const purchaseVendorShortcode = correlated<string>(
   `(SELECT v."shortcode" FROM "Vendor" v WHERE v."id" = "Purchase"."vendorId")`,
 );
 
+const purchaseDefaultProjectShortcode = correlated<string | null>(
+  `(SELECT p."shortcode" FROM "Project" p WHERE p."id" = "Purchase"."defaultProjectId" AND p."deletedAt" IS NULL)`,
+);
+
 const purchaseVendorAccountShortcode = correlated<string | null>(
   `(SELECT va."shortcode" FROM "VendorAccount" va WHERE va."id" = "Purchase"."vendorAccountId" AND va."deletedAt" IS NULL)`,
 );
@@ -307,6 +318,8 @@ const purchaseVendorLogoKey = sql<string | null>`(
 )`;
 
 const purchaseColumns = {
+  defaultProjectShortcode: purchaseDefaultProjectShortcode,
+  defaultTrade: purchase.defaultTrade,
   id: purchase.id,
   shortcode: purchase.shortcode,
   orderId: purchase.orderId,
@@ -330,6 +343,8 @@ const purchaseColumns = {
 } as const;
 
 type PurchaseRow = {
+  defaultProjectShortcode: string | null;
+  defaultTrade: PurchaseOut["defaultTrade"];
   id: PurchaseId;
   shortcode: string;
   orderId: string | null;
@@ -363,6 +378,10 @@ const dbPurchaseToAPI = (
   vendorAccountId: row.vendorAccountShortcode
     ? parseShortcodeFor("vendorAccount", row.vendorAccountShortcode)
     : null,
+  defaultProjectId: row.defaultProjectShortcode
+    ? parseShortcodeFor("project", row.defaultProjectShortcode)
+    : null,
+  defaultTrade: row.defaultTrade,
   orderId: row.orderId,
   displayLabel: row.displayLabel,
   date: row.date,
@@ -770,9 +789,10 @@ export const getPurchaseExpenses = async (
   const rows = await getDb(db).query.expense.findMany({
     where: and(eq(expense.purchaseId, id), notDeleted(expense)),
     orderBy: [asc(expense.date), asc(expense.name)],
+    extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
-  return rows.map(dbExpenseToAPI);
+  return (await hydrateExpenseProjectAllocations(db, rows)).map(dbExpenseToAPI);
 };
 
 /**
@@ -820,6 +840,10 @@ export const createPurchase = async (
       ? await resolveOrThrow(tx, "vendorAccount", data.vendorAccountId)
       : null;
     const created = await insertWithShortcode(tx, "purchase", {
+      defaultProjectId: data.defaultProjectId
+        ? await resolveOrThrow(tx, "project", data.defaultProjectId)
+        : null,
+      defaultTrade: data.defaultTrade,
       vendorId,
       vendorAccountId,
       orderId: data.orderId?.trim() || null,
@@ -845,6 +869,11 @@ export const createPurchase = async (
   });
   return { output: await getPurchaseByID(db, id), entityId: id };
 };
+
+const resolvePurchaseDefaultProjectUpdate = async (
+  tx: DrizzleTransaction,
+  shortcode: string | null | undefined,
+) => (shortcode == null ? shortcode : resolveOrThrow(tx, "project", shortcode));
 
 export const updatePurchase = async (
   db: Database,
@@ -930,6 +959,11 @@ export const updatePurchase = async (
       buildPartialUpdateValues({
         vendorId: resolvedVendorId,
         vendorAccountId: resolvedVendorAccountId,
+        defaultProjectId: await resolvePurchaseDefaultProjectUpdate(
+          tx,
+          data.defaultProjectId,
+        ),
+        defaultTrade: data.defaultTrade,
         orderId:
           data.orderId === undefined ? undefined : data.orderId?.trim() || null,
         displayLabel:
@@ -942,6 +976,9 @@ export const updatePurchase = async (
       }),
       id,
     );
+
+    await validatePurchaseItemInheritance(tx, [id]);
+    await validateLiveEffectiveTrades(tx);
 
     const changes = computeChanges(before, after, [
       ...entityFieldModels.purchase.audit,
@@ -1021,6 +1058,8 @@ export const linkExpensesToPurchase = async (
       .set({ purchaseId })
       .where(and(inArray(expense.id, expenseIds), notDeleted(expense)));
 
+    await validatePurchaseItemInheritance(tx, [purchaseId]);
+
     await touchDataQualityTargets(tx, {
       productIds: before
         .map((row) => row.productId)
@@ -1057,7 +1096,7 @@ export const linkExpensesToPurchase = async (
   return getPurchaseByID(db, purchaseId);
 };
 
-/** Split parts retain classifications; mismatched sums are displayed, never rejected. */
+/** A split replaces one ledger amount with parts that conserve its exact cents. */
 export const splitExpense = async (
   db: Database,
   input: SplitExpenseInput,
@@ -1082,6 +1121,19 @@ export const splitExpense = async (
         );
       }
 
+      if (
+        original.cost !== null &&
+        (parts.some((part) => part.cost === null) ||
+          parts.reduce(
+            (sum, part) => sum + Math.round((part.cost ?? 0) * 100),
+            0,
+          ) !== Math.round(original.cost * 100))
+      ) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Split parts must conserve the original expense amount exactly.",
+        );
+      }
       const chargeId = original.purchaseId;
       if (!chargeId) {
         throw createAppError(
@@ -1188,23 +1240,17 @@ export const splitExpense = async (
         }
         return productId;
       });
-      const projectIds = await resolveDefaultProjectIds(
-        tx,
-        parts.map((part, index) => {
-          const projectId = part.projectId
-            ? explicitProjectIds.get(part.projectId)
-            : null;
-          if (projectId === undefined) {
-            throw new Error(
-              `Project shortcode resolution lost ${String(part.projectId)}`,
-            );
-          }
-          return {
-            projectId,
-            productId: partProductIds[index] ?? null,
-          };
-        }),
-      );
+      const projectIds = parts.map((part) => {
+        const projectId = part.projectId
+          ? explicitProjectIds.get(part.projectId)
+          : null;
+        if (projectId === undefined) {
+          throw new Error(
+            `Project shortcode resolution lost ${String(part.projectId)}`,
+          );
+        }
+        return projectId;
+      });
       if (projectIds.length !== parts.length) {
         throw new Error("Default project resolution lost its correlation");
       }
@@ -1265,6 +1311,13 @@ export const splitExpense = async (
 
       const inserted: ExpenseId[] = [];
       for (const { part, productId, projectId, lineKind } of preparedParts) {
+        await validateExpenseInheritance(tx, {
+          lineKind,
+          projectId,
+          productId,
+          purchaseId: chargeId,
+          trade: part.trade,
+        });
         const row = await insertWithShortcode(tx, "expense", {
           name: part.name,
           cost: part.cost,
@@ -1338,9 +1391,15 @@ export const splitExpense = async (
 
   const rows = await getDb(db).query.expense.findMany({
     where: and(inArray(expense.id, createdIds), notDeleted(expense)),
+    extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
-  return { items: rows.map(dbExpenseToAPI), priceAffectedProductIds };
+  return {
+    items: (await hydrateExpenseProjectAllocations(db, rows)).map(
+      dbExpenseToAPI,
+    ),
+    priceAffectedProductIds,
+  };
 };
 
 /** Pre-check collisions because a failed unique statement poisons the transaction. */
@@ -1389,6 +1448,111 @@ export const renameChargeOrderId = async (
     });
   }
   return true;
+};
+
+/** Validate source changes within the transaction that changes their defaults. */
+const validatePurchaseItemInheritance = async (
+  tx: DrizzleTransaction,
+  purchaseIds: PurchaseId[],
+) => {
+  const rows = await tx.query.expense.findMany({
+    where: and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)),
+  });
+  for (const row of rows) await validateExpenseInheritance(tx, row);
+};
+
+/** Moving a purchase source must not silently reattribute principal items. */
+const preservePurchaseItemAttribution = async (
+  tx: DrizzleTransaction,
+  from: PurchaseId[],
+  to: PurchaseId | null,
+) => {
+  const rows = await tx
+    .select({
+      id: expense.id,
+      shortcode: expense.shortcode,
+      lineKind: expense.lineKind,
+      productId: expense.productId,
+      projectId: expense.projectId,
+      trade: expense.trade,
+      effectiveProjectId: effectiveExpenseProjectSql(),
+      effectiveTrade: effectiveExpenseTradeSql(),
+    })
+    .from(expense)
+    .where(and(inArray(expense.purchaseId, from), notDeleted(expense)));
+  for (const row of rows) {
+    if (row.lineKind !== "principal") {
+      if (to === null)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Purchase adjustment ${row.shortcode} cannot be detached. Delete it or move it to another purchase first.`,
+        );
+      await validateExpenseInheritance(tx, { ...row, purchaseId: to });
+      continue;
+    }
+
+    if (row.effectiveTrade === null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Principal expense ${row.shortcode} has no effective trade to preserve.`,
+      );
+    }
+
+    const projectProbe = await validateExpenseInheritance(tx, {
+      ...row,
+      purchaseId: to,
+      trade: row.effectiveTrade,
+    });
+    let projectId = row.projectId;
+    if (projectProbe.effectiveProjectId !== row.effectiveProjectId) {
+      if (row.effectiveProjectId === null) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Cannot preserve the unassigned project of ${row.shortcode} under the destination purchase default.`,
+        );
+      }
+      projectId = row.effectiveProjectId;
+    }
+
+    let trade = row.trade;
+    try {
+      const tradeProbe = await validateExpenseInheritance(tx, {
+        ...row,
+        projectId,
+        purchaseId: to,
+      });
+      if (tradeProbe.effectiveTrade !== row.effectiveTrade) {
+        trade = row.effectiveTrade;
+      }
+    } catch {
+      trade = row.effectiveTrade;
+    }
+
+    const next = await validateExpenseInheritance(tx, {
+      ...row,
+      projectId,
+      purchaseId: to,
+      trade,
+    });
+    if (next.effectiveProjectId !== row.effectiveProjectId) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Cannot preserve the unassigned project of ${row.shortcode} under the destination purchase default.`,
+      );
+    }
+    if (next.effectiveTrade !== row.effectiveTrade) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Cannot preserve the effective trade of ${row.shortcode} under the destination purchase defaults.`,
+      );
+    }
+    if (projectId !== row.projectId || trade !== row.trade) {
+      await tx
+        .update(expense)
+        .set({ projectId, trade })
+        .where(eq(expense.id, row.id));
+    }
+  }
 };
 
 const carryMissing = <T>(
@@ -1569,6 +1733,8 @@ export const foldChargeInto = async (
   // failure.
   const { carried, discardedStatedTotal, survivorStatedTotal } =
     await carryChargeMetadata(tx, deadId, survivorId);
+
+  await preservePurchaseItemAttribution(tx, [deadId], survivorId);
 
   const moved = await repointEdge(tx, "purchase", "Expense.purchaseId", {
     from: [deadId],
@@ -1757,20 +1923,14 @@ export const mergePurchases = async (
 
     const orderIdBearers = rows.filter((r) => r.orderId !== null);
 
-    // ORDER MATTERS: soft-delete the losers BEFORE the keeper adopts an order id.
-    // The unique index is partial on `deletedAt IS NULL`, so while a loser is
-    // still live, writing its order id onto the keeper makes two live rows share
-    // `(vendorId, orderId)` and the index aborts the whole merge. Deleting first
-    // vacates the slot.
-    // MEASURED, not `losers.length`: this statement is the one that actually
-    // removes them, and the `foldChargeInto` calls below re-issue the same
-    // soft-delete as a no-op, so `finalizeMerge` there reports 0.
-    const removed = await tx
-      .update(purchase)
-      .set({ deletedAt: new Date() })
-      .where(and(inArray(purchase.id, losers), notDeleted(purchase)))
-      .returning({ id: purchase.id });
-    mergedCount = removed.length;
+    // Fold while each source Purchase is still live so inherited Expense
+    // attribution can be resolved and preserved. Each fold soft-deletes its
+    // source, which also vacates the partial unique-index slot before the
+    // keeper adopts an order id below.
+    for (const loser of losers) {
+      await foldChargeInto(tx, loser, keepId, actor);
+    }
+    mergedCount = losers.length;
 
     const adopted = orderIdBearers[0];
     if (adopted && adopted.id !== keepId) {
@@ -1778,10 +1938,6 @@ export const mergePurchases = async (
         .update(purchase)
         .set({ orderId: adopted.orderId })
         .where(eq(purchase.id, keepId));
-    }
-
-    for (const loser of losers) {
-      await foldChargeInto(tx, loser, keepId, actor);
     }
     // A run can already target the keeper. Preserve that canonical target and
     // drop the colliding loser row before re-pointing the remaining history;
@@ -1925,6 +2081,7 @@ const deletePurchasesWithPolicy = async (
     }
 
     if (policy === "detach-references") {
+      await preservePurchaseItemAttribution(tx, ids, null);
       await tx
         .update(expense)
         .set({ purchaseId: null })

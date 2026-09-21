@@ -24,16 +24,22 @@ import type {
   ProjectPortfolioAnalyticsInput,
   ProjectPortfolioAnalyticsOut,
 } from "@cubby/schemas/project";
-import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { buildExpenseWhereClause } from "~/server/repo/expense";
 import {
-  EXPENSE_MONTH_BUCKET,
-  expenseAggregateFields,
-} from "~/server/repo/expense-aggregate-sql";
+  getDb,
+  notDeleted,
+  uuidArrayParam,
+} from "~/server/repo/database-helpers";
+import { EXPENSE_MONTH_BUCKET } from "~/server/repo/expense-aggregate-sql";
+import { effectiveExpenseTradeSql } from "~/server/repo/expense-inheritance";
+import {
+  expenseAllocatedCostSql,
+  expenseAllocationExistsSql,
+} from "~/server/repo/expense-project-allocation";
+import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
@@ -48,6 +54,16 @@ const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
   adjustments: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
   taskHeatmap: [],
 };
+
+const aggregateForCost = (
+  cost: ReturnType<typeof expenseAllocatedCostSql>,
+) => ({
+  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = false), 0)::float`,
+  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = true), 0)::float`,
+  credits: sql<number>`coalesce(-sum(${cost}) filter (where ${cost} < 0), 0)::float`,
+  net: sql<number>`coalesce(sum(${cost}), 0)::float`,
+  count: sql<number>`count(*)::int`,
+});
 
 export async function projectPortfolioAnalytics(
   db: Database,
@@ -94,14 +110,22 @@ export async function projectPortfolioAnalytics(
 
   const costVsEstimate = ids.map((id) => {
     const subtree = subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;
-    const parent = parentById.get(id);
+    let parent = parentById.get(id);
+    let isScopeRoot = true;
+    while (parent) {
+      if (inScope.has(parent)) {
+        isScopeRoot = false;
+        break;
+      }
+      parent = parentById.get(parent);
+    }
     return {
       projectId: shortcodeById.get(id)!,
       projectName: nameById.get(id) ?? "",
       actual: subtree.actualSpent,
       committed: subtree.committedSpent,
       estimate: subtree.costEstimate,
-      isScopeRoot: parent == null || !inScope.has(parent),
+      isScopeRoot,
     };
   });
 
@@ -113,30 +137,18 @@ export async function projectPortfolioAnalytics(
     }))
     .sort((a, b) => b.spend - a.spend);
 
-  // Expense-based aggregates: expenses whose OWN projectId is in the
-  // filtered set (not subtree-expanded — a sub-project's own expenses only
-  // count here if the sub-project itself matched the filter; unlike
-  // costVsEstimate/spendingByProject, which intentionally show subtree
-  // totals). Inbox expenses (no project) are excluded — judgment call, see
-  // the task report.
-  //
-  // Routed through the SAME `buildExpenseWhereClause` the ledger and
-  // `expenseAnalytics` use, so `costMin`/`costMax`/`notesSearch`/`urlSearch`
-  // and OR-search reach these charts too (they didn't before — a hand-rolled
-  // date-only clause lived here). `ProjectPortfolioAnalyticsInput` is
-  // project-shaped (`ProjectDashboardFilters`): only `dateFrom`/`dateTo` share
-  // both a name and a meaning with `ExpenseFilters` — `filters.search` means
-  // PROJECT name here and must never be forwarded as `ExpenseFilters.search`
-  // (expense name). `statusScope`/`kinds`/`locations`/`completionYear`
-  // already narrowed `ids` via `buildDashboardProjectWhere` above, so they
-  // need no expense-side translation. The project-id scoping itself is the
-  // `extraConditions` escape hatch: `ids` are already-resolved uuids, and
-  // `buildExpenseWhereClause`'s own `projectId` filter expects shortcodes it
-  // would have to resolve right back — round-tripping we'd rather skip.
-  const expenseScope = await buildExpenseWhereClause(
-    db,
-    { dateFrom: filters.dateFrom, dateTo: filters.dateTo },
-    { extraConditions: [inArray(expense.projectId, ids)] },
+  // Project filters choose attribution shares; date filters then narrow the
+  // source expenses. The full-purchase allocation denominator remains intact.
+  const allocationScope = { projectIds: ids };
+  const attributedCost = expenseAllocatedCostSql(
+    sql`${expense.id}`,
+    allocationScope,
+  );
+  const expenseScope = and(
+    notDeleted(expense),
+    expenseAllocationExistsSql(sql`${expense.id}`, allocationScope),
+    filters.dateFrom ? sql`${expense.date} >= ${filters.dateFrom}` : undefined,
+    filters.dateTo ? sql`${expense.date} <= ${filters.dateTo}` : undefined,
   );
   const expenseScopeWithDate = and(expenseScope, isNotNull(expense.date));
 
@@ -150,7 +162,7 @@ export async function projectPortfolioAnalytics(
     getDb(db)
       .select({
         month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
-        ...expenseAggregateFields(),
+        ...aggregateForCost(attributedCost),
       })
       .from(expense)
       .where(expenseScopeWithDate)
@@ -159,37 +171,40 @@ export async function projectPortfolioAnalytics(
     getDb(db)
       .select({
         month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
-        planned: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.future} = true), 0)::float`,
-        actual: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.future} = false), 0)::float`,
+        planned: sql<number>`coalesce(sum(${attributedCost}) filter (where ${expense.future} = true), 0)::float`,
+        actual: sql<number>`coalesce(sum(${attributedCost}) filter (where ${expense.future} = false), 0)::float`,
       })
       .from(expense)
       .where(expenseScopeWithDate)
       .groupBy(EXPENSE_MONTH_BUCKET)
       .orderBy(EXPENSE_MONTH_BUCKET),
     getDb(db)
-      .select({ trade: expense.trade, ...expenseAggregateFields() })
+      .select({
+        trade: effectiveExpenseTradeSql(),
+        ...aggregateForCost(attributedCost),
+      })
       .from(expense)
       .where(and(expenseScope, eq(expense.lineKind, "principal")))
-      .groupBy(expense.trade),
+      .groupBy(effectiveExpenseTradeSql()),
     getDb(db)
-      .select({ ...expenseAggregateFields() })
+      .select(aggregateForCost(attributedCost))
       .from(expense)
       .where(and(expenseScope, ne(expense.lineKind, "principal"))),
     getDb(db)
       .select({
-        projectId: task.projectId,
+        projectId: effectiveTaskProjectSql("Task"),
         openTaskCount: sql<number>`count(*)::int`,
       })
       .from(task)
       .where(
         and(
-          inArray(task.projectId, ids),
+          sql`${effectiveTaskProjectSql("Task")} = ANY(${uuidArrayParam(ids)})`,
           notDeleted(task),
           ne(task.status, "done"),
           isNull(task.parentTaskId),
         ),
       )
-      .groupBy(task.projectId),
+      .groupBy(effectiveTaskProjectSql("Task")),
   ]);
 
   const openTaskCountByProject = new Map<ProjectId, number>();

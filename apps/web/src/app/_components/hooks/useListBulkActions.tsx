@@ -1,6 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useMemo, useRef } from "react";
 
+import { useRedundantOverrideBulkAction } from "~/entities/field-resolution";
+import { generatedBrowserCrudEntities } from "~/entities/generated/entity-routes.gen";
+
 import { verbBulkAction } from "../actions/action-verb-ui";
 import {
   type EntityActionDefinition,
@@ -85,6 +88,11 @@ export function useListBulkActions<TData extends { id: string }>({
   const registeredActions = registered.selectionActions.length
     ? registered.selectionActions
     : emptyBulkActions<TData>();
+  const editableEntity = generatedBrowserCrudEntities.find(
+    (candidate) => candidate === entity,
+  );
+  const redundantOverrideAction =
+    useRedundantOverrideBulkAction<TData>(editableEntity);
 
   const config = useMemo((): BulkActionsConfig<TData> | undefined => {
     if (!selectable) return undefined;
@@ -92,6 +100,7 @@ export function useListBulkActions<TData extends { id: string }>({
       !deleteBulkAction &&
       !bulkActions &&
       !inspectAction &&
+      !redundantOverrideAction &&
       registeredActions.length === 0
     )
       return undefined;
@@ -105,6 +114,7 @@ export function useListBulkActions<TData extends { id: string }>({
       actions: [
         ...(inspectAction ? [inspectAction] : []),
         ...registeredActions,
+        ...(redundantOverrideAction ? [redundantOverrideAction] : []),
         ...(bulkActions?.actions ?? []),
         ...(deleteBulkAction ? [deleteBulkAction] : []),
       ],
@@ -114,6 +124,7 @@ export function useListBulkActions<TData extends { id: string }>({
     deleteBulkAction,
     inspectAction,
     registeredActions,
+    redundantOverrideAction,
     selectable,
   ]);
   const emptyConfig = useMemo<BulkActionsConfig<TData>>(

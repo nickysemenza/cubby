@@ -7,8 +7,10 @@ import {
   taskShortcode,
 } from "../identifier-fields.js";
 import { taskStatusSchema, tradeSchema } from "@cubby/schemas/task-fields";
+import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
+const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
@@ -91,6 +93,15 @@ export default defineEntity({
   model: {
     fields: [
       {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "What needs doing?" },
@@ -135,10 +146,49 @@ export default defineEntity({
           detailOrder: 5,
           columnId: "project",
         },
+        resolution: {
+          reset: { projectMode: "inherit", projectId: null },
+          none: { projectMode: "explicit", projectId: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "task.effective-project",
+          description:
+            "An explicit project choice wins; otherwise the task follows its parent.",
+          projections: {
+            list: "fieldResolutions.projectId.value",
+            detail: "fieldResolutions.projectId.value",
+            summary: "fieldResolutions.projectId.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.projectId.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.projectId.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.projectId.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
           read: projectShortcode.nullable(),
           create: projectShortcode.nullable().default(null),
           update: projectShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "projectMode",
+        kind: "enum",
+        readKey: null,
+        validation: {
+          read: null,
+          create: inheritanceModeSchema.optional(),
+          update: inheritanceModeSchema.optional(),
         },
       },
       {
@@ -158,10 +208,49 @@ export default defineEntity({
           detailOrder: 6,
           columnId: "subjectProduct",
         },
+        resolution: {
+          reset: { subjectProductMode: "inherit", subjectProductId: null },
+          none: { subjectProductMode: "explicit", subjectProductId: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "task.effective-subject-product",
+          description:
+            "An explicit product choice wins; otherwise the task follows its parent.",
+          projections: {
+            list: "fieldResolutions.subjectProductId.value",
+            detail: "fieldResolutions.subjectProductId.value",
+            summary: "fieldResolutions.subjectProductId.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.subjectProductId.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.subjectProductId.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.subjectProductId.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
           read: productShortcode.nullable(),
           create: productShortcode.nullable().default(null),
           update: productShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "subjectProductMode",
+        kind: "enum",
+        readKey: null,
+        validation: {
+          read: null,
+          create: inheritanceModeSchema.optional(),
+          update: inheritanceModeSchema.optional(),
         },
       },
       {
@@ -225,6 +314,9 @@ export default defineEntity({
       {
         key: "trade",
         kind: "enum",
+        // Storage is an override; the read projection remains required after
+        // the resolver supplies parent/project defaults.
+        nullable: true,
         control: {
           kind: "select",
           suggest: { basis: ["name", "projectId"] },
@@ -236,10 +328,35 @@ export default defineEntity({
           width: "sm",
           mobile: { slot: "meta", priority: 50 },
         },
+        resolution: {
+          reset: { trade: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "task.effective-trade",
+          description:
+            "A task trade override wins; otherwise the matching parent task or project default supplies it.",
+          projections: {
+            list: "fieldResolutions.trade.value",
+            detail: "fieldResolutions.trade.value",
+            summary: "fieldResolutions.trade.value",
+          },
+          sourceDependencies: [
+            { path: "fieldResolutions.trade.sourceEntity", label: "Source" },
+            {
+              path: "fieldResolutions.trade.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.trade.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
           read: tradeSchema,
-          create: tradeSchema,
-          update: tradeSchema.optional(),
+          create: tradeSchema.nullable().default(null),
+          update: tradeSchema.nullable().optional(),
         },
       },
       {
@@ -430,7 +547,19 @@ export default defineEntity({
         specialized: "enum:status",
       },
       { key: "projectId", reference: "project" },
+      {
+        key: "projectMode",
+        default: "literal",
+        defaultValue: "'inherit'",
+        specialized: "enum:projectMode",
+      },
       { key: "subjectProductId", reference: "product" },
+      {
+        key: "subjectProductMode",
+        default: "literal",
+        defaultValue: "'inherit'",
+        specialized: "enum:subjectProductMode",
+      },
       { key: "parentTaskId", reference: "task" },
       "dueDate",
       "dueEndDate",
@@ -445,7 +574,9 @@ export default defineEntity({
       "name",
       "status",
       "projectId",
+      "projectMode",
       "subjectProductId",
+      "subjectProductMode",
       "parentTaskId",
       "dueDate",
       "dueEndDate",
@@ -457,7 +588,9 @@ export default defineEntity({
       "name",
       "status",
       "projectId",
+      "projectMode",
       "subjectProductId",
+      "subjectProductMode",
       "parentTaskId",
       "dueDate",
       "dueEndDate",
@@ -468,12 +601,21 @@ export default defineEntity({
       "removeImageIds",
       "imageOrder",
     ],
-    bulk: ["projectId", "status", "trade", "dueDate", "dueEndDate"],
+    bulk: [
+      "projectId",
+      "projectMode",
+      "status",
+      "trade",
+      "dueDate",
+      "dueEndDate",
+    ],
     audit: [
       "name",
       "status",
       "projectId",
+      "projectMode",
       "subjectProductId",
+      "subjectProductMode",
       "parentTaskId",
       "dueDate",
       "dueEndDate",
@@ -500,7 +642,9 @@ export default defineEntity({
           "name",
           "status",
           "projectId",
+          "projectMode",
           "subjectProductId",
+          "subjectProductMode",
           "trade",
           "dueDate",
           "pendingImageIds",
@@ -509,7 +653,9 @@ export default defineEntity({
           "name",
           "status",
           "projectId",
+          "projectMode",
           "subjectProductId",
+          "subjectProductMode",
           "trade",
           "dueDate",
           "dueEndDate",
@@ -530,6 +676,7 @@ export default defineEntity({
       editorFields: ["notes"],
     },
     output: [
+      "fieldResolutions",
       "id",
       "name",
       "status",
@@ -604,7 +751,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by trade...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/task-fields",
           export: "tradeSchema",
@@ -864,7 +1010,14 @@ export default defineEntity({
     softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: {
-      fields: ["projectId", "status", "trade", "dueDate", "dueEndDate"],
+      fields: [
+        "projectId",
+        "projectMode",
+        "status",
+        "trade",
+        "dueDate",
+        "dueEndDate",
+      ],
     },
     merge: false,
     operationOwners: { delete: "kernel", merge: null },

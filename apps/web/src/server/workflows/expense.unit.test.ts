@@ -34,18 +34,19 @@ const expectAnalyzerGraph = () => {
     { type: "call", name: "currentWhere" },
     { type: "call", name: "comparison" },
     { type: "call", name: "previousWhere" },
+    { type: "call", name: "projectScope" },
     { type: "parallel", name: "periods" },
     { type: "call", name: "grid" },
     { type: "branch", name: "withinGridLimits" },
   ]);
-  expect(analysis.steps[3]?.branches).toMatchObject({
+  expect(analysis.steps[4]?.branches).toMatchObject({
     current: { name: "current" },
     previous: { name: "previous" },
   });
-  expect(analysis.steps[5]?.branches?.whenTrue?.steps).toMatchObject([
+  expect(analysis.steps[6]?.branches?.whenTrue?.steps).toMatchObject([
     { type: "parallel", name: "causes", concurrency: 2 },
   ]);
-  expect(analysis.steps[5]?.branches?.whenFalse?.steps).toEqual([]);
+  expect(analysis.steps[6]?.branches?.whenFalse?.steps).toEqual([]);
 };
 
 const expectFacetGraph = () => {

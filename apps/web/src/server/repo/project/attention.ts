@@ -28,7 +28,7 @@ import {
   projectAttentionItemSchema,
 } from "@cubby/schemas/project";
 import {
-  type AnyColumn,
+  type SQL,
   and,
   eq,
   inArray,
@@ -50,7 +50,17 @@ import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  effectiveExpenseProjectSql,
+  effectiveExpenseTradeSql,
+} from "~/server/repo/expense-inheritance";
+import {
+  expenseAllocatedCostSql,
+  expenseAllocationExistsSql,
+  expenseProjectAllocationSql,
+} from "~/server/repo/expense-project-allocation";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
+import { effectiveTaskProjectSql } from "~/server/repo/task-project-inheritance";
 import { listActionableTasks } from "~/server/repo/task/actionable";
 
 import {
@@ -134,7 +144,7 @@ export async function computeAttentionItems(
   const activityCutoff = householdDaysAgo(STALE_ACTIVITY_DAYS);
   const items: ProjectAttentionItem[] = [];
   const scopedProjectIds = options?.projectIds;
-  const scopedOrInbox = (column: AnyColumn) =>
+  const scopedOrInbox = (column: SQL) =>
     scopedProjectIds === undefined
       ? undefined
       : scopedProjectIds.length > 0
@@ -160,7 +170,7 @@ export async function computeAttentionItems(
         id: task.id,
         shortcode: task.shortcode,
         name: task.name,
-        projectId: task.projectId,
+        projectId: effectiveTaskProjectSql(),
         dueDate: task.dueDate,
         dueEndDate: task.dueEndDate,
       })
@@ -170,7 +180,7 @@ export async function computeAttentionItems(
           notDeleted(task),
           ne(task.status, "done"),
           isNull(task.parentTaskId),
-          scopedOrInbox(task.projectId),
+          scopedOrInbox(effectiveTaskProjectSql()),
         ),
       ),
     scopedProjectIds?.length === 0
@@ -198,11 +208,17 @@ export async function computeAttentionItems(
         id: expense.id,
         shortcode: expense.shortcode,
         name: expense.name,
-        projectId: expense.projectId,
+        projectId: effectiveExpenseProjectSql(),
         date: expense.date,
         // What the line was planned to cost — the card leads with the money,
         // which is the whole reason an un-logged plan matters.
-        cost: expense.cost,
+        cost:
+          scopedProjectIds === undefined
+            ? expense.cost
+            : expenseAllocatedCostSql(sql`${expense.id}`, {
+                projectIds: scopedProjectIds,
+                presence: "none",
+              }),
       })
       .from(expense)
       .where(
@@ -211,7 +227,12 @@ export async function computeAttentionItems(
           eq(expense.future, true),
           isNotNull(expense.date),
           lt(expense.date, today),
-          scopedOrInbox(expense.projectId),
+          scopedProjectIds === undefined
+            ? undefined
+            : expenseAllocationExistsSql(sql`${expense.id}`, {
+                projectIds: scopedProjectIds,
+                presence: "none",
+              }),
         ),
       ),
     getDb(db)
@@ -219,17 +240,22 @@ export async function computeAttentionItems(
         id: expense.id,
         shortcode: expense.shortcode,
         name: expense.name,
-        projectId: expense.projectId,
+        projectId: effectiveExpenseProjectSql(),
         date: expense.date,
       })
       .from(expense)
       .where(
         and(
           notDeleted(expense),
-          eq(expense.trade, "other"),
+          eq(effectiveExpenseTradeSql(), "other"),
           eq(expense.lineKind, "principal"),
           isNull(expense.cost),
-          scopedOrInbox(expense.projectId),
+          scopedProjectIds === undefined
+            ? undefined
+            : expenseAllocationExistsSql(sql`${expense.id}`, {
+                projectIds: scopedProjectIds,
+                presence: "none",
+              }),
         ),
       ),
     listActionableTasks(db),
@@ -287,24 +313,28 @@ export async function computeAttentionItems(
     const [taskActivityRows, expenseActivityRows] = await Promise.all([
       getDb(db)
         .select({
-          projectId: task.projectId,
+          projectId: effectiveTaskProjectSql(),
           lastActivity: sql<
             string | null
           >`max(coalesce(${task.dueEndDate}, ${task.dueDate}))`,
         })
         .from(task)
-        .where(and(inArray(task.projectId, inProgressIds), notDeleted(task)))
-        .groupBy(task.projectId),
-      getDb(db)
-        .select({
-          projectId: expense.projectId,
-          lastActivity: sql<string>`max(${expense.date})`,
-        })
-        .from(expense)
         .where(
-          and(inArray(expense.projectId, inProgressIds), notDeleted(expense)),
+          and(
+            inArray(effectiveTaskProjectSql(), inProgressIds),
+            notDeleted(task),
+          ),
         )
-        .groupBy(expense.projectId),
+        .groupBy(effectiveTaskProjectSql()),
+      getDb(db)
+        .execute<{ projectId: ProjectId; lastActivity: string | null }>(sql`
+        SELECT allocation."projectId", max(e."date") AS "lastActivity"
+        FROM (${expenseProjectAllocationSql()}) allocation
+        JOIN "Expense" e ON e."id" = allocation."expenseId"
+        WHERE ${inArray(sql`allocation."projectId"`, inProgressIds)}
+        GROUP BY allocation."projectId"
+      `)
+        .then((result) => result.rows),
     ]);
     const taskActivityByProject = new Map<ProjectId, string>();
     for (const row of taskActivityRows) {
@@ -314,7 +344,7 @@ export async function computeAttentionItems(
     }
     const expenseActivityByProject = new Map<ProjectId, string>();
     for (const row of expenseActivityRows) {
-      if (row.projectId)
+      if (row.projectId && row.lastActivity)
         expenseActivityByProject.set(row.projectId, row.lastActivity);
     }
     for (const row of inProgressProjectRows) {

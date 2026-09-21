@@ -35,6 +35,33 @@ export interface SuggestTargets {
   readonly basisKeys: readonly string[];
 }
 
+const INHERITANCE_CONTEXT_KEYS = {
+  expense: ["lineKind", "purchaseId", "productId", "projectId", "trade"],
+  task: [
+    "parentTaskId",
+    "projectId",
+    "projectMode",
+    "subjectProductId",
+    "subjectProductMode",
+    "trade",
+  ],
+} as const satisfies Partial<Record<ShortcodeEntity, readonly string[]>>;
+
+/** Declared suggestion dependencies plus the raw assignment/source keys the
+ * authoritative inheritance resolver needs for this entity. */
+export function suggestionContextKeys(
+  entity: ShortcodeEntity,
+  targets: SuggestTargets,
+): readonly string[] {
+  const inheritedKeys: readonly string[] =
+    entity === "expense"
+      ? INHERITANCE_CONTEXT_KEYS.expense
+      : entity === "task"
+        ? INHERITANCE_CONTEXT_KEYS.task
+        : [];
+  return [...new Set([...targets.basisKeys, ...inheritedKeys])];
+}
+
 const EMPTY_TARGETS: SuggestTargets = { targets: [], basisKeys: [] };
 
 /**
@@ -108,6 +135,8 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
   record: TRecord,
 ) {
   const basis: Record<string, string | null> = {};
+  const referenceLabels: Record<string, { id: string; name: string | null }> =
+    {};
   for (const key of targets.basisKeys) {
     const readKey = fieldByKey(entity, key)?.readKey ?? key;
     const field = fieldByKey(entity, key);
@@ -115,9 +144,18 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
     // this record's shape; a key absent from a partial record just reads
     // `undefined`, which `basisValueOf` treats as null.
     const value = record[readKey as keyof TRecord];
+    const reference = field?.reference
+      ? readReferenceField(record, field)?.items[0]
+      : undefined;
     basis[key] = field?.reference
-      ? (readReferenceField(record, field)?.items[0]?.id ?? null)
+      ? (reference?.id ?? null)
       : basisValueOf(value);
+    if (reference) {
+      referenceLabels[key] = { id: reference.id, name: reference.name };
+    }
+  }
+  if (Object.keys(referenceLabels).length > 0) {
+    basis.__referenceLabels = JSON.stringify(referenceLabels);
   }
   return basis;
 }
@@ -175,6 +213,7 @@ export const productionEntitySuggestionsOperations: EntitySuggestionsOperations 
 /** Never a fresh `{}` — a stable default keeps `suggestions` referentially
  * equal across renders when there is nothing to show (web-ui hook-default rule). */
 const EMPTY_SUGGESTIONS: Record<string, FieldSuggestion | null> = {};
+const EMPTY_FIELD_RESOLUTIONS = {};
 
 /** A schema-valid placeholder input used only while `source` is null, so
  * `queryOptions()` (which parses its input unconditionally, even while the
@@ -218,6 +257,8 @@ export function useEntitySuggestionsQuery({
   });
   return {
     suggestions: query.data?.suggestions ?? EMPTY_SUGGESTIONS,
+    fieldResolutions: query.data?.fieldResolutions ?? EMPTY_FIELD_RESOLUTIONS,
+    eligibleTargets: query.data?.eligibleTargets ?? [],
     isFetching: query.isFetching,
   };
 }

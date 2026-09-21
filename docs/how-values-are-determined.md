@@ -415,6 +415,24 @@ Classification is derived from the transfer's source and destination party roles
 
 ## Projects (`project`)
 
+### Locations (`locations`)
+
+Explicit project locations win; otherwise the nearest parent project with explicit locations supplies them.
+
+- Rule: `project.effective-locations`, version 1
+- Resolver: Declared field projection
+- Value paths: List `fieldResolutions.locations.value`; Detail `fieldResolutions.locations.value`; Summary `fieldResolutions.locations.value`
+- Source dependencies: Source (`fieldResolutions.locations.sourceEntity`); Stored override (`fieldResolutions.locations.storedValue`); Inherited value (`fieldResolutions.locations.fallbackValue`)
+
+### Default trade (`defaultTrade`)
+
+A project trade override wins; otherwise the nearest parent project with a default trade supplies it.
+
+- Rule: `project.effective-default-trade`, version 1
+- Resolver: Declared field projection
+- Value paths: List `fieldResolutions.defaultTrade.value`; Detail `fieldResolutions.defaultTrade.value`; Summary `fieldResolutions.defaultTrade.value`
+- Source dependencies: Source (`fieldResolutions.defaultTrade.sourceEntity`); Stored override (`fieldResolutions.defaultTrade.storedValue`); Inherited value (`fieldResolutions.defaultTrade.fallbackValue`)
+
 ### Parent Project Name (`parentProjectName`)
 
 The parent project name is read from the current live parent project selected by this project's parent link.
@@ -425,6 +443,33 @@ The parent project name is read from the current live parent project selected by
 - Source dependencies: Parent project (`parentProjectId`)
 
 ## Tasks (`task`)
+
+### Project (`projectId`)
+
+An explicit project choice wins; otherwise the task follows its parent.
+
+- Rule: `task.effective-project`, version 1
+- Resolver: Declared field projection
+- Value paths: List `fieldResolutions.projectId.value`; Detail `fieldResolutions.projectId.value`; Summary `fieldResolutions.projectId.value`
+- Source dependencies: Source (`fieldResolutions.projectId.sourceEntity`); Stored override (`fieldResolutions.projectId.storedValue`); Inherited value (`fieldResolutions.projectId.fallbackValue`)
+
+### For (`subjectProductId`)
+
+An explicit product choice wins; otherwise the task follows its parent.
+
+- Rule: `task.effective-subject-product`, version 1
+- Resolver: Declared field projection
+- Value paths: List `fieldResolutions.subjectProductId.value`; Detail `fieldResolutions.subjectProductId.value`; Summary `fieldResolutions.subjectProductId.value`
+- Source dependencies: Source (`fieldResolutions.subjectProductId.sourceEntity`); Stored override (`fieldResolutions.subjectProductId.storedValue`); Inherited value (`fieldResolutions.subjectProductId.fallbackValue`)
+
+### Trade (`trade`)
+
+A task trade override wins; otherwise the matching parent task or project default supplies it.
+
+- Rule: `task.effective-trade`, version 1
+- Resolver: Declared field projection
+- Value paths: List `fieldResolutions.trade.value`; Detail `fieldResolutions.trade.value`; Summary `fieldResolutions.trade.value`
+- Source dependencies: Source (`fieldResolutions.trade.sourceEntity`); Stored override (`fieldResolutions.trade.storedValue`); Inherited value (`fieldResolutions.trade.fallbackValue`)
 
 ### Images (`images`)
 
@@ -604,6 +649,24 @@ Price range is the low and high effective price across priced live candidates; u
 - Source dependencies: Candidate products and effective prices (`candidates`)
 
 ## Expenses (`expense`)
+
+### Trade (`trade`)
+
+An expense trade override wins; otherwise the expense uses its purchase default trade, then its effective project's default trade.
+
+- Rule: `expense.effective-trade`, version 1
+- Resolver: Declared field projection
+- Value paths: List `fieldResolutions.trade.value`; Detail `fieldResolutions.trade.value`; Summary `fieldResolutions.trade.value`
+- Source dependencies: Source (`fieldResolutions.trade.sourceEntity`); Stored override (`fieldResolutions.trade.storedValue`); Inherited value (`fieldResolutions.trade.fallbackValue`)
+
+### Project (`projectId`)
+
+A principal expense project override wins; otherwise the expense uses its purchase's default project, then Household for food or Unassigned. Purchase-level adjustments are allocated across the purchase's principal project totals.
+
+- Rule: `expense.effective-project`, version 1
+- Resolver: Declared field projection
+- Value paths: List `fieldResolutions.projectId.value`; Detail `fieldResolutions.projectId.value`; Summary `fieldResolutions.projectId.value`
+- Source dependencies: Source (`fieldResolutions.projectId.sourceEntity`); Stored override (`fieldResolutions.projectId.storedValue`); Inherited value (`fieldResolutions.projectId.fallbackValue`)
 
 ### Vendor (`vendor`)
 
