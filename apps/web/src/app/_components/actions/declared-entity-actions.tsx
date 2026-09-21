@@ -92,11 +92,12 @@ type DiscardableProduct = z.infer<typeof discardableProduct>;
 
 function useDiscardProductAction(): EntityActionHandles {
   const [product, setProduct] = useState<DiscardableProduct | null>(null);
+  // An unstocked product still discards: the dialog records a ledger-only exit
+  // when `inventoryEntry` is empty, which is the post-import "don't have this
+  // anymore" case. Gating on a non-empty shelf list hid the verb exactly there.
   const parse = (row: EntityActionRow) => {
     const parsed = discardableProduct.safeParse(row);
-    return parsed.success && parsed.data.inventoryEntry.length > 0
-      ? parsed.data
-      : null;
+    return parsed.success ? parsed.data : null;
   };
   return {
     run: async (rows) => {
