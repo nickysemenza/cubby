@@ -178,6 +178,30 @@ from a partial or stale run.
 | --- | ---: | --- | --- | --- | ---: |
 | [#1102](https://github.com/nickysemenza/cubby/pull/1102) / `ac4aad71` | not captured | validation 168s; auxiliary 54s; Rust 21s; web node 97s; web UI 67s; PostgreSQL 121s; Chromium 358s; WebKit 183s; Apple checks 647s; Apple package 308s | macOS pnpm-store hit (732 MiB; setup 72s); Rust FFI target hits | no | 82s |
 
+### 2026-09-21 Apple setup caches, path filter, chromium shards
+
+Exact-head runs of [#1163](https://github.com/nickysemenza/cubby/pull/1163)
+(every run touched `.github/`, so both Apple jobs ran). Baseline is run
+35644114202 on `main` before the branch: PR wall **600s**; Apple checks 544s
+(140s generator build, 93s SPM clone, 53s unneeded `pnpm install`); Apple
+package tests 301s after a 154s runner queue; chromium 433s on one worker.
+
+| Run | Apple caches | PR wall | Apple checks | Apple package | Chromium | Note |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| 35652760985 | cold | — | 1089s (failed) | merged into Apple checks | 345s (2 workers) | simulator tests: 4 Vision suites cannot run on the simulator; one real bug in `PhotoRecordSearch` |
+| 35655298230 | cold (saved on exit) | 1139s | 1082s | merged | 416s (2 workers) | simulator pre-booted at job start starved the FFI restore (41s → 281s) |
+| 35657369044 | warm | 918s | 899s | merged | 330s (2 workers, **1 flake**) | boot moved after restores: still ~10 min of CPU starvation |
+| 35659623444 | warm | **325s** | **296s** | 309s (SPM checkouts cold, saved) | **216s / 284s** (2 shards, 1 worker each) | two macOS jobs restored; retained |
+
+**Decisions.** Retained: generator-binary and SPM-clone caches (generator
+step 140s → under 5s warm; Resolve Package Graph 93s → 28s), dropping the
+Apple job's `pnpm install`, the PR path filter, two chromium shards at one
+worker each. Rejected: CubbyKit tests on the iOS Simulator inside the build
+job (a hosted runner's first boot is ~6 min and starves the 3-core machine
+for ~10 more, so the merged job was 13–18 min) and two Playwright workers on
+one runner (one flake in three runs). One warm sample so far; append further
+exact-head rows before changing this topology again.
+
 ### 2026-09-20 serial experiment record
 
 The rows below are GitHub job wall times for five successful reruns of each
