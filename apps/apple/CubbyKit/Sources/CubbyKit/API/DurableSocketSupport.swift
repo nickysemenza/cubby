@@ -41,6 +41,35 @@ enum AuthenticatedSocketSupport {
         .seconds(min(30, 1 << min(max(0, attempt - 1), 5)))
     }
 
+    static func isExpectedReconnectFailure(_ error: any Error) -> Bool {
+        isExpectedReconnectFailure(error, depth: 0)
+    }
+
+    private static func isExpectedReconnectFailure(_ error: any Error, depth: Int) -> Bool {
+        guard depth < 8 else { return false }
+        let nsError = error as NSError
+        if nsError.domain == NSPOSIXErrorDomain,
+            nsError.code == Int(POSIXErrorCode.ENOTCONN.rawValue)
+        {
+            return true
+        }
+        if nsError.domain == NSURLErrorDomain {
+            // The worker's reconnect catch also sees auth, protocol, decoding, and outbox errors.
+            // Keep this allowlist limited to conditions the existing reconnect loop can resolve.
+            let expected: Set<URLError.Code> = [
+                .cancelled,
+                .timedOut,
+                .networkConnectionLost,
+                .notConnectedToInternet,
+            ]
+            if expected.contains(URLError.Code(rawValue: nsError.code)) { return true }
+        }
+        guard let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError else {
+            return false
+        }
+        return isExpectedReconnectFailure(underlying, depth: depth + 1)
+    }
+
     static func data(from message: URLSessionWebSocketTask.Message) -> Data? {
         switch message {
         case .data(let data): data
