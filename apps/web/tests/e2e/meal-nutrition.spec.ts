@@ -46,7 +46,10 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   );
   await dialog.getByRole("button", { name: "Add food" }).click();
   const dispatcherUrl = (await firstSaveRequest).url();
-  expect(new URL(dispatcherUrl).pathname).toContain("start-operation-dispatch");
+  expect(new URL(dispatcherUrl).pathname).toBe("/_serverFn/dispatch");
+  expect(new URL(dispatcherUrl).searchParams.get("operation")).toBe(
+    "meal.saveFood",
+  );
   await expect(dialog).not.toBeVisible();
 
   const member = page.getByRole("region", {
