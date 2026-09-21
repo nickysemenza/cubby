@@ -134,7 +134,9 @@ public actor CompanionImageWorker {
                 attempt += 1
                 socket?.cancel(with: .abnormalClosure, reason: nil)
                 socket = nil
-                failureObserver?(error)
+                if !AuthenticatedSocketSupport.isExpectedReconnectFailure(error) {
+                    failureObserver?(error)
+                }
                 activityObserver?(.init(phase: .connecting))
                 do {
                     try await Task.sleep(

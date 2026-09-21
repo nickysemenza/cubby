@@ -87,7 +87,7 @@ actor PhotoLibraryIO {
                     if (info?[PHImageCancelledKey] as? Bool) == true {
                         request.finish(.failure(CancellationError()))
                     } else if let error = info?[PHImageErrorKey] as? Error {
-                        request.finish(.failure(error))
+                        request.finish(.failure(PhotoLibraryFailure.normalizing(error)))
                     } else if (info?[PHImageResultIsDegradedKey] as? Bool) != true {
                         #if os(macOS)
                             let decoded = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
@@ -131,7 +131,7 @@ actor PhotoLibraryIO {
                     return
                 }
                 if let error = info?[PHImageErrorKey] as? Error {
-                    continuation.finish(throwing: error)
+                    continuation.finish(throwing: PhotoLibraryFailure.normalizing(error))
                     return
                 }
                 #if os(macOS)
@@ -178,7 +178,7 @@ actor PhotoLibraryIO {
                     if (info?[PHImageCancelledKey] as? Bool) == true {
                         request.finish(.failure(CancellationError()))
                     } else if let error = info?[PHImageErrorKey] as? Error {
-                        request.finish(.failure(error))
+                        request.finish(.failure(PhotoLibraryFailure.normalizing(error)))
                     } else if (info?[PHImageResultIsDegradedKey] as? Bool) != true {
                         #if os(macOS)
                             let decoded = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
@@ -233,7 +233,7 @@ actor PhotoLibraryIO {
                         return
                     }
                     if let error = info?[PHImageErrorKey] as? Error {
-                        request.finish(.failure(error))
+                        request.finish(.failure(PhotoLibraryFailure.normalizing(error)))
                         return
                     }
                     guard let data, let typeIdentifier, let type = UTType(typeIdentifier),
@@ -266,6 +266,28 @@ actor PhotoLibraryIO {
 
 nonisolated enum PhotoLibraryFailure: LocalizedError {
     case cloudUnavailable
+
+    static func normalizing(_ error: any Error) -> any Error {
+        isNetworkAccessRequired(error) ? Self.cloudUnavailable : error
+    }
+
+    static func isCloudUnavailable(_ error: any Error) -> Bool {
+        guard let failure = error as? Self else { return false }
+        if case .cloudUnavailable = failure { return true }
+        return false
+    }
+
+    private static func isNetworkAccessRequired(_ error: any Error, depth: Int = 0) -> Bool {
+        guard depth < 8 else { return false }
+        let nsError = error as NSError
+        // PHPhotosErrorNetworkAccessRequired is stable API value 3164 on every supported OS.
+        if nsError.domain == PHPhotosErrorDomain, nsError.code == 3164 { return true }
+        guard let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError else {
+            return false
+        }
+        return isNetworkAccessRequired(underlying, depth: depth + 1)
+    }
+
     var errorDescription: String? {
         "This photo needs to download from iCloud. Select it to download, or try again when connected."
     }

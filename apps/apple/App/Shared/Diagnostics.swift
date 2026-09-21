@@ -58,6 +58,60 @@ nonisolated enum Diagnostics {
             || host.hasPrefix("127.")
     }
 
+    /// Removes credential-bearing transport metadata while retaining the request path and bounded
+    /// diagnostics such as method, status, and body size. Sentry's v9 header sanitizer does not
+    /// know about application-specific authentication headers, so collection must be deny-by-default.
+    static func scrubHTTPMetadata(from event: Event) -> Event {
+        if let request = event.request {
+            request.headers = nil
+            request.cookies = nil
+            request.queryString = nil
+            request.fragment = nil
+            request.url = sanitizedURLWithoutParameters(request.url)
+        }
+        event.context = event.context?.mapValues { scrubHTTPMetadata($0) }
+        event.extra = event.extra.map { scrubHTTPMetadata($0) }
+        scrubOpenAPIClientError(from: event)
+        return event
+    }
+
+    private static func scrubOpenAPIClientError(from event: Event) {
+        guard let capturedError = event.error else { return }
+        let error = capturedError as NSError
+        guard error.domain == "OpenAPIRuntime.ClientError" else { return }
+        event.error = NSError(
+            domain: error.domain, code: error.code,
+            userInfo: [NSLocalizedDescriptionKey: "OpenAPI client operation failed"])
+        for exception in event.exceptions ?? [] where exception.type == error.domain {
+            exception.value = "OpenAPI client operation failed; transport metadata removed"
+            exception.mechanism?.desc = nil
+            exception.mechanism?.data = nil
+        }
+    }
+
+    private static func sanitizedURLWithoutParameters(_ rawValue: String?) -> String? {
+        guard let rawValue, var components = URLComponents(string: rawValue) else { return nil }
+        components.user = nil
+        components.password = nil
+        components.query = nil
+        components.fragment = nil
+        return components.string
+    }
+
+    private static func scrubHTTPMetadata(_ dictionary: [String: Any]) -> [String: Any] {
+        dictionary.reduce(into: [:]) { result, entry in
+            let key = entry.key.lowercased()
+            guard key != "headers", key != "cookies" else { return }
+            result[entry.key] = scrubHTTPMetadata(entry.value)
+        }
+    }
+
+    private static func scrubHTTPMetadata(_ value: Any) -> Any {
+        if let dictionary = value as? [String: Any] { return scrubHTTPMetadata(dictionary) }
+        if let values = value as? [Any] { return values.map(scrubHTTPMetadata) }
+        return value
+    }
+
     /// First thing in `CubbyApp.init`, before `AppModel` exists, so a crash during model setup is
     /// still caught.
     static func start(baseURL: URL) {
@@ -77,9 +131,7 @@ nonisolated enum Diagnostics {
             // presigned PUTs (`PresignedUpload`, which sends only `Content-Type` by contract)
             // and cover-image fetches leave the trace domain and must not carry them.
             options.tracePropagationTargets = [CubbyBaseURL.host(of: baseURL)]
-            // No `beforeSend` scrubber: unlike the web's MCP `?key=` history, the app carries no
-            // credential in a URL — bearer auth rides in a header (`CubbyAuthMiddleware`), and
-            // `sendDefaultPii = false` keeps headers out of events.
+            options.beforeSend = { scrubHTTPMetadata(from: $0) }
         }
     }
 
@@ -96,7 +148,7 @@ nonisolated enum Diagnostics {
         if let urlError = error as? URLError, urlError.code == .cancelled { return }
         if let auth = error as? AuthError, auth == .invalidCredentials || auth == .rateLimited { return }
         logger.error(
-            "[\(context, privacy: .public)] \(String(reflecting: type(of: error)), privacy: .public): \(String(reflecting: error), privacy: .public)"
+            "[\(context, privacy: .public)] \(String(reflecting: type(of: error)), privacy: .public)"
         )
         if let api = error as? CubbyAPIError, api.isUnauthorized || api.status == 404 {
             let crumb = Breadcrumb(level: .warning, category: context)

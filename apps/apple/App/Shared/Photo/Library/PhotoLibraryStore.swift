@@ -232,7 +232,9 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
                 } catch {
                     guard generation == token else { return }
                     matches.markUnavailable(for: asset.localIdentifier, message: error.localizedDescription)
-                    Diagnostics.report(error, context: "photos.match.prepare")
+                    if !PhotoLibraryFailure.isCloudUnavailable(error) {
+                        Diagnostics.report(error, context: "photos.match.prepare")
+                    }
                 }
                 // Coalesce progress even when cloud-only assets cannot be fingerprinted.
                 if offset.isMultiple(of: 32) || offset == remaining.count - 1 {
@@ -295,7 +297,9 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         } catch {
             if generation == token {
                 matches.markUnavailable(for: id, message: error.localizedDescription)
-                Diagnostics.report(error, context: "photos.match.prepare")
+                if !PhotoLibraryFailure.isCloudUnavailable(error) {
+                    Diagnostics.report(error, context: "photos.match.prepare")
+                }
             }
             throw error
         }
