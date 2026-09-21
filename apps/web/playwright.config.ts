@@ -19,9 +19,10 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  /* Private-repository CI runners have two CPUs; browser, Worker, and database
-     share them. Preserve the local fast-failure budget while giving the same
-     CI scenarios the wall-clock room they had on public four-CPU runners. */
+  /* Public-repository ubuntu-latest CI runners have 4 vCPU, shared by the
+     browser, Worker, and database; the chromium lane runs 2 Playwright
+     workers (CUBBY_E2E_WORKERS), webkit stays at 1. Preserve the local
+     fast-failure budget while giving CI scenarios more wall-clock room. */
   timeout: isCI ? 120_000 : 30_000,
 
   /* Global setup prepares the immutable Worker config and database template. */
@@ -33,8 +34,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Browser canaries are deterministic contracts; retries hide flakes. */
   retries: 0,
-  /* Each local worker owns an isolated database and harness. CI runners have
-     two CPUs and retain one worker; local macOS may override the measured cap. */
+  /* Each local worker owns an isolated database and harness. CI sets
+     CUBBY_E2E_WORKERS per lane (2 for chromium, 1 for webkit); local macOS
+     may override the measured cap. See tooling/e2e-workers.ts. */
   workers: resolveE2EWorkers(),
   /* Backstop for a dead worker harness, which fails every remaining test
      identically. Kept loose enough that a genuine multi-test regression still

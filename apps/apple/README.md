@@ -75,8 +75,13 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 ## Verification
 
 - `pnpm apple check` runs native formatting, CubbyKit package tests, generated API
-  drift checks, and an iOS simulator build.
+  drift checks, and an iOS simulator build (`scripts/apple-check.sh full`).
 - `pnpm apple test` runs package tests only. It does **not** run the hosted app tests.
+- Hosted CI runs `sh scripts/apple-check.sh ci` instead: the same formatting
+  and drift checks, then `xcodebuild test` on a concrete iOS Simulator, which
+  runs CubbyKit's package tests through the `Cubby-iOS` scheme's local
+  `package: CubbyKit/CubbyKitTests` test target alongside `Cubby-iOS-Tests` —
+  no separate `swift test` pass and no separate package-test job.
 - Run the hosted iPhone tests explicitly, using a simulator ID from `xcrun simctl
   list devices available`:
 

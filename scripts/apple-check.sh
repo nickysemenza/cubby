@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 # Body of the former `runAppleCheck` (scripts/ci-scope.ts, deleted): native
-# formatting, tests, OpenAPI drift, and a simulator build. Backs the `apple`
-# Nx target (apps/apple/project.json) and `pnpm apple check`. Run from the
-# workspace root.
+# formatting, package tests, OpenAPI drift, and a build or test run. Backs
+# the `apple` Nx target (apps/apple/project.json) and `pnpm apple check`. Run
+# from the workspace root.
+#
+#   full  local default: swift test (CubbyKit package) + a generic-simulator build
+#   app   local, skips swift test: a generic-simulator build only
+#   ci    hosted `Apple checks` job: xcodebuild test on a concrete simulator,
+#         which runs CubbyKit's package tests via the Cubby-iOS scheme's local
+#         `package: CubbyKit/CubbyKitTests` test target (apps/apple/project.yml)
+#         alongside Cubby-iOS-Tests, instead of a separate `swift test` job
 set -euo pipefail
 
 mode="${1:-full}"
 case "$mode" in
-  full | app) ;;
+  full | app | ci) ;;
   *)
-    echo "usage: $0 [full|app]" >&2
+    echo "usage: $0 [full|app|ci]" >&2
     exit 2
     ;;
 esac
@@ -19,16 +26,7 @@ if ! xcode-select -p >/dev/null 2>&1; then
   exit 0
 fi
 
-# The xcframework + shim come from the Nx cache when the Rust tree is
-# unchanged; a stale committed shim shows up as a dirty path afterwards.
-node scripts/ensure-apple-ffi.ts
-shim="apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift"
-if [ -n "$(git status --porcelain -- "$shim")" ]; then
-  echo "$shim is stale for the current Rust sources; commit the regenerated file." >&2
-  exit 1
-fi
-
-xcodegen generate --spec apps/apple/project.yml --use-cache
+apps/apple/scripts/prepare-project.sh
 
 # @State/@StateObject must never be seeded from an init parameter: a re-presented
 # `.sheet(item:)` can then show the previous item's stale state (apps/apple/AGENTS.md,
@@ -59,6 +57,8 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 # --force-resolved-versions: a bare `swift test` re-resolves and rewrites
 # CubbyKit/Package.resolved (only the originHash), leaving the tree dirty
 # after every run. Pins change only via a deliberate `swift package update`.
+# `ci` mode instead runs these package tests through the Cubby-iOS scheme
+# below, so it does not need this local `swift test` pass.
 if [ "$mode" = "full" ]; then
   swift test --package-path apps/apple/CubbyKit --force-resolved-versions
 fi
@@ -80,10 +80,44 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
 fi
 
-xcodebuild \
-  -project apps/apple/Cubby.xcodeproj \
-  -scheme Cubby-iOS \
-  -destination "generic/platform=iOS Simulator" \
-  -derivedDataPath apps/apple/DerivedData \
-  "${build_settings[@]}" \
-  build
+if [ "$mode" = "ci" ]; then
+  # Pick a concrete simulator: the booted one if any, else the first iPhone —
+  # mirrors scripts/apple.ts's `sim` command. `xcodebuild test` needs a
+  # resolved device id; the `app`/`full` build below uses the generic
+  # destination instead, which `build` (but not `test`) accepts.
+  simulators_json="$(xcrun simctl list devices available -j)"
+  udid="$(SIMULATORS_JSON="$simulators_json" node -e '
+    const devices = Object.values(JSON.parse(process.env.SIMULATORS_JSON).devices).flat();
+    const iphones = devices.filter((d) => d.name.includes("iPhone"));
+    const chosen = iphones.find((d) => d.state === "Booted") ?? iphones[0];
+    if (!chosen) {
+      process.stderr.write("no available iPhone simulator\n");
+      process.exit(1);
+    }
+    process.stdout.write(chosen.udid);
+  ')"
+
+  xcodebuild \
+    -project apps/apple/Cubby.xcodeproj \
+    -scheme Cubby-iOS \
+    -destination "platform=iOS Simulator,id=$udid" \
+    -derivedDataPath apps/apple/DerivedData \
+    -clonedSourcePackagesDirPath apps/apple/SourcePackages \
+    -skipPackagePluginValidation \
+    -skipMacroValidation \
+    -parallel-testing-enabled NO \
+    "${build_settings[@]}" \
+    test
+else
+  # No -clonedSourcePackagesDirPath here: local builds keep SPM clones inside the
+  # DerivedData `pnpm apple` also uses, so the two never thrash each other.
+  xcodebuild \
+    -project apps/apple/Cubby.xcodeproj \
+    -scheme Cubby-iOS \
+    -destination "generic/platform=iOS Simulator" \
+    -derivedDataPath apps/apple/DerivedData \
+    -skipPackagePluginValidation \
+    -skipMacroValidation \
+    "${build_settings[@]}" \
+    build
+fi

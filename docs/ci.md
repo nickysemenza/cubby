@@ -61,31 +61,64 @@ resource-safe on the same machine. Keep heavy local runs coordinated when the
 host is constrained.
 
 A change under `apps/apple/` or `cubby-ffi/` selects the `apple` Nx target
-(`scripts/apple-check.sh`, the former `ci-scope.ts` `runAppleCheck` body): `node
+(`scripts/apple-check.sh`, the former `ci-scope.ts` `runAppleCheck` body).
+`apps/apple/scripts/prepare-project.sh` (extracted from the check script so
+the hosted job can call it before `pnpm install` has ever run) does `node
 scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI shim; a stale
-committed `cubby_ffi.swift` fails as a dirty tree), `xcodegen
-generate --use-cache`,
-`swift test --package-path apps/apple/CubbyKit`,
-`apps/apple/scripts/generate-openapi.sh --check`, then an `xcodebuild` simulator
-build. It skips itself (with a message, not a failure) when `xcode-select -p`
-fails, so a machine without Xcode still passes — `pnpm apple check` runs the
-same script directly. The `rust` target runs fmt/clippy/test per crate
+committed `cubby_ffi.swift` fails as a dirty tree) and `xcodegen
+generate --use-cache`. `apple-check.sh` then runs the `@State`/`@StateObject`
+grep, `swift format lint`, `apps/apple/scripts/generate-openapi.sh --check`,
+and one of three modes: `full` (local default) additionally runs
+`swift test --package-path apps/apple/CubbyKit` and a generic-simulator
+`xcodebuild build`; `app` skips the package tests and only builds; `ci`
+(hosted only) skips the local `swift test` and instead runs `xcodebuild test`
+on a concrete simulator — CubbyKit's package tests run through the
+`Cubby-iOS` scheme's local `package: CubbyKit/CubbyKitTests` test target
+(`apps/apple/project.yml`) alongside `Cubby-iOS-Tests`, so the hosted job
+covers both without a second `swift test` pass or a separate job. The script
+skips itself (with a message, not a failure) when `xcode-select -p` fails, so
+a machine without Xcode still passes — `pnpm apple check` runs `apple-check.sh
+full` directly. The `rust` target runs fmt/clippy/test per crate
 (`recipebridge/project.json`, `cubby-ffi/project.json`); `verify:local(:full)`
-runs both projects' `rust` target regardless of what changed. The hosted
-`Apple checks` job runs `pnpm apple check` on macOS for every verification workflow; it has the same
-format, package-test, OpenAPI-drift, and simulator-build coverage as the local
-target.
+runs both projects' `rust` target regardless of what changed.
+
+The hosted `Apple checks` job runs `sh scripts/apple-check.sh ci` on macOS. It
+only runs when the PR's changed files match the Apple path filter computed by
+the `scope` job's `apple` output: a prefix match on `apps/apple/`,
+`cubby-ffi/`, `recipebridge/`, or `.github/`, or an exact match on
+`rust-toolchain.toml`, `scripts/ensure-apple-ffi.ts`,
+`scripts/rust-fingerprint.ts`, `scripts/apple-check.sh`, or
+`apps/web/src/lib/generated/http-openapi.gen.json` (always `true` on a `push`
+or `workflow_dispatch`, where there is no PR diff). A skipped `Apple checks`
+job still satisfies the required status check (GitHub treats a skipped
+required job as passing). `.github/actions/setup-apple-tools` installs
+XcodeGen and restores two caches specific to the hosted job: the
+`swift-openapi-generator` 1.13.1 binary it builds from source (keyed on the
+generator package's inputs and the Swift toolchain version, so a warm cache
+skips rebuilding it from scratch — previously about 140s every run), and
+`apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones for Sentry,
+GRDB, and Nuke (previously an uncached "Resolve Package Graph" on every run).
+Both are separate from the target-specific FFI output cache
+(`.github/actions/setup-apple-ffi`) described above.
 
 ## Hosted suite
 
 The `CI` workflow runs automatically for pull requests to `main` and pushes to
 `main`. It runs repository validation and dependency deduplication, auxiliary
 tests and Worker builds, Rust checks, web node/UI tests, PostgreSQL integration
-tests, Chromium and WebKit E2E, and the Apple check. The browser lanes test the
-exact bundle produced by the node test lane and retain the discovery and no-skip
-guard. Coverage remains a manual `workflow_dispatch` option (`mode=coverage`);
-it does not deploy. The separate Markdown link workflow, previews, and opt-in
-Claude workflows remain manual.
+tests, Chromium and WebKit E2E, and (when the Apple path filter above matches)
+the Apple check. There is no separate "Apple package tests" job — the hosted
+Apple job's `xcodebuild test` run covers CubbyKit's package tests together
+with the `Cubby-iOS-Tests` bundle on the iOS Simulator. The browser lanes test
+the exact bundle produced by the node test lane and retain the discovery and
+no-skip guard; the chromium lane runs two Playwright workers
+(`CUBBY_E2E_WORKERS=2`, public `ubuntu-latest` runners have 4 vCPU) and webkit
+stays at one. Coverage remains a manual `workflow_dispatch` option
+(`mode=coverage`); it does not deploy. `test-postgres` and `test-e2e` each
+declare their own `postgres`/`integresql` `services:` block — GitHub Actions
+YAML has no anchors and no reusable construct that fits here, so the
+duplication is accepted rather than worked around. The separate Markdown link
+workflow, previews, and opt-in Claude workflows remain manual.
 
 ## Deployment
 

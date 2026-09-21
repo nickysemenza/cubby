@@ -242,6 +242,10 @@ schemes:
         CUBBY_TEST_HOST: "1"
       targets:
         - Cubby-iOS-Tests
+        # Runs CubbyKit's own package tests through this scheme (hosted CI's
+        # `apple-check.sh ci` runs `xcodebuild test` on this scheme instead of
+        # a separate `swift test` job); XcodeGen's local-package test syntax.
+        - package: CubbyKit/CubbyKitTests
     run:
       config: Debug
   Cubby-macOS:

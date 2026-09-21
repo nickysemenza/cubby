@@ -41,7 +41,18 @@ CONFIG="$IOS/openapi/openapi-generator-config.yaml"
 # its dependency graph takes minutes; `.generator` has no targets of its own,
 # so different package roots reuse the same dependency artifacts).
 GENERATOR_SCRATCH="${CUBBY_OPENAPI_GENERATOR_SCRATCH:-$HOME/.cache/cubby/openapi-generator-build}"
-BIN="$(swift build --package-path "$IOS/.generator" --scratch-path "$GENERATOR_SCRATCH" -c release --show-bin-path)/swift-openapi-generator"
+# On CI, .github/actions/setup-apple-tools pins CUBBY_OPENAPI_GENERATOR_BIN to
+# a small directory it caches independently of the scratch tree (just the
+# binary and its `.inputs` stamp below). On a warm cache this must NOT call
+# `swift build --show-bin-path`: that call alone loads the package graph and
+# fetches swift-openapi-generator, ~10s+, even when nothing needs rebuilding.
+# Locally, and on a cold CI cache, BIN is derived from --show-bin-path as
+# before.
+if [ -n "${CUBBY_OPENAPI_GENERATOR_BIN:-}" ]; then
+  BIN="$CUBBY_OPENAPI_GENERATOR_BIN"
+else
+  BIN="$(swift build --package-path "$IOS/.generator" --scratch-path "$GENERATOR_SCRATCH" -c release --show-bin-path)/swift-openapi-generator"
+fi
 # The binary only changes when the generator package's inputs or the toolchain
 # do, so a content stamp next to it decides whether to rebuild. (An mtime
 # check would rebuild in every fresh worktree, whose checkout is always newer
@@ -56,6 +67,18 @@ if [ "$REBUILD_GENERATOR" = "1" ] \
   || [ ! -x "$BIN" ] \
   || [ "$(generator_inputs | shasum -a 256)" != "$(cat "$GENERATOR_STAMP" 2>/dev/null)" ]; then
   swift build --package-path "$IOS/.generator" --scratch-path "$GENERATOR_SCRATCH" --product swift-openapi-generator -c release >/dev/null
+  if [ -n "${CUBBY_OPENAPI_GENERATOR_BIN:-}" ]; then
+    # `--show-bin-path` alone doesn't build (verified: it only resolves/prints
+    # the path), but here it runs right after a real build with nothing left
+    # to resolve, so it is cheap. Querying it instead of guessing a fixed
+    # `<arch>-apple-macosx/release` path keeps this portable across
+    # toolchain/build-system layouts.
+    built_bin="$(swift build --package-path "$IOS/.generator" --scratch-path "$GENERATOR_SCRATCH" -c release --show-bin-path)/swift-openapi-generator"
+    if [ "$built_bin" != "$BIN" ]; then
+      mkdir -p "$(dirname "$BIN")"
+      cp -f "$built_bin" "$BIN"
+    fi
+  fi
   generator_inputs | shasum -a 256 > "$GENERATOR_STAMP"
 fi
 
