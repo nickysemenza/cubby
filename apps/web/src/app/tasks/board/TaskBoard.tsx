@@ -11,7 +11,7 @@ import {
   pointerWithin,
 } from "@dnd-kit/core";
 import { keyBy } from "es-toolkit";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { useDeleteEntityAction } from "~/app/_components/actions/delete-entity-action";
 import {
@@ -151,6 +151,8 @@ export function TaskBoard({
     touchTolerance: 8,
     keyboardCoordinates,
   });
+  // Hydration-stable id; see TableHeaderLayout for why the counter default breaks.
+  const describedById = `DndDescribedBy-${useId()}`;
 
   // One hoisted quick-add dialog (not one per column/cell) — the "+" in a
   // column header or an empty cell sets this, which mounts the dialog fresh
@@ -359,6 +361,7 @@ export function TaskBoard({
   return (
     <>
       <DndContext
+        id={describedById}
         sensors={sensors}
         autoScroll={false}
         collisionDetection={boardCollisionDetection}

@@ -15,6 +15,7 @@ import {
   createContext,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -182,6 +183,8 @@ export function EventCalendarDndProvider<T>({
     touchTolerance: settings.activation?.touchTolerancePx ?? 5,
     keyboardCoordinates: calendarKeyboardCoordinates,
   });
+  // Hydration-stable id; see TableHeaderLayout for why the counter default breaks.
+  const describedById = `DndDescribedBy-${useId()}`;
   const [active, setActive] =
     useState<EventCalendarDragData<T> | null>(null);
   const activeRef = useRef(false);
@@ -306,6 +309,7 @@ export function EventCalendarDndProvider<T>({
   return (
     <CalendarDndContext.Provider value={state as State<unknown>}>
       <DndContext
+        id={describedById}
         sensors={sensors}
         autoScroll={false}
         onDragStart={onStart}

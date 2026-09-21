@@ -23,6 +23,7 @@ import {
   PinOff,
   RotateCcw,
 } from "lucide-react";
+import { useId } from "react";
 import { z } from "zod";
 
 import {
@@ -312,6 +313,8 @@ export default function TableLayoutCustomizer<TData extends RowData>({
 }) {
   const columns = table.getAllLeafColumns();
   const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
+  // Hydration-stable id; see TableHeaderLayout for why the counter default breaks.
+  const describedById = `DndDescribedBy-${useId()}`;
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -373,6 +376,7 @@ export default function TableLayoutCustomizer<TData extends RowData>({
   return (
     <div className="space-y-2 p-2">
       <DndContext
+        id={describedById}
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={onDragEnd}

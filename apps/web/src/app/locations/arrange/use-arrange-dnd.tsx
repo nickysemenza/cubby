@@ -15,6 +15,7 @@ import {
   type ReactNode,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -83,6 +84,8 @@ export function ArrangeDndProvider({
     [roots],
   );
   const sensors = useCubbyDndSensors({ keyboardCoordinates });
+  // Hydration-stable id; see TableHeaderLayout for why the counter default breaks.
+  const describedById = `DndDescribedBy-${useId()}`;
   useEffect(() => {
     document.body.classList.toggle(DRAGGING_CLASS, active !== null);
     return () => document.body.classList.remove(DRAGGING_CLASS);
@@ -141,6 +144,7 @@ export function ArrangeDndProvider({
   return (
     <ArrangeDndStateContext.Provider value={{ active }}>
       <DndContext
+        id={describedById}
         sensors={sensors}
         autoScroll={false}
         collisionDetection={collisionDetection}

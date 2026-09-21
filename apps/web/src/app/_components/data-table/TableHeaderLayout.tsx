@@ -11,6 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, GripVertical } from "lucide-react";
+import { useId } from "react";
 
 import {
   createDndAnnouncements,
@@ -209,6 +210,11 @@ export default function TableHeaderLayout<TData extends RowData>({
   isDebugEnabled: boolean;
 }) {
   const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
+  // dnd-kit's default `DndDescribedBy-<n>` id comes from a module-level counter
+  // that advances differently on the server and the client, so every sortable
+  // header's `aria-describedby` hydration-mismatches. `useId` is tree-stable
+  // across SSR and hydration; dnd-kit uses a provided `id` verbatim.
+  const describedById = `DndDescribedBy-${useId()}`;
   const region = (id: string) => table.getColumn(id)?.getIsPinned() || "center";
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -250,6 +256,7 @@ export default function TableHeaderLayout<TData extends RowData>({
 
   return (
     <DndContext
+      id={describedById}
       sensors={sensors}
       collisionDetection={closestCenter}
       modifiers={[restrictToHorizontalAxis]}
