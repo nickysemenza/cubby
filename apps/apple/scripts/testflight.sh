@@ -136,10 +136,7 @@ archive_platform() {
     -destination "$destination" \
     -archivePath "$archive" \
     -derivedDataPath "$derived_data" \
-    CODE_SIGN_STYLE=Manual \
-    CODE_SIGN_IDENTITY='Apple Distribution' \
-    DEVELOPMENT_TEAM="$team_id" \
-    PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" \
+    CUBBY_PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" \
     MARKETING_VERSION="$MARKETING_VERSION" \
     CURRENT_PROJECT_VERSION="$build_number" \
     COMPILER_INDEX_STORE_ENABLE=NO \
