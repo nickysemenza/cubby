@@ -878,9 +878,19 @@ history is the archive. Permanent product constraints live in the
   workflow needs to write it. The generic editor has no native control for
   product `unitMappings`/`labelNutrition`, recipe `sections`/`yield`/`meta`,
   meal `recipes`, expense `beneficiaries`/`funders`/`sourceClaims`,
-  ledgerTransfer `sourceClaims`, financialAccount `identity`/`sourceAliases`,
-  or financialTransaction `sourceRefs`; those fields are silently left out of
-  the native create/edit form (`EntityFieldControls.swift`).
+  ledgerTransfer `sourceClaims`, financialAccount
+  `identity`/`sourceAliases`/`cardNumbers`, or financialTransaction
+  `sourceRefs`; those fields are silently left out of the native create/edit
+  form (`EntityFieldControls.swift`). On web, `cardNumbers` has no editor at
+  all — only the create form's "Last four" seeds a primary entry; the dated
+  history is MCP-only.
+
+- **Receipt-minted provisional accounts** — Promote when the next one appears.
+  A provisional `FinancialAccount` with no source aliases whose every live
+  transaction has `sourceRefs = []` was minted from receipt digits (FAC-J7CE,
+  2026-09-19, was the Apple Pay device number of FAC-E67H). Now that
+  `cardNumbers` gives those digits a home, a Problems finding should flag the
+  shape so it gets folded into the funding account instead of lingering.
 
 - **Native workflow parity with web.** Promote when a recurring household task
   still requires switching to the web. Native already renders every manifest

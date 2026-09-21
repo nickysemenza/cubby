@@ -253,8 +253,16 @@ describe("first-wave compact cards", () => {
           kind: "credit_card",
           issuer: "Example Bank",
           network: "visa",
-          last4: "4242",
         },
+        cardNumbers: [
+          {
+            last4: "4242",
+            kind: "primary",
+            validFrom: null,
+            validTo: null,
+            note: null,
+          },
+        ],
         provisional: false,
         transactionCount: 23,
       },

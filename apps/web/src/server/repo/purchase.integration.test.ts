@@ -541,8 +541,16 @@ describe("purchase repository — mergePurchases", () => {
         kind: "credit_card",
         issuer: null,
         network: "visa",
-        last4: "4242",
       },
+      cardNumbers: [
+        {
+          last4: "4242",
+          kind: "primary",
+          validFrom: null,
+          validTo: null,
+          note: null,
+        },
+      ],
       provisional: false,
       sourceAliases: [],
       notes: null,

@@ -1,4 +1,5 @@
 import {
+  financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
@@ -30,12 +31,13 @@ export async function findInvalidFinancialJson(
     id: string;
     identity?: unknown;
     sourceAliases?: unknown;
+    cardNumbers?: unknown;
     sourceRefs?: unknown;
   }>(sql`
-    SELECT 'financialAccount' AS entity, fa.shortcode AS id, fa.identity, fa."sourceAliases", NULL AS "sourceRefs"
+    SELECT 'financialAccount' AS entity, fa.shortcode AS id, fa.identity, fa."sourceAliases", fa."cardNumbers", NULL AS "sourceRefs"
     FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL
     UNION ALL
-    SELECT 'financialTransaction' AS entity, ft.shortcode AS id, NULL AS identity, NULL AS "sourceAliases", ft."sourceRefs"
+    SELECT 'financialTransaction' AS entity, ft.shortcode AS id, NULL AS identity, NULL AS "sourceAliases", NULL AS "cardNumbers", ft."sourceRefs"
     FROM "FinancialTransaction" ft WHERE ft."deletedAt" IS NULL
   `);
   const problems: InvalidFinancialJson[] = [];
@@ -57,6 +59,7 @@ export async function findInvalidFinancialJson(
         "sourceAliases",
         financialAccountSourceAliases.safeParse(row.sourceAliases),
       ],
+      ["cardNumbers", financialAccountCardNumbers.safeParse(row.cardNumbers)],
     ] as const;
     for (const [field, parsed] of checks)
       if (!parsed.success)

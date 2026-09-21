@@ -54,12 +54,16 @@ function requireTestValue<T>(value: T | null | undefined, message: string): T {
 const account = (name: string, aliases: FinancialAccountSourceAlias[] = []) =>
   financialAccountCreateInput.parse({
     name,
-    identity: {
-      kind: "credit_card",
-      issuer: null,
-      network: "visa",
-      last4: "1234",
-    },
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    cardNumbers: [
+      {
+        last4: "1234",
+        kind: "primary",
+        validFrom: null,
+        validTo: null,
+        note: null,
+      },
+    ],
     sourceAliases: aliases,
   });
 
@@ -374,29 +378,78 @@ describe("financial repositories — critical invariants", () => {
         ctx.db,
         financialAccountCreateInput.parse({
           name: "Identity-only Visa",
-          identity: {
-            kind: "credit_card",
-            issuer: null,
-            network: "visa",
-            last4: "9999",
-          },
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          // A reissued card: the provider may still label the account with
+          // the retired digits, so both must resolve here.
+          cardNumbers: [
+            {
+              last4: "9999",
+              kind: "primary",
+              validFrom: null,
+              validTo: "2024-06-30",
+              note: null,
+            },
+            {
+              last4: "9997",
+              kind: "primary",
+              validFrom: "2024-07-01",
+              validTo: null,
+              note: null,
+            },
+          ],
         }),
         ctx.actor,
       )
     ).output;
-    const identityResolved = await previewFinancialStatementImport(ctx.db, {
+    for (const digits of ["9999", "9997"]) {
+      const identityResolved = await previewFinancialStatementImport(ctx.db, {
+        rows: [
+          {
+            ...row,
+            key: `identity-only-account-${digits}`,
+            account: `Unmapped Visa (...${digits})`,
+            originalStatement: "IDENTITY-ONLY LINE",
+          },
+        ],
+      });
+      expect(identityResolved.rows[0]).toMatchObject({
+        status: "ready_to_create",
+        accountId: identityAccount.id,
+      });
+    }
+
+    // Two live accounts carrying the same digits: last four alone is not
+    // unique, so the row stays unresolved rather than guessing.
+    await createFinancialAccount(
+      ctx.db,
+      financialAccountCreateInput.parse({
+        name: "Sibling Visa",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        cardNumbers: [
+          {
+            last4: "9997",
+            kind: "supplementary",
+            validFrom: null,
+            validTo: null,
+            note: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const ambiguous = await previewFinancialStatementImport(ctx.db, {
       rows: [
         {
           ...row,
-          key: "identity-only-account",
-          account: "Unmapped Visa (...9999)",
-          originalStatement: "IDENTITY-ONLY LINE",
+          key: "ambiguous-digits",
+          account: "Unmapped Visa (...9997)",
+          originalStatement: "AMBIGUOUS LINE",
         },
       ],
     });
-    expect(identityResolved.rows[0]).toMatchObject({
-      status: "ready_to_create",
-      accountId: identityAccount.id,
+    expect(ambiguous.rows[0]).toMatchObject({
+      status: "unresolved_account",
+      accountId: null,
     });
 
     const duplicates = await previewFinancialStatementImport(ctx.db, {
@@ -423,7 +476,8 @@ describe("financial repositories — critical invariants", () => {
       provisionalAccount: {
         name: "Unmapped Visa (...9998)",
         provisional: true,
-        identity: { kind: "credit_card", network: "visa", last4: "9998" },
+        identity: { kind: "credit_card", network: "visa" },
+        cardNumbers: [{ last4: "9998", kind: "primary" }],
       },
     });
 

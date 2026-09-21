@@ -1818,6 +1818,13 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
+        "cardNumbers": {
+          "name": "cardNumbers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
         "ledgerPartyId": {
           "name": "ledgerPartyId",
           "type": "uuid",

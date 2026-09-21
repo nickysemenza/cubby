@@ -1,5 +1,8 @@
 import { displayGtin } from "@cubby/schemas/external-id";
-import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
+import {
+  currentLast4,
+  type FinancialAccountOut,
+} from "@cubby/schemas/financial-account";
 import type { GardenEntryKind } from "@cubby/schemas/garden-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageAssociation, ImageWithEntity } from "@cubby/schemas/image";
@@ -853,6 +856,7 @@ export function toVendorCard(
 
 function financialAccountIdentitySummary(
   identity: FinancialAccountOut["identity"],
+  cardNumbers: FinancialAccountOut["cardNumbers"],
 ) {
   const provider =
     identity.kind === "credit_card"
@@ -862,7 +866,7 @@ function financialAccountIdentitySummary(
         : identity.kind === "stored_value"
           ? identity.provider
           : null;
-  const last4 = "last4" in identity ? identity.last4 : null;
+  const last4 = currentLast4(cardNumbers);
 
   return [
     capitalize(identity.kind.replaceAll("_", " ")),
@@ -882,7 +886,7 @@ export function toFinancialAccountCard(
     icon: <EntityIcon entity="financialAccount" size={14} colored />,
     name: data.name,
     tag: "account",
-    identity: financialAccountIdentitySummary(data.identity),
+    identity: financialAccountIdentitySummary(data.identity, data.cardNumbers),
     body: [
       {
         kind: "stats",

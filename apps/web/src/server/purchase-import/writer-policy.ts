@@ -62,7 +62,8 @@ export type SettlementCandidate = {
   id: string;
   amount: number;
   occurredAt: Date;
-  cardLastFour: string | null;
+  /** Every last four the paying account could have presented on that date. */
+  cardLastFours: readonly string[];
 };
 
 export type PaymentAllocation = {
@@ -94,7 +95,7 @@ export const matchCompletePaymentSet = (
       (candidate) =>
         cents(candidate.amount) === cents(payment.amount) &&
         (payment.cardLastFour === undefined ||
-          candidate.cardLastFour === payment.cardLastFour) &&
+          candidate.cardLastFours.includes(payment.cardLastFour)) &&
         (chargedAt === null ||
           withinPostingWindow(candidate.occurredAt, chargedAt)),
     );
