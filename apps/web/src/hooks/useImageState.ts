@@ -35,7 +35,7 @@ export function useImageState() {
     // Pending documents merge into pendingImageIds — same association path.
     // `PendingImage.id` is plain `string` (the same gallery component also
     // handles existing images), but the value underneath is always the
-    // `IMG-` shortcode `create_file_upload`/`image.uploadImage` hand back —
+    // `IMG-` shortcode `create_file_uploads`/`image.uploadImage` hand back —
     // parsed at this shared gallery boundary before the update input is built.
     const pendingIds = [...pendingImages, ...pendingDocuments].map(
       (img) => img.id,

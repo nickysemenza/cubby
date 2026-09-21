@@ -549,7 +549,7 @@ describe("attachFileToEntity", () => {
         ...attachmentTarget,
         uploadId: stagedUploadCode,
       }),
-    ).rejects.toThrow("Call create_file_upload first");
+    ).rejects.toThrow("Call create_file_uploads first");
     expect(storage.uploaded).toEqual([]);
   });
 
@@ -585,7 +585,7 @@ describe("attachFileToEntity", () => {
         ...attachmentTarget,
         uploadId: testShortcode("image", "IMG-4444"),
       }),
-    ).rejects.toThrow(/Call create_file_upload first/);
+    ).rejects.toThrow(/Call create_file_uploads first/);
     expect(storage.uploaded).toEqual([]);
   });
 

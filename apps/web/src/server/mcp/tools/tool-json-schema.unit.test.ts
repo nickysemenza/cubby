@@ -125,32 +125,24 @@ describe("MCP tool JSON Schema — toWire parity", () => {
   });
 
   it("advertises every gallery entity and rejects non-gallery attachment targets", () => {
-    const attachFile = requireTool(tools, "attach_file");
     const attachFiles = requireTool(tools, "attach_files");
     const attachExisting = requireTool(tools, "attach_existing_image");
-    const schemas = [attachFile, attachFiles, attachExisting].map((tool) => ({
+    const schemas = [attachFiles, attachExisting].map((tool) => ({
       tool,
       input: requireZodType(tool.inputSchema, `${tool.name} input`),
     }));
 
     for (const entity of galleryEntities) {
       const targetId = testShortcode(entity, "ABC1");
-      expect(attachFile.description ?? "").toContain(entity);
       expect(attachFiles.description ?? "").toContain(entity);
       expect(attachExisting.description ?? "").toContain(entity);
       expect(
         schemas[0]!.input.safeParse({
-          entityId: targetId,
-          url: "https://example.test/file.jpg",
-        }).success,
-      ).toBe(true);
-      expect(
-        schemas[1]!.input.safeParse({
           items: [{ entityId: targetId, url: "https://example.test/file.jpg" }],
         }).success,
       ).toBe(true);
       expect(
-        schemas[2]!.input.safeParse({
+        schemas[1]!.input.safeParse({
           imageId: testShortcode("image", "IMG1"),
           targetId,
         }).success,
@@ -160,19 +152,62 @@ describe("MCP tool JSON Schema — toWire parity", () => {
     const vendorId = testShortcode("vendor", "ABC1");
     expect(
       schemas[0]!.input.safeParse({
-        entityId: vendorId,
-        url: "https://example.test/file.jpg",
-      }).success,
-    ).toBe(false);
-    expect(
-      schemas[1]!.input.safeParse({
         items: [{ entityId: vendorId, url: "https://example.test/file.jpg" }],
       }).success,
     ).toBe(false);
     expect(
-      schemas[2]!.input.safeParse({
+      schemas[1]!.input.safeParse({
         imageId: testShortcode("image", "IMG1"),
         targetId: vendorId,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("publishes batched upload initiation and excludes base64 attachment input", () => {
+    expect(tools.some((tool) => tool.name === "create_file_upload")).toBe(
+      false,
+    );
+    expect(tools.some((tool) => tool.name === "attach_file")).toBe(false);
+
+    const createUploads = requireZodType(
+      requireTool(tools, "create_file_uploads").inputSchema,
+      "create_file_uploads input",
+    );
+    const attachFiles = requireZodType(
+      requireTool(tools, "attach_files").inputSchema,
+      "attach_files input",
+    );
+    const entityId = testShortcode("product", "ABC1");
+    const upload = {
+      entityId,
+      filename: "item.jpg",
+      contentType: "image/jpeg",
+      size: 123,
+    };
+
+    expect(createUploads.safeParse({ items: [upload] }).success).toBe(true);
+    expect(
+      createUploads.safeParse({ items: [{ ...upload, size: 0 }] }).success,
+    ).toBe(false);
+    expect(
+      createUploads.safeParse({
+        items: Array.from({ length: 51 }, () => upload),
+      }).success,
+    ).toBe(false);
+    expect(
+      attachFiles.safeParse({
+        items: [{ entityId, data: "aGVsbG8=", contentType: "image/jpeg" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      attachFiles.safeParse({
+        items: [
+          {
+            entityId,
+            url: "https://example.test/item.jpg",
+            uploadId: testShortcode("image", "IMG1"),
+          },
+        ],
       }).success,
     ).toBe(false);
   });

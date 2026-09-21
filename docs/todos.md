@@ -34,12 +34,6 @@ history is the archive. Permanent product constraints live in the
   `unavailable` and `history_expired`, the same class of fix the product
   identity checks got.
 
-- **Generate the MCP instructions' prefix list.** `MCP_SERVER_INSTRUCTIONS`
-  in `server/mcp/server.ts` hand-lists every shortcode prefix while
-  `packages/shared/src/generated/shortcode-registry.gen.ts` already holds
-  them. Render the list from the registry plus entity descriptions so a new
-  entity cannot drift out of the instructions.
-
 - **Canvas conformance follow-ups.** The generic pages now render the
   canvas (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>): one 44px
   workbench band with declared-filter chips and `Actions ▾`, plate verbs,
@@ -406,12 +400,23 @@ history is the archive. Permanent product constraints live in the
   path before allowing any proposed validation change to touch Purchases,
   Expenses, Product assignments, settlement, or shared evidence.
 
-- **Generalize evidence-backed Product enrichment beyond Amazon.** The bounded
-  commit currently proves ASINs and exact-variant images from the typed Amazon
-  capture fields. Add vendor-specific, fixed capture adapters for retailer SKU,
-  catalog/item number, and GTIN evidence before allowing those identifiers or
-  non-Amazon images to write; readable page text and free-text source hints are
-  not sufficient authority.
+- **Generalize evidence-backed Product enrichment beyond Amazon.** Add fixed
+  source adapters for retailer SKU, catalog/item number, and GTIN evidence;
+  each batch declares each field's expected current and replacement values, and
+  applies only those proven corrections. Preserve current values unless an
+  explicit correction is evidenced.
+  Readable page text and free-text source hints are not write authority.
+
+- **Dependent batch program.** Define a bounded program of named operations
+  whose results feed later inputs. Specify input/result limits, dependency
+  failure propagation, ordered partial outcomes, and retries that preserve
+  completed writes. Carry an explicit continuation for unfinished work.
+
+- **Manual purchase lifecycle.** Define one compact run that expands selected
+  candidates into evidence, automatic receipt outcomes with attachment ids and
+  classifications, replay-safe writes, and multi-order handling. Keep a
+  multi-order export as run evidence. Record the run evidence and terminal
+  outcomes so interruption resumes rather than duplicating work.
 
 - **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its owned window,
@@ -460,18 +465,29 @@ history is the archive. Permanent product constraints live in the
   See the [purchase-import plan](plans/purchase-import-redesign.md) for the
   existing runtime boundaries.
 
-- **Durable Entity identity and shared files.** Three patterns
-  coexist for a row that points at any of several entity types: untyped
-  `entityType + entityId` with no FK (search index, embeddings, AI analysis,
-  `AiUsage`, audit log); `Image.targetType/targetId` plus eight per-entity
-  join tables; and an exclusive-arc CHECK (`LedgerSourceClaim_owner_check`).
-  The proposed end state gives every local shortcode-bearing entity a durable
-  identity, consolidates direct files in `EntityAttachment`, and deliberately
-  preserves typed domain FKs and joins. It includes merge redirects, tombstones,
-  payload-retention policy, workflow file liveness, migration gates, and the
-  constraints from the tabled 2026-09-19 review. It is planned but not
-  implemented; see
-  [the detailed plan](plans/entity-identity-and-files.md).
+- **Durable Entity identity and shared files.** Three patterns coexist for a
+  row that points at any of several entity types: an untyped type-plus-id pair,
+  Image target fields plus per-entity joins, and an exclusive-arc CHECK. The
+  proposed end state gives local shortcode-bearing entities durable identity,
+  consolidates direct files in EntityAttachment, and preserves typed domain FKs
+  and joins. The unresolved design includes merge redirects, tombstones, payload
+  retention, workflow-file liveness, and migration gates; see [the detailed
+  plan](plans/entity-identity-and-files.md).
+
+- **MCP staged-file storage.** Before sharing a local upload beyond its signed
+  grant, define no-copy activation, replay behavior for a signed grant,
+  activation fencing, delete-before-grant-expiry handling for a recreated
+  orphan, and ownership of workflow evidence. This depends on the durable
+  identity and files design where applicable.
+
+- **Host-provided MCP file references.** Adapt client-owned file handles and
+  download URLs through capability-specific input metadata and the existing
+  validated URL-fetch path. Downloadable URLs remain the fallback; no upload UI.
+
+- **Durable MCP transfer telemetry.** Persist call duration, serialized response
+  bytes, and per-item outcomes when repeated measurements justify it. Expand
+  telemetry storage and queue consumers compatibly before new producers; the
+  current lightweight tracing does not require this migration.
 
 - **Merge redirects.** A merged-away shortcode in a URL, note, or MCP
   client resolves to nothing today; `finalizeMerge` records no forward.
@@ -653,8 +669,10 @@ history is the archive. Permanent product constraints live in the
   scheduled; define the smallest room/wall-indexed photo packet before walls close.
 
 - **Budget-aware MCP pagination** — Promote when a real tool result hits an output
-  limit or is measurably too large; use stable keyset cursors and an explicit compact
-  JSON byte budget.
+  limit or is measurably too large. Define stable keyset cursors, explicit compact
+  JSON byte and aggregate-result limits, and a continuation that preserves the
+  chosen filters, sort, and budget. Mixed entity/action read batches need
+  explicit per-family bounds and result attribution.
 
 - **Core native inventory experience.** Promote when everyday use of the native
   redesign exposes a specific inventory bottleneck. Deepen location-first browsing,

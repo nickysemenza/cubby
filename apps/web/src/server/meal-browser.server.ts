@@ -30,8 +30,14 @@ export const mealHandlers = implementOperationDomain(mealContract, {
       input,
       context.services.availability,
     ),
-  addRecipe: (context, input) =>
-    workflow.addRecipeToMealWorkflow(context.db, input, context.actorContext),
+  addRecipe: async (context, input) =>
+    (
+      await workflow.addRecipeToMealWorkflow(
+        context.db,
+        input,
+        context.actorContext,
+      )
+    ).meal,
   updateRecipe: (context, input) =>
     workflow.updateMealRecipeWorkflow(context.db, input, context.actorContext),
   removeRecipe: (context, input) =>

@@ -59,6 +59,9 @@ const addRecipeToMealInput = mealAddRecipeInput.extend({
 });
 const addRecipeToMealOut = z.object({
   id: mealShortcode,
+  mealRecipeId: mealRecipeIdInput.shape.id.describe(
+    "New meal-recipe occurrence ID; use it for update_meal_recipe or remove_meal_recipe.",
+  ),
   name: z.string(),
   coverage: z.object({
     cost: compactEstimate,
@@ -66,6 +69,12 @@ const addRecipeToMealOut = z.object({
   }),
   nutrition: compactNutrition.optional(),
 });
+
+export const MEAL_RECIPE_TOOL_NAMES = {
+  add: "add_recipe_to_meal",
+  update: "update_meal_recipe",
+  remove: "remove_meal_recipe",
+} as const;
 const dailyIntakeInput = z.object({
   date: plainDate,
   partyId: ledgerPartyShortcode,
@@ -232,7 +241,7 @@ export function registerMealTools(server: McpServer) {
   });
 
   registerRouterTool(server, {
-    name: "add_recipe_to_meal",
+    name: MEAL_RECIPE_TOOL_NAMES.add,
     description:
       "Plan a recipe into a meal at a given scale multiplier (1 = as-written). Returns compact meal identity plus cost/kcal coverage. Nutrition defaults to none; request kcal, macros, or full when needed.",
     inputSchema: addRecipeToMealInput,
@@ -245,7 +254,7 @@ export function registerMealTools(server: McpServer) {
         scale: params.scale,
         sortOrder: params.sortOrder,
       });
-      const meal = respond(result, slimMeal);
+      const meal = respond(result.meal, slimMeal);
       const keys =
         params.nutrition === "full"
           ? nutrientKey.options
@@ -256,6 +265,7 @@ export function registerMealTools(server: McpServer) {
               : [];
       return {
         id: meal.id,
+        mealRecipeId: result.mealRecipeId,
         name: meal.name ?? meal.mealType ?? meal.date,
         coverage: {
           cost: compactValue(meal.totals.cost),
@@ -286,7 +296,7 @@ export function registerMealTools(server: McpServer) {
   });
 
   registerMcpTool(server, {
-    name: "update_meal_recipe",
+    name: MEAL_RECIPE_TOOL_NAMES.update,
     description:
       "Adjust a planned recipe's scale or sort order within its meal.",
     inputSchema: z.object({
@@ -317,7 +327,7 @@ export function registerMealTools(server: McpServer) {
   });
 
   registerMcpTool(server, {
-    name: "remove_meal_recipe",
+    name: MEAL_RECIPE_TOOL_NAMES.remove,
     description: "Remove a planned recipe from its meal.",
     inputSchema: z.object({
       // mealRecipe.id is a declared exception — see update_meal_recipe above.

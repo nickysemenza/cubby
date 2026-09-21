@@ -20,33 +20,59 @@ import {
 } from "./_shared";
 
 // `entityType` is derived from the shortcode's prefix, so it is not asked for.
-const { entityType: _entityType, ...attachFileEntityless } = attachFileFields;
+const {
+  entityType: _entityType,
+  data: _data,
+  ...attachFileEntityless
+} = attachFileFields;
 
 const attachFileInputFields = {
   ...attachFileEntityless,
   entityId: attachFileEntityless.entityId.describe(
     `Shortcode of the target — its prefix picks the entity (${attachableImageEntity.options.join(", ")}).`,
   ),
+  url: attachFileEntityless.url.describe(
+    "External http(s) URL the server fetches. Provide exactly one of `url` or `uploadId`.",
+  ),
+  uploadId: attachFileEntityless.uploadId.describe(
+    "`IMG-` code returned by create_file_uploads after its presigned PUT succeeded. Provide exactly one of `url` or `uploadId`.",
+  ),
+  contentType: attachFileEntityless.contentType.describe(
+    "Optional expected MIME type for a URL attachment; a conflicting response Content-Type is rejected.",
+  ),
 };
 
-const attachFileItem = z.object(attachFileInputFields);
+const attachFileItem = z
+  .object(attachFileInputFields)
+  .superRefine((value, ctx) => {
+    const sources = [value.url, value.uploadId].filter(Boolean);
+    if (sources.length !== 1) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Provide exactly one of `url` or `uploadId`",
+      });
+    }
+  });
 type AttachFileItem = z.infer<typeof attachFileItem>;
 
 const attachExistingItem = imageAttachExistingInput;
 
 const ATTACH_FILE_SOURCE_PROSE =
-  "Provide the file exactly one of three ways: `url` (an http(s) link the server " +
-  "fetches), `uploadId` (from create_file_upload — the ONLY route for a file on " +
-  "local disk), or `data` (base64, or a data: URI; avoid at photo sizes, it costs " +
-  "tens of thousands of tokens per image). For base64, set `contentType` " +
-  "(image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, " +
-  "or application/pdf) unless a data: URI already carries it.";
+  "Provide the file exactly one of two ways: `url` (an http(s) link the server " +
+  "fetches) or `uploadId` (from create_file_uploads — the route for a file on " +
+  "local disk).";
+
+export const IMAGE_TOOL_NAMES = {
+  createFileUploads: "create_file_uploads",
+  attachFiles: "attach_files",
+  attachExistingImage: "attach_existing_image",
+} as const;
 
 /**
  * Attach one file, deriving the target entity from its shortcode prefix.
  *
- * Shared by `attach_file` and `attach_files` so the prefix check and the
- * `entityType` derivation cannot drift between the singular and plural forms.
+ * Kept separate from the batch adapter so the prefix check and `entityType`
+ * derivation remain one per-item operation with an indexed runtime outcome.
  */
 async function attachOne(caller: Caller, params: AttachFileItem) {
   const parsed = parseShortcode(params.entityId);
@@ -65,33 +91,32 @@ async function attachOne(caller: Caller, params: AttachFileItem) {
 /**
  * Image/document attachment tools.
  *
- * `attach_file` routes bytes through the server-side R2 upload pipeline and
+ * `attach_files` routes bytes through the server-side R2 upload pipeline and
  * associates the result with a gallery entity. Images and PDFs share one code
  * path (a "document" is inferred from the PDF content type).
  *
- * Three input modes, and the third is why this file grew: `data` (base64) and
- * `url` are both server-side, which left a file on local disk with no route at
- * all — the server is remote, so no URL names it, and base64 costs ~82k tokens
- * for one photo. `create_file_upload` exposes the same two-phase presigned flow
- * the browser has always used, so the client PUTs the bytes straight to R2 and
- * `attach_file` takes the resulting `uploadId`.
+ * A local file cannot be named by a URL from the remote server. The
+ * `create_file_uploads` batch exposes the browser's two-phase presigned flow,
+ * so the client PUTs bytes straight to R2 and `attach_files` consumes each
+ * resulting `uploadId` without carrying base64 through MCP.
  */
 export function registerImageTools(server: McpServer) {
-  registerMcpTool(server, {
-    name: "create_file_upload",
+  registerBatchTool(server, {
+    name: IMAGE_TOOL_NAMES.createFileUploads,
     description:
-      "Stage a LOCAL file for attachment and get a presigned PUT URL back. This is how a file on disk reaches Cubby: the server is remote, so `url` cannot name a local path, and base64 `data` costs tens of thousands of tokens per photo. Three steps: call this, upload the bytes with " +
+      "Stage up to 50 LOCAL files in request order and get one presigned PUT URL per successful item. This is how files on disk reach Cubby: the server is remote, so `url` cannot name a local path. Three steps: call this batch, upload each successful item with " +
       "`curl -X PUT -H 'Content-Type: <contentType>' --upload-file <path> '<uploadUrl>'`, " +
-      "then call attach_file with the returned uploadId. No R2 staging, wrangler, or manual cleanup — the staged object is discarded once attached. Supported types: image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, application/pdf.",
-    inputSchema: createFileUploadInput,
-    outputSchema: createFileUploadResponse,
+      "then call attach_files with the returned uploadIds. A failed item does not roll back successful presigns; results preserve input indexes for retrying only failures. No R2 staging, wrangler, or manual cleanup — each staged object is discarded once attached. Supported types: image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, application/pdf.",
+    itemInputSchema: createFileUploadInput,
+    itemOutputSchema: createFileUploadResponse,
+    projectReference: (item) => item.uploadId,
+    defaultResultDetail: "full",
     annotations: WRITE_CLOSED,
-    handler: async (params, extra) =>
-      await getCaller(extra).image.createFileUpload(params),
+    run: async (caller, item) => await caller.image.createFileUpload(item),
   });
 
   registerMcpTool(server, {
-    name: "attach_existing_image",
+    name: IMAGE_TOOL_NAMES.attachExistingImage,
     description:
       `Attach an existing uploaded image to a live gallery record. The image is not re-uploaded; ` +
       `the target shortcode prefix must name one of ${attachableImageEntity.options.join(", ")}. ` +
@@ -112,33 +137,8 @@ export function registerImageTools(server: McpServer) {
     },
   });
 
-  registerMcpTool(server, {
-    name: "attach_file",
-    description:
-      `Attach an image or PDF to one of ${attachableImageEntity.options.join(", ")}. ` +
-      "A Purchase is one vendor order/receipt event — this is how a receipt or an emailed PDF " +
-      "invoice gets filed against the vendor event it documents). Purchase attachments require " +
-      "documentKind; order_confirmation, sales_order, invoice, and receipt count as primary evidence. " +
-      `${ATTACH_FILE_SOURCE_PROSE} Resolve the ` +
-      "target shortcode first using the corresponding entity tools. " +
-      "`reused: true` in the response means the idempotencyKey matched a file that is " +
-      "still attached and nothing was uploaded; `false` means this call stored bytes.",
-    // `entityType` is dropped on purpose: a shortcode's prefix already names
-    // the entity, so asking for both invites a mismatched pair. The handler
-    // derives the type from the code and rejects a non-attachable one.
-    inputSchema: attachFileItem,
-    outputSchema: attachFileResponse,
-    annotations: WRITE_CLOSED,
-    // The attachment target, for `McpToolCall.entity`. Derived from the
-    // shortcode prefix for the same reason `entityType` is not an input: the
-    // code already names the entity. This tool is ~18% of all MCP traffic, so
-    // leaving it unattributed would hollow out the usage dashboard on its own.
-    telemetryEntity: (params) => parseShortcode(params.entityId)?.type,
-    handler: async (params, extra) => await attachOne(getCaller(extra), params),
-  });
-
   registerBatchTool(server, {
-    name: "attach_files",
+    name: IMAGE_TOOL_NAMES.attachFiles,
     description:
       `Attach up to 50 files in request order. Each item carries its own entityId, so one call can ` +
       `cover many different ${attachableImageEntity.options.join("/")} records — this is the cover-image ` +
