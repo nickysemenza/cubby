@@ -45,6 +45,19 @@
   "ai": {
     "binding": "AI"
   },
+  "vars": {
+    // Sentry environment for the agent Durable Object and the queue consumer.
+    // "test" disables reporting entirely (workerd harness; set it in .dev.vars
+    // for a silent local `pnpm dev`, or "development" to report under that
+    // environment like the web `preview:cf`). The DSN itself is code
+    // (`@cubby/worker-tracing/sentry-dsn`), not configuration.
+    "SENTRY_ENVIRONMENT": "production",
+    // Flue agent-tracing spans sent to Sentry. Runs are rare and high-value,
+    // so 100% stays far below the free-plan span quota; lower it here, not in
+    // code, if that changes. Cloudflare's own Workers Traces sampling is the
+    // separate `observability.traces.head_sampling_rate` above.
+    "SENTRY_TRACES_SAMPLE_RATE": "1"
+  },
   "migrations": [
     {
       "tag": "v1",

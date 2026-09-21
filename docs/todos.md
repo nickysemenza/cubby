@@ -723,6 +723,17 @@ history is the archive. Permanent product constraints live in the
 
 ### Waiting for a trigger
 
+- **Trace the web Worker's AI calls into Sentry's Agents view.** The purchase
+  agent reports `gen_ai` spans through Flue's Sentry blueprint, but the web
+  Worker's structured AI features (`server/ai/run-feature.ts`, embeddings) do
+  not: Sentry's Workers AI integration only wraps `env.AI.run()`, never the
+  `env.AI.gateway("cubby").run()` transport Cubby uses, and the TanStack AI
+  adapters bypass Sentry's provider integrations. Adding it means a
+  `@tanstack/ai` `ChatMiddleware` (next to `ai-gateway-usage.ts`) that opens a
+  `gen_ai.chat` span with the request model and token usage. Do it when a
+  web-side AI feature needs per-call latency or cost debugging that the AI
+  Gateway dashboard cannot answer.
+
 - **`get_vendor_coverage` per account** — Promote when two members hold
   accounts at the same vendor. Coverage and `needs_data` are per Vendor
   today, which would conflate their histories.

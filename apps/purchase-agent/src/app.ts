@@ -1,4 +1,8 @@
-import { setProvider } from "@flue/runtime";
+// Sentry first: its bridge and OpenTelemetry instrumentation must register
+// before the generated Worker entry evaluates.
+import "./sentry";
+import { instrument, setProvider } from "@flue/runtime";
+import { createCloudflareTracing } from "@flue/runtime/cloudflare";
 import { createAgentRouter } from "@flue/runtime/routing";
 import { env } from "cloudflare:workers";
 
@@ -19,6 +23,14 @@ const testModel = (
     CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentTestModelBinding;
   }
 ).CUBBY_PURCHASE_AGENT_TEST_MODEL;
+
+// Native Workers Traces (Grafana Tempo). Flue's default install of this same
+// instrumentation ships conversation content — messages, system instructions,
+// tool definitions, arguments, and results — as span attributes; the
+// wrangler.jsonc policy keeps that content in the authenticated Flue transcript
+// only. Registering it here, in a hoisted `app.ts` import, makes the generated
+// entry's default installer yield to this content-free configuration.
+instrument(createCloudflareTracing({ content: false }));
 
 // Every production model request, including Flue compaction and retries, uses
 // the same Universal Gateway/BYOK transport as Cubby's web Worker.

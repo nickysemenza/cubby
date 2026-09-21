@@ -275,12 +275,24 @@ importers:
 
   apps/purchase-agent:
     dependencies:
+      '@cubby/worker-tracing':
+        specifier: workspace:*
+        version: link:../../packages/worker-tracing
       '@earendil-works/pi-ai':
         specifier: 0.83.0
         version: 0.83.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)(ws@8.21.2)(zod@4.6.5)
+      '@flue/opentelemetry':
+        specifier: 2.1.0
+        version: 2.1.0(@flue/runtime@2.1.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)(typescript@7.0.2)(ws@8.21.2)(zod@4.6.5))(@opentelemetry/api@1.9.1)
       '@flue/runtime':
         specifier: 2.1.0
         version: 2.1.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)(typescript@7.0.2)(ws@8.21.2)(zod@4.6.5)
+      '@opentelemetry/api':
+        specifier: ^1.9.1
+        version: 1.9.1
+      '@sentry/cloudflare':
+        specifier: ^10.66.0
+        version: 10.74.0(@cloudflare/workers-types@5.20260917.1)(wrangler@4.134.0(@cloudflare/workers-types@5.20260917.1)(@types/node@26.5.0))
       valibot:
         specifier: ^1.1.0
         version: 1.5.0(typescript@7.0.2)
@@ -299,13 +311,13 @@ importers:
         version: 2.1.0
       '@flue/vite':
         specifier: 2.1.0
-        version: 2.1.0(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.0)(zod@4.6.5))(hono@4.13.0)(react@19.3.0)(rolldown@1.2.9)(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(ws@8.21.2)(zod@4.6.5)
+        version: 2.1.0(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.1)(zod@4.6.5))(hono@4.13.0)(react@19.3.0)(rolldown@1.2.9)(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(ws@8.21.2)(zod@4.6.5)
       vite:
         specifier: ^8.0.0
         version: 8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
         specifier: ^5.0.1
-        version: 5.0.1(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.0)(@types/node@26.5.0)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.5.0)(typescript@7.0.2))(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))
+        version: 5.0.1(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.5.0)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.5.0)(typescript@7.0.2))(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))
       wrangler:
         specifier: 4.134.0
         version: 4.134.0(@cloudflare/workers-types@5.20260917.1)(@types/node@26.5.0)
@@ -488,6 +500,9 @@ importers:
       '@cubby/usda-schemas':
         specifier: workspace:*
         version: link:../../packages/usda-schemas
+      '@cubby/worker-tracing':
+        specifier: workspace:*
+        version: link:../../packages/worker-tracing
       '@date-fns/tz':
         specifier: ^1.5.0
         version: 1.5.0
@@ -2116,6 +2131,13 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+
+  '@flue/opentelemetry@2.1.0':
+    resolution: {integrity: sha512-xUYEdm8kyeQRuVz1d7Z6K18NTA0pJAbPZ5/CQAAxjc1Ljj1TM1BXGnS5hJxEehfQUUDNtcv/mHfrouRpgcEwcw==}
+    engines: {node: '>=22.19.0'}
+    peerDependencies:
+      '@flue/runtime': ^2.1.0
+      '@opentelemetry/api': ^1.9.0
 
   '@flue/runtime@2.1.0':
     resolution: {integrity: sha512-wFvvoPqtDx8qdtQ2IBkqPiXULpV9C9ZxmY36qnrogbaSJq9u8jrsldAYveMvqpmFpE0AHIe6Iez81/3lmTtiSw==}
@@ -12504,6 +12526,11 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
+  '@flue/opentelemetry@2.1.0(@flue/runtime@2.1.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)(typescript@7.0.2)(ws@8.21.2)(zod@4.6.5))(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@flue/runtime': 2.1.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)(typescript@7.0.2)(ws@8.21.2)(zod@4.6.5)
+      '@opentelemetry/api': 1.9.1
+
   '@flue/runtime@2.1.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)(typescript@7.0.2)(ws@8.21.2)(zod@4.6.5)':
     dependencies:
       '@earendil-works/pi-agent-core': 0.83.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)(ws@8.21.2)(zod@4.6.5)
@@ -12528,11 +12555,11 @@ snapshots:
     dependencies:
       '@durable-streams/client': 0.2.7
 
-  '@flue/vite@2.1.0(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.0)(zod@4.6.5))(hono@4.13.0)(react@19.3.0)(rolldown@1.2.9)(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(ws@8.21.2)(zod@4.6.5)':
+  '@flue/vite@2.1.0(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.1)(zod@4.6.5))(hono@4.13.0)(react@19.3.0)(rolldown@1.2.9)(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(ws@8.21.2)(zod@4.6.5)':
     dependencies:
       '@flue/runtime': 2.1.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)(typescript@7.0.2)(ws@8.21.2)(zod@4.6.5)
       '@hono/node-server': 2.1.0(hono@4.13.0)
-      agents: 0.20.1(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.0)(zod@4.6.5))(react@19.3.0)(rolldown@1.2.9)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(zod@4.6.5)
+      agents: 0.20.1(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.1)(zod@4.6.5))(react@19.3.0)(rolldown@1.2.9)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(zod@4.6.5)
       magic-string: 1.4.1
       tinyglobby: 0.2.17
       ulidx: 2.4.1
@@ -15986,19 +16013,6 @@ snapshots:
 
   '@tanstack/ai-utils@0.4.0': {}
 
-  '@tanstack/ai@0.54.0(@opentelemetry/api@1.9.0)(zod@4.6.5)':
-    dependencies:
-      '@ag-ui/core': 0.1.1-canary.beta.0(zod@4.6.5)
-      '@standard-schema/spec': 1.1.0
-      '@tanstack/ai-event-client': 0.11.3
-      '@tanstack/ai-utils': 0.4.0
-      partial-json: 0.1.7
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.0
-    transitivePeerDependencies:
-      - zod
-    optional: true
-
   '@tanstack/ai@0.54.0(@opentelemetry/api@1.9.1)(zod@4.6.5)':
     dependencies:
       '@ag-ui/core': 0.1.1-canary.beta.0(zod@4.6.5)
@@ -17113,7 +17127,7 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  agents@0.20.1(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.0)(zod@4.6.5))(react@19.3.0)(rolldown@1.2.9)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(zod@4.6.5):
+  agents@0.20.1(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20260917.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.1)(zod@4.6.5))(react@19.3.0)(rolldown@1.2.9)(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(zod@4.6.5):
     dependencies:
       '@babel/plugin-proposal-decorators': 8.0.2(@babel/core@8.0.6)
       '@cfworker/json-schema': 4.1.1
@@ -17132,7 +17146,7 @@ snapshots:
       yargs: 18.0.0
       zod: 4.6.5
     optionalDependencies:
-      '@tanstack/ai': 0.54.0(@opentelemetry/api@1.9.0)(zod@4.6.5)
+      '@tanstack/ai': 0.54.0(@opentelemetry/api@1.9.1)(zod@4.6.5)
       vite: 8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@babel/core'
@@ -21395,32 +21409,6 @@ snapshots:
       '@edge-runtime/vm': 3.2.0
       '@opentelemetry/api': 1.9.1
       '@types/node': 26.5.0
-      jsdom: 30.0.0(@noble/hashes@2.2.0)
-    transitivePeerDependencies:
-      - msw
-
-  vitest@5.0.1(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.0)(@types/node@26.5.0)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.5.0)(typescript@7.0.2))(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0)):
-    dependencies:
-      '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.1(msw@2.12.9(@types/node@26.5.0)(typescript@7.0.2))(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))
-      chai: 6.2.2
-      es-module-lexer: 2.3.2
-      expect-type: 1.4.0
-      magic-string: 1.4.1
-      obug: 2.2.1
-      picomatch: 4.0.7
-      std-env: 4.2.0
-      tinybench: 6.1.4
-      tinyexec: 1.3.0
-      tinyglobby: 0.2.17
-      vite: 8.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@edge-runtime/vm': 3.2.0
-      '@opentelemetry/api': 1.9.0
-      '@types/node': 26.5.0
-      '@vitest/coverage-v8': 5.0.1(vitest@5.0.1)
-      '@vitest/ui': 5.0.1(vitest@5.0.1)
       jsdom: 30.0.0(@noble/hashes@2.2.0)
     transitivePeerDependencies:
       - msw

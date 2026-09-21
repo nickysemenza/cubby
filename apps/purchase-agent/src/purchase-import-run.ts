@@ -22,6 +22,10 @@ import { purchaseImportTools } from "./tools";
 
 installPurchaseImportTelemetry();
 
+// Flue applies this extension's `wrap` to the generated Durable Object class,
+// which is where the Sentry SDK initializes for the agent isolate.
+export { cloudflare } from "./sentry";
+
 type ImportRunInitialData = {
   runId: string;
   publicId?: string;

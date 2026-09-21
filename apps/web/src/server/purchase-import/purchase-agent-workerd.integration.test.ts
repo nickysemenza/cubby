@@ -167,7 +167,12 @@ function createWorkerdHarness(databaseUrl: string) {
         },
         secrets: { BETTER_AUTH_SECRET: "workerd-test-secret" },
       },
-      { config: workerdAgentConfig() },
+      {
+        config: workerdAgentConfig(),
+        // "test" disables Sentry in both the agent Durable Object wrapper and
+        // the queue consumer, so the harness never reports to sentry.io.
+        vars: { SENTRY_ENVIRONMENT: "test" },
+      },
       {
         config: {
           name: "cubby-test-model",
