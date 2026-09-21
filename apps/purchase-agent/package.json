@@ -16,8 +16,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@cubby/worker-tracing": "workspace:*",
     "@earendil-works/pi-ai": "0.83.0",
+    "@flue/opentelemetry": "2.1.0",
     "@flue/runtime": "2.1.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@sentry/cloudflare": "^10.66.0",
     "valibot": "^1.1.0",
     "zod": "^4.6.5"
   },

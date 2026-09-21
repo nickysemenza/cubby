@@ -61,12 +61,14 @@ if (process.env.CUBBY_OTEL === "1") {
   );
 }
 
+// The DSN module is a bare constant in a workspace package; Node 24 strips its
+// types natively (the symlink resolves outside node_modules), so this preload
+// shares the single definition instead of keeping a copy in sync.
+import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
 import * as Sentry from "@sentry/tanstackstart-react";
 
 Sentry.init({
-  // Keep in sync with SENTRY_DSN in src/lib/sentry-dsn.ts — this preload runs
-  // via `node --import` before TS transpilation, so it can't import that module.
-  dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+  dsn: CUBBY_SENTRY_DSN,
   sendDefaultPii: false,
   // Unconditionally "development": this preload is wired into the `dev` script
   // only (`NODE_OPTIONS='--import ./instrument.server.mjs' vite dev`), so it

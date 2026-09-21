@@ -94,7 +94,25 @@ authority. Its checked-in Wrangler configuration declares:
   `PurchaseImportService` entrypoint, including run-bound MCP token issuance
   and private MCP request forwarding;
 - Workers AI binding `AI`, with every orchestration call routed through AI
-  Gateway `cubby` by the Flue provider adapter.
+  Gateway `cubby` by the Flue provider adapter;
+- vars `SENTRY_ENVIRONMENT` (`test` disables Sentry entirely, which is what the
+  workerd harness sets) and `SENTRY_TRACES_SAMPLE_RATE` (Flue agent-tracing
+  spans sent to Sentry; `1` in production).
+
+Observability on this Worker has two backends. Native Workers Traces carry the
+platform spans plus Flue's `invoke_agent` / `chat` / `execute_tool` spans and the
+consumer's `job.purchase_agent_event` span (`run.id`, `event.type`,
+`dispatch.outcome`) to Grafana Tempo; `app.ts` installs that instrumentation
+explicitly with `content: false`, because Flue's default install would attach
+prompts, tool arguments, and results as span attributes. Sentry is wired by
+`src/sentry.ts`, a port of Flue's official `tooling/sentry` blueprint: the agent
+Durable Object class is wrapped with `instrumentDurableObjectWithSentry`, the
+queue consumer with `withSentry`, and both report to the shared `cubby` project
+tagged `service:purchase-agent`. Sentry receives the same span hierarchy with
+token usage, Flue `log.*` calls as Sentry Logs, terminal failures (a failed
+top-level agent operation or a failed submission settlement) as issues, and
+coordinator recovery as breadcrumbs. Model and tool content is never recorded on
+either backend.
 
 The web Worker has the reverse `PURCHASE_AGENT` service binding solely to proxy
 authenticated conversation history, live updates, prompts, and aborts. This is
@@ -359,10 +377,18 @@ because the `AI` binding supplies Worker-identity authentication.
 
 ## Observability
 
-The web/Workers Sentry DSN is intentionally public and checked into
-`apps/web/src/lib/sentry-dsn.ts`. The native app uses a separate `cubby-apple`
-Sentry project. Authentication and ownership for both projects remain
-provider-side state.
+The web/Workers Sentry DSN is intentionally public and defined exactly once,
+in `packages/worker-tracing/src/sentry-dsn.ts`; the web client and Worker, the
+dev-only Node preload, and every auxiliary Worker import it from there. The
+native app uses a separate `cubby-apple` Sentry project. Authentication and
+ownership for both projects remain provider-side state.
+
+Cloudflare joins service-binding, JS RPC, and Durable Object subrequests into
+one trace, so the web Worker's proxy into the purchase agent and the agent's
+`CUBBY_PURCHASE_SERVICE` calls back appear in a single trace in the Cloudflare
+dashboard and in Tempo. A queue delivery starts a new trace in the consumer;
+`run.id` on the consumer's job span is the join key back to the producer's job
+spans. Trace context never propagates to services outside Cloudflare.
 
 Authenticated Start, workflow-stream, HTTP API, and MCP failures carry bounded
 message/cause diagnostics with operation, optional entity, execution stage, and

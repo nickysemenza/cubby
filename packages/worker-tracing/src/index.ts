@@ -30,9 +30,7 @@
 
 export type SpanAttr = string | number | boolean | undefined;
 
-/** Public DSN shared by the auxiliary Workers in the cubby Sentry project. */
-export const CUBBY_SENTRY_DSN =
-  "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232";
+export { CUBBY_SENTRY_DSN } from "./sentry-dsn";
 
 /** The subset of the CF `Span` surface our call sites use. */
 export interface WorkerSpan {
